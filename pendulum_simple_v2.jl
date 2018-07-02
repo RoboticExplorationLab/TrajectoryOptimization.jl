@@ -15,12 +15,19 @@ dynamics(x,u) = [x[2];
 
 dynamics_midpoint = iLQR.f_midpoint(dynamics, dt)
 
-fx(x,dt) = [1 + g*cos(x[1])*(dt^2)/(2*l) dt - mu*(dt^2)/(2*m*l^2);
+fx(x,u,dt) = [1 + g*cos(x[1])*(dt^2)/(2*l) dt - mu*(dt^2)/(2*m*l^2);
             g*cos(x[1] + x[2]*dt/2)*dt/l - mu*g*cos(x[1])*(dt^2)/(2*m*l^3) 1 + g*cos(x[1] + x[2]*dt/2)*(dt^2)/(2*l) - mu*dt/(m*l^2) + (mu^2)*(dt^2)/(2*(m^2)*l^4)];
 
-fu(x,dt) = [(dt^2)/(2*m*l^2);
+fu(x,u,dt) = [(dt^2)/(2*m*l^2);
             (-mu*(dt^2)/(2*(m^2)*l^4) + dt/(m*l^2))];
 
+function f_jacobian(x,u,dt)
+    A = [1 + g*cos(x[1])*(dt^2)/(2*l) dt - mu*(dt^2)/(2*m*l^2);
+        g*cos(x[1] + x[2]*dt/2)*dt/l - mu*g*cos(x[1])*(dt^2)/(2*m*l^3) 1 + g*cos(x[1] + x[2]*dt/2)*(dt^2)/(2*l) - mu*dt/(m*l^2) + (mu^2)*(dt^2)/(2*(m^2)*l^4)];
+    B = [(dt^2)/(2*m*l^2);
+        (-mu*(dt^2)/(2*(m^2)*l^4) + dt/(m*l^2))];
+    return A, B
+end
 
 # initial conditions
 x0 = [0; 0];
@@ -45,32 +52,9 @@ iterations = 4
 # Set up problem
 model = iLQR.Model(dynamics, n, p)
 obj = iLQR.Objective(Q, R, Qf, tf, x0, xf)
-solver = iLQR.Solver(model, obj, fx, fu, dt) # initialization
-u = zeros(p,N-1);
-x = zeros(n,N);
-x_ = similar(x)
-u_ = similar(u)
-x[:,1] = x0;
-
-K = zeros(m,n,N)
-lk = zeros(m,N)
-
-# first roll-out
-iLQR.rollout!(solver, x, u)
-
-## iterations of iLQR using my derivation
-# improvement criteria
-c1 = 0.25;
-c2 = 0.75;
-
-for i = 1:iterations
-    K, lk = iLQR.backward_pass!(solver, x, u, K, lk)
-    J = iLQR.forwardpass!(solver, x, u, K, lk, x_, u_)
-
-    x = copy(x_)
-    u = copy(u_)
-    println("Cost:", J)
-end
+# solver = iLQR.Solver(model, obj, fx, fu, dt) # initialization
+solver = iLQR.Solver(model, obj, f_jacobian, dt) # initialization
+x, u = iLQR.solve(solver, iterations=1)
 
 p = plot(linspace(0,tf,N), x[1,:])
 p = plot!(linspace(0,tf,N), x[2,:])

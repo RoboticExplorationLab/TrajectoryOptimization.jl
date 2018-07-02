@@ -1,9 +1,39 @@
 module iLQR
+using RigidBodyDynamics
 
 struct Model
     f::Function
     n::Int
     m::Int
+
+    function Model(f::Function, n::Int, m::Int)
+        new(f,n,m)
+    end
+
+    function Model(mech::Mechanism)
+        n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
+        num_joints = length(joints(mech))-1  # subtract off joint to world
+        m = num_joints # Default to number of joints
+
+        function fc(x,u)
+            state = MechanismState{eltype(x)}(mech)
+
+            # set the state variables:
+            q = x[1:num_joints]
+            qd = x[(1:num_joints)+num_joints]
+            set_configuration!(state, q)
+            set_velocity!(state, qd)
+
+            # return momentum converted to an `Array` (as this is the format that ForwardDiff expects)
+            [qd; Array(mass_matrix(state))\u - Array(mass_matrix(state))\Array(dynamics_bias(state))]
+        end
+        new(fc, n, m)
+    end
+end
+
+function Model(urdf::String)
+    mech = parse_urdf(Float64,urdf)
+    Model(mech)
 end
 
 struct Objective
@@ -20,10 +50,9 @@ struct Solver
     obj::Objective
     dt::Float64
     f_midpoint::Function
-    fx::Function
-    fu::Function
+    f_jacobian::Function
     N::Int
-    function Solver(model, obj, fx, fu, dt)
+    function Solver(model, obj, f_jacobian, dt)
         obj_n = size(obj.Q, 1)
         obj_m = size(obj.R, 1)
         @assert obj_n == model.n
@@ -31,8 +60,7 @@ struct Solver
 
         f_mid = f_midpoint(model.f, dt)
         N = Int(floor(obj.tf/dt));
-        new(model, obj, dt, f_mid, fx, fu, N)
-
+        new(model, obj, dt, f_mid, f_jacobian, N)
     end
 end
 
@@ -109,8 +137,9 @@ function backward_pass!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}
     for k = N-1:-1:1
         q = Q*(x[:,k] - solver.obj.xf);
         r = R*(u[:,k]);
-        A = solver.fx(x[:,k], solver.dt);
-        B = solver.fu(x[:,k], solver.dt)
+        A, B = solver.f_jacobian(x[:,k], u[:,k], solver.dt);
+        # A = solver.fx(x[:,k], u[:,k], solver.dt)
+        # B = solver.fu(x[:,k], u[:,k], solver.dt)
         C1 = q' + s_prev*A;  # 1 x n
         C2 = r' + s_prev*B;  # 1 x m
         C3 = Q + A'*S_prev*A; # n x n
@@ -121,23 +150,24 @@ function backward_pass!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}
         if any(eigvals(C4).<0)
             mu_reg = mu_reg + 1;
             k = N-1;
+            println("REG")
         end
 
-        K[:,:,k] = C4\C5';
+        K[:,:,k] = C4\C5;
         lk[:,k] = C4\C2';
         s_prev = C1 - C2*K[:,:,k] + lk[:,k]'*C4*K[:,:,k] - lk[:,k]'*C5;
         S_prev = C3 + K[:,:,k]'*C4*K[:,:,k] - K[:,:,k]'*C5 - C5'*K[:,:,k];
 
-        vs1 = vs1 + float(lk[:,k]'*C2');
+        vs1 = vs1 + float(lk[:,k]'*C2')[1];
         vs2 = vs2 + float(lk[:,k]'*C4*lk[:,k]);
 
     end
 
-    return K, lk
+    return K, lk, vs1, vs2
 
 end
 
-function forwardpass!(solver::Solver, x, u, K, lk, x_, u_)
+function forwardpass!(x_, u_, solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64,3}, lk::Array{Float64,2}, vs1::Float64, vs2::Float64, c1::Float64=0.25, c2::Float64=0.75)
 
     # Compute original cost
     J_prev = computecost(solver.obj, x, u)
@@ -152,13 +182,15 @@ function forwardpass!(solver::Solver, x, u, K, lk, x_, u_)
     dV = Inf;
     z = 0;
 
-    while J > J_prev
+    while J > J_prev || z < c1 || z > c2
         # x_, u_ = iLQR.rollout!(solver, x, u, K, lk, alpha)
         iLQR.rollout!(solver, x, u, K, lk, alpha, x_, u_)
 
         # Calcuate cost
         J = iLQR.computecost(solver.obj, x_, u_)
 
+        dV = alpha*vs1 + (alpha^2)*vs2/2
+        z = (J_prev - J)/dV[1,1]
         alpha = alpha/2;
         iter = iter + 1;
 
@@ -170,6 +202,40 @@ function forwardpass!(solver::Solver, x, u, K, lk, x_, u_)
 
     return J
 
+end
+
+function solve(solver::Solver; iterations=10)
+    n = solver.model.n
+    m = solver.model.m
+    N = solver.N
+
+    u = zeros(m,N-1);
+    x = zeros(n,N);
+    x_ = similar(x)
+    u_ = similar(u)
+    x[:,1] = solver.obj.x0;
+
+    K = zeros(m,n,N)
+    lk = zeros(m,N)
+
+    # first roll-out
+    iLQR.rollout!(solver, x, u)
+
+    ## iterations of iLQR using my derivation
+    # improvement criteria
+    c1 = 0.25;
+    c2 = 0.75;
+
+    for i = 1:iterations
+        K, lk, vs1, vs2 = iLQR.backward_pass!(solver, x, u, K, lk)
+        J = iLQR.forwardpass!(x_, u_, solver, x, u, K, lk, vs1, vs2)
+
+        x = copy(x_)
+        u = copy(u_)
+        println("Cost:", J)
+    end
+
+    return x, u
 end
 
 end
