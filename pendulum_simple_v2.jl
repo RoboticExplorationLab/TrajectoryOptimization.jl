@@ -45,9 +45,7 @@ iterations = 4
 # Set up problem
 model = iLQR.Model(dynamics, n, p)
 obj = iLQR.Objective(Q, R, Qf, tf, x0, xf)
-solver = iLQR.Solver(model, obj, fx, fu, dt)
-
-# initialization
+solver = iLQR.Solver(model, obj, fx, fu, dt) # initialization
 u = zeros(p,N-1);
 x = zeros(n,N);
 x_ = similar(x)
