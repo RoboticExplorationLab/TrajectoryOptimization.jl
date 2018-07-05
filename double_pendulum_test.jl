@@ -12,5 +12,9 @@ x = [q;qd]
 dir = Pkg.dir("DynamicWalking2018")
 urdf = joinpath(dir,"notebooks","data","doublependulum.urdf")
 doublependulum = parse_urdf(Float64,urdf)
+joints(doublependulum)
 
-iLQR.Model(doublependulum)
+model = iLQR.Model(urdf)
+model.f(x,u)
+
+fc(x,u) ≈ model.f(x,u)
