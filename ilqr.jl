@@ -1,5 +1,6 @@
 module iLQR
 using RigidBodyDynamics
+using ForwardDiff
 
 struct Model
     f::Function
@@ -49,7 +50,7 @@ struct Solver
     model::Model
     obj::Objective
     dt::Float64
-    f_midpoint::Function
+    fd::Function  # Discrete dynamics
     f_jacobian::Function
     N::Int
     function Solver(model, obj, f_jacobian, dt)
@@ -62,17 +63,72 @@ struct Solver
         N = Int(floor(obj.tf/dt));
         new(model, obj, dt, f_mid, f_jacobian, N)
     end
-end
+    function Solver(model, obj, dt=0.1)
+        n, m = model.n, model.m
+        fd = f_midpoint(model.f, dt)     # Discrete dynamics
+        f_aug = f_augmented(model)  # Augmented continuous dynamics
+        fd_aug = f_midpoint(f_aug)  # Augmented discrete dynamics
 
+        out = zeros(n+m+1)
+        Df(S::Array) = ForwardDiff.jacobian(fd_aug, S)
+
+        function f_jacobian(x::Array,u::Array,dt::Float64)
+            Df_aug = Df([x;u;dt])
+            A = Df_aug[1:n,1:n]
+            B = Df_aug[1:n,n+1:n+m]
+            return A,B
+        end
+
+        N = Int(floor(obj.tf/dt));
+        new(model, obj, dt, fd, f_jacobian, N)
+    end
+end
 
 function f_midpoint(f::Function, dt::Float64)
     dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
 end
 
+function f_midpoint(f::Function)
+    dynamics_midpoint(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
+end
+
+function f_midpoint!(f_aug!::Function)
+
+    function dynamics_midpoint(out::AbstractVector, S::Array)
+        # out = zeros(7)
+        f_aug!(out, S)
+        f_aug!(out, S + out*S[end]/2)
+        copy!(out, S + out*S[end])
+    end
+end
+
+
+function f_augmented(model::Model)
+    n, m = model.n, model.m
+    f_aug = f_augmented(model.f, n, m)
+    f(S::Array) = [f_aug(S); zeros(m+1)]
+end
+
+function f_augmented!(model::Model)
+    n, m = model.n, model.m
+    f_aug! = f_augmented!(model.f, n, m)
+    f!(out::AbstractVector, S::Array) = [f_aug!(out, S); zeros(m+1)]
+end
+
+function f_augmented(f::Function, n::Int, m::Int)
+    f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
+end
+
+function f_augmented!(f::Function, n::Int, m::Int)
+    f_aug!(out::AbstractVector, S::Array) = copy!(out, f(S[1:n], S[n+(1:m)]))
+end
+
+
+
 function rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2})
     N = size(x, 2)
     for k = 2:N
-        x[:, k] = solver.f_midpoint(x[:,k-1], u[:,k-1])
+        x[:, k] = solver.fd(x[:,k-1], u[:,k-1])
     end
 end
 
@@ -93,7 +149,7 @@ function rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::A
         delta = (x_[:,k-1] - x[:,k-1])
 
         u_[:, k-1] = u[:, k-1] - K[:,:,k-1]*delta - a;
-        x_[:,k] = solver.f_midpoint(x_[:,k-1], u_[:,k-1]);
+        x_[:,k] = solver.fd(x_[:,k-1], u_[:,k-1]);
     end
 end
 
