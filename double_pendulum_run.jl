@@ -2,6 +2,8 @@ using DoublePendulum
 using Plots
 using RigidBodyDynamics
 using iLQR
+using ForwardDiff
+using BenchmarkTools
 
 state = MechanismState(doublependulum)
 # set_configuration!(state, [0., 0.])
@@ -25,15 +27,17 @@ R = 1e-5*eye(m)
 
 # simulation
 tf = 1.
-dt = 0.1
+dt = 0.01
 
 # objects
 model = iLQR.Model(doublependulum)
+# model = iLQR.Model(DoublePendulum.fc, n, m)
 obj = iLQR.Objective(Q, R, Qf, tf, x0, xf)
-solver = iLQR.Solver(model, obj, f_jacobian, dt) # initialization
+# solver = iLQR.Solver(model, obj, f_jacobian, dt) # initialization
+solver = iLQR.Solver(model, obj, dt)
 @time X, U = iLQR.solve(solver, iterations=10)
 # solver = iLQR.Solver(model, obj, fx, fu, dt) # initialization
 
 P = plot(linspace(0,tf,size(X,2)),X[1,:],title="Double Pendulum (iLQR and Rigid Body Dynamics)")
 P = plot!(linspace(0,tf,size(X,2)),X[2,:],ylabel="State")
-# display(P)
+display(P)
