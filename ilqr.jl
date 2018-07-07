@@ -325,5 +325,3 @@ function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_in
 
     return X, U
 end
-
-end
