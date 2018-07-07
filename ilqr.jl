@@ -261,12 +261,16 @@ function forwardpass!(x_, u_, solver::Solver, x::Array{Float64,2}, u::Array{Floa
 end
 
 function solve(solver::Solver; iterations=10)
+    u = 10*rand(m,N-1)
+    solve(solver, u, iterations=iterations)
+end
+
+function solve(solver::Solver, u::Array; iterations=10)
     n = solver.model.n
     m = solver.model.m
     N = solver.N
 
-    u = zeros(m,N-1);
-    x = zeros(n,N);
+    x = zeros(n,N)
     x_ = similar(x)
     u_ = similar(u)
     x[:,1] = solver.obj.x0;
@@ -288,7 +292,7 @@ function solve(solver::Solver; iterations=10)
 
         x = copy(x_)
         u = copy(u_)
-        println("Cost:", J)
+        println("Cost: $J")
     end
 
     return x, u
