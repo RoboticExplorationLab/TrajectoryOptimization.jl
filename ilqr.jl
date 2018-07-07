@@ -201,12 +201,6 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
-    S = zeros(n,n,N)
-    s = zeros(n,N)
-
-#     K = zeros(m,n,N-1)
-#     d = zeros(m,N-1)
-
     S = Qf
     s = Qf*(X[:,N] - xf)
     v1 = 0.0
@@ -249,7 +243,7 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
     return K, d, v1, v2
 end
 
-function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},J::Float64,v1,v2,c1::Float64=0.0,c2::Float64=1.0)
+function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},J::Float64,v1,v2,c1::Float64=0.5,c2::Float64=0.85)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -297,7 +291,7 @@ function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_in
     X_ = zeros(n,N)
 
     if control_init == "random"
-        U = 10.0*rand(m,N-1)
+        U = 1.0*rand(m,N-1)
     else
         U = zeros(m,N-1)
     end
@@ -324,4 +318,6 @@ function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_in
     end
 
     return X, U
+end
+
 end
