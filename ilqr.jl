@@ -7,7 +7,7 @@ struct Model
     n::Int
     m::Int
 
-    function Model(f::Function, n::Int, m::Int)
+    function Model(f::Function, n::Int64, m::Int64)
         new(f,n,m)
     end
 
@@ -25,7 +25,6 @@ struct Model
             set_configuration!(state, q)
             set_velocity!(state, qd)
 
-            # return momentum converted to an `Array` (as this is the format that ForwardDiff expects)
             [qd; Array(mass_matrix(state))\u - Array(mass_matrix(state))\Array(dynamics_bias(state))]
         end
         new(fc, n, m)
@@ -50,248 +49,281 @@ struct Solver
     model::Model
     obj::Objective
     dt::Float64
-    fd::Function  # Discrete dynamics
-    f_jacobian::Function
+    fd::Function  # discrete dynamics
+    F::Function
     N::Int
-    function Solver(model, obj, f_jacobian, dt)
+    function Solver(model::Model, obj::Objective, dt::Float64)
         obj_n = size(obj.Q, 1)
         obj_m = size(obj.R, 1)
         @assert obj_n == model.n
         @assert obj_m == model.m
 
-        f_mid = f_midpoint(model.f, dt)
-        N = Int(floor(obj.tf/dt));
-        new(model, obj, dt, f_mid, f_jacobian, N)
+        # RK4 integration
+        fd = rk4(model.f, dt)
+        F(x,u) = Jacobian(fd,x,u)
+        N = Int(floor(obj.tf/dt))
+        new(model, obj, dt, fd, F, N)
     end
-    function Solver(model, obj, dt=0.1)
-        n, m = model.n, model.m
-        fd = f_midpoint(model.f, dt)     # Discrete dynamics
-        f_aug = f_augmented(model)  # Augmented continuous dynamics
-        fd_aug = f_midpoint(f_aug)  # Augmented discrete dynamics
 
-        out = zeros(n+m+1)
-        Df(S::Array) = ForwardDiff.jacobian(fd_aug, S)
+    # function Solver(model, obj, dt=0.1)
+    #     n, m = model.n, model.m
+    #     fd = f_midpoint(model.f, dt)     # Discrete dynamics
+    #     f_aug = f_augmented(model)  # Augmented continuous dynamics
+    #     fd_aug = f_midpoint(f_aug)  # Augmented discrete dynamics
+    #
+    #     out = zeros(n+m+1)
+    #     Df(S::Array) = ForwardDiff.jacobian(fd_aug, S)
+    #
+    #     function f_jacobian(x::Array,u::Array,dt::Float64)
+    #         Df_aug = Df([x;u;dt])
+    #         A = Df_aug[1:n,1:n]
+    #         B = Df_aug[1:n,n+1:n+m]
+    #         return A,B
+    #     end
+    #
+    #     N = Int(floor(obj.tf/dt));
+    #     new(model, obj, dt, fd, f_jacobian, N)
+    # end
+end
 
-        function f_jacobian(x::Array,u::Array,dt::Float64)
-            Df_aug = Df([x;u;dt])
-            A = Df_aug[1:n,1:n]
-            B = Df_aug[1:n,n+1:n+m]
-            return A,B
-        end
+# function f_midpoint(f::Function, dt::Float64)
+#     dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
+# end
+#
+# function f_midpoint(f::Function)
+#     dynamics_midpoint(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
+# end
+#
+# function f_midpoint!(f_aug!::Function)
+#
+#     function dynamics_midpoint(out::AbstractVector, S::Array)
+#         # out = zeros(7)
+#         f_aug!(out, S)
+#         f_aug!(out, S + out*S[end]/2)
+#         copy!(out, S + out*S[end])
+#     end
+# end
+#
+#
+# function f_augmented(model::Model)
+#     n, m = model.n, model.m
+#     f_aug = f_augmented(model.f, n, m)
+#     f(S::Array) = [f_aug(S); zeros(m+1)]
+# end
+#
+# function f_augmented!(model::Model)
+#     n, m = model.n, model.m
+#     f_aug! = f_augmented!(model.f, n, m)
+#     f!(out::AbstractVector, S::Array) = [f_aug!(out, S); zeros(m+1)]
+# end
+#
+# function f_augmented(f::Function, n::Int, m::Int)
+#     f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
+# end
+#
+# function f_augmented!(f::Function, n::Int, m::Int)
+#     f_aug!(out::AbstractVector, S::Array) = copy!(out, f(S[1:n], S[n+(1:m)]))
+# end
 
-        N = Int(floor(obj.tf/dt));
-        new(model, obj, dt, fd, f_jacobian, N)
+function rk4(f::Function,dt::Float64)
+    # Runge-Kutta 4
+    k1(x,u) = dt*f(x,u)
+    k2(x,u) = dt*f(x + k1(x,u)/2.,u)
+    k3(x,u) = dt*f(x + k2(x,u)/2.,u)
+    k4(x,u) = dt*f(x + k3(x,u), u)
+    fd(x,u) = x + (k1(x,u) + 2.*k2(x,u) + 2.*k3(x,u) + k4(x,u))/6.
+end
+
+function midpoint(f::Function,dt::Float64)
+    fd(x,u) = x + f(x + f(x,u)*dt/2., u)*dt
+end
+
+function Jacobian(f::Function,x::Array{Float64,1},u::Array{Float64,1})
+    f1 = a -> f(a,u)
+    f2 = b -> f(x,b)
+    fx = ForwardDiff.jacobian(f1,x)
+    fu = ForwardDiff.jacobian(f2,u)
+    return fx, fu
+end
+
+#iLQR
+function rollout(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+    X[:,1] = solver.obj.x0
+    for k = 1:solver.N-1
+        X[:,k+1] = solver.fd(X[:,k],U[:,k])
     end
+    return X
 end
 
-function f_midpoint(f::Function, dt::Float64)
-    dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
-end
+# function rollout(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},X_::Array{Float64,2},U_::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},alpha::Float64)
+#     X_prev = copy(X)
+#     X[:,1] = solver.obj.x0
+#     for k = 1:solver.N-1
+#       U_[:,k] = U[:,k] - K[:,:,k]*(X[:,k] - X_prev[:,k]) - alpha*d[:,k]
+#       X[:,k+1] = solver.fd(X[:,k],U_[:,k]);
+#     end
+#     return X, U_
+# end
 
-function f_midpoint(f::Function)
-    dynamics_midpoint(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
-end
+# function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
+#     N = solver.N
+#     X_[:,1] = solver.obj.x0;
+#     for k = 2:N
+#         a = alpha*(d[:,k-1]);
+#         delta = (X_[:,k-1] - X[:,k-1])
 
-function f_midpoint!(f_aug!::Function)
+#         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a;
+#         X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1]);
+#     end
+# end
 
-    function dynamics_midpoint(out::AbstractVector, S::Array)
-        # out = zeros(7)
-        f_aug!(out, S)
-        f_aug!(out, S + out*S[end]/2)
-        copy!(out, S + out*S[end])
-    end
-end
-
-
-function f_augmented(model::Model)
-    n, m = model.n, model.m
-    f_aug = f_augmented(model.f, n, m)
-    f(S::Array) = [f_aug(S); zeros(m+1)]
-end
-
-function f_augmented!(model::Model)
-    n, m = model.n, model.m
-    f_aug! = f_augmented!(model.f, n, m)
-    f!(out::AbstractVector, S::Array) = [f_aug!(out, S); zeros(m+1)]
-end
-
-function f_augmented(f::Function, n::Int, m::Int)
-    f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
-end
-
-function f_augmented!(f::Function, n::Int, m::Int)
-    f_aug!(out::AbstractVector, S::Array) = copy!(out, f(S[1:n], S[n+(1:m)]))
-end
-
-
-
-function rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2})
-    N = size(x, 2)
-    for k = 2:N
-        x[:, k] = solver.fd(x[:,k-1], u[:,k-1])
-    end
-end
-
-function rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64,3}, lk::Array{Float64,2}, alpha::Float64)
-    N = solver.N
-    x_ = zeros(solver.model.n, N);
-    u_ = zeros(solver.model.m, N)
-    rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64,3}, lk::Array{Float64,2},
-        alpha::Float64, x_::Array{Float64,2}, u_::Array{Float64,2})
-    return x_, u_
-end
-
-function rollout!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64,3}, lk::Array{Float64,2}, alpha::Float64, x_::Array{Float64,2}, u_::Array{Float64,2})
-    N = solver.N
-    x_[:,1] = solver.obj.x0;
-    for k = 2:N
-        a = alpha*(lk[:,k-1]);
-        delta = (x_[:,k-1] - x[:,k-1])
-
-        u_[:, k-1] = u[:, k-1] - K[:,:,k-1]*delta - a;
-        x_[:,k] = solver.fd(x_[:,k-1], u_[:,k-1]);
-    end
-end
-
-
-function computecost(obj::Objective, x::Array{Float64,2}, u::Array{Float64,2})
-    Q = obj.Q
-    R = obj.R
-    Qf = obj.Qf
-    xf = obj.xf
-    N = size(x, 2)
-
-    J = 0;
-    for k = 1:N-1
-        J = J + (x[:,k] - xf)'*Q*(x[:,k] - xf) + u[:,k]'*R*u[:,k];
-    end
-    J = 0.5*(J + (x[:,N] - xf)'*Qf*(x[:,N] - xf));
-end
-
-function backward_pass!(solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64, 3}, lk::Array{Float64,2})
-    n = solver.model.n
-    m = solver.model.m
+function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     N = solver.N
     Q = solver.obj.Q
     R = solver.obj.R
+    xf = solver.obj.xf
     Qf = solver.obj.Qf
 
-    S_prev = Qf
-    s_prev = Qf*(x[:,N] - solver.obj.xf)
-    s_prev = reshape(s_prev, 1, n)
-    # S = zeros(n,n,N)
-    # S[:,:,N] = Qf
-    # s = zeros(n,N)
-    # s[:,N] = Qf*(x[:,N] - solver.obj.xf)
-    # K = zeros(m,n,N)
-    # lk = zeros(m,N)
-    vs1 = 0
-    vs2 = 0
-
-    mu_reg = 0;
-
-    for k = N-1:-1:1
-        q = Q*(x[:,k] - solver.obj.xf);
-        r = R*(u[:,k]);
-        A, B = solver.f_jacobian(x[:,k], u[:,k], solver.dt);
-        # A = solver.fx(x[:,k], u[:,k], solver.dt)
-        # B = solver.fu(x[:,k], u[:,k], solver.dt)
-        C1 = q' + s_prev*A;  # 1 x n
-        C2 = r' + s_prev*B;  # 1 x m
-        C3 = Q + A'*S_prev*A; # n x n
-        C4 = R + B'*(S_prev + mu_reg*eye(n))*B; # m x m
-        C5 = Array(B'*(S_prev + mu_reg*eye(n))*A);  # m x n
-
-        # regularization
-        if any(eigvals(C4).<0)
-            mu_reg = mu_reg + 1;
-            k = N-1;
-            println("REG")
-        end
-
-        K[:,:,k] = C4\C5;
-        lk[:,k] = C4\C2';
-        s_prev = C1 - C2*K[:,:,k] + lk[:,k]'*C4*K[:,:,k] - lk[:,k]'*C5;
-        S_prev = C3 + K[:,:,k]'*C4*K[:,:,k] - K[:,:,k]'*C5 - C5'*K[:,:,k];
-
-        vs1 = vs1 + float(lk[:,k]'*C2')[1];
-        vs2 = vs2 + float(lk[:,k]'*C4*lk[:,k]);
-
+    J = 0.0
+    for k = 1:N-1
+      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
     end
-
-    return K, lk, vs1, vs2
-
-end
-
-function forwardpass!(x_, u_, solver::Solver, x::Array{Float64,2}, u::Array{Float64,2}, K::Array{Float64,3}, lk::Array{Float64,2}, vs1::Float64, vs2::Float64, c1::Float64=0.25, c2::Float64=0.75)
-
-    # Compute original cost
-    J_prev = computecost(solver.obj, x, u)
-
-    # update control, roll out new policy, calculate new cost
-    # u_ = zeros(solver.model.m, solver.N)
-    # x_ = similar(x);
-    # J_prev = copy(J);
-    J = Inf;
-    alpha = 1.0;
-    iter = 0;
-    dV = Inf;
-    z = 0;
-
-    while J > J_prev || z < c1 || z > c2
-        # x_, u_ = iLQR.rollout!(solver, x, u, K, lk, alpha)
-        iLQR.rollout!(solver, x, u, K, lk, alpha, x_, u_)
-
-        # Calcuate cost
-        J = iLQR.computecost(solver.obj, x_, u_)
-
-        dV = alpha*vs1 + (alpha^2)*vs2/2
-        z = (J_prev - J)/dV[1,1]
-        alpha = alpha/2;
-        iter = iter + 1;
-
-        if iter > 200
-            println("max iterations")
-            break
-        end
-    end
-
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
     return J
-
 end
 
-function solve(solver::Solver; iterations=10)
+function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2})
+    N = solver.N
     n = solver.model.n
     m = solver.model.m
+    Q = solver.obj.Q
+    R = solver.obj.R
+    xf = solver.obj.xf
+    Qf = solver.obj.Qf
+
+    S = zeros(n,n,N)
+    s = zeros(n,N)
+
+#     K = zeros(m,n,N-1)
+#     d = zeros(m,N-1)
+
+    S = Qf
+    s = Qf*(X[:,N] - xf)
+    v1 = 0.0
+    v2 = 0.0
+
+    mu = 0.0
+    k = N-1
+
+    while k >= 1
+        lx = Q*(X[:,k] - xf)
+        lu = R*(U[:,k])
+        lxx = Q
+        luu = R
+        fx, fu = solver.F(X[:,k],U[:,k])
+
+        Qx = lx + fx'*s
+        Qu = lu + fu'*s
+        Qxx = lxx + fx'*S*fx
+        Quu = luu + fu'*(S + mu*eye(n))*fu
+        Qux = fu'*(S + mu*eye(n))*fx
+
+        # regularization
+        if any(x->x < 0.0, (eigvals(Quu)))
+            mu = mu + 1.0;
+            k = N-1;
+            println("regularized")
+        end
+
+        K[:,:,k] = Quu\Qux
+        d[:,k] = Quu\Qu
+        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+
+        # terms for line search
+        v1 += d[:,k]'*Qu
+        v2 += d[:,k]'*Quu*d[:,k]
+
+        k = k - 1;
+    end
+    return K, d, v1, v2
+end
+
+function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},J::Float64,v1,v2,c1::Float64=0.0,c2::Float64=1.0)
     N = solver.N
+    n = solver.model.n
+    m = solver.model.m
+    X_prev = copy(X)
+    J_prev = copy(J)
+    U_ = zeros(m,N-1)
+    J = Inf
+    dV = 0.0
+    dJ = 0.0
+    z = 0.0
 
-    u = zeros(m,N-1);
-    x = zeros(n,N);
-    x_ = similar(x)
-    u_ = similar(u)
-    x[:,1] = solver.obj.x0;
+    alpha = 1.0
 
-    K = zeros(m,n,N)
-    lk = zeros(m,N)
+    while J > J_prev || z < c1 || z > c2
+        X[:,1] = solver.obj.x0
+        for k = 1:N-1
+            U_[:,k] = U[:,k] - K[:,:,k]*(X[:,k] - X_prev[:,k]) - alpha*d[:,k]
+            X[:,k+1] = solver.fd(X[:,k],U_[:,k]);
+        end
+#         X_, U_ = rollout(solver,X,U,X_,U_,K,d,alpha)
 
-    # first roll-out
-    iLQR.rollout!(solver, x, u)
+         J = cost(solver,X,U_)
+#        J = cost(solver,X_,U_)
+        dV = alpha*v1 + (alpha^2)*v2/2.0
+        dJ = J_prev - J
+        z = dJ/dV[1]
 
-    ## iterations of iLQR using my derivation
-    # improvement criteria
-    c1 = 0.25;
-    c2 = 0.75;
-
-    for i = 1:iterations
-        K, lk, vs1, vs2 = iLQR.backward_pass!(solver, x, u, K, lk)
-        J = iLQR.forwardpass!(x_, u_, solver, x, u, K, lk, vs1, vs2)
-
-        x = copy(x_)
-        u = copy(u_)
-        println("Cost:", J)
+        alpha = alpha/2.0;
     end
 
-    return x, u
+    println("New cost: $J")
+    println("- Expected improvement: $(dV[1])")
+    println("- Actual improvement: $(dJ)")
+    println("- (z = $z)\n")
+
+      return X, U_, J
+#     return X_, U_, J
+end
+
+function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_init::String="random")
+    N = solver.N
+    n = solver.model.n
+    m = solver.model.m
+    X = zeros(n,N)
+    X_ = zeros(n,N)
+
+    if control_init == "random"
+        U = 10.0*rand(m,N-1)
+    else
+        U = zeros(m,N-1)
+    end
+    U_ = zeros(m,N-1)
+
+    K = zeros(m,n,N-1)
+    d = zeros(m,N-1)
+
+    X = rollout(solver, X, U)
+    J_prev = cost(solver, X, U)
+    println("Initial Cost: $J_prev\n")
+
+    for i = 1:iterations
+        println("*** Iteration: $i ***")
+        K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+        X, U, J = forwardpass(solver,X,U,K,d,J_prev,v1,v2)
+
+        if abs(J-J_prev) < eps
+          println("-----SOLVED-----")
+          println("eps criteria met at iteration: $i")
+          break
+        end
+        J_prev = copy(J)
+    end
+
+    return X, U
 end
 
 end
