@@ -34,8 +34,6 @@ end
 export
     doublependulum,
     state,
-    f_jacobian,
-    f_jacobian!,
     fc
 
 end
