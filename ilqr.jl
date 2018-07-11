@@ -137,7 +137,7 @@ function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::A
 #     return X_, U_, J
 end
 
-function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_init::String="random")
+function solve(solver::Solver, iterations::Int64=100, eps::Float64=1e-3; control_init::String="random")
     N = solver.N
     n = solver.model.n
     m = solver.model.m
