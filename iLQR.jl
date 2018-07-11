@@ -9,5 +9,5 @@ module iLQR
 
     include("model.jl")
     include("solver.jl")
-    include("ilqr.jl")
+    include("ilqr_algorithm.jl")
 end

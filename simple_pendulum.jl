@@ -31,4 +31,4 @@ iterations = 4
 # Set up problem
 model = iLQR.Model(dynamics, n, p)
 obj = iLQR.Objective(Q, R, Qf, tf, x0, xf)
-solver = iLQR.Solver(model, obj, dt)
+solver = iLQR.Solver(model, obj, dt=dt)
