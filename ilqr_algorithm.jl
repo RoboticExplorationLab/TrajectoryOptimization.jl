@@ -1,5 +1,3 @@
-
-
 #iLQR
 function rollout(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     X[:,1] = solver.obj.x0
@@ -137,22 +135,16 @@ function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::A
 #     return X_, U_, J
 end
 
-function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_init::String="random")
+function solve(solver::Solver)
+    U = zeros(solver.model.m, solver.N)
+    solve(solver,U)
+end
+
+function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Float64=1e-3)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     X = zeros(n,N)
-    X_ = zeros(n,N)
-
-    if control_init == "random"
-        U = 1.0*rand(m,N-1)
-    else
-        U = zeros(m,N-1)
-    end
-    U_ = zeros(m,N-1)
-
-    K = zeros(m,n,N-1)
-    d = zeros(m,N-1)
 
     X = rollout(solver, X, U)
     J_prev = cost(solver, X, U)
@@ -160,7 +152,7 @@ function solve(solver::Solver,iterations::Int64=100,eps::Float64=1e-3;control_in
 
     for i = 1:iterations
         println("*** Iteration: $i ***")
-        K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+        K, d, v1, v2 = backwardpass(solver,X,U)
         X, U, J = forwardpass(solver,X,U,K,d,J_prev,v1,v2)
 
         if abs(J-J_prev) < eps

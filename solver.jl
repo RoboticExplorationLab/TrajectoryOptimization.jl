@@ -1,5 +1,3 @@
-
-
 struct Solver
     model::Model
     obj::Objective
