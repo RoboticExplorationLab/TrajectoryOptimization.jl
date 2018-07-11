@@ -53,16 +53,6 @@ function rk4(f_aug::Function)
     end
 end
 
-<<<<<<< HEAD
-function Jacobian(f::Function,x::Array{Float64,1},u::Array{Float64,1})
-    f1 = a -> f(a,u)
-    f2 = b -> f(x,b)
-    fx = ForwardDiff.jacobian(f1,x)
-    fu = ForwardDiff.jacobian(f2,u)
-    return fx, fu
-end
-=======
 function midpoint(f::Function)
     fd(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
 end
->>>>>>> df1b01e9b179450b0a37331c241231b1d93661a1
