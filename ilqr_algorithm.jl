@@ -44,7 +44,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     return J
 end
 
-function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2})
+function backwardpass!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2})
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -92,7 +92,7 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
 
         k = k - 1;
     end
-    return K, d, v1, v2
+    return v1, v2
 end
 
 function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},J::Float64,v1,v2,c1::Float64=0.5,c2::Float64=0.85)
@@ -131,8 +131,8 @@ function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::A
     println("- Actual improvement: $(dJ)")
     println("- (z = $z)\n")
 
-      return X, U_, J
-#     return X_, U_, J
+    return X, U_, J
+
 end
 
 function solve(solver::Solver)
@@ -140,11 +140,13 @@ function solve(solver::Solver)
     solve(solver,U)
 end
 
-function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Float64=1e-3)
+function solve(solver::Solver, U::Array{Float64,2}, iterations::Int64=100, eps::Float64=1e-4)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     X = zeros(n,N)
+    K = zeros(m,n,N)
+    d = zeros(m,N)
 
     X = rollout(solver, X, U)
     J_prev = cost(solver, X, U)
@@ -152,7 +154,7 @@ function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Flo
 
     for i = 1:iterations
         println("*** Iteration: $i ***")
-        K, d, v1, v2 = backwardpass(solver,X,U)
+        v1, v2 = backwardpass!(solver,X,U,K,d)
         X, U, J = forwardpass(solver,X,U,K,d,J_prev,v1,v2)
 
         if abs(J-J_prev) < eps

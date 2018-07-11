@@ -15,18 +15,15 @@ x0 = [0; 0];
 xf = [pi; 0]; # (ie, swing up)
 
 # costs
-Q = 1e-5*eye(n);
-Qf = 25*eye(n);
-R = 1e-5*eye(p);
-
-e_dJ = 1e-6;
+Q = 1e-3*eye(n);
+Qf = 100*eye(n);
+R = 1e-3*eye(p);
 
 # simulation
 dt = 0.1;
-tf = 1;
+tf = 5;
 N = Int(floor(tf/dt));
 t = linspace(0,tf,N);
-iterations = 4
 
 # Set up problem
 model = iLQR.Model(dynamics, n, p)
