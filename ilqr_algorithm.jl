@@ -1,33 +1,33 @@
 #iLQR
-function rollout(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+
+#iLQR
+function rollout!(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         X[:,k+1] = solver.fd(X[:,k],U[:,k])
     end
-    return X
 end
 
-# function rollout(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},X_::Array{Float64,2},U_::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},alpha::Float64)
-#     X_prev = copy(X)
-#     X[:,1] = solver.obj.x0
-#     for k = 1:solver.N-1
-#       U_[:,k] = U[:,k] - K[:,:,k]*(X[:,k] - X_prev[:,k]) - alpha*d[:,k]
-#       X[:,k+1] = solver.fd(X[:,k],U_[:,k]);
-#     end
-#     return X, U_
-# end
+function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
+    N = solver.N
+    X_[:,1] = solver.obj.x0;
+    for k = 2:N
+        a = alpha*(d[:,k-1]);
+        delta = (X_[:,k-1] - X[:,k-1])
 
-# function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
-#     N = solver.N
-#     X_[:,1] = solver.obj.x0;
-#     for k = 2:N
-#         a = alpha*(d[:,k-1]);
-#         delta = (X_[:,k-1] - X[:,k-1])
+        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a;
+        X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1]);
+    end
+end
 
-#         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a;
-#         X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1]);
-#     end
-# end
+function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64)
+    N = solver.N
+    X_ = zeros(solver.model.n, N);
+    U_ = zeros(solver.model.m, N)
+    rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2},
+        alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
+    return X_, U_
+end
 
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     N = solver.N
@@ -44,7 +44,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     return J
 end
 
-function backwardpass!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2})
+function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2})
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -55,19 +55,17 @@ function backwardpass!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2},
 
     S = Qf
     s = Qf*(X[:,N] - xf)
-    v1 = 0.0
-    v2 = 0.0
+    v1 = 0.
+    v2 = 0.
 
-    mu = 0.0
+    mu = 0.
     k = N-1
-
     while k >= 1
         lx = Q*(X[:,k] - xf)
         lu = R*(U[:,k])
         lxx = Q
         luu = R
         fx, fu = solver.F(X[:,k],U[:,k])
-
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
@@ -75,7 +73,7 @@ function backwardpass!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2},
         Qux = fu'*(S + mu*eye(n))*fx
 
         # regularization
-        if any(x->x < 0.0, (eigvals(Quu)))
+        if any(eigvals(Quu).<0.)
             mu = mu + 1.0;
             k = N-1;
             println("regularized")
@@ -87,51 +85,49 @@ function backwardpass!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2},
         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
-        v1 += d[:,k]'*Qu
-        v2 += d[:,k]'*Quu*d[:,k]
+        v1 += float(d[:,k]'*Qu)[1]
+        v2 += float(d[:,k]'*Quu*d[:,k])
 
         k = k - 1;
     end
-    return v1, v2
+    return K, d, v1, v2
 end
 
-function forwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2},J::Float64,v1,v2,c1::Float64=0.5,c2::Float64=0.85)
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
-    X_prev = copy(X)
-    J_prev = copy(J)
-    U_ = zeros(m,N-1)
+function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, v1::Float64, v2::Float64, c1::Float64=0.5, c2::Float64=0.85)
+
+    # Compute original cost
+    J_prev = cost(solver, X, U)
+
     J = Inf
-    dV = 0.0
-    dJ = 0.0
-    z = 0.0
-
     alpha = 1.0
+    iter = 0
+    dV = Inf
+    z = 0.
 
-    while J > J_prev || z < c1 || z > c2
-        X[:,1] = solver.obj.x0
-        for k = 1:N-1
-            U_[:,k] = U[:,k] - K[:,:,k]*(X[:,k] - X_prev[:,k]) - alpha*d[:,k]
-            X[:,k+1] = solver.fd(X[:,k],U_[:,k]);
+    while z < c1 || z > c2
+        rollout!(solver, X, U, K, d, alpha, X_, U_)
+
+        # Calcuate cost
+        J = cost(solver, X_, U_)
+
+        dV = alpha*v1 + (alpha^2)*v2/2.
+        z = (J_prev - J)/dV[1,1]
+        alpha = alpha/2.
+        iter = iter + 1
+
+        if iter > 25
+            println("max iterations (forward pass)")
+            break
         end
-#         X_, U_ = rollout(solver,X,U,X_,U_,K,d,alpha)
-
-         J = cost(solver,X,U_)
-#        J = cost(solver,X_,U_)
-        dV = alpha*v1 + (alpha^2)*v2/2.0
-        dJ = J_prev - J
-        z = dJ/dV[1]
-
-        alpha = alpha/2.0;
+        iter += 1
     end
 
     println("New cost: $J")
     println("- Expected improvement: $(dV[1])")
-    println("- Actual improvement: $(dJ)")
+    println("- Actual improvement: $(J_prev-J)")
     println("- (z = $z)\n")
 
-    return X, U_, J
+    return J
 
 end
 
@@ -140,28 +136,37 @@ function solve(solver::Solver)
     solve(solver,U)
 end
 
-function solve(solver::Solver, U::Array{Float64,2}, iterations::Int64=100, eps::Float64=1e-4)
+function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Float64=1e-3)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     X = zeros(n,N)
-    K = zeros(m,n,N)
-    d = zeros(m,N)
+    X_ = similar(X)
+    U_ = similar(U)
+    K = zeros(m,n,N-1)
+    d = zeros(m,N-1)
 
-    X = rollout(solver, X, U)
+    X[:,1] = solver.obj.x0
+
+    # initial roll-out
+    rollout!(solver, X, U)
     J_prev = cost(solver, X, U)
     println("Initial Cost: $J_prev\n")
 
     for i = 1:iterations
         println("*** Iteration: $i ***")
-        v1, v2 = backwardpass!(solver,X,U,K,d)
-        X, U, J = forwardpass(solver,X,U,K,d,J_prev,v1,v2)
+        K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+        J = forwardpass!(X_, U_, solver, X, U, K, d, v1, v2)
+
+        X = copy(X_)
+        U = copy(U_)
 
         if abs(J-J_prev) < eps
-          println("-----SOLVED-----")
-          println("eps criteria met at iteration: $i")
-          break
+            println("-----SOLVED-----")
+            println("eps criteria met at iteration: $i")
+            break
         end
+
         J_prev = copy(J)
     end
 
