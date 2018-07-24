@@ -25,11 +25,11 @@ struct Solver
 end
 
 # Midpoint Integrator
-function f_midpoint(f::Function, dt::Float64)
+function midpoint(f::Function, dt::Float64)
     dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
 end
 
-function f_midpoint(f::Function)
+function midpoint(f::Function)
     dynamics_midpoint(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
 end
 
