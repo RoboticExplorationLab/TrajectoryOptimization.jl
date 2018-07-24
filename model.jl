@@ -17,7 +17,12 @@ struct Model
         Model(mech,ones(m,1))
     end
 
-    function Model(mech::Mechanism,torques::Array)
+    """
+        Model(mech::Mechanism, torques::Array{Bool, 1})
+    Constructor for an underactuated mechanism, where torques is a binary array
+    that specifies whether a joint is actuated.
+    """
+    function Model(mech::Mechanism, torques::Array)
 
         # construct a model using robot dynamics equation assembed from URDF file
         n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
