@@ -1,4 +1,3 @@
-#iLQR
 
 #iLQR
 function rollout!(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
@@ -17,17 +16,22 @@ function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::A
 
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a;
         X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1]);
+
+        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
+            return false
+        end
     end
+    return true
 end
 
-function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64)
-    N = solver.N
-    X_ = zeros(solver.model.n, N);
-    U_ = zeros(solver.model.m, N)
-    rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2},
-        alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
-    return X_, U_
-end
+# function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64)
+#     N = solver.N
+#     X_ = zeros(solver.model.n, N);
+#     U_ = zeros(solver.model.m, N)
+#     rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2},
+#         alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
+#     return X_, U_
+# end
 
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     N = solver.N
@@ -93,7 +97,7 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
     return K, d, v1, v2
 end
 
-function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, v1::Float64, v2::Float64, c1::Float64=0.5, c2::Float64=0.85)
+function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, v1::Float64, v2::Float64, c1::Float64=0.01, c2::Float64=1.0)
 
     # Compute original cost
     J_prev = cost(solver, X, U)
@@ -105,21 +109,27 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
     z = 0.
 
     while z < c1 || z > c2
-        rollout!(solver, X, U, K, d, alpha, X_, U_)
+        flag = rollout!(solver, X, U, K, d, alpha, X_, U_)
+
+        # Check if rollout completed
+        if ~flag
+            # println("Bad X bar values")
+            alpha /= 2
+            continue
+        end
 
         # Calcuate cost
         J = cost(solver, X_, U_)
-
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
-        alpha = alpha/2.
-        iter = iter + 1
 
         if iter > 25
             println("max iterations (forward pass)")
             break
         end
+
         iter += 1
+        alpha /= 2.
     end
 
     println("New cost: $J")
