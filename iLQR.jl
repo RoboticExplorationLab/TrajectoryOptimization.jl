@@ -8,6 +8,7 @@ module iLQR
         Objective
 
     export
+        solve,
         rollout!,
         forwardpass!,
         backwardpass,
