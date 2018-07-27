@@ -1,8 +1,12 @@
-using iLQR
+include("../iLQR.jl")
+include("../dynamics.jl")
+import iLQR, iLQR.solve
 using BenchmarkTools
+using Dynamics
 
-include("simple_pendulum.jl")
-solver = iLQR.Solver(model, obj, dt=0.01)
+solver = iLQR.Solver(Dynamics.pendulum...,dt=0.1)
 # @btime iLQR.solve(solver)
-@time x,u = iLQR.solve(solver)
-println(x[:,end])
+# println(x[:,end])
+
+solver = iLQR.Solver(Dynamics.doublependulum...,dt=0.1)
+@time x,u = solve(solver)
