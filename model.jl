@@ -58,7 +58,7 @@ function Model(urdf::String,torques::Array{Float64,1})
 end
 
 # cost function
-struct Objective
+mutable struct Objective
     Q::Array{Float64,2}
     R::Array{Float64,2}
     Qf::Array{Float64,2}
