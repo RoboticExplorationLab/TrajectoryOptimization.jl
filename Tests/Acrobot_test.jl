@@ -35,8 +35,8 @@ obj = iLQR.Objective(Q,R,Qf,tf,x0,xf)
 solver = iLQR.Solver(model, obj, dt=dt)
 
 U0 = ones(m, solver.N-1)*5
-X, U = iLQR.solve(solver, U0)
-X_sr, U_sr = iLQR.solve_sqrt(solver, U0)
+normal_time = @time X, U = iLQR.solve(solver, U0)
+sr_time = @time X_sr, U_sr = iLQR.solve_sqrt(solver, U0)
 
 P = plot(linspace(0,tf,size(X,2)),X[1,:],title="Acrobot",label="\Theta")
 P = plot!(linspace(0,tf,size(X,2)),X[2,:],ylabel="State",label="\dot{\Theta}")
