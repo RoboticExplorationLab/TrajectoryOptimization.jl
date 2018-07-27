@@ -1,12 +1,15 @@
+include("solver_options.jl")
+
 struct Solver
     model::Model
     obj::Objective
+    opts::SolverOptions
     dt::Float64
     fd::Function  # discrete dynamics
     F::Function
     N::Int
 
-    function Solver(model::Model, obj::Objective, discretizer::Function=rk4; dt=0.01)
+    function Solver(model::Model, obj::Objective, discretizer::Function=rk4; dt=0.01, opts::SolverOptions=SolverOptions())
         fd = discretizer(model.f, dt)     # Discrete dynamics
         f_aug = f_augmented(model)  # Augmented continuous dynamics
         fd_aug = discretizer(f_aug)  # Augmented discrete dynamics
@@ -20,9 +23,21 @@ struct Solver
         end
 
         N = Int(floor(obj.tf/dt));
-        new(model, obj, dt, fd, Jacobians, N)
+        new(model, obj, opts, dt, fd, Jacobians, N)
     end
 end
+
+struct SolverResults
+    X::Array{Float64,2}
+    U::Array{Float64,2}
+    K::Array{Float64,3}
+    d::Array{Float64,2}
+    J::Array{Float64,1}
+end
+
+# struct SolverResultsConstrained <: SolverResults
+#     C::Array{Float64}
+# end
 
 # Midpoint Integrator
 function midpoint(f::Function, dt::Float64)

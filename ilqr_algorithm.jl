@@ -1,4 +1,4 @@
-
+include("solve_sqrt.jl")
 #iLQR
 function rollout!(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     X[:,1] = solver.obj.x0
@@ -132,10 +132,12 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
         alpha /= 2.
     end
 
-    println("New cost: $J")
-    println("- Expected improvement: $(dV[1])")
-    println("- Actual improvement: $(J_prev-J)")
-    println("- (z = $z)\n")
+    if solver.opts.verbose
+        println("New cost: $J")
+        println("- Expected improvement: $(dV[1])")
+        println("- Actual improvement: $(J_prev-J)")
+        println("- (z = $z)\n")
+    end
 
     return J
 
@@ -161,19 +163,29 @@ function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Flo
     # initial roll-out
     rollout!(solver, X, U)
     J_prev = cost(solver, X, U)
-    println("Initial Cost: $J_prev\n")
+    if solver.opts.verbose
+        println("Initial Cost: $J_prev\n")
+    end
 
     for i = 1:iterations
-        println("*** Iteration: $i ***")
-        K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+        if solver.opts.verbose
+            println("*** Iteration: $i ***")
+        end
+        if solver.opts.square_root
+            K, d, v1, v2 = backwards_sqrt(solver,X,U,K,d)
+        else
+            K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+        end
         J = forwardpass!(X_, U_, solver, X, U, K, d, v1, v2)
 
         X = copy(X_)
         U = copy(U_)
 
         if abs(J-J_prev) < eps
-            println("-----SOLVED-----")
-            println("eps criteria met at iteration: $i")
+            if solver.opts.verbose
+                println("-----SOLVED-----")
+                println("eps criteria met at iteration: $i")
+            end
             break
         end
 
