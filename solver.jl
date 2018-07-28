@@ -58,6 +58,8 @@ struct UnconstrainedResults <: SolverResults
     U::Array{Float64,2}
     K::Array{Float64,3}
     d::Array{Float64,2}
+    X_::Array{Float64,2}
+    U_::Array{Float64,2}
 end
 
 struct ConstrainedResults <: SolverResults

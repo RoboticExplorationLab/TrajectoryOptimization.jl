@@ -1,6 +1,8 @@
 include("solve_sqrt.jl")
 #iLQR
-function rollout!(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+function rollout!(res::UnconstrainedResults,solver::Solver)
+    X = res.X; U = res.U
+
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         if solver.opts.inplace_dynamics
@@ -11,20 +13,22 @@ function rollout!(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     end
 end
 
-function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
+function rollout!(res::UnconstrainedResults,solver::Solver,alpha::Float64)
+    # pull out solver/result values
     N = solver.N
+    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
+
     X_[:,1] = solver.obj.x0;
     for k = 2:N
-        a = alpha*(d[:,k-1]);
-        delta = (X_[:,k-1] - X[:,k-1])
+        a = alpha*d[:,k-1]
+        delta = X_[:,k-1] - X[:,k-1]
+        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
 
-        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a;
         if solver.opts.inplace_dynamics
             solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
         else
             X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1])
         end
-        # X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1]);
 
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
             return false
@@ -33,21 +37,9 @@ function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::A
     return true
 end
 
-# function rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, alpha::Float64)
-#     N = solver.N
-#     X_ = zeros(solver.model.n, N);
-#     U_ = zeros(solver.model.m, N)
-#     rollout!(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2},
-#         alpha::Float64, X_::Array{Float64,2}, U_::Array{Float64,2})
-#     return X_, U_
-# end
-
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
-    N = solver.N
-    Q = solver.obj.Q
-    R = solver.obj.R
-    xf = solver.obj.xf
-    Qf = solver.obj.Qf
+    # pull out solver/objective values
+    N = solver.N; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
 
     J = 0.0
     for k = 1:N-1
@@ -57,14 +49,11 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     return J
 end
 
-function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::Array{Float64,3},d::Array{Float64,2})
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
-    Q = solver.obj.Q
-    R = solver.obj.R
-    xf = solver.obj.xf
-    Qf = solver.obj.Qf
+function backwardpass!(res::UnconstrainedResults,solver::Solver)
+    N = solver.N; n = solver.model.n; m = solver.model.m; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d
 
     S = Qf
     s = Qf*(X[:,N] - xf)
@@ -87,14 +76,16 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
 
         # regularization
         if any(eigvals(Quu).<0.)
-            mu = mu + 1.0;
+            mu = mu + solver.opts.mu_regularization;
             k = N-1;
-            println("regularized")
+            if solver.opts.verbose
+                println("regularized")
+            end
         end
 
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)' # fix the transpose and simplify
         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
@@ -103,10 +94,13 @@ function backwardpass(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},K::
 
         k = k - 1;
     end
-    return K, d, v1, v2
+    return v1, v2
 end
 
-function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, v1::Float64, v2::Float64, c1::Float64=0.01, c2::Float64=1.0)
+function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2::Float64)
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
     # Compute original cost
     J_prev = cost(solver, X, U)
@@ -117,12 +111,14 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
     dV = Inf
     z = 0.
 
-    while z < c1 || z > c2
-        flag = rollout!(solver, X, U, K, d, alpha, X_, U_)
+    while z < solver.opts.c1 || z > solver.opts.c2
+        flag = rollout!(res, solver, alpha)
 
         # Check if rollout completed
         if ~flag
-            # println("Bad X bar values")
+            if solver.opts.verbose
+                println("Bad X bar values")
+            end
             alpha /= 2
             continue
         end
@@ -132,7 +128,7 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
 
-        if iter > 25
+        if iter > solver.opts.iterations_linesearch
             println("max iterations (forward pass)")
             break
         end
@@ -157,40 +153,38 @@ function solve(solver::Solver)
     solve(solver,U)
 end
 
-function solve(solver::Solver,U::Array{Float64,2},iterations::Int64=100,eps::Float64=1e-3)
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
+function solve(solver::Solver,U::Array{Float64,2})
+    N = solver.N; n = solver.model.n; m = solver.model.m
+
     X = zeros(n,N)
     X_ = similar(X)
     U_ = similar(U)
     K = zeros(m,n,N-1)
     d = zeros(m,N-1)
-
-    X[:,1] = solver.obj.x0
+    results = UnconstrainedResults(X,U,K,d,X_,U_)
 
     # initial roll-out
-    rollout!(solver, X, U)
+    X[:,1] = solver.obj.x0
+    rollout!(results, solver)
     J_prev = cost(solver, X, U)
     if solver.opts.verbose
         println("Initial Cost: $J_prev\n")
     end
 
-    for i = 1:iterations
+    for i = 1:solver.opts.iterations
         if solver.opts.verbose
             println("*** Iteration: $i ***")
         end
         if solver.opts.square_root
-            K, d, v1, v2 = backwards_sqrt(solver,X,U,K,d)
+            K, d, v1, v2 = backwards_sqrt(solver,X,U,K,d) # TODO fix
         else
-            K, d, v1, v2 = backwardpass(solver,X,U,K,d)
+            v1, v2 = backwardpass!(results,solver)
         end
-        J = forwardpass!(X_, U_, solver, X, U, K, d, v1, v2)
+        J = forwardpass!(results, solver, v1, v2)
+        X .= X_
+        U .= U_
 
-        X = copy(X_)
-        U = copy(U_)
-
-        if abs(J-J_prev) < eps
+        if abs(J-J_prev) < solver.opts.eps
             if solver.opts.verbose
                 println("-----SOLVED-----")
                 println("eps criteria met at iteration: $i")
