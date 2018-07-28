@@ -67,14 +67,15 @@ struct ConstrainedResults <: SolverResults
     U::Array{Float64,2}
     K::Array{Float64,3}
     d::Array{Float64,2}
-
+    X_::Array{Float64,2}
+    U_::Array{Float64,2}
     C::Array{Float64,2}
     Iμ::Array{Float64,3}
     LAMBDA::Array{Float64,2}
     MU::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,C,Iμ,LAMBDA,MU)
-        new(X,U,K,d,C,Iμ,LAMBDA,MU)
+    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
+        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
     end
 end
 function ConstrainedResults(n,m,p,N)
@@ -82,6 +83,8 @@ function ConstrainedResults(n,m,p,N)
     U = zeros(m,N-1)
     K = zeros(m,n,N-1)
     d = zeros(m,N-1)
+    X_ = zeros(n,N)
+    U_ = zeros(m,N-1)
     C = zeros(p,N)
     Iμ = zeros(p,p,N)
     LAMBDA = zeros(p,N)

@@ -19,7 +19,7 @@ mutable struct SolverOptions
 
     function SolverOptions(;square_root=false,al=false,verbose=false,
         inplace_dynamics=false,c1=1e-4,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
-        eps_constraint=1e-2,iterations=100,iterations_outerloop=25,
+        eps_constraint=1e-2,iterations=100,iterations_outerloop=10,
         iterations_linesearch=25,mu_regularization=1.0)
 
         new(square_root,al,verbose,inplace_dynamics,c1,c2,eps,eps_intermediate,

@@ -1,6 +1,6 @@
 include("solve_sqrt.jl")
 #iLQR
-function rollout!(res::UnconstrainedResults,solver::Solver)
+function rollout!(res::SolverResults,solver::Solver)
     X = res.X; U = res.U
 
     X[:,1] = solver.obj.x0
@@ -13,7 +13,7 @@ function rollout!(res::UnconstrainedResults,solver::Solver)
     end
 end
 
-function rollout!(res::UnconstrainedResults,solver::Solver,alpha::Float64)
+function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     # pull out solver/result values
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_

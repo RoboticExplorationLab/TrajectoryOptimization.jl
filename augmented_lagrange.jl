@@ -12,8 +12,9 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},C::Array{Fl
     return J
 end
 
-function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2}, v1::Float64, v2::Float64,
-        C, Iμ, c_fun,LAMBDA::Array{Float64,2},MU::Array{Float64,2}, res::ConstrainedResults, c1::Float64=0.5, c2::Float64=0.9)
+function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64, C, Iμ, c_fun,LAMBDA::Array{Float64,2},MU::Array{Float64,2})
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_;
 
     # Compute original cost
     J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
@@ -26,21 +27,21 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
     dV = Inf
     z = 0.
 
-    while z < c1 || z > c2
-        rollout!(solver, X, U, K, d, alpha, X_, U_)
+    while z < solver.opts.c1 || z > solver.opts.c2
+        rollout!(res,solver,alpha)
 
         # Calcuate cost
         update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
         J = cost(solver, X_, U_, C, Iμ, LAMBDA)
-        # J = cost(solver, X_, U_, C_function(X_,U_), I_mu_function(X_,U_,LAMBDA,MU), LAMBDA)
-
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
         alpha = alpha/2.
         iter = iter + 1
 
-        if iter > 25
-            println("max iterations (forward pass)")
+        if iter > solver.opts.iterations_linesearch
+            if solver.opts.verbose
+                println("max iterations (forward pass)")
+            end
             break
         end
         iter += 1
@@ -57,14 +58,15 @@ function forwardpass!(X_, U_, solver::Solver, X::Array{Float64,2}, U::Array{Floa
 
 end
 
-function forwardpass!(X_, U_, res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,
-        c_fun, c1::Float64=0.5, c2::Float64=0.9)
+function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,c_fun)
 
     # Pull out values from results
     X = res.X
     U = res.U
     K = res.K
     d = res.d
+    X_ = res.X_
+    U_ = res.U_
     C = res.C
     Iμ = res.Iμ
     LAMBDA = res.LAMBDA
@@ -81,21 +83,21 @@ function forwardpass!(X_, U_, res::ConstrainedResults, solver::Solver, v1::Float
     dV = Inf
     z = 0.
 
-    while z < c1 || z > c2
-        rollout!(solver, X, U, K, d, alpha, X_, U_)
+    while z < solver.opts.c1 || z > solver.opts.c2
+        rollout!(res,solver,alpha)
 
         # Calcuate cost
         update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
         J = cost(solver, X_, U_, C, Iμ, LAMBDA)
-        # J = cost(solver, X_, U_, C_function(X_,U_), I_mu_function(X_,U_,LAMBDA,MU), LAMBDA)
-
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
         alpha = alpha/2.
         iter = iter + 1
 
-        if iter > 25
-            println("max iterations (forward pass)")
+        if iter > solver.opts.iterations_linesearch
+            if solver.opts.verbose
+                println("max iterations (forward pass)")
+            end
             break
         end
         iter += 1
@@ -147,8 +149,75 @@ function build_I_mu(cI,λ,μ)
 end
 
 # Augmented Lagrange
-function backwardpass(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, K::Array{Float64,3}, d::Array{Float64,2},
-        C::Array{Float64,2}, Iμ::Array{Float64,3}, constraint_jacobian::Function, LAMBDA::Array{Float64,2})
+# function backwardpass(res::ConstrainedResults,solver::Solver, C::Array{Float64,2}, Iμ::Array{Float64,3}, constraint_jacobian::Function, LAMBDA::Array{Float64,2})
+#     N = solver.N
+#     n = solver.model.n
+#     m = solver.model.m
+#     Q = solver.obj.Q
+#     R = solver.obj.R
+#     xf = solver.obj.xf
+#     Qf = solver.obj.Qf
+#
+#     # pull out values from results
+#     X = res.X; U = res.U; K = res.K; d = res.d
+#
+#     # p = size(C,1)
+#     pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
+#     # pE = n
+#
+#     S = Qf
+#     s = Qf*(X[:,N] - xf)
+#     v1 = 0.
+#     v2 = 0.
+#
+#     mu = 0.
+#     k = N-1
+#     while k >= 1
+#         lx = Q*(X[:,k] - xf)
+#         lu = R*(U[:,k])
+#         lxx = Q
+#         luu = R
+#         fx, fu = solver.F(X[:,k],U[:,k])
+#         Qx = lx + fx'*s
+#         Qu = lu + fu'*s
+#         Qxx = lxx + fx'*S*fx
+#         Quu = luu + fu'*(S + mu*eye(n))*fu
+#         Qux = fu'*(S + mu*eye(n))*fx
+#
+#         Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+#
+#         # regularization
+#         if any(eigvals(Quu).<0.)
+#             mu = mu + solver.opts.mu_regularization
+#             k = N-1
+#             if solver.opts.verbose
+#                 println("regularized")
+#             end
+#         end
+#
+#         # Constraints
+#
+#         Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+#         Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
+#         Qxx += Cx'*Iμ[:,:,k]*Cx
+#         Quu += Cu'*Iμ[:,:,k]*Cu
+#         Qux += Cu'*Iμ[:,:,k]*Cx
+#
+#         K[:,:,k] = Quu\Qux
+#         d[:,k] = Quu\Qu
+#         s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+#         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+#
+#         # terms for line search
+#         v1 += float(d[:,k]'*Qu)[1]
+#         v2 += float(d[:,k]'*Quu*d[:,k])
+#
+#         k = k - 1;
+#     end
+#     return v1, v2
+# end
+
+function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacobian::Function, pI::Int)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -157,8 +226,10 @@ function backwardpass(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, 
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
     # p = size(C,1)
-    pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
+    # pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
     # pE = n
 
     S = Qf
@@ -173,70 +244,7 @@ function backwardpass(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2}, 
         lu = R*(U[:,k])
         lxx = Q
         luu = R
-        fx, fu = solver.F(X[:,k],U[:,k])
-        Qx = lx + fx'*s
-        Qu = lu + fu'*s
-        Qxx = lxx + fx'*S*fx
-        Quu = luu + fu'*(S + mu*eye(n))*fu
-        Qux = fu'*(S + mu*eye(n))*fx
-
-        Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
-
-        # regularization
-        if any(eigvals(Quu).<0.)
-            mu = mu + 1.0;
-            k = N-1;
-            println("regularized")
-        end
-
-        # Constraints
-
-        Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
-        Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
-        Qxx += Cx'*Iμ[:,:,k]*Cx
-        Quu += Cu'*Iμ[:,:,k]*Cu
-        Qux += Cu'*Iμ[:,:,k]*Cx
-
-        K[:,:,k] = Quu\Qux
-        d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-        S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
-
-        # terms for line search
-        v1 += float(d[:,k]'*Qu)[1]
-        v2 += float(d[:,k]'*Quu*d[:,k])
-
-        k = k - 1;
-    end
-    return v1, v2
-end
-
-function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacobian::Function, pI::Int)
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
-    Q = solver.obj.Q
-    R = solver.obj.R
-    xf = solver.obj.xf
-    Qf = solver.obj.Qf
-
-    # p = size(C,1)
-    # pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
-    # pE = n
-
-    S = Qf
-    s = Qf*(res.X[:,N] - xf)
-    v1 = 0.
-    v2 = 0.
-
-    mu = 0.
-    k = N-1
-    while k >= 1
-        lx = Q*(res.X[:,k] - xf)
-        lu = R*(res.U[:,k])
-        lxx = Q
-        luu = R
-        fx, fu = solver.F(res.X[:,k], res.U[:,k])
+        fx, fu = solver.F(X[:,k], U[:,k])
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
@@ -245,27 +253,28 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
 
         # regularization
         if ~isposdef(Quu)
-            mu = mu + 1.0;
-            k = N-1;
-            println("regularized")
+            mu = mu + solver.opts.mu_regularization;
+            k = N-1
+            if solver.opts.verbose
+                println("regularized")
+            end
         end
 
         # Constraints
-        Cx, Cu = constraint_jacobian(res.X[:,k], res.U[:,k])
-        Qx += Cx'*res.Iμ[:,:,k]*res.C[:,k] + Cx'*res.LAMBDA[:,k]
-        Qu += Cu'*res.Iμ[:,:,k]*res.C[:,k] + Cu'*res.LAMBDA[:,k]
-        Qxx += Cx'*res.Iμ[:,:,k]*Cx
-        Quu += Cu'*res.Iμ[:,:,k]*Cu
-        Qux += Cu'*res.Iμ[:,:,k]*Cx
-
-        res.K[:,:,k] = Quu\Qux
-        res.d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*res.K[:,:,k] + res.d[:,k]'*Quu*res.K[:,:,k] - res.d[:,k]'*Qux)'
-        S = Qxx + res.K[:,:,k]'*Quu*res.K[:,:,k] - res.K[:,:,k]'*Qux - Qux'*res.K[:,:,k]
+        Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+        Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+        Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
+        Qxx += Cx'*Iμ[:,:,k]*Cx
+        Quu += Cu'*Iμ[:,:,k]*Cu
+        Qux += Cu'*Iμ[:,:,k]*Cx
+        K[:,:,k] = Quu\Qux
+        d[:,k] = Quu\Qu
+        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
-        v1 += float(res.d[:,k]'*Qu)[1]
-        v2 += float(res.d[:,k]'*Quu*res.d[:,k])
+        v1 += float(d[:,k]'*Qu)[1]
+        v2 += float(d[:,k]'*Quu*d[:,k])
 
         k = k - 1;
     end
@@ -290,10 +299,11 @@ function update_constraints!(C,Iμ,c,X,U,LAMBDA,MU,pI)
 end
 
 
-function solve_al(solver::iLQR.Solver,U0::Array{Float64,2},iterations::Int64=100,eps::Float64=1e-5)
+function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     N = solver.N
     n = solver.model.n
     m = solver.model.m
+
     U = copy(U0)
     X = zeros(n,N)
     X_ = similar(X)
@@ -314,7 +324,7 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2},iterations::Int64=100
     xf = solver.obj.xf
 
     # results = ConstrainedResults(n,m,p,N)
-    results = ConstrainedResults(X,U,K,d,C,Iμ,LAMBDA,MU)
+    results = ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
 
     function c_control(x,u)
         [u_max - u;
@@ -357,33 +367,30 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2},iterations::Int64=100
     ### SOLVER
     # initial roll-out
     X[:,1] = solver.obj.x0
-    rollout!(solver, X, U)
+    rollout!(results,solver)
 
 
     # Outer Loop
-    for k = 1:10
+    for k = 1:solver.opts.iterations_outerloop
 
         update_constraints!(C,Iμ,c_fun,X,U,LAMBDA,MU,pI)
-        # J_prev = cost(solver, X, U, C_fun(X,U), I_mu(X,U,LAMBDA,MU), LAMBDA)
         J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
         end
 
-        for i = 1:iterations
+        for i = 1:solver.opts.iterations
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
             v1, v2 = backwardpass!(results, solver, constraint_jacobian, pI)
-            # v1, v2 = backwardpass(solver,X,U,K,d, C, Iμ, constraint_jacobian, LAMBDA)
-            J = forwardpass!(X_, U_, results, solver, v1, v2, c_fun)
-            # J = forwardpass!(X_, U_, solver, X, U, K, d, v1, v2, C, Iμ, c_fun, LAMBDA, MU, results)
-            X .= X_  # .= is better than copy, since it doesn't allocate new memory (in-place assignment)
+            J = forwardpass!(results, solver, v1, v2, c_fun)
+            X .= X_
             U .= U_
             dJ = copy(abs(J-J_prev))
             J_prev = copy(J)
 
-            if dJ < eps
+            if dJ < solver.opts.eps
                 if solver.opts.verbose
                     println("   eps criteria met at iteration: $i\n")
                 end
