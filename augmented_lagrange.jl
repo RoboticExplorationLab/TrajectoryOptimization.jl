@@ -12,51 +12,51 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},C::Array{Fl
     return J
 end
 
-function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64, C, Iμ, c_fun,LAMBDA::Array{Float64,2},MU::Array{Float64,2})
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_;
-
-    # Compute original cost
-    J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
-
-    pI = 2*solver.model.m # TODO change this
-
-    J = Inf
-    alpha = 1.0
-    iter = 0
-    dV = Inf
-    z = 0.
-
-    while z < solver.opts.c1 || z > solver.opts.c2
-        rollout!(res,solver,alpha)
-
-        # Calcuate cost
-        update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
-        J = cost(solver, X_, U_, C, Iμ, LAMBDA)
-        dV = alpha*v1 + (alpha^2)*v2/2.
-        z = (J_prev - J)/dV[1,1]
-        alpha = alpha/2.
-        iter = iter + 1
-
-        if iter > solver.opts.iterations_linesearch
-            if solver.opts.verbose
-                println("max iterations (forward pass)")
-            end
-            break
-        end
-        iter += 1
-    end
-
-    if solver.opts.verbose
-        println("New cost: $J")
-        println("- Expected improvement: $(dV[1])")
-        println("- Actual improvement: $(J_prev-J)")
-        println("- (z = $z)\n")
-    end
-
-    return J
-
-end
+# function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64, C, Iμ, c_fun,LAMBDA::Array{Float64,2},MU::Array{Float64,2})
+#     # pull out values from results
+#     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_;
+#
+#     # Compute original cost
+#     J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
+#
+#     pI = 2*solver.model.m # TODO change this
+#
+#     J = Inf
+#     alpha = 1.0
+#     iter = 0
+#     dV = Inf
+#     z = 0.
+#
+#     while z < solver.opts.c1 || z > solver.opts.c2
+#         rollout!(res,solver,alpha)
+#
+#         # Calcuate cost
+#         update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
+#         J = cost(solver, X_, U_, C, Iμ, LAMBDA)
+#         dV = alpha*v1 + (alpha^2)*v2/2.
+#         z = (J_prev - J)/dV[1,1]
+#         alpha = alpha/2.
+#         iter = iter + 1
+#
+#         if iter > solver.opts.iterations_linesearch
+#             if solver.opts.verbose
+#                 println("max iterations (forward pass)")
+#             end
+#             break
+#         end
+#         iter += 1
+#     end
+#
+#     if solver.opts.verbose
+#         println("New cost: $J")
+#         println("- Expected improvement: $(dV[1])")
+#         println("- Actual improvement: $(J_prev-J)")
+#         println("- (z = $z)\n")
+#     end
+#
+#     return J
+#
+# end
 
 function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,c_fun)
 
