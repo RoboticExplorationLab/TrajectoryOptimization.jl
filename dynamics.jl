@@ -1,6 +1,6 @@
 module Dynamics
 
-using iLQR.Model, iLQR.Objective
+using iLQR.Model, iLQR.UnconstainedObjective, iLQR.ConstrainedObjective
 
 export
     pendulum,
@@ -52,8 +52,15 @@ R = 1e-3*eye(m);
 # simulation
 tf = 5;
 
+obj = UnconstainedObjective(Q, R, Qf, tf, x0, xf)
+
+# Constraints
+u_min = [-20]
+u_max = [10]
+
+
 # Set up problem
-obj = Objective(Q, R, Qf, tf, x0, xf)
+
 pendulum = [model,obj]
 
 
@@ -76,7 +83,7 @@ R = 0.0001*eye(2)
 # simulation
 tf = 5.0
 
-obj = Objective(Q,R,Qf,tf,x0,xf)
+obj = UnconstainedObjective(Q,R,Qf,tf,x0,xf)
 doublependulum = [model,obj]
 
 """## Dubins car"""
