@@ -74,10 +74,25 @@ struct ConstrainedResults <: SolverResults
     LAMBDA::Array{Float64,2}
     MU::Array{Float64,2}
 
+    CN::Array{Float64,1}
+    IμN::Array{Float64,2}
+    λN::Array{Float64,1}
+    μN::Array{Float64,1}
+
     function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
-        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
+        n = size(X,1)
+        # Terminal Constraints (make 2D so it works well with stage values)
+        CN = zeros(n)
+        IμN = zeros(n,n)
+        λN = zeros(n)
+        μN = zeros(n)
+        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+    end
+    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
     end
 end
+
 function ConstrainedResults(n,m,p,N)
     X = zeros(n,N)
     U = zeros(m,N-1)
@@ -85,10 +100,19 @@ function ConstrainedResults(n,m,p,N)
     d = zeros(m,N-1)
     X_ = zeros(n,N)
     U_ = zeros(m,N-1)
-    C = zeros(p,N)
-    Iμ = zeros(p,p,N)
-    LAMBDA = zeros(p,N)
-    MU = zeros(p,N)
+
+    # Stage Constraints
+    C = zeros(p,N-1)
+    Iμ = zeros(p,p,N-1)
+    LAMBDA = zeros(p,N-1)
+    MU = zeros(p,N-1)
+
+    # Terminal Constraints (make 2D so it works well with stage values)
+    CN = zeros(n)
+    IμN = zeros(n,n)
+    λN = zeros(n)
+    μN = zeros(n)
+
 end
 
 # struct SolverResultsConstrained <: SolverResults

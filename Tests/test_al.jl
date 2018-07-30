@@ -29,5 +29,6 @@ obj = iLQR.ConstrainedObjective(obj_uncon, u_min=-2, u_max=2)
 
 model! = iLQR.Model(Dynamics.pendulum_dynamics!,2,1)
 solver! = iLQR.Solver(model!,obj,dt=0.1,opts=opt)
+solver!.obj.Qf .*= 0
 @time xc, uc = iLQR.solve_al(solver!,U)
 @profiler xc, uc = iLQR.solve_al(solver!,U)

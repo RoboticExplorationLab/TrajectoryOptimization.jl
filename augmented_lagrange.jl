@@ -6,9 +6,18 @@ using Base.Test
 # overloaded cost function to accomodate Augmented Lagrance method
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},C::Array{Float64,2},I_mu::Array{Float64,3},LAMBDA::Array{Float64,2})
     J = cost(solver,X,U)
-    for k = 1:solver.N
+    for k = 1:solver.N-1
         J += 0.5*(C[:,k]'*I_mu[:,:,k]*C[:,k] + LAMBDA[:,k]'*C[:,k])
     end
+    return J
+end
+
+function cost(solver::Solver, res::ConstrainedResults)
+    J = cost(solver,res.X,res.U)
+    for k = 1:solver.N-1
+        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+    end
+    J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
     return J
 end
 
@@ -73,7 +82,8 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     MU = res.MU
 
     # Compute original cost
-    J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
+    # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
+    J_prev = cost(solver, res)
 
     pI = 2*solver.model.m # TODO change this
 
@@ -87,8 +97,10 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
         rollout!(res,solver,alpha)
 
         # Calcuate cost
-        update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
-        J = cost(solver, X_, U_, C, Iμ, LAMBDA)
+        # update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
+        update_constraints!(res, c_fun, pI, X_, U_)
+        # J = cost(solver, X_, U_, C, Iμ, LAMBDA)
+        J = cost(solver,res)
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
         alpha = alpha/2.
@@ -232,8 +244,9 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
     # pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
     # pE = n
 
-    S = Qf
-    s = Qf*(X[:,N] - xf)
+    Cx, Cu = constraint_jacobian(res.X[:,N])
+    S = Qf + Cx'*res.IμN*Cx
+    s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
     v1 = 0.
     v2 = 0.
 
@@ -298,6 +311,27 @@ function update_constraints!(C,Iμ,c,X,U,LAMBDA,MU,pI)
     end
 end
 
+function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Void
+    p,N = size(res.C)
+    N += 1 # since C is size p x N-1
+    for k = 1:N-1
+        res.C[:,k] = c(X[:,k], U[:,k])
+        for j = 1:pI
+            if res.C[j,k] < 0. || res.LAMBDA[j,k] > 0.
+                res.Iμ[j,j,k] = res.MU[j,k]
+            else
+                res.Iμ[j,j,k] = 0.
+            end
+        end
+        for j = pI+1:p
+            res.Iμ[j,j,k] = res.MU[j,k]
+        end
+    end
+    # Terminal constraint
+    res.CN .= c(X[:,N])
+    res.IμN .= diagm(res.μN)
+    return nothing # TODO allow for more general terminal constraint
+end
 
 function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     N = solver.N
@@ -313,18 +347,24 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     J = 0.
 
     ### Constraints
-    p = 2*m
-    pI = p
-    C = zeros(p,N)
-    Iμ = zeros(p,p,N)
-    LAMBDA = zeros(p,N)
-    MU = ones(p,N)
-    u_min = -2.
-    u_max = 2.
+    p = solver.obj.p
+    pI = solver.obj.pI
+    u_min = solver.obj.u_min
+    u_max = solver.obj.u_max
     xf = solver.obj.xf
 
+    C = zeros(p,N-1)
+    Iμ = zeros(p,p,N-1)
+    LAMBDA = zeros(p,N-1)
+    MU = ones(p,N-1)
+
+    CN = zeros(n)  # TODO allow more general terminal constraint
+    IμN = zeros(n,n)
+    λN = zeros(n)
+    μN = zeros(n)
+
     # results = ConstrainedResults(n,m,p,N)
-    results = ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
+    results = ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
 
     function c_control(x,u)
         [u_max - u;
@@ -335,7 +375,7 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         c_control(x,u)
     end
 
-    function cN(x,u)
+    function c_fun(x)
         x - xf
     end
 
@@ -354,6 +394,8 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     fx = zeros(p,n)
     fu = zeros(p,m)
 
+    fx_N = eye(n)  # Jacobian of final state
+
     function constraint_jacobian(x::Array,u::Array)
         fx[1:2m, :] = fx_control
         fu[1:2m, :] = fu_control
@@ -363,6 +405,9 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         return fx, fu
     end
 
+    function constraint_jacobian(x::Array)
+        return fx_N
+    end
 
     ### SOLVER
     # initial roll-out
@@ -373,7 +418,8 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
 
-        update_constraints!(C,Iμ,c_fun,X,U,LAMBDA,MU,pI)
+        # update_constraints!(C,Iμ,c_fun,X,U,LAMBDA,MU,pI)
+        update_constraints!(results, c_fun, pI, X, U)
         J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
@@ -399,12 +445,14 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         end
 
         # Outer Loop - update lambda, mu
-        for jj = 1:N
+        for jj = 1:N-1
             for ii = 1:p
-                LAMBDA[ii,jj] += -MU[ii,jj]*min(C[ii,jj],0)
+                LAMBDA[ii,jj] += -MU[ii,jj]*min(C[ii,jj],0) # TODO handle equality constraints
                 MU[ii,jj] += 10.0
             end
         end
+        λN .+= -μN.*CN
+        μN .+= 10.0
     end
 
     return X, U
