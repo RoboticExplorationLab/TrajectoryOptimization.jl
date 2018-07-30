@@ -23,7 +23,11 @@ plot!(u1',label="unconstrained")
 opt = iLQR.SolverOptions()
 opt.inplace_dynamics = true
 opt.verbose = true
-obj = Dynamics.pendulum[2]
+obj_uncon = Dynamics.pendulum[2]
+# obj_uncon.Qf = eye(2)*1
+obj = iLQR.ConstrainedObjective(obj_uncon, u_min=-2, u_max=2)
+
 model! = iLQR.Model(Dynamics.pendulum_dynamics!,2,1)
 solver! = iLQR.Solver(model!,obj,dt=0.1,opts=opt)
-@profile xc, uc = iLQR.solve_al(solver!,U)
+@time xc, uc = iLQR.solve_al(solver!,U)
+@profiler xc, uc = iLQR.solve_al(solver!,U)
