@@ -93,7 +93,7 @@ struct ConstrainedResults <: SolverResults
     end
 end
 
-function ConstrainedResults(n,m,p,N)
+function ConstrainedResults(n,m,p,N,p_N=n)
     X = zeros(n,N)
     U = zeros(m,N-1)
     K = zeros(m,n,N-1)
@@ -108,10 +108,14 @@ function ConstrainedResults(n,m,p,N)
     MU = zeros(p,N-1)
 
     # Terminal Constraints (make 2D so it works well with stage values)
-    CN = zeros(n)
-    IμN = zeros(n,n)
-    λN = zeros(n)
-    μN = zeros(n)
+    C_N = zeros(p_N)
+    Iμ_N = zeros(p_N,p_N)
+    λ_N = zeros(p_N)
+    μ_N = zeros(p_N)
+
+    ConstrainedResults(X,U,K,d,X_,U_,
+        C,Iμ,LAMBDA,MU,
+        C_N,Iμ_N,λ_N,μ_N)
 
 end
 
