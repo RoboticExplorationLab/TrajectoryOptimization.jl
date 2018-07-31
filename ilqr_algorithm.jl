@@ -153,10 +153,11 @@ function solve(solver::Solver)
     solve(solver,U)
 end
 
-function solve(solver::Solver,U::Array{Float64,2})
+function solve(solver::Solver,U0::Array{Float64,2})
     N = solver.N; n = solver.model.n; m = solver.model.m
 
     X = zeros(n,N)
+    U = copy(U0)
     X_ = similar(X)
     U_ = similar(U)
     K = zeros(m,n,N-1)

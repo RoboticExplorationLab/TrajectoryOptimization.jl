@@ -10,7 +10,7 @@ solver = iLQR.Solver(Dynamics.pendulum...,dt=0.1)
 solver.opts.verbose = true
 
 U = ones(solver.model.m, solver.N-1)
-# @time x1,u1 = iLQR.solve(solver,U)
+@time x1,u1 = iLQR.solve(solver,U)
 
 @time xc,uc = iLQR.solve_al(solver,U)
 @btime xc,uc = iLQR.solve_al(solver,U)
@@ -22,8 +22,17 @@ plot!(u1',label="unconstrained")
 
 opt = iLQR.SolverOptions()
 opt.inplace_dynamics = true
-opt.verbose = true
-obj = Dynamics.pendulum[2]
+obj_uncon = Dynamics.pendulum[2]
+obj = iLQR.ConstrainedObjective(obj_uncon, u_min=-2, u_max=2)
 model! = iLQR.Model(Dynamics.pendulum_dynamics!,2,1)
 solver! = iLQR.Solver(model!,obj,dt=0.1,opts=opt)
+solver!.obj.Qf .= eye(2)*100.0
+solver!.opts.verbose = true
+@enter @time xc, uc = iLQR.solve_al(solver!,U)
+solver!.opts.verbose = false
+@btime xc, uc = iLQR.solve_al(solver!,U)
 @profile xc, uc = iLQR.solve_al(solver!,U)
+
+solver = iLQR.Solver(model!, obj_uncon, dt=0.1, opts=opt)
+@time x1,u1 = iLQR.solve(solver,U)
+@btime x1,u1 = iLQR.solve(solver,U)
