@@ -102,8 +102,9 @@ using Base.Test
     @test obj.p == 1
 
     # Update objectve
-    obj = iLQR.update_objective(obj, u_max=2, x_max = 4)
-    @test obj.p == 4
+    obj = iLQR.update_objective(obj, u_max=2, x_max = 4, cE=c)
+    @test obj.p == 5
+
 
 
 end

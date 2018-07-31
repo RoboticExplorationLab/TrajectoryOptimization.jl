@@ -334,73 +334,94 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
+"""
+    generate_constraint_functions(obj)
+Generate the constraints function C(x,u) and a function to compute the jacobians
+Cx, Cu = Jc(x,u) from a `ConstrainedObjective` type. Automatically stacks inequality
+and equality constraints and takes jacobians of custom functions with `ForwardDiff`.
 
-    U = copy(U0)
-    X = zeros(n,N)
-    X_ = similar(X)
-    U_ = similar(U)
-    K = zeros(m,n,N-1)
-    d = zeros(m,N-1)
-    J = 0.
+Stacks the constraints as follows:
+[upper control inequalities
+ lower control inequalities
+ upper state inequalities
+ lower state inequalities
+ general inequalities
+ general equalities
+ (control equalities for infeasible start)]
+"""
+function generate_constraint_functions(obj::ConstrainedObjective)
+    m = size(obj.R,1)
+    n = length(obj.x0)
 
-    ### Constraints
-    p = solver.obj.p
-    pI = solver.obj.pI
-    u_min = solver.obj.u_min
-    u_max = solver.obj.u_max
-    xf = solver.obj.xf
+    u_min_active = isfinite.(obj.u_min)
+    u_max_active = isfinite.(obj.u_max)
+    x_min_active = isfinite.(obj.x_min)
+    x_max_active = isfinite.(obj.x_max)
 
-    C = zeros(p,N-1)
-    Iμ = zeros(p,p,N-1)
-    LAMBDA = zeros(p,N-1)
-    MU = ones(p,N-1)
-
-    CN = zeros(n)  # TODO allow more general terminal constraint
-    IμN = zeros(n,n)
-    λN = zeros(n)
-    μN = zeros(n)
-
-    # results = ConstrainedResults(n,m,p,N)
-    results = ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
-
+    # Inequality on control
+    pI_u_max = count(u_max_active)
+    pI_u = pI_u_max + count(u_min_active)
+    cI_u = zeros(pI_u)
     function c_control(x,u)
-        [u_max - u;
-         u - u_min]
+        [(obj.u_max - u)[u_max_active];
+         (u - obj.u_min)[u_min_active]]
     end
 
+    # Inequality on state
+    pI_x_max = count(x_max_active)
+    pI_x = pI_x_max + count(x_min_active)
+    function c_state(x,u)
+        [(obj.x_max - x)[x_max_active];
+         (x - obj.x_min)[x_min_active]]
+    end
+
+    # Custom constraints
+    pI_c = obj.pI - pI_x - pI_u
+
+    # Form inequality constraint
+    CI = zeros(obj.pI)
+    function cI(x,u)
+        CI[1:pI_u] = c_control(x,u)
+        CI[(1:pI_x)+pI_u] = c_state(x,u)
+        CI[(1:pI_c)+pI_u+pI_x] = obj.cI(x,u)
+        return CI
+    end
+
+    C = zeros(obj.p)
     function c_fun(x,u)
-        c_control(x,u)
+        C[1:obj.pI] = cI(x,u)
+        C[1+obj.pI:end] = obj.cE(x,u)
+        return C
     end
 
+    # TODO make this more general
     function c_fun(x)
-        x - xf
+        x - obj.xf
     end
 
-    # function f_augmented(f::Function, n::Int, m::Int)
-    #     f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
-    # end
-    #
-    # c_aug = f_augmented(c_fun,n,m)
-    # F(S) = ForwardDiff.jacobian(c_aug, S)
+    ### Jacobians ###
+    # Declare known jacobians
+    fx_control = zeros(pI_u,n)
+    fu_control = zeros(pI_u,m)
+    fu_control[1:pI_u_max, :] = -eye(m)
+    fu_control[1+pI_u_max:end,:] = eye(m)
 
-    fx_control = zeros(2m,n)
-    fu_control = zeros(2m,m)
-    fu_control[1:m, :] = -eye(m)
-    fu_control[m+1:end,:] = eye(m)
+    fx_state = zeros(pI_x,n)
+    fu_state = zeros(pI_x,m)
+    fx_state[1:pI_x_max, :] = -eye(pI_x)
+    fx_state[1+pI_x_max:end,:] = eye(pI_x)
 
-    fx = zeros(p,n)
-    fu = zeros(p,m)
+    fx = zeros(obj.p,n)
+    fu = zeros(obj.p,m)
 
     fx_N = eye(n)  # Jacobian of final state
 
     function constraint_jacobian(x::Array,u::Array)
-        fx[1:2m, :] = fx_control
-        fu[1:2m, :] = fu_control
-        # F_aug = F([x;u]) # TODO handle arbitrary constraints
+        fx[1:pI_u, :] = fx_control
+        fu[1:pI_u, :] = fu_control
+        fx[(1:pI_x)+pI_u, :] = fx_state
+        fu[(1:pI_x)+pI_u, :] = fu_state
+        # F_aug = F([x;u]) # TODO handle general constraints
         # fx = F_aug[:,1:n]
         # fu = F_aug[:,n+1:n+m]
         return fx, fu
@@ -409,6 +430,93 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     function constraint_jacobian(x::Array)
         return fx_N
     end
+
+    return c_fun, constraint_jacobian
+end
+
+
+function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
+    N = solver.N
+    n = solver.model.n
+    m = solver.model.m
+
+    ### Constraints
+    p = solver.obj.p
+    pI = solver.obj.pI
+    u_min = solver.obj.u_min
+    u_max = solver.obj.u_max
+    xf = solver.obj.xf
+
+    results = ConstrainedResults(n,m,p,N)
+    results.U .= U0
+    X = results.X; X_ = results.X_
+    U = results.U; U_ = results.U_
+
+    # Initialization
+    # U = copy(U0)
+    # X = zeros(n,N)
+    # X_ = similar(X)
+    # U_ = similar(U)
+    # K = zeros(m,n,N-1)
+    # d = zeros(m,N-1)
+    # J = 0.
+
+    # C = zeros(p,N-1)
+    # Iμ = zeros(p,p,N-1)
+    # LAMBDA = zeros(p,N-1)
+    # MU = ones(p,N-1)
+    #
+    # CN = zeros(n)  # TODO allow more general terminal constraint
+    # IμN = zeros(n,n)
+    # λN = zeros(n)
+    # μN = zeros(n)
+
+    # results = ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+
+    # function c_control(x,u)
+    #     [u_max - u;
+    #      u - u_min]
+    # end
+    #
+    # function c_fun(x,u)
+    #     c_control(x,u)
+    # end
+    #
+    # function c_fun(x)
+    #     x - xf
+    # end
+
+    # function f_augmented(f::Function, n::Int, m::Int)
+    #     f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
+    # end
+    #
+    # c_aug = f_augmented(c_fun,n,m)
+    # F(S) = ForwardDiff.jacobian(c_aug, S)
+
+    # fx_control = zeros(2m,n)
+    # fu_control = zeros(2m,m)
+    # fu_control[1:m, :] = -eye(m)
+    # fu_control[m+1:end,:] = eye(m)
+    #
+    # fx = zeros(p,n)
+    # fu = zeros(p,m)
+    #
+    # fx_N = eye(n)  # Jacobian of final state
+    #
+    # function constraint_jacobian(x::Array,u::Array)
+    #     fx[1:2m, :] = fx_control
+    #     fu[1:2m, :] = fu_control
+    #     # F_aug = F([x;u]) # TODO handle arbitrary constraints
+    #     # fx = F_aug[:,1:n]
+    #     # fu = F_aug[:,n+1:n+m]
+    #     return fx, fu
+    # end
+    #
+    # function constraint_jacobian(x::Array)
+    #     return fx_N
+    # end
+
+    c_fun2, constraint_jacobian2 = generate_constraint_functions(solver.obj)
 
     ### SOLVER
     # initial roll-out
@@ -420,8 +528,9 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     for k = 1:solver.opts.iterations_outerloop
 
         # update_constraints!(C,Iμ,c_fun,X,U,LAMBDA,MU,pI)
-        update_constraints!(results, c_fun, pI, X, U)
-        J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
+        update_constraints!(results, c_fun2, pI, X, U)
+        # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
+        J_prev = cost(solver, results)
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
         end
@@ -430,8 +539,8 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
-            v1, v2 = backwardpass!(results, solver, constraint_jacobian, pI)
-            J = forwardpass!(results, solver, v1, v2, c_fun)
+            v1, v2 = backwardpass!(results, solver, constraint_jacobian2, pI)
+            J = forwardpass!(results, solver, v1, v2, c_fun2)
             X .= X_
             U .= U_
             dJ = copy(abs(J-J_prev))
