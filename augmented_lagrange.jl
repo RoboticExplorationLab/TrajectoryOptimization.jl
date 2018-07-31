@@ -126,6 +126,7 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
 end
 
+
 """
     I_mu(cI,cE,λ,μ)
 Build the a diagonal matrix of μ's that accurately account for inequalities
@@ -146,7 +147,7 @@ function build_I_mu(cI,λ,μ)
     I = zeros(p, p)
     # inequality constraints (controls)
     for j = 1:pI
-        if cI[j] < 0. || λ[j] > 0.
+        if cI[j] < 0. || λ[j] < 0.
             I[j,j] = μ[j]
         end
     end
@@ -299,7 +300,7 @@ function update_constraints!(C,Iμ,c,X,U,LAMBDA,MU,pI)
     for k = 1:N-1
         C[:,k] = c(X[:,k], U[:,k])
         for j = 1:pI
-            if C[j,k] < 0. || LAMBDA[j,k] > 0.
+            if C[j,k] < 0. || LAMBDA[j,k] < 0.
                 Iμ[j,j,k] = MU[j,k]
             else
                 Iμ[j,j,k] = 0.
@@ -317,7 +318,7 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     for k = 1:N-1
         res.C[:,k] = c(X[:,k], U[:,k])
         for j = 1:pI
-            if res.C[j,k] < 0. || res.LAMBDA[j,k] > 0.
+            if res.C[j,k] < 0. || res.LAMBDA[j,k] < 0.
                 res.Iμ[j,j,k] = res.MU[j,k]
             else
                 res.Iμ[j,j,k] = 0.
@@ -447,11 +448,11 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         # Outer Loop - update lambda, mu
         for jj = 1:N-1
             for ii = 1:p
-                LAMBDA[ii,jj] += -MU[ii,jj]*min(C[ii,jj],0) # TODO handle equality constraints
+                LAMBDA[ii,jj] += MU[ii,jj]*min(C[ii,jj],0) # TODO handle equality constraints
                 MU[ii,jj] += 10.0
             end
         end
-        λN .+= -μN.*CN
+        λN .+= μN.*CN
         μN .+= 10.0
     end
 
