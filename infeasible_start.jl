@@ -13,9 +13,13 @@ function bias(solver::Solver,X_desired::Array{Float64,2},U::Array{Float64,2})
     X = zeros(solver.model.n,solver.N)
     X[:,1] = X_desired[:,1]
     for k = 1:solver.N-1
-        X[:,k+1] = solver.fd(X[:,k],U[:,k])
+        if solver.opts.inplace_dynamics
+            solver.fd(view(X,:,k+1),X[:,k],U[:,k])
+        else
+            X[:,k+1] = solver.fd(X[:,k],U[:,k])
+        end
         b[:,k] = X_desired[:,k+1] - X[:,k+1]
-        X[:,k+1] += b[:,k]
+        X[:,k+1] .+= b[:,k]
     end
     X, b
 end
@@ -26,7 +30,8 @@ function rollout!(res::SolverResults,solver::InfeasibleSolver)
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         if solver.opts.inplace_dynamics
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k]) + U[solver.model.m+1:end,k]
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+            X[:,k+1] .+= U[solver.model.m+1:end,k]
         else
             X[:,k+1] = solver.fd(X[:,k], U[1:solver.model.m,k]) + U[solver.model.m+1:end,k]
         end
@@ -45,7 +50,8 @@ function rollout!(res::SolverResults,solver::InfeasibleSolver,alpha::Float64)
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
 
         if solver.opts.inplace_dynamics
-            solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1]) + U[solver.model.m+1:end,k-1]
+            solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1])
+            X_[:,k] .+= U[solver.model.m+1:end,k-1]
         else
             X_[:,k] = solver.fd(X_[:,k-1], U_[1:solver.model.m,k-1]) + U[solver.model.m+1:end,k-1]
         end
@@ -56,6 +62,7 @@ function rollout!(res::SolverResults,solver::InfeasibleSolver,alpha::Float64)
     end
     return true
 end
+
 # overloaded cost function to accomodate Augmented Lagrance method
 function cost(solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
@@ -96,9 +103,6 @@ function backwardpass!(res::ConstrainedResults, solver::InfeasibleSolver, constr
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-    # p = size(C,1)
-    # pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
-    # pE = n
 
     Cx, Cu = constraint_jacobian(res.X[:,N])
     S = Qf + Cx'*res.IμN*Cx
@@ -113,8 +117,10 @@ function backwardpass!(res::ConstrainedResults, solver::InfeasibleSolver, constr
         lu = R*(U[:,k])
         lxx = Q
         luu = R
+
         fx, fu = solver.F(X[:,k], U[1:m,k])
         fu = [fu eye(solver.model.n)]
+
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
@@ -166,7 +172,6 @@ function forwardpass!(res::ConstrainedResults, solver::InfeasibleSolver, v1::Flo
     MU = res.MU
 
     # Compute original cost
-    # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
     J_prev = cost(solver, res)
 
     pI = 2*solver.model.m # TODO change this
@@ -181,10 +186,8 @@ function forwardpass!(res::ConstrainedResults, solver::InfeasibleSolver, v1::Flo
         rollout!(res,solver,alpha)
 
         # Calcuate cost
-        # update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
         update_constraints!(res, c_fun, pI, X_, U_)
-        # J = cost(solver, X_, U_, C, Iμ, LAMBDA)
-        J = cost(solver,res)
+        J = cost(solver,X_,U_,C,Iμ,LAMBDA)
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
         alpha = alpha/2.
@@ -208,6 +211,45 @@ function forwardpass!(res::ConstrainedResults, solver::InfeasibleSolver, v1::Flo
 
     return J
 
+end
+
+function update_constraints!(C,Iμ,c,X,U,LAMBDA,MU,pI)
+    p,N = size(C)
+    for k = 1:N-1
+        C[:,k] = c(X[:,k], U[:,k])
+        for j = 1:pI
+            if C[j,k] < 0. || LAMBDA[j,k] < 0.
+                Iμ[j,j,k] = MU[j,k]
+            else
+                Iμ[j,j,k] = 0.
+            end
+        end
+        for j = pI+1:p
+            Iμ[j,j,k] = MU[j,k]
+        end
+    end
+end
+
+function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Void
+    p,N = size(res.C)
+    N += 1 # since C is size p x N-1
+    for k = 1:N-1
+        res.C[:,k] = c(X[:,k], U[:,k])
+        for j = 1:pI
+            if res.C[j,k] < 0. || res.LAMBDA[j,k] < 0.
+                res.Iμ[j,j,k] = res.MU[j,k]
+            else
+                res.Iμ[j,j,k] = 0.
+            end
+        end
+        for j = pI+1:p
+            res.Iμ[j,j,k] = res.MU[j,k]
+        end
+    end
+    # Terminal constraint
+    res.CN .= c(X[:,N])
+    res.IμN .= diagm(res.μN)
+    return nothing # TODO allow for more general terminal constraint
 end
 
 function solve_infeasible(solver::iLQR.Solver,X_init::Array{Float64,2},U0::Array{Float64,2})
