@@ -28,10 +28,11 @@ model! = iLQR.Model(Dynamics.pendulum_dynamics!,2,1)
 solver! = iLQR.Solver(model!,obj,dt=0.1,opts=opt)
 solver!.obj.Qf .= eye(2)*100.0
 solver!.opts.verbose = true
-@enter @time xc, uc = iLQR.solve_al(solver!,U)
+# @enter iLQR.solve_al(solver!,U)
+@time xc, uc = iLQR.solve(solver!,U)
 solver!.opts.verbose = false
-@btime xc, uc = iLQR.solve_al(solver!,U)
-@profile xc, uc = iLQR.solve_al(solver!,U)
+@btime xc, uc = iLQR.solve(solver!,U)
+@profile xc, uc = iLQR.solve(solver!,U)
 
 solver = iLQR.Solver(model!, obj_uncon, dt=0.1, opts=opt)
 @time x1,u1 = iLQR.solve(solver,U)

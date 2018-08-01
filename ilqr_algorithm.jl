@@ -154,6 +154,14 @@ function solve(solver::Solver)
 end
 
 function solve(solver::Solver,U0::Array{Float64,2})
+    if isa(solver.obj, UnconstrainedObjective)
+        solve_unconstrained(solver, U0)
+    elseif isa(solver.obj, ConstrainedObjective)
+        solve_al(solver,U0)
+    end
+end
+
+function solve_unconstrained(solver::Solver,U0::Array{Float64,2})
     N = solver.N; n = solver.model.n; m = solver.model.m
 
     X = zeros(n,N)

@@ -2,4 +2,5 @@
 *.jl.*.cov
 *.jl.mem
 .ipynb_checkpoints
+.vscode
 deps/deps.jl
