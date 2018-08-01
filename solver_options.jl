@@ -5,6 +5,7 @@ mutable struct SolverOptions
     augmented_lagrange::Bool
     verbose::Bool
     inplace_dynamics::Bool
+    infeasible_start::Bool
 
     c1::Float64 # lower bound for forward pass line search, 0 < c1 < 1
     c2::Float64 # upper bound for forward pass line search, 0 < c1 < c2 < 1
@@ -17,14 +18,16 @@ mutable struct SolverOptions
     iterations_linesearch::Int64 # maximum number of backtracking steps during forward pass line search
     mu_regularization::Float64 # termed add to Quu during backward pass to insure positive semidefiniteness
 
-    function SolverOptions(;square_root=false,al=false,verbose=false,
-        inplace_dynamics=false,c1=1e-4,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
-        eps_constraint=1e-2,iterations=100,iterations_outerloop=10,
-        iterations_linesearch=25,mu_regularization=1.0)
+    cache::Bool # cache all intermediate state and control trajectories
 
-        new(square_root,al,verbose,inplace_dynamics,c1,c2,eps,eps_intermediate,
+    function SolverOptions(;square_root=false,al=false,verbose=false,
+        inplace_dynamics=false,infeasible_start=false,c1=1e-4,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
+        eps_constraint=1e-2,iterations=100,iterations_outerloop=10,
+        iterations_linesearch=25,mu_regularization=1.0,cache=false)
+
+        new(square_root,al,verbose,inplace_dynamics,infeasible_start,c1,c2,eps,eps_intermediate,
         eps_constraint,iterations,iterations_outerloop,
-        iterations_linesearch,mu_regularization)
+        iterations_linesearch,mu_regularization,cache)
     end
 end
 

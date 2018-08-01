@@ -51,6 +51,21 @@ struct Solver
     end
 end
 
+struct InfeasibleSolver
+    model::Model
+    obj::Objective
+    opts::SolverOptions
+    dt::Float64
+    fd::Function  # discrete dynamics
+    F::Function
+    N::Int
+
+    function InfeasibleSolver(solver::Solver,obj::Objective)
+        new(solver.model, obj, solver.opts, solver.dt, solver.fd, solver.F, solver.N)
+    end
+end
+
+
 abstract type SolverResults end
 
 struct UnconstrainedResults <: SolverResults
@@ -60,6 +75,19 @@ struct UnconstrainedResults <: SolverResults
     d::Array{Float64,2}
     X_::Array{Float64,2}
     U_::Array{Float64,2}
+    function UnconstrainedResults(X,U,K,d,X_,U_)
+        new(X,U,K,d,X_,U_)
+    end
+end
+
+function UnconstrainedResults(n::Int,m::Int,N::Int)
+    X = zeros(n,N)
+    U = zeros(m,N-1)
+    K = zeros(m,n,N-1)
+    d = zeros(m,N-1)
+    X_ = zeros(n,N)
+    U_ = zeros(m,N-1)
+    UnconstrainedResults(X,U,K,d,X_,U_)
 end
 
 struct ConstrainedResults <: SolverResults
@@ -123,7 +151,7 @@ end
 #     C::Array{Float64}
 # end
 
-# Midpoint Integrator
+# Midpoint Integrator #UPDATE FOR INFEASIBLE DYNAMICS
 function midpoint(f::Function, dt::Float64)
     dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
 end

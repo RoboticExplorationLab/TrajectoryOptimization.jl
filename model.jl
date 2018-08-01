@@ -69,7 +69,7 @@ mutable struct UnconstainedObjective <: Objective
     xf::Array{Float64,1}
 end
 
-struct ConstrainedObjective <: Objective
+mutable struct ConstrainedObjective <: Objective
     Q::Array{Float64,2}
     R::Array{Float64,2}
     Qf::Array{Float64,2}
@@ -183,6 +183,21 @@ function update_objective(obj::ConstrainedObjective;
 
 end
 
+# hack to keep struct immutable
+function update_objective_infeasible(obj::ConstrainedObjective,R::Array{Float64,2};
+    u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
+    cI=obj.cI, cE=obj.cE,
+    use_terminal_constraint=obj.use_terminal_constraint,
+    cI_N=obj.cI_N, cE_N=obj.cE_N)
+
+    ConstrainedObjective(obj.Q,R,obj.Qf,obj.tf,obj.x0,obj.xf,
+        u_min, u_max,
+        x_min, x_max,
+        cI, cE,
+        use_terminal_constraint,
+        cI_N, cE_N)
+end
+
 function count_constraints(n,m,u_max,u_min,x_max,x_min,cI,cE,
     use_terminal_constraint, cI_N, cE_N)
 
@@ -203,8 +218,8 @@ function validate_bounds(max,min,n)
     if ~all(max .> min)
         throw(ArgumentError("u_max must be greater than u_min"))
     end
-    if length(max) != n
-        throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
-    end
+    # if length(max) != n
+    #     throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
+    # end
     return max, min
 end

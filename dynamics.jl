@@ -45,12 +45,12 @@ x0 = [0; 0];
 xf = [pi; 0]; # (ie, swing up)
 
 # costs
-Q = 1e-3*eye(n);
-Qf = 100*eye(n);
-R = 1e-3*eye(m);
+Q = 1.e-3*eye(n);
+Qf = 100.*eye(n);
+R = 1.e-3*eye(m);
 
 # simulation
-tf = 5;
+tf = 5.;
 
 obj = UnconstainedObjective(Q, R, Qf, tf, x0, xf)
 
