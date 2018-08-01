@@ -60,7 +60,7 @@ end
 # cost function
 abstract type Objective end
 
-mutable struct UnconstainedObjective <: Objective
+mutable struct UnconstrainedObjective <: Objective
     Q::Array{Float64,2}
     R::Array{Float64,2}
     Qf::Array{Float64,2}
@@ -164,7 +164,7 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
         cI_N, cE_N)
 end
 
-function ConstrainedObjective(obj::UnconstainedObjective; kwargs...)
+function ConstrainedObjective(obj::UnconstrainedObjective; kwargs...)
     ConstrainedObjective(obj.Q, obj.R, obj.Qf, obj.tf, obj.x0, obj.xf; kwargs...)
 end
 
