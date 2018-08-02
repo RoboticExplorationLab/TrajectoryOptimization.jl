@@ -1,5 +1,5 @@
-include("../iLQR.jl")
-import iLQR: UnconstainedObjective, ConstrainedObjective
+# include("../iLQR.jl")
+import iLQR: UnconstrainedObjective, ConstrainedObjective
 using Dynamics
 using Base.Test
 
@@ -16,8 +16,8 @@ using Base.Test
     R = 1e-3*eye(m);
     tf = 5
 
-    @test_nowarn UnconstainedObjective(Q, R, Qf, tf, x0, xf)
-    obj_uncon = iLQR.UnconstainedObjective(Q, R, Qf, tf, x0, xf)
+    @test_nowarn UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+    obj_uncon = iLQR.UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
     ### Constraints ###
     # Test defaults

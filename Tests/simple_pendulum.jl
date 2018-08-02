@@ -1,7 +1,10 @@
+# include("../iLQR.jl")
+# include("../dynamics.jl")
+using iLQR
 using Dynamics
 using Base.Test
 
-# Unconstrained with square root
+# Unconstrained
 model,obj = Dynamics.pendulum
 solver = iLQR.Solver(model,obj,dt=0.1)
 U = ones(solver.model.m, solver.N-1)
@@ -14,7 +17,7 @@ results = iLQR.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
 # Constrained
-obj_c = iLQR.ConstrainedObjective(obj_uncon, u_min=-2, u_max=2)
+obj_c = iLQR.ConstrainedObjective(obj, u_min=-2, u_max=2)
 solver = iLQR.Solver(model,obj_c,dt=0.1)
 results_c = iLQR.solve(solver, U)
 max_c = iLQR.max_violation(results_c)

@@ -19,4 +19,6 @@ end
 - in place dynamics
 - infeasible start
 - constraint generator
+- state inequality constraints
+- asymmetric bounds (one bounded, another not)
 """
