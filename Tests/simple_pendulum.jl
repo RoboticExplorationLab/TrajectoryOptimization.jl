@@ -1,31 +1,29 @@
-n = 2; # dimensions of system
-p = 1; # dimensions of control
-m = 1; # mass
-l = 1; # length
-g = 9.8; # gravity
-mu = 0.01; # friction coefficient
+using Dynamics
+using Base.Test
 
-dynamics(x,u) = [x[2];
-        (g/l*sin(x[1]) - mu/m/(l^2)*x[2] + 1/m/(l^2)*u)];
+# Unconstrained with square root
+model,obj = Dynamics.pendulum
+solver = iLQR.Solver(model,obj,dt=0.1)
+U = ones(solver.model.m, solver.N-1)
+results = iLQR.solve(solver,U)
+@test norm(results.X[:,end]-obj.xf) < 1e-3
 
-# initial conditions
-x0 = [0; 0];
+# Unconstrained with square root
+solver.opts.square_root = true
+results = iLQR.solve(solver,U)
+@test norm(results.X[:,end]-obj.xf) < 1e-3
 
-# goal
-xf = [pi; 0]; # (ie, swing up)
+# Constrained
+obj_c = iLQR.ConstrainedObjective(obj_uncon, u_min=-2, u_max=2)
+solver = iLQR.Solver(model,obj_c,dt=0.1)
+results_c = iLQR.solve(solver, U)
+max_c = iLQR.max_violation(results_c)
+@test norm(results.X[:,end]-obj.xf) < 1e-3
+@test max_c < 1e-2
 
-# costs
-Q = 1e-3*eye(n);
-Qf = 100*eye(n);
-R = 1e-3*eye(p);
-
-# simulation
-dt = 0.1;
-tf = 5;
-N = Int(floor(tf/dt));
-t = linspace(0,tf,N);
-
-# Set up problem
-model = iLQR.Model(dynamics, n, p)
-obj = iLQR.Objective(Q, R, Qf, tf, x0, xf)
-solver = iLQR.Solver(model, obj, dt=dt)
+# Constrained with Square Root
+solver.opts.square_root = true
+results_c = iLQR.solve(solver, U)
+max_c = iLQR.max_violation(results_c)
+@test norm(results.X[:,end]-obj.xf) < 1e-3
+@test max_c < 1e-2

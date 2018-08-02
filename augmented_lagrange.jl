@@ -151,7 +151,9 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     end
 
     if solver.opts.verbose
+        max_c = max_violation(res)
         println("New cost: $J")
+        println("- constraint violation: $max_c")
         println("- Expected improvement: $(dV[1])")
         println("- Actual improvement: $(J_prev-J)")
         println("- (z = $z)\n")
@@ -392,63 +394,16 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
     return c_fun, constraint_jacobian
 end
 
-# function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
-#     N = solver.N
-#     n = solver.model.n
-#     m = solver.model.m
-#     J = 0.
-#
-#     ### Constraints
-#     p = solver.obj.p
-#     pI = solver.obj.pI
-#
-#     results = ConstrainedResults(n,m,p,N)
-#     results.U .= U0
-#     X = results.X; X_ = results.X_
-#     U = results.U; U_ = results.U_
-#
-#     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj)
-#
-#     ### SOLVER
-#     # initial roll-out
-#     X[:,1] = solver.obj.x0
-#     rollout!(results,solver)
-#
-#     # Outer Loop
-#     for k = 1:solver.opts.iterations_outerloop
-#
-#         update_constraints!(results,c_fun,pI,X,U)
-#         J_prev = cost(solver, results, X, U)
-#         if solver.opts.verbose
-#             println("Cost ($k): $J_prev\n")
-#         end
-#
-#         for i = 1:solver.opts.iterations
-#             if solver.opts.verbose
-#                 println("--Iteration: $k-($i)--")
-#             end
-#             v1, v2 = backwardpass!(results, solver, constraint_jacobian)
-#             J = forwardpass!(results, solver, v1, v2, c_fun)
-#             X .= X_
-#             U .= U_
-#             dJ = copy(abs(J-J_prev))
-#             J_prev = copy(J)
-#
-#             if dJ < solver.opts.eps
-#                 if solver.opts.verbose
-#                     println("   eps criteria met at iteration: $i\n")
-#                 end
-#                 break
-#             end
-#         end
-#
-#         # Outer Loop - update lambda, mu
-#         outer_loop_update(results,solver)
-#     end
-#
-#     return results
-#
-# end
+"""
+    max_violation(results,inds)
+Compute the maximum constraint violation. Inactive inequality constraints are
+not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
+precomputed and passed in.
+"""
+function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
+    maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+end
+
 function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
 end
@@ -482,6 +437,10 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     X_ = results.X_
     U_ = results.U_
 
+    # Diagonal indicies for the Iμ matrix
+    diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
+
+    # Generate the constraint function and jacobian from the objective
     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
 
     ### SOLVER
@@ -502,7 +461,11 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
-            v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+            if solver.opts.square_root
+                v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible)
+            else
+                v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+            end
             J = forwardpass!(results, solver, v1, v2, c_fun,infeasible=infeasible)
             X .= X_
             U .= U_
@@ -519,6 +482,12 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
 
         # Outer Loop - update lambda, mu
         outer_loop_update(results,solver)
+        max_c = max_violation(results, diag_inds)
+        if max_c < solver.opts.eps_constraint
+            if solver.opts.verbose
+                println("\teps constraint criteria met at outer iteration: $k\n")
+            end
+        end
     end
 
     return results
