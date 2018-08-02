@@ -459,7 +459,11 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
-            v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+            if solver.opts.square_root
+                v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible)
+            else
+                v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+            end
             J = forwardpass!(results, solver, v1, v2, c_fun,infeasible=infeasible)
             X .= X_
             U .= U_

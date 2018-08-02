@@ -185,7 +185,7 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})
             println("*** Iteration: $i ***")
         end
         if solver.opts.square_root
-            K, d, v1, v2 = backwards_sqrt(solver,X,U,K,d) # TODO fix
+            v1, v2 = backwards_sqrt(results,solver)
         else
             v1, v2 = backwardpass!(results,solver)
         end
