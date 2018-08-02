@@ -175,9 +175,19 @@ Stacks the constraints as follows:
  general equalities
  (control equalities for infeasible start)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective)
+function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Bool=false)
     m = size(obj.R,1)
     n = length(obj.x0)
+
+    p = obj.p
+    pI = obj.pI
+    pE = p-pI
+    pE_c = pE  # custom equality constraints
+
+    if infeasible
+        p += n
+        pE += n
+    end
 
     u_min_active = isfinite.(obj.u_min)
     u_max_active = isfinite.(obj.u_max)
@@ -202,10 +212,11 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     end
 
     # Custom constraints
-    pI_c = obj.pI - pI_x - pI_u
+    pI_c = pI - pI_x - pI_u
+    # TODO add custom constraints
 
     # Form inequality constraint
-    CI = zeros(obj.pI)
+    CI = zeros(pI)
     function cI(x,u)
         CI[1:pI_u] = c_control(x,u)
         CI[(1:pI_x)+pI_u] = c_state(x,u)
@@ -213,10 +224,14 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         return CI
     end
 
-    C = zeros(obj.p)
+    # Augment functions together
+    C = zeros(p)
     function c_fun(x,u)
-        C[1:obj.pI] = cI(x,u)
-        C[1+obj.pI:end] = obj.cE(x,u)
+        C[1:pI] = cI(x,u[1:m])
+        C[(1:pE_c)+pI] = obj.cE(x,u[1:m])
+        if infeasible
+            C[pI+pE_c+1:end] = u[m+1:end]
+        end
         return C
     end
 
