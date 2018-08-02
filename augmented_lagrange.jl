@@ -319,7 +319,7 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         outer_loop_update(results)
     end
 
-    return X, U
+    return results
 
 end
 

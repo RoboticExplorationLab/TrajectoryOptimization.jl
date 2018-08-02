@@ -153,7 +153,7 @@ function solve(solver::Solver)
     solve(solver,U)
 end
 
-function solve(solver::Solver,U0::Array{Float64,2})
+function solve(solver::Solver,U0::Array{Float64,2})::SolverResults
     if isa(solver.obj, UnconstrainedObjective)
         solve_unconstrained(solver, U0)
     elseif isa(solver.obj, ConstrainedObjective)
@@ -204,5 +204,5 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})
         J_prev = copy(J)
     end
 
-    return X, U
+    return results
 end
