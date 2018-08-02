@@ -94,9 +94,11 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
         s = (Qx' - (Wuu[:R]'\Qu)'*(Wuu[:R]'\Qxu'))'
         try  # Regularization
             Su = chol_minus(Wxx[:R]+eye(n)*mu,Wuu[:R]'\Qxu')
-        catch
-            mu += 1
-            k = N-1
+        catch ex
+            if ex isa LinAlg.PosDefException
+                mu += 1
+                k = N-1
+            end
         end
 #         s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
 #         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
