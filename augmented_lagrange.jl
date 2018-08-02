@@ -435,6 +435,10 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     X_ = results.X_
     U_ = results.U_
 
+    # Diagonal indicies for the Iμ matrix
+    diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
+
+    # Generate the constraint function and jacobian from the objective
     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
 
     ### SOLVER
@@ -472,6 +476,7 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
 
         # Outer Loop - update lambda, mu
         outer_loop_update(results,solver)
+        max_c = max_violation(results, diag_inds)
         if max_c < solver.opts.eps_constraint
             if solver.opts.verbose
                 println("\teps constraint criteria met at outer iteration: $k\n")
