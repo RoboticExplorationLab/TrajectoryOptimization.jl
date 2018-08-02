@@ -3,9 +3,73 @@ using ForwardDiff
 using Plots
 using Base.Test
 
+function infeasible_bias(solver::Solver,x0::Array{Float64,2})
+    u = zeros(solver.model.m,solver.N-1)
+    bias(solver,x0,u)
+end
+
+function infeasible_bias(solver::Solver,x0::Array{Float64,2},u::Array{Float64,2})
+    b = zeros(solver.model.n,solver.N-1)
+    x = zeros(solver.model.n,solver.N)
+    x[:,1] = x0[:,1]
+    for k = 1:solver.N-1
+        if solver.opts.inplace_dynamics
+            solver.fd(view(x,:,k+1),x[:,k],u[:,k])
+        else
+            x[:,k+1] = solver.fd(x[:,k],u[:,k])
+        end
+        b[:,k] = x0[:,k+1] - x[:,k+1]
+        x[:,k+1] .+= b[:,k]
+    end
+    x, b
+end
+
+# function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
+#     X = res.X; U = res.U
+#
+#     X[:,1] = solver.obj.x0
+#     for k = 1:solver.N-1
+#         if solver.opts.inplace_dynamics
+#             solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+#         else
+#             X[:,k+1] = solver.fd(X[:,k], U[1:solver.model.m,k])
+#         end
+#         if infeasible
+#             X[:,k+1] .+= U[solver.model.m+1:end,k]
+#         end
+#     end
+# end
+
+function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::Bool=false)
+    # pull out solver/result values
+    N = solver.N
+    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
+
+    X_[:,1] = solver.obj.x0;
+    for k = 2:N
+        delta = X_[:,k-1] - X[:,k-1]
+        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
+
+        if solver.opts.inplace_dynamics
+            solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1])
+        else
+            X_[:,k] = solver.fd(X_[:,k-1], U_[1:solver.model.m,k-1])
+        end
+
+        if infeasible
+            X_[:,k] .+= U_[solver.model.m+1:end,k-1]
+        end
+
+        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
+            return false
+        end
+    end
+    return true
+end
+
 # overloaded cost function to accomodate Augmented Lagrance method
-function cost(solver::Solver, res::ConstrainedResults, X, U)
-    J = cost(solver, X, U)
+function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::Array{Float64,2}; infeasible::Bool=false)
+    J = cost(solver, X, U, infeasible=infeasible)
     for k = 1:solver.N-1
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
@@ -13,7 +77,26 @@ function cost(solver::Solver, res::ConstrainedResults, X, U)
     return J
 end
 
-function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,c_fun)
+function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2};infeasible::Bool=false)
+    # pull out solver/objective values
+    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+
+    if infeasible
+        R = solver.obj.R[1,1]*eye(solver.model.m+solver.model.n)
+        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
+    else
+        R = solver.obj.R
+    end
+
+    J = 0.0
+    for k = 1:N-1
+      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
+    end
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+    return J
+end
+
+function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64, c_fun::Function;infeasible::Bool=false)
 
     # Pull out values from results
     X = res.X
@@ -29,9 +112,10 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
     # Compute original cost
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
-    J_prev = cost(solver, res, X, U)
+    J_prev = cost(solver, res, X, U, infeasible=infeasible)
 
-    pI = 2*solver.model.m # TODO change this
+    #pI = 2*solver.model.m # TODO change this
+    pI = solver.obj.pI
 
     J = Inf
     alpha = 1.0
@@ -40,17 +124,21 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     z = 0.
 
     while z < solver.opts.c1 || z > solver.opts.c2
-        rollout!(res,solver,alpha)
+        rollout!(res,solver,alpha,infeasible=infeasible)
 
         # Calcuate cost
         # update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
         update_constraints!(res,c_fun,pI,X_,U_)
         # J = cost(solver, X_, U_, C, Iμ, LAMBDA)
-        J = cost(solver, res, X_, U_)
+        J = cost(solver, res, X_, U_, infeasible=infeasible)
 
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
-        alpha = alpha/2.
+        if iter < 10
+            alpha = alpha/2.
+        else
+            alpha = alpha/10.
+        end
         iter = iter + 1
 
         if iter > solver.opts.iterations_linesearch
@@ -73,20 +161,24 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
 end
 
-function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacobian::Function)
+function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacobian::Function;infeasible::Bool=false)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     Q = solver.obj.Q
-    R = solver.obj.R
+
+    if infeasible
+        R = solver.obj.R[1,1]*eye(m+n)
+        R[1:m,1:m] = solver.obj.R
+    else
+        R = solver.obj.R
+    end
+
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-    # p = size(C,1)
-    # pI = 2*m  # Number of inequality constraints. TODO this needs to be automatic
-    # pE = n
 
     Cx, Cu = constraint_jacobian(res.X[:,N])
     S = Qf + Cx'*res.IμN*Cx
@@ -101,7 +193,14 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
         lu = R*(U[:,k])
         lxx = Q
         luu = R
-        fx, fu = solver.F(X[:,k], U[:,k])
+
+        if infeasible
+            fx, fu = solver.F(X[:,k], U[1:m,k])
+            fu = [fu eye(n)]
+        else
+            fx, fu = solver.F(X[:,k], U[:,k])
+        end
+
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
@@ -175,7 +274,7 @@ Stacks the constraints as follows:
  general equalities
  (control equalities for infeasible start)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Bool=false)
+function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Bool=false)
     m = size(obj.R,1)
     n = length(obj.x0)
 
@@ -187,6 +286,7 @@ function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Boo
     if infeasible
         p += n
         pE += n
+        m_aug = m + n
     end
 
     u_min_active = isfinite.(obj.u_min)
@@ -243,17 +343,27 @@ function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Boo
     ### Jacobians ###
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
-    fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max, :] = -eye(m)
-    fu_control[1+pI_u_max:end,:] = eye(m)
-
     fx_state = zeros(pI_x,n)
-    fu_state = zeros(pI_x,m)
     fx_state[1:pI_x_max, :] = -eye(pI_x)
     fx_state[1+pI_x_max:end,:] = eye(pI_x)
+    fx = zeros(p,n)
 
-    fx = zeros(obj.p,n)
-    fu = zeros(obj.p,m)
+    if infeasible
+        fx_infeasible = zeros(n,n)
+        fu_infeasible = zeros(n,m_aug)
+        fu_infeasible[:,m+1:end] = eye(n)
+        fu_control = zeros(pI_u,m_aug)
+        fu_control[1:pI_u_max, 1:m] = -eye(m)
+        fu_control[1+pI_u_max:end, 1:m] = eye(m)
+        fu_state = zeros(pI_x,m_aug)
+        fu = zeros(p,m_aug)
+    else
+        fu_control = zeros(pI_u,m)
+        fu_control[1:pI_u_max,:] = -eye(m)
+        fu_control[1+pI_u_max:end,:] = eye(m)
+        fu_state = zeros(pI_x,m)
+        fu = zeros(p,m)
+    end
 
     fx_N = eye(n)  # Jacobian of final state
 
@@ -265,6 +375,11 @@ function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Boo
         # F_aug = F([x;u]) # TODO handle general constraints
         # fx = F_aug[:,1:n]
         # fu = F_aug[:,n+1:n+m]
+
+        if infeasible
+            fx[pI+pE_c+1:end,:] = fx_infeasible
+            fu[pI+pE_c+1:end,:] = fu_infeasible
+        end
         return fx, fu
     end
 
@@ -275,38 +390,108 @@ function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Boo
     return c_fun, constraint_jacobian
 end
 
+# function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
+#     N = solver.N
+#     n = solver.model.n
+#     m = solver.model.m
+#     J = 0.
+#
+#     ### Constraints
+#     p = solver.obj.p
+#     pI = solver.obj.pI
+#
+#     results = ConstrainedResults(n,m,p,N)
+#     results.U .= U0
+#     X = results.X; X_ = results.X_
+#     U = results.U; U_ = results.U_
+#
+#     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj)
+#
+#     ### SOLVER
+#     # initial roll-out
+#     X[:,1] = solver.obj.x0
+#     rollout!(results,solver)
+#
+#     # Outer Loop
+#     for k = 1:solver.opts.iterations_outerloop
+#
+#         update_constraints!(results,c_fun,pI,X,U)
+#         J_prev = cost(solver, results, X, U)
+#         if solver.opts.verbose
+#             println("Cost ($k): $J_prev\n")
+#         end
+#
+#         for i = 1:solver.opts.iterations
+#             if solver.opts.verbose
+#                 println("--Iteration: $k-($i)--")
+#             end
+#             v1, v2 = backwardpass!(results, solver, constraint_jacobian)
+#             J = forwardpass!(results, solver, v1, v2, c_fun)
+#             X .= X_
+#             U .= U_
+#             dJ = copy(abs(J-J_prev))
+#             J_prev = copy(J)
+#
+#             if dJ < solver.opts.eps
+#                 if solver.opts.verbose
+#                     println("   eps criteria met at iteration: $i\n")
+#                 end
+#                 break
+#             end
+#         end
+#
+#         # Outer Loop - update lambda, mu
+#         outer_loop_update(results,solver)
+#     end
+#
+#     return results
+#
+# end
 function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
+    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
+end
+
+function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
-    J = 0.
-
-    ### Constraints
     p = solver.obj.p
     pI = solver.obj.pI
-    u_min = solver.obj.u_min
-    u_max = solver.obj.u_max
-    xf = solver.obj.xf
+    J = 0.
+    infeasible=infeasible
+
+    if infeasible
+        _, b = infeasible_bias(solver,X0,U0)
+        m += n
+        p += n
+    end
 
     results = ConstrainedResults(n,m,p,N)
-    results.U .= U0
-    X = results.X; X_ = results.X_
-    U = results.U; U_ = results.U_
+    if infeasible
+        solver.obj.x0 = X0[:,1] # not sure this needs to be the case
+        results.X .= X0
+        results.U .= [U0; b]
+    else
+        results.U .= U0
+    end
 
-    c_fun2, constraint_jacobian2 = generate_constraint_functions(solver.obj)
+    X = results.X
+    U = results.U
+    X_ = results.X_
+    U_ = results.U_
 
+    c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
 
     ### SOLVER
-    # initial roll-out
-    X[:,1] = solver.obj.x0
-    rollout!(results,solver)
-
+    if !infeasible
+        X[:,1] = solver.obj.x0
+        rollout!(results,solver)
+    end
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
-
-        update_constraints!(results,c_fun2,pI,X,U)
-        J_prev = cost(solver, results, X, U)
+        update_constraints!(results,c_fun,pI,X,U)
+        J_prev = cost(solver, results, X, U, infeasible=infeasible)
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
         end
@@ -315,8 +500,8 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
-            v1, v2 = backwardpass!(results, solver, constraint_jacobian2)
-            J = forwardpass!(results, solver, v1, v2, c_fun2)
+            v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+            J = forwardpass!(results, solver, v1, v2, c_fun,infeasible=infeasible)
             X .= X_
             U .= U_
             dJ = copy(abs(J-J_prev))
@@ -331,23 +516,27 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
         end
 
         # Outer Loop - update lambda, mu
-        outer_loop_update(results)
+        outer_loop_update(results,solver)
     end
 
     return results
 
 end
 
-function outer_loop_update(results::ConstrainedResults)::Void
+function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C)
     N += 1
     for jj = 1:N-1
-        for ii = 1:p
-            results.LAMBDA[ii,jj] .+= -results.MU[ii,jj]*min(results.C[ii,jj],0)
-            results.MU[ii,jj] .+= 10.0
+        for ii = p
+            if ii <= solver.obj.pI
+                results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
+            else
+                results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
+            end
+            results.MU[ii,jj] .+= solver.opts.mu_al_update
         end
     end
     results.λN .+= results.μN.*results.CN
-    results.μN .+= 10.0
+    results.μN .+= solver.opts.mu_al_update
     return nothing
 end
