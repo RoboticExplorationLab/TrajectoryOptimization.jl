@@ -24,10 +24,9 @@ obj_uncon = Dynamics.pendulum[2]
 
 # Unconstrained problem
 solver = iLQR.Solver(model!, obj_uncon,dt=0.1,opts=opt)
-@time xc, uc = iLQR.solve(solver, U)
+@time results_uncon = iLQR.solve(solver, U)
 solver.opts.verbose = false
 @btime iLQR.solve(solver, U)
-
 
 
 # Constrained problem
@@ -36,14 +35,14 @@ solver! = iLQR.Solver(model!,obj,dt=0.1,opts=opt)
 solver!.obj.Qf .= eye(2)*100.0
 solver!.opts.verbose = true
 # @enter iLQR.solve_al(solver!,U)
-@time xc, uc = iLQR.solve(solver!,U)
+@time results = iLQR.solve(solver!,U)
 solver!.opts.verbose = false
-@btime xc, uc = iLQR.solve(solver!,U)
-@profile xc, uc = iLQR.solve(solver!,U)
+@btime iLQR.solve(solver!,U)
+@profile results= iLQR.solve(solver!,U)
 
 solver = iLQR.Solver(model!, obj_uncon, dt=0.1, opts=opt)
-@time x1,u1 = iLQR.solve(solver,U)
-@btime x1,u1 = iLQR.solve(solver,U)
+@time results = iLQR.solve(solver,U)
+@btime results = iLQR.solve(solver,U)
 
 
 plot(xc',label=["pos (constrained)", "vel (constrained)"], color=[:red :blue])
