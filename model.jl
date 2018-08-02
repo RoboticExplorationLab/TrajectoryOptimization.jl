@@ -203,8 +203,8 @@ function validate_bounds(max,min,n)
     if ~all(max .> min)
         throw(ArgumentError("u_max must be greater than u_min"))
     end
-    # if length(max) != n
-    #     throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
-    # end
+    if length(max) != n
+        throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
+    end
     return max, min
 end

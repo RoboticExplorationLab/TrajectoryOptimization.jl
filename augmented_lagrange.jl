@@ -2,6 +2,7 @@ using RigidBodyDynamics
 using ForwardDiff
 using Plots
 using Base.Test
+using BenchmarkTools
 
 function infeasible_bias(solver::Solver,x0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N-1)
@@ -139,7 +140,6 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
         else
             alpha = alpha/10.
         end
-        iter = iter + 1
 
         if iter > solver.opts.iterations_linesearch
             if solver.opts.verbose
@@ -443,6 +443,15 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     # Generate the constraint function and jacobian from the objective
     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
 
+    if solver.opts.benchmark
+        N_samples = 10
+        sample_iters = rand(1:solver.opts.iterations,N_samples)
+        println(sample_iters)
+        back_time = zeros(solver.opts.iterations_outerloop)
+        forw_time = zeros(solver.opts.iterations_outerloop)
+        s = 0
+    end
+
     ### SOLVER
     if !infeasible
         X[:,1] = solver.obj.x0
@@ -478,6 +487,16 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
                 end
                 break
             end
+            if solver.opts.benchmark
+                if i == 1 && k == 1
+                    # back_time[k] = @belapsed backwardpass!($results, $solver, $constraint_jacobian, infeasible=$infeasible)
+                    # back_time[k] /= N
+                    # forw_time[k] = @belapsed forwardpass!($results, $solver, $v1, $v2, $c_fun, infeasible=$infeasible)
+                    # forw_time[k] /= N
+                    @btime backwardpass!($results, $solver, $constraint_jacobian, infeasible=$infeasible)
+                    @btime forwardpass!($results, $solver, $v1, $v2, $c_fun, infeasible=$infeasible)
+                end
+            end
         end
 
         # Outer Loop - update lambda, mu
@@ -490,6 +509,10 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
     end
 
+    if solver.opts.benchmark
+        println("Backward pass: $(mean(back_time)) ± $(std(back_time))")
+        println("Forward pass:  $(mean(forw_time)) ± $(std(forw_time))")
+    end
     return results
 
 end
