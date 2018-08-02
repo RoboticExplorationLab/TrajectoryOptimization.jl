@@ -63,7 +63,9 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     end
 
     if solver.opts.verbose
+        max_c = max_violation(res)
         println("New cost: $J")
+        println("- constraint violation: $max_c")
         println("- Expected improvement: $(dV[1])")
         println("- Actual improvement: $(J_prev-J)")
         println("- (z = $z)\n")
@@ -275,6 +277,16 @@ function generate_constraint_functions(obj::ConstrainedObjective,infeasible::Boo
     return c_fun, constraint_jacobian
 end
 
+"""
+    max_violation(results,inds)
+Compute the maximum constraint violation. Inactive inequality constraints are
+not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
+precomputed and passed in.
+"""
+function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
+    maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+end
+
 function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     N = solver.N
     n = solver.model.n
@@ -295,12 +307,14 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
 
     c_fun2, constraint_jacobian2 = generate_constraint_functions(solver.obj)
 
+    # Indices for diagonal elements of Iμ matrix
+    diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
+
 
     ### SOLVER
     # initial roll-out
     X[:,1] = solver.obj.x0
     rollout!(results,solver)
-
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
@@ -332,6 +346,11 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
 
         # Outer Loop - update lambda, mu
         outer_loop_update(results)
+        if max_c < solver.opts.eps_constraint
+            if solver.opts.verbose
+                println("\teps constraint criteria met at outer iteration: $k\n")
+            end
+        end
     end
 
     return results
