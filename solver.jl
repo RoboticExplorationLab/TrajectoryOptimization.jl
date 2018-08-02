@@ -51,21 +51,6 @@ struct Solver
     end
 end
 
-struct InfeasibleSolver
-    model::Model
-    obj::Objective
-    opts::SolverOptions
-    dt::Float64
-    fd::Function  # discrete dynamics
-    F::Function
-    N::Int
-
-    function InfeasibleSolver(solver::Solver,obj::Objective)
-        new(solver.model, obj, solver.opts, solver.dt, solver.fd, solver.F, solver.N)
-    end
-end
-
-
 abstract type SolverResults end
 
 struct UnconstrainedResults <: SolverResults
