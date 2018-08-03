@@ -245,7 +245,8 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
 end
 
 """
-    generate_constraint_functions(obj)
+$(SIGNATURES)
+
 Generate the constraints function C(x,u) and a function to compute the jacobians
 Cx, Cu = Jc(x,u) from a `ConstrainedObjective` type. Automatically stacks inequality
 and equality constraints and takes jacobians of custom functions with `ForwardDiff`.
@@ -260,11 +261,11 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)]
 """
 function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Bool=false)
-    m = size(obj.R,1)
-    n = length(obj.x0)
+    m = size(obj.R,1) # number of control inputs
+    n = length(obj.x0) # number of states
 
-    p = obj.p
-    pI = obj.pI
+    p = obj.p # number of constraints
+    pI = obj.pI # number of inequality and equality constraints
     pE = p-pI
     pE_c = pE  # custom equality constraints
 
@@ -378,7 +379,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
 end
 
 """
-    max_violation(results,inds)
+$(SIGNATURES)
+
 Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
@@ -387,52 +389,49 @@ function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(
     maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
 end
 
-function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
-    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
-end
+"""
+$(SIGNATURES)
 
+Solve constrained optimization problem specified by `solver`
+"""
 function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
-
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
-    p = solver.obj.p
-    pI = solver.obj.pI
-
-    J = 0.
-
-    infeasible=infeasible
-
-    iter = 1 # counter for total number of iLQR iterations
+    ## Unpack model, objective, and solver parameters
+    N = solver.N # number of iterations for the solver (ie, knotpoints)
+    n = solver.model.n # number of states
+    m = solver.model.m # number of control inputs
+    p = solver.obj.p # number of inequality and equality constraints
+    pI = solver.obj.pI # number of inequality constraints
 
     if infeasible
-        _, b = infeasible_bias(solver,X0,U0)
-        m += n
-        p += n
+        _, b = infeasible_bias(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
+        m += n # augment the number of control input sequences by the number of states
+        p += n # increase the number of constraints by the number of additional control input sequences
     end
 
-    results = ConstrainedResults(n,m,p,N)
+    ## Initialize results
+    results = ConstrainedResults(n,m,p,N) # preallocate memory for results
 
     if infeasible
-        #solver.obj.x0 = X0[:,1] # not sure this is correct
-        results.X .= X0
-        results.U .= [U0; b]
+        #solver.obj.x0 = X0[:,1] #TODO not sure this is correct or needs to be here
+        results.X .= X0 # initialize state trajectory with infeasible trajectory input
+        results.U .= [U0; b] # augment control with additional control inputs that produce infeasible state trajectory
     else
-        results.U .= U0
+        results.U .= U0 # initialize control to control input sequence
     end
 
-    X = results.X
-    U = results.U
-    X_ = results.X_
-    U_ = results.U_
+    # unpack results for convenience
+    X = results.X # state trajectory
+    U = results.U # control trajectory
+    X_ = results.X_ # updated state trajectory
+    U_ = results.U_ # updated control trajectory
 
-    # Diagonal indicies for the Iμ matrix
+    # diagonal indicies for the Iμ matrix (fast)
     diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
 
-    # Generate the constraint function and jacobian from the objective
+    # generate constraint function and jacobian functions from the objective
     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
 
-    if solver.opts.benchmark
+    if solver.opts.benchmark #TODO do we need this?
         N_samples = 10
         sample_iters = rand(1:solver.opts.iterations,N_samples)
         println(sample_iters)
@@ -441,16 +440,19 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         s = 0
     end
 
-    ### SOLVER
+    ## Solver
+    # initial rollout
     if !infeasible
-        X[:,1] = solver.obj.x0
-        rollout!(results,solver)
+        X[:,1] = solver.obj.x0 # set state trajector initial conditions
+        rollout!(results,solver) # rollout new state trajectoy
     end
 
+    # evalute constraints for new trajectories
     update_constraints!(results,c_fun,pI,X,U)
 
     if solver.opts.cache
-        # cache initial trajectories and cost
+        # initialize cache and store initial trajectories and cost
+        iter = 1 # counter for total number of iLQR iterations
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop) #TODO preallocate smaller arrays
         results_cache.result[iter] = results
         results_cache.cost[iter] = cost(solver, results, X, U, infeasible=infeasible)
@@ -460,7 +462,8 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
-        J_prev = cost(solver, results, X, U, infeasible=infeasible)
+        J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
+
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
         end
@@ -471,34 +474,38 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             end
 
             if solver.opts.cache
-                t1 = time_ns()
+                t1 = time_ns() # time flag for iLQR inner loop start
             end
 
+            # Backward pass
             if solver.opts.square_root
-                v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible)
+                v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
-                v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
+                v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible) # standard backward pass [see insert algorithm]
             end
+
+            # forward pass
             J = forwardpass!(results, solver, v1, v2, c_fun,infeasible=infeasible)
 
             if solver.opts.cache
-                t2 = time_ns()
+                t2 = time_ns() # time flag of iLQR inner loop end
             end
 
+            # update results
             X .= X_
             U .= U_
-            dJ = copy(abs(J-J_prev))
+            dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
             if solver.opts.cache
-                #update_constraints!(results,c_fun,pI,X,U)
+                # store current results and performance parameters
                 results_cache.result[iter] = results
                 results_cache.cost[iter] = J
                 results_cache.time[iter] = (t2-t1)/(1.0e9)
+                iter += 1
             end
 
-            iter += 1
-
+            # check for cost convergence
             if dJ < solver.opts.eps
                 if solver.opts.verbose
                     println("   eps criteria met at iteration: $i\n")
@@ -519,12 +526,13 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
 
         if solver.opts.cache
-            results_cache.iter_type[iter-1] = 1 # indicates an outerloop update
+            results_cache.iter_type[iter-1] = 1 # flag outerloop update
         end
 
-        # Outer Loop - update lambda, mu
-        #update_constraints!(results,c_fun,pI,X,U)
+        ## Outer loop update for Augmented Lagrange method parameters
         outer_loop_update(results,solver)
+
+        # check if maximum constraint violation satisfies criteria
         max_c = max_violation(results, diag_inds)
         if max_c < solver.opts.eps_constraint
             if solver.opts.verbose
@@ -535,6 +543,7 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     end
 
     if solver.opts.cache
+        # store final results
         results_cache.termination_index = iter-1
         results_cache.X = results.X
         results_cache.U = results.U
@@ -545,24 +554,37 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         println("Forward pass:  $(mean(forw_time)) ± $(std(forw_time))")
     end
 
-    # return dynamically feasible trajectory
+    ## Return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
-            results_cache_2 = feasible_traj(results,solver)
-            return merge_results_cache(results_cache,results_cache_2,solver)
+            results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
+            return merge_results_cache(results_cache,results_cache_2,solver) # return infeasible results and final enforce dynamics results
         else
             return feasible_traj(results,solver)
         end
     else
         if solver.opts.cache
-            return results_cache #TODO
+            return results_cache
         else
             return results
         end
     end
-
 end
 
+"""
+$(SIGNATURES)
+
+Solve constrained optimization problem using an initial control trajectory
+"""
+function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
+    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
+end
+
+"""
+$(SIGNATURES)
+
+Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
+"""
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C)
     N += 1
@@ -581,6 +603,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     return nothing
 end
 
+"""
+$(SIGNATURES)
+
+Infeasible start solution is run through standard constrained solve to enforce dynamic feasibility. All infeasible augmented controls are removed.
+"""
 function feasible_traj(results::ConstrainedResults,solver::Solver)
     #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
     return solve_al(solver,results.U[1:solver.model.m,:])

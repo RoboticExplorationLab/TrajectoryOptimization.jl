@@ -6,7 +6,6 @@ constrained optimization problems. Constrained optimization problems are solved
 using Augmented Lagrangian methods. Supports automatic differentiation for computing dynamics Jacobians via the
 `ForwardDiff` package.
 """
-#NOTE don't think ForwardDiff is Julia Robotics
 module iLQR
     using RigidBodyDynamics
     using ForwardDiff
