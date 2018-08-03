@@ -113,9 +113,7 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
         rollout!(res,solver,alpha,infeasible=infeasible)
 
         # Calcuate cost
-        # update_constraints!(C,Iμ,c_fun,X_,U_,LAMBDA,MU,pI)
         update_constraints!(res,c_fun,pI,X_,U_)
-        # J = cost(solver, X_, U_, C, Iμ, LAMBDA)
         J = cost(solver, res, X_, U_, infeasible=infeasible)
 
         dV = alpha*v1 + (alpha^2)*v2/2.
@@ -393,11 +391,7 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
 end
 
-function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)
-
-    if solver.opts.cache
-        forensics = Forensics(solver.opts.iterations*solver.opts.iterations)
-    end
+function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
 
     N = solver.N
     n = solver.model.n
@@ -455,6 +449,15 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
 
     update_constraints!(results,c_fun,pI,X,U)
 
+    if solver.opts.cache
+        # cache initial trajectories and cost
+        results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop) #TODO preallocate smaller arrays
+        results_cache.result[iter] = results
+        results_cache.cost[iter] = cost(solver, results, X, U, infeasible=infeasible)
+        results_cache.time[iter] = 0
+        iter += 1
+    end
+
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
         J_prev = cost(solver, results, X, U, infeasible=infeasible)
@@ -488,10 +491,10 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             J_prev = copy(J)
 
             if solver.opts.cache
-                update_constraints!(results,c_fun,pI,X,U)
-                forensics.result[iter] = results
-                forensics.cost[iter] = J
-                forensics.time[iter] = (t2-t1)/(1.0e9)
+                #update_constraints!(results,c_fun,pI,X,U)
+                results_cache.result[iter] = results
+                results_cache.cost[iter] = J
+                results_cache.time[iter] = (t2-t1)/(1.0e9)
             end
 
             iter += 1
@@ -516,11 +519,11 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
 
         if solver.opts.cache
-            forensics.iter_type[iter-1] = 1 # indicates an outerloop update
+            results_cache.iter_type[iter-1] = 1 # indicates an outerloop update
         end
 
         # Outer Loop - update lambda, mu
-        update_constraints!(results,c_fun,pI,X,U)
+        #update_constraints!(results,c_fun,pI,X,U)
         outer_loop_update(results,solver)
         max_c = max_violation(results, diag_inds)
         if max_c < solver.opts.eps_constraint
@@ -532,7 +535,9 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     end
 
     if solver.opts.cache
-        forensics.termination_index = iter-1
+        results_cache.termination_index = iter-1
+        results_cache.X = results.X
+        results_cache.U = results.U
     end
 
     if solver.opts.benchmark
@@ -543,15 +548,14 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     # return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
-            println("n1: $(forensics.termination_index)")
-            forensics2 = feasible_traj(results,solver)
-            return merge_forensics(forensics,forensics2)
+            results_cache_2 = feasible_traj(results,solver)
+            return merge_results_cache(results_cache,results_cache_2,solver)
         else
-            return feasible_traj(results,solver) #TODO cache doesn't work with this yet
+            return feasible_traj(results,solver)
         end
     else
         if solver.opts.cache
-            return forensics #TODO-type instability...
+            return results_cache #TODO
         else
             return results
         end
