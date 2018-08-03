@@ -46,13 +46,12 @@ struct Solver
         else
             f! = wrap_inplace(model.f)
         end
-        opts.inplace_dynamics = true
 
         # Get integration scheme
         if isdefined(iLQR,integration)
             discretizer = eval(integration)
         else
-            # throw(ArgumentError("$integration is not a defined integration scheme"))
+            throw(ArgumentError("$integration is not a defined integration scheme"))
         end
 
         # Generate discrete dynamics equations
