@@ -160,6 +160,46 @@ function ConstrainedResults(n,m,p,N,p_N=n)
 
 end
 
-# struct SolverResultsConstrained <: SolverResults
-#     C::Array{Float64}
-# end
+mutable struct ResultsCache <: SolverResults
+    X::Array{Float64,2}
+    U::Array{Float64,2}
+    result::Array{SolverResults,1}
+    cost::Array{Float64,1}
+    time::Array{Float64,1}
+    iter_type::Array{Int64,1}
+    termination_index::Int64
+
+    function ResultsCache(X, U, result, cost, time, iter_type, termination_index)
+        new(X, U, result, cost, time, iter_type, termination_index)
+    end
+end
+
+function ResultsCache(solver::Solver,max_steps::Int64)
+    X = zeros(solver.model.n,solver.N)
+    U = zeros(solver.model.m, solver.N-1)
+    result = Array{SolverResults}(max_steps)
+    cost = zeros(max_steps)
+    time = zeros(max_steps)
+    iter_type = zeros(max_steps)
+    termination_index = 0
+    ResultsCache(X, U, result, cost, time, iter_type, termination_index)
+end
+
+function merge_results_cache(r1::ResultsCache,r2::ResultsCache,solver::Solver)
+    n1 = r1.termination_index
+    n2 = r2.termination_index
+    R = ResultsCache(solver,n1+n2)
+
+    R.X = r2.X
+    R.U = r2.U
+    R.result[1:n1] = r1.result[1:n1]
+    R.result[n1+1:end] = r2.result[1:n2]
+    R.cost[1:n1] = r1.cost[1:n1]
+    R.cost[n1+1:end] = r2.cost[1:n2]
+    R.time[1:n1] = r1.time[1:n1]
+    R.time[n1+1:end] = r2.time[1:n2]
+    R.iter_type[1:n1] = r1.iter_type[1:n1]
+    R.iter_type[n1+1:end] = r2.iter_type[1:n2]
+    R.termination_index = n1+n2
+    R
+end
