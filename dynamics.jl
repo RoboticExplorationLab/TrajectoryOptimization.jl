@@ -45,9 +45,9 @@ x0 = [0; 0];
 xf = [pi; 0]; # (ie, swing up)
 
 # costs
-Q = 1.e-3*eye(n);
+Q = (1.e-3)*eye(n);
 Qf = 100.*eye(n);
-R = 1.e-3*eye(m);
+R = (1.e-3)*eye(m);
 
 # simulation
 tf = 5.;
