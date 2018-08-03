@@ -14,11 +14,7 @@ function infeasible_bias(solver::Solver,x0::Array{Float64,2},u::Array{Float64,2}
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        if solver.opts.inplace_dynamics
-            solver.fd(view(x,:,k+1),x[:,k],u[:,k])
-        else
-            x[:,k+1] = solver.fd(x[:,k],u[:,k])
-        end
+        solver.fd(view(x,:,k+1),x[:,k],u[:,k])
         b[:,k] = x0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= b[:,k]
     end
@@ -49,12 +45,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::B
     for k = 2:N
         delta = X_[:,k-1] - X[:,k-1]
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
-
-        if solver.opts.inplace_dynamics
-            solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1])
-        else
-            X_[:,k] = solver.fd(X_[:,k-1], U_[1:solver.model.m,k-1])
-        end
+        solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1])
 
         if infeasible
             X_[:,k] .+= U_[solver.model.m+1:end,k-1]

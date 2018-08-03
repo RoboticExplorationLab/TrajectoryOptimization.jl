@@ -5,11 +5,7 @@ function rollout!(res::SolverResults,solver::Solver)
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        if solver.opts.inplace_dynamics
-            solver.fd(view(X,:,k+1), X[:,k], U[:,k])
-        else
-            X[:,k+1] = solver.fd(X[:,k], U[:,k])
-        end
+        solver.fd(view(X,:,k+1), X[:,k], U[:,k])
     end
 end
 
@@ -24,11 +20,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         delta = X_[:,k-1] - X[:,k-1]
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
 
-        if solver.opts.inplace_dynamics
-            solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
-        else
-            X_[:,k] = solver.fd(X_[:,k-1], U_[:,k-1])
-        end
+        solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
 
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
             return false
