@@ -19,6 +19,7 @@ module iLQR
 
     # include("model.jl")
     include("model.jl")
+    include("integration.jl")
     include("solver.jl")
     include("ilqr_algorithm.jl")
     include("augmented_lagrange.jl")
