@@ -18,6 +18,7 @@ n = 2 # number of pendulum states
 m = 1 # number of pendulum controls
 opts = iLQR.SolverOptions()
 opts.inplace_dynamics = true
+opts.verbose = true
 obj_uncon = Dynamics.pendulum[2]
 model! = iLQR.Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 
@@ -72,18 +73,15 @@ U5 = ones(m,solver5!.N-1)
 #plot(results5.U',title="Pendulum (5. Constrained control and states (inplace dynamics))",ylabel="u(t)")
 
 # 6. Infeasible start with constrained control and heterogeneous states (inplace dynamics)
-u_min6 = -2
-u_max6 = 2
-x_min6 = [-1;-2]
+u_min6 = -3
+u_max6 = 3
+x_min6 = [-3;-3]
 x_max6 = [10; 7]
 obj6 = iLQR.ConstrainedObjective(obj_uncon, u_min=u_min6, u_max=u_max6, x_min=x_min6, x_max=x_max6)
 solver6! = iLQR.Solver(model!,obj6,dt=0.1,opts=opts)
 U6 = ones(m,solver6!.N-1)
-X06 = ones(n,solver6!.N)
-@time results6 = iLQR.solve_al(solver6!,X06, U6)
+#X06 = ones(n,solver6!.N)
+X_interp = line_trajectory(solver6!.obj.x0,solver6!.obj.xf,solver6!.N)
+@time results6 = iLQR.solve_al(solver6!,X_interp,U6)
 plot(results6.X',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results6.U',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
-
-Xb, b= iLQR.infeasible_bias(solver6!,X06,U6)
-plot(b',label=["bias1","bias2"])
-plot!(results6.U[2:3,:]')

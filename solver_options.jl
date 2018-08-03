@@ -18,19 +18,20 @@ mutable struct SolverOptions
     iterations_linesearch::Int64 # maximum number of backtracking steps during forward pass line search
     mu_regularization::Float64 # termed add to Quu during backward pass to insure positive semidefiniteness
     mu_al_update::Float64 # value increase mu_k by at each outer loop iteration
+    infeasible_regularization::Float64 # regularization term for augmented controls during infeasible start
     cache::Bool # cache all intermediate state and control trajectories
 
     benchmark::Bool # Run benchmarks on forward and backward passes
 
     function SolverOptions(;square_root=false,al=false,verbose=false,
         inplace_dynamics=false,infeasible_start=false,c1=1e-4,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
-        eps_constraint=1e-2,iterations=100,iterations_outerloop=10,
-        iterations_linesearch=25,mu_regularization=1.0,mu_al_update=10.0,cache=false,
+        eps_constraint=1e-2,iterations=100,iterations_outerloop=25,
+        iterations_linesearch=25,mu_regularization=1.0,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
         benchmark=false)
 
         new(square_root,al,verbose,inplace_dynamics,infeasible_start,c1,c2,eps,eps_intermediate,
         eps_constraint,iterations,iterations_outerloop,
-        iterations_linesearch,mu_regularization,mu_al_update,cache,benchmark)
+        iterations_linesearch,mu_regularization,mu_al_update,infeasible_regularization,cache,benchmark)
     end
 end
 
