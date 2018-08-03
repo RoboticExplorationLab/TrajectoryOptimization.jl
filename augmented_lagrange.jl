@@ -407,14 +407,23 @@ function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
 end
 
-function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::ConstrainedResults
+function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)
+
+    if solver.opts.cache
+        forensics = Forensics(solver.opts.iterations*solver.opts.iterations)
+    end
+
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     p = solver.obj.p
     pI = solver.obj.pI
+
     J = 0.
+
     infeasible=infeasible
+
+    iter = 1 # counter for total number of iLQR iterations
 
     if infeasible
         _, b = infeasible_bias(solver,X0,U0)
@@ -423,8 +432,9 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
     end
 
     results = ConstrainedResults(n,m,p,N)
+
     if infeasible
-        #solver.obj.x0 = X0[:,1] # not sure this needs to be the case
+        #solver.obj.x0 = X0[:,1] # not sure this is correct
         results.X .= X0
         results.U .= [U0; b]
     else
@@ -457,9 +467,10 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         rollout!(results,solver)
     end
 
+    update_constraints!(results,c_fun,pI,X,U)
+
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
-        update_constraints!(results,c_fun,pI,X,U)
         J_prev = cost(solver, results, X, U, infeasible=infeasible)
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
@@ -469,16 +480,35 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
+
+            if solver.opts.cache
+                t1 = time_ns()
+            end
+
             if solver.opts.square_root
                 v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible)
             else
                 v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible)
             end
             J = forwardpass!(results, solver, v1, v2, c_fun,infeasible=infeasible)
+
+            if solver.opts.cache
+                t2 = time_ns()
+            end
+
             X .= X_
             U .= U_
             dJ = copy(abs(J-J_prev))
             J_prev = copy(J)
+
+            if solver.opts.cache
+                update_constraints!(results,c_fun,pI,X,U)
+                forensics.result[iter] = results
+                forensics.cost[iter] = J
+                forensics.time[iter] = (t2-t1)/(1.0e9)
+            end
+
+            iter += 1
 
             if dJ < solver.opts.eps
                 if solver.opts.verbose
@@ -486,6 +516,7 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
                 end
                 break
             end
+
             if solver.opts.benchmark
                 if i == 1 && k == 1
                     # back_time[k] = @belapsed backwardpass!($results, $solver, $constraint_jacobian, infeasible=$infeasible)
@@ -498,7 +529,12 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
             end
         end
 
+        if solver.opts.cache
+            forensics.iter_type[iter-1] = 1 # indicates an outerloop update
+        end
+
         # Outer Loop - update lambda, mu
+        update_constraints!(results,c_fun,pI,X,U)
         outer_loop_update(results,solver)
         max_c = max_violation(results, diag_inds)
         println("max_c")
@@ -510,6 +546,8 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
     end
 
+    forensics.termination_index = iter-1
+
     if solver.opts.benchmark
         println("Backward pass: $(mean(back_time)) ± $(std(back_time))")
         println("Forward pass:  $(mean(forw_time)) ± $(std(forw_time))")
@@ -517,10 +555,21 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
 
     # return dynamically feasible trajectory
     if infeasible
-        return feasible_traj(results,solver)
+        if solver.opts.cache
+            println("n1: $(forensics.termination_index)")
+            forensics2 = feasible_traj(results,solver)
+            return merge_forensics(forensics,forensics2)
+        else
+            return feasible_traj(results,solver) #TODO cache doesn't work with this yet
+        end
     else
-        return results
+        if solver.opts.cache
+            return forensics #TODO-type instability...
+        else
+            return results
+        end
     end
+
 end
 
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
