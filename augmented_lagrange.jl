@@ -21,21 +21,21 @@ function infeasible_bias(solver::Solver,x0::Array{Float64,2},u::Array{Float64,2}
     x, b
 end
 
-# function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
-#     X = res.X; U = res.U
-#
-#     X[:,1] = solver.obj.x0
-#     for k = 1:solver.N-1
-#         if solver.opts.inplace_dynamics
-#             solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
-#         else
-#             X[:,k+1] = solver.fd(X[:,k], U[1:solver.model.m,k])
-#         end
-#         if infeasible
-#             X[:,k+1] .+= U[solver.model.m+1:end,k]
-#         end
-#     end
-# end
+function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
+    X = res.X; U = res.U
+
+    X[:,1] = solver.obj.x0
+    for k = 1:solver.N-1
+        if solver.opts.inplace_dynamics
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+        else
+            X[:,k+1] = solver.fd(X[:,k], U[1:solver.model.m,k])
+        end
+        if infeasible
+            X[:,k+1] .+= U[solver.model.m+1:end,k]
+        end
+    end
+end
 
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::Bool=false)
     # pull out solver/result values
@@ -74,7 +74,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2};infeasible:
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
 
     if infeasible
-        R = solver.obj.R[1,1]*eye(solver.model.m+solver.model.n)
+        R = 10*solver.obj.R[1,1]*eye(solver.model.m+solver.model.n)
         R[1:solver.model.m,1:solver.model.m] = solver.obj.R
     else
         R = solver.obj.R
@@ -161,7 +161,7 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
     Q = solver.obj.Q
 
     if infeasible
-        R = solver.obj.R[1,1]*eye(m+n)
+        R = 10*solver.obj.R[1,1]*eye(m+n)
         R[1:m,1:m] = solver.obj.R
     else
         R = solver.obj.R
@@ -289,7 +289,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
 
     # Inequality on control
     pI_u_max = count(u_max_active)
-    pI_u = pI_u_max + count(u_min_active)
+    pI_u_min = count(u_min_active)
+    pI_u = pI_u_max + pI_u_min
     cI_u = zeros(pI_u)
     function c_control(x,u)
         [(obj.u_max - u)[u_max_active];
@@ -298,7 +299,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
 
     # Inequality on state
     pI_x_max = count(x_max_active)
-    pI_x = pI_x_max + count(x_min_active)
+    pI_x_min = count(x_min_active)
+    pI_x = pI_x_max + pI_x_min
     function c_state(x,u)
         [(obj.x_max - x)[x_max_active];
          (x - obj.x_min)[x_min_active]]
@@ -337,8 +339,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = -eye(pI_x)
-    fx_state[1+pI_x_max:end,:] = eye(pI_x)
+    fx_state[1:pI_x_max, :] = -eye(pI_x_max)
+    fx_state[1+pI_x_max:end,:] = eye(pI_x_min)
     fx = zeros(p,n)
 
     if infeasible
@@ -346,14 +348,14 @@ function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Boo
         fu_infeasible = zeros(n,m_aug)
         fu_infeasible[:,m+1:end] = eye(n)
         fu_control = zeros(pI_u,m_aug)
-        fu_control[1:pI_u_max, 1:m] = -eye(m)
-        fu_control[1+pI_u_max:end, 1:m] = eye(m)
+        fu_control[1:pI_u_max, 1:m] = -eye(pI_u_max)
+        fu_control[1+pI_u_max:end, 1:m] = eye(pI_u_min)
         fu_state = zeros(pI_x,m_aug)
         fu = zeros(p,m_aug)
     else
         fu_control = zeros(pI_u,m)
-        fu_control[1:pI_u_max,:] = -eye(m)
-        fu_control[1+pI_u_max:end,:] = eye(m)
+        fu_control[1:pI_u_max,:] = -eye(pI_u_max)
+        fu_control[1+pI_u_max:end,:] = eye(pI_u_min)
         fu_state = zeros(pI_x,m)
         fu = zeros(p,m)
     end
