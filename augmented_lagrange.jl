@@ -101,7 +101,6 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
     J_prev = cost(solver, res, X, U, infeasible=infeasible)
 
-    #pI = 2*solver.model.m # TODO change this
     pI = solver.obj.pI
 
     J = Inf
@@ -524,7 +523,6 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         update_constraints!(results,c_fun,pI,X,U)
         outer_loop_update(results,solver)
         max_c = max_violation(results, diag_inds)
-        println("max_c")
         if max_c < solver.opts.eps_constraint
             if solver.opts.verbose
                 println("\teps constraint criteria met at outer iteration: $k\n")

@@ -1,14 +1,16 @@
 
+"""
+$(SIGNATURES)
+In place Midpoint integration
 
-# Midpoint Integrator #UPDATE FOR INFEASIBLE DYNAMICS
-# function midpoint(f::Function, dt::Float64)
-#     dynamics_midpoint(x,u)  = x + f(x + f(x,u)*dt/2, u)*dt
-# end
-#
-# function midpoint(f::Function)
-#     dynamics_midpoint(S::Array)  = S + f(S + f(S)*S[end]/2)*S[end]
-# end
+Defines methods for both separated and augmented forms. Returns a discrete version
+of a continuous dynamics function.
 
+# Arguments
+* f!: in place dynamics function, i.e. `f!(ẋ,x,u)`
+* dt: time step
+
+"""
 function midpoint(f!::Function, dt::Float64)
     fd!(xdot,x,u) = begin
         f!(xdot,x,u)
@@ -28,7 +30,17 @@ function midpoint(f_aug!::Function)
     end
 end
 
-# RK4 Integrator
+"""
+$(SIGNATURES)
+In place Runge Kutta 4 integration
+
+Defines methods for both separated and augmented forms. Returns a discrete version
+of a continuous dynamics function.
+
+# Arguments
+* f!: in place dynamics function, i.e. `f!(ẋ,x,u)` for separate or `f!(Ṡ,S)` for augmented dynamics
+* dt: time step
+"""
 function rk4(f!::Function, dt::Float64)
     # Runge-Kutta 4
     fd!(xdot,x,u) = begin
@@ -55,16 +67,20 @@ function rk4(f_aug!::Function)
 end
 
 
-# Assembled augmented function
-function f_augmented(model::Model)
-    f_aug = f_augmented(model.f, model.n, model.m)
-    f(S::Array) = [f_aug(S); zeros(model.m+1,1)]
-end
+# # Assembled augmented function
+# function f_augmented(model::Model)
+#     f_aug = f_augmented(model.f, model.n, model.m)
+#     f(S::Array) = [f_aug(S); zeros(model.m+1,1)]
+# end
+#
+# function f_augmented(f::Function, n::Int, m::Int)
+#     f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
+# end
 
-function f_augmented(f::Function, n::Int, m::Int)
-    f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
-end
-
+"""
+$(SIGNATURES)
+Converts a separated dynamics function into an augmented dynamics function
+"""
 function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)])
 end

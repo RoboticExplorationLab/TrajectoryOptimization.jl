@@ -82,42 +82,47 @@ $(TYPEDEF)
 Defines a quadratic objective for an unconstrained optimization problem
 """
 mutable struct UnconstrainedObjective <: Objective
-    Q::Array{Float64,2}   # Quadratic stage cost for states (nxn)
-    R::Array{Float64,2}   # Quadratic stage cost for controls (mxm)
-    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (nxn)
+    Q::Array{Float64,2}   # Quadratic stage cost for states (n,n)
+    R::Array{Float64,2}   # Quadratic stage cost for controls (m,m)
+    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (n,n)
     tf::Float64           # Final time (sec)
-    x0::Array{Float64,1}  # Initial state (nx1)
-    xf::Array{Float64,1}  # Final state (nx1)
+    x0::Array{Float64,1}  # Initial state (n,)
+    xf::Array{Float64,1}  # Final state (n,)
 end
 
 """
 $(TYPEDEF)
 Define a quadratic objective for a constrained optimization problem.
+
+# Constraint formulation
+* Equality constraints: `f(x,u) = 0`
+* Inequality constraints: `f(x,u) ≥ 0`
+
 """
 mutable struct ConstrainedObjective <: Objective
-    Q::Array{Float64,2}   # Quadratic stage cost for states (nxn)
-    R::Array{Float64,2}   # Quadratic stage cost for controls (mxm)
-    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (nxn)
+    Q::Array{Float64,2}   # Quadratic stage cost for states (n,n)
+    R::Array{Float64,2}   # Quadratic stage cost for controls (m,m)
+    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (n,n)
     tf::Float64           # Final time (sec)
-    x0::Array{Float64,1}  # Initial state (nx1)
-    xf::Array{Float64,1}  # Final state (nx1)
+    x0::Array{Float64,1}  # Initial state (n,)
+    xf::Array{Float64,1}  # Final state (n,)
 
     # Control Constraints
-    u_min::Array{Float64,1}  # Lower control bounds
-    u_max::Array{Float64,1}  # Upper control bounds
+    u_min::Array{Float64,1}  # Lower control bounds (m,)
+    u_max::Array{Float64,1}  # Upper control bounds (m,)
 
     # State Constraints
-    x_min::Array{Float64,1}  # Lower state bounds
-    x_max::Array{Float64,1}  # Upper state bounds
+    x_min::Array{Float64,1}  # Lower state bounds (n,)
+    x_max::Array{Float64,1}  # Upper state bounds (n,)
 
     # General Stage Constraints
-    cI::Function  # inequality constraints
-    cE::Function  # equality constraints
+    cI::Function  # inequality constraint function
+    cE::Function  # equality constraint function
 
     # Terminal Constraints
     use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false)
-    cI_N::Function # terminal inequality constraints
-    cE_N::Function # terminal equality constraints
+    cI_N::Function # terminal inequality constraint function
+    cE_N::Function # terminal equality constraint function
 
     # Constants
     p::Int   # Total number of stage constraints
@@ -174,6 +179,27 @@ mutable struct ConstrainedObjective <: Objective
     end
 end
 
+"""
+$(SIGNATURES)
+
+Construct a ConstrainedObjective with defaults.
+
+Create a ConstrainedObjective, specifying only the needed fields. All others
+will be set to their default, constrained values.
+
+# Constraint formulation
+* Equality constraints: `f(x,u) = 0`
+* Inequality constraints: `f(x,u) ≥ 0`
+
+# Arguments
+* u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
+a vector of size (m,). A scalar will be copied to all states or controls. Values
+can be ±Inf.
+* cI, cE: Functions for inequality and equality constraints. Must be of the form
+`c = f(x,u)`, where `c` is of size (pI_c,) or (pE_c,).
+* cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
+where `c` is of size (pI_c_N,) or (pE_c_N,).
+"""
 function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
@@ -189,10 +215,18 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
         cI_N, cE_N)
 end
 
+"$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
 function ConstrainedObjective(obj::UnconstrainedObjective; kwargs...)
     ConstrainedObjective(obj.Q, obj.R, obj.Qf, obj.tf, obj.x0, obj.xf; kwargs...)
 end
 
+"""
+$(SIGNATURES)
+Updates constrained objective values and returns a new objective.
+
+Only updates the specified fields, all others are copied from the previous
+Objective.
+"""
 function update_objective(obj::ConstrainedObjective;
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE,
@@ -208,13 +242,17 @@ function update_objective(obj::ConstrainedObjective;
 
 end
 
-function count_constraints(n,m,u_max,u_min,x_max,x_min,cI,cE,
-    use_terminal_constraint, cI_N, cE_N)
+"""
+$(SIGNATURES)
+Check max/min bounds for state and control.
 
+Converts scalar bounds to vectors of appropriate size and checks that lengths
+are equal and bounds do not result in an empty set (i.e. max > min).
 
-end
-
-function validate_bounds(max,min,n)
+# Arguments
+* n: number of elements in the vector (n for states and m for controls)
+"""
+function validate_bounds(max,min,n::Int)
 
     if min isa Real
         min = ones(n)*min
