@@ -1,18 +1,30 @@
-using RigidBodyDynamics
-using ForwardDiff
 
+"""
+$(TYPEDEF)
+
+Dynamics model
+
+Holds all information required to uniquely describe a dynamic system, including
+a general nonlinear dynamics function of the form `ẋ = f(x,u)`, where x ∈ ℜⁿ are
+the states and u ∈ ℜᵐ are the controls.
+
+Dynamics function `Model.f` should be in one of the following forms:
+* `f(x,u)` and return ẋ
+* 'f!(ẋ,x,u)' and modify ẋ in place (recommended)
+"""
 struct Model
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
     m::Int # number of controls
 
+    # Construct a model from an explicit differential equation
     function Model(f::Function, n::Int64, m::Int64)
-        # construct a model from an explicit differential equation
         new(f,n,m)
     end
 
+    # Construct model from a `Mechanism` type from `RigidBodyDynamics`
+    # Automatically assigns one control per joint
     function Model(mech::Mechanism)
-        # fully actuated
         m = length(joints(mech))-1  # subtract off joint to world
         Model(mech,ones(m,1))
     end
@@ -29,7 +41,7 @@ struct Model
         num_joints = length(joints(mech))-1  # subtract off joint to world
         m = num_joints # Default to number of joints
 
-        function fc(x,u)
+        function fc(x,u) # TODO: make this an in place operation
             state = MechanismState{eltype(x)}(mech)
 
             # set the state variables:
@@ -44,12 +56,14 @@ struct Model
     end
 end
 
+"$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"
 function Model(urdf::String)
     # construct modeling using string to urdf file
     mech = parse_urdf(Float64,urdf)
     Model(mech)
 end
 
+"$(SIGNATURES) Construct a partially actuated model from a string to a urdf file"
 function Model(urdf::String,torques::Array{Float64,1})
     # underactuated system (potentially)
     # construct modeling using string to urdf file
@@ -57,33 +71,44 @@ function Model(urdf::String,torques::Array{Float64,1})
     Model(mech,torques)
 end
 
-# cost function
+"""
+$(TYPEDEF)
+Generic type for Objective functions, which are currently strictly Quadratic
+"""
 abstract type Objective end
 
+"""
+$(TYPEDEF)
+Defines a quadratic objective for an unconstrained optimization problem
+"""
 mutable struct UnconstrainedObjective <: Objective
-    Q::Array{Float64,2}
-    R::Array{Float64,2}
-    Qf::Array{Float64,2}
-    tf::Float64
-    x0::Array{Float64,1}
-    xf::Array{Float64,1}
+    Q::Array{Float64,2}   # Quadratic stage cost for states (nxn)
+    R::Array{Float64,2}   # Quadratic stage cost for controls (mxm)
+    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (nxn)
+    tf::Float64           # Final time (sec)
+    x0::Array{Float64,1}  # Initial state (nx1)
+    xf::Array{Float64,1}  # Final state (nx1)
 end
 
+"""
+$(TYPEDEF)
+Define a quadratic objective for a constrained optimization problem.
+"""
 mutable struct ConstrainedObjective <: Objective
-    Q::Array{Float64,2}
-    R::Array{Float64,2}
-    Qf::Array{Float64,2}
-    tf::Float64
-    x0::Array{Float64,1}
-    xf::Array{Float64,1}
+    Q::Array{Float64,2}   # Quadratic stage cost for states (nxn)
+    R::Array{Float64,2}   # Quadratic stage cost for controls (mxm)
+    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (nxn)
+    tf::Float64           # Final time (sec)
+    x0::Array{Float64,1}  # Initial state (nx1)
+    xf::Array{Float64,1}  # Final state (nx1)
 
     # Control Constraints
-    u_min::Array{Float64,1}
-    u_max::Array{Float64,1}
+    u_min::Array{Float64,1}  # Lower control bounds
+    u_max::Array{Float64,1}  # Upper control bounds
 
     # State Constraints
-    x_min::Array{Float64,1}
-    x_max::Array{Float64,1}
+    x_min::Array{Float64,1}  # Lower state bounds
+    x_max::Array{Float64,1}  # Upper state bounds
 
     # General Stage Constraints
     cI::Function  # inequality constraints

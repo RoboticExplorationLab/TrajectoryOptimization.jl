@@ -26,11 +26,7 @@ function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        if solver.opts.inplace_dynamics
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
-        else
-            X[:,k+1] = solver.fd(X[:,k], U[1:solver.model.m,k])
-        end
+        solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
         if infeasible
             X[:,k+1] .+= U[solver.model.m+1:end,k]
         end
@@ -537,7 +533,9 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
     end
 
-    forensics.termination_index = iter-1
+    if solver.opts.cache
+        forensics.termination_index = iter-1
+    end
 
     if solver.opts.benchmark
         println("Backward pass: $(mean(back_time)) ± $(std(back_time))")
