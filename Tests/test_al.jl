@@ -86,3 +86,5 @@ X_interp = iLQR.line_trajectory(solver6!.obj.x0,solver6!.obj.xf,solver6!.N)
 @time results6 = iLQR.solve_al(solver6!,X_interp,U6)
 plot(results6.X',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results6.U',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
+
+iLQR.line_trajectory

@@ -588,6 +588,11 @@ function feasible_traj(results::ConstrainedResults,solver::Solver)
     return solve_al(solver,results.U[1:solver.model.m,:])
 end
 
+"""
+$(SIGNATURES)
+
+Linear interpolation trajectory between initial and final state(s).
+"""
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
     x_traj = zeros(size(x0,1),N)
     t = linspace(0,N,N)
