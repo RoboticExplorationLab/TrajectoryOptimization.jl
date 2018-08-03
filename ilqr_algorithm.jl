@@ -99,11 +99,11 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
-        Quu = luu + fu'*(S + mu*eye(n))*fu
+        Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
         Qux = fu'*(S + mu*eye(n))*fx
 
         # regularization
-        if any(eigvals(Quu).<0.)
+        if !isposdef(Quu)
             mu = mu + solver.opts.mu_regularization;
             k = N-1;
             if solver.opts.verbose
