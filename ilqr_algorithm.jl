@@ -1,5 +1,13 @@
 include("solve_sqrt.jl")
 #iLQR
+
+"""
+$(SIGNATURES)
+Roll out the dynamics for a given control sequence (initial)
+
+Updates `res.X` by propagating the dynamics, using the controls specified in
+`res.U`.
+"""
 function rollout!(res::SolverResults,solver::Solver)
     X = res.X; U = res.U
 
@@ -9,7 +17,17 @@ function rollout!(res::SolverResults,solver::Solver)
     end
 end
 
-function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
+"""
+$(SIGNATURES)
+Roll out the dynamics using the gains and optimal controls computed by the
+backward pass
+
+Updates `res.X` by propagating the dynamics at each timestep, by applying the
+gains `res.K` and `res.d` to the difference between states
+
+Will return a flag indicating if the values are finite for all time steps.
+"""
+function rollout!(res::SolverResults,solver::Solver,alpha::Float64)::Bool
     # pull out solver/result values
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
@@ -29,6 +47,10 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     return true
 end
 
+"""
+$(SIGNATURES)
+Compute the unconstrained cost
+"""
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
@@ -41,12 +63,21 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     return J
 end
 
+"""
+$(SIGNATURES)
+Solve the dynamic programming problem, starting from the terminal time step
+
+Computes the gain matrices K and d by applying the principle of optimality at
+each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
+function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
+"""
 function backwardpass!(res::UnconstrainedResults,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d
 
+    # Terminal Values
     S = Qf
     s = Qf*(X[:,N] - xf)
     v1 = 0.
@@ -54,20 +85,25 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
 
     mu = 0.
     k = N-1
+    # Loop backwards
     while k >= 1
         lx = Q*(X[:,k] - xf)
         lu = R*(U[:,k])
         lxx = Q
         luu = R
+
+        # Compute gradients of the dynamics
         fx, fu = solver.F(X[:,k],U[:,k])
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
-        Quu = luu + fu'*(S + mu*eye(n))*fu
+        Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
         Qux = fu'*(S + mu*eye(n))*fx
 
         # regularization
-        if any(eigvals(Quu).<0.)
+        if !isposdef(Quu)
             mu = mu + solver.opts.mu_regularization;
             k = N-1;
             if solver.opts.verbose
@@ -75,9 +111,10 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
             end
         end
 
+        # Compute gains
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)' # fix the transpose and simplify
+        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)' # TODO: fix the transpose and simplify
         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
@@ -89,6 +126,10 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
     return v1, v2
 end
 
+"""
+$(SIGNATURES)
+Propagate dynamics with a line search
+"""
 function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2::Float64)
 
     # pull out values from results
@@ -108,8 +149,9 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
 
         # Check if rollout completed
         if ~flag
+            # Reduce step size if rollout returns non-finite values (NaN or Inf)
             if solver.opts.verbose
-                println("Bad X bar values")
+                println("Non-finite values in rollout")
             end
             alpha /= 2
             continue
@@ -120,13 +162,15 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
 
+        # Convergence criteria
         if iter > solver.opts.iterations_linesearch
             println("max iterations (forward pass)")
             break
         end
 
+        # Reduce step size
         iter += 1
-        alpha /= 2.
+        alpha /= 2. # TODO: make this a changeable parameter
     end
 
     if solver.opts.verbose
@@ -140,11 +184,11 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
 
 end
 
-function solve(solver::Solver)
-    U = zeros(solver.model.m, solver.N)
-    solve(solver,U)
-end
-
+"""
+$(SIGNATURES)
+Solve the trajectory optimization problem defined by `solver`, with `U0` as the
+initial guess for the controls
+"""
 function solve(solver::Solver,U0::Array{Float64,2})::SolverResults
     if isa(solver.obj, UnconstrainedObjective)
         solve_unconstrained(solver, U0)
@@ -153,7 +197,18 @@ function solve(solver::Solver,U0::Array{Float64,2})::SolverResults
     end
 end
 
-function solve_unconstrained(solver::Solver,U0::Array{Float64,2})
+function solve(solver::Solver)::SolverResults
+    # Generate random control sequence
+    U = rand(solver.model.m, solver.N-1)
+    solve(solver,U)
+end
+
+
+"""
+$(SIGNATURES)
+Solve an unconstrained optimization problem specified by `solver`
+"""
+function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
     N = solver.N; n = solver.model.n; m = solver.model.m
 
     X = zeros(n,N)

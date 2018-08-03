@@ -1,7 +1,7 @@
 include("solver_options.jl")
 
 """
-    check_inplace_dynamics(model)
+$(SIGNATURES)
 Determine if the dynamics in model are in place. i.e. the function call is of
 the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
 """
@@ -20,7 +20,7 @@ function is_inplace_dynamics(model::Model)::Bool
 end
 
 """
-    wrap_inplace(f)
+$(SIGNATURES)
 Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
 form `f!(xdot,x,u)`.
 """
@@ -28,14 +28,22 @@ function wrap_inplace(f::Function)
     f!(xdot,x,u) = copy!(xdot, f(x,u))
 end
 
+
+"""
+$(TYPEDEF)
+Contains all information to solver a trajectory optimization problem.
+
+The Solver type is immutable so is unique to the particular problem. However,
+anything in `Solver.opts` can be changed dynamically.
+"""
 struct Solver
-    model::Model
-    obj::Objective
-    opts::SolverOptions
-    dt::Float64
-    fd::Function  # discrete dynamics
-    F::Function
-    N::Int
+    model::Model         # Dynamics model
+    obj::Objective       # Objective (cost function and constraints)
+    opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
+    dt::Float64          # Time step
+    fd::Function         # Discrete in place dynamics function, `fd(ẋ,x,u)`
+    F::Function          # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    N::Int               # Number of time steps
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions())
         N = Int(floor(obj.tf/dt));
@@ -79,20 +87,40 @@ struct Solver
     end
 end
 
+"""
+$(TYPEDEF)
+Abstract type for the output of solving a trajectory optimization problem
+"""
 abstract type SolverResults end
 
+"""
+$(TYPEDEF)
+Values computed for an unconstrained optimization problem
+
+Time steps are always concatenated along the last dimension
+"""
 struct UnconstrainedResults <: SolverResults
-    X::Array{Float64,2}
-    U::Array{Float64,2}
-    K::Array{Float64,3}
-    d::Array{Float64,2}
-    X_::Array{Float64,2}
-    U_::Array{Float64,2}
+    X::Array{Float64,2}  # States (n,N)
+    U::Array{Float64,2}  # Controls (m,N-1)
+    K::Array{Float64,3}  # Feedback gain (m,n,N-1)
+    d::Array{Float64,2}  # Feedforward gain (m,N-1)
+    X_::Array{Float64,2} # Predicted states (n,N)
+    U_::Array{Float64,2} # Predicted controls (m,N-1)
+
     function UnconstrainedResults(X,U,K,d,X_,U_)
         new(X,U,K,d,X_,U_)
     end
 end
 
+"""
+$(SIGNATURES)
+Construct results from sizes
+
+# Arguments
+* n: number of states
+* m: number of controls
+* N: number of time steps
+"""
 function UnconstrainedResults(n::Int,m::Int,N::Int)
     X = zeros(n,N)
     U = zeros(m,N-1)
@@ -103,38 +131,47 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     UnconstrainedResults(X,U,K,d,X_,U_)
 end
 
+"""
+$(TYPEDEF)
+Values computed for a constrained optimization problem
+
+Time steps are always concatenated along the last dimension
+"""
 struct ConstrainedResults <: SolverResults
-    X::Array{Float64,2}
-    U::Array{Float64,2}
-    K::Array{Float64,3}
-    d::Array{Float64,2}
-    X_::Array{Float64,2}
-    U_::Array{Float64,2}
-    C::Array{Float64,2}
-    Iμ::Array{Float64,3}
-    LAMBDA::Array{Float64,2}
-    MU::Array{Float64,2}
+    X::Array{Float64,2}  # States (n,N)
+    U::Array{Float64,2}  # Controls (m,N-1)
+    K::Array{Float64,3}  # Feedback gain (m,n,N-1)
+    d::Array{Float64,2}  # Feedforward gain (m,N-1)
+    X_::Array{Float64,2} # Predicted states (n,N)
+    U_::Array{Float64,2} # Predicted controls (m,N-1)
 
-    CN::Array{Float64,1}
-    IμN::Array{Float64,2}
-    λN::Array{Float64,1}
-    μN::Array{Float64,1}
+    C::Array{Float64,2}      # Constraint values (p,N-1)
+    Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
+    LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N-1)
+    MU::Array{Float64,2}     # Penalty terms (p,N-1)
 
-    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU)
-        n = size(X,1)
-        # Terminal Constraints (make 2D so it works well with stage values)
-        CN = zeros(n)
-        IμN = zeros(n,n)
-        λN = zeros(n)
-        μN = zeros(n)
-        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
-    end
+    CN::Array{Float64,1}     # Final constraint values (p_N,)
+    IμN::Array{Float64,2}    # Final constraint penalty matrix (p_N,p_N)
+    λN::Array{Float64,1}     # Final lagrange multipliers (p_N,)
+    μN::Array{Float64,1}     # Final penalty terms (p_N,)
+
     function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
         new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
     end
 end
 
-function ConstrainedResults(n,m,p,N,p_N=n)
+"""
+$(SIGNATURES)
+Construct results from sizes
+
+# Arguments
+* n: number of states
+* m: number of controls
+* p: number of constraints
+* N: number of time steps
+* p_N (default=n): number of terminal constraints
+"""
+function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X = zeros(n,N)
     U = zeros(m,N-1)
     K = zeros(m,n,N-1)
