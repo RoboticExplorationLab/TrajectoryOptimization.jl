@@ -546,7 +546,9 @@ function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};
         end
     end
 
-    forensics.termination_index = iter-1
+    if solver.opts.cache
+        forensics.termination_index = iter-1
+    end
 
     if solver.opts.benchmark
         println("Backward pass: $(mean(back_time)) ± $(std(back_time))")
