@@ -1,67 +1,48 @@
 include("solve_sqrt.jl")
 #iLQR
 
-"""
-$(SIGNATURES)
-Roll out the dynamics for a given control sequence (initial)
 
-Updates `res.X` by propagating the dynamics, using the controls specified in
-`res.U`.
-"""
-function rollout!(res::SolverResults,solver::Solver)
-    X = res.X; U = res.U
+# function rollout!(res::SolverResults,solver::Solver)
+#     X = res.X; U = res.U
+#
+#     X[:,1] = solver.obj.x0
+#     for k = 1:solver.N-1
+#         solver.fd(view(X,:,k+1), X[:,k], U[:,k])
+#     end
+# end
 
-    X[:,1] = solver.obj.x0
-    for k = 1:solver.N-1
-        solver.fd(view(X,:,k+1), X[:,k], U[:,k])
-    end
-end
+# function rollout!(res::SolverResults,solver::Solver,alpha::Float64)::Bool
+#     # pull out solver/result values
+#     N = solver.N
+#     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
+#
+#     X_[:,1] = solver.obj.x0;
+#     for k = 2:N
+#         a = alpha*d[:,k-1]
+#         delta = X_[:,k-1] - X[:,k-1]
+#         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
+#
+#         solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
+#
+#         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
+#             return false
+#         end
+#     end
+#     return true
+# end
 
-"""
-$(SIGNATURES)
-Roll out the dynamics using the gains and optimal controls computed by the
-backward pass
 
-Updates `res.X` by propagating the dynamics at each timestep, by applying the
-gains `res.K` and `res.d` to the difference between states
-
-Will return a flag indicating if the values are finite for all time steps.
-"""
-function rollout!(res::SolverResults,solver::Solver,alpha::Float64)::Bool
-    # pull out solver/result values
-    N = solver.N
-    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
-
-    X_[:,1] = solver.obj.x0;
-    for k = 2:N
-        a = alpha*d[:,k-1]
-        delta = X_[:,k-1] - X[:,k-1]
-        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
-
-        solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
-
-        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
-            return false
-        end
-    end
-    return true
-end
-
-"""
-$(SIGNATURES)
-Compute the unconstrained cost
-"""
-function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
-    # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
-
-    J = 0.0
-    for k = 1:N-1
-      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
-    end
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-    return J
-end
+# function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+#     # pull out solver/objective values
+#     N = solver.N; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
+#
+#     J = 0.0
+#     for k = 1:N-1
+#       J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
+#     end
+#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+#     return J
+# end
 
 """
 $(SIGNATURES)

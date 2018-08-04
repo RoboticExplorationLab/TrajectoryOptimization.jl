@@ -26,6 +26,13 @@ function infeasible_controls(solver::Solver,x0::Array{Float64,2})
     infeasible_controls(solver,x0,u)
 end
 
+"""
+$(SIGNATURES)
+Roll out the dynamics for a given control sequence (initial)
+
+Updates `res.X` by propagating the dynamics, using the controls specified in
+`res.U`.
+"""
 function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
     X = res.X; U = res.U
 
@@ -38,6 +45,16 @@ function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
     end
 end
 
+"""
+$(SIGNATURES)
+Roll out the dynamics using the gains and optimal controls computed by the
+backward pass
+
+Updates `res.X` by propagating the dynamics at each timestep, by applying the
+gains `res.K` and `res.d` to the difference between states
+
+Will return a flag indicating if the values are finite for all time steps.
+"""
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::Bool=false)
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
@@ -69,6 +86,10 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::A
     return J
 end
 
+"""
+$(SIGNATURES)
+Compute the unconstrained cost
+"""
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2};infeasible::Bool=false)
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
