@@ -5,11 +5,10 @@ else
     using Test
 end
 
-include("../iLQR.jl")
-include("../dynamics.jl")
-using Base.Test
+# include("../iLQR.jl")
+# include("../dynamics.jl")
 using BenchmarkTools
-using iLQR
+# using iLQR
 
 
 @testset "Simple Pendulum" begin

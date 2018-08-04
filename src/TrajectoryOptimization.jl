@@ -12,11 +12,17 @@ using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 
+export
+    Dynamics
+
 # Primary types
 export
     Model,
     Solver,
-    Objective,
+    ConstrainedObjective,
+    UnconstrainedObjective,
+    ConstrainedResults,
+    UnconstrainedResults,
     SolverOptions
 
 # Primary methods
@@ -27,6 +33,7 @@ export
     backwardpass!,
     cost,
     max_violation,
+    update_objective,
     bias
 
 include("model.jl")
@@ -35,6 +42,7 @@ include("solver.jl")
 include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
 include("forensics.jl")
+include("dynamics.jl")
 
 
 end # module
