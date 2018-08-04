@@ -56,7 +56,7 @@ struct Solver
         end
 
         # Get integration scheme
-        if isdefined(iLQR,integration)
+        if isdefined(TrajectoryOptimization,integration)
             discretizer = eval(integration)
         else
             throw(ArgumentError("$integration is not a defined integration scheme"))

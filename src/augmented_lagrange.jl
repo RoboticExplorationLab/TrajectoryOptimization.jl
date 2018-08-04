@@ -442,7 +442,7 @@ $(SIGNATURES)
 
 Solve constrained optimization problem specified by `solver`
 """
-function solve_al(solver::iLQR.Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
+function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states
@@ -623,7 +623,7 @@ $(SIGNATURES)
 
 Solve constrained optimization problem using an initial control trajectory
 """
-function solve_al(solver::iLQR.Solver,U0::Array{Float64,2})
+function solve_al(solver::Solver,U0::Array{Float64,2})
     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
 end
 
