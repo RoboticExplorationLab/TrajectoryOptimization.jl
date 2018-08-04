@@ -197,46 +197,65 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
 end
 
-mutable struct ResultsCache <: SolverResults
-    X::Array{Float64,2}
-    U::Array{Float64,2}
-    result::Array{SolverResults,1}
-    cost::Array{Float64,1}
-    time::Array{Float64,1}
-    iter_type::Array{Int64,1}
-    termination_index::Int64
+"""
+$(TYPEDEF)
+
+Values cached for each solve iteration
+"""
+mutable struct ResultsCache <: SolverResults #TODO look into making an immutable struct
+    X::Array{Float64,2}            # Final state trajectory (n,N)
+    U::Array{Float64,2}            # Final control trajectory (m,N-1)
+    result::Array{SolverResults,1} # SolverResults at each solve iteration
+    cost::Array{Float64,1}         # Objective cost at each solve iteration
+    time::Array{Float64,1}         # iLQR inner loop evaluation time at each solve iteration
+    iter_type::Array{Int64,1}      # Flag indicating final inner loop iteration before outer loop update (1), otherwise (0), for each solve iteration
+    termination_index::Int64       # Iteration when solve terminates
 
     function ResultsCache(X, U, result, cost, time, iter_type, termination_index)
         new(X, U, result, cost, time, iter_type, termination_index)
     end
 end
 
-function ResultsCache(solver::Solver,max_steps::Int64)
+"""
+$(SIGNATURES)
+
+Construct ResultsCache from sizes
+
+#Arguments
+* solver: Solver
+* n_allocation: Array size allocation corresponding to number of solve iterations
+"""
+function ResultsCache(solver::Solver,n_allocation::Int64)
     X = zeros(solver.model.n,solver.N)
     U = zeros(solver.model.m, solver.N-1)
-    result = Array{SolverResults}(max_steps)
-    cost = zeros(max_steps)
-    time = zeros(max_steps)
-    iter_type = zeros(max_steps)
+    result = Array{SolverResults}(n_allocation)
+    cost = zeros(n_allocation)
+    time = zeros(n_allocation)
+    iter_type = zeros(n_allocation)
     termination_index = 0
     ResultsCache(X, U, result, cost, time, iter_type, termination_index)
 end
 
-function merge_results_cache(r1::ResultsCache,r2::ResultsCache,solver::Solver)
-    n1 = r1.termination_index
-    n2 = r2.termination_index
-    R = ResultsCache(solver,n1+n2)
+"""
+$(SIGNATURES)
 
-    R.X = r2.X
-    R.U = r2.U
-    R.result[1:n1] = r1.result[1:n1]
+Combined two ResultsCache's
+"""
+function merge_results_cache(r1::ResultsCache,r2::ResultsCache,solver::Solver)
+    n1 = r1.termination_index      # number of results
+    n2 = r2.termination_index      # number of results
+    R = ResultsCache(solver,n1+n2) # initialize new ResultsCache that will contain both ResultsCache's
+
+    R.X = r2.X # new ResultsCache will store most recent (ie, best) state trajectory
+    R.U = r2.U # new ResultsCache will store most recent (ie, best) control trajectory
+    R.result[1:n1] = r1.result[1:n1] # store all valid results
     R.result[n1+1:end] = r2.result[1:n2]
-    R.cost[1:n1] = r1.cost[1:n1]
+    R.cost[1:n1] = r1.cost[1:n1] # store all valid costs
     R.cost[n1+1:end] = r2.cost[1:n2]
-    R.time[1:n1] = r1.time[1:n1]
+    R.time[1:n1] = r1.time[1:n1] # store all valid times
     R.time[n1+1:end] = r2.time[1:n2]
-    R.iter_type[1:n1] = r1.iter_type[1:n1]
+    R.iter_type[1:n1] = r1.iter_type[1:n1] # store all valid iteration types
     R.iter_type[n1+1:end] = r2.iter_type[1:n2]
-    R.termination_index = n1+n2
+    R.termination_index = n1+n2 # update total number of iterations
     R
 end

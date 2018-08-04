@@ -3,8 +3,8 @@
 Primary module for setting up and solving trajectory optimization problems with
 iterative Linear Quadratic Regulator (iLQR). Module supports unconstrained and
 constrained optimization problems. Constrained optimization problems are solved
-using Augmented Lagrangian methods. Supports automatic differentiation via the
-`ForwardDiff` package by JuliaRobotics.
+using Augmented Lagrangian methods. Supports automatic differentiation for computing dynamics Jacobians via the
+`ForwardDiff` package.
 """
 module iLQR
     using RigidBodyDynamics
