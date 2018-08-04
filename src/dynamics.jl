@@ -1,6 +1,6 @@
 module Dynamics
 
-using iLQR.Model, iLQR.UnconstrainedObjective, iLQR.ConstrainedObjective
+using TrajectoryOptimization: Model, UnconstrainedObjective, ConstrainedObjective
 
 export
     pendulum,
