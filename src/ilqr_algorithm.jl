@@ -1,4 +1,4 @@
-include("solve_sqrt.jl")
+#include("solve_sqrt.jl")
 #iLQR
 
 
@@ -200,6 +200,15 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
     d = zeros(m,N-1)
     results = UnconstrainedResults(X,U,K,d,X_,U_)
 
+    if solver.opts.cache
+        # Initialize cache and store initial trajectories and cost
+        iter = 1 # counter for total number of iLQR iterations
+        results_cache = ResultsCache(solver,solver.opts.iterations+1) #TODO preallocate smaller arrays
+        results_cache.result[iter] = results
+        results_cache.cost[iter] = cost(solver, X, U)
+        iter += 1
+    end
+
     # initial roll-out
     X[:,1] = solver.obj.x0
     rollout!(results, solver)
@@ -212,14 +221,33 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
         if solver.opts.verbose
             println("*** Iteration: $i ***")
         end
+
+        if solver.opts.cache
+            t1 = time_ns() # time flag for iLQR inner loop start
+        end
+
         if solver.opts.square_root
             v1, v2 = backwards_sqrt(results,solver)
         else
             v1, v2 = backwardpass!(results,solver)
         end
+
         J = forwardpass!(results, solver, v1, v2)
+
         X .= X_
         U .= U_
+
+        if solver.opts.cache
+            t2 = time_ns() # time flag of iLQR inner loop end
+        end
+
+        if solver.opts.cache
+            # Store current results and performance parameters
+            results_cache.result[iter] = results
+            results_cache.cost[iter] = J
+            results_cache.time[iter] = (t2-t1)/(1.0e9)
+            iter += 1
+        end
 
         if abs(J-J_prev) < solver.opts.eps
             if solver.opts.verbose
@@ -232,5 +260,16 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
         J_prev = copy(J)
     end
 
-    return results
+    if solver.opts.cache
+        # Store final results
+        results_cache.termination_index = iter-1
+        results_cache.X = results.X
+        results_cache.U = results.U
+    end
+
+    if solver.opts.cache
+        return results_cache
+    else
+        return results
+    end
 end

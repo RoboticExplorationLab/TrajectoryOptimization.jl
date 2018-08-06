@@ -19,6 +19,7 @@ export
 export
     Model,
     Solver,
+    SolverResults,
     ConstrainedObjective,
     UnconstrainedObjective,
     ConstrainedResults,
@@ -28,13 +29,15 @@ export
 # Primary methods
 export
     solve,
+    solve_al,
     rollout!,
     forwardpass!,
     backwardpass!,
     cost,
     max_violation,
     update_objective,
-    infeasible_control
+    infeasible_control,
+    line_trajectory
 
 include("model.jl")
 include("integration.jl")
@@ -43,6 +46,5 @@ include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
 include("forensics.jl")
 include("dynamics.jl")
-
 
 end # module
