@@ -125,7 +125,7 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
     dV = Inf
     z = 0.
 
-    while z < solver.opts.c1 || z > solver.opts.c2
+    while z ≤ solver.opts.c1 || z > solver.opts.c2
         flag = rollout!(res, solver, alpha)
 
         # Check if rollout completed
