@@ -34,7 +34,7 @@ export
     cost,
     max_violation,
     update_objective,
-    bias
+    infeasible_control
 
 include("model.jl")
 include("integration.jl")
