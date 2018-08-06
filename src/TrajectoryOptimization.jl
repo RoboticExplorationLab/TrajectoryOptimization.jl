@@ -42,6 +42,7 @@ export
 include("model.jl")
 include("integration.jl")
 include("solver.jl")
+include("solve_sqrt.jl")
 include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
 include("forensics.jl")
