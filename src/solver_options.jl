@@ -40,7 +40,7 @@ mutable struct SolverOptions
     benchmark::Bool
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1e-4,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
+        c1=0.0,c2=1.0,eps=1e-5,eps_intermediate=1e-2,
         eps_constraint=1e-2,iterations=100,iterations_outerloop=25,
         iterations_linesearch=25,mu_regularization=1.0,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
         benchmark=false)

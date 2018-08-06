@@ -22,9 +22,10 @@ function pendulum_dynamics(x,u)
     g = 9.81
     xdot = zeros(x)
     xdot[1] = x[2]
-    xdot[2] = u[1] - m*g*lc*sin(x[1]) - b*x[2]
+    xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
     return xdot
 end
+
 function pendulum_dynamics!(xdot,x,u)
     m = 1.
     l = 0.5
@@ -33,7 +34,7 @@ function pendulum_dynamics!(xdot,x,u)
     I = 0.25
     g = 9.81
     xdot[1] = x[2]
-    xdot[2] = u[1] - m*g*lc*sin(x[1]) - b*x[2]
+    xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
 end
 model = Model(pendulum_dynamics,2,1)
 
@@ -41,18 +42,18 @@ n = model.n; # dimensions of system
 m = model.m; # dimensions of control
 
 # initial conditions
-x0 = [0; 0];
+x0 = [0; 0]
 
 # goal
-xf = [pi; 0]; # (ie, swing up)
+xf = [pi; 0] # (ie, swing up)
 
 # costs
-Q = (1.e-3)*eye(n);
-Qf = 100.*eye(n);
-R = (1.e-3)*eye(m);
+Q = 0.3*eye(n);
+Qf = 30.0*eye(n);
+R = 0.3*eye(m);
 
 # simulation
-tf = 5.;
+tf = 5.
 
 obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
