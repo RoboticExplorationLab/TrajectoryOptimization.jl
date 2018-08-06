@@ -636,7 +636,7 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C)
     N += 1
     for jj = 1:N-1
-        for ii = p
+        for ii = 1:p
             if ii <= solver.obj.pI
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
             else
