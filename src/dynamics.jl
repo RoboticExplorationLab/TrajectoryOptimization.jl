@@ -9,6 +9,8 @@ export
     ballonbeam,
     acrobot
 
+urdf_folder = joinpath(Pkg.dir("TrajectoryOptimization"), "urdf")
+
 """Simple Pendulum"""
 # https://github.com/HarvardAgileRoboticsLab/unscented-dynamic-programming/blob/master/pendulum_dynamics.m
 function pendulum_dynamics(x,u)
@@ -66,7 +68,9 @@ pendulum = [model,obj]
 
 """Double Pendulum"""
 # Load URDF
-urdf_doublependulum = "urdf/doublependulum.urdf"
+urdf_doublependulum = joinpath(urdf_folder, "doublependulum.urdf")
+isfile(urdf_doublependulum)
+
 model = Model(urdf_doublependulum)
 n = model.n; # dimensions of system
 m = model.m; # dimensions of control
@@ -120,7 +124,7 @@ ballonbeam = Model(ballonbeam_dynamics,4,1)
 acrobot = Model(urdf_doublependulum,[0.;1.])
 
 ## Cartpole / Inverted Pendulum
-urdf_cartpole = "urdf/cartpole.urdf"
+urdf_cartpole = joinpath(urdf_folder, "cartpole.urdf")
 cartpole = Model(urdf_cartpole,[1.;0.])
 
 
