@@ -47,7 +47,6 @@
 """
 $(SIGNATURES)
 Solve the dynamic programming problem, starting from the terminal time step
-
 Computes the gain matrices K and d by applying the principle of optimality at
 each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
@@ -75,6 +74,8 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
 
         # Compute gradients of the dynamics
         fx, fu = solver.F(X[:,k],U[:,k])
+        #println("fu: $fu\n")
+        #println("fx: $fx\n")
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*s
@@ -86,7 +87,7 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         # regularization
         if !isposdef(Quu)
             mu = mu + solver.opts.mu_regularization;
-            k = N-1;
+            k = N-1
             if solver.opts.verbose
                 println("regularized")
             end
@@ -95,8 +96,8 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         # Compute gains
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)' # TODO: fix the transpose and simplify
-        S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+        s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        S = Qxx - Qux'*(Quu\Qux) #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
@@ -125,7 +126,7 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
     dV = Inf
     z = 0.
 
-    while z ≤ solver.opts.c1 || z > solver.opts.c2
+    while z <= solver.opts.c1 || z > solver.opts.c2
         flag = rollout!(res, solver, alpha)
 
         # Check if rollout completed
@@ -141,7 +142,11 @@ function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2
         # Calcuate cost
         J = cost(solver, X_, U_)
         dV = alpha*v1 + (alpha^2)*v2/2.
+        # dV = v1 + 0.5*v2
+        # dV = v2 + v1
         z = (J_prev - J)/dV[1,1]
+        # println("α: $alpha")
+        # println("z: $z")
 
         # Convergence criteria
         if iter > solver.opts.iterations_linesearch
