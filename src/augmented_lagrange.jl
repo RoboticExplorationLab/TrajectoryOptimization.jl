@@ -248,8 +248,7 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
         Qux += Cu'*Iμ[:,:,k]*Cx
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-        S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+		s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
@@ -546,9 +545,9 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
             if solver.opts.cache
                 # Store current results and performance parameters
-                results_cache.result[iter] = results
-                results_cache.cost[iter] = J
-                results_cache.time[iter] = (t2-t1)/(1.0e9)
+                results_cache.result[iter] .= results
+                results_cache.cost[iter] = copy(J)
+                results_cache.time[iter] = copy((t2-t1)/(1.0e9))
                 iter += 1
             end
 
@@ -636,7 +635,7 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C)
     N += 1
     for jj = 1:N-1
-        for ii = p
+        for ii = 1:p
             if ii <= solver.obj.pI
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
             else
