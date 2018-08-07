@@ -170,6 +170,14 @@ $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
+function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2})::SolverResults
+    if isa(solver.obj, UnconstrainedObjective)
+        obj_c = ConstrainedObjective(solver.obj)
+        solver = Solver(solver.model, obj_c, dt=solver.dt, opts=solver.opts)
+    end
+    solve(solver,X0,U0)
+end
+
 function solve(solver::Solver,U0::Array{Float64,2})::SolverResults
     if isa(solver.obj, UnconstrainedObjective)
         solve_unconstrained(solver, U0)
