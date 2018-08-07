@@ -63,7 +63,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::B
     for k = 2:N
         delta = X_[:,k-1] - X[:,k-1]
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
-        solver.fd(view(X_,:,k) ,X_[:,k-1], U_[1:solver.model.m,k-1])
+        solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
 
         if infeasible
             X_[:,k] .+= U_[solver.model.m+1:end,k-1]
@@ -77,6 +77,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::B
 end
 
 # overloaded cost function to accomodate Augmented Lagrance method
+# TODO: Make cost a function only a function of results
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::Array{Float64,2}; infeasible::Bool=false)
     J = cost(solver, X, U, infeasible=infeasible)
     for k = 1:solver.N-1
@@ -308,7 +309,7 @@ Stacks the constraints as follows:
  general equalities
  (control equalities for infeasible start)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective;infeasible::Bool=false)
+function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bool=false)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -440,8 +441,18 @@ end
 """
 $(SIGNATURES)
 
+Solve constrained optimization problem using an initial control trajectory
+"""
+function solve_al(solver::Solver,U0::Array{Float64,2})
+    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
+end
+
+"""
+$(SIGNATURES)
+
 Solve constrained optimization problem specified by `solver`
 """
+# QUESTION: Should the infeasible tag be able to be changed? What happens if we turn it off with an X0?
 function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
@@ -460,7 +471,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
     results = ConstrainedResults(n,m,p,N) # preallocate memory for results
 
     if infeasible
-        #solver.obj.x0 = X0[:,1] #TODO not sure this is correct or needs to be here
+        #solver.obj.x0 = X0[:,1] # TODO not sure this is correct or needs to be here
         results.X .= X0 # initialize state trajectory with infeasible trajectory input
         results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
     else
@@ -478,15 +489,6 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
     # Generate constraint function and jacobian functions from the objective
     c_fun, constraint_jacobian = generate_constraint_functions(solver.obj,infeasible=infeasible)
-
-    if solver.opts.benchmark #TODO do we need this?
-        N_samples = 10
-        sample_iters = rand(1:solver.opts.iterations,N_samples)
-        println(sample_iters)
-        back_time = zeros(solver.opts.iterations_outerloop)
-        forw_time = zeros(solver.opts.iterations_outerloop)
-        s = 0
-    end
 
     ## Solver
     # Initial rollout
@@ -559,17 +561,6 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
                 end
                 break
             end
-
-            if solver.opts.benchmark
-                if i == 1 && k == 1
-                    # back_time[k] = @belapsed backwardpass!($results, $solver, $constraint_jacobian, infeasible=$infeasible)
-                    # back_time[k] /= N
-                    # forw_time[k] = @belapsed forwardpass!($results, $solver, $v1, $v2, $c_fun, infeasible=$infeasible)
-                    # forw_time[k] /= N
-                    @btime backwardpass!($results, $solver, $constraint_jacobian, infeasible=$infeasible)
-                    @btime forwardpass!($results, $solver, $v1, $v2, $c_fun, infeasible=$infeasible)
-                end
-            end
         end
 
         if solver.opts.cache
@@ -596,16 +587,11 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         results_cache.U = results.U
     end
 
-    if solver.opts.benchmark
-        println("Backward pass: $(mean(back_time)) ± $(std(back_time))")
-        println("Forward pass:  $(mean(forw_time)) ± $(std(forw_time))")
-    end
-
     ## Return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
             results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
-            return merge_results_cache(results_cache,results_cache_2,solver) # return infeasible results and final enforce dynamics results
+            return merge_results_cache(results_cache,results_cache_2) # return infeasible results and final enforce dynamics results
         else
             return feasible_traj(results,solver)
         end
@@ -618,14 +604,6 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
     end
 end
 
-"""
-$(SIGNATURES)
-
-Solve constrained optimization problem using an initial control trajectory
-"""
-function solve_al(solver::Solver,U0::Array{Float64,2})
-    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
-end
 
 """
 $(SIGNATURES)
