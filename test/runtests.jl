@@ -17,15 +17,18 @@ end
 @testset "Constrained Objective" begin
     include("objective_tests.jl")
 end
+@testset "Results" begin
+    include("results_tests.jl")
+end
 
 
 """
 # NEEDED TESTS:
-- integration schemes
-- in place dynamics
-- infeasible start
 - constraint generator
-- state inequality constraints
-- asymmetric bounds (one bounded, another not)
-- all solve methods
+
+- Attempt undefined integration scheme
+- All dynamics
+- Custom terminal constraints in objective
+- Try/catch in solve_sqrt
+- UnconstrainedResults constructor
 """
