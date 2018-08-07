@@ -204,8 +204,7 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
         # Initialize cache and store initial trajectories and cost
         iter = 1 # counter for total number of iLQR iterations
         results_cache = ResultsCache(solver,solver.opts.iterations+1) #TODO preallocate smaller arrays
-        results_cache.result[iter] = results
-        results_cache.cost[iter] = cost(solver, X, U)
+        add_iter!(results_cache, results, cost(solver, X, U))
         iter += 1
     end
 
@@ -243,9 +242,8 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
 
         if solver.opts.cache
             # Store current results and performance parameters
-            results_cache.result[iter] = results
-            results_cache.cost[iter] = J
-            results_cache.time[iter] = (t2-t1)/(1.0e9)
+            time = (t2-t1)/(1.0e9)
+            add_iter!(results_cache, results, J, time, iter)
             iter += 1
         end
 
@@ -256,7 +254,6 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
             end
             break
         end
-
         J_prev = copy(J)
     end
 

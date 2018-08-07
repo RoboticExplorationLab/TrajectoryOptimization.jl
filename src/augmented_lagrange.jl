@@ -504,8 +504,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         # Initialize cache and store initial trajectories and cost
         iter = 1 # counter for total number of iLQR iterations
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
-        results_cache.result[iter] = results
-        results_cache.cost[iter] = cost(solver, results, X, U, infeasible=infeasible)
+        add_iter!(results_cache, results, cost(solver, X, U, infeasible=infeasible))
         iter += 1
     end
 
@@ -548,9 +547,8 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
             if solver.opts.cache
                 # Store current results and performance parameters
-                results_cache.result[iter] = results
-                results_cache.cost[iter] = J
-                results_cache.time[iter] = (t2-t1)/(1.0e9)
+                time = (t2-t1)/(1.0e9)
+                add_iter!(results_cache, results, J, time, iter)
                 iter += 1
             end
 

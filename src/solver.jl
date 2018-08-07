@@ -1,4 +1,5 @@
 include("solver_options.jl")
+import Base: copy, length, size
 
 """
 $(SIGNATURES)
@@ -95,11 +96,17 @@ abstract type SolverResults end
 
 """
 $(TYPEDEF)
+Abstract type for the output of a single iteration step
+"""
+abstract type SolverIterResults <: SolverResults end
+
+"""
+$(TYPEDEF)
 Values computed for an unconstrained optimization problem
 
 Time steps are always concatenated along the last dimension
 """
-struct UnconstrainedResults <: SolverResults
+struct UnconstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
     U::Array{Float64,2}  # Controls (m,N-1)
     K::Array{Float64,3}  # Feedback gain (m,n,N-1)
@@ -131,13 +138,17 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     UnconstrainedResults(X,U,K,d,X_,U_)
 end
 
+function copy(r::UnconstrainedResults)
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_))
+end
+
 """
 $(TYPEDEF)
 Values computed for a constrained optimization problem
 
 Time steps are always concatenated along the last dimension
 """
-struct ConstrainedResults <: SolverResults
+struct ConstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
     U::Array{Float64,2}  # Controls (m,N-1)
     K::Array{Float64,3}  # Feedback gain (m,n,N-1)
@@ -197,9 +208,13 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
 end
 
+function copy(r::ConstrainedResults)
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),
+        copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN))
+end
+
 """
 $(TYPEDEF)
-
 Values cached for each solve iteration
 """
 mutable struct ResultsCache <: SolverResults #TODO look into making an immutable struct
@@ -218,16 +233,22 @@ end
 
 """
 $(SIGNATURES)
-
-Construct ResultsCache from sizes
-
-#Arguments
-* solver: Solver
-* n_allocation: Array size allocation corresponding to number of solve iterations
+Construct ResultsCache from sizes with a pre-allocated size of `n_allocation`
 """
 function ResultsCache(solver::Solver,n_allocation::Int64)
-    X = zeros(solver.model.n,solver.N)
-    U = zeros(solver.model.m, solver.N-1)
+    n,m = solver.model.n, solver.model.m
+    N = solver.N
+    ResultsCache(n,m,N,n_allocation)
+end
+
+function ResultsCache(results::SolverIterResults,n_allocation::Int64)
+    m,n,N = size(results.K)
+    ResultsCache(n,m,N,n_allocation)
+end
+
+function ResultsCache(n::Int, m::Int, N::Int, n_allocation::Int64)
+    X = zeros(n,N)
+    U = zeros(m, N-1)
     result = Array{SolverResults}(n_allocation)
     cost = zeros(n_allocation)
     time = zeros(n_allocation)
@@ -236,15 +257,32 @@ function ResultsCache(solver::Solver,n_allocation::Int64)
     ResultsCache(X, U, result, cost, time, iter_type, termination_index)
 end
 
+" $(SIGNATURES) Get the number of iterations in the cache"
+size(cache::ResultsCache) = length(cache.cost)
+
+" $(SIGNATURES) Get number of completed iterations in the cache"
+function length(cache::ResultsCache)
+    for i = 1:size(cache)
+        if !isassigned(cache.result,i)
+            return i-1
+        end
+    end
+    return size(cache)
+end
+
 """
 $(SIGNATURES)
 
-Combined two ResultsCache's
+Combine result caches r1 and r2 by stacking r1 on top of r2, such that r2
+contains the most recent results.
+
+Useful for making results caches dynamically larger. Removes any unused entries
+so size(cache) == length(cache)
 """
-function merge_results_cache(r1::ResultsCache,r2::ResultsCache,solver::Solver)
-    n1 = r1.termination_index      # number of results
-    n2 = r2.termination_index      # number of results
-    R = ResultsCache(solver,n1+n2) # initialize new ResultsCache that will contain both ResultsCache's
+function merge_results_cache(r1::ResultsCache,r2::ResultsCache)
+    n1 = length(r1)      # number of results
+    n2 = length(r2)      # number of results
+    R = ResultsCache(r1.result[1],n1+n2) # initialize new ResultsCache that will contain both ResultsCache's
 
     R.X = r2.X # new ResultsCache will store most recent (ie, best) state trajectory
     R.U = r2.U # new ResultsCache will store most recent (ie, best) control trajectory
@@ -258,4 +296,15 @@ function merge_results_cache(r1::ResultsCache,r2::ResultsCache,solver::Solver)
     R.iter_type[n1+1:end] = r2.iter_type[1:n2]
     R.termination_index = n1+n2 # update total number of iterations
     R
+end
+
+"""
+$(SIGNATURES)
+Add the result of an iteration to the cache
+"""
+function add_iter!(cache::ResultsCache, results::SolverIterResults, cost::Float64, time::Float64=0., iter::Int=length(cache)+1)::Void
+    cache.result[iter] = copy(results)
+    cache.cost[iter] = cost
+    cache.time[iter] = time
+    return nothing
 end
