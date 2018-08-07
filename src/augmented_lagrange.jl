@@ -139,7 +139,7 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     dV = Inf
     z = 0.
 
-    while z < solver.opts.c1 || z > solver.opts.c2
+    while z ≤ solver.opts.c1 || z > solver.opts.c2
         rollout!(res,solver,alpha,infeasible=infeasible)
 
         # Calcuate cost

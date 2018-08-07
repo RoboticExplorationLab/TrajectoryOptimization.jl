@@ -96,7 +96,7 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         # Compute gains
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)' 
+        s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
         S = Qxx - Qux'*(Quu\Qux) #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
