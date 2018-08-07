@@ -1,5 +1,5 @@
-include("../src/dynamics.jl")
 using TrajectoryOptimization
+using Dynamics
 using Plots
 using BenchmarkTools
 

@@ -49,4 +49,4 @@ include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
 include("forensics.jl")
 include("dynamics.jl")
-end # module
+end
