@@ -5,6 +5,11 @@ using Juno
 # Set up models and objective
 u_bound = 2.
 model,obj = TrajectoryOptimization.Dynamics.pendulum
+opts = TrajectoryOptimization.SolverOptions()
+opts.c1 = 1e-3
+opts.c2 = 1.5
+opts.mu_al_update = 100.
+
 obj.Q .= eye(2)*1e-3
 obj.R .= eye(1)*1e-3
 obj.tf = 5.
@@ -14,7 +19,7 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 
 ### UNCONSTRAINED ###
 # rk4
-solver = TrajectoryOptimization.Solver(model,obj,dt=0.1)
+solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(solver.model.m, solver.N-1)
 # @enter TrajectoryOptimization.solve(solver,U)
 results = TrajectoryOptimization.solve(solver,U)
@@ -27,7 +32,7 @@ results = TrajectoryOptimization.solve(solver,U)
 
 
 # midpoint
-solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1)
+solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
 results = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
@@ -39,7 +44,6 @@ results = TrajectoryOptimization.solve(solver,U)
 
 ### CONSTRAINED ###
 # rk4
-opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
