@@ -187,7 +187,7 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
 """
 function backwardpass!(res::ConstrainedResults, solver::Solver,
-        constraint_jacobian::Function, infeasible::Bool=false)
+        infeasible::Bool=false)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -221,11 +221,10 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         lxx = Q
         luu = R
 
+        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
         if infeasible
-            fx, fu = solver.F(X[:,k], U[1:m,k])
+            # fx, fu = solver.F(X[:,k], U[1:m,k])
             fu = [fu eye(n)]
-        else
-            fx, fu = solver.F(X[:,k], U[:,k])
         end
 
         Qx = lx + fx'*s
@@ -297,15 +296,23 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function calc_constraint_jacobian(res::ConstrainedResults, constraint_jacobian::Function)::Void
+function calc_jacobians(res::ConstrainedResults, constraint_jacobian::Function, solver::Solver)::Void
     N = size(res.X,2)
+    m = solver.model.m
+
     for k = 1:N-1
+        # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
+        # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
+        solver.F(view(res.fx,:,:,k), view(res.fu,:,:,k), res.X[:,k], res.U[1:m,k])
         res.Cx[:,:,k], res.Cu[:,:,k] = constraint_jacobian(res.X[:,k],res.U[:,k])
         # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
+    # constraint_jacobian(res.Cx_N,res.X[:,N])
     res.Cx_N .= constraint_jacobian(res.X[:,N])
     return nothing
 end
+
+
 
 """
 $(SIGNATURES)
@@ -431,7 +438,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
             fx[pI+pE_c+1:end,:] = fx_infeasible
             fu[pI+pE_c+1:end,:] = fu_infeasible
         end
-        return fx, fu
+        return fx,fu
     end
 
     function constraint_jacobian(x::Array)

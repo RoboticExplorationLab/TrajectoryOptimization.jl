@@ -70,18 +70,19 @@ struct Solver
         F!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
 
         # Auto-diff discrete dynamics
-        function Jacobians!(x,u)
+        function Jacobians!(fx,fu,x,u)
             nm1 = model.n + model.m + 1
             J = zeros(nm1, nm1)
             S = zeros(nm1)
+            
             S[1:model.n] = x
             S[model.n+1:end-1] = u
             S[end] = dt
             Sdot = zeros(S)
             F_aug = F!(J,Sdot,S)
-            fx = F_aug[1:model.n,1:model.n]
-            fu = F_aug[1:model.n,model.n+1:model.n+model.m]
-            return fx, fu
+            fx .= F_aug[1:model.n,1:model.n]
+            fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
+            # return fx, fu
         end
         new(model, obj, opts, dt, fd!, Jacobians!, N)
 
@@ -156,6 +157,9 @@ struct ConstrainedResults <: SolverIterResults
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
 
+    fx::Array{Float64,3}
+    fu::Array{Float64,3}
+
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
     LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N-1)
@@ -171,8 +175,8 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    function ConstrainedResults(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
 
@@ -195,6 +199,9 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X_ = zeros(n,N)
     U_ = zeros(m,N-1)
 
+    fx = zeros(n,n,N-1)
+    fu = zeros(n,m,N-1)
+
     # Stage Constraints
     C = zeros(p,N-1)
     Iμ = zeros(p,p,N-1)
@@ -211,7 +218,7 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu = zeros(p,m,N-1)
     cxn = zeros(p_N,n)
 
-    ConstrainedResults(X,U,K,d,X_,U_,
+    ConstrainedResults(X,U,K,d,X_,U_,fx,fu,
         C,Iμ,LAMBDA,MU,
         C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
