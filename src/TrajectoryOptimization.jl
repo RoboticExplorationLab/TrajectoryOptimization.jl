@@ -12,6 +12,9 @@ using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 
+level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
+debug_level = :critical  # (:verbose, :debug, :info, :critical, :none)
+
 export
     Dynamics
 
@@ -46,6 +49,7 @@ include("solver.jl")
 include("solve_sqrt.jl")
 include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
+include("solve.jl")
 include("forensics.jl")
 include("dynamics.jl")
 end # module
