@@ -146,13 +146,14 @@ $(SIGNATURES)
 Construct ResultsCache from sizes with a pre-allocated size of `n_allocation`
 """
 function ResultsCache(solver::Solver,n_allocation::Int64)
-    n,m = solver.model.n, solver.model.m
+    n, m = solver.model.n, solver.model.m
     N = solver.N
     ResultsCache(n,m,N,n_allocation)
 end
 
 function ResultsCache(results::SolverIterResults,n_allocation::Int64)
     m,n,N = size(results.K)
+    N += 1 # K is (m,n,N-1)
     ResultsCache(n,m,N,n_allocation)
 end
 
@@ -172,12 +173,13 @@ size(cache::ResultsCache) = length(cache.cost)
 
 " $(SIGNATURES) Get number of completed iterations in the cache"
 function length(cache::ResultsCache)
-    for i = 1:size(cache)
-        if !isassigned(cache.result,i)
-            return i-1
-        end
-    end
-    return size(cache)
+    # for i = 1:size(cache)
+    #     if !isassigned(cache.result,i)
+    #         return i-1
+    #     end
+    # end
+    # return size(cache)
+    return cache.termination_index
 end
 
 """
@@ -189,21 +191,33 @@ contains the most recent results.
 Useful for making results caches dynamically larger. Removes any unused entries
 so size(cache) == length(cache)
 """
-function merge_results_cache(r1::ResultsCache,r2::ResultsCache)
-    n1 = length(r1)      # number of results
-    n2 = length(r2)      # number of results
-    R = ResultsCache(r1.result[1],n1+n2) # initialize new ResultsCache that will contain both ResultsCache's
+function merge_results_cache(r1::ResultsCache,r2::ResultsCache;infeasible::Bool=true)
+    n1 = r1.termination_index     # number of results
+    n2 = r2.termination_index      # number of results
+
+    R = ResultsCache(r2.result[1],n1+n2) # initialize new ResultsCache that will contain both ResultsCache's
 
     R.X = r2.X # new ResultsCache will store most recent (ie, best) state trajectory
     R.U = r2.U # new ResultsCache will store most recent (ie, best) control trajectory
-    R.result[1:n1] = r1.result[1:n1] # store all valid results
-    R.result[n1+1:end] = r2.result[1:n2]
-    R.cost[1:n1] = r1.cost[1:n1] # store all valid costs
+
+    for i = 1:n1
+        R.result[i] = copy(r1.result[i]) # store all valid results
+    end
+    for i = n1+1:n1+n2
+        R.result[i] = copy(r2.result[i-n1]) # store all valid costs
+    end
+
+    R.cost[1:n1] = r1.cost[1:n1]
     R.cost[n1+1:end] = r2.cost[1:n2]
     R.time[1:n1] = r1.time[1:n1] # store all valid times
     R.time[n1+1:end] = r2.time[1:n2]
     R.iter_type[1:n1] = r1.iter_type[1:n1] # store all valid iteration types
     R.iter_type[n1+1:end] = r2.iter_type[1:n2]
+
+    if infeasible
+        R.iter_type[n1+1] = 2 # flag beginning of infeasible->feasible solve
+    end
+
     R.termination_index = n1+n2 # update total number of iterations
     R
 end
