@@ -206,7 +206,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
 
-    Cx, Cu = constraint_jacobian(res.X[:,N])
+    # Cx, Cu = constraint_jacobian(res.X[:,N])
+    Cx = res.Cx_N
     S = Qf + Cx'*res.IμN*Cx
     s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
     v1 = 0.
@@ -243,7 +244,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         end
 
         # Constraints
-        Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+        # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+        Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
         Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
         Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
         Qxx += Cx'*Iμ[:,:,k]*Cx
@@ -293,6 +295,16 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     res.CN .= c(X[:,N])
     res.IμN .= diagm(res.μN)
     return nothing # TODO allow for more general terminal constraint
+end
+
+function calc_constraint_jacobian(res::ConstrainedResults, constraint_jacobian::Function)::Void
+    N = size(res.X,2)
+    for k = 1:N-1
+        res.Cx[:,:,k], res.Cu[:,:,k] = constraint_jacobian(res.X[:,k],res.U[:,k])
+        # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
+    end
+    res.Cx_N .= constraint_jacobian(res.X[:,N])
+    return nothing
 end
 
 """

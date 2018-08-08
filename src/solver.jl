@@ -166,8 +166,13 @@ struct ConstrainedResults <: SolverIterResults
     λN::Array{Float64,1}     # Final lagrange multipliers (p_N,)
     μN::Array{Float64,1}     # Final penalty terms (p_N,)
 
-    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
-        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+    Cx::Array{Float64,3}
+    Cu::Array{Float64,3}
+
+    Cx_N::Array{Float64,2}
+
+    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
 
@@ -202,9 +207,13 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     λ_N = zeros(p_N)
     μ_N = ones(p_N)
 
+    cx = zeros(p,n,N-1)
+    cu = zeros(p,m,N-1)
+    cxn = zeros(p_N,n)
+
     ConstrainedResults(X,U,K,d,X_,U_,
         C,Iμ,LAMBDA,MU,
-        C_N,Iμ_N,λ_N,μ_N)
+        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
 end
 
