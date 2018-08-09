@@ -249,8 +249,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
         Qux += Cu'*Iμ[:,:,k]*Cx
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-		s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-        S = Qxx - Qux'*(Quu\Qux)
+        s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
