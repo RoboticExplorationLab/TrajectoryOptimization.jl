@@ -44,6 +44,8 @@ struct Solver
     dt::Float64          # Time step
     fd::Function         # Discrete in place dynamics function, `fd(ẋ,x,u)`
     F::Function          # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    c_fun::Function
+    c_jacobian::Function
     N::Int               # Number of time steps
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions())
@@ -73,14 +75,14 @@ struct Solver
         fx = zeros(n,n)
         fu = zeros(n,m)
 
+        nm1 = model.n + model.m + 1
+        J = zeros(nm1, nm1)
+        S = zeros(nm1)
+
         # Auto-diff discrete dynamics
         function Jacobians!(x,u)
-            nm1 = model.n + model.m + 1
-            J = zeros(nm1, nm1)
-            S = zeros(nm1)
-
-            S[1:model.n] = x
-            S[model.n+1:end-1] = u
+            S[1:n] = x
+            S[n+1:end-1] = u
             S[end] = dt
             Sdot = zeros(S)
             F_aug = F!(J,Sdot,S)
@@ -88,10 +90,15 @@ struct Solver
             fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
             return fx, fu
         end
-        new(model, obj, opts, dt, fd!, Jacobians!, N)
+
+        c_fun, c_jacob = generate_constraint_functions(obj)
+
+        new(model, obj, opts, dt, fd!, Jacobians!, c_fun, c_jacob, N)
 
     end
 end
+
+generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,u)->nothing
 
 """
 $(TYPEDEF)
@@ -118,9 +125,11 @@ struct UnconstrainedResults <: SolverIterResults
     d::Array{Float64,2}  # Feedforward gain (m,N-1)
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
+    fx::Array{Float64,3} # State jacobian (n,n,N)
+    fu::Array{Float64,3} # Control jacobian (n,m,N-1)
 
-    function UnconstrainedResults(X,U,K,d,X_,U_)
-        new(X,U,K,d,X_,U_)
+    function UnconstrainedResults(X,U,K,d,X_,U_,fx,fu)
+        new(X,U,K,d,X_,U_,fx,fu)
     end
 end
 
@@ -140,7 +149,9 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     d = zeros(m,N-1)
     X_ = zeros(n,N)
     U_ = zeros(m,N-1)
-    UnconstrainedResults(X,U,K,d,X_,U_)
+    fx = zeros(n,n,N-1)
+    fu = zeros(n,m,N-1)
+    UnconstrainedResults(X,U,K,d,X_,U_,fx,fu)
 end
 
 function copy(r::UnconstrainedResults)

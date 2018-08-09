@@ -23,7 +23,7 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 # Unconstrained
 solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
 U = ones(model!.m,solver.N-1)
-results = TrajectoryOptimization.solve(solver,U) # Test random init
+results = TrajectoryOptimization.solve_al(solver,U) # Test random init
 err = norm(results.X[:,end]-obj.xf)
 @test err < 1e-3
 println("$system - Unconstrained")
@@ -37,6 +37,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test max_c < 1e-2
 println("$system - Constrained")
 @btime TrajectoryOptimization.solve(solver,U)
+@profiler TrajectoryOptimization.solve(solver,U)
 
 ### Infeasible Start
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)

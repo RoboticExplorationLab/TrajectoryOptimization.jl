@@ -78,7 +78,7 @@ end
 
 # overloaded cost function to accomodate Augmented Lagrance method
 # TODO: Make cost a function only a function of results
-function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::Array{Float64,2}; infeasible::Bool=false)
+function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::Array{Float64,2}, infeasible::Bool=false)
     J = cost(solver, X, U, infeasible=infeasible)
     for k = 1:solver.N-1
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
@@ -110,12 +110,31 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2};infeasible:
     return J
 end
 
+function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U, infeasible::Bool=false)
+    # pull out solver/objective values
+    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+
+    if infeasible
+        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
+        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
+    else
+        R = solver.obj.R
+    end
+
+    J = 0.0
+    for k = 1:N-1
+      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
+    end
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+    return J
+end
+
 """
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
 function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,
-        c_fun::Function=(x,u), infeasible::Bool=false)
+        infeasible::Bool=false)
 
     # Pull out values from results
     X = res.X
@@ -131,7 +150,7 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
     # Compute original cost
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
-    J_prev = cost(solver, res, X, U, infeasible=infeasible)
+    J_prev = cost(solver, res, X, U, infeasible)
 
     pI = solver.obj.pI
 
@@ -145,8 +164,8 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
         rollout!(res,solver,alpha,infeasible=infeasible)
 
         # Calcuate cost
-        update_constraints!(res,c_fun,pI,X_,U_)
-        J = cost(solver, res, X_, U_, infeasible=infeasible)
+        update_constraints!(res,solver.c_fun,pI,X_,U_)
+        J = cost(solver, res, X_, U_, infeasible)
 
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
@@ -187,7 +206,7 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
 """
 function backwardpass!(res::ConstrainedResults, solver::Solver,
-        constraint_jacobian, infeasible::Bool=false)
+        infeasible::Bool=false)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -206,8 +225,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
 
-    Cx, Cu = constraint_jacobian(res.X[:,N])
-    # Cx = res.Cx_N
+    # Cx, Cu = constraint_jacobian(res.X[:,N])
+    Cx = res.Cx_N
     S = Qf + Cx'*res.IμN*Cx
     s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
     v1 = 0.
@@ -221,10 +240,9 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         lxx = Q
         luu = R
 
-        fx, fu = solver.F(X[:,k], U[:,k])
-        # fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+        # fx, fu = solver.F(X[:,k], U[1:m,k])
+        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
         if infeasible
-            # fx, fu = solver.F(X[:,k], U[1:m,k])
             fu = [fu eye(n)]
         end
 
@@ -244,8 +262,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         end
 
         # Constraints
-        Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
-        # Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+        # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+        Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
         Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
         Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
         Qxx += Cx'*Iμ[:,:,k]*Cx
@@ -297,19 +315,28 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function calc_jacobians(res::ConstrainedResults, constraint_jacobian::Function, solver::Solver)::Void
+function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void
     N = size(res.X,2)
     m = solver.model.m
 
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
         # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
-        solver.F(view(res.fx,:,:,k), view(res.fu,:,:,k), res.X[:,k], res.U[1:m,k])
-        res.Cx[:,:,k], res.Cu[:,:,k] = constraint_jacobian(res.X[:,k],res.U[:,k])
+        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k])
+        res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
         # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
     # constraint_jacobian(res.Cx_N,res.X[:,N])
-    res.Cx_N .= constraint_jacobian(res.X[:,N])
+    res.Cx_N .= solver.c_jacobian(res.X[:,N])
+    return nothing
+end
+
+function calc_jacobians(res::UnconstrainedResults, solver::Solver)::Void
+    N = solver.N
+    m = solver.model.m
+    for k = 1:N-1
+        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k])
+    end
     return nothing
 end
 

@@ -176,9 +176,6 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
         # Evalute constraints for new trajectories
         update_constraints!(results,c_fun,pI,results.X,results.U)
-
-        kwargs_bp = Dict(:constraint_jacobian=>constraint_jacobian,:infeasible=>infeasible)
-        kwargs_fp = Dict(:c_fun=>c_fun, :infeasible=>infeasible)
     end
 
     # Unpack results for convenience
@@ -204,7 +201,8 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
-        J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
+        # J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
+        J_prev = cost(solver, results, X, U, infeasible)
 
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
@@ -220,16 +218,16 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
             end
 
             # Backward pass
-            # calc_jacobians!(results, constraint_jacobian, solver)
+            calc_jacobians(results, solver)
             if solver.opts.square_root
                 v1, v2 = backwards_sqrt(results, solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 # v1, v2 = backwardpass!(results, solver; kwargs_bp...) # standard backward pass [see insert algorithm]
-                v1, v2 = backwardpass!(results, solver, constraint_jacobian, infeasible)
+                v1, v2 = backwardpass!(results, solver)
             end
 
             # Forward pass
-            J = forwardpass!(results, solver, v1, v2, c_fun, infeasible)
+            J = forwardpass!(results, solver, v1, v2)
 
             if solver.opts.cache
                 t2 = time_ns() # time flag of iLQR inner loop end
@@ -265,13 +263,16 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         outer_loop_update(results,solver)
 
         # Check if maximum constraint violation satisfies termination criteria
-        max_c = max_violation(results, diag_inds)
-        if max_c < solver.opts.eps_constraint
-            if solver.opts.verbose
-                println("\teps constraint criteria met at outer iteration: $k\n")
+        if solver.obj isa ConstrainedObjective
+            max_c = max_violation(results, diag_inds)
+            if max_c < solver.opts.eps_constraint
+                if solver.opts.verbose
+                    println("\teps constraint criteria met at outer iteration: $k\n")
+                end
+                break
             end
-            break
         end
+
     end
 
     if solver.opts.cache
