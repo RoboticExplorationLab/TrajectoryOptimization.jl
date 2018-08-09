@@ -40,7 +40,9 @@ solver_c = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
 res = TrajectoryOptimization.solve(solver_c)
 
 # Cache constrained results
-TrajectoryOptimization.add_iter!(rc,res,10.,0.)
+rc.result[1].X
+rc.result
+TrajectoryOptimization.add_iter!(rc,res,10.,0.,2) #TODO fix the overloaded length method
 @test rc.result[1].X !== rc.result[2] # Make sure they're not equal
 
 # Cache in another cache
@@ -49,9 +51,21 @@ TrajectoryOptimization.add_iter!(rc2,res,20.,1.,1)
 @test rc.result[2].X == rc2.result[1].X
 @test !(rc.result[2].X === rc2.result[1].X)
 
-# Merge Caches
+#Fill and  Merge Caches
+n1 = rc.termination_index
+n2 = rc2.termination_index
+for i = 1:n1
+    rc.result[i] = TrajectoryOptimization.ConstrainedResults(1,1,1,1)
+end
+for i = 1:n2
+    rc2.result[i] = TrajectoryOptimization.ConstrainedResults(2,2,2,2)
+end
+R1 = TrajectoryOptimization.ResultsCache(rc.result[1],n1+n2)
+i = n1
+R1.result[i] = copy(rc.result[i]) # store all valid results
+
 merged = TrajectoryOptimization.merge_results_cache(rc,rc2)
 @test size(merged) == length(merged)
-@test size(merged) == 3
+@test size(merged) == n1+n2
 @test merged.result[1] !== merged.result[2]
-@test merged.result[2].X == merged.result[3].X
+@test merged.result[1].X == merged.result[2].X

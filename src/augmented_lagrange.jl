@@ -9,21 +9,21 @@ $(SIGNATURES)
 
 Additional controls for producing an infeasible state trajectory
 """
-function infeasible_controls(solver::Solver,x0::Array{Float64,2},u::Array{Float64,2})
+function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N-1) # initialize
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         solver.fd(view(x,:,k+1),x[:,k],u[:,k])
-        ui[:,k] = x0[:,k+1] - x[:,k+1]
+        ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
     end
     ui
 end
 
-function infeasible_controls(solver::Solver,x0::Array{Float64,2})
+function infeasible_controls(solver::Solver,X0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N-1)
-    infeasible_controls(solver,x0,u)
+    infeasible_controls(solver,X0,u)
 end
 
 """
@@ -477,6 +477,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
     else
         results.U .= U0 # initialize control to control input sequence
+        #TODO confirm that these bootstrapped constraints can be removed
         if size(prevResults.X,1) != 0 # bootstrap previous constraint solution
             println("Bootstrap")
             # println(size(results.C))
@@ -488,8 +489,8 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
             # results.CN .= 1000.*prevResults.CN
             # results.IμN .= 1000.*prevResults.IμN
-            results.λN .= 1000.*prevResults.λN
-            results.μN .= 1000.*prevResults.μN
+            results.λN .= prevResults.λN
+            results.μN .= prevResults.μN
         end
     end
 
@@ -603,7 +604,9 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
     ## Return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
+            # return results
             results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
+            #return results_cache_2
             return merge_results_cache(results_cache,results_cache_2,infeasible=infeasible) # return infeasible results and final enforce dynamics results
         else
             return feasible_traj(results,solver)

@@ -164,7 +164,7 @@ function ResultsCache(n::Int, m::Int, N::Int, n_allocation::Int64)
     cost = zeros(n_allocation)
     time = zeros(n_allocation)
     iter_type = zeros(n_allocation)
-    termination_index = 0
+    termination_index = n_allocation
     ResultsCache(X, U, result, cost, time, iter_type, termination_index)
 end
 
@@ -172,14 +172,14 @@ end
 size(cache::ResultsCache) = length(cache.cost)
 
 " $(SIGNATURES) Get number of completed iterations in the cache"
-function length(cache::ResultsCache)
-    # for i = 1:size(cache)
-    #     if !isassigned(cache.result,i)
-    #         return i-1
-    #     end
-    # end
-    # return size(cache)
-    return cache.termination_index
+function length(cache::ResultsCache) #TODO- I think something is wrong with this
+    for i = 1:size(cache)
+        if !isassigned(cache.result,i)
+            return i-1
+        end
+    end
+    return size(cache)
+    #return cache.termination_index
 end
 
 """
