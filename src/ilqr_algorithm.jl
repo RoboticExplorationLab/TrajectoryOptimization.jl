@@ -51,7 +51,7 @@ Computes the gain matrices K and d by applying the principle of optimality at
 each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
 """
-function backwardpass!(res::UnconstrainedResults,solver::Solver)
+function backwardpass!(res::UnconstrainedResults,solver::Solver,infeasible=false)
     N = solver.N; n = solver.model.n; m = solver.model.m; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
 
     # pull out values from results
@@ -112,7 +112,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search
 """
-function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2::Float64)
+function forwardpass!(res::UnconstrainedResults, solver::Solver, v1::Float64, v2::Float64, infeasible=false)
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_

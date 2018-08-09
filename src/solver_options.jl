@@ -39,15 +39,17 @@ mutable struct SolverOptions
     "Run benchmarks on forward and backward passes"
     benchmark::Bool
 
+    infeasible::Bool
+
     function SolverOptions(;square_root=false,verbose=false,
-        c1=0.1,c2=10.0,eps=1e-5,eps_intermediate=1e-2,
+        c1=1e-4,c2=2.0,eps=1e-5,eps_intermediate=1e-2,
         eps_constraint=1e-2,iterations=100,iterations_outerloop=25,
         iterations_linesearch=25,mu_regularization=1.0,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
-        benchmark=false)
+        benchmark=false,infeasible=false)
 
         new(square_root,verbose,c1,c2,eps,eps_intermediate,
         eps_constraint,iterations,iterations_outerloop,
-        iterations_linesearch,mu_regularization,mu_al_update,infeasible_regularization,cache,benchmark)
+        iterations_linesearch,mu_regularization,mu_al_update,infeasible_regularization,cache,benchmark,infeasible)
     end
 end
 

@@ -242,9 +242,6 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
 
         # fx, fu = solver.F(X[:,k], U[1:m,k])
         fx, fu = res.fx[:,:,k], res.fu[:,:,k]
-        if infeasible
-            fu = [fu eye(n)]
-        end
 
         Qx = lx + fx'*s
         Qu = lu + fu'*s
@@ -271,8 +268,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         Qux += Cu'*Iμ[:,:,k]*Cx
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-		s = Qx - Qux'*(Quu\Qu) #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-        S = Qxx - Qux'*(Quu\Qux)
+        s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+        S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
@@ -315,14 +312,15 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void
+function calc_jacobians(res::ConstrainedResults, solver::Solver, infeasible=false)::Void
     N = size(res.X,2)
     m = solver.model.m
+    n = solver.model.n
 
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
         # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k])
+        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k], infeasible)
         res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
         # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
@@ -331,7 +329,7 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void
     return nothing
 end
 
-function calc_jacobians(res::UnconstrainedResults, solver::Solver)::Void
+function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Void
     N = solver.N
     m = solver.model.m
     for k = 1:N-1
@@ -413,10 +411,11 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
     # Augment functions together
     C = zeros(p)
     function c_fun(x,u)
+        infeasible = length(u) != m
         C[1:pI] = cI(x,u[1:m])
         C[(1:pE_c)+pI] = obj.cE(x,u[1:m])
         if infeasible
-            C[pI+pE_c+1:end] = u[m+1:end]
+            return [C; u[m+1:end]]
         end
         return C
     end
@@ -449,11 +448,15 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
         fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
         fu_state = zeros(pI_x,m)
         fu = zeros(p,m)
+
+        fu_infeasible = eye(n)
+        fx_infeasible = zeros(n,n)
     end
 
     fx_N = eye(n)  # Jacobian of final state
 
     function constraint_jacobian(x::Array,u::Array)
+        infeasible = length(u) != m
         fx[1:pI_u, :] = fx_control
         fu[1:pI_u, :] = fu_control
         fx[(1:pI_x)+pI_u, :] = fx_state
@@ -463,8 +466,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
         # fu = F_aug[:,n+1:n+m]
 
         if infeasible
-            fx[pI+pE_c+1:end,:] = fx_infeasible
-            fu[pI+pE_c+1:end,:] = fu_infeasible
+            return [fx; fx_infeasible], cat((1,2),fu,fu_infeasible)
         end
         return fx,fu
     end
@@ -492,8 +494,8 @@ end
 #
 # Solve constrained optimization problem using an initial control trajectory
 # """
-# function solve_al(solver::Solver,U0::Array{Float64,2})
-#     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false)
+# function solve_al(solver::Solver,U0::Array{Float64,2};prevResults::ConstrainedResults=ConstrainedResults(0,0,0,0,0))
+#     solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false,prevResults=prevResults)
 # end
 #
 # """
@@ -502,7 +504,7 @@ end
 # Solve constrained optimization problem specified by `solver`
 # """
 # # QUESTION: Should the infeasible tag be able to be changed? What happens if we turn it off with an X0?
-# function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true)::SolverResults
+# function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true,prevResults::ConstrainedResults=ConstrainedResults(0,0,0,0,0))::SolverResults
 #     ## Unpack model, objective, and solver parameters
 #     N = solver.N # number of iterations for the solver (ie, knotpoints)
 #     n = solver.model.n # number of states
@@ -523,8 +525,23 @@ end
 #         #solver.obj.x0 = X0[:,1] # TODO not sure this is correct or needs to be here
 #         results.X .= X0 # initialize state trajectory with infeasible trajectory input
 #         results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
+#
 #     else
 #         results.U .= U0 # initialize control to control input sequence
+#         if size(prevResults.X,1) != 0 # bootstrap previous constraint solution
+#             println("Bootstrap")
+#             # println(size(results.C))
+#             # println(size(prevResults.C))
+#             # results.C .= prevResults.C[1:p,:]
+#             # results.Iμ .= prevResults.Iμ[1:p,1:p,:]
+#             results.LAMBDA .= prevResults.LAMBDA[1:p,:]
+#             results.MU .= prevResults.MU[1:p,:]
+#
+#             # results.CN .= 1000.*prevResults.CN
+#             # results.IμN .= 1000.*prevResults.IμN
+#             results.λN .= 1000.*prevResults.λN
+#             results.μN .= 1000.*prevResults.μN
+#         end
 #     end
 #
 #     # Unpack results for convenience
@@ -553,7 +570,7 @@ end
 #         # Initialize cache and store initial trajectories and cost
 #         iter = 1 # counter for total number of iLQR iterations
 #         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
-#         add_iter!(results_cache, results, cost(solver, X, U, infeasible=infeasible))
+#         add_iter!(results_cache, results, cost(solver, X, U, infeasible=infeasible),0.0,iter)
 #         iter += 1
 #     end
 #
@@ -638,7 +655,7 @@ end
 #     if infeasible
 #         if solver.opts.cache
 #             results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
-#             return merge_results_cache(results_cache,results_cache_2) # return infeasible results and final enforce dynamics results
+#             return merge_results_cache(results_cache,results_cache_2,infeasible=infeasible) # return infeasible results and final enforce dynamics results
 #         else
 #             return feasible_traj(results,solver)
 #         end
@@ -682,7 +699,7 @@ Infeasible start solution is run through standard constrained solve to enforce d
 """
 function feasible_traj(results::ConstrainedResults,solver::Solver)
     #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
-    return solve_al(solver,results.U[1:solver.model.m,:])
+    return solve_al(solver,results.U[1:solver.model.m,:],prevResults=results)
 end
 
 """

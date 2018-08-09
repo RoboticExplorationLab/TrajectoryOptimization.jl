@@ -16,6 +16,7 @@ opts.mu_al_update = 100.
 
 obj.Q .= eye(2)*1e-3
 obj.R .= eye(1)*1e-3
+obj.Qf .= eye(2)*30
 obj.tf = 5.
 model! = TrajectoryOptimization.Model(Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
@@ -23,7 +24,7 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 # Unconstrained
 solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
 U = ones(model!.m,solver.N-1)
-results = TrajectoryOptimization.solve_al(solver,U) # Test random init
+results = TrajectoryOptimization.solve(solver,U) # Test random init
 err = norm(results.X[:,end]-obj.xf)
 @test err < 1e-3
 println("$system - Unconstrained")
@@ -41,8 +42,10 @@ println("$system - Constrained")
 
 ### Infeasible Start
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)
-solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts)
+solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts, infeasible=true)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
+solver.c_jacobian([1,2],[1],true)
+solver.c_fun([1,2],[0,0,1])
 results_inf = TrajectoryOptimization.solve_al(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
