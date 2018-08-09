@@ -48,6 +48,7 @@ struct Solver
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions())
         N = Int(floor(obj.tf/dt));
+        n,m = model.n, model.m
 
         # Make dynamics inplace
         if is_inplace_dynamics(model)
@@ -69,12 +70,15 @@ struct Solver
         fd_aug! = discretizer(f_aug!)
         F!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
 
+        fx = zeros(n,n)
+        fu = zeros(n,m)
+
         # Auto-diff discrete dynamics
-        function Jacobians!(fx,fu,x,u)
+        function Jacobians!(x,u)
             nm1 = model.n + model.m + 1
             J = zeros(nm1, nm1)
             S = zeros(nm1)
-            
+
             S[1:model.n] = x
             S[model.n+1:end-1] = u
             S[end] = dt
@@ -82,7 +86,7 @@ struct Solver
             F_aug = F!(J,Sdot,S)
             fx .= F_aug[1:model.n,1:model.n]
             fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
-            # return fx, fu
+            return fx, fu
         end
         new(model, obj, opts, dt, fd!, Jacobians!, N)
 

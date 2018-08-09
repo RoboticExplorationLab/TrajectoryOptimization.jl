@@ -187,7 +187,7 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
 """
 function backwardpass!(res::ConstrainedResults, solver::Solver,
-        infeasible::Bool=false)
+        constraint_jacobian, infeasible::Bool=false)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -206,8 +206,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
 
-    # Cx, Cu = constraint_jacobian(res.X[:,N])
-    Cx = res.Cx_N
+    Cx, Cu = constraint_jacobian(res.X[:,N])
+    # Cx = res.Cx_N
     S = Qf + Cx'*res.IμN*Cx
     s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
     v1 = 0.
@@ -221,7 +221,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         lxx = Q
         luu = R
 
-        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+        fx, fu = solver.F(X[:,k], U[:,k])
+        # fx, fu = res.fx[:,:,k], res.fu[:,:,k]
         if infeasible
             # fx, fu = solver.F(X[:,k], U[1:m,k])
             fu = [fu eye(n)]
@@ -243,8 +244,8 @@ function backwardpass!(res::ConstrainedResults, solver::Solver,
         end
 
         # Constraints
-        # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
-        Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+        Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+        # Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
         Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
         Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
         Qxx += Cx'*Iμ[:,:,k]*Cx

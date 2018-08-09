@@ -77,7 +77,7 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
         end
 
         t1 = time_ns() # time flag for iLQR inner loop start
-
+        # calc_jacobians!(results,solver)
         if solver.opts.square_root
             v1, v2 = backwards_sqrt(results,solver)
         else
@@ -220,12 +220,12 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
             end
 
             # Backward pass
-            calc_jacobians(results, constraint_jacobian, solver)
+            # calc_jacobians!(results, constraint_jacobian, solver)
             if solver.opts.square_root
                 v1, v2 = backwards_sqrt(results, solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 # v1, v2 = backwardpass!(results, solver; kwargs_bp...) # standard backward pass [see insert algorithm]
-                v1, v2 = backwardpass!(results, solver, infeasible)
+                v1, v2 = backwardpass!(results, solver, constraint_jacobian, infeasible)
             end
 
             # Forward pass
