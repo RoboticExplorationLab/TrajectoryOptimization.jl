@@ -2,7 +2,7 @@ using TrajectoryOptimization
 using Plots
 using BenchmarkTools
 using Base.Test
-using Juno
+#using Juno
 
 ##### Set up pendulum for infeasible tests
 

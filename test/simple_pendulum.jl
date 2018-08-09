@@ -1,6 +1,6 @@
 using TrajectoryOptimization
 using Base.Test
-using Juno
+#using Juno
 
 # Set up models and objective
 u_bound = 3.
@@ -114,11 +114,11 @@ max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test all(X_interp[2,2:end-1] .<= max(solver.obj.x0[2],solver.obj.xf[2]))
 
 # test that additional augmented controls can achieve an infeasible state trajectory
-U_infeasible = ones(m,solver.N-1)
-X_infeasible = ones(n,solver.N)
-solver.obj.x0 = ones(n)
+U_infeasible = ones(solver.model.m,solver.N-1)
+X_infeasible = ones(solver.model.n,solver.N)
+solver.obj.x0 = ones(solver.model.n)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = ConstrainedResults(n,m+n,1,solver.N,1)
+results_infeasible = ConstrainedResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
 results_infeasible.U[:,:] = [U_infeasible;ui]
 rollout!(results_infeasible,solver;infeasible=true)
 
