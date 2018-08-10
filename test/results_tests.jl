@@ -28,7 +28,7 @@ rc = TrajectoryOptimization.ResultsCache(n,m,N,N_iter)
 # Merge caches
 res = TrajectoryOptimization.solve(solver)
 rc = TrajectoryOptimization.ResultsCache(res,10)
-TrajectoryOptimization.add_iter!(rc,res,10.,0.) # Add results to cache
+TrajectoryOptimization.add_iter!(rc,res,10.,0.,1) # Add results to cache
 @test rc.cost[1] == 10
 @test rc.time[1] == 0
 @test rc.result[1].X == res.X # Make sure values are the same
@@ -40,8 +40,9 @@ solver_c = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
 res = TrajectoryOptimization.solve(solver_c)
 
 # Cache constrained results
-TrajectoryOptimization.add_iter!(rc,res,10.,0.)
-@test rc.result[1].X !== rc.result[2] # Make sure they're not equal
+length(rc)
+TrajectoryOptimization.add_iter!(rc,res,10.,0.,2)
+@test rc.result[1].X !== rc.result[2].X # Make sure they're not equal
 
 # Cache in another cache
 rc2 = TrajectoryOptimization.ResultsCache(solver_c,5)
