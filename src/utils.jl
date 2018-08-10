@@ -1,5 +1,14 @@
 using Plots
 
+function println(level::Symbol, msg::String)
+    if level_priorities[level] ≥ level_priorities[debug_level]
+        println(msg)
+    end
+end
+
+print_info(msg) = println(:info,msg)
+print_debug(msg) = println(:debug,msg)
+
 #TODO finish
 function plot_cost(results::ResultsCache)
     index_outerloop = find(x -> x == 1, results.iter_type)

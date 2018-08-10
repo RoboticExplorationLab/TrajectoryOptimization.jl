@@ -1,3 +1,16 @@
+################################################################################
+"""
+FILE CONTENTS:
+    SUMMARY: Integration schemes
+
+    INTEGRATION METHODS
+        midpoint: midpoint or trapezoidal integration
+        rk4: Runge-Kutta 4
+        rk3: Runge-Kutta 3
+    OTHER METHODS
+        f_augmented!: Create function with augmented state and control input
+"""
+################################################################################
 
 """
 $(SIGNATURES)
@@ -100,19 +113,6 @@ function rk3(f_aug!::Function)
         copy!(dS, S + (k1 + 4.*k2 + k3)/6.)
     end
 end
-
-
-
-
-# # Assembled augmented function
-# function f_augmented(model::Model)
-#     f_aug = f_augmented(model.f, model.n, model.m)
-#     f(S::Array) = [f_aug(S); zeros(model.m+1,1)]
-# end
-#
-# function f_augmented(f::Function, n::Int, m::Int)
-#     f_aug(S::Array) = f(S[1:n], S[n+(1:m)])
-# end
 
 """
 $(SIGNATURES)

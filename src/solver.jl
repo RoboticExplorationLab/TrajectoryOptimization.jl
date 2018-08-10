@@ -1,34 +1,20 @@
 include("solver_options.jl")
 import Base: copy, length, size
 
+################################################################################
 """
-$(SIGNATURES)
-Determine if the dynamics in model are in place. i.e. the function call is of
-the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
-"""
-function is_inplace_dynamics(model::Model)::Bool
-    x = rand(model.n)
-    u = rand(model.m)
-    xdot = rand(model.n)
-    try
-        model.f(xdot,x,u)
-    catch x
-        if x isa MethodError
-            return false
-        end
-    end
-    return true
-end
+FILE CONTENTS:
+    SUMMARY: Solver type and related methods
 
-"""
-$(SIGNATURES)
-Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
-form `f!(xdot,x,u)`.
-"""
-function wrap_inplace(f::Function)
-    f!(xdot,x,u) = copy!(xdot, f(x,u))
-end
+    TYPES
+        Solver
 
+    METHODS
+        is_inplace_dynamics: Checks if dynamics in Model are in-place
+        wrap_inplace: Makes non-inplace dynamics look in-place
+        getR: Return the quadratic control state cost (augmented if necessary)
+"""
+################################################################################
 
 """
 $(TYPEDEF)
@@ -107,7 +93,35 @@ struct Solver
     end
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,u)->nothing
+
+"""
+$(SIGNATURES)
+Determine if the dynamics in model are in place. i.e. the function call is of
+the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
+"""
+function is_inplace_dynamics(model::Model)::Bool
+    x = rand(model.n)
+    u = rand(model.m)
+    xdot = rand(model.n)
+    try
+        model.f(xdot,x,u)
+    catch x
+        if x isa MethodError
+            return false
+        end
+    end
+    return true
+end
+
+"""
+$(SIGNATURES)
+Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
+form `f!(xdot,x,u)`.
+"""
+function wrap_inplace(f::Function)
+    f!(xdot,x,u) = copy!(xdot, f(x,u))
+end
+
 
 """
 $(SIGNATURES)

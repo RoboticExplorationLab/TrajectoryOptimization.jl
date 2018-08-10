@@ -1,5 +1,30 @@
 import Base: isempty,copy
 
+################################################################################
+"""
+FILE CONTENTS:
+    SUMMARY: Results types for storing arrays used during computation
+
+    TYPES                                        Tree
+       SolverResults                           ---------
+       SolverIterResults                      SolverResults
+       ConstrainedResults                       ↙     ↘
+       UnconstrainedResults          ResultsCache   SolverIterResults
+       ResultsCache                                     ↙     ↘
+                                     UnconstrainedResults    ConstrainedResults
+
+
+
+    METHODS
+        copy(UnconstrainedResults)
+        copy(ConstrainedResults)
+        size(ResultsCache): size of pre-allocated cache
+        length(ResultsCache): current number of stored iterations
+        merge_results_cache: merge two ResultsCache's
+        add_iter!: Add a SolverIterResults to ResultsCache
+"""
+################################################################################
+
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem

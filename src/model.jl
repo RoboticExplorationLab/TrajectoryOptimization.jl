@@ -1,4 +1,26 @@
 
+################################################################################
+"""
+FILE CONTENTS:
+    SUMMARY: Model and Objective Classes
+
+    TYPES                                             Tree
+        Model                                       --------
+        Objective                                     Model
+        UnconstrainedObjective
+        ConstrainedObjective                        Objective
+                                                    ↙       ↘
+                                UnconstrainedObjective     ConstrainedObjective
+
+
+    METHODS
+        update_objective: Update ConstrainedObjective values, creating a new
+            Objective.
+        _validate_bounds: Check bounds on state and control bound inequalities
+"""
+################################################################################
+
+
 """
 $(TYPEDEF)
 
@@ -141,8 +163,8 @@ mutable struct ConstrainedObjective <: Objective
         m = size(R,1)
 
         # Validity Tests
-        u_max, u_min = validate_bounds(u_max,u_min,m)
-        x_max, x_min = validate_bounds(x_max,x_min,n)
+        u_max, u_min = _validate_bounds(u_max,u_min,m)
+        x_max, x_min = _validate_bounds(x_max,x_min,n)
 
         # Stage Constraints
         pI = 0
@@ -252,7 +274,7 @@ are equal and bounds do not result in an empty set (i.e. max > min).
 # Arguments
 * n: number of elements in the vector (n for states and m for controls)
 """
-function validate_bounds(max,min,n::Int)
+function _validate_bounds(max,min,n::Int)
 
     if min isa Real
         min = ones(n)*min

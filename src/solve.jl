@@ -1,5 +1,22 @@
 import Base.println
 
+################################################################################
+"""
+FILE CONTENTS:
+    SUMMARY: Methods for settings and solving iLQR problems
+
+    METHODS
+        solve(solver, X0, U0): Call infeasible solver.
+        solve(solver, X0, []): Call infeasible solver and set controls to zeros
+        solve(solver, U0): Solve iLQR problem with initial guess for controls
+        solve(solver): Solve iLQR problem with random initial guess for controls
+        _solve: lower-level method for setting and solving iLQR problem
+
+        outer_loop_update: Update parameters on major iterations
+"""
+################################################################################
+
+
 """
 $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
@@ -38,7 +55,6 @@ $(SIGNATURES)
 
 Solve constrained optimization problem specified by `solver`
 """
-# QUESTION: Should the infeasible tag be able to be changed? What happens if we turn it off with an X0?
 function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::SolverResults
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
@@ -252,12 +268,3 @@ end
 function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Void
     return nothing
 end
-
-function println(level::Symbol, msg::String)
-    if level_priorities[level] ≥ level_priorities[debug_level]
-        println(msg)
-    end
-end
-
-print_info(msg) = println(:info,msg)
-print_debug(msg) = println(:debug,msg)
