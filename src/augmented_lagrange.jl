@@ -9,21 +9,21 @@ $(SIGNATURES)
 
 Additional controls for producing an infeasible state trajectory
 """
-function infeasible_controls(solver::Solver,x0::Array{Float64,2},u::Array{Float64,2})
+function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N-1) # initialize
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         solver.fd(view(x,:,k+1),x[:,k],u[:,k])
-        ui[:,k] = x0[:,k+1] - x[:,k+1]
+        ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
     end
     ui
 end
 
-function infeasible_controls(solver::Solver,x0::Array{Float64,2})
+function infeasible_controls(solver::Solver,X0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N-1)
-    infeasible_controls(solver,x0,u)
+    infeasible_controls(solver,X0,u)
 end
 
 """
