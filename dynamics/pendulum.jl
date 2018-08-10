@@ -35,9 +35,9 @@ x0 = [0; 0]
 xf = [pi; 0] # (ie, swing up)
 
 # costs
-Q = (1e-3)*eye(model.n);
-Qf = 100.0*eye(model.n);
-R = (1e-3)*eye(model.m);
+Q = (1e-3)*eye(model.n)
+Qf = 100.0*eye(model.n)
+R = (1e-2)*eye(model.m)
 
 # simulation
 tf = 5.

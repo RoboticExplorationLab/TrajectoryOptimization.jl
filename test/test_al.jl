@@ -19,25 +19,36 @@ opts.square_root = false
 opts.verbose = true
 opts.cache = true
 obj_uncon = Dynamics.pendulum[2]
+
+# obj_uncon.Qf[:,:] = 30.0*eye(n)
+# obj_uncon.Q[:,:] = 0.3*eye(n)
+# obj_uncon.R[:,:] = 0.3*eye(m)
+
+obj_uncon.Qf[:,:] = 100.0*eye(n)
+obj_uncon.Q[:,:] = 0.01*eye(n)
+obj_uncon.R[:,:] = 0.01*eye(m)
+
 model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 
-# # 1. Unconstrained
-# solver1 = Solver(model!,obj_uncon,dt=0.1)
-# solver1.opts.verbose = true
-# solver1.opts.cache = true
-# solver1.opts.iterations = 250
-# solver1.opts.eps = 1e-3
-# U1 = ones(m, solver1.N-1)
-# @time results1 = solve_unconstrained(solver1,U1)
-# # results1.result[1].X
-# #
-# # res = UnconstrainedResults(n,m,solver1.N)
-# # res.U[:,:] = U1[:,:]
-# # rollout!(res,solver1)
-# # res.X
-# # solver1.F(res.X[:,2],res.U[2])
-# #@btime results1 = solve(solver1,U1)
+# 1. Unconstrained
+solver1 = Solver(model!,obj_uncon,dt=0.001)
+solver1.opts.verbose = true
+solver1.opts.cache = true
+solver1.opts.iterations = 250
+solver1.opts.eps = 1e-3
+U1 = zeros(m, solver1.N-1)
+@time results1 = solve_unconstrained(solver1,U1)
+println("Average time per iteration: $(sum(results1.time)/results1.termination_index)(s)")
+
+# results1.result[1].X
 #
+# res = UnconstrainedResults(n,m,solver1.N)
+# res.U[:,:] = U1[:,:]
+# rollout!(res,solver1)
+# res.X
+# solver1.F(res.X[:,2],res.U[2])
+#@btime results1 = solve(solver1,U1)
+
 # plot(results1.X',title="Pendulum (1. Unconstrained)",ylabel="x(t)")
 # println("Average time per iteration: $(sum(results1.time)/results1.termination_index)(s)")
 # plot(results1.cost[1:results1.termination_index-1],title="Cost",color="red")
@@ -85,22 +96,22 @@ model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 # #plot(results5.X',title="Pendulum (5. Constrained control and states (inplace dynamics))",ylabel="x(t)")
 # #plot(results5.U',title="Pendulum (5. Constrained control and states (inplace dynamics))",ylabel="u(t)")
 #
-# 6. Infeasible start with constrained control and heterogeneous states (inplace dynamics)
-opts.cache=true
-u_min6 = -3
-u_max6 = 3
-x_min6 = [-Inf;-Inf]
-x_max6 = [Inf; Inf]
-obj6 = ConstrainedObjective(obj_uncon, u_min=u_min6, u_max=u_max6, x_min=x_min6, x_max=x_max6)
-solver6! = Solver(model!,obj6,dt=0.1,opts=opts)
-U6 = ones(m,solver6!.N-1)
-#X06 = ones(n,solver6!.N)
-X_interp = line_trajectory(solver6!.obj.x0,solver6!.obj.xf,solver6!.N)
-@time results6 = solve_al(solver6!,X_interp,U6)
-plot(results6.X',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
-plot(results6.U',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
-
-results6.U
+# # 6. Infeasible start with constrained control and heterogeneous states (inplace dynamics)
+# opts.cache=true
+# u_min6 = -3
+# u_max6 = 3
+# x_min6 = [-Inf;-Inf]
+# x_max6 = [Inf; Inf]
+# obj6 = ConstrainedObjective(obj_uncon, u_min=u_min6, u_max=u_max6, x_min=x_min6, x_max=x_max6)
+# solver6! = Solver(model!,obj6,dt=0.1,opts=opts)
+# U6 = ones(m,solver6!.N-1)
+# #X06 = ones(n,solver6!.N)
+# X_interp = line_trajectory(solver6!.obj.x0,solver6!.obj.xf,solver6!.N)
+# @time results6 = solve_al(solver6!,X_interp,U6)
+# plot(results6.X',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
+# plot(results6.U',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
+#
+# results6.U
 # plot(log.(results6.cost))
 # results6.iter_type
 # println(plot_cost(results6))

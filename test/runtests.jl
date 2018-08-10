@@ -5,11 +5,7 @@ else
     using Test
 end
 
-# include("../iLQR.jl")
-# include("../dynamics.jl")
 using BenchmarkTools
-# using iLQR
-
 
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")
@@ -31,4 +27,5 @@ end
 - Custom terminal constraints in objective
 - Try/catch in solve_sqrt
 - UnconstrainedResults constructor
+- more advanced infeasible start
 """
