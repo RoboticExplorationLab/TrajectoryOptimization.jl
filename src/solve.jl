@@ -146,7 +146,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Backward pass
             calc_jacobians(results, solver)
             if solver.opts.square_root
-                v1, v2 = backwards_sqrt(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                v1, v2 = backwards_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 # v1, v2 = backwardpass!(results, solver; kwargs_bp...) # standard backward pass [see insert algorithm]
                 v1, v2 = backwardpass!(results, solver)

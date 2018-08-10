@@ -14,6 +14,8 @@ results_sqrt.U[:,:] = ones(model.m,solver.N-1)
 
 TrajectoryOptimization.rollout!(results,solver)
 TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.calc_jacobians(results,solver)
+TrajectoryOptimization.calc_jacobians(results_sqrt,solver)
 
 TrajectoryOptimization.backwardpass!(results,solver)
 TrajectoryOptimization.backwards_sqrt!(results_sqrt,solver)
@@ -39,8 +41,10 @@ solver_con = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con)
 solver_con_sqrt = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con_sqrt)
 results_con = TrajectoryOptimization.ConstrainedResults(model.n,model.m,p[1],solver.N)
 results_con_sqrt = TrajectoryOptimization.ConstrainedResults(model.n,model.m,p[1],solver.N)
-TrajectoryOptimization.backwardpass!(results_con, solver_con, constraint_jacobian)
-TrajectoryOptimization.backwards_sqrt!(results_con_sqrt, solver_con_sqrt, constraint_jacobian=constraint_jacobian)
+TrajectoryOptimization.calc_jacobians(results_con, solver_con)
+TrajectoryOptimization.calc_jacobians(results_con_sqrt, solver_con_sqrt)
+TrajectoryOptimization.backwardpass!(results_con, solver_con)
+TrajectoryOptimization.backwards_sqrt!(results_con_sqrt, solver_con_sqrt)
 results_con.S
 results_con_sqrt.S
 

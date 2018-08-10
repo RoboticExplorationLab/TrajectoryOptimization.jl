@@ -19,7 +19,7 @@ function checkdiag(A::AbstractArray)
     return true
 end
 
-function backwards_sqrt(res::SolverResults,solver::Solver)
+function backwards_sqrt!(res::SolverResults,solver::Solver)
 
     N = solver.N
     n = solver.model.n
@@ -39,7 +39,7 @@ function backwards_sqrt(res::SolverResults,solver::Solver)
 
     # Terminal Cost-to-go
     if isa(solver.obj, ConstrainedObjective)
-        Cx, Cu = constraint_jacobian(res.X[:,N])
+        Cx = res.Cx_N
         Su = chol(Qf + Cx'*res.IμN*Cx)
         s = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
     else
