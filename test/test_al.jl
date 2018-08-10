@@ -23,15 +23,16 @@ obj_uncon = Dynamics.pendulum[2]
 # obj_uncon.Qf[:,:] = 30.0*eye(n)
 # obj_uncon.Q[:,:] = 0.3*eye(n)
 # obj_uncon.R[:,:] = 0.3*eye(m)
+# obj_uncon.tf = 5.0
 
-obj_uncon.Qf[:,:] = 100.0*eye(n)
-obj_uncon.Q[:,:] = 0.01*eye(n)
-obj_uncon.R[:,:] = 0.01*eye(m)
+# obj_uncon.Qf[:,:] = 100.0*eye(n)
+# obj_uncon.Q[:,:] = 0.01*eye(n)
+# obj_uncon.R[:,:] = 0.01*eye(m)
 
 model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 
 # 1. Unconstrained
-solver1 = Solver(model!,obj_uncon,dt=0.001)
+solver1 = Solver(model!,obj_uncon,dt=0.1)
 solver1.opts.verbose = true
 solver1.opts.cache = true
 solver1.opts.iterations = 250
@@ -39,7 +40,13 @@ solver1.opts.eps = 1e-3
 U1 = zeros(m, solver1.N-1)
 @time results1 = solve_unconstrained(solver1,U1)
 println("Average time per iteration: $(sum(results1.time)/results1.termination_index)(s)")
+# anim = @animate for i=1:5#size(results1.X,2)
+#     x = cos(results1.X[1,i] - pi/2)
+#     y = sin(results1.X[1,i] - pi/2)
+#     plot([0,x],[0,y],xlims=(-1.5,1.5),ylims=(-1.5,1.5),color="black",size=(200,200))#,label="",title="Pendulum")
+# end
 
+#pendulum_animation(results1,fps=5)
 # results1.result[1].X
 #
 # res = UnconstrainedResults(n,m,solver1.N)

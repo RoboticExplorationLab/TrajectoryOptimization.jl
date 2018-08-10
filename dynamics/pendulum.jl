@@ -53,5 +53,6 @@ obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min,
 
 # Set up problem
 pendulum = [model,obj_uncon]
+pendulum! = [model!,obj_uncon]
 pendulum_constrained = [model, obj_con]
 pendulum_constrained! = [model!,obj_con]

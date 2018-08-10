@@ -206,7 +206,11 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
 
     Cx, Cu = constraint_jacobian(res.X[:,N])
     S = Qf + Cx'*res.IμN*Cx
-    s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
+    s = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+
+    res.S[:,:,N] .= S
+    res.s[:,N] = copy(s)
+
     v1 = 0.
     v2 = 0.
 
@@ -247,10 +251,13 @@ function backwardpass!(res::ConstrainedResults, solver::Solver, constraint_jacob
         Qxx += Cx'*Iμ[:,:,k]*Cx
         Quu += Cu'*Iμ[:,:,k]*Cu
         Qux += Cu'*Iμ[:,:,k]*Cx
+
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
         s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
         S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+        res.S[:,:,k] .= S
+        res.s[:,k] = copy(s)
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
@@ -543,7 +550,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
 
             # Backward pass
             if solver.opts.square_root
-                v1, v2 = backwards_sqrt(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                v1, v2 = backwards_sqrt!(results,solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 v1, v2 = backwardpass!(results, solver, constraint_jacobian,infeasible=infeasible) # standard backward pass [see insert algorithm]
             end

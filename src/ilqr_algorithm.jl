@@ -1,49 +1,6 @@
 #include("solve_sqrt.jl")
 #iLQR
 
-
-# function rollout!(res::SolverResults,solver::Solver)
-#     X = res.X; U = res.U
-#
-#     X[:,1] = solver.obj.x0
-#     for k = 1:solver.N-1
-#         solver.fd(view(X,:,k+1), X[:,k], U[:,k])
-#     end
-# end
-
-# function rollout!(res::SolverResults,solver::Solver,alpha::Float64)::Bool
-#     # pull out solver/result values
-#     N = solver.N
-#     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
-#
-#     X_[:,1] = solver.obj.x0;
-#     for k = 2:N
-#         a = alpha*d[:,k-1]
-#         delta = X_[:,k-1] - X[:,k-1]
-#         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - a
-#
-#         solver.fd(view(X_,:,k) ,X_[:,k-1], U_[:,k-1])
-#
-#         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
-#             return false
-#         end
-#     end
-#     return true
-# end
-
-
-# function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
-#     # pull out solver/objective values
-#     N = solver.N; Q = solver.obj.Q; R = solver.obj.R; xf = solver.obj.xf; Qf = solver.obj.Qf
-#
-#     J = 0.0
-#     for k = 1:N-1
-#       J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
-#     end
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#     return J
-# end
-
 """
 $(SIGNATURES)
 Solve the dynamic programming problem, starting from the terminal time step
@@ -60,6 +17,10 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
     # Terminal Values
     S = Qf
     s = Qf*(X[:,N] - xf)
+
+    res.S[:,:,N] .= S
+    res.s[:,N] = copy(s)
+
     v1 = 0.
     v2 = 0.
 
@@ -82,15 +43,21 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
         Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
+        # Quu = luu + fu'*(S + mu*eye(n))*fu
+
         Qux = fu'*(S + mu*eye(n))*fx
 
         # regularization
+        # println("Quu: $(Quu)")
+        # println("condition number: $(cond(Quu))")
         if !isposdef(Quu)
             mu = mu + solver.opts.mu_regularization;
             k = N-1
             if solver.opts.verbose
                 println("regularized")
             end
+            break
+
         end
 
         # Compute gains
@@ -99,12 +66,16 @@ function backwardpass!(res::UnconstrainedResults,solver::Solver)
         s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
         S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
+        res.S[:,:,k] .= S
+        res.s[:,k] = copy(s)
+
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
         v2 += float(d[:,k]'*Quu*d[:,k])
 
         k = k - 1;
     end
+
     return v1, v2
 end
 
@@ -211,7 +182,9 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
     U_ = similar(U)
     K = zeros(m,n,N-1)
     d = zeros(m,N-1)
-    results = UnconstrainedResults(X,U,K,d,X_,U_)
+    S = zeros(n,n,N)
+    s = zeros(n,N)
+    results = UnconstrainedResults(X,U,K,d,X_,U_,S,s)
 
     if solver.opts.cache
         # Initialize cache and store initial trajectories and cost
@@ -239,7 +212,7 @@ function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
         end
 
         if solver.opts.square_root
-            v1, v2 = backwards_sqrt(results,solver)
+            v1, v2 = backwards_sqrt!(results,solver)
         else
             v1, v2 = backwardpass!(results,solver)
         end

@@ -4,6 +4,7 @@ using Plots
 function plot_cost(results::ResultsCache)
     index_outerloop = find(x -> x == 1, results.iter_type)
 end
+
 """
 @(SIGNATURES)
 
@@ -22,6 +23,22 @@ function trajectory_animation(results::ResultsCache;traj::String="state",ylim=[-
         end
     end
 
+    path = joinpath(Pkg.dir("TrajectoryOptimization"),filename)
+    gif(anim,path,fps=fps)
+    return nothing
+end
+
+"""
+@(SIGNATURES)
+
+Generate an animation of a pendulum
+"""
+function pendulum_animation(results::SolverResults;filename::String="pendulum.gif",fps::Int=1)::Void
+    anim = @animate for i=1:size(results1.X,2)
+        x = cos(results1.X[1,i] - pi/2)
+        y = sin(results1.X[1,i] - pi/2)
+        plot([0,x],[0,y],xlims=(-1.5,1.5),ylims=(-1.5,1.5),color="black",size=(300,300),label="",title="Pendulum")
+    end
     path = joinpath(Pkg.dir("TrajectoryOptimization"),filename)
     gif(anim,path,fps=fps)
     return nothing
