@@ -38,13 +38,12 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test max_c < 1e-2
 println("$system - Constrained")
 @btime TrajectoryOptimization.solve(solver,U)
-@profiler TrajectoryOptimization.solve(solver,U)
 
 ### Infeasible Start
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)
-solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts, infeasible=true)
+solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
-results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
+results_inf = TrajectoryOptimization.solve_al(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
