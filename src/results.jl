@@ -1,3 +1,5 @@
+import Base: isempty,copy
+
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem
@@ -53,7 +55,7 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.fx),copy(r.fu))
 end
 
 """
@@ -92,6 +94,12 @@ struct ConstrainedResults <: SolverIterResults
         new(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
+
+function ConstrainedResults()
+    ConstrainedResults(0,0,0,0)
+end
+
+isempty(res::ConstrainedResults) = isempty(res.X) && isempty(res.U)
 
 """
 $(SIGNATURES)
@@ -138,8 +146,9 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),
-        copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN))
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.fx),copy(r.fu),
+        copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
 end
 
 """

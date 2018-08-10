@@ -44,9 +44,7 @@ println("$system - Constrained")
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)
 solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts, infeasible=true)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
-solver.c_jacobian([1,2],[1],true)
-solver.c_fun([1,2],[0,0,1])
-results_inf = TrajectoryOptimization.solve_al(solver,X_interp,U)
+results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2

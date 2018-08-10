@@ -38,9 +38,9 @@ results = TrajectoryOptimization.solve(solver,U)
 
 #  with square root
 solver.opts.square_root = true
-results = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[:,end]-obj.xf) < 1e-3
-
+results_sr = TrajectoryOptimization.solve(solver,U)
+@test norm(results_sr.X[:,end]-obj.xf) < 1e-3
+@test norm(results_sr.X - results.X) ≈ 0. atol=1e-12
 
 ### CONSTRAINED ###
 # rk4
@@ -101,7 +101,7 @@ opts.verbose = true
 obj_c2 = TrajectoryOptimization.update_objective(obj_c, u_min=-Inf, x_min=[-5;-5], x_max=[10;10])
 solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
-results_inf = TrajectoryOptimization.solve_al(solver,X_interp,U)
+results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
