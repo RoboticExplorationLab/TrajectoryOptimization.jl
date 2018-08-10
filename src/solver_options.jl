@@ -1,4 +1,4 @@
-import Base.show
+import Base: show, copy
 
 """
 $(TYPEDEF)
@@ -52,6 +52,10 @@ mutable struct SolverOptions
         iterations_linesearch,mu_regularization,mu_al_update,infeasible_regularization,cache,benchmark,infeasible)
     end
 end
+
+copy(opts::SolverOptions) = SolverOptions(;[name=>getfield(opts,name) for name in fieldnames(opts)]...)
+
+
 
 # function show(io::IO, opts::SolverOptions)
 #     println(io, "SolverOptions:")

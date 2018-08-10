@@ -98,7 +98,11 @@ struct Solver
 
         c_fun, c_jacob = generate_constraint_functions(obj)
 
-        new(model, obj, opts, dt, fd!, Jacobians!, c_fun, c_jacob, N)
+        # Copy solver options so any changes don't modify the options passed in
+        options = copy(opts)
+        options.infeasible = infeasible
+
+        new(model, obj, options, dt, fd!, Jacobians!, c_fun, c_jacob, N)
 
     end
 end
