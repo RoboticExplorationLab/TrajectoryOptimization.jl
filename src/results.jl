@@ -23,9 +23,10 @@ struct UnconstrainedResults <: SolverIterResults
     d::Array{Float64,2}  # Feedforward gain (m,N-1)
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
-
-    function UnconstrainedResults(X,U,K,d,X_,U_)
-        new(X,U,K,d,X_,U_)
+    S::Array{Float64,3} # Cost-to-go hessian (n,n)
+    s::Array{Float64,2} # Cost-to-go gradient (n,1)
+    function UnconstrainedResults(X,U,K,d,X_,U_,S,s)
+        new(X,U,K,d,X_,U_,S,s)
     end
 end
 
@@ -45,11 +46,13 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     d = zeros(m,N-1)
     X_ = zeros(n,N)
     U_ = zeros(m,N-1)
-    UnconstrainedResults(X,U,K,d,X_,U_)
+    S = zeros(n,n,N)
+    s = zeros(n,N)
+    UnconstrainedResults(X,U,K,d,X_,U_,S,s)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s))
 end
 
 """
@@ -65,6 +68,8 @@ struct ConstrainedResults <: SolverIterResults
     d::Array{Float64,2}  # Feedforward gain (m,N-1)
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
+    S::Array{Float64,3} # Cost-to-go hessian (n,n)
+    s::Array{Float64,2} # Cost-to-go gradient (n,1)
 
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
@@ -76,8 +81,8 @@ struct ConstrainedResults <: SolverIterResults
     λN::Array{Float64,1}     # Final lagrange multipliers (p_N,)
     μN::Array{Float64,1}     # Final penalty terms (p_N,)
 
-    function ConstrainedResults(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
-        new(X,U,K,d,X_,U_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+    function ConstrainedResults(X,U,K,d,X_,U_,S,s,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+        new(X,U,K,d,X_,U_,S,s,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
     end
 end
 
@@ -99,6 +104,8 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     d = zeros(m,N-1)
     X_ = zeros(n,N)
     U_ = zeros(m,N-1)
+    S = zeros(n,n,N)
+    s = zeros(n,N)
 
     # Stage Constraints
     C = zeros(p,N-1)
@@ -112,14 +119,14 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     λ_N = zeros(p_N)
     μ_N = ones(p_N)
 
-    ConstrainedResults(X,U,K,d,X_,U_,
+    ConstrainedResults(X,U,K,d,X_,U_,S,s,
         C,Iμ,LAMBDA,MU,
         C_N,Iμ_N,λ_N,μ_N)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN))
 end
 

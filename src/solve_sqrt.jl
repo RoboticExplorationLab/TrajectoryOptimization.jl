@@ -19,7 +19,7 @@ function checkdiag(A::AbstractArray)
     return true
 end
 
-function backwards_sqrt(res::SolverResults,solver::Solver;
+function backwards_sqrt!(res::SolverResults,solver::Solver;
     constraint_jacobian::Function=(x,u)->nothing, infeasible::Bool=false)
 
     N = solver.N
@@ -30,6 +30,8 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
+
+
     Uq = chol(Q)
     Ur = chol(R)
 
@@ -37,8 +39,17 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
     X = res.X; U = res.U; K = res.K; d = res.d
 
     # Terminal Cost-to-go
-    Su = chol(Qf)
-    s = Qf*(X[:,N] - xf)
+    if isa(solver.obj, ConstrainedObjective)
+        Cx, Cu = constraint_jacobian(res.X[:,N])
+        Su = chol(Qf + Cx'*res.IμN*Cx)
+        s = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+    else
+        Su = chol(Qf)
+        s = Qf*(X[:,N] - xf)
+    end
+
+    res.S[:,:,N] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
+    res.s[:,N] = copy(s)
 
     # Initialization
     v1 = 0.
@@ -73,36 +84,23 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
             Wuu = qrfact!([Wuu[:R]; Iμ2*Cu])
         end
 
-#         Qxx = lxx + fx'*S*fx
-#         Quu = luu + fu'*(S + mu*eye(n))*fu
-#         Qux = fu'*(S + mu*eye(n))*fx
-
-        # regularization
-        # println(isposdef(Wuu[:R]'Wuu[:R]))
-        # if ~checkdiag(Wuu[:R])
-        #     println("Regularized: mu = $mu, k=$k")
-        #     println("eigs: ", eigvals(Wuu[:R]))
-        #     mu = mu + 1.0;
-        #     k = N-1;
-        # end
-
         K[:,:,k] = Wuu[:R]\(Wuu[:R]'\Qxu')
         d[:,k] = Wuu[:R]\(Wuu[:R]'\Qu)
-#         K[:,:,k] = Quu\Qux
-#         d[:,k] = Quu\Qu
 
-        s = (Qx' - (Wuu[:R]'\Qu)'*(Wuu[:R]'\Qxu'))'
+        s = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
+
         try  # Regularization
             Su = chol_minus(Wxx[:R]+eye(n)*mu,Wuu[:R]'\Qxu')
+
         catch ex
             if ex isa LinAlg.PosDefException
                 mu += 1
                 k = N-1
             end
         end
-#         s = (Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-#         S = Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
 
+        res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
+        res.s[:,k] = copy(s)
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
@@ -111,5 +109,4 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
         k = k - 1;
     end
     return v1, v2
-
 end
