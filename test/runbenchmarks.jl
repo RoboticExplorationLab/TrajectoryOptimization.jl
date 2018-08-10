@@ -16,6 +16,7 @@ opts.mu_al_update = 100.
 
 obj.Q .= eye(2)*1e-3
 obj.R .= eye(1)*1e-3
+obj.Qf .= eye(2)*30
 obj.tf = 5.
 model! = TrajectoryOptimization.Model(Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
@@ -42,7 +43,7 @@ println("$system - Constrained")
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)
 solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
-results_inf = TrajectoryOptimization.solve_al(solver,X_interp,U)
+results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2

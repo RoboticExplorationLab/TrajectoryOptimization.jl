@@ -53,6 +53,7 @@ function rk4(f!::Function, dt::Float64)
     end
 end
 
+
 function rk4(f_aug!::Function)
     # Runge-Kutta 4
     fd!(dS,S::Array) = begin

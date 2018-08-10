@@ -12,6 +12,9 @@ using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 
+const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
+const debug_level = :critical  # (:verbose, :debug, :info, :critical, :none)
+
 export
     Dynamics
 
@@ -47,6 +50,17 @@ include("results.jl")
 include("solve_sqrt.jl")
 include("ilqr_algorithm.jl")
 include("augmented_lagrange.jl")
+include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
+
+function set_debug_level(level::Symbol)
+    global debug_level
+    if level ∈ keys(level_priorities)
+        debug_level = level
+    else
+        warn("Debug level not recognized")
+    end
+    return nothing
+end
 end

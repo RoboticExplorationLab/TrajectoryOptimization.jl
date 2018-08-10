@@ -44,10 +44,13 @@ struct Solver
     dt::Float64          # Time step
     fd::Function         # Discrete in place dynamics function, `fd(ẋ,x,u)`
     F::Function          # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    c_fun::Function
+    c_jacobian::Function
     N::Int               # Number of time steps
 
-    function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions())
+    function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
         N = Int(floor(obj.tf/dt));
+        n,m = model.n, model.m
 
         # Make dynamics inplace
         if is_inplace_dynamics(model)
@@ -69,20 +72,55 @@ struct Solver
         fd_aug! = discretizer(f_aug!)
         F!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
 
+        fx = zeros(n,n)
+        fu = zeros(n,m)
+
+        nm1 = model.n + model.m + 1
+        J = zeros(nm1, nm1)
+        S = zeros(nm1)
+
         # Auto-diff discrete dynamics
         function Jacobians!(x,u)
-            nm1 = model.n + model.m + 1
-            J = zeros(nm1, nm1)
-            S = zeros(nm1)
-            S[1:model.n] = x
-            S[model.n+1:end-1] = u
+            infeasible = length(u) != m
+            S[1:n] = x
+            S[n+1:end-1] = u[1:m]
             S[end] = dt
             Sdot = zeros(S)
             F_aug = F!(J,Sdot,S)
-            fx = F_aug[1:model.n,1:model.n]
-            fu = F_aug[1:model.n,model.n+1:model.n+model.m]
+            fx .= F_aug[1:model.n,1:model.n]
+            fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
+            if infeasible
+                return fx, [fu zeros(n,n)]
+            end
             return fx, fu
+
         end
-        new(model, obj, opts, dt, fd!, Jacobians!, N)
+
+        c_fun, c_jacob = generate_constraint_functions(obj)
+
+        # Copy solver options so any changes don't modify the options passed in
+        options = copy(opts)
+        options.infeasible = infeasible
+
+        new(model, obj, options, dt, fd!, Jacobians!, c_fun, c_jacob, N)
+
+    end
+end
+
+generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,u)->nothing
+
+"""
+$(SIGNATURES)
+Return the quadratic control stage cost R
+
+If using an infeasible start, will return the augmented cost matrix
+"""
+function getR(solver::Solver)::Array{Float64,2}
+    if solver.opts.infeasible
+        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
+        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
+        return R
+    else
+        return solver.obj.R
     end
 end

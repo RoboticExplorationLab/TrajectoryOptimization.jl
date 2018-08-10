@@ -1,3 +1,5 @@
+import Base: isempty,copy
+
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem
@@ -25,8 +27,11 @@ struct UnconstrainedResults <: SolverIterResults
     U_::Array{Float64,2} # Predicted controls (m,N-1)
     S::Array{Float64,3} # Cost-to-go hessian (n,n)
     s::Array{Float64,2} # Cost-to-go gradient (n,1)
-    function UnconstrainedResults(X,U,K,d,X_,U_,S,s)
-        new(X,U,K,d,X_,U_,S,s)
+    fx::Array{Float64,3} # State jacobian (n,n,N)
+    fu::Array{Float64,3} # Control jacobian (n,m,N-1)
+
+    function UnconstrainedResults(X,U,K,d,X_,U_,fx,fu)
+        new(X,U,K,d,X_,U_,S,s,fx,fu)
     end
 end
 
@@ -48,11 +53,13 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     U_ = zeros(m,N-1)
     S = zeros(n,n,N)
     s = zeros(n,N)
-    UnconstrainedResults(X,U,K,d,X_,U_,S,s)
+    fx = zeros(n,n,N-1)
+    fu = zeros(n,m,N-1)
+=    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu))
 end
 
 """
@@ -71,6 +78,9 @@ struct ConstrainedResults <: SolverIterResults
     S::Array{Float64,3} # Cost-to-go hessian (n,n)
     s::Array{Float64,2} # Cost-to-go gradient (n,1)
 
+    fx::Array{Float64,3}
+    fu::Array{Float64,3}
+
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
     LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N-1)
@@ -81,10 +91,21 @@ struct ConstrainedResults <: SolverIterResults
     λN::Array{Float64,1}     # Final lagrange multipliers (p_N,)
     μN::Array{Float64,1}     # Final penalty terms (p_N,)
 
-    function ConstrainedResults(X,U,K,d,X_,U_,S,s,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
-        new(X,U,K,d,X_,U_,S,s,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN)
+    Cx::Array{Float64,3}
+    Cu::Array{Float64,3}
+
+    Cx_N::Array{Float64,2}
+
+    function ConstrainedResults(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
+
+function ConstrainedResults()
+    ConstrainedResults(0,0,0,0)
+end
+
+isempty(res::ConstrainedResults) = isempty(res.X) && isempty(res.U)
 
 """
 $(SIGNATURES)
@@ -107,6 +128,9 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     S = zeros(n,n,N)
     s = zeros(n,N)
 
+    fx = zeros(n,n,N-1)
+    fu = zeros(n,m,N-1)
+
     # Stage Constraints
     C = zeros(p,N-1)
     Iμ = zeros(p,p,N-1)
@@ -119,15 +143,20 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     λ_N = zeros(p_N)
     μ_N = ones(p_N)
 
-    ConstrainedResults(X,U,K,d,X_,U_,S,s,
+    cx = zeros(p,n,N-1)
+    cu = zeros(p,m,N-1)
+    cxn = zeros(p_N,n)
+
+    ConstrainedResults(X,U,K,d,X_,U_,fx,fu,
         C,Iμ,LAMBDA,MU,
-        C_N,Iμ_N,λ_N,μ_N)
+        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),
-        copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN))
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.fx),copy(r.fu),
+        copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
 end
 
 """
