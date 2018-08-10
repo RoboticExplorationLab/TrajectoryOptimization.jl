@@ -19,8 +19,7 @@ function checkdiag(A::AbstractArray)
     return true
 end
 
-function backwards_sqrt(res::SolverResults,solver::Solver;
-    constraint_jacobian::Function=(x,u)->nothing, infeasible::Bool=false)
+function backwards_sqrt(res::SolverResults,solver::Solver)
 
     N = solver.N
     n = solver.model.n
@@ -63,7 +62,7 @@ function backwards_sqrt(res::SolverResults,solver::Solver;
         if isa(solver.obj, ConstrainedObjective)
             # Constraints
             Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
-            Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
             Iμ2 = sqrt.(Iμ[:,:,k])
             Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
             Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]

@@ -80,9 +80,10 @@ struct Solver
         S = zeros(nm1)
 
         # Auto-diff discrete dynamics
-        function Jacobians!(x,u,infeasible=false)
+        function Jacobians!(x,u)
+            infeasible = length(u) != m
             S[1:n] = x
-            S[n+1:end-1] = u
+            S[n+1:end-1] = u[1:m]
             S[end] = dt
             Sdot = zeros(S)
             F_aug = F!(J,Sdot,S)
@@ -102,4 +103,20 @@ struct Solver
     end
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; infeasible=infeasible) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,u)->nothing
+
+"""
+$(SIGNATURES)
+Return the quadratic control stage cost R
+
+If using an infeasible start, will return the augmented cost matrix
+"""
+function getR(solver::Solver)::Array{Float64,2}
+    if solver.opts.infeasible
+        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
+        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
+        return R
+    else
+        return solver.obj.R
+    end
+end

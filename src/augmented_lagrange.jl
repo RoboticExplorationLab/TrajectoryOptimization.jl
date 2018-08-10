@@ -33,13 +33,13 @@ Roll out the dynamics for a given control sequence (initial)
 Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
-function rollout!(res::SolverResults,solver::Solver;infeasible::Bool=false)
+function rollout!(res::SolverResults,solver::Solver)
     X = res.X; U = res.U
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
-        if infeasible
+        if solver.opts.infeasible
             X[:,k+1] .+= U[solver.model.m+1:end,k]
         end
     end
@@ -55,7 +55,7 @@ gains `res.K` and `res.d` to the difference between states
 
 Will return a flag indicating if the values are finite for all time steps.
 """
-function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::Bool=false)
+function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
@@ -65,7 +65,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::B
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
         solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
 
-        if infeasible
+        if solver.opts.infeasible
             X_[:,k] .+= U_[solver.model.m+1:end,k-1]
         end
 
@@ -77,9 +77,8 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64;infeasible::B
 end
 
 # overloaded cost function to accomodate Augmented Lagrance method
-# TODO: Make cost a function only a function of results
-function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::Array{Float64,2}, infeasible::Bool=false)
-    J = cost(solver, X, U, infeasible=infeasible)
+function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+    J = cost(solver, X, U)
     for k = 1:solver.N-1
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
@@ -87,40 +86,18 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}, U::A
     return J
 end
 
+function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+    cost(solver,X,U)
+end
+
 """
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2};infeasible::Bool=false)
+function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
-
-    if infeasible
-        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
-        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
-    else
-        R = solver.obj.R
-    end
-
-    J = 0.0
-    for k = 1:N-1
-      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
-    end
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-    return J
-end
-
-function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U, infeasible::Bool=false)
-    # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
-
-    if infeasible
-        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
-        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
-    else
-        R = solver.obj.R
-    end
-
+    R = getR(solver)
     J = 0.0
     for k = 1:N-1
       J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
@@ -133,8 +110,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64,
-        infeasible::Bool=false)
+function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64)
 
     # Pull out values from results
     X = res.X
@@ -150,7 +126,7 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
     # Compute original cost
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
-    J_prev = cost(solver, res, X, U, infeasible)
+    J_prev = cost(solver, res, X, U)
 
     pI = solver.obj.pI
 
@@ -161,11 +137,11 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     z = 0.
 
     while z ≤ solver.opts.c1 || z > solver.opts.c2
-        rollout!(res,solver,alpha,infeasible=infeasible)
+        rollout!(res,solver,alpha)
 
         # Calcuate cost
         update_constraints!(res,solver.c_fun,pI,X_,U_)
-        J = cost(solver, res, X_, U_, infeasible)
+        J = cost(solver, res, X_, U_)
 
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
@@ -205,19 +181,13 @@ Computes the gain matrices K and d by applying the principle of optimality at
 each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
 """
-function backwardpass!(res::ConstrainedResults, solver::Solver,
-        infeasible::Bool=false)
+function backwardpass!(res::ConstrainedResults, solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
     Q = solver.obj.Q
 
-    if infeasible
-        R = solver.opts.infeasible_regularization*eye(m+n)
-        R[1:m,1:m] = solver.obj.R
-    else
-        R = solver.obj.R
-    end
+    R = getR(solver)
 
     xf = solver.obj.xf
     Qf = solver.obj.Qf
@@ -312,15 +282,12 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function calc_jacobians(res::ConstrainedResults, solver::Solver, infeasible=false)::Void
-    N = size(res.X,2)
-    m = solver.model.m
-    n = solver.model.n
-
+function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void
+    N = solver.N
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
         # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k], infeasible)
+        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
         res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
         # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
@@ -356,7 +323,7 @@ Stacks the constraints as follows:
  general equalities
  (control equalities for infeasible start)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bool=false)
+function generate_constraint_functions(obj::ConstrainedObjective)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -364,12 +331,6 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
     pI = obj.pI # number of inequality and equality constraints
     pE = p-pI # number of equality constraints
     pE_c = pE  # number of custom equality constraints
-
-    if infeasible
-        p += n
-        pE += n
-        m_aug = m + n
-    end
 
     u_min_active = isfinite.(obj.u_min)
     u_max_active = isfinite.(obj.u_max)
@@ -433,25 +394,14 @@ function generate_constraint_functions(obj::ConstrainedObjective; infeasible::Bo
     fx_state[pI_x_max+1:end,:] = eye(pI_x_min)
     fx = zeros(p,n)
 
-    if infeasible
-        fx_infeasible = zeros(n,n)
-        fu_infeasible = zeros(n,m_aug)
-        fu_infeasible[:,m+1:end] = eye(n)
-        fu_control = zeros(pI_u,m_aug)
-        fu_control[1:pI_u_max, 1:m] = -eye(pI_u_max)
-        fu_control[pI_u_max+1:end, 1:m] = eye(pI_u_min)
-        fu_state = zeros(pI_x,m_aug)
-        fu = zeros(p,m_aug)
-    else
-        fu_control = zeros(pI_u,m)
-        fu_control[1:pI_u_max,:] = -eye(pI_u_max)
-        fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
-        fu_state = zeros(pI_x,m)
-        fu = zeros(p,m)
+    fu_control = zeros(pI_u,m)
+    fu_control[1:pI_u_max,:] = -eye(pI_u_max)
+    fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
+    fu_state = zeros(pI_x,m)
+    fu = zeros(p,m)
 
-        fu_infeasible = eye(n)
-        fx_infeasible = zeros(n,n)
-    end
+    fu_infeasible = eye(n)
+    fx_infeasible = zeros(n,n)
 
     fx_N = eye(n)  # Jacobian of final state
 
@@ -699,7 +649,8 @@ Infeasible start solution is run through standard constrained solve to enforce d
 """
 function feasible_traj(results::ConstrainedResults,solver::Solver)
     #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
-    return solve_al(solver,results.U[1:solver.model.m,:],prevResults=results)
+    solver.opts.infeasible = false
+    return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
 end
 
 """
