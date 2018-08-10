@@ -56,6 +56,7 @@ gains `res.K` and `res.d` to the difference between states
 Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
+    infeasible = solver.model.m != size(res.U,1)
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
@@ -65,7 +66,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
         solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
 
-        if solver.opts.infeasible
+        if infeasible
             X_[:,k] .+= U_[solver.model.m+1:end,k-1]
         end
 
