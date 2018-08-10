@@ -5,131 +5,33 @@ $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
-function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2})::SolverResults
+function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
+    solver.opts.infeasible = true
+
+    # If initialize zero controls if none are passed in
+    if isempty(U0)
+        U0 = zeros(solver.m,solver.N-1)
+    end
+
+    # Convert to a constrained problem
     if isa(solver.obj, UnconstrainedObjective)
         obj_c = ConstrainedObjective(solver.obj)
         solver = Solver(solver.model, obj_c, dt=solver.dt, opts=solver.opts)
     end
-    solve(solver,X0,U0)
+
+    _solve(solver,U0,X0,prevResults=prevResults)
 end
 
-function solve(solver::Solver,U0::Array{Float64,2})::SolverResults
-    if isa(solver.obj, UnconstrainedObjective)
-        solve_unconstrained(solver, U0)
-    elseif isa(solver.obj, ConstrainedObjective)
-        solve_al(solver,U0)
-    end
+function solve(solver::Solver,U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
+    _solve(solver,U0, prevResults=prevResults)
 end
 
 function solve(solver::Solver)::SolverResults
     # Generate random control sequence
-    U = rand(solver.model.m, solver.N-1)
-    solve(solver,U)
+    U0 = rand(solver.model.m, solver.N-1)
+    solve(solver,U0)
 end
 
-
-"""
-$(SIGNATURES)
-Solve an unconstrained optimization problem specified by `solver`
-"""
-function solve_unconstrained(solver::Solver,U0::Array{Float64,2})::SolverResults
-    N = solver.N; n = solver.model.n; m = solver.model.m
-
-    if solver.obj isa UnconstrainedObjective
-        X = zeros(n,N)
-        U = copy(U0)
-        X_ = similar(X)
-        U_ = similar(U)
-        K = zeros(m,n,N-1)
-        d = zeros(m,N-1)
-        # results = UnconstrainedResults(X,U,K,d,X_,U_)
-        results = UnconstrainedResults(n,m,N)
-    elseif solver.obj isa ConstrainedObjective
-
-    end
-
-    # Unpack results for convenience
-    X = results.X # state trajectory
-    U = results.U # control trajectory
-    X_ = results.X_ # updated state trajectory
-    U_ = results.U_ # updated control trajectory
-
-
-    if solver.opts.cache
-        # Initialize cache and store initial trajectories and cost
-        iter = 1 # counter for total number of iLQR iterations
-        results_cache = ResultsCache(solver,solver.opts.iterations+1) #TODO preallocate smaller arrays
-        add_iter!(results_cache, results, cost(solver, X, U))
-        iter += 1
-    end
-
-    # initial roll-out
-    X[:,1] = solver.obj.x0
-    rollout!(results, solver)
-    J_prev = cost(solver, X, U)
-    if solver.opts.verbose
-        println("Initial Cost: $J_prev\n")
-    end
-
-    for i = 1:solver.opts.iterations
-        if solver.opts.verbose
-            println("*** Iteration: $i ***")
-        end
-
-        t1 = time_ns() # time flag for iLQR inner loop start
-        # calc_jacobians!(results,solver)
-        if solver.opts.square_root
-            v1, v2 = backwards_sqrt(results,solver)
-        else
-            v1, v2 = backwardpass!(results,solver)
-        end
-
-        J = forwardpass!(results, solver, v1, v2)
-
-        X .= X_
-        U .= U_
-
-        t2 = time_ns() # time flag of iLQR inner loop end
-
-        if solver.opts.cache
-            # Store current results and performance parameters
-            time = (t2-t1)/(1.0e9)
-            add_iter!(results_cache, results, J, time, iter)
-            iter += 1
-        end
-
-        if abs(J-J_prev) < solver.opts.eps
-            if solver.opts.verbose
-                print_info("-----SOLVED-----")
-                print_info("eps criteria met at iteration: $i")
-            end
-            break
-        end
-        J_prev = copy(J)
-    end
-
-    if solver.opts.cache
-        # Store final results
-        results_cache.termination_index = iter-1
-        results_cache.X = results.X
-        results_cache.U = results.U
-    end
-
-    if solver.opts.cache
-        return results_cache
-    else
-        return results
-    end
-end
-
-"""
-$(SIGNATURES)
-
-Solve constrained optimization problem using an initial control trajectory
-"""
-function solve_al(solver::Solver,U0::Array{Float64,2};prevResults::ConstrainedResults=ConstrainedResults(0,0,0,0,0))
-    solve_al(solver,zeros(solver.model.n,solver.N),U0,infeasible=false,prevResults=prevResults)
-end
 
 """
 $(SIGNATURES)
@@ -137,13 +39,22 @@ $(SIGNATURES)
 Solve constrained optimization problem specified by `solver`
 """
 # QUESTION: Should the infeasible tag be able to be changed? What happens if we turn it off with an X0?
-function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infeasible::Bool=true,prevResults::ConstrainedResults=ConstrainedResults(0,0,0,0,0))::SolverResults
+function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::SolverResults
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states
     m = solver.model.m # number of control inputs
 
+    # Use infeasible start if an initial trajectory was passed in
+    if isempty(X0)
+        infeasible = false
+    else
+        infeasible = true
+    end
+
+    # Initialization
     if solver.obj isa UnconstrainedObjective
+        print_debug("Solving Unconstrained Problem...")
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
 
@@ -152,9 +63,14 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         pI = solver.obj.pI # number of inequality constraints
 
         if infeasible
+            print_debug("Solving Constrained Problem with Infeasible Start...")
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
+            solver.opts.infeasible = true
+        else
+            print_debug("Solving Constrained Problem...")
+            solver.opts.infeasible = false
         end
 
         ## Initialize results
@@ -166,7 +82,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
             results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
         else
             results.U .= U0 # initialize control to control input sequence
-            if size(prevResults.X,1) != 0 # bootstrap previous constraint solution
+            if !isempty(prevResults) # bootstrap previous constraint solution
                 println("Bootstrap")
                 # println(size(results.C))
                 # println(size(prevResults.C))
@@ -189,7 +105,7 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         # c_fun, constraint_jacobian = generate_constraint_functions(solver.obj, infeasible=infeasible)
 
         # Evalute constraints for new trajectories
-        update_constraints!(results,c_fun,pI,results.X,results.U)
+        update_constraints!(results,solver.c_fun,pI,results.X,results.U)
     end
 
     # Unpack results for convenience
@@ -209,39 +125,35 @@ function solve_al(solver::Solver,X0::Array{Float64,2},U0::Array{Float64,2};infea
         # Initialize cache and store initial trajectories and cost
         iter = 1 # counter for total number of iLQR iterations
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
-        add_iter!(results_cache, results, cost(solver, X, U, infeasible=infeasible))
+        add_iter!(results_cache, results, cost(solver, X, U))
         iter += 1
     end
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
         # J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
-        J_prev = cost(solver, results, X, U, infeasible)
+        J_prev = cost(solver, results, X, U)
 
-        if solver.opts.verbose
-            println("Cost ($k): $J_prev\n")
-        end
+        print_info("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
-            if solver.opts.verbose
-                println("--Iteration: $k-($i)--")
-            end
+            print_info("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
             end
 
             # Backward pass
-            calc_jacobians(results, solver, infeasible)
+            calc_jacobians(results, solver)
             if solver.opts.square_root
-                v1, v2 = backwards_sqrt(results, solver, constraint_jacobian=constraint_jacobian, infeasible=infeasible) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                v1, v2 = backwards_sqrt(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 # v1, v2 = backwardpass!(results, solver; kwargs_bp...) # standard backward pass [see insert algorithm]
-                v1, v2 = backwardpass!(results, solver, infeasible)
+                v1, v2 = backwardpass!(results, solver)
             end
 
             # Forward pass
-            J = forwardpass!(results, solver, v1, v2, infeasible)
+            J = forwardpass!(results, solver, v1, v2)
 
             if solver.opts.cache
                 t2 = time_ns() # time flag of iLQR inner loop end
