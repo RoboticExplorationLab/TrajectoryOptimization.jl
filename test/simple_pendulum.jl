@@ -118,9 +118,9 @@ U_infeasible = ones(solver.model.m,solver.N-1)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = ConstrainedResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
+results_infeasible = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
 results_infeasible.U[:,:] = [U_infeasible;ui]
-rollout!(results_infeasible,solver;infeasible=true)
+TrajectoryOptimization.rollout!(results_infeasible,solver;infeasible=true)
 
 @test all(ui[1,:] .== ui[1,1]) # special case for state trajectory of all ones, control 1 should all be same
 @test all(ui[2,:] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
