@@ -30,7 +30,7 @@ struct UnconstrainedResults <: SolverIterResults
     fx::Array{Float64,3} # State jacobian (n,n,N)
     fu::Array{Float64,3} # Control jacobian (n,m,N-1)
 
-    function UnconstrainedResults(X,U,K,d,X_,U_,fx,fu)
+    function UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
         new(X,U,K,d,X_,U_,S,s,fx,fu)
     end
 end
@@ -55,7 +55,7 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     s = zeros(n,N)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
-=    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
+    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
 end
 
 function copy(r::UnconstrainedResults)
@@ -96,8 +96,8 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,d,X_,U_,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    function ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,d,X_,U_,S,s,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
 
@@ -147,14 +147,14 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu = zeros(p,m,N-1)
     cxn = zeros(p_N,n)
 
-    ConstrainedResults(X,U,K,d,X_,U_,fx,fu,
+    ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,
         C,Iμ,LAMBDA,MU,
         C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.fx),copy(r.fu),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
 end
