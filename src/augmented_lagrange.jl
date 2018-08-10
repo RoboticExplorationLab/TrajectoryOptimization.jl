@@ -34,12 +34,13 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
 function rollout!(res::SolverResults,solver::Solver)
+    infeasible = solver.model.m != size(res.U,1)
     X = res.X; U = res.U
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
-        if solver.opts.infeasible
+        if infeasible
             X[:,k+1] .+= U[solver.model.m+1:end,k]
         end
     end
@@ -111,7 +112,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::Float64)
 
     # Pull out values from results
     X = res.X
@@ -120,16 +121,14 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     d = res.d
     X_ = res.X_
     U_ = res.U_
-    C = res.C
-    Iμ = res.Iμ
-    LAMBDA = res.LAMBDA
-    MU = res.MU
+    # C = res.C
+    # Iμ = res.Iμ
+    # LAMBDA = res.LAMBDA
+    # MU = res.MU
 
     # Compute original cost
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
     J_prev = cost(solver, res, X, U)
-
-    pI = solver.obj.pI
 
     J = Inf
     alpha = 1.0
@@ -138,10 +137,22 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
     z = 0.
 
     while z ≤ solver.opts.c1 || z > solver.opts.c2
-        rollout!(res,solver,alpha)
+        flag = rollout!(res,solver,alpha)
+
+        # Check if rollout completed
+        if ~flag
+            # Reduce step size if rollout returns non-finite values (NaN or Inf)
+            if solver.opts.verbose
+                println("Non-finite values in rollout")
+            end
+            alpha /= 2
+            continue
+        end
 
         # Calcuate cost
-        update_constraints!(res,solver.c_fun,pI,X_,U_)
+        if res isa ConstrainedResults
+            update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
+        end
         J = cost(solver, res, X_, U_)
 
         dV = alpha*v1 + (alpha^2)*v2/2.
@@ -174,82 +185,82 @@ function forwardpass!(res::ConstrainedResults, solver::Solver, v1::Float64, v2::
 
 end
 
-"""
-$(SIGNATURES)
-Solve the dynamic programming problem, starting from the terminal time step
-
-Computes the gain matrices K and d by applying the principle of optimality at
-each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
-function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
-"""
-function backwardpass!(res::ConstrainedResults, solver::Solver)
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
-    Q = solver.obj.Q
-
-    R = getR(solver)
-
-    xf = solver.obj.xf
-    Qf = solver.obj.Qf
-
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-
-    # Cx, Cu = constraint_jacobian(res.X[:,N])
-    Cx = res.Cx_N
-    S = Qf + Cx'*res.IμN*Cx
-    s = Qf*(X[:,N] - xf) + + Cx'*res.IμN*res.CN + Cx'*res.λN
-    v1 = 0.
-    v2 = 0.
-
-    mu = 0.
-    k = N-1
-    while k >= 1
-        lx = Q*(X[:,k] - xf)
-        lu = R*(U[:,k])
-        lxx = Q
-        luu = R
-
-        # fx, fu = solver.F(X[:,k], U[1:m,k])
-        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
-
-        Qx = lx + fx'*s
-        Qu = lu + fu'*s
-        Qxx = lxx + fx'*S*fx
-        Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
-        Qux = fu'*(S + mu*eye(n))*fx
-
-        # regularization
-        if ~isposdef(Quu)
-            mu = mu + solver.opts.mu_regularization;
-            k = N-1
-            if solver.opts.verbose
-                println("regularized")
-            end
-        end
-
-        # Constraints
-        # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
-        Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-        Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
-        Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
-        Qxx += Cx'*Iμ[:,:,k]*Cx
-        Quu += Cu'*Iμ[:,:,k]*Cu
-        Qux += Cu'*Iμ[:,:,k]*Cx
-        K[:,:,k] = Quu\Qux
-        d[:,k] = Quu\Qu
-        s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
-        S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
-
-        # terms for line search
-        v1 += float(d[:,k]'*Qu)[1]
-        v2 += float(d[:,k]'*Quu*d[:,k])
-
-        k = k - 1;
-    end
-    return v1, v2
-end
+# """
+# $(SIGNATURES)
+# Solve the dynamic programming problem, starting from the terminal time step
+#
+# Computes the gain matrices K and d by applying the principle of optimality at
+# each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
+# function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
+# """
+# function backwardpass!(res::ConstrainedResults, solver::Solver)
+#     N = solver.N
+#     n = solver.model.n
+#     m = solver.model.m
+#     Q = solver.obj.Q
+#
+#     R = getR(solver)
+#
+#     xf = solver.obj.xf
+#     Qf = solver.obj.Qf
+#
+#     # pull out values from results
+#     X = res.X; U = res.U; K = res.K; d = res.d; C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+#
+#     # Cx, Cu = constraint_jacobian(res.X[:,N])
+#     Cx = res.Cx_N
+#     S = Qf + Cx'*res.IμN*Cx
+#     s = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+#     v1 = 0.
+#     v2 = 0.
+#
+#     mu = 0.
+#     k = N-1
+#     while k >= 1
+#         lx = Q*(X[:,k] - xf)
+#         lu = R*(U[:,k])
+#         lxx = Q
+#         luu = R
+#
+#         # fx, fu = solver.F(X[:,k], U[1:m,k])
+#         fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+#
+#         Qx = lx + fx'*s
+#         Qu = lu + fu'*s
+#         Qxx = lxx + fx'*S*fx
+#         Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
+#         Qux = fu'*(S + mu*eye(n))*fx
+#
+#         # regularization
+#         if ~isposdef(Quu)
+#             mu = mu + solver.opts.mu_regularization;
+#             k = N-1
+#             if solver.opts.verbose
+#                 println("regularized")
+#             end
+#         end
+#
+#         # Constraints
+#         # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
+#         Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+#         Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+#         Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
+#         Qxx += Cx'*Iμ[:,:,k]*Cx
+#         Quu += Cu'*Iμ[:,:,k]*Cu
+#         Qux += Cu'*Iμ[:,:,k]*Cx
+#         K[:,:,k] = Quu\Qux
+#         d[:,k] = Quu\Qu
+#         s = Qx - Qux'd[:,k] #(Qx' - Qu'*K[:,:,k] + d[:,k]'*Quu*K[:,:,k] - d[:,k]'*Qux)'
+#         S = Qxx - Qux'K[:,:,k] #Qxx + K[:,:,k]'*Quu*K[:,:,k] - K[:,:,k]'*Qux - Qux'*K[:,:,k]
+#
+#         # terms for line search
+#         v1 += float(d[:,k]'*Qu)[1]
+#         v2 += float(d[:,k]'*Quu*d[:,k])
+#
+#         k = k - 1;
+#     end
+#     return v1, v2
+# end
 
 """
 $(SIGNATURES)
