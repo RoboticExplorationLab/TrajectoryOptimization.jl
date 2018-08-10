@@ -1,20 +1,18 @@
 import Base.println
 
-################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Methods for settings and solving iLQR problems
-
-    METHODS
-        solve(solver, X0, U0): Call infeasible solver.
-        solve(solver, X0, []): Call infeasible solver and set controls to zeros
-        solve(solver, U0): Solve iLQR problem with initial guess for controls
-        solve(solver): Solve iLQR problem with random initial guess for controls
-        _solve: lower-level method for setting and solving iLQR problem
-
-        outer_loop_update: Update parameters on major iterations
-"""
-################################################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Methods for settings and solving iLQR problems
+#
+#     METHODS
+#         solve(solver, X0, U0): Call infeasible solver.
+#         solve(solver, X0, []): Call infeasible solver and set controls to zeros
+#         solve(solver, U0): Solve iLQR problem with initial guess for controls
+#         solve(solver): Solve iLQR problem with random initial guess for controls
+#         _solve: lower-level method for setting and solving iLQR problem
+#
+#         outer_loop_update: Update parameters on major iterations
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 """

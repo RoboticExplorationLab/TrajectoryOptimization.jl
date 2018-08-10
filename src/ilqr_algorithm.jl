@@ -1,14 +1,13 @@
-##################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Forward and Backwards passes for iLQR algorithm
-
-    backwardpass!: iLQR backward pass
-    backwards_sqrt: iLQR backward pass with Cholesky Factorization of Cost-to-Go
-    chol_minus: Calculate sqrt(A-B)
-    forwardpass!: iLQR forward pass
-"""
-##################################################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Forward and Backwards passes for iLQR algorithm
+#
+#     backwardpass!: iLQR backward pass
+#     backwards_sqrt: iLQR backward pass with Cholesky Factorization of
+#        Cost-to-Go
+#     chol_minus: Calculate sqrt(A-B)
+#     forwardpass!: iLQR forward pass
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 """

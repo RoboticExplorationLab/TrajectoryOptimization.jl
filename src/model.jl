@@ -1,25 +1,21 @@
-
-################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Model and Objective Classes
-
-    TYPES                                             Tree
-        Model                                       --------
-        Objective                                     Model
-        UnconstrainedObjective
-        ConstrainedObjective                        Objective
-                                                    ↙       ↘
-                                UnconstrainedObjective     ConstrainedObjective
-
-
-    METHODS
-        update_objective: Update ConstrainedObjective values, creating a new
-            Objective.
-        _validate_bounds: Check bounds on state and control bound inequalities
-"""
-################################################################################
-
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Model and Objective Classes
+#
+#     TYPES                                             Tree
+#         Model                                       --------
+#         Objective                                     Model
+#         UnconstrainedObjective
+#         ConstrainedObjective                        Objective
+#                                                     ↙       ↘
+#                                 UnconstrainedObjective     ConstrainedObjective
+#
+#
+#     METHODS
+#         update_objective: Update ConstrainedObjective values, creating a new
+#             Objective.
+#         _validate_bounds: Check bounds on state and control bound inequalities
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
 $(TYPEDEF)

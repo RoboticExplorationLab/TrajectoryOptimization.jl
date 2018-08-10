@@ -1,7 +1,7 @@
 using Plots
 
-function println(level::Symbol, msg::String)
-    if level_priorities[level] ≥ level_priorities[debug_level]
+function println(level::Symbol, msg::String)::Void
+    if level_priorities[level] ≥ level_priorities[debug_level::Symbol]
         println(msg)
     end
 end

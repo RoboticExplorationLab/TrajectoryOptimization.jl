@@ -1,20 +1,18 @@
 include("solver_options.jl")
 import Base: copy, length, size
 
-################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Solver type and related methods
-
-    TYPES
-        Solver
-
-    METHODS
-        is_inplace_dynamics: Checks if dynamics in Model are in-place
-        wrap_inplace: Makes non-inplace dynamics look in-place
-        getR: Return the quadratic control state cost (augmented if necessary)
-"""
-################################################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Solver type and related methods
+#
+#     TYPES
+#         Solver
+#
+#     METHODS
+#         is_inplace_dynamics: Checks if dynamics in Model are in-place
+#         wrap_inplace: Makes non-inplace dynamics look in-place
+#         getR: Return the quadratic control state cost (augmented if necessary)
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
 $(TYPEDEF)

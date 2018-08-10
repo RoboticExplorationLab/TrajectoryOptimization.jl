@@ -4,35 +4,33 @@ using Plots
 using Base.Test
 using BenchmarkTools
 
-##################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Important methods used by the forward and backward iLQR passes
-
-    GENERAL METHODS
-        rollout!: Compute state trajectory X given controls U
-        cost: Compute the cost
-        calc_jacobians: Compute jacobians
-    CONSTRAINTS:
-        update_constraints!: Update constraint values and handle activation of
-            inequality constraints
-        generate_constraint_functions: Given a ConstrainedObjective, generate
-            the constraint function and its jacobians
-        max_violation: Compute the maximum constraint violation
-    INFEASIBLE START:
-        infeasible_controls: Compute the augmented (infeasible) controls required
-            to meet the specified trajectory
-        line_trajectory: Generate a linearly interpolated state trajectory between
-            start and end
-        feasible_traj: Finish an infeasible start solve by removing the augmented
-            controls
-"""
-##################################################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Important methods used by the forward and backward iLQR passes
+#
+#     GENERAL METHODS
+#         rollout!: Compute state trajectory X given controls U
+#         cost: Compute the cost
+#         calc_jacobians: Compute jacobians
+#     CONSTRAINTS:
+#         update_constraints!: Update constraint values and handle activation of
+#             inequality constraints
+#         generate_constraint_functions: Given a ConstrainedObjective, generate
+#             the constraint function and its jacobians
+#         max_violation: Compute the maximum constraint violation
+#     INFEASIBLE START:
+#         infeasible_controls: Compute the augmented (infeasible) controls
+#             required to meet the specified trajectory
+#         line_trajectory: Generate a linearly interpolated state trajectory
+#             between start and end
+#         feasible_traj: Finish an infeasible start solve by removing the
+#             augmented controls
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 
 ########################################
-"""         GENERAL METHODS          """
+###         GENERAL METHODS          ###
 ########################################
 
 """
@@ -152,7 +150,7 @@ end
 
 
 ########################################
-""" METHODS FOR CONSTRAINED PROBLEMS """
+### METHODS FOR CONSTRAINED PROBLEMS ###
 ########################################
 
 """
@@ -325,7 +323,7 @@ end
 
 
 ####################################
-""" METHODS FOR INFEASIBLE START """
+### METHODS FOR INFEASIBLE START ###
 ####################################
 
 """

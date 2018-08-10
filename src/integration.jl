@@ -1,16 +1,14 @@
-################################################################################
-"""
-FILE CONTENTS:
-    SUMMARY: Integration schemes
-
-    INTEGRATION METHODS
-        midpoint: midpoint or trapezoidal integration
-        rk4: Runge-Kutta 4
-        rk3: Runge-Kutta 3
-    OTHER METHODS
-        f_augmented!: Create function with augmented state and control input
-"""
-################################################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILE CONTENTS:
+#     SUMMARY: Integration schemes
+#
+#     INTEGRATION METHODS
+#         midpoint: midpoint or trapezoidal integration
+#         rk4: Runge-Kutta 4
+#         rk3: Runge-Kutta 3
+#     OTHER METHODS
+#         f_augmented!: Create function with augmented state and control input
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
 $(SIGNATURES)
