@@ -2,7 +2,7 @@
 
 ![Build Status](https://travis-ci.org/RoboticExplorationLab/TrajectoryOptimization.jl.svg?branch=master)
 
-A package for solving constrained and unconstrained trajectory optimization problems in Julia. The package currently uses only iterative LQR (iLQR) techniques, a derivative of Differential Dynamics Programming (DDP).
+A package for solving constrained and unconstrained trajectory optimization problems in Julia. The package currently uses only iterative LQR (iLQR) techniques, a derivative of Differential Dynamic Programming (DDP).
 
 The package currently has the following capabilities:
 * Solve trajectory optimization problems with quadratic costs and nonlinear equality or inequality constraints (both stage and terminal)
