@@ -49,10 +49,11 @@ struct UnconstrainedResults <: SolverIterResults
     S::Array{Float64,3} # Cost-to-go hessian (n,n)
     s::Array{Float64,2} # Cost-to-go gradient (n,1)
     fx::Array{Float64,3} # State jacobian (n,n,N)
-    fu::Array{Float64,3} # Control jacobian (n,m,N-1)
+    fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
+    fu_::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
 
-    function UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
-        new(X,U,K,d,X_,U_,S,s,fx,fu)
+    function UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
+        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
     end
 end
 
@@ -67,20 +68,21 @@ Construct results from sizes
 """
 function UnconstrainedResults(n::Int,m::Int,N::Int)
     X = zeros(n,N)
-    U = zeros(m,N-1)
-    K = zeros(m,n,N-1)
-    d = zeros(m,N-1)
+    U = zeros(m,N)
+    K = zeros(m,n,N)
+    d = zeros(m,N)
     X_ = zeros(n,N)
-    U_ = zeros(m,N-1)
+    U_ = zeros(m,N)
     S = zeros(n,n,N)
     s = zeros(n,N)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
-    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu)
+    fu_ = zeros(n,m,N-1) # gradient with respect to u_{k+1}
+    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_))
 end
 
 """
@@ -101,6 +103,7 @@ struct ConstrainedResults <: SolverIterResults
 
     fx::Array{Float64,3}
     fu::Array{Float64,3}
+    fu_::Array{Float64,3}
 
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
@@ -117,8 +120,8 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,d,X_,U_,S,s,fx,fu,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    function ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
 
@@ -141,16 +144,17 @@ Construct results from sizes
 """
 function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X = zeros(n,N)
-    U = zeros(m,N-1)
-    K = zeros(m,n,N-1)
-    d = zeros(m,N-1)
+    U = zeros(m,N)
+    K = zeros(m,n,N)
+    d = zeros(m,N)
     X_ = zeros(n,N)
-    U_ = zeros(m,N-1)
+    U_ = zeros(m,N)
     S = zeros(n,n,N)
     s = zeros(n,N)
 
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
+    fu_ = zeros(n,m,N-1)
 
     # Stage Constraints
     C = zeros(p,N-1)
@@ -168,14 +172,14 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu = zeros(p,m,N-1)
     cxn = zeros(p_N,n)
 
-    ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,
+    ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,
         C,Iμ,LAMBDA,MU,
         C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
 end
@@ -210,13 +214,13 @@ end
 
 function ResultsCache(results::SolverIterResults,n_allocation::Int64)
     m,n,N = size(results.K)
-    N += 1 # K is (m,n,N-1)
+    #N += 1 # K is (m,n,N-1) <- changed K to be (m,n,N)
     ResultsCache(n,m,N,n_allocation)
 end
 
 function ResultsCache(n::Int, m::Int, N::Int, n_allocation::Int64)
     X = zeros(n,N)
-    U = zeros(m, N-1)
+    U = zeros(m, N)
     result = Array{SolverResults}(n_allocation)
     cost = zeros(n_allocation)
     time = zeros(n_allocation)

@@ -5,8 +5,8 @@ m = rand(1:10)
 N = rand(10:10:100)
 r = TrajectoryOptimization.UnconstrainedResults(n,m,N)
 @test size(r.X) == (n,N)
-@test size(r.U) == (m,N-1)
-@test size(r.K) == (m,n,N-1)
+@test size(r.U) == (m,N)
+@test size(r.K) == (m,n,N)
 
 # Results Cache (pendulum)
 n,m = 2,1
@@ -16,13 +16,13 @@ N = solver.N
 N_iter = rand(10:10:100)
 rc = TrajectoryOptimization.ResultsCache(solver,N_iter)
 @test size(rc.X) == (n,N)
-@test size(rc.U) == (m,N-1)
+@test size(rc.U) == (m,N)
 @test size(rc.cost) == (N_iter,)
 @test_throws MethodError c = TrajectoryOptimization.ResultsCache(solver,float(N_iter)) # Error on float size
 
 rc = TrajectoryOptimization.ResultsCache(n,m,N,N_iter)
 @test size(rc.X) == (n,N)
-@test size(rc.U) == (m,N-1)
+@test size(rc.U) == (m,N)
 @test size(rc.cost) == (N_iter,)
 
 # Merge caches

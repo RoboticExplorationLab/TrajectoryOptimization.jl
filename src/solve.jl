@@ -43,7 +43,7 @@ end
 
 function solve(solver::Solver)::SolverResults
     # Generate random control sequence
-    U0 = rand(solver.model.m, solver.N-1)
+    U0 = rand(solver.model.m, solver.N)
     solve(solver,U0)
 end
 
@@ -97,7 +97,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         else
             results.U .= U0 # initialize control to control input sequence
             if !isempty(prevResults) # bootstrap previous constraint solution
-                println("Bootstrap")
+                # println("Bootstrap")
                 # println(size(results.C))
                 # println(size(prevResults.C))
                 # results.C .= prevResults.C[1:p,:]
@@ -107,8 +107,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
                 # results.CN .= 1000.*prevResults.CN
                 # results.IμN .= 1000.*prevResults.IμN
-                results.λN .= 1000.*prevResults.λN
-                results.μN .= 1000.*prevResults.μN
+                results.λN .= prevResults.λN
+                results.μN .= prevResults.μN
             end
         end
 

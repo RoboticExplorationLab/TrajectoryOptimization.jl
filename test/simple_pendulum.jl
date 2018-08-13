@@ -20,7 +20,7 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 ### UNCONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
-U = zeros(solver.model.m, solver.N-1)
+U = zeros(solver.model.m, solver.N)
 # @enter TrajectoryOptimization.solve(solver,U)
 results = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
@@ -153,7 +153,7 @@ rollout!(tmp2,solver)
 @test all(X_interp[2,2:end-1] .<= max(solver.obj.x0[2],solver.obj.xf[2]))
 
 # test that additional augmented controls can achieve an infeasible state trajectory
-U_infeasible = ones(solver.model.m,solver.N-1)
+U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
@@ -162,8 +162,8 @@ results_infeasible.U[:,:] = [U_infeasible;ui]
 # solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 
-@test all(ui[1,:] .== ui[1,1]) # special case for state trajectory of all ones, control 1 should all be same
-@test all(ui[2,:] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
+@test all(ui[1,1:end-1] .== ui[1,1]) # special case for state trajectory of all ones, control 1 should all be same
+@test all(ui[2,1:end-1] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
 @test all(results_infeasible.X .== X_infeasible)
 # rolled out trajectory should be equivalent to infeasible trajectory after applying augmented controls
 

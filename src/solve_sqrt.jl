@@ -30,8 +30,6 @@ function backwards_sqrt!(res::SolverResults,solver::Solver;
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
-
-
     Uq = chol(Q)
     Ur = chol(R)
 

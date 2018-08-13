@@ -112,10 +112,10 @@ x_min6 = [-Inf;-Inf]
 x_max6 = [Inf; Inf]
 obj6 = ConstrainedObjective(obj_uncon, u_min=u_min6, u_max=u_max6, x_min=x_min6, x_max=x_max6)
 solver6! = Solver(model!,obj6,dt=0.1,opts=opts)
-U6 = ones(m,solver6!.N-1)
+U6 = ones(m,solver6!.N)
 #X06 = ones(n,solver6!.N)
 X_interp = line_trajectory(solver6!.obj.x0,solver6!.obj.xf,solver6!.N)
-@time results6 = solve_al(solver6!,X_interp,U6)
+@time results6 = solve(solver6!,X_interp,U6)
 plot(results6.X',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results6.U',title="Pendulum (6. Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
 
