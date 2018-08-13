@@ -96,16 +96,55 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test max_c < 1e-2
 
 ### Infeasible Start
-opts.cache = true
+opts = TrajectoryOptimization.SolverOptions()
+opts.square_root = false
 opts.verbose = false
-obj_c2 = TrajectoryOptimization.update_objective(obj_c, u_min=-Inf, u_max=1, x_min=[-5;-5], x_max=[10;10])
-solver = TrajectoryOptimization.Solver(model!, obj_c2, dt=0.1, opts=opts)
-X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
+opts.cache=true
+opts.c1=1e-4
+opts.c2=2.0
+opts.mu_al_update = 100.0
+opts.infeasible_regularization = 1.0
+opts.eps_constraint = 1e-3
+opts.eps = 1e-5
+opts.iterations_outerloop = 250
+opts.iterations = 1000
+
+u_min = -3
+u_max = 3
+x_min = [-10;-10]
+x_max = [10; 10]
+obj_uncon = TrajectoryOptimization.Dynamics.pendulum[2]
+obj_uncon.R[:] = [1e-2] # control needs to be properly regularized for infeasible start to produce a good warm-start control output
+
+obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
+X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
-@test abs(minimum(results_inf.U) + 2) > 0.5 # Make sure lower bound is unbounded
+
+# test that control output from infeasible start is a good warm start (ie, that infeasible control output is "near" dynamically constrained control output)
+idx = find(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
+
+# plot(results_inf.result[end].X')
+# plot(results_inf.result[idx[1]].U',color="green")
+# plot!(results_inf.result[end].U',color="red")
+
+@test norm(results_inf.result[idx[1]].U-results_inf.result[end].U) < 0.5 # confirm that infeasible and final feasible controls are "near"
+
+tmp = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
+tmp.U[:,:] = results_inf.result[idx[1]].U # store infeasible control output
+tmp2 = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
+tmp2.U[:,:] = results_inf.result[end].U # store
+
+rollout!(tmp,solver)
+rollout!(tmp2,solver)
+
+# plot(tmp.X')
+# plot!(tmp2.X')
+
+@test norm(tmp.X[:]-tmp2.X[:]) < 0.5 # test that infeasible state trajectory rollout is "near" dynamically constrained state trajectory rollout
 
 # test linear interpolation for state trajectory
 @test norm(X_interp[:,1] - solver.obj.x0) < 1e-8
@@ -127,7 +166,6 @@ TrajectoryOptimization.rollout!(results_infeasible,solver)
 @test all(ui[2,:] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
 @test all(results_infeasible.X .== X_infeasible)
 # rolled out trajectory should be equivalent to infeasible trajectory after applying augmented controls
-
 
 ### OTHER TESTS ###
 # Test undefined integration
