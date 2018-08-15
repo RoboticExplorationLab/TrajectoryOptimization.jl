@@ -231,9 +231,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             return feasible_traj(results,solver)
         end
     else
+        if solver.opts.verbose
+            println("***Solve Complete***")
+        end
         if solver.opts.cache
             return results_cache
         else
+
+
             return results
         end
     end
