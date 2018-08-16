@@ -277,9 +277,11 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
     end
 
     if solver.opts.verbose
-        max_c = max_violation(res)
         println("New cost: $J")
-        println("- Max constraint violation: $max_c")
+        if res isa ConstrainedResults
+            max_c = max_violation(res)
+            println("- Max constraint violation: $max_c")
+        end
         println("- Expected improvement: $(dV[1])")
         println("- Actual improvement: $(J_prev-J)")
         println("- (z = $z)\n")

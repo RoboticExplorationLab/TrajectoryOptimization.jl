@@ -10,9 +10,9 @@ mutable struct SolverOptions
     "Display statistics at each iteration TODO: make this a symbol specifying level of output"
     verbose::Bool
 
-    "lower bound for forward pass line search, 0 < c1 < 1"
+    "lower bound for forward pass line search, 0 < c1 < c2"
     c1::Float64
-    "upper bound for forward pass line search, 0 < c1 < c2 < 1"
+    "upper bound for forward pass line search, 0 < c1 < c2 < Inf"
     c2::Float64
 
     "final cost convergence criteria"

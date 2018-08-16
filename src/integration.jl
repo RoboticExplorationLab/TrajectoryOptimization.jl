@@ -112,10 +112,37 @@ function rk3(f_aug!::Function)
     end
 end
 
+function rk3_foh(f!::Function, dt::Float64)
+    # Runge-Kutta 3 with first order hold on controls
+    fd!(xdot,x,u1,u2) = begin
+        k1 = k2 = k3 = zeros(x)
+        f!(k1, x, u1);         k1 *= dt;
+        f!(k2, x + k1/2., (u1 + u2)./2); k2 *= dt;
+        f!(k3, x - k1 + 2.*k2, u2); k3 *= dt;
+        copy!(xdot, x + (k1 + 4.*k2 + k3)/6.)
+    end
+end
+
+function rk3_foh(f_aug!::Function)
+    # Runge-Kutta 3 with first order hold on controls
+    fd!(dS,S::Array) = begin
+        dt = S[end]
+        k1 = k2 = k3 = zeros(S)
+        f_aug!(k1,S);         k1 *= dt;
+        f_aug!(k2,S + k1/2.); k2 *= dt;
+        f_aug!(k3,S - k1 + 2.*k2); k3 *= dt;
+        copy!(dS, S + (k1 + 4.*k2 + k3)/6.)
+    end
+end
+
 """
 $(SIGNATURES)
 Converts a separated dynamics function into an augmented dynamics function
 """
 function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)])
+end
+
+function f_augmented_foh!(f!::Function, n::Int, m::Int)
+    f_aug_foh!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)], S[n+m+1:n+m+m])
 end
