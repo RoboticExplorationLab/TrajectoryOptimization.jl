@@ -26,11 +26,14 @@ struct Solver
     obj::Objective       # Objective (cost function and constraints)
     opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
     dt::Float64          # Time step
-    fd::Function         # Discrete in place dynamics function, `fd(ẋ,x,u)`
-    F::Function          # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    fd::Function         # Discrete in place dynamics function, `fd(x?,x,u)`
+    Fd::Function         # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    fc::Function         # Continuous dynamics function (inplace)
+    Fc::Function         # Jacobian of continuous dynamics
     c_fun::Function
     c_jacobian::Function
     N::Int               # Number of time steps
+    integration::Symbol
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
         N = Int(floor(obj.tf/dt));
@@ -53,29 +56,74 @@ struct Solver
         # Generate discrete dynamics equations
         fd! = discretizer(f!, dt)
         f_aug! = f_augmented!(f!, model.n, model.m)
+
         fd_aug! = discretizer(f_aug!)
-        F!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
+        if integration == :rk3_foh
+            fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
+        end
+
+        Fd!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
+        Fc!(J,Sdot,S) = ForwardDiff.jacobian!(J,f_aug!,Sdot,S)
 
         fx = zeros(n,n)
         fu = zeros(n,m)
+        if integration == :rk3_foh
+            fv = zeros(n,m)
+            nm1 = model.n + model.m + model.m + 1
+        else
+            nm1 = model.n + model.m + 1
+        end
 
-        nm1 = model.n + model.m + 1
-        J = zeros(nm1, nm1)
-        S = zeros(nm1)
+        Jd = zeros(nm1, nm1)
+        Sd = zeros(nm1)
 
         # Auto-diff discrete dynamics
-        function Jacobians!(x,u)
+        function Jacobians_Discrete!(x,u,v=zeros(size(u)))
             infeasible = length(u) != m
-            S[1:n] = x
-            S[n+1:end-1] = u[1:m]
-            S[end] = dt
-            Sdot = zeros(S)
-            F_aug = F!(J,Sdot,S)
+            Sd[1:n] = x
+            Sd[n+1:n+m] = u[1:m]
+
+            if integration == :rk3_foh
+                Sd[n+m+1:n+m+m] = v[1:m]
+            end
+
+            Sd[end] = dt
+            Sdot = zeros(Sd)
+            Fd_aug = Fd!(Jd,Sdot,Sd)
+            fx .= Fd_aug[1:model.n,1:model.n]
+            fu .= Fd_aug[1:model.n,model.n+1:model.n+model.m]
+
+            if infeasible
+                return fx, [fu zeros(n,n)] # TODO add foh functionality
+            end
+
+            if integration == :rk3_foh
+                fv .= Fd_aug[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
+                return fx, fu, fv
+            end
+
+            return fx, fu
+
+        end
+
+        # autodifferentiate continuous dynamics #TODO combined these two functions into 1
+        Jc = zeros(model.n+model.m+1,model.n+model.m+1)
+        Sc = zeros(model.n+model.m+1)
+
+        function Jacobians_Continuous!(x,u)
+            infeasible = length(u) != m
+            Sc[1:n] = x
+            Sc[n+1:n+m] = u[1:m]
+            Sc[end] = dt
+            Sdot = zeros(Sc)
+            F_aug = Fc!(Jc,Sdot,Sc)
             fx .= F_aug[1:model.n,1:model.n]
             fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
+
             if infeasible
                 return fx, [fu zeros(n,n)]
             end
+
             return fx, fu
 
         end
@@ -86,7 +134,7 @@ struct Solver
         options = copy(opts)
         options.infeasible = infeasible
 
-        new(model, obj, options, dt, fd!, Jacobians!, c_fun, c_jacob, N)
+        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration)
 
     end
 end

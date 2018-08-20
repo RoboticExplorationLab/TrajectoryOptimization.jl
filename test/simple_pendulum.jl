@@ -138,8 +138,8 @@ tmp.U[:,:] = results_inf.result[idx[1]].U # store infeasible control output
 tmp2 = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
 tmp2.U[:,:] = results_inf.result[end].U # store
 
-rollout!(tmp,solver)
-rollout!(tmp2,solver)
+TrajectoryOptimization.rollout!(tmp,solver)
+TrajectoryOptimization.rollout!(tmp2,solver)
 
 # plot(tmp.X')
 # plot!(tmp2.X')

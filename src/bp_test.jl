@@ -1,19 +1,21 @@
 using TrajectoryOptimization
 
-function backwardpass_foh!(res::SolverIterResults,solver::Solver)
+function backwardpass_foh!(X,U,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m;
     W = solver.obj.Q; Wf = solver.obj.Qf; xf = solver.obj.xf;
-    K = res.K; b = res.b; d = res.d;
-
     dt = solver.dt
-
-    X = res.X
-    U = res.U
-
     R = getR(solver)
+
+    XM = zeros(size(X))
+
+    alpha = zeros(m,n,N)
+    beta = zeros(m,m,N)
+    gamma = zeros(m,N)
 
     S = zeros(n+m,n+m,N)
     s = zeros(n+m,N)
+
+    xm = zeros(n)
 
     # precompute once
     G = zeros(3*n+3*m,3*n+3*m)
@@ -40,22 +42,20 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     S[1:n,1:n,N] = Wf
     s[1:n,N] = Wf*(X[:,N]-xf)
 
+    H = []
     k = N-1
     # Loop backwards
     while k >= 1
 
         # Calculate the L(x,u,y,v)
-        Ac, Bc = solver.Fc(X[:,k],U[:,k]) # Jacobian1(fc,X[:,k],U[:,k])
-        Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1]) #Jacobian1(fd,X[:,k],U[:,k],U[:,k+1])
-
-        Ac, Bc = Jacobian1(fc,X[:,k],U[:,k])
-        Ad, Bd, Cd = Jacobian1(fd,X[:,k],U[:,k],U[:,k+1])
+        Ac, Bc = Jacobian(fc,X[:,k],U[:,k])
+        Ad, Bd, Cd = Jacobian(fd,X[:,k],U[:,k],U[:,k+1])
 
         M = 0.25*[3*eye(n)+dt*Ac Bc*eye(m) eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
-        res.Xm[:,k] .= xm
+        XM[:,k] = xm
         g[1:n,1] = W*(X[:,k] - xf)
         g[n+1:n+m] = R*U[:,k]
         g[n+m+1:n+m+n] = W*(xm - xf)
@@ -126,15 +126,15 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxv = Hxv_ + Sxv_
         Quv = Huv_ + Suv_
 
-        K[:,:,k+1] .= -Qvv\Qxv'
-        b[:,:,k+1] .= -Qvv\Quv'
-        d[:,k+1] .= -Qvv\Qv'
+        alpha[:,:,k+1] = -Qvv\Qxv'
+        beta[:,:,k+1] = -Qvv\Quv'
+        gamma[:,k+1] = -Qvv\Qv'
 
-        Qx_ = Qx + Qv*K[:,:,k+1] + d[:,k+1]'*Qxv' + d[:,k+1]'*Qvv*K[:,:,k+1]
-        Qu_ = Qu + Qv*b[:,:,k+1] + d[:,k+1]'*Quv' + d[:,k+1]'*Qvv*b[:,:,k+1]
-        Qxx_ = Qxx + Qxv*K[:,:,k+1] + K[:,:,k+1]'*Qvv*K[:,:,k+1]
-        Quu_ = Quu + Quv*b[:,:,k+1] + b[:,:,k+1]*Quv' + b[:,:,k+1]'*Qvv*b[:,:,k+1]
-        Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1]
+        Qx_ = Qx + Qv*alpha[:,:,k+1] + gamma[:,k+1]'*Qxv' + gamma[:,k+1]'*Qvv*alpha[:,:,k+1]
+        Qu_ = Qu + Qv*beta[:,:,k+1] + gamma[:,k+1]'*Quv' + gamma[:,k+1]'*Qvv*beta[:,:,k+1]
+        Qxx_ = Qxx + Qxv*alpha[:,:,k+1] + alpha[:,:,k+1]'*Qvv*alpha[:,:,k+1]
+        Quu_ = Quu + Quv*beta[:,:,k+1] + beta[:,:,k+1]*Quv' + beta[:,:,k+1]'*Qvv*beta[:,:,k+1]
+        Qxu_ = Qxu + alpha[:,:,k+1]'*Quv' + Qxv*beta[:,:,k+1] + alpha[:,:,k+1]'*Qvv*beta[:,:,k+1]
 
         # generate (approximate) cost-to-go at timestep k
         s[1:n,k] = Qx_
@@ -146,18 +146,18 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         # if at last time step, optimize over final control
         if k == 1
-            K[:,:,k] .= -Quu_\Qxu_'
-            b[:,:,k] .= zeros(m,m)
-            d[:,k] .= -Quu_\Qu_'
+            alpha[:,:,k] = -Quu_\Qxu_'
+            beta[:,:,k] = zeros(m,m)
+            gamma[:,k] = -Quu_\Qu_'
         end
 
         k = k - 1;
     end
 
-    return nothing#alpha, beta, gamma, XM
+    return alpha, beta, gamma, XM
 end
-#
-function rk3_foh1(f::Function, dt::Float64)
+
+function rk3_foh(f::Function, dt::Float64)
     # Runge-Kutta 3 with first order hold on controls
     fd(x,u1,u2) = begin
         k1 = k2 = k3 = zeros(x)
@@ -167,8 +167,8 @@ function rk3_foh1(f::Function, dt::Float64)
         x + (k1 + 4.*k2 + k3)/6.
     end
 end
-#
-function Jacobian1(f::Function,x::Array{Float64,1},u::Array{Float64,1})
+
+function Jacobian(f::Function,x::Array{Float64,1},u::Array{Float64,1})
     f1 = a -> f(a,u)
     f2 = b -> f(x,b)
     fx = ForwardDiff.jacobian(f1,x)
@@ -176,7 +176,7 @@ function Jacobian1(f::Function,x::Array{Float64,1},u::Array{Float64,1})
     return fx, fu
 end
 
-function Jacobian1(f::Function,x::Array{Float64,1},u1::Array{Float64,1},u2::Array{Float64,1})
+function Jacobian(f::Function,x::Array{Float64,1},u1::Array{Float64,1},u2::Array{Float64,1})
     f1 = a -> f(a,u1,u2)
     f2 = b -> f(x,b,u2)
     f3 = c -> f(x,u1,c)
@@ -185,60 +185,63 @@ function Jacobian1(f::Function,x::Array{Float64,1},u1::Array{Float64,1},u2::Arra
     fu2 = ForwardDiff.jacobian(f3,u2)
     return fx, fu1, fu2
 end
-#
-# function rollout_foh!(res::SolverResults,solver::Solver,alpha::Float64,k1,k2,k3,dyna)
-#     # infeasible = solver.model.m != size(res.U,1)
-#     N = solver.N
-#     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_; K = res.K; d = res.d;
-#     du1 = []
-#     X_[:,1] = solver.obj.x0;
-#     for k = 2:N
-#         delta = X_[:,k-1] - X[:,k-1]
-#         if k == 2
-#             du1 = k1[:,:,1]*delta + alpha*k3[:,1]
-#             U_[:,1] = U[:,1] + du1
-#         end
-#         du2 = k1[:,:,k]*delta + alpha*(k2[:,:,k]*du1 + k3[:,1]) # TODO line search term goes on bias term, I think this is corrent then
-#         U_[:, k] = U[:, k-1] + du2
-#         X[:,k] .= dyna(X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
-#
-#         du1 = du2
-#
-#         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
-#             return false
-#         end
-#     end
-#     return true
-# end
 
+function rollout_foh!(res::SolverResults,solver::Solver,alpha::Float64,k1,k2,k3,dyna)
+    # infeasible = solver.model.m != size(res.U,1)
+    N = solver.N
+    X = res.X; U = res.U; X_ = res.X_; U_ = res.U_; K = res.K; d = res.d;
+    du1 = []
+    X_[:,1] = solver.obj.x0;
+    for k = 2:N
+        delta = X_[:,k-1] - X[:,k-1]
+        if k == 2
+            du1 = k1[:,:,1]*delta + alpha*k3[:,1]
+            U_[:,1] = U[:,1] + du1
+        end
+        du2 = k1[:,:,k]*delta + alpha*(k2[:,:,k]*du1 + k3[:,1]) # TODO line search term goes on bias term, I think this is corrent then
+        U_[:, k] = U[:, k-1] + du2
+        X[:,k] .= dyna(X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
 
-# function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},Xm::Array{Float64,2})
-#     # pull out solver/objective values
-#
-#     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
-#     R = getR(solver)
-#
-#     function l(x,u)
-#         0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
-#     end
-#
-#     J = 0.0
-#     for k = 1:N-1
-#         J += solver.dt/6*(l(X[:,k],U[:,k]) + 4*l(Xm[:,k],(U[:,k] + U[:,k+1])/2) + l(X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
-#     end
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#     return J
-# end
+        du1 = du2
+
+        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
+            return false
+        end
+    end
+    return true
+end
+
+"""
+$(SIGNATURES)
+Compute the unconstrained cost for foh (rk3) # TODO add better description
+"""
+function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},XM)
+    # pull out solver/objective values
+
+    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+    R = getR(solver)
+
+    function l(x,u)
+        0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+    end
+
+    J = 0.0
+    for k = 1:N-1
+        J += solver.dt/6*(l(X[:,k],U[:,k]) + 4*l(XM[:,k],(U[:,k] + U[:,k+1])/2) + l(X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
+    end
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+    return J
+end
 
 dt = 0.1
-fd = rk3_foh1(Dynamics.dubins_dynamics, dt)
+fd = rk3_foh(Dynamics.dubins_dynamics, dt)
 fc = Dynamics.dubins_dynamics
 
 
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cache=false
+opts.cache=true
 opts.c1=1e-4
 opts.c2=2.0
 opts.mu_al_update = 100.0
@@ -251,64 +254,27 @@ opts.iterations = 1000
 obj_uncon = TrajectoryOptimization.Dynamics.dubinscar![2]
 obj_uncon.R[:] = 1e-2*eye(2) # control needs to be properly regularized for infeasible start to produce a good warm-start control output
 solver = TrajectoryOptimization.Solver(Dynamics.dubinscar![1], obj_uncon, dt=0.1, opts=opts)
-# U = rand(solver.model.m, solver.N)
-#
-# alpha = zeros(solver.model.m,solver.model.n,solver.N)
-# beta = zeros(solver.model.m,solver.model.m,solver.N)
-# gamma = zeros(solver.model.m,solver.N)
-#
-# results_foh = TrajectoryOptimization.UnconstrainedResults(solver.model.n,solver.model.m,solver.N)
-# results_foh.U[:,:] = U
-# rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
-# results_foh.X
-#
-# # initial cost
-# alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
-# rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
-# cost_foh(solver,results_foh.X,results_foh.U,XM)
-#
-# # cost after 1 update
-# alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
-# rollout_foh!(results_foh,solver,0.5,alpha,beta,gamma,fd)
-# cost_foh(solver,results_foh.X,results_foh.U,XM)
-# #
-# alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
-# rollout_foh!(results_foh,solver,0.25,alpha,beta,gamma,fd)
-# cost_foh(solver,results_foh.X,results_foh.U,XM)
+U = rand(solver.model.m, solver.N)
 
+alpha = zeros(solver.model.m,solver.model.n,solver.N)
+beta = zeros(solver.model.m,solver.model.m,solver.N)
+gamma = zeros(solver.model.m,solver.N)
 
-###
-solver = TrajectoryOptimization.Solver(Dynamics.dubinscar![1], obj_uncon, dt=0.1,integration=:rk3_foh, opts=opts)
-U = ones(solver.model.m, solver.N)
 results_foh = TrajectoryOptimization.UnconstrainedResults(solver.model.n,solver.model.m,solver.N)
 results_foh.U[:,:] = U
-results_foh.K
-rollout!(results_foh,solver)
-results_foh.K
-backwardpass_foh!(results_foh,solver)
+rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
 results_foh.X
-rollout!(results_foh,solver,1.0)
-results_foh.Xm
-cost_foh(solver,results_foh.X_,results_foh.U_,results_foh.Xm)
-results_foh.X .= results_foh.X_
-results_foh.U .= results_foh.U_
-backwardpass_foh!(results_foh,solver)
-rollout!(results_foh,solver,0.5)
-cost_foh(solver,results_foh.X_,results_foh.U_,results_foh.Xm)
 
-#
-# # solver.fd(rand(3),rand(3),rand(2),rand(2))
-# # solver.fc(rand(3),rand(3),rand(2))
-#
-# solver.Fc(rand(3),rand(2))
-# solver.Fd(rand(3),rand(2),rand(2))
-# #
-# solver.fd(rand(3),rand(3),rand(2),rand(2))
-# solver.Fd(rand(3),rand(2))
-# solver.Fc(rand(3),rand(2))
-#
-# fd! = rk3_foh(Dynamics.dubinscar![1].f, dt)
-# tmp = TrajectoryOptimization.f_augmented_foh!(fd!,3,2)
-#
-#
-# tmp(zeros(8),ones(8))
+# initial cost
+alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
+rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
+cost_foh(solver,results_foh.X_,results_foh.U_,XM)
+
+# cost after 1 update
+alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
+rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
+cost_foh(solver,results_foh.X,results_foh.U,XM)
+
+alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
+rollout_foh!(results_foh,solver,0.5,alpha,beta,gamma,fd)
+cost_foh(solver,results_foh.X,results_foh.U,XM)

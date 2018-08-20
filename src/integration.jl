@@ -18,7 +18,7 @@ Defines methods for both separated and augmented forms. Returns a discrete versi
 of a continuous dynamics function.
 
 # Arguments
-* f!: in place dynamics function, i.e. `f!(ẋ,x,u)`
+* f!: in place dynamics function, i.e. `f!(x?,x,u)`
 * dt: time step
 
 """
@@ -49,7 +49,7 @@ Defines methods for both separated and augmented forms. Returns a discrete versi
 of a continuous dynamics function.
 
 # Arguments
-* f!: in place dynamics function, i.e. `f!(ẋ,x,u)` for separate or `f!(Ṡ,S)` for augmented dynamics
+* f!: in place dynamics function, i.e. `f!(x?,x,u)` for separate or `f!(S?,S)` for augmented dynamics
 * dt: time step
 """
 function rk4(f!::Function, dt::Float64)
@@ -86,11 +86,11 @@ Defines methods for both separated and augmented forms. Returns a discrete versi
 of a continuous dynamics function.
 
 # Arguments
-* f!: in place dynamics function, i.e. `f!(ẋ,x,u)` for separate or `f!(Ṡ,S)` for augmented dynamics
+* f!: in place dynamics function, i.e. `f!(x?,x,u)` for separate or `f!(S?,S)` for augmented dynamics
 * dt: time step
 """
 function rk3(f!::Function, dt::Float64) #TODO - test that this is correct
-    # Runge-Kutta 3
+    # Runge-Kutta 3 (zero order hold)
     fd!(xdot,x,u) = begin
         k1 = k2 = k3 = zeros(x)
         f!(k1, x, u);         k1 *= dt;
@@ -101,7 +101,7 @@ function rk3(f!::Function, dt::Float64) #TODO - test that this is correct
 end
 
 function rk3(f_aug!::Function)
-    # Runge-Kutta 3
+    # Runge-Kutta 3 augmented (zero order hold)
     fd!(dS,S::Array) = begin
         dt = S[end]
         k1 = k2 = k3 = zeros(S)
@@ -113,7 +113,7 @@ function rk3(f_aug!::Function)
 end
 
 function rk3_foh(f!::Function, dt::Float64)
-    # Runge-Kutta 3 with first order hold on controls
+    # Runge-Kutta 3 (first order hold on controls)
     fd!(xdot,x,u1,u2) = begin
         k1 = k2 = k3 = zeros(x)
         f!(k1, x, u1);         k1 *= dt;
@@ -143,6 +143,6 @@ function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)])
 end
 
-function f_augmented_foh!(f!::Function, n::Int, m::Int)
-    f_aug_foh!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)], S[n+m+1:n+m+m])
+function f_augmented_foh!(fd!::Function, n::Int, m::Int)
+    f_aug_foh!(dS::AbstractArray, S::Array) = fd!(dS, S[1:n], S[n+1:n+m], S[n+m+1:n+m+m])
 end

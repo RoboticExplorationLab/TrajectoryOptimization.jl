@@ -46,9 +46,16 @@ function rollout!(res::SolverResults,solver::Solver)
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+        # foh
+        if solver.integration == :rk3_foh
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k],U[1:solver.model.m,k+1])
+        # zoh
+        else
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+        end
+
         if infeasible
-            X[:,k+1] .+= U[solver.model.m+1:end,k]
+            X[:,k+1] .+= U[solver.model.m+1:end,k] #TODO update infeasible for foh
         end
     end
 end
@@ -66,16 +73,32 @@ Will return a flag indicating if the values are finite for all time steps.
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
     N = solver.N
-    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
-
+    X = res.X; U = res.U; K = res.K; b = res.b; d = res.d; X_ = res.X_; U_ = res.U_
+    du = []
     X_[:,1] = solver.obj.x0;
     for k = 2:N
         delta = X_[:,k-1] - X[:,k-1]
-        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
-        solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
+
+        # foh
+        if solver.integration == :rk3_foh
+            if k == 2
+                du = K[:,:,1]*delta + alpha*d[:,1]
+                U_[:,1] .= U[:,1] + du
+            end
+            dv = K[:,:,k]*delta + alpha*(b[:,:,k]*du + d[:,1]) # TODO line search term goes on bias term, I think this is corrent then
+            U_[:, k] .= U[:, k-1] + dv
+            solver.fd(view(X_,:,k),X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
+
+            du .= dv
+
+        # zoh
+        else
+            U_[:, k-1] .= U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
+            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
+        end
 
         if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:end,k-1]
+            X_[:,k] .+= U_[solver.model.m+1:end,k-1] # TODO update for foh
         end
 
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
@@ -106,9 +129,9 @@ end
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
     for k = 1:solver.N-1
-        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+        J += 0.5*(res.C[:,k]'*res.Iµ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
-    J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
+    J += 0.5*(res.CN'*res.IµN*res.CN + res.?N'*res.CN)
     return J
 end
 
@@ -117,6 +140,28 @@ function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res
     cost(solver,X,U)
 end
 
+"""
+
+$(SIGNATURES)
+Compute the unconstrained cost for foh (rk3) # TODO add better description
+"""
+function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},Xm::Array{Float64,2})
+    # pull out solver/objective values
+
+    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+    R = getR(solver)
+
+    function stage_cost(x,u)
+        0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+    end
+
+    J = 0.0
+    for k = 1:N-1
+        J += solver.dt/6*(stage_cost(X[:,k],U[:,k]) + 4*stage_cost(Xm[:,k],(U[:,k] + U[:,k+1])/2) + stage_cost(X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
+    end
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+    return J
+end
 
 """
 $(SIGNATURES)
@@ -129,7 +174,11 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
         # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
+        if solver.integration == :rk3_foh
+            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
+        else
+            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
+        end
         res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
         # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
@@ -142,7 +191,7 @@ function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=fa
     N = solver.N
     m = solver.model.m
     for k = 1:N-1
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k])
+        res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
     end
     return nothing
 end
@@ -167,21 +216,21 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
         # Inequality constraints [see equation ref]
         for j = 1:pI
             if res.C[j,k] < 0. || res.LAMBDA[j,k] < 0.
-                res.Iμ[j,j,k] = res.MU[j,k] # active (or previously active) inequality constraints are penalized
+                res.Iµ[j,j,k] = res.MU[j,k] # active (or previously active) inequality constraints are penalized
             else
-                res.Iμ[j,j,k] = 0. # inactive inequality constraints are not penalized
+                res.Iµ[j,j,k] = 0. # inactive inequality constraints are not penalized
             end
         end
 
         # Equality constraints
         for j = pI+1:p
-            res.Iμ[j,j,k] = res.MU[j,k] # equality constraints are penalized
+            res.Iµ[j,j,k] = res.MU[j,k] # equality constraints are penalized
         end
     end
 
     # Terminal constraint
     res.CN .= c(X[:,N])
-    res.IμN .= diagm(res.μN)
+    res.IµN .= diagm(res.µN)
     return nothing # TODO allow for more general terminal constraint
 end
 
@@ -313,11 +362,11 @@ generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,
 $(SIGNATURES)
 
 Compute the maximum constraint violation. Inactive inequality constraints are
-not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
+not counted (masked by the Iµ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
-function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
-    maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iµ,1),indices(results.Iµ,2)))
+    maximum(abs.(results.C.*(results.Iµ[inds,:] .!= 0)))
 end
 
 

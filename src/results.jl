@@ -43,6 +43,7 @@ struct UnconstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
     U::Array{Float64,2}  # Controls (m,N-1)
     K::Array{Float64,3}  # Feedback gain (m,n,N-1)
+    b::Array{Float64,3}
     d::Array{Float64,2}  # Feedforward gain (m,N-1)
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
@@ -51,9 +52,10 @@ struct UnconstrainedResults <: SolverIterResults
     fx::Array{Float64,3} # State jacobian (n,n,N)
     fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
     fu_::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
+    Xm::Array{Float64,2}
 
-    function UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
-        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
+    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm)
     end
 end
 
@@ -70,6 +72,7 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     X = zeros(n,N)
     U = zeros(m,N)
     K = zeros(m,n,N)
+    b = zeros(m,m,N)
     d = zeros(m,N)
     X_ = zeros(n,N)
     U_ = zeros(m,N)
@@ -78,11 +81,12 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
     fu_ = zeros(n,m,N-1) # gradient with respect to u_{k+1}
-    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
+    Xm = zeros(n,N-1)
+    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_),copy(r.Xm))
 end
 
 """
@@ -95,6 +99,7 @@ struct ConstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
     U::Array{Float64,2}  # Controls (m,N-1)
     K::Array{Float64,3}  # Feedback gain (m,n,N-1)
+    b::Array{Float64,3}
     d::Array{Float64,2}  # Feedforward gain (m,N-1)
     X_::Array{Float64,2} # Predicted states (n,N)
     U_::Array{Float64,2} # Predicted controls (m,N-1)
@@ -104,6 +109,8 @@ struct ConstrainedResults <: SolverIterResults
     fx::Array{Float64,3}
     fu::Array{Float64,3}
     fu_::Array{Float64,3}
+
+    Xm::Array{Float64,2}
 
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
@@ -120,8 +127,8 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
     end
 end
 
@@ -146,6 +153,7 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X = zeros(n,N)
     U = zeros(m,N)
     K = zeros(m,n,N)
+    b = zeros(m,m,N)
     d = zeros(m,N)
     X_ = zeros(n,N)
     U_ = zeros(m,N)
@@ -155,6 +163,8 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
     fu_ = zeros(n,m,N-1)
+
+    Xm = zeros(n,N-1)
 
     # Stage Constraints
     C = zeros(p,N-1)
@@ -172,14 +182,14 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu = zeros(p,m,N-1)
     cxn = zeros(p_N,n)
 
-    ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,
+    ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fu_,Xm,
         C,Iμ,LAMBDA,MU,
         C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_),copy(r.Xm),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
 end
