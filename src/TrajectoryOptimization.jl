@@ -12,6 +12,7 @@ using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 using LinearAlgebra
+using ProgressMeter
 
 export
     Dynamics

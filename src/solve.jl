@@ -147,9 +147,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         J_prev = cost(solver, results, X, U)
 
         @info("Cost ($k): $J_prev\n")
-
+        
+        prog = ProgressThresh(solver.opts.eps, "Iterating...")
         for i = 1:solver.opts.iterations
-            @info("--Iteration: $k-($i)--")
+            #@info("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
@@ -183,7 +184,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 add_iter!(results_cache, results, J, time, iter)
                 iter += 1
             end
-
+            
+            ProgressMeter.update!(prog, dJ)
             # Check for cost convergence
             if dJ < solver.opts.eps
                 if solver.opts.verbose
