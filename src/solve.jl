@@ -1,5 +1,3 @@
-import Base.println
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
 #     SUMMARY: Methods for settings and solving iLQR problems
@@ -68,7 +66,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Initialization
     if solver.obj isa UnconstrainedObjective
-        print_debug("Solving Unconstrained Problem...")
+        @debug("Solving Unconstrained Problem...")
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
 
@@ -77,13 +75,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         pI = solver.obj.pI # number of inequality constraints
 
         if infeasible
-            print_debug("Solving Constrained Problem with Infeasible Start...")
+            @debug("Solving Constrained Problem with Infeasible Start...")
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
             solver.opts.infeasible = true
         else
-            print_debug("Solving Constrained Problem...")
+            @debug("Solving Constrained Problem...")
             solver.opts.infeasible = false
         end
 
@@ -148,10 +146,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         # J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
         J_prev = cost(solver, results, X, U)
 
-        print_info("Cost ($k): $J_prev\n")
+        @info("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
-            print_info("--Iteration: $k-($i)--")
+            @info("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start

@@ -1,13 +1,5 @@
 using Plots
 
-function println(level::Symbol, msg::String)::Void
-    if level_priorities[level] ≥ level_priorities[debug_level::Symbol]
-        println(msg)
-    end
-end
-
-print_info(msg) = println(:info,msg)
-print_debug(msg) = println(:debug,msg)
 
 #TODO finish
 function plot_cost(results::ResultsCache)
