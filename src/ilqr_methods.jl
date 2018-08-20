@@ -1,7 +1,6 @@
 using RigidBodyDynamics
 using ForwardDiff
 using Plots
-using Base.Test
 using BenchmarkTools
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -40,7 +39,7 @@ Roll out the dynamics for a given control sequence (initial)
 Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
-function rollout!(res::SolverResults,solver::Solver)
+function rollout!(res::SolverResults, solver::Solver)
     infeasible = solver.model.m != size(res.U,1)
     X = res.X; U = res.U
 
@@ -63,7 +62,7 @@ gains `res.K` and `res.d` to the difference between states
 
 Will return a flag indicating if the values are finite for all time steps.
 """
-function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
+function rollout!(res::SolverResults, solver::Solver, alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
     N = solver.N
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
@@ -90,7 +89,7 @@ end
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+function cost(solver::Solver, X::Array{Float64,2}, U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
     R = getR(solver)
@@ -124,7 +123,7 @@ Calculate Jacobians prior to the backwards pass
 
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
-function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO change to inplace '!' notation throughout the code
+function calc_jacobians!(res::ConstrainedResults, solver::Solver)::Nothing
     N = solver.N
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
@@ -138,7 +137,7 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
     return nothing
 end
 
-function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Void
+function calc_jacobians!(res::UnconstrainedResults, solver::Solver, infeasible=false)::Nothing
     N = solver.N
     m = solver.model.m
     for k = 1:N-1
@@ -158,7 +157,7 @@ $(SIGNATURES)
 
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Void
+function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Nothing
     p, N = size(res.C)
     N += 1 # since C is size (p,N-1), terminal constraints are handled separately
     for k = 1:N-1
@@ -181,7 +180,7 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
 
     # Terminal constraint
     res.CN .= c(X[:,N])
-    res.IμN .= diagm(res.μN)
+    res.IμN .= Matrix(Diagonal(res.μN))
     return nothing # TODO allow for more general terminal constraint
 end
 
@@ -242,8 +241,8 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     CI = zeros(pI)
     function cI(x,u)
         CI[1:pI_u] = c_control(x,u)
-        CI[(1:pI_x)+pI_u] = c_state(x,u)
-        CI[(1:pI_c)+pI_u+pI_x] = obj.cI(x,u)
+        CI[(1:pI_x).+pI_u] = c_state(x,u)
+        CI[(1:pI_c).+pI_u.+pI_x] .= obj.cI(x,u)
         return CI
     end
 
@@ -252,7 +251,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     function c_fun(x,u)
         infeasible = length(u) != m
         C[1:pI] = cI(x,u[1:m])
-        C[(1:pE_c)+pI] = obj.cE(x,u[1:m])
+        C[(1:pE_c).+pI] .= obj.cE(x,u[1:m])
         if infeasible
             return [C; u[m+1:end]]
         end
@@ -268,27 +267,27 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = -eye(pI_x_max)
-    fx_state[pI_x_max+1:end,:] = eye(pI_x_min)
+    fx_state[1:pI_x_max, :] = -Diagonal{Float64}(I, pI_x_max)
+    fx_state[pI_x_max+1:end,:] = Diagonal{Float64}(I, pI_x_min)
     fx = zeros(p,n)
 
     fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max,:] = -eye(pI_u_max)
-    fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
+    fu_control[1:pI_u_max,:] = -Diagonal{Float64}(I, pI_u_max)
+    fu_control[pI_u_max+1:end,:] = Diagonal{Float64}(I, pI_u_min)
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 
-    fu_infeasible = eye(n)
+    fu_infeasible = Diagonal{Float64}(I, n)
     fx_infeasible = zeros(n,n)
 
-    fx_N = eye(n)  # Jacobian of final state
+    fx_N = Diagonal{Float64}(I, n)  # Jacobian of final state
 
     function constraint_jacobian(x::Array,u::Array)
         infeasible = length(u) != m
         fx[1:pI_u, :] = fx_control
         fu[1:pI_u, :] = fu_control
-        fx[(1:pI_x)+pI_u, :] = fx_state
-        fu[(1:pI_x)+pI_u, :] = fu_state
+        fx[(1:pI_x).+pI_u, :] = fx_state
+        fu[(1:pI_x).+pI_u, :] = fu_state
         # F_aug = F([x;u]) # TODO handle general constraints
         # fx = F_aug[:,1:n]
         # fu = F_aug[:,n+1:n+m]
@@ -316,7 +315,7 @@ Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
-function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
+function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
 end
 

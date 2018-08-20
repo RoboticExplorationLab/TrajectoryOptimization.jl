@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 function quadrotor_dynamics!(xdot,X,u)
       #TODO change concatentations to make faster!
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -27,7 +29,7 @@ function quadrotor_dynamics!(xdot,X,u)
       # Parameters
       m = .5 # mass
       I = diagm([0.0023,0.0023,0.004]) # inertia matrix
-      invI = diagm(1./[0.0023,0.0023,0.004]) # inverted inertia matrix
+      invI = diagm(1.0 / [0.0023,0.0023,0.004]) # inverted inertia matrix
       g = 9.81 # gravity
       L = 0.1750 # distance between motors
 

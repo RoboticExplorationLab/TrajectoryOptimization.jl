@@ -1,5 +1,6 @@
+using LinearAlgebra
 using TrajectoryOptimization
-using Base.Test
+using Test
 #using Juno
 
 # Set up models and objective
@@ -10,8 +11,8 @@ opts.c1 = 1e-3
 opts.c2 = 2.0
 opts.mu_al_update = 100.
 
-obj.Q .= eye(2)*1e-3
-obj.R .= eye(1)*1e-2
+obj.Q .= Diagonal{Float64}(I, 2)*1e-3
+obj.R .= Diagonal{Float64}(I, 1)*1e-2
 obj.tf = 5.
 model! = TrajectoryOptimization.Model(Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
@@ -125,7 +126,7 @@ max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test max_c < 1e-2
 
 # test that control output from infeasible start is a good warm start (ie, that infeasible control output is "near" dynamically constrained control output)
-idx = find(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
+idx = findall(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
 
 # plot(results_inf.result[end].X')
 # plot(results_inf.result[idx[1]].U',color="green")

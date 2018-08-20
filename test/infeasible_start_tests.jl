@@ -63,7 +63,7 @@ plot(results.U',title="Pendulum (Infeasible start with constrained control and s
 println(results.X[:,end])
 # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
 # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
-idx = find(x->x==2,results.iter_type)
+idx = findall(x->x==2,results.iter_type)
 plot(results.result[end].X')
 
 plot(results.result[idx[1]].U',color="green")

@@ -57,10 +57,10 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
-        Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
+        Quu = Hermitian(luu + fu'*(S + mu * Diagonal{Float64}(I, n))*fu)
         # Quu = luu + fu'*(S + mu*eye(n))*fu
 
-        Qux = fu'*(S + mu*eye(n))*fx
+        Qux = fu'*(S + mu * Diagonal{Float64}(I, n))*fx
 
         # regularization
         # println("Quu: $(Quu)")
@@ -120,8 +120,8 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
     xf = solver.obj.xf
     Qf = solver.obj.Qf
 
-    Uq = chol(Q)
-    Ur = chol(R)
+    Uq = (cholesky(Q)).U
+    Ur = (cholesky(R)).U
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d
@@ -129,10 +129,10 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
     # Terminal Cost-to-go
     if isa(solver.obj, ConstrainedObjective)
         Cx = res.Cx_N
-        Su = chol(Qf + Cx'*res.IμN*Cx)
+        Su = (cholesky(Qf + Cx'*res.IμN*Cx)).U
         s = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
     else
-        Su = chol(Qf)
+        Su = (cholesky(Qf)).U
         s = Qf*(X[:,N] - xf)
     end
 
@@ -155,8 +155,8 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 
-        Wxx = qrfact!([Su*fx; Uq])
-        Wuu = qrfact!([Su*fu; Ur])
+        Wxx = qr!([Su*fx; Uq])
+        Wuu = qr!([Su*fu; Ur])
         Qxu = fx'*(Su'Su)*fu
 
         if isa(solver.obj, ConstrainedObjective)
@@ -168,20 +168,20 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
             Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
             Qxu += Cx'*Iμ[:,:,k]*Cu
 
-            Wxx = qrfact!([Wxx[:R]; Iμ2*Cx])
-            Wuu = qrfact!([Wuu[:R]; Iμ2*Cu])
+            Wxx = qr!([Wxx[:R]; Iμ2*Cx])
+            Wuu = qr!([Wuu[:R]; Iμ2*Cu])
         end
 
-        K[:,:,k] = Wuu[:R]\(Wuu[:R]'\Qxu')
-        d[:,k] = Wuu[:R]\(Wuu[:R]'\Qu)
+        K[:,:,k] = Wuu.R\(Wuu.R'\Qxu')
+        d[:,k] = Wuu.R\(Wuu.R'\Qu)
 
-        s = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
+        s = Qx - Qxu*(Wuu.R\(Wuu.R'\Qu))
 
         try  # Regularization
-            Su = chol_minus(Wxx[:R]+eye(n)*mu,Wuu[:R]'\Qxu')
+            Su = chol_minus(Wxx.R + Diagonal{Float64}(I, n)*mu,Wuu.R'\Qxu')
 
         catch ex
-            if ex isa LinAlg.PosDefException
+            if ex isa PosDefException
                 mu += 1
                 k = N-1
             end
@@ -192,7 +192,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
 
         # terms for line search
         v1 += float(d[:,k]'*Qu)[1]
-        v2 += float(d[:,k]'*Wuu[:R]'Wuu[:R]*d[:,k])
+        v2 += float(d[:,k]'*Wuu.R'Wuu.R*d[:,k])
 
         k = k - 1;
     end
@@ -204,9 +204,9 @@ $(SIGNATURES)
 Perform the operation sqrt(A-B), where A and B are Symmetric Matrices
 """
 function chol_minus(A::Matrix,B::Matrix)
-    AmB = LinAlg.Cholesky(copy(A),'U')
+    AmB = Cholesky(copy(A),'U')
     for i = 1:size(B,1)
-        LinAlg.lowrankdowndate!(AmB,B[i,:])
+        lowrankdowndate!(AmB,B[i,:])
     end
     U = AmB[:U]
 end

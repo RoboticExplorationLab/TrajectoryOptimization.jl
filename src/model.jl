@@ -171,10 +171,10 @@ mutable struct ConstrainedObjective <: Objective
         pI += count(isfinite, x_max)
 
         u0 = zeros(m)
-        if ~isa(cI(x0,u0), Void)
+        if cI(x0,u0) != nothing
             pI += size(cI(x0,u0),1)
         end
-        if ~isa(cE(x0,u0), Void)
+        if cE(x0,u0) != nothing
             pE += size(cE(x0,u0),1)
         end
         p = pI + pE
@@ -182,10 +182,10 @@ mutable struct ConstrainedObjective <: Objective
 
         # Terminal Constraints
         pI_N = pE_N = 0
-        if ~isa(cI_N(x0), Void)
+        if cI_N(x0) != nothing
             pI_N = size(cI_N(x0),1)
         end
-        if ~isa(cE_N(x0), Void)
+        if cE_N(x0) != nothing
             pE_N = size(cE_N(x0),1)
         end
         if use_terminal_constraint

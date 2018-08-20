@@ -6,6 +6,7 @@ else
 end
 
 using BenchmarkTools
+using LinearAlgebra
 
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")

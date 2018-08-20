@@ -84,7 +84,7 @@ tmp.U[:,:] = U # store infeasible control output
 
 rollout!(tmp,solver)
 tmp.X
-calc_jacobians(tmp,solver)
+calc_jacobians!(tmp,solver)
 K,d = backwardpass_foh!(tmp.X,ones(solver.model.m,solver.N),solver)
 
 tmp.S

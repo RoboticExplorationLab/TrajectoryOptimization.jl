@@ -11,6 +11,7 @@ module TrajectoryOptimization
 using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
+using LinearAlgebra
 
 export
     Dynamics

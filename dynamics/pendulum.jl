@@ -1,3 +1,4 @@
+using LinearAlgebra
 ## Pendulum
 # https://github.com/HarvardAgileRoboticsLab/unscented-dynamic-programming/blob/master/pendulum_dynamics.m
 
@@ -8,7 +9,7 @@ function pendulum_dynamics(x,u)
     lc = 0.5
     I = 0.25
     g = 9.81
-    xdot = zeros(x)
+    xdot = zero(x)
     xdot[1] = x[2]
     xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
     return xdot
@@ -35,9 +36,9 @@ x0 = [0; 0]
 xf = [pi; 0] # (ie, swing up)
 
 # costs
-Q = (1e-3)*eye(model.n)
-Qf = 100.0*eye(model.n)
-R = (1e-2)*eye(model.m)
+Q = (1e-3)*Diagonal{Float64}(I, model.n)
+Qf = 100.0*Diagonal{Float64}(I, model.n)
+R = (1e-2)*Diagonal{Float64}(I, model.m)
 
 # simulation
 tf = 5.

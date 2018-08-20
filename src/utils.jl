@@ -3,7 +3,7 @@ using Plots
 
 #TODO finish
 function plot_cost(results::ResultsCache)
-    index_outerloop = find(x -> x == 1, results.iter_type)
+    index_outerloop = findall(x -> x == 1, results.iter_type)
 end
 
 """
@@ -11,7 +11,7 @@ end
 
 Generate an animation of a trajectory as it evolves during a solve
 """
-function trajectory_animation(results::ResultsCache;traj::String="state",ylim=[-10;10],title::String="Trajectory Evolution",filename::String="trajectory.gif",fps::Int=1)::Void
+function trajectory_animation(results::ResultsCache;traj::String="state",ylim=[-10;10],title::String="Trajectory Evolution",filename::String="trajectory.gif",fps::Int=1)::Nothing
     anim = @animate for i=1:results.termination_index
         if traj == "state"
             t = results.result[i].X'
@@ -34,7 +34,7 @@ end
 
 Generate an animation of a pendulum
 """
-function pendulum_animation(results::SolverResults;filename::String="pendulum.gif",fps::Int=1)::Void
+function pendulum_animation(results::SolverResults;filename::String="pendulum.gif",fps::Int=1)::Nothing
     anim = @animate for i=1:size(results1.X,2)
         x = cos(results1.X[1,i] - pi/2)
         y = sin(results1.X[1,i] - pi/2)
@@ -76,7 +76,7 @@ end
 
 Plot a 3D trajectory (static)
 """
-function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10.0],ylim=[-10.0;10.0],zlim=[-10.0;10.0],title::String="3D Trajectory")::Void
+function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10.0],ylim=[-10.0;10.0],zlim=[-10.0;10.0],title::String="3D Trajectory")::Nothing
     # initialize a 3D plot with 1 empty series
     plt = path3d(1, xlim=(xlim[1],xlim[2]), ylim=(ylim[1],ylim[2]), zlim=(zlim[1],zlim[2]),
                     xlab = "", ylab = "", zlab = "",

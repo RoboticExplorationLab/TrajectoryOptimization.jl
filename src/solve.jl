@@ -111,7 +111,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
         # Diagonal indicies for the Iμ matrix (fast)
-        diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
+        diag_inds = CartesianIndex.(axes(results.Iμ,1), axes(results.Iμ,2))
 
         # Generate constraint function and jacobian functions from the objective
         # c_fun, constraint_jacobian = generate_constraint_functions(solver.obj, infeasible=infeasible)
@@ -156,7 +156,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Backward pass
-            calc_jacobians(results, solver)
+            calc_jacobians!(results, solver)
             if solver.opts.square_root
                 v1, v2 = backwards_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
@@ -248,7 +248,7 @@ $(SIGNATURES)
 
 Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
 """
-function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
+function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     p,N = size(results.C)
     N += 1
     for jj = 1:N-1
@@ -266,6 +266,6 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Void
+function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Nothing
     return nothing
 end

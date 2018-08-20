@@ -26,10 +26,10 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
 @test obj.x_max == [Inf,Inf]
-@test isa(obj.cI(x0,u0),Void)
-@test isa(obj.cE(x0,u0),Void)
-@test isa(obj.cI_N(x0),Void)
-@test isa(obj.cE_N(x0),Void)
+@test (obj.cI(x0,u0) == nothing)
+@test (obj.cE(x0,u0) == nothing)
+@test (obj.cI_N(x0) == nothing)
+@test (obj.cE_N(x0) == nothing)
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
 @test obj.p_N == 2
@@ -90,10 +90,10 @@ obj = ConstrainedObjective(obj_uncon)
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
 @test obj.x_max == [Inf,Inf]
-@test isa(obj.cI(x0,u0),Void)
-@test isa(obj.cE(x0,u0),Void)
-@test isa(obj.cI_N(x0),Void)
-@test isa(obj.cE_N(x0),Void)
+@test (obj.cI(x0,u0) == nothing)
+@test (obj.cE(x0,u0) == nothing)
+@test (obj.cI_N(x0) == nothing)
+@test (obj.cE_N(x0) == nothing)
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
 @test obj.p_N == 2

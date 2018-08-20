@@ -1,8 +1,8 @@
 
 function chol_minus(A,B)
-    AmB = LinAlg.Cholesky(copy(A),'U')
+    AmB = Cholesky(copy(A),'U')
     for i = 1:size(B,1)
-        LinAlg.lowrankdowndate!(AmB,B[i,:])
+        lowrankdowndate!(AmB,B[i,:])
     end
     U = AmB[:U]
 end
@@ -88,10 +88,10 @@ function backwards_sqrt!(res::SolverResults,solver::Solver;
         s = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
 
         try  # Regularization
-            Su = chol_minus(Wxx[:R]+eye(n)*mu,Wuu[:R]'\Qxu')
+            Su = chol_minus(Wxx[:R]+Diagonal{Float64}(I,n)*mu,Wuu[:R]'\Qxu')
 
         catch ex
-            if ex isa LinAlg.PosDefException
+            if ex isa PosDefException
                 mu += 1
                 k = N-1
             end

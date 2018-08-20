@@ -69,7 +69,7 @@ struct Solver
             S[1:n] = x
             S[n+1:end-1] = u[1:m]
             S[end] = dt
-            Sdot = zeros(S)
+            Sdot = zero(S)
             F_aug = F!(J,Sdot,S)
             fx .= F_aug[1:model.n,1:model.n]
             fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
@@ -117,7 +117,7 @@ Makes the dynamics function `f(x,u)` appear to operate as an inplace operation o
 form `f!(xdot,x,u)`.
 """
 function wrap_inplace(f::Function)
-    f!(xdot,x,u) = copy!(xdot, f(x,u))
+    f!(xdot,x,u) = copyto!(xdot, f(x,u))
 end
 
 
@@ -129,7 +129,7 @@ If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
     if solver.opts.infeasible
-        R = solver.opts.infeasible_regularization*eye(solver.model.m+solver.model.n)
+        R = solver.opts.infeasible_regularization * Diagonal{Float64}(I, solver.model.m+solver.model.n)
         R[1:solver.model.m,1:solver.model.m] = solver.obj.R
         return R
     else

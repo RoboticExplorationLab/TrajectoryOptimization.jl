@@ -19,9 +19,9 @@ opts.iterations_outerloop = 250
 opts.iterations = 1000
 
 # Objective and constraints
-Qf = 100.0*eye(n)
-Q = 1e-2*eye(n)
-R = 1e-2*eye(m)
+Qf = 100.0*Diagonal{Float64}(I, n)
+Q = 1e-2*Diagonal{Float64}(I, n)
+R = 1e-2*Diagonal{Float64}(I, m)
 tf = 5.0
 dt = 0.1
 

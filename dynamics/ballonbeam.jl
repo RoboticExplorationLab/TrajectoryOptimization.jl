@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 ## Ball on beam
 # TODO needs inplace dynamics and objective
 function ballonbeam_dynamics(x,u)
@@ -25,9 +27,9 @@ xf = [.5;0.;0.;0.]
 
 # costs
 #TODO these costs are taken from the notebook
-Q = 5e-4*eye(model.n)
-Qf = 500.0*eye(model.n)
-R = 1e-5*eye(model.m)
+Q = 5e-4*Diagonal{Float64}(I, model.n)
+Qf = 500.0*Diagonal{Float64}(I, model.n)
+R = 1e-5*Diagonal{Float64}(I, model.m)
 
 # simulation
 tf = 1.0

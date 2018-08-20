@@ -287,7 +287,7 @@ end
 $(SIGNATURES)
 Add the result of an iteration to the cache
 """
-function add_iter!(cache::ResultsCache, results::SolverIterResults, cost::Float64, time::Float64=0., iter::Int=length(cache)+1)::Void
+function add_iter!(cache::ResultsCache, results::SolverIterResults, cost::Float64, time::Float64=0., iter::Int=length(cache)+1)::Nothing
     cache.result[iter] = copy(results)
     cache.cost[iter] = cost
     cache.time[iter] = time

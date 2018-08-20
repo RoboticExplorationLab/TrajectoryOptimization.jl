@@ -14,9 +14,9 @@ x0 = [0.;0.;0.;0.]
 xf = [pi;0.;0.;0.]
 
 # costs
-Q = 0.0001*eye(4)
-Qf = 250.0*eye(4)
-R = 0.0001*eye(2)
+Q = 0.0001*Diagonal{Float64}(I, 4)
+Qf = 250.0*Diagonal{Float64}(I, 4)
+R = 0.0001*Diagonal{Float64}(I, 2)
 
 # simulation
 tf = 5.0

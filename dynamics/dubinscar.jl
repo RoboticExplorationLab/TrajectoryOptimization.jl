@@ -1,3 +1,4 @@
+using LinearAlgebra
 ## Dubins car
 # TODO test and inplace dynamics
 
@@ -12,9 +13,9 @@ x0 = [0.;0.;0.]
 xf = [0.;1.;0.]
 
 # costs
-Q = 0.001*eye(model.n)
-Qf = 1000.0*eye(model.n)
-R = 0.001*eye(model.m)
+Q = 0.001*Diagonal{Float64}(I, model.n)
+Qf = 1000.0*Diagonal{Float64}(I, model.n)
+R = 0.001*Diagonal{Float64}(I, model.m)
 
 # simulation
 tf = 5.0

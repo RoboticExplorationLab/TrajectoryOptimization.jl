@@ -124,6 +124,6 @@ plot(log.(results6.cost))
 results6.iter_type
 println(plot_cost(results6))
 
-index_outerloop = find(x -> x == 1, results6.iter_type)
+index_outerloop = findall(x -> x == 1, results6.iter_type)
 results6.cost[index_outerloop-1]
 results6.termination_index
