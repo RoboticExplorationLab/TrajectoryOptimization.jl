@@ -271,8 +271,10 @@ rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
 cost_foh(solver,results_foh.X_,results_foh.U_,XM)
 
 # cost after 1 update
+results_foh.X .= results_foh.X_
+results_foh.U .= results_foh.U_
 alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)
-rollout_foh!(results_foh,solver,1.0,alpha,beta,gamma,fd)
+rollout_foh!(results_foh,solver,0.5,alpha,beta,gamma,fd)
 cost_foh(solver,results_foh.X,results_foh.U,XM)
 
 alpha, beta, gamma, XM = backwardpass_foh!(results_foh.X,results_foh.U,solver)

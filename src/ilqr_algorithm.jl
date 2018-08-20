@@ -151,7 +151,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
         lu = R*(U[:,k])
         lxx = Q
         luu = R
-        fx, fu = solver.F(X[:,k],U[:,k])
+        fx, fu = solver.Fd(X[:,k],U[:,k])
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 

@@ -43,13 +43,22 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     k = N-1
     # Loop backwards
     while k >= 1
+        println("Jacobians (cont.)")
 
         # Calculate the L(x,u,y,v)
         Ac, Bc = solver.Fc(X[:,k],U[:,k]) # Jacobian1(fc,X[:,k],U[:,k])
         Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1]) #Jacobian1(fd,X[:,k],U[:,k],U[:,k+1])
 
+        println("Ac: $(Ac)")
+
         Ac, Bc = Jacobian1(fc,X[:,k],U[:,k])
         Ad, Bd, Cd = Jacobian1(fd,X[:,k],U[:,k],U[:,k+1])
+
+        println("Ac: $(Ac)")
+
+        println("Functions:")
+        println(solver.fc(zeros(3),X[:,k],U[:,k]))
+        println(fc(X[:,k],U[:,k]))
 
         M = 0.25*[3*eye(n)+dt*Ac Bc*eye(m) eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
@@ -234,6 +243,7 @@ dt = 0.1
 fd = rk3_foh1(Dynamics.dubins_dynamics, dt)
 fc = Dynamics.dubins_dynamics
 
+model1 = Model(fc,3,2)
 
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
@@ -312,3 +322,40 @@ cost_foh(solver,results_foh.X_,results_foh.U_,results_foh.Xm)
 #
 #
 # tmp(zeros(8),ones(8))
+
+x1 = rand(3)
+u1 = rand(2)
+
+Ac, Bc = solver.Fc(x1,u1) # Jacobian1(fc,X[:,k],U[:,k])
+Ad, Bd, Cd = solver.Fd(x1,u1,u1) #Jacobian1(fd,X[:,k],U[:,k],U[:,k+1])
+
+Ac1, Bc1 = Jacobian1(fc,x1,u1)
+Ad1, Bd1, Cd1 = Jacobian1(fd,x1,u1,u1)
+
+isapprox.(Ac,Ac1)
+isapprox.(Bc,Bc1)
+isapprox.(Ad,Ad1)
+isapprox.(Bd,Bd1)
+isapprox.(Cd,Cd1)
+
+x2 = rand(3)
+u2 = rand(2)
+norm(solver.fd(zeros(3),x2,u2,u2) - fd(x2,u2,u2))
+norm(Dynamics.dubins_dynamics(x1,u1) -Dynamics.dubins_dynamics!(zeros(3),x1,u1))
+norm(Dynamics.dubins_dynamics(x1,u1) -solver.fc(zeros(3),x1,u1))
+solver.fc(zeros(3),x1,u1)
+
+Bc
+
+Bc1
+
+function test1(x,u)
+
+    return [cos(x[1])*u[1];sin(x[2])*u[2]]
+end
+
+x = [pi/2.; pi/2.]
+u = [1.;1.]
+typeof(u)
+test1(x,u)
+Jacobian1(test1,x,u)

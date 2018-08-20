@@ -93,13 +93,13 @@ struct Solver
             fx .= Fd_aug[1:model.n,1:model.n]
             fu .= Fd_aug[1:model.n,model.n+1:model.n+model.m]
 
-            if infeasible
-                return fx, [fu zeros(n,n)] # TODO add foh functionality
-            end
-
             if integration == :rk3_foh
                 fv .= Fd_aug[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
                 return fx, fu, fv
+            end
+
+            if infeasible
+                return fx, [fu zeros(n,n)] # TODO add foh functionality
             end
 
             return fx, fu
@@ -107,22 +107,16 @@ struct Solver
         end
 
         # autodifferentiate continuous dynamics #TODO combined these two functions into 1
-        Jc = zeros(model.n+model.m+1,model.n+model.m+1)
-        Sc = zeros(model.n+model.m+1)
+        Jc = zeros(model.n+model.m,model.n+model.m)
+        Sc = zeros(model.n+model.m)
 
         function Jacobians_Continuous!(x,u)
-            infeasible = length(u) != m
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
-            Sc[end] = dt
             Sdot = zeros(Sc)
             F_aug = Fc!(Jc,Sdot,Sc)
-            fx .= F_aug[1:model.n,1:model.n]
-            fu .= F_aug[1:model.n,model.n+1:model.n+model.m]
-
-            if infeasible
-                return fx, [fu zeros(n,n)]
-            end
+            fx = F_aug[1:model.n,1:model.n]
+            fu = F_aug[1:model.n,model.n+1:model.n+model.m]
 
             return fx, fu
 

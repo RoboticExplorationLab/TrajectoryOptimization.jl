@@ -131,7 +131,7 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     for k = 1:solver.N-1
         J += 0.5*(res.C[:,k]'*res.Iµ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
-    J += 0.5*(res.CN'*res.IµN*res.CN + res.?N'*res.CN)
+    J += 0.5*(res.CN'*res.IµN*res.CN + res.λN'*res.CN)
     return J
 end
 

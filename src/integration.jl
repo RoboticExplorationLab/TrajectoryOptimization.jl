@@ -140,7 +140,7 @@ $(SIGNATURES)
 Converts a separated dynamics function into an augmented dynamics function
 """
 function f_augmented!(f!::Function, n::Int, m::Int)
-    f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+(1:m)])
+    f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+1:n+m])
 end
 
 function f_augmented_foh!(fd!::Function, n::Int, m::Int)
