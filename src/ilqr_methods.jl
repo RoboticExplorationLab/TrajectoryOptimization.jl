@@ -242,7 +242,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     function cI(x,u)
         CI[1:pI_u] = c_control(x,u)
         CI[(1:pI_x).+pI_u] = c_state(x,u)
-        CI[(1:pI_c).+pI_u.+pI_x] .= obj.cI(x,u)
+        CI[(1:pI_c).+pI_u.+pI_x] = obj.cI(x,u)
         return CI
     end
 
@@ -251,7 +251,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     function c_fun(x,u)
         infeasible = length(u) != m
         C[1:pI] = cI(x,u[1:m])
-        C[(1:pE_c).+pI] .= obj.cE(x,u[1:m])
+        C[(1:pE_c).+pI] = obj.cE(x,u[1:m]) # TODO(jkg)
         if infeasible
             return [C; u[m+1:end]]
         end
@@ -293,7 +293,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         # fu = F_aug[:,n+1:n+m]
 
         if infeasible
-            return [fx; fx_infeasible], cat((1,2),fu,fu_infeasible)
+            return [fx; fx_infeasible], cat(fu,fu_infeasible, dims=(1,2)) # TODO(jkg) avoid cat?
         end
         return fx,fu
     end
@@ -365,7 +365,7 @@ Linear interpolation trajectory between initial and final state(s)
 """
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
     x_traj = zeros(size(x0,1),N)
-    t = linspace(0,N,N)
+    t = range(0,stop=N,length=N)
     slope = (xf-x0)./N
     for i = 1:size(x0,1)
         x_traj[i,:] = slope[i].*t

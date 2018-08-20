@@ -11,9 +11,9 @@ m = pendulum.m
 x0 = [0; 0];
 xf = [pi; 0]; # (ie, swing up)
 u0 = [1]
-Q = 1e-3*eye(n);
-Qf = 100*eye(n);
-R = 1e-3*eye(m);
+Q = 1e-3*Diagonal{Float64}(I, n);
+Qf = 100*Diagonal{Float64}(I, n);
+R = 1e-3*Diagonal{Float64}(I, m);
 tf = 5
 
 @test_nowarn UnconstrainedObjective(Q, R, Qf, tf, x0, xf)

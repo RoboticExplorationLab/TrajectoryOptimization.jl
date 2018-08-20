@@ -1,5 +1,5 @@
 using TrajectoryOptimization
-using Base.Test
+using Test
 
 model,obj = TrajectoryOptimization.Dynamics.dubinscar
 opts = TrajectoryOptimization.SolverOptions()

@@ -51,7 +51,7 @@ $(SIGNATURES)
 
 Solve constrained optimization problem specified by `solver`
 """
-function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::SolverResults
+function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef, 0,0); prevResults::SolverResults=ConstrainedResults())::SolverResults
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states

@@ -8,19 +8,20 @@ end
 using BenchmarkTools
 using LinearAlgebra
 
-@testset "Simple Pendulum" begin
-    include("simple_pendulum.jl")
+@testset "trajopt" begin
+    @testset "Simple Pendulum" begin
+        include("simple_pendulum.jl")
+    end
+    @testset "Constrained Objective" begin
+        include("objective_tests.jl")
+    end
+    @testset "Results" begin
+        include("results_tests.jl")
+    end
+    @testset "Square Root Method" begin
+        include("sqrt_method_tests.jl")
+    end
 end
-@testset "Constrained Objective" begin
-    include("objective_tests.jl")
-end
-@testset "Results" begin
-    include("results_tests.jl")
-end
-@testset "Square Root Method" begin
-    include("sqrt_method_tests.jl")
-end
-
 
 """
 # NEEDED TESTS:

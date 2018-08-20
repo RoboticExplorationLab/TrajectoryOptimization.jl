@@ -168,8 +168,8 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
             Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
             Qxu += Cx'*Iμ[:,:,k]*Cu
 
-            Wxx = qr!([Wxx[:R]; Iμ2*Cx])
-            Wuu = qr!([Wuu[:R]; Iμ2*Cu])
+            Wxx = qr!([Wxx.R; Iμ2*Cx])
+            Wuu = qr!([Wuu.R; Iμ2*Cu])
         end
 
         K[:,:,k] = Wuu.R\(Wuu.R'\Qxu')

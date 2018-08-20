@@ -55,7 +55,7 @@ of a continuous dynamics function.
 function rk4(f!::Function, dt::Float64)
     # Runge-Kutta 4
     fd!(xdot,x,u) = begin
-        k1 = k2 = k3 = k4 = zeros(x)
+        k1 = k2 = k3 = k4 = zero(x)
         f!(k1, x, u);         k1 *= dt;
         f!(k2, x + k1/2., u); k2 *= dt;
         f!(k3, x + k2/2., u); k3 *= dt;
