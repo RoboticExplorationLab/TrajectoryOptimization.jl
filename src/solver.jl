@@ -33,7 +33,7 @@ struct Solver
     c_fun::Function
     c_jacobian::Function
     N::Int               # Number of time steps
-    integration::Symbol
+    control_integration::Symbol
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
         N = Int(floor(obj.tf/dt));
@@ -53,25 +53,30 @@ struct Solver
             throw(ArgumentError("$integration is not a defined integration scheme"))
         end
 
+        # Control integration type
+        if integration == :rk3_foh
+            control_integration = :foh
+        else
+            control_integration = :zoh
+        end
+
         # Generate discrete dynamics equations
         fd! = discretizer(f!, dt)
         f_aug! = f_augmented!(f!, model.n, model.m)
 
         fd_aug! = discretizer(f_aug!)
-        if integration == :rk3_foh
+        if control_integration == :foh
             fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
         end
 
         fx = zeros(n,n)
         fu = zeros(n,m)
-        if integration == :rk3_foh
+        if control_integration == :foh
             fv = zeros(n,m)
             nm1 = model.n + model.m + model.m + 1
         else
             nm1 = model.n + model.m + 1
         end
-
-
 
         # Auto-diff discrete dynamics
         Jd = zeros(nm1, nm1)
@@ -82,7 +87,7 @@ struct Solver
             Sd[1:n] = x
             Sd[n+1:n+m] = u[1:m]
 
-            if integration == :rk3_foh
+            if control_integration == :foh
                 Sd[n+m+1:n+m+m] = v[1:m]
             end
 
@@ -92,7 +97,7 @@ struct Solver
             fx .= Fd_augd[1:model.n,1:model.n]
             fu .= Fd_augd[1:model.n,model.n+1:model.n+model.m]
 
-            if integration == :rk3_foh
+            if control_integration == :foh
                 fv .= Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
                 return fx, fu, fv
             end
@@ -123,7 +128,7 @@ struct Solver
         options = copy(opts)
         options.infeasible = infeasible
 
-        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration)
+        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, control_integration)
 
     end
 end

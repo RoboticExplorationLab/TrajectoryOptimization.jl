@@ -5,6 +5,7 @@
 #     backwardpass!: iLQR backward pass
 #     backwards_sqrt: iLQR backward pass with Cholesky Factorization of
 #        Cost-to-Go
+#     backwardpass_foh!: iLQR backward pass for first order hold on controls
 #     chol_minus: Calculate sqrt(A-B)
 #     forwardpass!: iLQR forward pass
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -199,6 +200,11 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
     return v1, v2
 end
 
+"""
+$(SIGNATURES)
+
+Perform a backward pass for first order hold (foh) integration scheme
+"""
 function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -206,6 +212,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     W = solver.obj.Q
     Wf = solver.obj.Qf
     xf = solver.obj.xf
+
     K = res.K
     b = res.b
     d = res.d
@@ -217,8 +224,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
     R = getR(solver)
 
-    S = zeros(n+m,n+m,N)
-    s = zeros(n+m,N)
+    S = zeros(n+m,n+m)
+    s = zeros(n+m)
+
+    v1 = 0.0
+    v2 = 0.0
 
     # precompute once
     G = zeros(3*n+3*m,3*n+3*m)
@@ -232,7 +242,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
     g = zeros(3*n+3*m)
 
-    # precompute most of matrix once
+    # precompute most of E matrix once
     E = zeros(3*n+3*m,2*n+2*m)
     E[1:n,1:n] = eye(n)
     E[n+1:n+m,n+1:n+m] = eye(m)
@@ -243,13 +253,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)
 
     # Boundary conditions
-    S[1:n,1:n,N] = Wf
-    s[1:n,N] = Wf*(X[:,N]-xf)
+    S[1:n,1:n] = Wf
+    s[1:n] = Wf*(X[:,N]-xf)
 
     k = N-1
     # Loop backwards
     while k >= 1
-        # println("Jacobians")
 
         # Calculate the L(x,u,y,v)
         Ac, Bc = solver.Fc(X[:,k],U[:,k])
@@ -273,7 +282,33 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         E[n+m+1:n+m+n,:] = M
 
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
-        res.Xm[:,k] .= xm # probably don't need to cache
+        # function xm_func(x,u,y)
+        #     tmp = zeros(x)
+        #     solver.fc(tmp,x,u)
+        #     0.75*x + 0.25*solver.dt*tmp + 0.25*y
+        # end
+        # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
+        um = (U[:,k] + U[:,k+1])/2.0
+
+        # # analytic solution
+        # M1 = 0.25*3*eye(n)+dt*Ac
+        # M2 = 0.25*dt*Bc
+        #
+        # Hxx = 4*M1'*W*M1 + W
+        # Hxu = 2*M1'*zeros(n,m) + 4*M1*W*M2 + zeros(n,m)
+        # Hxy = M1*W
+        # Hxv= 2*M1*zeros(n,m)
+        # Huu = R + 2*(M2'*zeros(n,m) + zeros(m,n)*M2) + 4*M2'*W*M2 + R
+        # Huy = 0.5*zeros(m,n) + M2'*W
+        # Huv = R + 2*M2'*zeros(n,m)
+        # Hyy = 0.25*W + W
+        # Hyv = 0.5*zeros(n,m) + zeros(n,m)
+        # Hvv = R + R
+        #
+        # Hx = M1*W*(xm - xf) + W*(X[:,k] - xf)
+        # Hu = 0.5*R*um + M2'*W*(xm -xf) + R*U[:,k+1]
+        # Hy = 0.25*W*(xm - xf) + W*(X[:,k] - xf)
+        # Hv = 0.5*R*um + R*U[:,k]
 
         g[1:n,1] = W*(X[:,k] - xf)
         g[n+1:n+m] = R*U[:,k]
@@ -282,8 +317,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         g[n+m+n+m+1:n+m+n+m+n] = W*(X[:,k+1] - xf)
         g[n+m+n+m+n+1:end] = R*U[:,k+1]
 
-        H = dt/6.*E'*G*E
-        h = dt/6.*g'*E
+        H = dt/6*E'*G*E
+        h = dt/6*g'*E
 
         # parse L(...) into H blocks
         Hx = h[1:n]
@@ -315,11 +350,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huv_ = Huv + Huy*Cd + Bd'*Hyv + Bd'*Hyy*Cd
 
         # parse (approximate) cost-to-go P
-        Sy = s[1:n,k]
-        Sv = s[n+1:n+m,k]
-        Syy = S[1:n,1:n,k]
-        Svv = S[n+1:n+m,n+1:n+m,k]
-        Syv = S[1:n,n+1:n+m,k]
+        Sy = s[1:n]
+        Sv = s[n+1:n+m]
+        Syy = S[1:n,1:n]
+        Svv = S[n+1:n+m,n+1:n+m]
+        Syv = S[1:n,n+1:n+m]
 
         Sx_ = Sy'*Ad
         Su_ = Sy'*Bd
@@ -356,24 +391,30 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1] # note, I'm using this instead of Qux'
 
         # generate (approximate) cost-to-go at timestep k
-        s[1:n,k] = Qx_
-        s[n+1:n+m,k] = Qu_
-        S[1:n,1:n,k] = Qxx_
+        s[1:n] = Qx_
+        s[n+1:n+m] = Qu_
+        S[1:n,1:n] = Qxx_
         S[n+1:n+m,n+1:n+m] = Quu_
         S[1:n,n+1:n+m] = Qxu_
         S[n+1:n+m,1:n] = Qxu_'
 
-        # if at last time step, optimize over final control
+        v1 += d[:,k]'*Qv[:,1] # TODO confirm
+        v2 += 0.5*d[:,k]'*Qvv*d[:,k]
+
+        # at last time step, optimize over final control
         if k == 1
             K[:,:,k] .= -Quu_\Qxu_'
             b[:,:,k] .= zeros(m,m)
             d[:,k] .= -Quu_\Qu_'
+
+            v1 += d[:,k]'*Qu_[:,1] #TODO confirm that this is correct
+            v2 += 0.5*d[:,k]'*Quu_*d[:,k]
         end
 
         k = k - 1;
     end
 
-    return nothing
+    return v1, v2
 end
 
 """
@@ -409,13 +450,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
     # Compute original cost
     # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
-
-    if solver.integration == :rk3_foh
-        J_prev = cost_foh(solver, X, U)
-    else
-        J_prev = cost(solver, res, X, U)
-    end
-
+    J_prev = cost(solver, res, X, U)
     J = Inf
     alpha = 1.0
     iter = 0
@@ -439,14 +474,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         if res isa ConstrainedResults
             update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
         end
-
-
-        if solver.integration == :rk3_foh
-            J_prev = cost_foh(solver,X_,U_) # TODO need to update xm for new rollout
-        else
-            J_prev = cost(solver, res, X_, U_)
-        end
-
+        J = cost(solver, res, X_, U_)
+        println("Cost: $J")
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV[1,1]
         if iter < 10
