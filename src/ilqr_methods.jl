@@ -74,22 +74,22 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
     N = solver.N
     X = res.X; U = res.U; K = res.K; b = res.b; d = res.d; X_ = res.X_; U_ = res.U_
-    du = []
-    X_[:,1] = solver.obj.x0;
+
+    du = alpha*d[:,1]
+    U_[:,1] .= U[:,1] + du
+    X_[:,1] = solver.obj.x0
+
     for k = 2:N
         delta = X_[:,k-1] - X[:,k-1]
 
         # foh
         if solver.integration == :rk3_foh
-            if k == 2
-                du = K[:,:,1]*delta + alpha*d[:,1]
-                U_[:,1] .= U[:,1] + du
-            end
-            dv = K[:,:,k]*delta + alpha*(b[:,:,k]*du + d[:,1]) # TODO line search term goes on bias term, I think this is corrent then
-            U_[:, k] .= U[:, k-1] + dv
-            solver.fd(view(X_,:,k),X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
 
-            du .= dv
+            dv = K[:,:,k]*delta + alpha*(b[:,:,k]*du + d[:,k]) # TODO line search term goes on bias term, I think this is corrent then
+            U_[:, k] .= U[:, k] + dv
+            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
+
+            du = dv
 
         # zoh
         else
@@ -145,7 +145,7 @@ end
 $(SIGNATURES)
 Compute the unconstrained cost for foh (rk3) # TODO add better description
 """
-function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},Xm::Array{Float64,2})
+function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
 
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
@@ -155,9 +155,15 @@ function cost_foh(solver::Solver,X::Array{Float64,2},U::Array{Float64,2},Xm::Arr
         0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
     end
 
+    function xm_func(x,u,y,dt) # TODO improve
+        xm = zeros(solver.model.n)
+        solver.fc(xm,x,u)
+        0.25*3*x + 0.25*dt*xm + 0.25*y
+    end
+
     J = 0.0
     for k = 1:N-1
-        J += solver.dt/6*(stage_cost(X[:,k],U[:,k]) + 4*stage_cost(Xm[:,k],(U[:,k] + U[:,k+1])/2) + stage_cost(X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
+        J += solver.dt/6*(stage_cost(X[:,k],U[:,k]) + 4*stage_cost(xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt),(U[:,k] + U[:,k+1])/2) + stage_cost(X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
     return J
@@ -191,12 +197,15 @@ function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=fa
     N = solver.N
     m = solver.model.m
     for k = 1:N-1
-        res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
+        # res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
+        if solver.integration == :rk3_foh
+            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
+        else
+            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
+        end
     end
     return nothing
 end
-
-
 
 ########################################
 ### METHODS FOR CONSTRAINED PROBLEMS ###

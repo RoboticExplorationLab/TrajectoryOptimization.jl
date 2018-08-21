@@ -62,9 +62,6 @@ struct Solver
             fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
         end
 
-        Fd!(J,Sdot,S) = ForwardDiff.jacobian!(J,fd_aug!,Sdot,S)
-        Fc!(J,Sdot,S) = ForwardDiff.jacobian!(J,f_aug!,Sdot,S)
-
         fx = zeros(n,n)
         fu = zeros(n,m)
         if integration == :rk3_foh
@@ -74,10 +71,12 @@ struct Solver
             nm1 = model.n + model.m + 1
         end
 
-        Jd = zeros(nm1, nm1)
-        Sd = zeros(nm1)
+
 
         # Auto-diff discrete dynamics
+        Jd = zeros(nm1, nm1)
+        Sd = zeros(nm1)
+        Sdotd = zeros(Sd)
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))
             infeasible = length(u) != m
             Sd[1:n] = x
@@ -88,13 +87,13 @@ struct Solver
             end
 
             Sd[end] = dt
-            Sdot = zeros(Sd)
-            Fd_aug = Fd!(Jd,Sdot,Sd)
-            fx .= Fd_aug[1:model.n,1:model.n]
-            fu .= Fd_aug[1:model.n,model.n+1:model.n+model.m]
+            Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
+            Fd_augd = Fd!(Jd,Sdotd,Sd)
+            fx .= Fd_augd[1:model.n,1:model.n]
+            fu .= Fd_augd[1:model.n,model.n+1:model.n+model.m]
 
             if integration == :rk3_foh
-                fv .= Fd_aug[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
+                fv .= Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
                 return fx, fu, fv
             end
 
@@ -109,17 +108,13 @@ struct Solver
         # autodifferentiate continuous dynamics #TODO combined these two functions into 1
         Jc = zeros(model.n+model.m,model.n+model.m)
         Sc = zeros(model.n+model.m)
-
-        function Jacobians_Continuous!(x,u)
-            Sc[1:n] = x
-            Sc[n+1:n+m] = u[1:m]
-            Sdot = zeros(Sc)
-            F_aug = Fc!(Jc,Sdot,Sc)
-            fx = F_aug[1:model.n,1:model.n]
-            fu = F_aug[1:model.n,model.n+1:model.n+model.m]
-
-            return fx, fu
-
+        Scdot = zeros(Sc)
+        function Jacobians_Continuous!(x,u) #TODO this is still perplexing me...
+            F!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
+            Sc[1:model.n] = x
+            Sc[model.n+1:model.n+model.m] = u
+            F = F!(Jc,Scdot,Sc)
+            return F[1:n,1:n], F[1:n,n+1:n+m]
         end
 
         c_fun, c_jacob = generate_constraint_functions(obj)
