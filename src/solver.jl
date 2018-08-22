@@ -32,11 +32,11 @@ struct Solver
     Fc::Function         # Jacobian of continuous dynamics
     c_fun::Function
     c_jacobian::Function
-    N::Int               # Number of time steps
+    N::Int64               # Number of time steps
     control_integration::Symbol
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
-        N = Int(floor(obj.tf/dt));
+        N = convert(Int64,floor(obj.tf/dt))
         n,m = model.n, model.m
 
         # Make dynamics inplace
@@ -100,7 +100,6 @@ struct Solver
             if control_integration == :foh
                 fv .= Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
                 return fx, fu, fv
-                # return Fd_augd[1:model.n,1:model.n], Fd_augd[1:model.n,model.n+1:model.n+model.m], Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
 
             end
 
