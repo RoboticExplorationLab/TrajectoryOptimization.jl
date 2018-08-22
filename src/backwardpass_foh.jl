@@ -84,7 +84,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         #     0.75*x + 0.25*solver.dt*tmp + 0.25*y
         # end
         # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
-        res.Xm[:,k] .= xm
+        # res.Xm[:,k] .= xm
         um = (U[:,k] + U[:,k+1])/2.0
 
         # # analytic solution
@@ -197,7 +197,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         v1 += d[:,k]'*Qv[:,1]
         v2 += d[:,k]'*Qvv*d[:,k]
-
+        # v1 += d[:,k]'*Qu_[:,1]
+        # v2 += d[:,k]'*Quu_*d[:,k]
+        println("d: $(d[:,k])")
+        println("Qvv: $(Qvv)")
+        println("v1: $v1, v2: $v2")
         # at last time step, optimize over final control
         if k == 1
             K[:,:,k] .= -Quu_\Qxu_'
@@ -336,9 +340,9 @@ obj_uncon = TrajectoryOptimization.Dynamics.pendulum![2]
 
 ###
 solver_foh = TrajectoryOptimization.Solver(Dynamics.pendulum![1], obj_uncon, dt=dt,integration=:rk3_foh, opts=opts)
-solver_zoh = TrajectoryOptimization.Solver(Dynamics.pendulum![1], obj_uncon, dt=dt,integration=:rk4, opts=opts)
+solver_zoh = TrajectoryOptimization.Solver(Dynamics.pendulum![1], obj_uncon, dt=dt,integration=:rk3, opts=opts)
 
-U = ones(solver_foh.model.m, solver_foh.N)
+U = rand(solver_foh.model.m, solver_foh.N)
 
 results_foh = TrajectoryOptimization.UnconstrainedResults(solver_foh.model.n,solver_foh.model.m,solver_foh.N)
 results_zoh = TrajectoryOptimization.UnconstrainedResults(solver_zoh.model.n,solver_zoh.model.m,solver_zoh.N)

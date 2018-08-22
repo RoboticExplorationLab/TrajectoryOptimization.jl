@@ -100,8 +100,14 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         v1 += float(d[:,k]'*Qu)[1]
         v2 += float(d[:,k]'*Quu*d[:,k])
 
+        # println("d: $(d[:,k])")
+        # println("Qu: $Qu")
+        # println("Quu: $(Quu)")
+        # println("v1: $v1, v2: $v2")
+
         k = k - 1;
     end
+    # println("v1: $v1, v2: $v2")
 
     return v1, v2
 end
@@ -227,8 +233,14 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     S = zeros(n+m,n+m)
     s = zeros(n+m)
 
+    # line search stuff
     v1 = 0.0
     v2 = 0.0
+    QUU = zeros(m,m,N-1)
+    QVV = zeros(m,m,N-1)
+    QUV = zeros(m,m,N-1)
+    QU = zeros(m,N-1)
+    QV = zeros(m,N-1)
 
     # precompute once
     G = zeros(3*n+3*m,3*n+3*m)
@@ -264,20 +276,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Ac, Bc = solver.Fc(X[:,k],U[:,k])
         Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
 
-        # println("Ac: $(Ac)")
-        # println("Bc: $(Bc)")
-        #
-        #
-        # Ac, Bc = Jacobian(fc,X[:,k],U[:,k])
-        # Ad, Bd, Cd = Jacobian(fd,X[:,k],U[:,k],U[:,k+1])
-        #
-        # println("Ac: $(Ac)")
-        # println("Bc: $(Bc)")
-        #
-        # println("Functions:")
-        # println(solver.fc(zeros(3),X[:,k],U[:,k]))
-        # println(fc(X[:,k],U[:,k]))
-
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
@@ -289,26 +287,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # end
         # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
         um = (U[:,k] + U[:,k+1])/2.0
-
-        # # analytic solution
-        # M1 = 0.25*3*eye(n)+dt*Ac
-        # M2 = 0.25*dt*Bc
-        #
-        # Hxx = 4*M1'*W*M1 + W
-        # Hxu = 2*M1'*zeros(n,m) + 4*M1*W*M2 + zeros(n,m)
-        # Hxy = M1*W
-        # Hxv= 2*M1*zeros(n,m)
-        # Huu = R + 2*(M2'*zeros(n,m) + zeros(m,n)*M2) + 4*M2'*W*M2 + R
-        # Huy = 0.5*zeros(m,n) + M2'*W
-        # Huv = R + 2*M2'*zeros(n,m)
-        # Hyy = 0.25*W + W
-        # Hyv = 0.5*zeros(n,m) + zeros(n,m)
-        # Hvv = R + R
-        #
-        # Hx = M1*W*(xm - xf) + W*(X[:,k] - xf)
-        # Hu = 0.5*R*um + M2'*W*(xm -xf) + R*U[:,k+1]
-        # Hy = 0.25*W*(xm - xf) + W*(X[:,k] - xf)
-        # Hv = 0.5*R*um + R*U[:,k]
 
         g[1:n,1] = W*(X[:,k] - xf)
         g[n+1:n+m] = R*U[:,k]
@@ -398,8 +376,25 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[1:n,n+1:n+m] = Qxu_
         S[n+1:n+m,1:n] = Qxu_'
 
-        v1 += d[:,k]'*Qv[:,1] # TODO confirm
-        v2 += 0.5*d[:,k]'*Qvv*d[:,k]
+        # line search terms
+        QUU[:,:,k] .= Quu
+        QVV[:,:,k] .= Qvv
+        QUV[:,:,k] .= Quv
+        QU[:,k] .= Qu[:,1]
+        QV[:,k] .= Qv[:,1]
+        # v1 += d[:,k]'*Qv[:,1] # TODO confirm
+        # v2 += d[:,k]'*Qvv*d[:,k]
+        # v1 += (Quu_\Qu_[:,1])'*Qu_[:,1]
+        # v2 += (Quu_\Qu_[:,1])'*Quu_*(Quu_\Qu_[:,1])
+
+        # println("d: $(d[:,k])")
+        # println("Qvv: $(Qvv)")
+        # println("Quu_: $Quu_")
+        # println("Qu_: $Qu_")
+        # println("Qv: $Qv")
+        # println("v1: $v1, v2: $v2")
+        # println("alts:\n")
+        # println("d_alt: $(-Quu_\Qu_')")
 
         # at last time step, optimize over final control
         if k == 1
@@ -407,9 +402,17 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             b[:,:,k] .= zeros(m,m)
             d[:,k] .= -Quu_\Qu_'
 
-            v1 += d[:,k]'*Qu_[:,1] #TODO confirm that this is correct
-            v2 += 0.5*d[:,k]'*Quu_*d[:,k]
+            # v1 += d[:,k]'*Qu_[:,1] #TODO confirm that this is correct
+            # v2 += d[:,k]'*Quu_*d[:,k]
+
+            for i = 2:N
+                v1 += (-d[:,i-1])'*QUV[:,:,i-1]*(b[:,:,i]*d[:,i-1] + (-d[:,i])) + QU[:,i-1]'*(-d[:,i-1]) + QV[:,i-1]'*(b[:,:,i]*d[:,i-1] + (-d[:,i]))
+                v2 += d[:,i-1]'*QUU[:,:,i-1]*d[:,i-1] + (b[:,:,i]*d[:,i-1] + (-d[:,i]))'*QVV[:,:,i-1]*(b[:,:,i]*d[:,i-1] + (-d[:,i]))
+                println("v1: $v1, v2: $v2")
+
+            end
         end
+
 
         k = k - 1;
     end
@@ -475,9 +478,16 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
         end
         J = cost(solver, res, X_, U_)
-        println("Cost: $J")
-        dV = alpha*v1 + (alpha^2)*v2/2.
+        # println("Cost: $J")
+        # println("v1: $v1, v2: $v2")
+
+        # if solver.control_integration == :foh # TODO experimental, -> fix
+        #     dV = v1 + v2
+        # else
+            dV = alpha*v1 + (alpha^2)*v2/2.
+        # end
         z = (J_prev - J)/dV[1,1]
+
         if iter < 10
             alpha = alpha/2.
         else
