@@ -236,11 +236,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     # line search stuff
     v1 = 0.0
     v2 = 0.0
-    QUU = zeros(m,m,N-1)
-    QVV = zeros(m,m,N-1)
-    QUV = zeros(m,m,N-1)
-    QU = zeros(m,N-1)
-    QV = zeros(m,N-1)
 
     # precompute once
     G = zeros(3*n+3*m,3*n+3*m)
@@ -273,13 +268,18 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     while k >= 1
 
         # Calculate the L(x,u,y,v)
-        Ac, Bc = solver.Fc(X[:,k],U[:,k])
-        Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
+        Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+        # Ac, Bc = solver.Fc(X[:,k],U[:,k])
+        # Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
 
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
+        # xm = (X[:,k] + X[:,k+1])/2.0
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+        # println("xm: $xm")
+        # println("xk: $(X[:,k]), xk+1: $(X[:,k+1])")
         # function xm_func(x,u,y)
         #     tmp = zeros(x)
         #     solver.fc(tmp,x,u)
@@ -289,11 +289,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
-        g[n+1:n+m] = R*U[:,k]
-        g[n+m+1:n+m+n] = 4.0*W*(xm - xf)
-        g[n+m+n+1:n+m+n+m]= 4.0*R*(U[:,k] + U[:,k+1])./2
-        g[n+m+n+m+1:n+m+n+m+n] = W*(X[:,k+1] - xf)
-        g[n+m+n+m+n+1:end] = R*U[:,k+1]
+        g[n+1:n+m,1] = R*U[:,k]
+        g[n+m+1:n+m+n,1] = 4.0*W*(xm - xf)
+        g[n+m+n+1:n+m+n+m,1]= 4.0*R*um
+        g[n+m+n+m+1:n+m+n+m+n,1] = W*(X[:,k+1] - xf)
+        g[n+m+n+m+n+1:end,1] = R*U[:,k+1]
 
         H = dt/6*E'*G*E
         h = dt/6*g'*E
@@ -377,42 +377,18 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        QUU[:,:,k] .= Quu
-        QVV[:,:,k] .= Qvv
-        QUV[:,:,k] .= Quv
-        QU[:,k] .= Qu[:,1]
-        QV[:,k] .= Qv[:,1]
-        # v1 += d[:,k]'*Qv[:,1] # TODO confirm
-        # v2 += d[:,k]'*Qvv*d[:,k]
-        # v1 += (Quu_\Qu_[:,1])'*Qu_[:,1]
-        # v2 += (Quu_\Qu_[:,1])'*Quu_*(Quu_\Qu_[:,1])
-
-        # println("d: $(d[:,k])")
-        # println("Qvv: $(Qvv)")
-        # println("Quu_: $Quu_")
-        # println("Qu_: $Qu_")
-        # println("Qv: $Qv")
-        # println("v1: $v1, v2: $v2")
-        # println("alts:\n")
-        # println("d_alt: $(-Quu_\Qu_')")
+        v1 += -d[:,k+1]'*Qv[:,1] # TODO confirm
+        v2 += d[:,k+1]'*Qvv*d[:,k+1]
 
         # at last time step, optimize over final control
         if k == 1
-            K[:,:,k] .= -Quu_\Qxu_'
-            b[:,:,k] .= zeros(m,m)
-            d[:,k] .= -Quu_\Qu_'
+            K[:,:,1] .= -Quu_\Qxu_'
+            b[:,:,1] .= zeros(m,m)
+            d[:,1] .= -Quu_\Qu_'
 
-            # v1 += d[:,k]'*Qu_[:,1] #TODO confirm that this is correct
-            # v2 += d[:,k]'*Quu_*d[:,k]
-
-            for i = 2:N
-                v1 += (-d[:,i-1])'*QUV[:,:,i-1]*(b[:,:,i]*d[:,i-1] + (-d[:,i])) + QU[:,i-1]'*(-d[:,i-1]) + QV[:,i-1]'*(b[:,:,i]*d[:,i-1] + (-d[:,i]))
-                v2 += d[:,i-1]'*QUU[:,:,i-1]*d[:,i-1] + (b[:,:,i]*d[:,i-1] + (-d[:,i]))'*QVV[:,:,i-1]*(b[:,:,i]*d[:,i-1] + (-d[:,i]))
-                println("v1: $v1, v2: $v2")
-
-            end
+            v1 += d[:,1]'*Qu_[:,1]
+            v2 += d[:,1]'*Quu_*d[:,1]
         end
-
 
         k = k - 1;
     end
@@ -460,6 +436,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
     dV = Inf
     z = 0.
 
+    # while J > J_prev && iter < 25 #TODO return this to line search
     while z ≤ solver.opts.c1 || z > solver.opts.c2
         flag = rollout!(res,solver,alpha)
 
@@ -484,7 +461,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         # if solver.control_integration == :foh # TODO experimental, -> fix
         #     dV = v1 + v2
         # else
-            dV = alpha*v1 + (alpha^2)*v2/2.
+        dV = alpha*v1 + (alpha^2)*v2/2.
         # end
         z = (J_prev - J)/dV[1,1]
 

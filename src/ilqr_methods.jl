@@ -84,7 +84,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         delta = X_[:,k-1] - X[:,k-1]
 
         if solver.control_integration == :foh
-            dv .= K[:,:,k]*delta + alpha*(b[:,:,k]*du + d[:,k]) # TODO confirm that line search term goes like this
+            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k] # TODO confirm that line search term goes like this
             U_[:,k] .= U[:,k] + dv
             solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
             du .= dv
@@ -133,7 +133,10 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
-            Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
+            Ac, Bc = solver.Fc(X[:,k],U[:,k])
+            M = 0.25*[3*eye(solver.model.n)+solver.dt*Ac solver.dt*Bc eye(solver.model.n) zeros(solver.model.n,solver.model.m)]
+            Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+            # Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
             Um = (U[:,k] + U[:,k+1])/2
             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
@@ -170,7 +173,7 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
-            res.Ac[:,:,k], res.Bc = solver.Fc(res.X[:,k], res.U[:,k])
+            res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
         else
             res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
         end

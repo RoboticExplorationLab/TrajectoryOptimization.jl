@@ -100,6 +100,8 @@ struct Solver
             if control_integration == :foh
                 fv .= Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
                 return fx, fu, fv
+                # return Fd_augd[1:model.n,1:model.n], Fd_augd[1:model.n,model.n+1:model.n+model.m], Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
+
             end
 
             if infeasible
