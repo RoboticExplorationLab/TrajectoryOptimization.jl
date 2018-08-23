@@ -56,7 +56,7 @@ U = ones(solver.model.m,solver.N-1)
 # @test all(ui[2,:] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
 # @test all(results.X .== X0) # rolled out trajectory should be equivalent to infeasible trajectory after applying augmented controls
 
-@time results = solve_al(solver,X_interp,U)
+@time results = solve(solver,X_interp,U)
 
 plot(results.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")

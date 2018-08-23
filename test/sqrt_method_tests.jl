@@ -2,15 +2,15 @@ using TrajectoryOptimization
 using Base.Test
 
 model,obj = TrajectoryOptimization.Dynamics.dubinscar
-opts = SolverOptions()
+opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = true
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 results = TrajectoryOptimization.UnconstrainedResults(model.n,model.m,solver.N)
 results_sqrt = TrajectoryOptimization.UnconstrainedResults(model.n,model.m,solver.N)
 results.X[:,1] = solver.obj.x0
-results.U[:,:] = ones(model.m,solver.N-1)
+results.U[:,:] = ones(model.m,solver.N)
 results_sqrt.X[:,1] = solver.obj.x0
-results_sqrt.U[:,:] = ones(model.m,solver.N-1)
+results_sqrt.U[:,:] = ones(model.m,solver.N)
 
 TrajectoryOptimization.rollout!(results,solver)
 TrajectoryOptimization.rollout!(results_sqrt,solver)
@@ -30,12 +30,14 @@ end
 @test all(isapprox.(results.S,tmp))
 
 # backward pass square root for constrained solve
-obj_c = TrajectoryOptimization.ConstrainedObjective(obj) # constrained objective
+u_min = -10
+u_max = 10
+obj_c = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min,u_max=u_max) # constrained objective
 c_fun, constraint_jacobian = TrajectoryOptimization.generate_constraint_functions(obj_c)
-p = size(c_fun(zeros(model.n),zeros(model.m)))
-opts_con = SolverOptions()
+p = size(c_fun(zeros(solver.model.n),zeros(solver.model.m)))
+opts_con = TrajectoryOptimization.SolverOptions()
 opts_con.square_root = false
-opts_con_sqrt = SolverOptions()
+opts_con_sqrt = TrajectoryOptimization.SolverOptions()
 opts_con_sqrt.square_root=true
 solver_con = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con)
 solver_con_sqrt = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con_sqrt)

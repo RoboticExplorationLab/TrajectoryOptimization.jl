@@ -124,7 +124,7 @@ Calculate Jacobians prior to the backwards pass
 
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
-function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void
+function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO change to inplace '!' notation throughout the code
     N = solver.N
     for k = 1:N-1
         # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
@@ -332,7 +332,7 @@ $(SIGNATURES)
 Additional controls for producing an infeasible state trajectory
 """
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
-    ui = zeros(solver.model.n,solver.N-1) # initialize
+    ui = zeros(solver.model.n,solver.N) # initialize
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
@@ -344,7 +344,7 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
 end
 
 function infeasible_controls(solver::Solver,X0::Array{Float64,2})
-    u = zeros(solver.model.m,solver.N-1)
+    u = zeros(solver.model.m,solver.N)
     infeasible_controls(solver,X0,u)
 end
 

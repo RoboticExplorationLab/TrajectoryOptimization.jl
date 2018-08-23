@@ -8,7 +8,7 @@ function pendulum_dynamics(x,u)
     lc = 0.5
     I = 0.25
     g = 9.81
-    xdot = zeros(x)
+    xdot = similar(x)
     xdot[1] = x[2]
     xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
     return xdot

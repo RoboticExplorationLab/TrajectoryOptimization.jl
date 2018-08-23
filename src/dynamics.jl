@@ -15,5 +15,6 @@ include("../dynamics/acrobot.jl")
 include("../dynamics/ballonbeam.jl")
 include("../dynamics/cartpole.jl")
 include("../dynamics/dubinscar.jl")
+include("../dynamics/quadrotor.jl")
 
 end
