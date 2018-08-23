@@ -22,7 +22,9 @@ end
 @testset "First Order Hold" begin
     include("foh_tests.jl")
 end
-
+@testset "Infeasible Start" begin
+    include("infeasible_start_tests.jl")
+end
 
 """
 # NEEDED TESTS:

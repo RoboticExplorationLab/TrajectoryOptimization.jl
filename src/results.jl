@@ -171,10 +171,10 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     Bc = zeros(n,m,N-1)
 
     # Stage Constraints
-    C = zeros(p,N-1)
-    Iμ = zeros(p,p,N-1)
-    LAMBDA = zeros(p,N-1)
-    MU = ones(p,N-1)
+    C = zeros(p,N)
+    Iμ = zeros(p,p,N)
+    LAMBDA = zeros(p,N)
+    MU = ones(p,N)
 
     # Terminal Constraints (make 2D so it works well with stage values)
     C_N = zeros(p_N)
@@ -182,8 +182,8 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     λ_N = zeros(p_N)
     μ_N = ones(p_N)
 
-    cx = zeros(p,n,N-1)
-    cu = zeros(p,m,N-1)
+    cx = zeros(p,n,N)
+    cu = zeros(p,m,N)
     cxn = zeros(p_N,n)
 
     ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,

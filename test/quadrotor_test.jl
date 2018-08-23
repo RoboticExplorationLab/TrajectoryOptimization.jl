@@ -59,4 +59,4 @@ plot!(results_con.U[1:m,:]',color="red")
 
 println("Final position: $(results_uncon.X[1:3,end]) | desired: $(obj_uncon.xf[1:3])")
 
-plot_3D_trajectory(results_uncon, solver_uncon, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])
+plot_3D_trajectory(results_con, solver_con, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])

@@ -84,7 +84,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         delta = X_[:,k-1] - X[:,k-1]
 
         if solver.control_integration == :foh
-            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k] # TODO confirm that line search term goes like this
+            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
             U_[:,k] .= U[:,k] + dv
             solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
             du .= dv
@@ -128,21 +128,20 @@ Compute the unconstrained cost
 """
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     R = getR(solver)
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
             Ac, Bc = solver.Fc(X[:,k],U[:,k])
             M = 0.25*[3*eye(solver.model.n)+solver.dt*Ac solver.dt*Bc eye(solver.model.n) zeros(solver.model.n,solver.model.m)]
-            Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+            Xm = M*[X[:,k];U[1:m,k];X[:,k+1];U[1:m,k+1]]
             # Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
             Um = (U[:,k] + U[:,k+1])/2
             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
             J += stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
-        #J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
     return J
@@ -151,9 +150,15 @@ end
 """ $(SIGNATURES) Compute the Constrained Cost """
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
-    for k = 1:solver.N-1
+    N = solver.N
+    for k = 1:N-1
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
+
+    if solver.control_integration == :foh
+        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
+    end
+
     J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
     return J
 end
@@ -179,6 +184,11 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
         end
         res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
     end
+
+    if solver.control_integration == :foh
+        res.Cx[:,:,N], res.Cu[:,:,N] = solver.c_jacobian(res.X[:,N],res.U[:,N])
+    end
+
     res.Cx_N .= solver.c_jacobian(res.X[:,N])
     return nothing
 end
@@ -206,10 +216,19 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Void
-    p, N = size(res.C)
-    N += 1 # since C is size (p,N-1), terminal constraints are handled separately
-    for k = 1:N-1
+function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, U::Array)::Void
+
+    p, N = size(res.C) # note, C is now (p,N)
+    c = solver.c_fun
+    pI = solver.obj.pI
+
+    if solver.control_integration == :foh
+        final_index = N
+    else
+        final_index = N-1
+    end
+
+    for k = 1:final_index
         res.C[:,k] = c(X[:,k], U[:,k]) # update results with constraint evaluations
 
         # Inequality constraints [see equation ref]
@@ -379,7 +398,11 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        solver.fd(view(x,:,k+1),x[:,k],u[:,k])
+        if solver.control_integration == :foh
+            solver.fd(view(x,:,k+1),x[:,k],u[:,k],u[:,k+1])
+        else
+            solver.fd(view(x,:,k+1),x[:,k],u[:,k])
+        end
         ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
     end
@@ -413,4 +436,8 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
         x_traj[i,:] = slope[i].*t
     end
     x_traj
+end
+
+function line_trajectory(solver::Solver)
+    line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
 end

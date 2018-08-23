@@ -30,8 +30,6 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     S = Qf
     s = Qf*(X[:,N] - xf)
 
-    res.S[:,:,N] .= S
-    res.s[:,N] = copy(s)
 
     v1 = 0.
     v2 = 0.
@@ -41,6 +39,9 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         S += Cx'*res.IμN*Cx
         s += Cx'*res.IμN*res.CN + Cx'*res.λN
     end
+
+    res.S[:,:,N] .= S
+    res.s[:,N] = copy(s)
 
     mu = 0.
     k = N-1
@@ -52,33 +53,27 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         luu = R
 
         # Compute gradients of the dynamics
-        fx,fu = res.fx[:,:,k], res.fu[:,:,k]
+        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
         Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
-        # Quu = luu + fu'*(S + mu*eye(n))*fu
-
         Qux = fu'*(S + mu*eye(n))*fx
 
         # regularization
-        # println("Quu: $(Quu)")
-        # println("condition number: $(cond(Quu))")
         if !isposdef(Quu)
             mu = mu + solver.opts.mu_regularization;
             k = N-1
             if solver.opts.verbose
                 println("regularized")
             end
-            break
-
+            continue
         end
 
         # Constraints
         if res isa ConstrainedResults
-            # Cx, Cu = constraint_jacobian(X[:,k], U[:,k])
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
             Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
             Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
@@ -97,17 +92,11 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         res.s[:,k] = copy(s)
 
         # terms for line search
-        v1 += float(d[:,k]'*Qu)[1]
-        v2 += float(d[:,k]'*Quu*d[:,k])
-
-        # println("d: $(d[:,k])")
-        # println("Qu: $Qu")
-        # println("Quu: $(Quu)")
-        # println("v1: $v1, v2: $v2")
+        v1 += (d[:,k]'*Qu)[1]
+        v2 += d[:,k]'*Quu*d[:,k]
 
         k = k - 1;
     end
-    # println("v1: $v1, v2: $v2")
 
     return v1, v2
 end
@@ -189,8 +178,9 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
 
         catch ex
             if ex isa LinAlg.PosDefException
-                mu += 1
+                mu += solver.opts.mu_regularization
                 k = N-1
+                continue
             end
         end
 
@@ -215,6 +205,10 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
+    if solver.model.m != size(res.U,1)
+        m += n
+    end
+
     W = solver.obj.Q
     Wf = solver.obj.Qf
     xf = solver.obj.xf
@@ -263,29 +257,26 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     S[1:n,1:n] = Wf
     s[1:n] = Wf*(X[:,N]-xf)
 
+    if res isa ConstrainedResults
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        Cx = res.Cx_N
+        S[1:n,1:n] += Cx'*res.IμN*Cx
+        s[1:n] += Cx'*res.IμN*res.CN + Cx'*res.λN
+    end
+
     k = N-1
+    mu = 0.0
     # Loop backwards
     while k >= 1
 
         # Calculate the L(x,u,y,v)
-        Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
-        Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
-        # Ac, Bc = solver.Fc(X[:,k],U[:,k])
-        # Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
+        Ac, Bc = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
 
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
-        # xm = (X[:,k] + X[:,k+1])/2.0
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
-        # println("xm: $xm")
-        # println("xk: $(X[:,k]), xk+1: $(X[:,k+1])")
-        # function xm_func(x,u,y)
-        #     tmp = zeros(x)
-        #     solver.fc(tmp,x,u)
-        #     0.75*x + 0.25*solver.dt*tmp + 0.25*y
-        # end
-        # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
@@ -308,12 +299,37 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huu = H[n+1:n+m,n+1:n+m]
         Hyy = H[n+m+1:n+m+n,n+m+1:n+m+n]
         Hvv = H[2*n+m+1:2*n+2*m,2*n+m+1:2*n+2*m]
+
         Hxu = H[1:n,n+1:n+m]
         Hxy = H[1:n,n+m+1:n+m+n]
         Hxv = H[1:n,2*n+m+1:2*n+2*m]
         Huy = H[n+1:n+m,n+m+1:n+m+n]
         Huv = H[n+1:n+m,2*n+m+1:2*n+2*m]
         Hyv = H[n+m+1:n+m+n,2*n+m+1:2*n+2*m]
+
+        # Constraints
+        if res isa ConstrainedResults
+            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+
+            Hx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])'
+            Hu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])'
+            Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
+            Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
+
+            Hxx += Cx'*Iμ[:,:,k]*Cx
+            Huu += Cu'*Iμ[:,:,k]*Cu
+            Hyy += Cy'*Iμ[:,:,k+1]*Cy
+            Hvv += Cv'*Iμ[:,:,k+1]*Cv
+
+            Hxu += Cx'*Iμ[:,:,k]*Cu
+            #Hxy += Cx'*Iμ[:,:,k]*Cy
+            #Hxv += Cx'*Iμ[:,:,k]*Cv
+            #Huy += Cu'*Iμ[:,:,k]*Cy
+            #Huv += Cu'*Iμ[:,:,k]*Cv
+            Hyv += Cy'*Iμ[:,:,k+1]*Cv
+
+        end
 
         # substitute in dynamics dx = Addx + Bddu1 + Cddu2
         Hx_ = Hx + Hy*Ad
@@ -328,6 +344,9 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huv_ = Huv + Huy*Cd + Bd'*Hyv + Bd'*Hyy*Cd
 
         # parse (approximate) cost-to-go P
+
+        #TODO regularize if needed, is this correct?
+
         Sy = s[1:n]
         Sv = s[n+1:n+m]
         Syy = S[1:n,1:n]
@@ -338,12 +357,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Su_ = Sy'*Bd
         Sv_ = Sy'*Cd + Sv' # TODO come back and sort out transpose business
 
-        Sxx_ = Ad'*Syy*Ad
-        Suu_ = Bd'*Syy*Bd
-        Svv_ = Svv + Cd'*Syy*Cd + Cd'*Syv + Syv'*Cd
-        Sxu_ = Ad'*Syy*Bd
-        Sxv_ = Ad'*Syy*Cd + Ad'*Syv
-        Suv_ = Bd'*Syy*Cd + Bd'*Syv
+        Sxx_ = Ad'*Syy*Ad # I don't think this is regularized, similar to how Qxx is not during normal backwardpass
+        Suu_ = Bd'*(Syy + mu*eye(n))*Bd
+        Svv_ = (Svv + mu*eye(m)) + Cd'*(Syy + mu*eye(n))*Cd + Cd'*Syv + Syv'*Cd
+        Sxu_ = Ad'*(Syy + mu*eye(n))*Bd
+        Sxv_ = Ad'*(Syy + mu*eye(n))*Cd + Ad'*Syv
+        Suv_ = Bd'*(Syy + mu*eye(n))*Cd + Bd'*Syv
 
         # collect terms to form Q
         Qx = Hx_ + Sx_
@@ -357,6 +376,16 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxu = Hxu_ + Sxu_
         Qxv = Hxv_ + Sxv_
         Quv = Huv_ + Suv_
+
+        # regularization
+        if !isposdef(Qvv)
+            mu = mu + solver.opts.mu_regularization;
+            k = N-1
+            if solver.opts.verbose
+                println("regularized")
+            end
+            continue
+        end
 
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
@@ -377,7 +406,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        v1 += -d[:,k+1]'*Qv[:,1] # TODO confirm
+        v1 += -d[:,k+1]'*Qv[:,1]
         v2 += d[:,k+1]'*Qvv*d[:,k+1]
 
         # at last time step, optimize over final control
@@ -422,13 +451,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
     d = res.d
     X_ = res.X_
     U_ = res.U_
-    # C = res.C
-    # Iμ = res.Iμ
-    # LAMBDA = res.LAMBDA
-    # MU = res.MU
 
     # Compute original cost
-    # J_prev = cost(solver, X, U, C, Iμ, LAMBDA)
     J_prev = cost(solver, res, X, U)
     J = Inf
     alpha = 1.0
@@ -436,7 +460,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
     dV = Inf
     z = 0.
 
-    # while J > J_prev && iter < 25 #TODO return this to line search
     while z ≤ solver.opts.c1 || z > solver.opts.c2
         flag = rollout!(res,solver,alpha)
 
@@ -452,17 +475,12 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
         # Calcuate cost
         if res isa ConstrainedResults
-            update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
+            update_constraints!(res,solver,X_,U_)
+            # update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
+
         end
         J = cost(solver, res, X_, U_)
-        # println("Cost: $J")
-        # println("v1: $v1, v2: $v2")
-
-        # if solver.control_integration == :foh # TODO experimental, -> fix
-        #     dV = v1 + v2
-        # else
         dV = alpha*v1 + (alpha^2)*v2/2.
-        # end
         z = (J_prev - J)/dV[1,1]
 
         if iter < 10

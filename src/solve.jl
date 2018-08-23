@@ -97,16 +97,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         else
             results.U .= U0 # initialize control to control input sequence
             if !isempty(prevResults) # bootstrap previous constraint solution
-                # println("Bootstrap")
-                # println(size(results.C))
-                # println(size(prevResults.C))
-                # results.C .= prevResults.C[1:p,:]
-                # results.Iμ .= prevResults.Iμ[1:p,1:p,:]
+
                 results.LAMBDA .= prevResults.LAMBDA[1:p,:]
                 results.MU .= prevResults.MU[1:p,:]
-
-                # results.CN .= 1000.*prevResults.CN
-                # results.IμN .= 1000.*prevResults.IμN
                 results.λN .= prevResults.λN
                 results.μN .= prevResults.μN
             end
@@ -116,10 +109,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
 
         # Generate constraint function and jacobian functions from the objective
-        # c_fun, constraint_jacobian = generate_constraint_functions(solver.obj, infeasible=infeasible)
-
-        # Evalute constraints for new trajectories
-        update_constraints!(results,solver.c_fun,pI,results.X,results.U)
+        update_constraints!(results,solver,results.X,results.U)
     end
 
     # Unpack results for convenience
@@ -145,7 +135,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Outer Loop
     for k = 1:solver.opts.iterations_outerloop
-        # J_prev = cost(solver, results, X, U, infeasible=infeasible) # calculate cost for current trajectories and constraint violations
         J_prev = cost(solver, results, X, U)
 
         print_info("Cost ($k): $J_prev\n")
@@ -164,7 +153,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             elseif solver.opts.square_root
                 v1, v2 = backwards_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
-                # v1, v2 = backwardpass!(results, solver; kwargs_bp...) # standard backward pass [see insert algorithm]
                 v1, v2 = backwardpass!(results, solver)
             end
 
@@ -239,8 +227,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         if solver.opts.cache
             return results_cache
         else
-
-
             return results
         end
     end
@@ -253,9 +239,14 @@ $(SIGNATURES)
 Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
-    p,N = size(results.C)
-    N += 1
-    for jj = 1:N-1
+    p,N = size(results.C) # note I changed C to be (p,N)
+    if solver.control_integration == :foh
+        final_index = N
+    else
+        final_index = N-1
+    end
+
+    for jj = 1:final_index
         for ii = 1:p
             if ii <= solver.obj.pI
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
