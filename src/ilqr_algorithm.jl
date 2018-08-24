@@ -43,7 +43,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     res.S[:,:,N] .= S
     res.s[:,N] = copy(s)
 
-    mu = 0.
+    mu = res.mu_reg
     k = N-1
     # Loop backwards
     while k >= 1
@@ -59,17 +59,19 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
-        Quu = Hermitian(luu + fu'*(S + mu*eye(n))*fu)
-        Qux = fu'*(S + mu*eye(n))*fx
+        Quu = Hermitian(luu + fu'*(S + mu[1]*eye(n))*fu)
+        Qux = fu'*(S + mu[1]*eye(n))*fx
 
         # regularization
         if !isposdef(Quu)
-            mu = mu + solver.opts.mu_regularization;
+            mu[1] += solver.opts.mu_reg_update
             k = N-1
             if solver.opts.verbose
                 println("regularized")
             end
             continue
+        else
+            mu[1] /= 1.6
         end
 
         # Constraints
@@ -138,7 +140,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
     # Initialization
     v1 = 0.
     v2 = 0.
-    mu = 0.
+    mu = res.mu_reg
     k = N-1
 
     # Backwards passes
@@ -174,14 +176,15 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
         s = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
 
         try  # Regularization
-            Su = chol_minus(Wxx[:R]+eye(n)*mu,Wuu[:R]'\Qxu')
+            Su = chol_minus(Wxx[:R]+eye(n)*mu[1],Wuu[:R]'\Qxu')
 
         catch ex
             if ex isa LinAlg.PosDefException
-                mu += solver.opts.mu_regularization
+                mu[1] += solver.opts.mu_reg_update
                 k = N-1
                 continue
             end
+            #TODO add mu decrement
         end
 
         res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
@@ -265,7 +268,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     end
 
     k = N-1
-    mu = 0.0
+    mu = res.mu_reg
     # Loop backwards
     while k >= 1
 
@@ -358,11 +361,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Sv_ = Sy'*Cd + Sv' # TODO come back and sort out transpose business
 
         Sxx_ = Ad'*Syy*Ad # I don't think this is regularized, similar to how Qxx is not during normal backwardpass
-        Suu_ = Bd'*(Syy + mu*eye(n))*Bd
-        Svv_ = (Svv + mu*eye(m)) + Cd'*(Syy + mu*eye(n))*Cd + Cd'*Syv + Syv'*Cd
-        Sxu_ = Ad'*(Syy + mu*eye(n))*Bd
-        Sxv_ = Ad'*(Syy + mu*eye(n))*Cd + Ad'*Syv
-        Suv_ = Bd'*(Syy + mu*eye(n))*Cd + Bd'*Syv
+        Suu_ = Bd'*(Syy + mu[1]*eye(n))*Bd
+        Svv_ = (Svv + mu[1]*eye(m)) + Cd'*(Syy + mu[1]*eye(n))*Cd + Cd'*Syv + Syv'*Cd
+        Sxu_ = Ad'*(Syy + mu[1]*eye(n))*Bd
+        Sxv_ = Ad'*(Syy + mu[1]*eye(n))*Cd + Ad'*Syv
+        Suv_ = Bd'*(Syy + mu[1]*eye(n))*Cd + Bd'*Syv
 
         # collect terms to form Q
         Qx = Hx_ + Sx_
@@ -379,12 +382,14 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         # regularization
         if !isposdef(Qvv)
-            mu = mu + solver.opts.mu_regularization;
+            mu[1] += solver.opts.mu_reg_update
             k = N-1
             if solver.opts.verbose
                 println("regularized")
             end
             continue
+        else
+            mu[1] /= 2.0
         end
 
         K[:,:,k+1] .= -Qvv\Qxv'
@@ -453,8 +458,12 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
     U_ = res.U_
 
     # Compute original cost
+    if res isa ConstrainedResults
+        update_constraints!(res,solver,X,U)
+    end
     J_prev = cost(solver, res, X, U)
     J = Inf
+
     alpha = 1.0
     iter = 0
     dV = Inf
@@ -490,9 +499,18 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         end
 
         if iter > solver.opts.iterations_linesearch
+            # set trajectories to original trajectory
+            X_ .= X
+            U_ .= U
+            J = cost(solver, res, X_, U_)
+            # dV = alpha*v1 + (alpha^2)*v2/2.
+            z = (J_prev - J)/dV[1,1]
+
             if solver.opts.verbose
-                println("max iterations (forward pass)")
+                println("Max iterations (forward pass)\n -No improvement made")
             end
+            # update regularization parameter
+            res.mu_reg[1] += solver.opts.mu_reg_update
             break
         end
         iter += 1

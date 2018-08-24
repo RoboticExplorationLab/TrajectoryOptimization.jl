@@ -22,8 +22,8 @@ opts.iterations_outerloop = 250
 opts.iterations = 1000
 
 # Constraints
-u_min = -3
-u_max = 3
+u_min = -2
+u_max = 2
 x_min = [-10;-10]
 x_max = [10; 10]
 obj_uncon = Dynamics.pendulum[2]
@@ -46,14 +46,13 @@ println(results.X[:,end])
 idx = find(x->x==2,results.iter_type)
 plot(results.result[end].X')
 
-plot(results.result[idx[1]].U',color="green")
-plot!(results.result[idx[1]+1].U',color="red")
+plot(results.result[idx[1]-1].U',color="green")
+plot!(results.result[idx[1]].U',color="red")
 
 # confirm that control output from infeasible start is a good warm start for constrained solve
-@test norm(results.result[idx[1]].U-results.result[idx[1]+1].U) < 1e-1
-
+@test norm(results.result[idx[1]-1].U[1,:]-results.result[idx[1]].U[1,:]) < 1e-3
 tmp = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
-tmp.U[:,:] = results.result[idx[1]].U
+tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
 tmp2 = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
 tmp2.U[:,:] = results.result[end].U
 
@@ -64,4 +63,4 @@ rollout!(tmp2,solver)
 plot!(tmp2.X')
 
 # confirm that state trajectory from infeasible start is similar to the unconstrained solve
-@test norm(tmp.X' - tmp2.X') < 1e-1
+@test norm(tmp.X' - tmp2.X') < 5.0

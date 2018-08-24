@@ -5,14 +5,14 @@ using Base.Test
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = true
+opts.verbose = false
 opts.cache = true
 opts.c1 = 1e-4
 opts.c2 = 5.0
 opts.mu_al_update = 100.0
 opts.infeasible_regularization = 1.0
 opts.eps_constraint = 1e-3
-opts.eps = 1e-4
+opts.eps = 1e-5
 opts.iterations_outerloop = 25
 opts.iterations = 100
 
@@ -28,6 +28,7 @@ sol_foh = TrajectoryOptimization.solve(solver_foh,U)
 
 ### test final state of foh solve
 @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3
+sol_foh.X[:,end] - solver_foh.obj.xf
 ###
 
 ### test that foh augmented dynamics works
@@ -62,7 +63,8 @@ Ac, Bc = solver_test.Fc(x,u)
 
 ### test that control constraints work with foh
 u_min = -2.0
-u_max = 3.0
+u_max = 2.0
+obj_uncon.R[:] = [5e-1]
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max) # constrained objective
 
 solver_foh_con = Solver(Dynamics.pendulum![1], obj_con, integration=:rk3_foh, dt=dt, opts=opts)
@@ -73,14 +75,17 @@ plot(sol_foh_con.U')
 ###
 
 ### test that state and control constraints work with foh
-x_min = -2.5
-x_max = 6.0
+u_min = -3
+u_max = 3
+x_min = [-6; -6]
+x_max = [6; 6]
 obj_con2 = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh_con2 = Solver(Dynamics.pendulum![1], obj_con2, integration=:rk3_foh, dt=dt, opts=opts)
 sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
 plot(sol_foh_con2.X')
 plot(sol_foh_con2.U')
+sol_foh_con2.X[:,end]
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
 ###
 

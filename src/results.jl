@@ -55,8 +55,10 @@ struct UnconstrainedResults <: SolverIterResults
     Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N-1)
     Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N-1)
 
-    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc)
+    mu_reg::Array{Float64,1}
+
+    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
     end
 end
 
@@ -84,11 +86,12 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
     Ac = zeros(n,n,N-1)
     Bc = zeros(n,m,N-1)
-    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc)
+    mu_reg = zeros(1)
+    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.mu_reg))
 end
 
 """
@@ -130,8 +133,10 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    mu_reg::Array{Float64,1}
+
+    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn,mu_reg)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn,mu_reg)
     end
 end
 
@@ -186,16 +191,18 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu = zeros(p,m,N)
     cxn = zeros(p_N,n)
 
+    mu_reg = zeros(1)
+
     ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,
         C,Iμ,LAMBDA,MU,
-        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
+        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn,mu_reg)
 
 end
 
 function copy(r::ConstrainedResults)
     ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
-        copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.mu_reg))
 end
 
 """

@@ -1,6 +1,5 @@
 using TrajectoryOptimization
 using Base.Test
-#using Juno
 
 # Set up models and objective
 u_bound = 3.
@@ -8,6 +7,7 @@ model,obj = TrajectoryOptimization.Dynamics.pendulum
 opts = TrajectoryOptimization.SolverOptions()
 opts.c1 = 1e-3
 opts.c2 = 2.0
+opts.verbose = false
 opts.mu_al_update = 100.
 
 obj.Q .= eye(2)*1e-3

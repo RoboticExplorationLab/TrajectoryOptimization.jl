@@ -134,13 +134,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     end
 
     # Outer Loop
+    dJ = Inf
     for k = 1:solver.opts.iterations_outerloop
+        println("Outer loop $k (begin)")
+        if results isa ConstrainedResults
+            update_constraints!(results,solver,results.X,results.U)
+        end
         J_prev = cost(solver, results, X, U)
 
-        print_info("Cost ($k): $J_prev\n")
+        println("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
-            print_info("--Iteration: $k-($i)--")
+            println("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
@@ -177,9 +182,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Check for cost convergence
-            if dJ < solver.opts.eps
+            if (results isa UnconstrainedResults && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate)
                 if solver.opts.verbose
-                    println("   eps criteria met at iteration: $i\n")
+                    println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
                 end
                 break
             end
@@ -195,13 +200,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         # Check if maximum constraint violation satisfies termination criteria
         if solver.obj isa ConstrainedObjective
             max_c = max_violation(results, diag_inds)
-            if max_c < solver.opts.eps_constraint
+            if max_c < solver.opts.eps_constraint && dJ < solver.opts.eps
                 if solver.opts.verbose
-                    println("\teps constraint criteria met at outer iteration: $k\n")
+                    println("-Outer loop cost and constraint eps criteria met at outer iteration: $k\n")
                 end
                 break
             end
         end
+        println("Outer loop $k (end)\n")
 
     end
 
@@ -215,6 +221,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     ## Return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
+            println("Infeasible -> Feasible ")
             results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
             return merge_results_cache(results_cache,results_cache_2) # return infeasible results and final enforce dynamics results
         else
