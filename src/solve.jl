@@ -25,12 +25,14 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
 
     # If initialize zero controls if none are passed in
     if isempty(U0)
+        println("hello?")
         U0 = zeros(solver.m,solver.N-1)
     end
 
     # Convert to a constrained problem
     if isa(solver.obj, UnconstrainedObjective)
         obj_c = ConstrainedObjective(solver.obj)
+        solver.opts.unconstrained = true
         solver = Solver(solver.model, obj_c, dt=solver.dt, opts=solver.opts)
     end
 
@@ -38,7 +40,7 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
 end
 
 function solve(solver::Solver,U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
-    _solve(solver,U0, prevResults=prevResults)
+    _solve(solver,U0,prevResults=prevResults)
 end
 
 function solve(solver::Solver)::SolverResults
@@ -71,6 +73,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         print_debug("Solving Unconstrained Problem...")
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
+        results.U .= U0
 
     elseif solver.obj isa ConstrainedObjective
         p = solver.obj.p # number of inequality and equality constraints
@@ -91,13 +94,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results = ConstrainedResults(n,m,p,N) # preallocate memory for results
 
         if infeasible
-            #solver.obj.x0 = X0[:,1] # TODO not sure this is correct or needs to be here
             results.X .= X0 # initialize state trajectory with infeasible trajectory input
             results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
         else
             results.U .= U0 # initialize control to control input sequence
             if !isempty(prevResults) # bootstrap previous constraint solution
-
                 results.LAMBDA .= prevResults.LAMBDA[1:p,:]
                 results.MU .= prevResults.MU[1:p,:]
                 results.λN .= prevResults.λN

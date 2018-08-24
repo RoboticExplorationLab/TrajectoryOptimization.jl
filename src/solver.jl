@@ -33,6 +33,7 @@ struct Solver
     c_fun::Function
     c_jacobian::Function
     N::Int64             # Number of time steps
+    integration::Symbol
     control_integration::Symbol
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
@@ -84,9 +85,7 @@ struct Solver
         Sdotd = zeros(Sd)
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))
             infeasible = length(u) != m
-            # if infeasible
-            #     m += n
-            # end
+
             Sd[1:n] = x
             Sd[n+1:n+m] = u[1:m]
 
@@ -112,7 +111,7 @@ struct Solver
             end
 
             if infeasible
-                return fx, [fu eye(n,n)]
+                return fx, [fu eye(n)]
             end
 
             return fx, fu
@@ -123,11 +122,17 @@ struct Solver
         Sc = zeros(model.n+model.m)
         Scdot = zeros(Sc)
         function Jacobians_Continuous!(x,u)
+            infeasible = size(u,1) != model.m
             F!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
             Sc[1:model.n] = x
-            Sc[model.n+1:model.n+model.m] = u[1:m]
+            Sc[model.n+1:model.n+model.m] = u[1:model.m]
             F = F!(Jc,Scdot,Sc)
-            return F[1:n,1:n], F[1:n,n+1:n+m]
+
+            if infeasible
+                return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+            else
+                return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
+            end
         end
 
         c_fun, c_jacob = generate_constraint_functions(obj)
@@ -136,7 +141,7 @@ struct Solver
         options = copy(opts)
         options.infeasible = infeasible
 
-        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, control_integration)
+        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
 
     end
 end

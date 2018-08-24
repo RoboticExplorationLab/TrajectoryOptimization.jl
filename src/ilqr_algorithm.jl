@@ -67,7 +67,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
             mu[1] += solver.opts.mu_reg_update
             k = N-1
             if solver.opts.verbose
-                println("regularized")
+                println("regularized (normal bp)")
             end
             continue
         else
@@ -94,7 +94,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         res.s[:,k] = copy(s)
 
         # terms for line search
-        v1 += (d[:,k]'*Qu)[1]
+        v1 += vec(d[:,k])'*vec(Qu)
         v2 += d[:,k]'*Quu*d[:,k]
 
         k = k - 1;
@@ -191,7 +191,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
         res.s[:,k] = copy(s)
 
         # terms for line search
-        v1 += float(d[:,k]'*Qu)[1]
+        v1 += float(vec(d[:,k])'*vec(Qu))
         v2 += float(d[:,k]'*Wuu[:R]'Wuu[:R]*d[:,k])
 
         k = k - 1;
@@ -381,20 +381,20 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Quv = Huv_ + Suv_
 
         # regularization
-        if !isposdef(Qvv)
-            mu[1] += solver.opts.mu_reg_update
-            k = N-1
-            if solver.opts.verbose
-                println("regularized")
-            end
-            continue
-        else
-            mu[1] /= 2.0
-        end
+        # if !isposdef(Qvv)
+        #     mu[1] += solver.opts.mu_reg_update
+        #     k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized")
+        #     end
+        #     continue
+        # else
+        #     mu[1] /= 2.0
+        # end
 
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
-        d[:,k+1] .= -Qvv\Qv'
+        d[:,k+1] .= -Qvv\vec(Qv)
 
         Qx_ = Qx + Qv*K[:,:,k+1] + d[:,k+1]'*Qxv' + d[:,k+1]'*Qvv*K[:,:,k+1]
         Qu_ = Qu + Qv*b[:,:,k+1] + d[:,k+1]'*Quv' + d[:,k+1]'*Qvv*b[:,:,k+1]
@@ -411,17 +411,17 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        v1 += -d[:,k+1]'*Qv[:,1]
-        v2 += d[:,k+1]'*Qvv*d[:,k+1]
+        v1 += -vec(d[:,k+1])'*vec(Qv)
+        v2 += vec(d[:,k+1])'*Qvv*vec(d[:,k+1])
 
         # at last time step, optimize over final control
         if k == 1
             K[:,:,1] .= -Quu_\Qxu_'
             b[:,:,1] .= zeros(m,m)
-            d[:,1] .= -Quu_\Qu_'
+            d[:,1] .= -Quu_\vec(Qu_)
 
-            v1 += d[:,1]'*Qu_[:,1]
-            v2 += d[:,1]'*Quu_*d[:,1]
+            v1 += vec(d[:,1])'*vec(Qu_)
+            v2 += vec(d[:,1])'*Quu_*vec(d[:,1])
         end
 
         k = k - 1;
@@ -485,12 +485,10 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         # Calcuate cost
         if res isa ConstrainedResults
             update_constraints!(res,solver,X_,U_)
-            # update_constraints!(res,solver.c_fun,solver.obj.pI,X_,U_)
-
         end
         J = cost(solver, res, X_, U_)
         dV = alpha*v1 + (alpha^2)*v2/2.
-        z = (J_prev - J)/dV[1,1]
+        z = (J_prev - J)/dV
 
         if iter < 10
             alpha = alpha/2.
@@ -502,9 +500,12 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
+            if res isa ConstrainedResults
+                update_constraints!(res,solver,X_,U_)
+            end
             J = cost(solver, res, X_, U_)
             # dV = alpha*v1 + (alpha^2)*v2/2.
-            z = (J_prev - J)/dV[1,1]
+            z = (J_prev - J)/dV
 
             if solver.opts.verbose
                 println("Max iterations (forward pass)\n -No improvement made")
@@ -518,7 +519,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
     if solver.opts.verbose
         println("New cost: $J")
-        if res isa ConstrainedResults
+        if res isa ConstrainedResults && !solver.opts.unconstrained
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end

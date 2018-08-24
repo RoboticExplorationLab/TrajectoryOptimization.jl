@@ -67,15 +67,18 @@ Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
-    N = solver.N
+    N = solver.N; m = solver.model.m; n = solver.model.n
+    if infeasible
+        m += n
+    end
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
     X_[:,1] = solver.obj.x0;
 
     if solver.control_integration == :foh
         b = res.b
-        du = zeros(solver.model.m)
-        dv = zeros(solver.model.m)
+        du = zeros(m)
+        dv = zeros(m)
         du .= d[:,1]
         U_[:,1] .= U[:,1] + du
     end
@@ -129,18 +132,25 @@ Compute the unconstrained cost
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-    R = getR(solver)
+    if size(U,1) != m
+        m += n
+    end
+    #R = getR(solver)
+    R = solver.obj.R
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
             Ac, Bc = solver.Fc(X[:,k],U[:,k])
-            M = 0.25*[3*eye(solver.model.n)+solver.dt*Ac solver.dt*Bc eye(solver.model.n) zeros(solver.model.n,solver.model.m)]
-            Xm = M*[X[:,k];U[1:m,k];X[:,k+1];U[1:m,k+1]]
+            # println("size Ac: $(size(Ac)), Bc: $(size(Bc))")
+            M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
+            # println("size M: $(size(M))")
+            # println("size vec: $(size([X[:,k];U[:,k];X[:,k+1];U[:,k+1]]))")
+            Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
             # Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
             Um = (U[:,k] + U[:,k+1])/2
-            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J += solver.dt/6*(stage_cost(X[:,k],U[1:solver.model.m,k],Q,R,xf) + 4*stage_cost(Xm,Um[1:solver.model.m],Q,R,xf) + stage_cost(X[:,k+1],U[1:solver.model.m,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
-            J += stage_cost(X[:,k],U[:,k],Q,R,xf)
+            J += stage_cost(X[:,k],U[1:solver.model.m,k],Q,R,xf)
         end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
@@ -421,7 +431,14 @@ Infeasible start solution is run through standard constrained solve to enforce d
 function feasible_traj(results::ConstrainedResults,solver::Solver)
     #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
     solver.opts.infeasible = false
-    return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
+    if solver.opts.unconstrained
+        # solver.opts.unconstrained = false
+        obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
+        solver_uncon = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
+        return solve(solver_uncon,results.U[1:solver.model.m,:])
+    else
+        return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
+    end
 end
 
 """
