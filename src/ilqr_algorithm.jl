@@ -511,7 +511,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
                 println("Max iterations (forward pass)\n -No improvement made")
             end
             # update regularization parameter
-            res.mu_reg[1] += solver.opts.mu_reg_update
+            # res.mu_reg[1] += solver.opts.mu_reg_update
             break
         end
         iter += 1
@@ -519,7 +519,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
     if solver.opts.verbose
         println("New cost: $J")
-        if res isa ConstrainedResults && !solver.opts.unconstrained
+        if res isa ConstrainedResults# && !solver.opts.unconstrained
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end

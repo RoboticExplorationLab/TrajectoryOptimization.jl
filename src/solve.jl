@@ -25,7 +25,6 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
 
     # If initialize zero controls if none are passed in
     if isempty(U0)
-        println("hello?")
         U0 = zeros(solver.m,solver.N-1)
     end
 
@@ -33,7 +32,7 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
     if isa(solver.obj, UnconstrainedObjective)
         obj_c = ConstrainedObjective(solver.obj)
         solver.opts.unconstrained = true
-        solver = Solver(solver.model, obj_c, dt=solver.dt, opts=solver.opts)
+        solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
 
     _solve(solver,U0,X0,prevResults=prevResults)
@@ -80,13 +79,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         pI = solver.obj.pI # number of inequality constraints
 
         if infeasible
-            print_debug("Solving Constrained Problem with Infeasible Start...")
+            println("Solving Constrained Problem with Infeasible Start...")
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
             solver.opts.infeasible = true
         else
-            print_debug("Solving Constrained Problem...")
+            println("Solving Constrained Problem...")
             solver.opts.infeasible = false
         end
 

@@ -38,16 +38,15 @@ results
 idx = find(x->x==2,results.iter_type)
 
 # # test that infeasible control output is good warm start for dynamically constrained solve
-@test norm(results.result[idx[1]-1].U[1,:]-results.result[idx[1]].U[1,:]) < 1e-3
+@test norm(results.result[idx[1]-1].U[1,:]-vec(results.result[idx[1]].U)) < 0.05
 @test norm(results.X[:,end] - solver_uncon.obj.xf) < 1e-3
 
 plot(results.result[idx[1]-1].U',color="green")
-plot!(results.result[idx[1]].U',color="blue")
+plot!(results.result[idx[1]+1].U',color="blue")
 plot!(results.result[end].U',color="red")
 results.result[idx[1]].U
 
 # confirm that control output from infeasible start is a good warm start for constrained solve
-@test norm(results.result[idx[1]-1].U[1,:]-results.result[idx[1]].U[1,:]) < 1e-3
 tmp = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
 tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
 tmp2 = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
@@ -89,10 +88,11 @@ idx = find(x->x==2,results.iter_type)
 plot(results.result[end].X')
 
 plot(results.result[idx[1]-1].U',color="green")
-plot!(results.result[idx[1]].U',color="red")
+plot(results.result[idx[1]+1].U',color="blue")
+plot!(results.result[end].U',color="red")
 
 # confirm that control output from infeasible start is a good warm start for constrained solve
-@test norm(results.result[idx[1]-1].U[1,:]-results.result[idx[1]].U[1,:]) < 1e-3
+@test norm(results.result[idx[1]-1].U[1,:]-vec(results.result[idx[1]].U)) < 0.05
 tmp = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
 tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
 tmp2 = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
