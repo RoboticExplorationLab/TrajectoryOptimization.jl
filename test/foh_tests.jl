@@ -146,11 +146,9 @@ tmp2.U[:,:] = results.result[end].U
 rollout!(tmp,solver_uncon)
 plot(tmp.X')
 tmp.X[:,end]
-cost(solver_uncon,tmp.X,tmp.U)
 
 rollout!(tmp2,solver_uncon)
 plot!(tmp2.X')
-cost(solver_uncon,tmp2.X,tmp2.U)
 
 ## Constraints
 # u_min = -2

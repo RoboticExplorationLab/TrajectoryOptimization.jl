@@ -135,8 +135,8 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     if size(U,1) != m
         m += n
     end
-    #R = getR(solver)
-    R = solver.obj.R
+    R = getR(solver)
+    # R = solver.obj.R
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -148,9 +148,9 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
             Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
             # Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
             Um = (U[:,k] + U[:,k+1])/2
-            J += solver.dt/6*(stage_cost(X[:,k],U[1:solver.model.m,k],Q,R,xf) + 4*stage_cost(Xm,Um[1:solver.model.m],Q,R,xf) + stage_cost(X[:,k+1],U[1:solver.model.m,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
-            J += stage_cost(X[:,k],U[1:solver.model.m,k],Q,R,xf)
+            J += stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
