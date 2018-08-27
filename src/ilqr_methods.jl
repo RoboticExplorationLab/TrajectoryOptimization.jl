@@ -162,11 +162,11 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     J = cost(solver, X, U)
     N = solver.N
     for k = 1:N-1
-        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
-    end
-
-    if solver.control_integration == :foh
-        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
+        if solver.control_integration == :foh
+            J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k] + res.C[:,k+1]'*res.Iμ[:,:,k+1]*res.C[:,k+1] + res.LAMBDA[:,k+1]'*res.C[:,k+1])
+        else
+            J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+        end
     end
 
     J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
