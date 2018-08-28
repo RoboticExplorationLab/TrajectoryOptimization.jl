@@ -314,3 +314,26 @@ function add_iter!(cache::ResultsCache, results::SolverIterResults, cost::Float6
     cache.time[iter] = time
     return nothing
 end
+
+function add_iter_outerloop!(cache::ResultsCache, results::SolverIterResults, iter)::Void
+    cache.result[iter] = copy(results)
+    return nothing
+end
+
+function check_multipliers(results,solver)
+    p,N = size(results.C)
+    pI = solver.obj.pI
+    for i = 1:N
+        if (results.LAMBDA[1:pI,i]'*results.C[1:pI,i]) < 0.0
+            println("multiplier problem @ $i")
+            println("$(results.LAMBDA[1:pI,i].*results.C[1:pI,i] .< 0.0)")
+            println("$(results.LAMBDA[1:pI,i])")
+            println("$(results.C[1:pI,i])\n")
+            break
+        else
+            println("no multiplier problems\n")
+        end
+    end
+
+    return nothing
+end

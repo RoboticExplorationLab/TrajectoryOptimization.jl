@@ -5,10 +5,10 @@ using Plots
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = true
+opts.verbose = false
 opts.cache = true
 opts.c1 = 1e-5
-opts.c2 = 10.0
+opts.c2 = 2.0
 opts.mu_al_update = 100.0
 opts.infeasible_regularization = 1.0
 opts.eps_constraint = 1e-3
@@ -143,16 +143,17 @@ model_p = Dynamics.pendulum![1]
 # ###
 
 ### State and control constraints with foh (dubins car)
-u_min = [-0.5; -0.5]
+u_min = [-1; -1]
 u_max = [100; 100]
 x_min = [0; -100; -100]
-x_max = [100; 100; 100]
+x_max = [1.0; 100; 100]
+
 obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
 
-U = ones(solver_foh_con2.model.m,solver_foh_con2.N)
+U = ones(solver_zoh_con2.model.m,solver_zoh_con2.N)
 
 sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,U)
@@ -163,14 +164,10 @@ plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
 plot(sol_foh_con2.U')
 plot!(sol_zoh_con2.U')
 
-sol_foh_con2.X[:,end]
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
 
 a = 4
-# ### test infeasible start with foh
-# n = 2 # number of pendulum states
-# m = 1 # number of pendulum controls
-# model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
+### test infeasible start with foh (pendulum)
 #
 # opts = SolverOptions()
 # opts.square_root = false
@@ -187,16 +184,12 @@ a = 4
 # opts.iterations = 1000
 #
 # ## Unconstrained
-# obj_uncon = Dynamics.pendulum[2]
-# obj_uncon.R[:] = [1e-2]
-# solver_uncon = Solver(model!,obj_uncon,integration=:rk3_foh,dt=0.1,opts=opts)
-# solver_uncon.integration
-# solver_uncon.control_integration
+# solver_uncon_inf = Solver(model_p,obj_uncon_p,integration=:rk3_foh,dt=dt,opts=opts)
 #
-# X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
-# U = ones(solver_uncon.model.m,solver_uncon.N)
+# X_interp = line_trajectory(solver_uncon_inf.obj.x0,solver_uncon_inf.obj.xf,solver_uncon_inf.N)
+# U = ones(solver_uncon_inf.model.m,solver_uncon_inf.N)
 #
-# results = solve(solver_uncon,X_interp,U)
+# results_inf = solve(solver_uncon_inf,X_interp,U)
 #
 # plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
 # plot(results.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")

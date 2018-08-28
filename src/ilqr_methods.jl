@@ -136,22 +136,23 @@ Compute the unconstrained cost
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+
     if size(U,1) != m
         m += n
     end
+
     R = getR(solver)
-    # R = solver.obj.R
+
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
             Ac, Bc = solver.Fc(X[:,k],U[:,k])
-            # println("size Ac: $(size(Ac)), Bc: $(size(Bc))")
+
             M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
-            # println("size M: $(size(M))")
-            # println("size vec: $(size([X[:,k];U[:,k];X[:,k+1];U[:,k+1]]))")
+
             Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
-            # Xm = xm_func(X[:,k],U[:,k],X[:,k+1],solver.dt,solver.fc)
             Um = (U[:,k] + U[:,k+1])/2
+
             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
             J += stage_cost(X[:,k],U[:,k],Q,R,xf)
@@ -165,13 +166,15 @@ end
 """ $(SIGNATURES) Compute the Constrained Cost """
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
-    if J < 0.0
-        println("negative stage cost: $J")
-    end
+    # if J < 0.0
+    #     println("negative stage cost: $J")
+    # end
+
     N = solver.N
     for k = 1:N-1
         if res.LAMBDA[:,k]'*res.C[:,k] < 0.0
             println("Constraint issue")
+            println("added cost: $(res.LAMBDA[:,k]'*res.C[:,k])")
             println("$k")
             println("Lambda: \n $(res.LAMBDA[:,k])")
             println("C: \n $(res.C[:,k])")
@@ -245,6 +248,7 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     p, N = size(res.C) # note, C is now (p,N)
     c = solver.c_fun
     pI = solver.obj.pI
+    println("pI: $pI")
 
     if solver.control_integration == :foh
         final_index = N
@@ -254,6 +258,15 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
 
     for k = 1:final_index
         res.C[:,k] = c(X[:,k], U[:,k]) # update results with constraint evaluations
+
+        for ii = 1:pI
+            if res.C[ii,k] > 0.0
+                res.C[ii,k] .= 0.0
+            end
+        end
+        # if pI > 0
+        #     res.C[(res.C[1:pI,k] .> 0.0),k] = 0.0 # set satisfied inequality constraints to zero
+        # end
 
         # Inequality constraints [see equation ref]
         for j = 1:pI

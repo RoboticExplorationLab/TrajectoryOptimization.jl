@@ -259,14 +259,14 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
-        Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
+        # Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN + Cy'*Iμ[:,:,N]*Cy
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
-        S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
-        s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
-        S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
-        S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
+        S[1:n,1:n] += CxN'*res.IμN*CxN #+ Cy'*Iμ[:,:,N]*Cy
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN #+ Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
+        # S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
+        # s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
+        # S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
+        # S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
     end
 
     k = N-1
@@ -327,24 +327,24 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # Constraints
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            # Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
 
             Hx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])'
             Hu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])'
-            # Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
-            # Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
+            Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
+            Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
 
             Hxx += Cx'*Iμ[:,:,k]*Cx
             Huu += Cu'*Iμ[:,:,k]*Cu
-            # Hyy += Cy'*Iμ[:,:,k+1]*Cy
-            # Hvv += Cv'*Iμ[:,:,k+1]*Cv
+            Hyy += Cy'*Iμ[:,:,k+1]*Cy
+            Hvv += Cv'*Iμ[:,:,k+1]*Cv
 
             Hxu += Cx'*Iμ[:,:,k]*Cu
             #Hxy += Cx'*Iμ[:,:,k]*Cy
             #Hxv += Cx'*Iμ[:,:,k]*Cv
             #Huy += Cu'*Iμ[:,:,k]*Cy
             #Huv += Cu'*Iμ[:,:,k]*Cv
-            # Hyv += Cy'*Iμ[:,:,k+1]*Cv
+            Hyv += Cy'*Iμ[:,:,k+1]*Cv
         end
 
         # substitute in dynamics dx = Addx + Bddu1 + Cddu2
@@ -508,8 +508,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             if solver.opts.verbose
                 println("Max iterations (forward pass)\n -No improvement made")
             end
-            # update regularization parameter
-            # res.mu_reg[1] += solver.opts.mu_reg_update
             break
         end
         iter += 1

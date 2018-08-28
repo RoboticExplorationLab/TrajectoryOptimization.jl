@@ -148,10 +148,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             update_constraints!(results,solver,results.X,results.U)
         end
         J_prev = cost(solver, results, X, U)
-        println("Cost ($k): $J_prev\n")
+        # println("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
-            println("--Iteration: $k-($i)--")
+            # println("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
@@ -204,7 +204,23 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
         ## Outer loop update for Augmented Lagrange Method parameters
+        if results isa ConstrainedResults
+            update_constraints!(results,solver,results.X,results.U)
+        end
+        # println("precheck")
+        # check_multipliers(results)
+
         outer_loop_update(results,solver)
+
+        if results isa ConstrainedResults
+            println("postcheck")
+            check_multipliers(results,solver)
+        end
+
+        if solver.opts.cache
+            # Store current results and performance parameters
+            add_iter_outerloop!(results_cache, results, iter-1) # we already iterated counter but this needs to update those results
+        end
 
         # Check if maximum constraint violation satisfies termination criteria
         if solver.obj isa ConstrainedObjective
@@ -257,6 +273,7 @@ Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagra
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C) # note I changed C to be (p,N)
+
     if solver.control_integration == :foh
         final_index = N
     else
@@ -266,10 +283,15 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     for jj = 1:final_index
         for ii = 1:p
             if ii <= solver.obj.pI
-                if results.C[ii,jj] < 0 && results.LAMBDA[ii,jj] > 0.0
-                    println("C | Lambda disagree")
+                # if results.C[ii,jj] > 0.0
+                #     results.LAMBDA[ii,jj] .= 0.0
+                # else
+                if results.C[ii,jj] > 0
+                    println("Constraint not being set to zero")
                 end
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
+                # results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj] # for inequality constraints, C is zero if constraint is satisfied
+            #     # end
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
