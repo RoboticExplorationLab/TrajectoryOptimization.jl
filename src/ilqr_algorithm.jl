@@ -69,9 +69,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
-            continue
-        else
-            mu[1] /= 1.6
+            break
         end
 
         # Constraints
@@ -95,7 +93,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
         # terms for line search
         v1 += vec(d[:,k])'*vec(Qu)
-        v2 += d[:,k]'*Quu*d[:,k]
+        v2 += vec(d[:,k])'*Quu*vec(d[:,k])
 
         k = k - 1;
     end
@@ -149,13 +147,13 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
         lu = R*(U[:,k])
         lxx = Q
         luu = R
-        fx, fu = solver.Fd(X[:,k],U[:,k])
+        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 
         Wxx = qrfact!([Su*fx; Uq])
         Wuu = qrfact!([Su*fu; Ur])
-        Qxu = fx'*(Su'Su)*fu
+        Qxu = (fx'*Su')*(Su*fu)
 
         if isa(solver.obj, ConstrainedObjective)
             # Constraints
@@ -182,9 +180,8 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
             if ex isa LinAlg.PosDefException
                 mu[1] += solver.opts.mu_reg_update
                 k = N-1
-                continue
+                continue # break
             end
-            #TODO add mu decrement
         end
 
         res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
@@ -192,7 +189,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
 
         # terms for line search
         v1 += float(vec(d[:,k])'*vec(Qu))
-        v2 += float(d[:,k]'*Wuu[:R]'Wuu[:R]*d[:,k])
+        v2 += float(vec(d[:,k])'*Wuu[:R]'Wuu[:R]*vec(d[:,k]))
 
         k = k - 1;
     end
@@ -247,14 +244,17 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     g = zeros(3*n+3*m)
 
     # precompute most of E matrix once
+    Im = zeros(m,m)
+    Im[1:solver.model.m,1:solver.model.m] = 0.5*eye(solver.model.m)
+
     E = zeros(3*n+3*m,2*n+2*m)
     E[1:n,1:n] = eye(n)
-    E[n+1:n+m,n+1:n+m] = eye(m)
+    E[n+1:n+m,n+1:n+m] = eye(m)#Im
     #E[n+m+1:n+m+n,:] = M
-    E[2*n+m+1:2*n+m+m,n+1:n+m] = 0.5*eye(m)
-    E[2*n+m+1:2*n+m+m,2*n+m+1:2*n+m+m] = 0.5*eye(m)
+    E[2*n+m+1:2*n+m+m,n+1:n+m] = eye(m)#Im
+    E[2*n+m+1:2*n+m+m,2*n+m+1:2*n+m+m] = eye(m)#Im
     E[2*n+2*m+1:2*n+2*m+n,n+m+1:n+m+n] = eye(n)
-    E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)
+    E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)#Im
 
     # Boundary conditions
     S[1:n,1:n] = Wf
@@ -490,7 +490,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV
 
-        if iter < 10
+        if iter < 20
             alpha = alpha/2.
         else
             alpha = alpha/10.

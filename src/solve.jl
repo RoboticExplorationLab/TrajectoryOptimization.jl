@@ -122,7 +122,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Initial rollout
     if !infeasible
         X[:,1] = solver.obj.x0 # set state trajector initial conditions
-        rollout!(results,solver) # rollout new state trajectoy
+        flag = rollout!(results,solver) # rollout new state trajectoy
+
+        if !flag
+            println("Bad initial control sequence, setting initial control to random")
+            results.U .= rand(solver.model.m,solver.N)
+            rollout!(results,solver)
+        end
     end
 
     if solver.opts.cache
@@ -137,11 +143,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     dJ = Inf
     for k = 1:solver.opts.iterations_outerloop
         println("Outer loop $k (begin)")
+
         if results isa ConstrainedResults
             update_constraints!(results,solver,results.X,results.U)
         end
         J_prev = cost(solver, results, X, U)
-
         println("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
@@ -185,6 +191,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             if (results isa UnconstrainedResults && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
+                    if results isa UnconstrainedResults
+                        println("Unconstrained solve complete")
+                    end
                 end
                 break
             end
@@ -203,6 +212,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             if max_c < solver.opts.eps_constraint && dJ < solver.opts.eps
                 if solver.opts.verbose
                     println("-Outer loop cost and constraint eps criteria met at outer iteration: $k\n")
+                    println("Constrained solve complete")
                 end
                 break
             end

@@ -68,6 +68,8 @@ struct Solver
         fd_aug! = discretizer(f_aug!)
         if control_integration == :foh
             fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
+        else
+            fd_aug! = discretizer(f_aug!)
         end
 
         fx = zeros(n,n)
@@ -126,12 +128,16 @@ struct Solver
             F!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
             Sc[1:model.n] = x
             Sc[model.n+1:model.n+model.m] = u[1:model.m]
-            F = F!(Jc,Scdot,Sc)
+            # F = F!(Jc,Scdot,Sc)
+            F!(Jc,Scdot,Sc)
 
             if infeasible
-                return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+                # return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
             else
-                return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
+                # return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
+                return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m]
+
             end
         end
 
@@ -139,7 +145,7 @@ struct Solver
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
-        options.infeasible = infeasible
+        # options.infeasible = infeasible
 
         new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
 

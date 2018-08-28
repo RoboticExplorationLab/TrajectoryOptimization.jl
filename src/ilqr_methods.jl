@@ -52,9 +52,13 @@ function rollout!(res::SolverResults,solver::Solver)
         end
 
         if infeasible
-            X[:,k+1] .+= U[solver.model.m+1:end,k]
+            X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
+        end
+        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
+            return false
         end
     end
+    return true
 end
 
 """
@@ -97,7 +101,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         end
 
         if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:end,k-1]
+            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
         end
 
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
@@ -111,8 +115,8 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,W,R,xf)
-    0.5*(x - xf)'*W*(x - xf) + 0.5*u'*R*u
+function stage_cost(x,u,Q,R,xf)
+    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
 """
@@ -205,13 +209,12 @@ end
 
 function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Void
     N = solver.N
-    m = solver.model.m
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
             res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
         else
-            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[1:m,k])
+            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
         end
     end
     return nothing
@@ -405,13 +408,14 @@ Additional controls for producing an infeasible state trajectory
 """
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N) # initialize
+    m = solver.model.m
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         if solver.control_integration == :foh
-            solver.fd(view(x,:,k+1),x[:,k],u[:,k],u[:,k+1])
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1])
         else
-            solver.fd(view(x,:,k+1),x[:,k],u[:,k])
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k])
         end
         ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
@@ -432,7 +436,6 @@ function feasible_traj(results::ConstrainedResults,solver::Solver)
     #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
     solver.opts.infeasible = false
     if solver.opts.unconstrained
-        # solver.opts.unconstrained = false
         obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
         solver_uncon = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
         return solve(solver_uncon,results.U[1:solver.model.m,:])
