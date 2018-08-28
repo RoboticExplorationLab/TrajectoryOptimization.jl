@@ -255,16 +255,14 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     # Boundary conditions
     S[1:n,1:n] = Wf
     s[1:n] = Wf*(X[:,N]-xf)
-    S[n+1:n+m,n+1:n+m] = R
-    s[n+1:n+m] = R*U[:,N]
 
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-        Cx = res.Cx_N
+        CxN = res.Cx_N
         Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += Cx'*res.IμN*Cx + Cy'*Iμ[:,:,N]*Cy
-        s[1:n] += Cx'*res.IμN*res.CN + Cx'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
+        S[1:n,1:n] += CxN'*res.IμN*CxN + Cy'*Iμ[:,:,N]*Cy
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
         S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
         s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
         S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
@@ -411,7 +409,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        v1 += -d[:,k+1]'*vec(Qv) # TODO confirm
+        v1 += -d[:,k+1]'*vec(Qv)
         v2 += d[:,k+1]'*Qvv*d[:,k+1]
 
         # at last time step, optimize over final control
@@ -420,7 +418,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             b[:,:,1] .= zeros(m,m)
             d[:,1] .= -Quu_\vec(Qu)
 
-            v1 += d[:,1]'*vec(Qu_)
+            v1 += -d[:,1]'*vec(Qu_)
             v2 += d[:,1]'*Quu_*d[:,1]
         end
 
@@ -490,7 +488,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV
 
-        if iter < 20
+        if iter < 25
             alpha = alpha/2.
         else
             alpha = alpha/10.
@@ -523,7 +521,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end
-        println("- Expected improvement: $(dV[1])")
+        println("- Expected improvement: $(dV)")
         println("- Actual improvement: $(J_prev-J)")
         println("- (z = $z)\n")
     end

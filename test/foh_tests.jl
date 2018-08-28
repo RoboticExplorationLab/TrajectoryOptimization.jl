@@ -1,93 +1,48 @@
 using TrajectoryOptimization
 using Plots
 
+#### Solver setup
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = true
 opts.cache = true
-opts.c1 = 0.1
-opts.c2 = 20.0
+opts.c1 = 1e-5
+opts.c2 = 10.0
 opts.mu_al_update = 100.0
 opts.infeasible_regularization = 1.0
 opts.eps_constraint = 1e-3
 opts.eps = 1e-5
-opts.iterations_outerloop = 250
+opts.iterations_outerloop = 100
 opts.iterations = 1000
-obj_uncon = TrajectoryOptimization.Dynamics.dubinscar![2]
-obj_uncon.R[:,:] = (1e-2)*eye(2)
+opts.iterations_linesearch = 50
+####
 
-###
-solver_foh = TrajectoryOptimization.Solver(Dynamics.dubinscar![1], obj_uncon, dt=dt,integration=:rk3_foh, opts=opts)
-solver_zoh = TrajectoryOptimization.Solver(Dynamics.dubinscar![1], obj_uncon, dt=dt,integration=:rk3, opts=opts)
+#### Systems
+obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
+model_dc = Dynamics.dubinscar![1]
 
-U = rand(solver_foh.model.m, solver_foh.N)
+obj_uncon_p = TrajectoryOptimization.Dynamics.pendulum![2]
+model_p = Dynamics.pendulum![1]
+####
 
-println("zoh solve:")
-sol_zoh = solve(solver_zoh,U)
-println("foh solve:")
-sol_foh = solve(solver_foh,U)
-plot(sol_foh.X')
-
-plot(sol_foh.X[1,:],sol_foh.X[2,:])
-plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
-
-println("Final state (foh): $(sol_foh.X[:,end])")
-println("Final state (zoh): $(sol_zoh.X[:,end])")
-
-a = 2
-# using TrajectoryOptimization
-# using Plots
-# using Base.Test
-#
-# dt = 0.1
-# opts = TrajectoryOptimization.SolverOptions()
-# opts.square_root = false
-# opts.verbose = true
-# opts.cache = true
-# opts.c1 = 1e-4
-# opts.c2 = 2.0
-# opts.mu_al_update = 100.0
-# opts.infeasible_regularization = 1.0
-# opts.eps_constraint = 1e-3
-# opts.eps = 1e-5
-# opts.iterations_outerloop = 50
-# opts.iterations = 500
-#
-# obj_uncon = TrajectoryOptimization.Dynamics.pendulum![2]
-# obj_uncon.R[:] = [1e-2]
-# solver_foh = Solver(Dynamics.pendulum![1], obj_uncon, integration=:rk3_foh, dt=dt, opts=opts)
-# solver_zoh = TrajectoryOptimization.Solver(Dynamics.pendulum![1], obj_uncon, integration=:rk3, dt=dt, opts=opts)
-#
-# U = rand(solver_foh.model.m, solver_foh.N)
-#
-# sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
-# sol_foh = TrajectoryOptimization.solve(solver_foh,U)
-#
-# ### test final state of foh solve
-# @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3
-# sol_foh.X[:,end] - solver_foh.obj.xf
-# plot(sol_foh.X')
-# plot(sol_foh.U')
-# ###
-#
-# ### test that foh augmented dynamics works
-# n = 3
-# m = 2
-# fc! = TrajectoryOptimization.Dynamics.dubinscar![1].f
-# fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m,n)
+# ### foh augmented dynamics
+# n_dc = 3
+# m_dc = 2
+# fc! = model_dc.f
+# fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
 # fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
-# fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n,m)
+# fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n_dc,m_dc)
 #
-# x = ones(n)
-# u1 = ones(m)
-# u2 = ones(m)
+# x = ones(n_dc)
+# u1 = ones(m_dc)
+# u2 = ones(m_dc)
 #
-# @test norm(fd!(zeros(n),x,u1,u2) - fd_aug!(zeros(n+m+m+1),[x;u1;u2;dt])[1:n,1]) < 1e-5
+# @test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
 # ###
 #
-# ### test that continuous dynamics Jacobians match known analytical solutions
-# solver_test = TrajectoryOptimization.Solver(Dynamics.dubinscar![1], obj_uncon, dt=dt,integration=:rk3_foh, opts=opts)
+# ### Continuous dynamics Jacobians match known analytical solutions
+# solver_test = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
 #
 # x = [0.0; 0.0; pi/4.0]
 # u = [2.0; 2.0]
@@ -101,34 +56,117 @@ a = 2
 # @test norm((Bc_known - Bc)[:]) < 1e-5
 # ###
 #
-# ### test that control constraints work with foh
+# ### Unconstrained dubins car foh
+# solver_foh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
+# solver_zoh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3, opts=opts)
+#
+# U = ones(solver_foh.model.m, solver_foh.N)
+#
+# println("zoh solve:")
+# sol_zoh = solve(solver_zoh,U)
+# println("foh solve:")
+# sol_foh = solve(solver_foh,U)
+# plot(sol_foh.X')
+#
+# plot(sol_foh.X[1,:],sol_foh.X[2,:])
+# plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
+#
+# plot(sol_foh.U')
+# plot!(sol_zoh.U')
+#
+# println("Final state (foh): $(sol_foh.X[:,end])")
+# println("Final state (zoh): $(sol_zoh.X[:,end])")
+#
+# @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
+# # @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < norm(sol_zoh.X[:,end] - solver_zoh.obj.xf)
+# ###
+#
+# ### Unconstrained pendulum foh
+# solver_foh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_zoh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3, dt=dt, opts=opts)
+#
+# U = ones(solver_foh.model.m, solver_foh.N)
+#
+# sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
+# sol_foh = TrajectoryOptimization.solve(solver_foh,U)
+#
+# sol_foh.X[:,end] - solver_foh.obj.xf
+# plot(sol_foh.X')
+# plot(sol_foh.U')
+#
+# @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3 # test final state of foh solve
+# ###
+#
+# ### Control constraints with foh (pendulum)
 # u_min = -2.0
 # u_max = 2.0
-# obj_uncon.R[:] = [5e-1]
-# obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max) # constrained objective
+# # obj_uncon_p.R[:] = [1e-2]
+# obj_con_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max) # constrained objective
 #
-# solver_foh_con = Solver(Dynamics.pendulum![1], obj_con, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_foh_con = Solver(model_p, obj_con_p, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_zoh_con = Solver(model_p, obj_con_p, integration=:rk3, dt=dt, opts=opts)
+#
+# U = ones(solver_foh_con.model.m, solver_foh_con.N)
+#
 # sol_foh_con = TrajectoryOptimization.solve(solver_foh_con,U)
+# sol_zoh_con = TrajectoryOptimization.solve(solver_zoh_con,U)
+#
 # plot(sol_foh_con.X')
+# plot!(sol_zoh_con.X')
 # plot(sol_foh_con.U')
+# plot!(sol_zoh_con.U')
+#
 # @test norm(sol_foh_con.X[:,end] - solver_foh_con.obj.xf) < 1e-3
 # ###
 #
-# ### test that state and control constraints work with foh
-# u_min = -3
-# u_max = 3
-# x_min = [-10; -10]
-# x_max = [10; 10]
-# obj_con2 = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+# ### State and control constraints with foh (pendulum)
+# u_min = -20
+# u_max = 6
+# x_min = [-10; -2]
+# x_max = [10; 6]
+# obj_con2_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 #
-# solver_foh_con2 = Solver(Dynamics.pendulum![1], obj_con2, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_foh_con2 = Solver(model_p, obj_con2_p, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_zoh_con2 = Solver(model_p, obj_con2_p, integration=:rk3, dt=dt, opts=opts)
+#
 # sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
+# sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,U)
+#
 # plot(sol_foh_con2.X')
+# plot!(sol_zoh_con2.X')
+#
 # plot(sol_foh_con2.U')
+# plot!(sol_zoh_con2.U')
+#
 # sol_foh_con2.X[:,end]
 # @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
 # ###
-#
+
+### State and control constraints with foh (dubins car)
+u_min = [-0.5; -0.5]
+u_max = [100; 100]
+x_min = [0; -100; -100]
+x_max = [100; 100; 100]
+obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+
+solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
+solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
+
+U = ones(solver_foh_con2.model.m,solver_foh_con2.N)
+
+sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
+sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,U)
+
+plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
+plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
+
+plot(sol_foh_con2.U')
+plot!(sol_zoh_con2.U')
+
+sol_foh_con2.X[:,end]
+@test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
+
+a = 4
 # ### test infeasible start with foh
 # n = 2 # number of pendulum states
 # m = 1 # number of pendulum controls

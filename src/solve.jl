@@ -266,6 +266,9 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     for jj = 1:final_index
         for ii = 1:p
             if ii <= solver.obj.pI
+                if results.C[ii,jj] < 0 && results.LAMBDA[ii,jj] > 0.0
+                    println("C | Lambda disagree")
+                end
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]

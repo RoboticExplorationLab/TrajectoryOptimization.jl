@@ -158,14 +158,25 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
         end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+
     return J
 end
 
 """ $(SIGNATURES) Compute the Constrained Cost """
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
+    if J < 0.0
+        println("negative stage cost: $J")
+    end
     N = solver.N
     for k = 1:N-1
+        if res.LAMBDA[:,k]'*res.C[:,k] < 0.0
+            println("Constraint issue")
+            println("$k")
+            println("Lambda: \n $(res.LAMBDA[:,k])")
+            println("C: \n $(res.C[:,k])")
+            println("x: \n $(X[:,k])")
+        end
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
 
