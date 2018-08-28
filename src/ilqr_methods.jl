@@ -83,7 +83,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         b = res.b
         du = zeros(m)
         dv = zeros(m)
-        du .= d[:,1]
+        du .= alpha*d[:,1] # check on this...
         U_[:,1] .= U[:,1] + du
     end
 
@@ -166,11 +166,11 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     J = cost(solver, X, U)
     N = solver.N
     for k = 1:N-1
-        if solver.control_integration == :foh
-            J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k] + res.C[:,k+1]'*res.Iμ[:,:,k+1]*res.C[:,k+1] + res.LAMBDA[:,k+1]'*res.C[:,k+1])
-        else
-            J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
-        end
+        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+    end
+
+    if solver.control_integration == :foh
+        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
     end
 
     J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)

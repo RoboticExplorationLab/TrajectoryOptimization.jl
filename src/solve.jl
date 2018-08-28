@@ -124,11 +124,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         X[:,1] = solver.obj.x0 # set state trajector initial conditions
         flag = rollout!(results,solver) # rollout new state trajectoy
 
-        if !flag
-            println("Bad initial control sequence, setting initial control to random")
-            results.U .= rand(solver.model.m,solver.N)
-            rollout!(results,solver)
-        end
+        # if !flag
+        #     println("Bad initial control sequence, setting initial control to random")
+        #     results.U .= rand(solver.model.m,solver.N)
+        #     rollout!(results,solver)
+        # end
     end
 
     if solver.opts.cache

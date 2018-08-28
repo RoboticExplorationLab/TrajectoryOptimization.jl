@@ -208,7 +208,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     if solver.model.m != size(res.U,1)
         m += n
     end
-
     W = solver.obj.Q
     Wf = solver.obj.Qf
     xf = solver.obj.xf
@@ -244,42 +243,60 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     g = zeros(3*n+3*m)
 
     # precompute most of E matrix once
-    Im = zeros(m,m)
-    Im[1:solver.model.m,1:solver.model.m] = 0.5*eye(solver.model.m)
-
     E = zeros(3*n+3*m,2*n+2*m)
     E[1:n,1:n] = eye(n)
-    E[n+1:n+m,n+1:n+m] = eye(m)#Im
+    E[n+1:n+m,n+1:n+m] = eye(m)
     #E[n+m+1:n+m+n,:] = M
-    E[2*n+m+1:2*n+m+m,n+1:n+m] = eye(m)#Im
-    E[2*n+m+1:2*n+m+m,2*n+m+1:2*n+m+m] = eye(m)#Im
+    E[2*n+m+1:2*n+m+m,n+1:n+m] = 0.5*eye(m)
+    E[2*n+m+1:2*n+m+m,2*n+m+1:2*n+m+m] = 0.5*eye(m)
     E[2*n+2*m+1:2*n+2*m+n,n+m+1:n+m+n] = eye(n)
-    E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)#Im
+    E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)
 
     # Boundary conditions
     S[1:n,1:n] = Wf
     s[1:n] = Wf*(X[:,N]-xf)
+    S[n+1:n+m,n+1:n+m] = R
+    s[n+1:n+m] = R*U[:,N]
 
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         Cx = res.Cx_N
-        S[1:n,1:n] += Cx'*res.IμN*Cx
-        s[1:n] += Cx'*res.IμN*res.CN + Cx'*res.λN
+        Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
+
+        S[1:n,1:n] += Cx'*res.IμN*Cx + Cy'*Iμ[:,:,N]*Cy
+        s[1:n] += Cx'*res.IμN*res.CN + Cx'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
+        S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
+        s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
+        S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
+        S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
     end
 
     k = N-1
-    mu = res.mu_reg
     # Loop backwards
     while k >= 1
 
         # Calculate the L(x,u,y,v)
-        Ac, Bc = res.Ac[:,:,k], res.Bc[:,:,k]
-        Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+        Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+        # Ac, Bc = solver.Fc(X[:,k],U[:,k])
+        # Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
+        # println("Ad: $Ad")
+        # println("Bd: $Bd")
+        # println("Cd: $Cd")
 
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
+        # xm = (X[:,k] + X[:,k+1])/2.0
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+        # # println("xm: $xm")
+        # # println("xk: $(X[:,k]), xk+1: $(X[:,k+1])")
+        # function xm_func(x,u,y)
+        #     tmp = zeros(x)
+        #     solver.fc(tmp,x,u)
+        #     0.75*x + 0.25*solver.dt*tmp + 0.25*y
+        # end
+        # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
@@ -302,7 +319,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huu = H[n+1:n+m,n+1:n+m]
         Hyy = H[n+m+1:n+m+n,n+m+1:n+m+n]
         Hvv = H[2*n+m+1:2*n+2*m,2*n+m+1:2*n+2*m]
-
         Hxu = H[1:n,n+1:n+m]
         Hxy = H[1:n,n+m+1:n+m+n]
         Hxv = H[1:n,2*n+m+1:2*n+2*m]
@@ -313,25 +329,24 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # Constraints
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+            # Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
 
             Hx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])'
             Hu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])'
-            Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
-            Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
+            # Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
+            # Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
 
             Hxx += Cx'*Iμ[:,:,k]*Cx
             Huu += Cu'*Iμ[:,:,k]*Cu
-            Hyy += Cy'*Iμ[:,:,k+1]*Cy
-            Hvv += Cv'*Iμ[:,:,k+1]*Cv
+            # Hyy += Cy'*Iμ[:,:,k+1]*Cy
+            # Hvv += Cv'*Iμ[:,:,k+1]*Cv
 
             Hxu += Cx'*Iμ[:,:,k]*Cu
             #Hxy += Cx'*Iμ[:,:,k]*Cy
             #Hxv += Cx'*Iμ[:,:,k]*Cv
             #Huy += Cu'*Iμ[:,:,k]*Cy
             #Huv += Cu'*Iμ[:,:,k]*Cv
-            Hyv += Cy'*Iμ[:,:,k+1]*Cv
-
+            # Hyv += Cy'*Iμ[:,:,k+1]*Cv
         end
 
         # substitute in dynamics dx = Addx + Bddu1 + Cddu2
@@ -347,9 +362,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huv_ = Huv + Huy*Cd + Bd'*Hyv + Bd'*Hyy*Cd
 
         # parse (approximate) cost-to-go P
-
-        #TODO regularize if needed, is this correct?
-
         Sy = s[1:n]
         Sv = s[n+1:n+m]
         Syy = S[1:n,1:n]
@@ -360,12 +372,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Su_ = Sy'*Bd
         Sv_ = Sy'*Cd + Sv' # TODO come back and sort out transpose business
 
-        Sxx_ = Ad'*Syy*Ad # I don't think this is regularized, similar to how Qxx is not during normal backwardpass
-        Suu_ = Bd'*(Syy + mu[1]*eye(n))*Bd
-        Svv_ = (Svv + mu[1]*eye(m)) + Cd'*(Syy + mu[1]*eye(n))*Cd + Cd'*Syv + Syv'*Cd
-        Sxu_ = Ad'*(Syy + mu[1]*eye(n))*Bd
-        Sxv_ = Ad'*(Syy + mu[1]*eye(n))*Cd + Ad'*Syv
-        Suv_ = Bd'*(Syy + mu[1]*eye(n))*Cd + Bd'*Syv
+        Sxx_ = Ad'*Syy*Ad
+        Suu_ = Bd'*Syy*Bd
+        Svv_ = Svv + Cd'*Syy*Cd + Cd'*Syv + Syv'*Cd
+        Sxu_ = Ad'*Syy*Bd
+        Sxv_ = Ad'*Syy*Cd + Ad'*Syv
+        Suv_ = Bd'*Syy*Cd + Bd'*Syv
 
         # collect terms to form Q
         Qx = Hx_ + Sx_
@@ -380,21 +392,9 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxv = Hxv_ + Sxv_
         Quv = Huv_ + Suv_
 
-        # regularization
-        # if !isposdef(Qvv)
-        #     mu[1] += solver.opts.mu_reg_update
-        #     k = N-1
-        #     if solver.opts.verbose
-        #         println("regularized")
-        #     end
-        #     continue
-        # else
-        #     mu[1] /= 2.0
-        # end
-
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
-        d[:,k+1] .= -Qvv\vec(Qv)
+        d[:,k+1] .= -Qvv\Qv'
 
         Qx_ = Qx + Qv*K[:,:,k+1] + d[:,k+1]'*Qxv' + d[:,k+1]'*Qvv*K[:,:,k+1]
         Qu_ = Qu + Qv*b[:,:,k+1] + d[:,k+1]'*Quv' + d[:,k+1]'*Qvv*b[:,:,k+1]
@@ -411,17 +411,17 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        v1 += -vec(d[:,k+1])'*vec(Qv)
-        v2 += vec(d[:,k+1])'*Qvv*vec(d[:,k+1])
+        v1 += -d[:,k+1]'*vec(Qv) # TODO confirm
+        v2 += d[:,k+1]'*Qvv*d[:,k+1]
 
         # at last time step, optimize over final control
         if k == 1
             K[:,:,1] .= -Quu_\Qxu_'
             b[:,:,1] .= zeros(m,m)
-            d[:,1] .= -Quu_\vec(Qu_)
+            d[:,1] .= -Quu_\vec(Qu)
 
-            v1 += vec(d[:,1])'*vec(Qu_)
-            v2 += vec(d[:,1])'*Quu_*vec(d[:,1])
+            v1 += d[:,1]'*vec(Qu_)
+            v2 += d[:,1]'*Quu_*d[:,1]
         end
 
         k = k - 1;
