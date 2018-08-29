@@ -7,7 +7,7 @@ model,obj = TrajectoryOptimization.Dynamics.pendulum
 opts = TrajectoryOptimization.SolverOptions()
 opts.c1 = 1e-3
 opts.c2 = 2.0
-opts.verbose = false
+opts.verbose = true
 opts.mu_al_update = 100.
 
 obj.Q .= eye(2)*1e-3
@@ -52,6 +52,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 
 #   with Square Root
 solver.opts.square_root = true
+solver.opts.verbose = true
 results_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
@@ -98,7 +99,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 ### Infeasible Start
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.cache=true
 opts.c1=1e-4
 opts.c2=2.0

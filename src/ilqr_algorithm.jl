@@ -180,7 +180,7 @@ function backwards_sqrt!(res::SolverResults,solver::Solver)
             if ex isa LinAlg.PosDefException
                 mu[1] += solver.opts.mu_reg_update
                 k = N-1
-                continue # break
+                break
             end
         end
 
@@ -310,30 +310,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huv = H[n+1:n+m,2*n+m+1:2*n+2*m]
         Hyv = H[n+m+1:n+m+n,2*n+m+1:2*n+2*m]
 
-        # Constraints
-        if res isa ConstrainedResults
-            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-
-            Hx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])'
-            Hu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])'
-            Hy += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])'
-            Hv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])'
-
-            Hxx += Cx'*Iμ[:,:,k]*Cx
-            Huu += Cu'*Iμ[:,:,k]*Cu
-            Hyy += Cy'*Iμ[:,:,k+1]*Cy
-            Hvv += Cv'*Iμ[:,:,k+1]*Cv
-
-            Hxu += Cx'*Iμ[:,:,k]*Cu
-            #Hxy += Cx'*Iμ[:,:,k]*Cy
-            #Hxv += Cx'*Iμ[:,:,k]*Cv
-            #Huy += Cu'*Iμ[:,:,k]*Cy
-            #Huv += Cu'*Iμ[:,:,k]*Cv
-            Hyv += Cy'*Iμ[:,:,k+1]*Cv
-        end
-
-        # substitute in dynamics dx = Addx + Bddu1 + Cddu2
+        # substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
         Hx_ = Hx + Hy*Ad
         Hu_ = Hu + Hy*Bd
         Hv_ = Hv + Hy*Cd
@@ -352,6 +329,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Svv = S[n+1:n+m,n+1:n+m]
         Syv = S[1:n,n+1:n+m]
 
+        # subsitute in dynamics
         Sx_ = Sy'*Ad
         Su_ = Sy'*Bd
         Sv_ = Sy'*Cd + Sv' # TODO come back and sort out transpose business
@@ -375,6 +353,50 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxu = Hxu_ + Sxu_
         Qxv = Hxv_ + Sxv_
         Quv = Huv_ + Suv_
+
+        # Constraints
+        if res isa ConstrainedResults #TODO there is a way simpler way to incorporate the constraints here that I need to do
+            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+
+            Zx = vec(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+            Zu = vec(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            # Zy = vec(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
+            # Zv = vec(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
+
+            Zxx = Cx'*Iμ[:,:,k]*Cx
+            Zuu = Cu'*Iμ[:,:,k]*Cu
+            # Zyy = Cy'*Iμ[:,:,k+1]*Cy
+            # Zvv = Cv'*Iμ[:,:,k+1]*Cv
+
+            Zxu = Cx'*Iμ[:,:,k]*Cu
+            # Zyv = Cy'*Iμ[:,:,k+1]*Cv
+
+            # substitute in dynamics
+            Zx_ = Zx #+ Ad'*Zy
+            Zu_ = Zu #+ Bd'*Zy
+            Zv_ = zeros(m)#Zv #+ Cd'*Zy
+
+            Zxx_ = Zxx #+ Ad'*Zyy*Ad
+            Zuu_ = Zuu #+ Bd'*Zyy*Bd
+            Zvv_ = zeros(m,m)#Zvv + Zyv'*Cd + Cd'*Zyv + Cd'*Zyy*Cd
+            Zxu_ = Zxu #+ Ad'*Zyy*Bd
+            Zxv_ = zeros(n,m)#Ad'*Zyv + Ad'*Zyy*Cd
+            Zuv_ = zeros(m,m)#Bd'*Zyv + Bd'*Zyy*Cd
+
+            # augment
+            Qx += Zx_'
+            Qu += Zu_'
+            Qv += Zv_'
+
+            Qxx += Zxx_
+            Quu += Zuu_
+            Qvv += Zvv_
+
+            Qxu += Zxu_
+            Qxv += Zxv_
+            Quv += Zuv_
+        end
 
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
@@ -402,7 +424,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         if k == 1
             K[:,:,1] .= -Quu_\Qxu_'
             b[:,:,1] .= zeros(m,m)
-            d[:,1] .= -Quu_\vec(Qu)
+            d[:,1] .= -Quu_\vec(Qu_)
 
             v1 += -d[:,1]'*vec(Qu_)
             v2 += d[:,1]'*Quu_*d[:,1]

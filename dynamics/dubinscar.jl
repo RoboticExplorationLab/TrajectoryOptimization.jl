@@ -21,9 +21,9 @@ x0 = [0.;0.;0.]
 xf = [0.;1.;0.]
 
 # costs
-Q = 0.001*eye(model.n)
+Q = (1e-2)*eye(model.n)
 Qf = 1000.0*eye(model.n)
-R = 0.001*eye(model.m)
+R = (1e-2)*eye(model.m)
 
 # simulation
 tf = 5.0

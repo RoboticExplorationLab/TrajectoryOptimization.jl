@@ -54,11 +54,11 @@ function rollout!(res::SolverResults,solver::Solver)
         if infeasible
             X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
         end
-        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
-            return false
-        end
+        # if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
+        #     return false
+        # end
     end
-    return true
+    # return true
 end
 
 """
@@ -166,9 +166,6 @@ end
 """ $(SIGNATURES) Compute the Constrained Cost """
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
-    # if J < 0.0
-    #     println("negative stage cost: $J")
-    # end
 
     N = solver.N
     for k = 1:N-1
@@ -263,9 +260,6 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
                 res.C[ii,k] .= 0.0
             end
         end
-        # if pI > 0
-        #     res.C[(res.C[1:pI,k] .> 0.0),k] = 0.0 # set satisfied inequality constraints to zero
-        # end
 
         # Inequality constraints [see equation ref]
         for j = 1:pI

@@ -69,7 +69,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Initialization
     if solver.obj isa UnconstrainedObjective
-        print_debug("Solving Unconstrained Problem...")
+        println("Solving Unconstrained Problem...")
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
         results.U .= U0
@@ -122,7 +122,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Initial rollout
     if !infeasible
         X[:,1] = solver.obj.x0 # set state trajector initial conditions
-        flag = rollout!(results,solver) # rollout new state trajectoy
+        rollout!(results,solver) # rollout new state trajectoy
 
         # if !flag
         #     println("Bad initial control sequence, setting initial control to random")
@@ -204,18 +204,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
         ## Outer loop update for Augmented Lagrange Method parameters
-        if results isa ConstrainedResults
-            update_constraints!(results,solver,results.X,results.U)
-        end
+        # if results isa ConstrainedResults
+        #     update_constraints!(results,solver,results.X,results.U)
+        # end
         # println("precheck")
         # check_multipliers(results)
 
         outer_loop_update(results,solver)
 
-        if results isa ConstrainedResults
-            println("postcheck")
-            check_multipliers(results,solver)
-        end
+        # if results isa ConstrainedResults
+        #     println("postcheck")
+        #     check_multipliers(results,solver)
+        # end
 
         if solver.opts.cache
             # Store current results and performance parameters
@@ -283,23 +283,15 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     for jj = 1:final_index
         for ii = 1:p
             if ii <= solver.obj.pI
-                # if results.C[ii,jj] > 0.0
-                #     results.LAMBDA[ii,jj] .= 0.0
-                # else
-                if results.C[ii,jj] > 0
-                    println("Constraint not being set to zero")
-                end
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
-                # results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj] # for inequality constraints, C is zero if constraint is satisfied
-            #     # end
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
-            results.MU[ii,jj] .+= solver.opts.mu_al_update
+            results.MU[ii,jj] .*= solver.opts.mu_al_update
         end
     end
     results.λN .+= results.μN.*results.CN
-    results.μN .+= solver.opts.mu_al_update
+    results.μN .*= solver.opts.mu_al_update
     return nothing
 end
 

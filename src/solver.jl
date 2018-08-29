@@ -128,15 +128,15 @@ struct Solver
             F!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
             Sc[1:model.n] = x
             Sc[model.n+1:model.n+model.m] = u[1:model.m]
-            # F = F!(Jc,Scdot,Sc)
-            F!(Jc,Scdot,Sc)
+            F = F!(Jc,Scdot,Sc)
+            # F!(Jc,Scdot,Sc)
 
             if infeasible
-                # return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
-                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+                return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+                # return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
             else
-                # return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
-                return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m]
+                return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
+                # return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m]
 
             end
         end
