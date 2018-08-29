@@ -54,3 +54,4 @@ obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
 cartpole = [model, obj_uncon]
 cartpole_analytical = [model_analytical, obj_uncon]
+cartpole_mechanism = MechanismState(parse_urdf(Float64,urdf_cartpole))

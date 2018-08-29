@@ -1,7 +1,6 @@
 using Base.Test
 using Snopt
 using ForwardDiff
-include("dircol.jl")
 
 """
 $(SIGNATURES)
@@ -188,7 +187,7 @@ function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
     # Solve the problem
     println("Passing Problem to SNOPT...")
     @time z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options)
-    # @time snopt(usrfun, Z0, lb, ub, options)
+    @time snopt(usrfun, Z0, lb, ub, options)
     # xopt, fopt, info = Z0, Inf, "Nothing"
     x_opt,u_opt = unpackZ(z_opt,pack)
 
