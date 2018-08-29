@@ -44,7 +44,7 @@ obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 
 model! = Model(Dynamics.quadrotor_dynamics!,n,m)
 
-solver_uncon = Solver(model!,obj_uncon,integration=:rk3_foh,dt=dt,opts=opts)
+solver_uncon = Solver(model!,obj_uncon,integration=:rk4,dt=dt,opts=opts)
 # solver_con = Solver(model!,obj_con,dt=dt,opts=opts)
 
 U = ones(solver_uncon.model.m, solver_uncon.N)

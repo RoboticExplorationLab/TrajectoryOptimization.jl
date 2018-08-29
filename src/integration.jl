@@ -8,6 +8,7 @@
 #         rk3: Runge-Kutta 3
 #     OTHER METHODS
 #         f_augmented!: Create function with augmented state and control input
+#         f_augmented_foh!: Create function with augmented state and control input foh
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
@@ -143,6 +144,10 @@ function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+1:n+m])
 end
 
+"""
+$(SIGNATURES)
+Converts a separated dynamics function into an augmented dynamics function (foh version)
+"""
 function f_augmented_foh!(fd!::Function, n::Int, m::Int)
     f_aug_foh!(dS::AbstractArray, S::Array) = fd!(dS, S[1:n], S[n+1:n+m], S[n+m+1:n+m+m])
 end

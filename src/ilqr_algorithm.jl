@@ -259,20 +259,18 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
-        Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
+        Cx, Cu = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN + Cy'*Iμ[:,:,N]*Cy
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
-        S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
-        s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
-        S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
-        S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
+        S[1:n,1:n] += CxN'*res.IμN*CxN + Cx'*Iμ[:,:,N]*Cx
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cx'*Iμ[:,:,N]*C[:,N] + Cx'*LAMBDA[:,N]
+        S[n+1:n+m,n+1:n+m] = Cu'*Iμ[:,:,N]*Cu
+        s[n+1:n+m] = Cu'*Iμ[:,:,N]*C[:,N] + Cu'*LAMBDA[:,N]
+        S[1:n,n+1:n+m] = Cx'*Iμ[:,:,N]*Cu
+        S[n+1:n+m,1:n] = Cu'*Iμ[:,:,N]*Cx
     end
 
     k = N-1
-    # Loop backwards
     while k >= 1
-
         # Calculate the L(x,u,y,v)
         Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
         Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
@@ -280,7 +278,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
-        xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+        xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]] #TODO don't do concatentation
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
@@ -309,6 +307,20 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Huy = H[n+1:n+m,n+m+1:n+m+n]
         Huv = H[n+1:n+m,2*n+m+1:2*n+2*m]
         Hyv = H[n+m+1:n+m+n,2*n+m+1:2*n+2*m]
+
+        # Constraints
+        if res isa ConstrainedResults
+            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+
+            Hx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])'
+            Hu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])'
+
+            Hxx += Cx'*Iμ[:,:,k]*Cx
+            Huu += Cu'*Iμ[:,:,k]*Cu
+
+            Hxu += Cx'*Iμ[:,:,k]*Cu
+
+        end
 
         # substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
         Hx_ = Hx + Hy*Ad
@@ -348,55 +360,23 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         Qxx = Hxx_ + Sxx_
         Quu = Huu_ + Suu_
-        Qvv = Hvv_ + Svv_
+        Qvv = Hermitian(Hvv_ + Svv_)
 
         Qxu = Hxu_ + Sxu_
         Qxv = Hxv_ + Sxv_
         Quv = Huv_ + Suv_
 
-        # Constraints
-        if res isa ConstrainedResults #TODO there is a way simpler way to incorporate the constraints here that I need to do
-            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+        #TODO add regularization
 
-            Zx = vec(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Zu = vec(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            # Zy = vec(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-            # Zv = vec(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-
-            Zxx = Cx'*Iμ[:,:,k]*Cx
-            Zuu = Cu'*Iμ[:,:,k]*Cu
-            # Zyy = Cy'*Iμ[:,:,k+1]*Cy
-            # Zvv = Cv'*Iμ[:,:,k+1]*Cv
-
-            Zxu = Cx'*Iμ[:,:,k]*Cu
-            # Zyv = Cy'*Iμ[:,:,k+1]*Cv
-
-            # substitute in dynamics
-            Zx_ = Zx #+ Ad'*Zy
-            Zu_ = Zu #+ Bd'*Zy
-            Zv_ = zeros(m)#Zv #+ Cd'*Zy
-
-            Zxx_ = Zxx #+ Ad'*Zyy*Ad
-            Zuu_ = Zuu #+ Bd'*Zyy*Bd
-            Zvv_ = zeros(m,m)#Zvv + Zyv'*Cd + Cd'*Zyv + Cd'*Zyy*Cd
-            Zxu_ = Zxu #+ Ad'*Zyy*Bd
-            Zxv_ = zeros(n,m)#Ad'*Zyv + Ad'*Zyy*Cd
-            Zuv_ = zeros(m,m)#Bd'*Zyv + Bd'*Zyy*Cd
-
-            # augment
-            Qx += Zx_'
-            Qu += Zu_'
-            Qv += Zv_'
-
-            Qxx += Zxx_
-            Quu += Zuu_
-            Qvv += Zvv_
-
-            Qxu += Zxu_
-            Qxv += Zxv_
-            Quv += Zuv_
-        end
+        # regularization
+        # if !isposdef(Qvv)
+        #     mu[1] += solver.opts.mu_reg_update
+        #     k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized")
+        #     end
+        #     break
+        # end
 
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
@@ -468,8 +448,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         update_constraints!(res,solver,X,U)
     end
     J_prev = cost(solver, res, X, U)
-    J = Inf
 
+    J = Inf
     alpha = 1.0
     iter = 0
     dV = Inf
@@ -493,6 +473,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             update_constraints!(res,solver,X_,U_)
         end
         J = cost(solver, res, X_, U_)
+
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV
 
@@ -506,11 +487,11 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
+
             if res isa ConstrainedResults
                 update_constraints!(res,solver,X_,U_)
             end
             J = cost(solver, res, X_, U_)
-            # dV = alpha*v1 + (alpha^2)*v2/2.
             z = (J_prev - J)/dV
 
             if solver.opts.verbose

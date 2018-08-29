@@ -54,11 +54,11 @@ function rollout!(res::SolverResults,solver::Solver)
         if infeasible
             X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
         end
-        # if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
-        #     return false
-        # end
+        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
+            return false
+        end
     end
-    # return true
+    return true
 end
 
 """
@@ -119,15 +119,15 @@ function stage_cost(x,u,Q,R,xf)
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
-"""
-$(SIGNATURES)
-Evaluate state midpoint using cubic spline interpolation
-"""
-function xm_func(x,u,y,dt,fc!)
-    tmp = zeros(x)
-    fc!(tmp,x,u)
-    0.75*x + 0.25*dt*tmp + 0.25*y
-end
+# """
+# $(SIGNATURES)
+# Evaluate state midpoint using cubic spline interpolation
+# """
+# function xm_func(x,u,y,dt,fc!)
+#     tmp = zeros(x)
+#     fc!(tmp,x,u)
+#     0.75*x + 0.25*dt*tmp + 0.25*y
+# end
 
 """
 $(SIGNATURES)
@@ -135,7 +135,7 @@ Compute the unconstrained cost
 """
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
 
     if size(U,1) != m
         m += n
@@ -255,6 +255,7 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     for k = 1:final_index
         res.C[:,k] = c(X[:,k], U[:,k]) # update results with constraint evaluations
 
+        # inequality constraints that are satisfied (ie c > 0) are set to 0
         for ii = 1:pI
             if res.C[ii,k] > 0.0
                 res.C[ii,k] .= 0.0
@@ -450,9 +451,9 @@ $(SIGNATURES)
 Infeasible start solution is run through standard constrained solve to enforce dynamic feasibility. All infeasible augmented controls are removed.
 """
 function feasible_traj(results::ConstrainedResults,solver::Solver)
-    #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
     solver.opts.infeasible = false
     if solver.opts.unconstrained
+        # TODO method for generating a new solver with unconstrained objective
         obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
         solver_uncon = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
         return solve(solver_uncon,results.U[1:solver.model.m,:])

@@ -122,13 +122,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Initial rollout
     if !infeasible
         X[:,1] = solver.obj.x0 # set state trajector initial conditions
-        rollout!(results,solver) # rollout new state trajectoy
+        flag = rollout!(results,solver) # rollout new state trajectoy
 
-        # if !flag
-        #     println("Bad initial control sequence, setting initial control to random")
-        #     results.U .= rand(solver.model.m,solver.N)
-        #     rollout!(results,solver)
-        # end
+        if !flag
+            println("Bad initial control sequence, setting initial control to random")
+            results.U .= rand(solver.model.m,solver.N)
+            rollout!(results,solver)
+        end
     end
 
     if solver.opts.cache
@@ -148,10 +148,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             update_constraints!(results,solver,results.X,results.U)
         end
         J_prev = cost(solver, results, X, U)
-        # println("Cost ($k): $J_prev\n")
+        println("Cost ($k): $J_prev\n")
 
         for i = 1:solver.opts.iterations
-            # println("--Iteration: $k-($i)--")
+            println("--Iteration: $k-($i)--")
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
