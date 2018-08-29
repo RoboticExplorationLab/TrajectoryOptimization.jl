@@ -54,8 +54,8 @@ struct Solver
             throw(ArgumentError("$integration is not a defined integration scheme"))
         end
 
-        # Control integration type
-        if integration == :rk3_foh
+        # Determine control integration type
+        if integration == :rk3_foh # add more foh options as necessary
             control_integration = :foh
         else
             control_integration = :zoh
@@ -65,26 +65,26 @@ struct Solver
         fd! = discretizer(f!, dt)
         f_aug! = f_augmented!(f!, model.n, model.m)
 
-        fd_aug! = discretizer(f_aug!)
         if control_integration == :foh
             fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
-        else
-            fd_aug! = discretizer(f_aug!)
-        end
-
-        fx = zeros(n,n)
-        fu = zeros(n,m)
-        if control_integration == :foh
-            fv = zeros(n,m)
             nm1 = model.n + model.m + model.m + 1
         else
+            fd_aug! = discretizer(f_aug!)
             nm1 = model.n + model.m + 1
         end
 
-        # Auto-diff discrete dynamics
+
+        # Initialize discrete and continuous dynamics Jacobians
         Jd = zeros(nm1, nm1)
         Sd = zeros(nm1)
         Sdotd = zeros(Sd)
+        Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
+
+        Jc = zeros(model.n+model.m,model.n+model.m)
+        Sc = zeros(model.n+model.m)
+        Scdot = zeros(Sc)
+        Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
+
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))
             infeasible = length(u) != m
 
@@ -96,59 +96,44 @@ struct Solver
             end
 
             Sd[end] = dt
-            Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
-            Fd_augd = Fd!(Jd,Sdotd,Sd)
-            fx .= Fd_augd[1:model.n,1:model.n]
-            fu .= Fd_augd[1:model.n,model.n+1:model.n+model.m]
+
+            Fd!(Jd,Sdotd,Sd)
 
             if control_integration == :foh
-                fv .= Fd_augd[1:model.n,model.n+model.m+1:model.n+model.m+model.m]
-
                 if infeasible
-                    return fx, [fu eye(n)], [fv eye(n)]
+                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] eye(n)], [Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] eye(n)] # fx, [fu I], [fv I]
                 else
-                    return fx, fu, fv
+                    return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m], Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] # fx, fu, fv
                 end
-
+            else
+                if infeasible
+                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] eye(n)] # fx, [fu I]
+                else
+                    return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m] # fx, fu
+                end
             end
-
-            if infeasible
-                return fx, [fu eye(n)]
-            end
-
-            return fx, fu
-
         end
 
-        Jc = zeros(model.n+model.m,model.n+model.m)
-        Sc = zeros(model.n+model.m)
-        Scdot = zeros(Sc)
         function Jacobians_Continuous!(x,u)
             infeasible = size(u,1) != model.m
-            F!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
             Sc[1:model.n] = x
             Sc[model.n+1:model.n+model.m] = u[1:model.m]
-            F = F!(Jc,Scdot,Sc)
-            # F!(Jc,Scdot,Sc)
+            Fc!(Jc,Scdot,Sc)
 
             if infeasible
-                return F[1:model.n,1:model.n], [F[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
-                # return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)]
+                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)] # fx, [fu I]
             else
-                return F[1:model.n,1:model.n], F[1:model.n,model.n+1:model.n+model.m]
-                # return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m]
-
+                return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m] # fx, fu
             end
         end
 
+        # Generate constraint functions
         c_fun, c_jacob = generate_constraint_functions(obj)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
-        # options.infeasible = infeasible
 
         new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
-
     end
 end
 
