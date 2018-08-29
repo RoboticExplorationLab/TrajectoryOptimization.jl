@@ -185,6 +185,42 @@ function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
+function count_constraints(obj::ConstrainedObjective)
+    n = size(obj.Q,1)
+    p = obj.p # number of constraints
+    pI = obj.pI # number of inequality and equality constraints
+    pE = p-pI # number of equality constraints
+
+    u_min_active = isfinite.(obj.u_min)
+    u_max_active = isfinite.(obj.u_max)
+    x_min_active = isfinite.(obj.x_min)
+    x_max_active = isfinite.(obj.x_max)
+
+    pI_u_max = count(u_max_active)
+    pI_u_min = count(u_min_active)
+    pI_u = pI_u_max + pI_u_min
+
+    pI_x_max = count(x_max_active)
+    pI_x_min = count(x_min_active)
+    pI_x = pI_x_max + pI_x_min
+
+    pI_c = pI - pI_x - pI_u
+    pE_c = pE
+
+    p_N = obj.p_N
+    pI_N = obj.pI_N
+    pE_N = p_N - pI_N
+    pI_N_c = pI_N 
+    if obj.use_terminal_constraint
+        pE_N_c = pE_N - n
+    else
+        pE_N_c = pE_N
+    end
+
+    return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
+
+end
+
 """
 $(SIGNATURES)
 
@@ -259,6 +295,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         return C
     end
 
+    # Terminal Constraint
     # TODO make this more general
     function c_fun(x)
         x - obj.xf

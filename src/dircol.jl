@@ -26,7 +26,6 @@ function get_weights(method,N::Int)
         weights[2:2:end] = 4/3
         weights[[1,end]] = 1/3
     end
-    weights *= dt
     return weights
 end
 
@@ -133,20 +132,22 @@ Evaluate constraint values
 [           ...                 ]
 [ dt*(f(xN-1)+f(xN))/2 - xN + xN-1 ]
 """
-function calc_constraints(X,U,method,dt,f::Function)
+function collocation_constraints(X,U,method,dt,f::Function)
     n,m,N = get_sizes(X,U)
     g = zeros(eltype(X),(N-1)*n)
     g = reshape(g,n,N-1)
+
+    fVal = zeros(eltype(X),n,N)
+    for k = 1:N
+        f(view(fVal,:,k),X[:,k],U[:,k])
+    end
+
     if method == :trapezoid
         for k = 1:N-1
             # Collocation Constraints
-            g[:,k] = dt*( f(X[:,k+1],U[:,k+1]) + f(X[:,k],U[:,k]) )/2 - X[:,k+1] + X[:,k]
+            g[:,k] = dt*( fVal[:,k+1] + fVal[:,k] )/2 - X[:,k+1] + X[:,k]
         end
     elseif method == :hermite_simpson_separated
-        fVal = zeros(eltype(X),n,N)
-        for k = 1:N
-            f(view(fVal,:,k),X[:,k],U[:,k])
-        end
         iLow = 1:2:N-1
         iMid = iLow + 1
         iUpp = iMid + 1

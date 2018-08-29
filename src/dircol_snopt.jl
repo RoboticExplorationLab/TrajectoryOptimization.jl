@@ -23,12 +23,24 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     n,m,N = pack
 
     # Weights (Trapezoidal)
-    weights = get_weights(method,N)
+    weights = get_weights(method,N)*dt
 
     # Jacobian for Dynamics
     f_aug! = f_augmented!(model.f, model.n, model.m)
     zdot = zeros(n)
     F(z) = ForwardDiff.jacobian(f_aug!,zdot,z)
+
+    # Count constraints
+    pI = 0
+    pE = (N-1)*n # Collocation constraints
+    p_colloc = pE
+
+    pI_obj, pE_obj = count_constraints(obj)
+    pI_c,   pE_c   = pI_obj[2], pE_obj[2]
+    pI_N_c, pE_N_c = pI_obj[4], pE_obj[4]
+
+    pI += pI_c*(N-1) + pI_N_c  # Add custom inequality constraints
+    pE += pE_c*(N-1) + pE_N_c  # Add custom equality constraints
 
     # Evaluate the Cost (objective) function)
     function eval_f(Z)
@@ -36,10 +48,59 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
         cost(X,U,weights,obj)
     end
 
-    # Evaluate the constraint function
-    function eval_g(Z)
+    # Evaluate the equality constraint function
+    function eval_ceq(Z)
         X,U = unpackZ(Z,pack)
-        calc_constraints(X,U,method,dt,model.f)
+        gE = zeros(eltype(Z),pE)
+        g_colloc = collocation_constraints(X,U,method,dt,model.f)
+        gE[1:p_colloc] = g_colloc
+
+        # Custom constraints
+        if pE_c > 0
+            gE_c = zeros(eltype(Z),pE_c,N-1)
+            for k = 1:N-1
+                gE_c[:,k] = obj.cE(X[:,k],U[:,k])
+            end
+            gE[p_colloc+1 : end-pE_N_c] = vec(gE_c)
+        end
+        if pE_N_c > 0
+            gE[end-pE_N_c+1:end] = obj.cE(X[:,N])
+        end
+        return g_colloc
+    end
+
+    # Evaluate the inequality constraint function
+    function eval_c(Z)
+        X,U = unpackZ(Z,pack)
+        gI = zeros(eltype(Z),pI)
+
+        # Custom constraints
+        if pI_c > 0
+            gI_c = zeros(eltype(Z),pI_c,N-1)
+            for k = 1:N-1
+                gI[k] = obj.cI(X[:,k],U[:,k])
+            end
+            gI[p_colloc+1 : end-pI_N_c] = vec(gI_c)
+        end
+        if pI_N_c > 0
+            gI[end-pI_N_c+1:end] = obj.cI(X[:,N])
+        end
+        return gI
+    end
+
+    """
+    Stack constraints as follows:
+    [ general stage inequality,
+      general terminal inequality,
+      general stage equality,
+      general terminal equality,
+      collocation constraints ]
+    """
+    function eval_g(Z)
+        g = zeros(eltype(Z),pI+pE)
+        g[1:pI] = eval_c(Z)
+        g[pI+1:end] = eval_ceq(Z)
+        return g
     end
 
     # User defined function passed to SNOPT (via Snopt.jl)
@@ -49,7 +110,7 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
 
         # Constraints (dynamics only for now)
         c = Float64[] # No inequality constraints for now
-        ceq = eval_g(Z)
+        ceq = eval_ceq(Z)
 
         fail = false
 
@@ -77,7 +138,7 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
         end
     end
 
-    return usrfun, eval_f, eval_g
+    return usrfun, eval_f, eval_c, eval_ceq
 end
 
 """
@@ -125,9 +186,9 @@ function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
     options["Verify level"] = 1
 
     # Solve the problem
-    print_info("Passing Problem to SNOPT...")
+    println("Passing Problem to SNOPT...")
     @time z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options)
-    @time snopt(usrfun, Z0, lb, ub, options)
+    # @time snopt(usrfun, Z0, lb, ub, options)
     # xopt, fopt, info = Z0, Inf, "Nothing"
     x_opt,u_opt = unpackZ(z_opt,pack)
 
