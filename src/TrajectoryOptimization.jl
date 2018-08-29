@@ -40,7 +40,8 @@ export
     max_violation,
     update_objective,
     infeasible_control,
-    line_trajectory
+    line_trajectory,
+    dircol
 
 include("model.jl")
 include("integration.jl")
