@@ -287,11 +287,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
-            results.MU[ii,jj] .*= solver.opts.mu_al_update
+            results.MU[ii,jj] .+= solver.opts.mu_al_update
         end
     end
     results.λN .+= results.μN.*results.CN
-    results.μN .*= solver.opts.mu_al_update
+    results.μN .+= solver.opts.mu_al_update
     return nothing
 end
 
