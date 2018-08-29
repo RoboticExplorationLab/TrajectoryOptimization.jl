@@ -40,12 +40,12 @@ end
 model_analytical = Model(cartpole_dynamics!,4,1)
 
 # initial and goal states
-x0 = [0.;pi;0.;0.]
-xf = [0.;0.;0.;0.]
+x0 = [0.;0.;0.;0.]
+xf = [0.;pi;0.;0.]
 
 # costs
 Q = 0.001*eye(model.n)
-Qf = 150.0*eye(model.n)
+Qf = 1000.0*eye(model.n)
 R = 0.0001*eye(model.m)
 
 # simulation

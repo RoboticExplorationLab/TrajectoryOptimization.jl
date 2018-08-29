@@ -203,19 +203,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             results_cache.iter_type[iter-1] = 1 # flag outerloop update
         end
 
-        ## Outer loop update for Augmented Lagrange Method parameters
-        # if results isa ConstrainedResults
-        #     update_constraints!(results,solver,results.X,results.U)
-        # end
-        # println("precheck")
-        # check_multipliers(results)
-
         outer_loop_update(results,solver)
-
-        # if results isa ConstrainedResults
-        #     println("postcheck")
-        #     check_multipliers(results,solver)
-        # end
 
         if solver.opts.cache
             # Store current results and performance parameters
@@ -287,11 +275,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
-            results.MU[ii,jj] .+= solver.opts.mu_al_update
+            results.MU[ii,jj] .*= solver.opts.mu_al_update
         end
     end
     results.λN .+= results.μN.*results.CN
-    results.μN .+= solver.opts.mu_al_update
+    results.μN .*= solver.opts.mu_al_update
     return nothing
 end
 

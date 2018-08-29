@@ -11,7 +11,7 @@ opts.verbose = true
 opts.cache = true
 opts.c1 = 1e-4
 opts.c2 = 10.0
-opts.mu_al_update = 100.0
+opts.mu_al_update = 10.0
 opts.infeasible_regularization = 1.0
 opts.eps_constraint = 1e-3
 opts.eps = 1e-5
@@ -259,32 +259,32 @@ plot!(tmp2.X')
 ###
 
 ### infeasible start with state and control constraints with foh (dubins car)
-u_min = [-1; -1]
-u_max = [100; 100]
-x_min = [0; -100; -100]
-x_max = [1.0; 100; 100]
-
-obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
-
-solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
-# solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
-
-U = rand(solver_foh_con2.model.m,solver_foh_con2.N)
-X_interp = line_trajectory(solver_foh_con2)
-
-sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
-# sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
-plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
-# plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
-
-println("Final state (foh): $(sol_foh_con2.X[:,end])")
-# println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
-
-println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
-# println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
-
-plot(sol_foh_con2.U')
-# plot!(sol_zoh_con2.U')
-
-@test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
-###
+# u_min = [-1; -1]
+# u_max = [100; 100]
+# x_min = [0; -100; -100]
+# x_max = [1.0; 100; 100]
+#
+# obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+#
+# solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
+# # solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
+#
+# U = rand(solver_foh_con2.model.m,solver_foh_con2.N)
+# X_interp = line_trajectory(solver_foh_con2)
+#
+# sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
+# # sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
+# plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
+# # plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
+#
+# println("Final state (foh): $(sol_foh_con2.X[:,end])")
+# # println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
+#
+# println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
+# # println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
+#
+# plot(sol_foh_con2.U')
+# # plot!(sol_zoh_con2.U')
+#
+# @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
+# ###
