@@ -37,6 +37,8 @@ function cartpole_dynamics!(Xdot, X, U)
     return nothing
 end
 
+model_analytical = Model(cartpole_dynamics!,4,1)
+
 # initial and goal states
 x0 = [0.;pi;0.;0.]
 xf = [0.;0.;0.;0.]
@@ -53,3 +55,4 @@ dt = 0.1
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
 cartpole = [model, obj_uncon]
+cartpole_analytical = [model_analytical, obj_uncon]

@@ -36,7 +36,6 @@ using BenchmarkTools
 """
 $(SIGNATURES)
 Roll out the dynamics for a given control sequence (initial)
-
 Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
@@ -46,36 +45,63 @@ function rollout!(res::SolverResults,solver::Solver)
 
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+        if solver.control_integration == :foh
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k], U[1:solver.model.m,k+1])
+        else
+            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+        end
+
         if infeasible
-            X[:,k+1] .+= U[solver.model.m+1:end,k]
+            X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
+        end
+        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
+            return false
         end
     end
+    return true
 end
 
 """
 $(SIGNATURES)
 Roll out the dynamics using the gains and optimal controls computed by the
 backward pass
-
 Updates `res.X` by propagating the dynamics at each timestep, by applying the
 gains `res.K` and `res.d` to the difference between states
-
 Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
-    N = solver.N
+    N = solver.N; m = solver.model.m; n = solver.model.n
+    if infeasible
+        m += n
+    end
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
     X_[:,1] = solver.obj.x0;
+
+    if solver.control_integration == :foh
+        b = res.b
+        du = zeros(m)
+        dv = zeros(m)
+        du .= alpha*d[:,1] # check on this...
+        U_[:,1] .= U[:,1] + du
+    end
+
     for k = 2:N
         delta = X_[:,k-1] - X[:,k-1]
-        U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
-        solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
+
+        if solver.control_integration == :foh
+            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
+            U_[:,k] .= U[:,k] + dv
+            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
+            du .= dv
+        else
+            U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
+            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
+        end
 
         if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:end,k-1]
+            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
         end
 
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
@@ -85,6 +111,23 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     return true
 end
 
+"""
+$(SIGNATURES)
+Quadratic stage cost (with goal state)
+"""
+function stage_cost(x,u,Q,R,xf)
+    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+end
+
+# """
+# $(SIGNATURES)
+# Evaluate state midpoint using cubic spline interpolation
+# """
+# function xm_func(x,u,y,dt,fc!)
+#     tmp = zeros(x)
+#     fc!(tmp,x,u)
+#     0.75*x + 0.25*dt*tmp + 0.25*y
+# end
 
 """
 $(SIGNATURES)
@@ -92,22 +135,55 @@ Compute the unconstrained cost
 """
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q;xf = solver.obj.xf; Qf = solver.obj.Qf
+    N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+
+    if size(U,1) != m
+        m += n
+    end
+
     R = getR(solver)
+
     J = 0.0
     for k = 1:N-1
-      J += 0.5*(X[:,k] - xf)'*Q*(X[:,k] - xf) + 0.5*U[:,k]'*R*U[:,k]
+        if solver.control_integration == :foh
+            Ac, Bc = solver.Fc(X[:,k],U[:,k])
+
+            M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
+
+            Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+            Um = (U[:,k] + U[:,k+1])/2
+
+            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+        else
+            J += stage_cost(X[:,k],U[:,k],Q,R,xf)
+        end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+
     return J
 end
 
 """ $(SIGNATURES) Compute the Constrained Cost """
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     J = cost(solver, X, U)
-    for k = 1:solver.N-1
+
+    N = solver.N
+    for k = 1:N-1
+        # if res.LAMBDA[:,k]'*res.C[:,k] < 0.0
+        #     println("Constraint issue")
+        #     println("added cost: $(res.LAMBDA[:,k]'*res.C[:,k])")
+        #     println("$k")
+        #     println("Lambda: \n $(res.LAMBDA[:,k])")
+        #     println("C: \n $(res.C[:,k])")
+        #     println("x: \n $(X[:,k])")
+        # end
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
+
+    if solver.control_integration == :foh
+        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
+    end
+
     J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
     return J
 end
@@ -117,36 +193,43 @@ function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res
     cost(solver,X,U)
 end
 
-
 """
 $(SIGNATURES)
 Calculate Jacobians prior to the backwards pass
-
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
 function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO change to inplace '!' notation throughout the code
     N = solver.N
     for k = 1:N-1
-        # constraint_jacobian(view(res.Cx,:,:,k),view(res.Cu,:,:,k),res.X[:,k],res.U[:,k])
-        # res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[:,k])
+        if solver.control_integration == :foh
+            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
+            res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
+        else
+            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
+        end
         res.Cx[:,:,k], res.Cu[:,:,k] = solver.c_jacobian(res.X[:,k],res.U[:,k])
-        # res.Cx[:,:,k], res.Cu[:,:,k] = Cx, Cu
     end
-    # constraint_jacobian(res.Cx_N,res.X[:,N])
+
+    if solver.control_integration == :foh
+        res.Cx[:,:,N], res.Cu[:,:,N] = solver.c_jacobian(res.X[:,N],res.U[:,N])
+    end
+
     res.Cx_N .= solver.c_jacobian(res.X[:,N])
     return nothing
 end
 
 function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Void
     N = solver.N
-    m = solver.model.m
     for k = 1:N-1
-        res.fx[:,:,k], res.fu[:,:,k] = solver.F(res.X[:,k], res.U[1:m,k])
+        if solver.control_integration == :foh
+            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
+            res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
+        else
+            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
+        end
     end
     return nothing
 end
-
 
 
 ########################################
@@ -155,14 +238,29 @@ end
 
 """
 $(SIGNATURES)
-
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, c::Function, pI::Int, X::Array, U::Array)::Void
-    p, N = size(res.C)
-    N += 1 # since C is size (p,N-1), terminal constraints are handled separately
-    for k = 1:N-1
+function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, U::Array)::Void
+
+    p, N = size(res.C) # note, C is now (p,N)
+    c = solver.c_fun
+    pI = solver.obj.pI
+
+    if solver.control_integration == :foh
+        final_index = N
+    else
+        final_index = N-1
+    end
+
+    for k = 1:final_index
         res.C[:,k] = c(X[:,k], U[:,k]) # update results with constraint evaluations
+
+        # inequality constraints that are satisfied (ie c > 0) are set to 0
+        for ii = 1:pI
+            if res.C[ii,k] > 0.0
+                res.C[ii,k] .= 0.0
+            end
+        end
 
         # Inequality constraints [see equation ref]
         for j = 1:pI
@@ -187,11 +285,9 @@ end
 
 """
 $(SIGNATURES)
-
 Generate the constraints function C(x,u) and a function to compute the jacobians
 Cx, Cu = Jc(x,u) from a `ConstrainedObjective` type. Automatically stacks inequality
 and equality constraints and takes jacobians of custom functions with `ForwardDiff`.
-
 Stacks the constraints as follows:
 [upper control inequalities
  lower control inequalities
@@ -311,7 +407,6 @@ generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,
 
 """
 $(SIGNATURES)
-
 Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
@@ -321,22 +416,25 @@ function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(
 end
 
 
-
 ####################################
 ### METHODS FOR INFEASIBLE START ###
 ####################################
 
 """
 $(SIGNATURES)
-
 Additional controls for producing an infeasible state trajectory
 """
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N) # initialize
+    m = solver.model.m
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        solver.fd(view(x,:,k+1),x[:,k],u[:,k])
+        if solver.control_integration == :foh
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1])
+        else
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k])
+        end
         ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
     end
@@ -350,18 +448,22 @@ end
 
 """
 $(SIGNATURES)
-
 Infeasible start solution is run through standard constrained solve to enforce dynamic feasibility. All infeasible augmented controls are removed.
 """
 function feasible_traj(results::ConstrainedResults,solver::Solver)
-    #solver.opts.iterations_outerloop = 3 # TODO: this should be run to convergence, but can be reduce for speedup
     solver.opts.infeasible = false
-    return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
+    if solver.opts.unconstrained
+        # TODO method for generating a new solver with unconstrained objective
+        obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
+        solver_uncon = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
+        return solve(solver_uncon,results.U[1:solver.model.m,:])
+    else
+        return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
+    end
 end
 
 """
 $(SIGNATURES)
-
 Linear interpolation trajectory between initial and final state(s)
 """
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
@@ -372,4 +474,8 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
         x_traj[i,:] = slope[i].*t
     end
     x_traj
+end
+
+function line_trajectory(solver::Solver)
+    line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
 end

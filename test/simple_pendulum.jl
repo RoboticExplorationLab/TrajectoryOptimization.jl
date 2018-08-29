@@ -1,6 +1,5 @@
 using TrajectoryOptimization
 using Base.Test
-#using Juno
 
 # Set up models and objective
 u_bound = 3.
@@ -8,6 +7,7 @@ model,obj = TrajectoryOptimization.Dynamics.pendulum
 opts = TrajectoryOptimization.SolverOptions()
 opts.c1 = 1e-3
 opts.c2 = 2.0
+opts.verbose = true
 opts.mu_al_update = 100.
 
 obj.Q .= eye(2)*1e-3
@@ -52,6 +52,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 
 #   with Square Root
 solver.opts.square_root = true
+solver.opts.verbose = true
 results_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
@@ -98,7 +99,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 ### Infeasible Start
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.cache=true
 opts.c1=1e-4
 opts.c2=2.0
@@ -138,8 +139,8 @@ tmp.U[:,:] = results_inf.result[idx[1]].U # store infeasible control output
 tmp2 = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
 tmp2.U[:,:] = results_inf.result[end].U # store
 
-rollout!(tmp,solver)
-rollout!(tmp2,solver)
+TrajectoryOptimization.rollout!(tmp,solver)
+TrajectoryOptimization.rollout!(tmp2,solver)
 
 # plot(tmp.X')
 # plot!(tmp2.X')

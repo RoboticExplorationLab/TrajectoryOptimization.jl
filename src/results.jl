@@ -41,19 +41,24 @@ Time steps are always concatenated along the last dimension
 """
 struct UnconstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
-    U::Array{Float64,2}  # Controls (m,N-1)
-    K::Array{Float64,3}  # Feedback gain (m,n,N-1)
-    d::Array{Float64,2}  # Feedforward gain (m,N-1)
+    U::Array{Float64,2}  # Controls (m,N)
+    K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
+    b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
+    d::Array{Float64,2}  # Feedforward gain (m,N)
     X_::Array{Float64,2} # Predicted states (n,N)
-    U_::Array{Float64,2} # Predicted controls (m,N-1)
-    S::Array{Float64,3} # Cost-to-go hessian (n,n)
-    s::Array{Float64,2} # Cost-to-go gradient (n,1)
+    U_::Array{Float64,2} # Predicted controls (m,N)
+    S::Array{Float64,3}  # Cost-to-go hessian (n,n)
+    s::Array{Float64,2}  # Cost-to-go gradient (n,1)
     fx::Array{Float64,3} # State jacobian (n,n,N)
     fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
-    fu_::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
+    fv::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
+    Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N-1)
+    Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N-1)
 
-    function UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
-        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
+    mu_reg::Array{Float64,1}
+
+    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
     end
 end
 
@@ -70,6 +75,7 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     X = zeros(n,N)
     U = zeros(m,N)
     K = zeros(m,n,N)
+    b = zeros(m,m,N)
     d = zeros(m,N)
     X_ = zeros(n,N)
     U_ = zeros(m,N)
@@ -77,12 +83,15 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     s = zeros(n,N)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
-    fu_ = zeros(n,m,N-1) # gradient with respect to u_{k+1}
-    UnconstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_)
+    fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
+    Ac = zeros(n,n,N-1)
+    Bc = zeros(n,m,N-1)
+    mu_reg = zeros(1)
+    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.mu_reg))
 end
 
 """
@@ -93,17 +102,21 @@ Time steps are always concatenated along the last dimension
 """
 struct ConstrainedResults <: SolverIterResults
     X::Array{Float64,2}  # States (n,N)
-    U::Array{Float64,2}  # Controls (m,N-1)
-    K::Array{Float64,3}  # Feedback gain (m,n,N-1)
-    d::Array{Float64,2}  # Feedforward gain (m,N-1)
+    U::Array{Float64,2}  # Controls (m,N)
+    K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
+    b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
+    d::Array{Float64,2}  # Feedforward gain (m,N)
     X_::Array{Float64,2} # Predicted states (n,N)
-    U_::Array{Float64,2} # Predicted controls (m,N-1)
-    S::Array{Float64,3} # Cost-to-go hessian (n,n)
-    s::Array{Float64,2} # Cost-to-go gradient (n,1)
+    U_::Array{Float64,2} # Predicted controls (m,N)
+    S::Array{Float64,3}  # Cost-to-go hessian (n,n)
+    s::Array{Float64,2}  # Cost-to-go gradient (n,1)
 
     fx::Array{Float64,3}
     fu::Array{Float64,3}
-    fu_::Array{Float64,3}
+    fv::Array{Float64,3}
+
+    Ac::Array{Float64,3}
+    Bc::Array{Float64,3}
 
     C::Array{Float64,2}      # Constraint values (p,N-1)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N-1)
@@ -120,8 +133,10 @@ struct ConstrainedResults <: SolverIterResults
 
     Cx_N::Array{Float64,2}
 
-    function ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
-        new(X,U,K,d,X_,U_,S,s,fx,fu,fu_,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn)
+    mu_reg::Array{Float64,1}
+
+    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn,mu_reg)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,Iμ,LAMBDA,MU,CN,IμN,λN,μN,cx,cu,cxn,mu_reg)
     end
 end
 
@@ -146,6 +161,7 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X = zeros(n,N)
     U = zeros(m,N)
     K = zeros(m,n,N)
+    b = zeros(m,m,N)
     d = zeros(m,N)
     X_ = zeros(n,N)
     U_ = zeros(m,N)
@@ -154,13 +170,16 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
-    fu_ = zeros(n,m,N-1)
+    fv = zeros(n,m,N-1)
+
+    Ac = zeros(n,n,N-1)
+    Bc = zeros(n,m,N-1)
 
     # Stage Constraints
-    C = zeros(p,N-1)
-    Iμ = zeros(p,p,N-1)
-    LAMBDA = zeros(p,N-1)
-    MU = ones(p,N-1)
+    C = zeros(p,N)
+    Iμ = zeros(p,p,N)
+    LAMBDA = zeros(p,N)
+    MU = ones(p,N)
 
     # Terminal Constraints (make 2D so it works well with stage values)
     C_N = zeros(p_N)
@@ -168,20 +187,22 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     λ_N = zeros(p_N)
     μ_N = ones(p_N)
 
-    cx = zeros(p,n,N-1)
-    cu = zeros(p,m,N-1)
+    cx = zeros(p,n,N)
+    cu = zeros(p,m,N)
     cxn = zeros(p_N,n)
 
-    ConstrainedResults(X,U,K,d,X_,U_,S,s,fx,fu,fu_,
+    mu_reg = zeros(1)
+
+    ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,
         C,Iμ,LAMBDA,MU,
-        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn)
+        C_N,Iμ_N,λ_N,μ_N,cx,cu,cxn,mu_reg)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fu_),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),
         copy(r.C),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.IμN),copy(r.λN),copy(r.μN),
-        copy(r.Cx),copy(r.Cu),copy(r.Cx_N))
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.mu_reg))
 end
 
 """
@@ -291,5 +312,29 @@ function add_iter!(cache::ResultsCache, results::SolverIterResults, cost::Float6
     cache.result[iter] = copy(results)
     cache.cost[iter] = cost
     cache.time[iter] = time
+    return nothing
+end
+
+function add_iter_outerloop!(cache::ResultsCache, results::SolverIterResults, iter)::Void
+    cache.result[iter] = copy(results)
+    return nothing
+end
+
+function check_multipliers(results,solver)
+    p,N = size(results.C)
+    pI = solver.obj.pI
+    for i = 1:N
+        if (results.LAMBDA[1:pI,i]'*results.C[1:pI,i]) < 0.0
+            println("multiplier problem @ $i")
+            println("$(results.LAMBDA[1:pI,i].*results.C[1:pI,i] .< 0.0)")
+            println("$(results.LAMBDA[1:pI,i])")
+            println("$(results.C[1:pI,i])\n")
+            break
+        else
+            nothing
+            # println("no multiplier problems\n")
+        end
+    end
+
     return nothing
 end
