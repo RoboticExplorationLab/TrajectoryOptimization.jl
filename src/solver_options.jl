@@ -27,8 +27,8 @@ mutable struct SolverOptions
     iterations_outerloop::Int64
     "maximum number of backtracking steps during forward pass line search"
     iterations_linesearch::Int64
-    "termed add to Quu during backward pass to insure positive semidefiniteness"
-    mu_regularization::Float64
+    "regularization term update"
+    mu_reg_update::Float64
     "value increase mu_k by at each outer loop iteration"
     mu_al_update::Float64
     "regularization term for augmented controls during infeasible start"
@@ -40,16 +40,17 @@ mutable struct SolverOptions
     benchmark::Bool
 
     infeasible::Bool
+    unconstrained::Bool
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1e-4,c2=2.0,eps=1e-5,eps_intermediate=1e-2,
-        eps_constraint=1e-2,iterations=100,iterations_outerloop=25,
-        iterations_linesearch=25,mu_regularization=1.0,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
-        benchmark=false,infeasible=false)
+        c1=1e-4,c2=10.0,eps=1e-5,eps_intermediate=1e-2,
+        eps_constraint=1e-3,iterations=1000,iterations_outerloop=50,
+        iterations_linesearch=50,mu_reg_update=1e-3,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
+        benchmark=false,infeasible=false,unconstrained=false)
 
         new(square_root,verbose,c1,c2,eps,eps_intermediate,
         eps_constraint,iterations,iterations_outerloop,
-        iterations_linesearch,mu_regularization,mu_al_update,infeasible_regularization,cache,benchmark,infeasible)
+        iterations_linesearch,mu_reg_update,mu_al_update,infeasible_regularization,cache,benchmark,infeasible,unconstrained)
     end
 end
 

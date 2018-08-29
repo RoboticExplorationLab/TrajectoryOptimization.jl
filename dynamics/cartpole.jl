@@ -34,7 +34,8 @@ function cartpole_dynamics!(Xdot, X, U)
     Xdot[3:4] = qdd
     return nothing
 end
-model! = Model(cartpole_dynamics!,4,1)
+
+model_analytical = Model(cartpole_dynamics!,4,1)
 
 # initial and goal states
 x0 = [0.;pi;0.;0.]
@@ -52,4 +53,4 @@ dt = 0.1
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
 cartpole = [model, obj_uncon]
-cartpole! = [model!, obj_uncon]
+cartpole_analytical = [model_analytical, obj_uncon]
