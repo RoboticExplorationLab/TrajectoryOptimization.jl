@@ -308,7 +308,7 @@ function count_constraints(obj::ConstrainedObjective)
     p_N = obj.p_N
     pI_N = obj.pI_N
     pE_N = p_N - pI_N
-    pI_N_c = pI_N 
+    pI_N_c = pI_N
     if obj.use_terminal_constraint
         pE_N_c = pE_N - n
     else
@@ -401,13 +401,13 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = -eye(pI_x_max)
-    fx_state[pI_x_max+1:end,:] = eye(pI_x_min)
+    fx_state[1:pI_x_max, :] = -eye(n)[x_max_active,:]
+    fx_state[pI_x_max+1:end,:] = eye(n)[x_min_active,:]
     fx = zeros(p,n)
 
     fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max,:] = -eye(pI_u_max)
-    fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
+    fu_control[1:pI_u_max,:] = -eye(m)[u_max_active,:]
+    fu_control[pI_u_max+1:end,:] = eye(m)[u_min_active,:]
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 
