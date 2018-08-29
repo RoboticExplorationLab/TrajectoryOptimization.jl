@@ -172,14 +172,14 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
 
     N = solver.N
     for k = 1:N-1
-        if res.LAMBDA[:,k]'*res.C[:,k] < 0.0
-            println("Constraint issue")
-            println("added cost: $(res.LAMBDA[:,k]'*res.C[:,k])")
-            println("$k")
-            println("Lambda: \n $(res.LAMBDA[:,k])")
-            println("C: \n $(res.C[:,k])")
-            println("x: \n $(X[:,k])")
-        end
+        # if res.LAMBDA[:,k]'*res.C[:,k] < 0.0
+        #     println("Constraint issue")
+        #     println("added cost: $(res.LAMBDA[:,k]'*res.C[:,k])")
+        #     println("$k")
+        #     println("Lambda: \n $(res.LAMBDA[:,k])")
+        #     println("C: \n $(res.C[:,k])")
+        #     println("x: \n $(X[:,k])")
+        # end
         J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
 
@@ -248,7 +248,6 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     p, N = size(res.C) # note, C is now (p,N)
     c = solver.c_fun
     pI = solver.obj.pI
-    println("pI: $pI")
 
     if solver.control_integration == :foh
         final_index = N

@@ -331,7 +331,8 @@ function check_multipliers(results,solver)
             println("$(results.C[1:pI,i])\n")
             break
         else
-            println("no multiplier problems\n")
+            nothing
+            # println("no multiplier problems\n")
         end
     end
 

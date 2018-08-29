@@ -259,14 +259,14 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
-        # Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
+        Cy, Cv = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN #+ Cy'*Iμ[:,:,N]*Cy
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN #+ Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
-        # S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
-        # s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
-        # S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
-        # S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
+        S[1:n,1:n] += CxN'*res.IμN*CxN + Cy'*Iμ[:,:,N]*Cy
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cy'*Iμ[:,:,N]*C[:,N] + Cy'*LAMBDA[:,N]
+        S[n+1:n+m,n+1:n+m] = Cv'*Iμ[:,:,N]*Cv
+        s[n+1:n+m] = Cv'*Iμ[:,:,N]*C[:,N] + Cv'*LAMBDA[:,N]
+        S[1:n,n+1:n+m] = Cy'*Iμ[:,:,N]*Cv
+        S[n+1:n+m,1:n] = Cv'*Iμ[:,:,N]*Cy
     end
 
     k = N-1
@@ -276,25 +276,11 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # Calculate the L(x,u,y,v)
         Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
         Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
-        # Ac, Bc = solver.Fc(X[:,k],U[:,k])
-        # Ad, Bd, Cd = solver.Fd(X[:,k],U[:,k],U[:,k+1])
-        # println("Ad: $Ad")
-        # println("Bd: $Bd")
-        # println("Cd: $Cd")
 
         M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
         E[n+m+1:n+m+n,:] = M
 
-        # xm = (X[:,k] + X[:,k+1])/2.0
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
-        # # println("xm: $xm")
-        # # println("xk: $(X[:,k]), xk+1: $(X[:,k+1])")
-        # function xm_func(x,u,y)
-        #     tmp = zeros(x)
-        #     solver.fc(tmp,x,u)
-        #     0.75*x + 0.25*solver.dt*tmp + 0.25*y
-        # end
-        # xm = xm_func(X[:,k],U[:,k],X[:,k+1])
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
@@ -398,7 +384,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qu_ = Qu + Qv*b[:,:,k+1] + d[:,k+1]'*Quv' + d[:,k+1]'*Qvv*b[:,:,k+1]
         Qxx_ = Qxx + Qxv*K[:,:,k+1] + K[:,:,k+1]'*Qxv' + K[:,:,k+1]'*Qvv*K[:,:,k+1]
         Quu_ = Quu + Quv*b[:,:,k+1] + b[:,:,k+1]'*Quv' + b[:,:,k+1]'*Qvv*b[:,:,k+1]
-        Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1] # note, I'm using this instead of Qux'
+        Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1]
 
         # generate (approximate) cost-to-go at timestep k
         s[1:n] = Qx_
