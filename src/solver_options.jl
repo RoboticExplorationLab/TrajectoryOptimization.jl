@@ -43,9 +43,9 @@ mutable struct SolverOptions
     unconstrained::Bool
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1e-4,c2=10.0,eps=1e-5,eps_intermediate=1e-2,
+        c1=1e-8,c2=2.0,eps=1e-5,eps_intermediate=1e-2,
         eps_constraint=1e-3,iterations=1000,iterations_outerloop=50,
-        iterations_linesearch=50,mu_reg_update=1e-3,mu_al_update=100.0,infeasible_regularization=1000.0,cache=false,
+        iterations_linesearch=50,mu_reg_update=1e-3,mu_al_update=10.0,infeasible_regularization=10.0,cache=false,
         benchmark=false,infeasible=false,unconstrained=false)
 
         new(square_root,verbose,c1,c2,eps,eps_intermediate,

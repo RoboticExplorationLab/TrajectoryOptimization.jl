@@ -69,7 +69,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Initialization
     if solver.obj isa UnconstrainedObjective
-        println("Solving Unconstrained Problem...")
+        if solver.opts.verbose
+            println("Solving Unconstrained Problem...")
+        end
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
         results.U .= U0
@@ -79,13 +81,17 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         pI = solver.obj.pI # number of inequality constraints
 
         if infeasible
-            println("Solving Constrained Problem with Infeasible Start...")
+            if solver.opts.verbose
+                println("Solving Constrained Problem with Infeasible Start...")
+            end
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
             solver.opts.infeasible = true
         else
-            println("Solving Constrained Problem...")
+            if solver.opts.verbose
+                println("Solving Constrained Problem...")
+            end
             solver.opts.infeasible = false
         end
 
@@ -125,7 +131,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
-            println("Bad initial control sequence, setting initial control to random")
+            if solver.opts.verbose
+                println("Bad initial control sequence, setting initial control to random")
+            end
             results.U .= rand(solver.model.m,solver.N)
             rollout!(results,solver)
         end
@@ -142,16 +150,23 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Outer Loop
     dJ = Inf
     for k = 1:solver.opts.iterations_outerloop
-        println("Outer loop $k (begin)")
+        if solver.opts.verbose
+            println("Outer loop $k (begin)")
+        end
 
         if results isa ConstrainedResults
             update_constraints!(results,solver,results.X,results.U)
         end
         J_prev = cost(solver, results, X, U)
-        println("Cost ($k): $J_prev\n")
+
+        if solver.opts.verbose
+            println("Cost ($k): $J_prev\n")
+        end
 
         for i = 1:solver.opts.iterations
-            println("--Iteration: $k-($i)--")
+            if solver.opts.verbose
+                println("--Iteration: $k-($i)--")
+            end
 
             if solver.opts.cache
                 t1 = time_ns() # time flag for iLQR inner loop start
@@ -203,19 +218,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             results_cache.iter_type[iter-1] = 1 # flag outerloop update
         end
 
-        ## Outer loop update for Augmented Lagrange Method parameters
-        # if results isa ConstrainedResults
-        #     update_constraints!(results,solver,results.X,results.U)
-        # end
-        # println("precheck")
-        # check_multipliers(results)
-
         outer_loop_update(results,solver)
-
-        # if results isa ConstrainedResults
-        #     println("postcheck")
-        #     check_multipliers(results,solver)
-        # end
 
         if solver.opts.cache
             # Store current results and performance parameters
@@ -233,7 +236,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             end
         end
-        println("Outer loop $k (end)\n")
+        if solver.opts.verbose
+            println("Outer loop $k (end)\n")
+        end
 
     end
 
@@ -247,7 +252,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     ## Return dynamically feasible trajectory
     if infeasible
         if solver.opts.cache
-            println("Infeasible -> Feasible ")
+            if solver.opts.verbose
+                println("Infeasible -> Feasible ")
+            end
             results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
             return merge_results_cache(results_cache,results_cache_2) # return infeasible results and final enforce dynamics results
         else
@@ -287,11 +294,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
-            results.MU[ii,jj] .+= solver.opts.mu_al_update
+            results.MU[ii,jj] .*= solver.opts.mu_al_update
         end
     end
     results.λN .+= results.μN.*results.CN
-    results.μN .+= solver.opts.mu_al_update
+    results.μN .*= solver.opts.mu_al_update
     return nothing
 end
 
