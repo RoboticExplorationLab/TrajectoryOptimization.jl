@@ -280,7 +280,13 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
         E[n+m+1:n+m+n,:] = M
 
-        xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]] #TODO don't do concatentation
+        # xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]] #TODO don't do concatentation
+        xdot1 = zeros(n)
+        xdot2 = zeros(n)
+        solver.model.f(xdot1,X[:,k],U[:,k])
+        solver.model.f(xdot2,X[:,k+1],U[:,k+1])
+
+        xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
         um = (U[:,k] + U[:,k+1])/2.0
 
         g[1:n,1] = W*(X[:,k] - xf)
@@ -479,17 +485,12 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV
 
-        # if iter < 25
-            alpha /= 2.0
-        # else
-            alpha = alpha/10.
-        # end
+        alpha /= 2.0
 
         if iter > solver.opts.iterations_linesearch
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
-            alpha = 0.0
             if res isa ConstrainedResults
                 update_constraints!(res,solver,X_,U_)
             end
@@ -499,6 +500,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             if solver.opts.verbose
                 println("Max iterations (forward pass)\n -No improvement made")
             end
+            alpha = 0.0
             break
         end
         iter += 1
