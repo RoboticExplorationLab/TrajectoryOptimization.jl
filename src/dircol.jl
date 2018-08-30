@@ -84,7 +84,7 @@ function get_initial_state(obj::Objective, N::Int)
     n,m = get_sizes(obj)
     X0 = line_trajectory(obj.x0, obj.xf, N)
     U0 = zeros(m,N)
-    Z0 = packZ(X0,U0)
+    return X0, U0
 end
 
 

@@ -40,9 +40,12 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
 function rollout!(res::SolverResults,solver::Solver)
-    infeasible = solver.model.m != size(res.U,1)
     X = res.X; U = res.U
+    rollout!(X, U, solver)
+end
 
+function rollout!(X::Matrix, U::Matrix, solver::Solver)
+    infeasible = solver.model.m != size(U,1)
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         if solver.control_integration == :foh

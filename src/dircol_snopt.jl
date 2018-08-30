@@ -140,6 +140,21 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     return usrfun, eval_f, eval_c, eval_ceq
 end
 
+function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
+        method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic)
+
+        # Constants
+        nSeg = Int(floor(obj.tf/dt)); # Number of segments
+        dt = obj.tf/nSeg
+        if method == :trapezoid
+            N = nSeg + 1
+        elseif method == :hermite_simpson_separated
+            N = 2*nSeg + 1
+        end
+
+        X0, U0 = get_initial_state(obj,N)
+        dircol(model, obj, dt, X0, U0, method=method, grads=grads)
+end
 """
 $(SIGNATURES)
 Solve a trajectory optimization problem with direct collocation
@@ -158,17 +173,25 @@ Solve a trajectory optimization problem with direct collocation
     :auto - uses ForwardDiff to calculate gradients
     :quadratic - uses functions exploiting quadratic cost functions
 """
-function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
+function dircol(model::Model, obj::Objective, dt::Float64, X0::Matrix, U0::Matrix;
         method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic)
 
-    # Constants
-    nSeg = Int(floor(obj.tf/dt)); # Number of segments
-    dt = obj.tf/nSeg
-    if method == :trapezoid
-        N = nSeg + 1
-    elseif method == :hermite_simpson_separated
-        N = 2*nSeg + 1
+    X0 = copy(X0)
+    U0 = copy(U0)
+
+    if obj isa UnconstrainedObjective
+        obj = ConstrainedObjective(obj)
     end
+
+    # Constants
+    N = size(X0,2)
+    if method == :trapezoid
+        nSeg = N-1
+    elseif method == :hermite_simpson_separated
+        nSeg = (N-1)/2
+    end
+    dt = obj.tf/nSeg
+
     n,m = model.n, model.m
     pack = (n,m,N)
 
@@ -176,7 +199,7 @@ function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
     usrfun, eval_f, eval_g = gen_usrfun(model, obj, dt, pack, method, grads=grads)
 
     # Set up the problem
-    Z0 = get_initial_state(obj,N)
+    Z0 = packZ(X0,U0)
     lb,ub = get_bounds(obj,N)
 
     # Set options
