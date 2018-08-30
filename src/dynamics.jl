@@ -1,6 +1,7 @@
 module Dynamics
 
 using TrajectoryOptimization: Model, UnconstrainedObjective, ConstrainedObjective
+using RigidBodyDynamics
 
 export
     pendulum,

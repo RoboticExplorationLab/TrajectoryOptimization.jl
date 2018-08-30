@@ -40,9 +40,12 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
 function rollout!(res::SolverResults,solver::Solver)
-    infeasible = solver.model.m != size(res.U,1)
     X = res.X; U = res.U
+    rollout!(X, U, solver)
+end
 
+function rollout!(X::Matrix, U::Matrix, solver::Solver)
+    infeasible = solver.model.m != size(U,1)
     X[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         if solver.control_integration == :foh
@@ -274,6 +277,42 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     return nothing # TODO allow for more general terminal constraint
 end
 
+function count_constraints(obj::ConstrainedObjective)
+    n = size(obj.Q,1)
+    p = obj.p # number of constraints
+    pI = obj.pI # number of inequality and equality constraints
+    pE = p-pI # number of equality constraints
+
+    u_min_active = isfinite.(obj.u_min)
+    u_max_active = isfinite.(obj.u_max)
+    x_min_active = isfinite.(obj.x_min)
+    x_max_active = isfinite.(obj.x_max)
+
+    pI_u_max = count(u_max_active)
+    pI_u_min = count(u_min_active)
+    pI_u = pI_u_max + pI_u_min
+
+    pI_x_max = count(x_max_active)
+    pI_x_min = count(x_min_active)
+    pI_x = pI_x_max + pI_x_min
+
+    pI_c = pI - pI_x - pI_u
+    pE_c = pE
+
+    p_N = obj.p_N
+    pI_N = obj.pI_N
+    pE_N = p_N - pI_N
+    pI_N_c = pI_N
+    if obj.use_terminal_constraint
+        pE_N_c = pE_N - n
+    else
+        pE_N_c = pE_N
+    end
+
+    return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
+
+end
+
 """
 $(SIGNATURES)
 Generate the constraints function C(x,u) and a function to compute the jacobians
@@ -346,6 +385,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         return C
     end
 
+    # Terminal Constraint
     # TODO make this more general
     function c_fun(x)
         x - obj.xf
@@ -355,13 +395,13 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = -eye(pI_x_max)
-    fx_state[pI_x_max+1:end,:] = eye(pI_x_min)
+    fx_state[1:pI_x_max, :] = -eye(n)[x_max_active,:]
+    fx_state[pI_x_max+1:end,:] = eye(n)[x_min_active,:]
     fx = zeros(p,n)
 
     fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max,:] = -eye(pI_u_max)
-    fu_control[pI_u_max+1:end,:] = eye(pI_u_min)
+    fu_control[1:pI_u_max,:] = -eye(m)[u_max_active,:]
+    fu_control[pI_u_max+1:end,:] = eye(m)[u_min_active,:]
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 
