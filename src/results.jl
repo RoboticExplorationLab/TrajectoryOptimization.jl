@@ -52,8 +52,8 @@ struct UnconstrainedResults <: SolverIterResults
     fx::Array{Float64,3} # State jacobian (n,n,N)
     fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
     fv::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
-    Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N-1)
-    Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N-1)
+    Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N)
+    Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N)
 
     mu_reg::Array{Float64,1}
 
@@ -84,8 +84,8 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     fx = zeros(n,n,N-1)
     fu = zeros(n,m,N-1)
     fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
-    Ac = zeros(n,n,N-1)
-    Bc = zeros(n,m,N-1)
+    Ac = zeros(n,n,N)
+    Bc = zeros(n,m,N)
     mu_reg = zeros(1)
     UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
 end
@@ -172,8 +172,8 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     fu = zeros(n,m,N-1)
     fv = zeros(n,m,N-1)
 
-    Ac = zeros(n,n,N-1)
-    Bc = zeros(n,m,N-1)
+    Ac = zeros(n,n,N)
+    Bc = zeros(n,m,N)
 
     # Stage Constraints
     C = zeros(p,N)

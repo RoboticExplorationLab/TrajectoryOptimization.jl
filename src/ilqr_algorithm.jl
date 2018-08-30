@@ -272,10 +272,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     k = N-1
     while k >= 1
         # Calculate the L(x,u,y,v)
-        Ac,Bc = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ac1,Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ac2,Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
+
         Ad,Bd,Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
 
-        M = 0.25*[3*eye(n)+dt*Ac dt*Bc eye(n) zeros(n,m)]
+        M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
         E[n+m+1:n+m+n,:] = M
 
         xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]] #TODO don't do concatentation
@@ -464,7 +466,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             if solver.opts.verbose
                 println("Non-finite values in rollout")
             end
-            alpha /= 2
+            alpha /= 2.0
             continue
         end
 
@@ -477,17 +479,17 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         dV = alpha*v1 + (alpha^2)*v2/2.
         z = (J_prev - J)/dV
 
-        if iter < 25
-            alpha = alpha/2.
-        else
+        # if iter < 25
+            alpha /= 2.0
+        # else
             alpha = alpha/10.
-        end
+        # end
 
         if iter > solver.opts.iterations_linesearch
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
-
+            alpha = 0.0
             if res isa ConstrainedResults
                 update_constraints!(res,solver,X_,U_)
             end
@@ -504,6 +506,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
     if solver.opts.verbose
         println("New cost: $J")
+        println("alpha: $alpha")
         if res isa ConstrainedResults# && !solver.opts.unconstrained
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
