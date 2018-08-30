@@ -37,7 +37,7 @@ struct Solver
     control_integration::Symbol
 
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
-        N = convert(Int64,floor(obj.tf/dt)) + 1
+        N = calc_N(obj.tf, dt)
         n, m = model.n, model.m
 
         # Make dynamics inplace
@@ -137,6 +137,9 @@ struct Solver
     end
 end
 
+function calc_N(tf::Float64, dt::Float64)::Int
+    convert(Int64,floor(obj.tf/dt)) + 1
+end
 
 """
 $(SIGNATURES)
