@@ -1,3 +1,4 @@
+import Base.copy
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
 #     SUMMARY: Model and Objective Classes
@@ -89,6 +90,12 @@ function Model(urdf::String,torques::Array{Float64,1})
     Model(mech,torques)
 end
 
+
+
+#*********************************#
+#        OBJECTIVE CLASS          #
+#*********************************#
+
 """
 $(TYPEDEF)
 Generic type for Objective functions, which are currently strictly Quadratic
@@ -106,6 +113,10 @@ mutable struct UnconstrainedObjective <: Objective
     tf::Float64           # Final time (sec)
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
+end
+
+function copy(obj::UnconstrainedObjective)
+    UnconstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf))
 end
 
 """
@@ -231,6 +242,14 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
         cI, cE,
         use_terminal_constraint,
         cI_N, cE_N)
+end
+
+function copy(obj::ConstrainedObjective)
+    ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf),
+        u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
+        cI=obj.cI, cE=obj.cE,
+        use_terminal_constraint=obj.use_terminal_constraint,
+        cI_N=obj.cI_N, cE_N=obj.cE_N)
 end
 
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
