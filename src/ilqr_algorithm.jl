@@ -515,7 +515,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         end
         println("- Expected improvement: $(dV)")
         println("- Actual improvement: $(J_prev-J)")
-        println("- (z = $z)\n")
+        println("- (z = $z, α = $alpha)\n")
     end
 
     return J

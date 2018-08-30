@@ -103,6 +103,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
             solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
         end
 
+
         if infeasible
             X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
         end
@@ -120,6 +121,10 @@ Quadratic stage cost (with goal state)
 """
 function stage_cost(x,u,Q,R,xf)
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+end
+
+function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
+    0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u
 end
 
 # """
@@ -158,9 +163,9 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
             Um = (U[:,k] + U[:,k+1])/2
 
-            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J += solver.dt/6*(stage_cost(obj,X[:,k],U[:,k]) + 4*stage_cost(obj,Xm,Um) + stage_cost(obj,X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
         else
-            J += stage_cost(X[:,k],U[:,k],Q,R,xf)
+            J += solver.dt*stage_cost(obj,X[:,k],U[:,k])
         end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)

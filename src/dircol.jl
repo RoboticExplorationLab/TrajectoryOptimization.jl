@@ -29,7 +29,7 @@ function get_weights(method,N::Int)
     return weights
 end
 
-function get_bounds(obj::Objective,N::Int)
+function get_bounds(obj::ConstrainedObjective,N::Int)
     n,m = get_sizes(obj)
     lb = zeros((n+m),N)
     ub = zeros((n+m),N)
@@ -87,6 +87,34 @@ function get_initial_state(obj::Objective, N::Int)
     return X0, U0
 end
 
+function rollout_midpoint(solver::Solver,U::Matrix)
+    N = solver.N
+    n,m = solver.model.n,solver.model.m
+    nSeg = N-1
+    N_ = 2*nSeg + 1
+    X_ = zeros(n,N_)
+    U_ = zeros(size(U,1),N_)
+    X_[:,1] = solver.obj.x0
+    U_[:,1] = U[:,1]
+
+    for k = 1:N_-1
+        if isodd(k)
+            j = (k+1)÷2
+            U_[:,k+2] = U[:,j+1]
+            solver.fd(view(X_,:,k+2), X_[:,k], U_[1:m,k], U_[1:m,k+2])
+        else
+            Ac, Bc = solver.Fc(X_[:,k-1], U_[:,k-1])
+            M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
+
+            Xm = M*[X_[:,k-1]; U_[:,k-1]; X_[:,k+1]; U_[:,k+1]]
+            Um = (U_[:,k-1] + U_[:,k+1])/2
+
+            X_[:,k] = Xm
+            U_[:,k] = Um
+        end
+    end
+    return X_,U_
+end
 
 
 """
