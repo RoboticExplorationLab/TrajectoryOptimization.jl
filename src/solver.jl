@@ -121,7 +121,7 @@ struct Solver
             Fc!(Jc,Scdot,Sc)
 
             if infeasible
-                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)] # fx, [fu I]
+                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)] # fx, [fu 0]
             else
                 return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m] # fx, fu
             end

@@ -99,3 +99,19 @@ function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10
     display(plt)
     return nothing
 end
+
+function linear_spline(x1::Array,x2::Array,T::Float64)
+    x = zeros(x1)
+    f(t) = begin
+        for i in eachindex(M1)
+            x[i] = (x2[i] - x1[i])/T*t + x1[i]
+        end
+        x
+    end
+end
+
+function quadratic_spline(xdot::Array,x1::Array,x2::Array,T::Float64)
+    f(t) = begin
+        0.5*(2*x2/T^2 - 2*x1/T^2 - 2*xdot/T)*t^2 + xdot*t + x1
+    end
+end

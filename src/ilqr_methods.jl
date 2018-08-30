@@ -86,7 +86,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         b = res.b
         du = zeros(m)
         dv = zeros(m)
-        du .= alpha*d[:,1] # check on this...
+        du = alpha*d[:,1] # check on this...
         U_[:,1] .= U[:,1] + du
     end
 
@@ -97,7 +97,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
             dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
             U_[:,k] .= U[:,k] + dv
             solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
-            du .= dv
+            du = dv
         else
             U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
             solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
@@ -154,10 +154,11 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
-            Ac, Bc = solver.Fc(X[:,k],U[:,k])
+            Ac1, Bc1 = solver.Fc(X[:,k],U[:,k])
+            Ac2, Bc2 = solver.Fc(X[:,k+1],U[:,k+1])
 
-            M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
-
+            # M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
+            M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
             Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
             Um = (U[:,k] + U[:,k+1])/2
 
@@ -211,6 +212,7 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
     end
 
     if solver.control_integration == :foh
+        res.Ac[:,:,N], res.Bc[:,:,N] = solver.Fc(res.X[:,N], res.U[:,N])
         res.Cx[:,:,N], res.Cu[:,:,N] = solver.c_jacobian(res.X[:,N],res.U[:,N])
     end
 
@@ -228,6 +230,10 @@ function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=fa
             res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
         end
     end
+    if solver.control_integration == :foh
+        res.Ac[:,:,N], res.Bc[:,:,N] = solver.Fc(res.X[:,N], res.U[:,N])
+    end
+
     return nothing
 end
 
