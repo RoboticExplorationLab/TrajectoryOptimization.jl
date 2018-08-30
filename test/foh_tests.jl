@@ -9,15 +9,14 @@ opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = true
 opts.cache = true
-opts.c1 = 1e-4
-opts.c2 = 10.0
-opts.mu_al_update = 10.0
-opts.infeasible_regularization = 1.0
-opts.eps_constraint = 1e-3
-opts.eps = 1e-5
-opts.iterations_outerloop = 100
-opts.iterations = 1000
-opts.iterations_linesearch = 50
+# opts.c1 = 1e-4
+# opts.c2 = 2.0
+# opts.mu_al_update = 10.0
+# opts.eps_constraint = 1e-3
+# opts.eps = 1e-5
+# opts.iterations_outerloop = 100
+# opts.iterations = 1000
+# opts.iterations_linesearch = 50
 ###
 
 #### Systems
