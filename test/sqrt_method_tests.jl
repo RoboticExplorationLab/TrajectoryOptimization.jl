@@ -33,7 +33,7 @@ end
 u_min = -10
 u_max = 10
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min,u_max=u_max) # constrained objective
-c_fun, constraint_jacobian = TrajectoryOptimization.generate_constraint_functions(obj_c)
+c_fun, constraint_jaco = TrajectoryOptimization.generate_constraint_functions(obj_c)
 p = size(c_fun(zeros(solver.model.n),zeros(solver.model.m)))
 opts_con = TrajectoryOptimization.SolverOptions()
 opts_con.square_root = false

@@ -27,35 +27,35 @@ obj_uncon_p = TrajectoryOptimization.Dynamics.pendulum![2]
 model_p = Dynamics.pendulum![1]
 ####
 
-### foh augmented dynamics
-n_dc = 3
-m_dc = 2
-fc! = model_dc.f
-fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
-fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
-fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n_dc,m_dc)
-
-x = ones(n_dc)
-u1 = ones(m_dc)
-u2 = ones(m_dc)
-
-@test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
-###
-
-### Continuous dynamics Jacobians match known analytical solutions
-solver_test = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
-
-x = [0.0; 0.0; pi/4.0]
-u = [2.0; 2.0]
-
-Ac_known = [0.0 0.0 -sin(x[3])*u[1]; 0.0 0.0 cos(x[3])*u[1]; 0.0 0.0 0.0]
-Bc_known = [cos(x[3]) 0.0; sin(x[3]) 0.0; 0.0 1.0]
-
-Ac, Bc = solver_test.Fc(x,u)
-
-@test norm((Ac_known - Ac)[:]) < 1e-5
-@test norm((Bc_known - Bc)[:]) < 1e-5
-###
+# ### foh augmented dynamics
+# n_dc = 3
+# m_dc = 2
+# fc! = model_dc.f
+# fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
+# fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
+# fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n_dc,m_dc)
+#
+# x = ones(n_dc)
+# u1 = ones(m_dc)
+# u2 = ones(m_dc)
+#
+# @test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
+# ###
+#
+# ### Continuous dynamics Jacobians match known analytical solutions
+# solver_test = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
+#
+# x = [0.0; 0.0; pi/4.0]
+# u = [2.0; 2.0]
+#
+# Ac_known = [0.0 0.0 -sin(x[3])*u[1]; 0.0 0.0 cos(x[3])*u[1]; 0.0 0.0 0.0]
+# Bc_known = [cos(x[3]) 0.0; sin(x[3]) 0.0; 0.0 1.0]
+#
+# Ac, Bc = solver_test.Fc(x,u)
+#
+# @test norm((Ac_known - Ac)[:]) < 1e-5
+# @test norm((Bc_known - Bc)[:]) < 1e-5
+# ###
 
 ### Unconstrained dubins car foh
 solver_foh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
@@ -71,6 +71,9 @@ sol_foh = TrajectoryOptimization.solve(solver_foh,U)
 plot(sol_zoh.cost[1:sol_zoh.termination_index])
 plot!(sol_foh.cost[1:sol_foh.termination_index])
 
+plot(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
+plot!(log.(sol_foh.cost[1:sol_foh.termination_index]))
+
 plot(sol_foh.X[1,:],sol_foh.X[2,:])
 plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
 
@@ -80,29 +83,32 @@ plot!(sol_zoh.U')
 println("Final state (foh): $(sol_foh.X[:,end])")
 println("Final state (zoh): $(sol_zoh.X[:,end])")
 
+println("Final state cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
+println("Final state cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
+
 sol_foh.U[:,end-1]
 @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
 ###
 
-### Unconstrained pendulum foh
-solver_foh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3_foh, dt=dt, opts=opts)
-solver_zoh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3, dt=dt, opts=opts)
-
-U = rand(solver_foh.model.m, solver_foh.N)
-
-sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
-sol_foh = TrajectoryOptimization.solve(solver_foh,U)
-
-plot(sol_zoh.cost[1:sol_zoh.termination_index])
-plot!(sol_foh.cost[1:sol_foh.termination_index])
-
-plot(sol_foh.X')
-plot!(sol_zoh.X')
-
-plot(sol_foh.U')
-plot!(sol_zoh.U')
-
-@test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3 # test final state of foh solve
+# ### Unconstrained pendulum foh
+# solver_foh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_zoh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3, dt=dt, opts=opts)
+#
+# U = rand(solver_foh.model.m, solver_foh.N)
+#
+# sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
+# sol_foh = TrajectoryOptimization.solve(solver_foh,U)
+#
+# plot(sol_zoh.cost[1:sol_zoh.termination_index])
+# plot!(sol_foh.cost[1:sol_foh.termination_index])
+#
+# plot(sol_foh.X')
+# plot!(sol_zoh.X')
+#
+# plot(sol_foh.U')
+# plot!(sol_zoh.U')
+#
+# @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3 # test final state of foh solve
 # ###
 #
 # ### Control constraints with foh (pendulum)

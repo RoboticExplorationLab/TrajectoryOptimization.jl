@@ -144,7 +144,7 @@ Compute the unconstrained cost
 function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-
+    obj = solver.obj
     if size(U,1) != m
         m += n
     end
@@ -154,12 +154,13 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
-            Ac1, Bc1 = solver.Fc(X[:,k],U[:,k])
-            Ac2, Bc2 = solver.Fc(X[:,k+1],U[:,k+1])
 
-            # M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
-            M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
-            Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
+            xdot1 = zeros(n)
+            xdot2 = zeros(n)
+            solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
+            solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+
+            Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
             Um = (U[:,k] + U[:,k+1])/2
 
             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)

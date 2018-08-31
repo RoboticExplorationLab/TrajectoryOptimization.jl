@@ -25,9 +25,9 @@ end
 @testset "Infeasible Start" begin
     include("infeasible_start_tests.jl")
 end
-@testset "Direct Collocation" begin
-    include("dircol_test.jl")
-end
+# @testset "Direct Collocation" begin
+#     include("dircol_test.jl")
+# end
 
 """
 # NEEDED TESTS:
