@@ -138,7 +138,7 @@ struct Solver
 end
 
 function calc_N(tf::Float64, dt::Float64)::Int
-    convert(Int64,floor(obj.tf/dt)) + 1
+    convert(Int64,floor(tf/dt)) + 1
 end
 
 """

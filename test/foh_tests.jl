@@ -68,6 +68,9 @@ sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
 println("foh solve:")
 sol_foh = TrajectoryOptimization.solve(solver_foh,U)
 
+plot(sol_zoh.cost[1:sol_zoh.termination_index])
+plot!(sol_foh.cost[1:sol_foh.termination_index])
+
 plot(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
 plot!(log.(sol_foh.cost[1:sol_foh.termination_index]))
 
@@ -79,6 +82,9 @@ plot!(sol_zoh.U')
 
 println("Final state (foh): $(sol_foh.X[:,end])")
 println("Final state (zoh): $(sol_zoh.X[:,end])")
+
+println("Final state cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
+println("Final state cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
 
 sol_foh.U[:,end-1]
 @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
