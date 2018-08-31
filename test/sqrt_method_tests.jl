@@ -3,7 +3,7 @@ using Base.Test
 
 model,obj = TrajectoryOptimization.Dynamics.dubinscar
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = true
+opts.verbose = false
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 results = TrajectoryOptimization.UnconstrainedResults(model.n,model.m,solver.N)
 results_sqrt = TrajectoryOptimization.UnconstrainedResults(model.n,model.m,solver.N)
