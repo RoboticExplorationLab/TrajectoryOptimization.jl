@@ -471,11 +471,11 @@ function backwardpass_foh_alt!(res::SolverIterResults,solver::Solver)
 
     k = N-1
     while k >= 1
-        ## Calculate the L(x,u,y,v)
+        ## Calculate the L(x,u,y,v) second order expansion
 
         # unpack Jacobians
-        Ac1,Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
-        Ac2,Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
+        Ac1, Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ac2, Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
         Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
 
         # calculate xm, um using cubic and linear splines
@@ -488,20 +488,20 @@ function backwardpass_foh_alt!(res::SolverIterResults,solver::Solver)
 
         # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
         Lx = dt/6*Q*(X[:,k] - xf) + 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(xm - xf)
-        Lu = dt/6*R*U[:,k] + 4*dt/6*(dt/8*Bc1)'*Q*(xm - xf) + 4*dt/6*0.5*R*um
+        Lu = dt/6*R*U[:,k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
         Ly = dt/6*Q*(X[:,k+1] - xf) + 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(xm - xf)
-        Lv = dt/6*R*U[:,k+1] + 4*dt/6*(-dt/8*Bc2)'*Q*(xm - xf) + 4*dt/6*0.5*R*um
+        Lv = dt/6*R*U[:,k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
 
         Lxx = dt/6*Q + 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(0.5*eye(n) + dt/8*Ac1)
-        Luu = dt/6*R + 4*dt/6*(dt/8*Bc1)'*Q*(dt/8*Bc1) + 4*dt/6*0.5*R*0.5
+        Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
         Lyy = dt/6*Q + 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(0.5*eye(n) - dt/8*Ac2)
-        Lvv = dt/6*R + 4*dt/6*(-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 4*dt/6*0.5*R*0.5
+        Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
 
         Lxu = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(dt/8*Bc1)
         Lxy = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(0.5*eye(n) - dt/8*Ac2)
         Lxv = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(-dt/8*Bc2)
         Luy = 4*dt/6*(dt/8*Bc1)'*Q*(0.5*eye(n) - dt/8*Ac2)
-        Luv = 4*dt/6*(dt/8*Bc1)'*Q*(-dt/8*Bc2)
+        Luv = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
         Lyv = 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(-dt/8*Bc2)
 
         # Unpack cost-to-go P, then add L + P
@@ -530,7 +530,7 @@ function backwardpass_foh_alt!(res::SolverIterResults,solver::Solver)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
         Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
-        Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd
+        Qvv = Hermitian(Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd)
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
