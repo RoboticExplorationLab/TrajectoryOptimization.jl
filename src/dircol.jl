@@ -33,6 +33,10 @@ function get_weights(method,N::Int)
     return weights
 end
 
+function get_bounds(obj::UnconstrainedObjective,N::Int)
+    get_bounds(ConstrainedObjective(obj),N::Int)
+end
+
 function get_bounds(obj::ConstrainedObjective,N::Int)
     n,m = get_sizes(obj)
     lb = zeros((n+m),N)
@@ -341,7 +345,7 @@ function interp(t,T,X,U,F)
         f1,f2 = F[:,k], F[:,k+1]
         xm = (x1+x2)/2 + dt/8*(f1-f2)
         um = (U[:,k] + U[:,k+1])/2
-        
+
         u = (2(τ-dt/2)(τ-dt)U[:,k] - 4τ*(τ-dt)Um + 2τ*(τ-dt/2)*U[:,k+1])/dt^2
         x = X[:,k] + F[:,k]*τ/dt + 1/2*(-3F[:,])
     end

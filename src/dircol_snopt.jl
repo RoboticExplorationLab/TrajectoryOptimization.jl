@@ -1,6 +1,7 @@
 using Base.Test
 using Snopt
 using ForwardDiff
+using Interpolations
 
 """
 $(SIGNATURES)
@@ -18,16 +19,18 @@ Generate the custom function to be passed into SNOPT, as well as `eval_f` and
     :auto - uses ForwardDiff to calculate gradients
     :quadratic - uses functions exploiting quadratic cost functions
 """
-function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::Tuple, method::Symbol; grads=:none)::Tuple
-    n,m,N = pack
+function gen_usrfun(solver::Solver, method::Symbol; grads=:none)::Function
+    n,m,N = solver.model.n, solver.model.m, solver.N
+    pack = (n,m,N)
+    dt = solver.dt
+    obj = copy(solver.obj)
 
-    # Weights (Trapezoidal)
+    # Weights
     weights = get_weights(method,N)*dt
 
-    # Jacobian for Dynamics
-    f_aug! = f_augmented!(model.f, model.n, model.m)
-    zdot = zeros(n)
-    F(z) = ForwardDiff.jacobian(f_aug!,zdot,z)
+    if obj isa UnconstrainedObjective
+        obj = ConstrainedObjective(obj)
+    end
 
     # Count constraints
     pI = 0
@@ -45,7 +48,7 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     function eval_f(Z)
         X,U = unpackZ(Z,pack)
         if method == :hermite_simpson_modified
-            return cost(obj,model.f,X,U)
+            return cost(obj,solver.model.f,X,U)
         else
             cost(X,U,weights,obj)
         end
@@ -55,7 +58,7 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     function eval_ceq(Z)
         X,U = unpackZ(Z,pack)
         gE = zeros(eltype(Z),pE)
-        g_colloc = collocation_constraints(X,U,method,dt,model.f)
+        g_colloc = collocation_constraints(X,U,method,dt,solver.model.f)
         gE[1:p_colloc] = g_colloc
 
         # Custom constraints
@@ -134,18 +137,18 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
             if grads == :auto
                 jacob_ceq = ForwardDiff.jacobian(eval_g,Z)
             else
-                jacob_ceq = constraint_jacobian(X,U,dt,method,F)
+                jacob_ceq = constraint_jacobian(X,U,dt,method,solver.Fc)
             end
 
             return J, c, ceq, grad_f, jacob_c, jacob_ceq, fail
         end
     end
 
-    return usrfun, eval_f, eval_c, eval_ceq
+    return usrfun
 end
 
 function dircol(model::Model,obj::Objective,dt::Float64;
-        method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic)
+        method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic, start=start)
 
         # Constants
         nSeg = Int(floor(obj.tf/dt)); # Number of segments
@@ -157,7 +160,7 @@ function dircol(model::Model,obj::Objective,dt::Float64;
         end
 
         X0, U0 = get_initial_state(obj,N)
-        dircol(model, obj, dt, X0, U0, method=method, grads=grads)
+        dircol(model, obj, dt, X0, U0, method=method, grads=grads, start=start)
 end
 
 
@@ -180,116 +183,91 @@ Solve a trajectory optimization problem with direct collocation
     :auto - uses ForwardDiff to calculate gradients
     :quadratic - uses functions exploiting quadratic cost functions
 """
-function dircol(model::Model, obj::Objective, dt::Float64, X0::Matrix, U0::Matrix;
-        method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic)
+function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
+        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
 
-    X0 = copy(X0)
-    U0 = copy(U0)
+        X0 = copy(X0)
+        U0 = copy(U0)
 
-    if method == :hermite_simpson_modified
-        grads = :none
+        if method == :auto
+            if solver.integration == :rk3_foh
+                method = :hermite_simpson_modified
+            elseif solver.integration == :midpoint
+                method = :midpoint
+            else
+                method = :hermite_simpson_modified
+            end
+        end
+
+        if method == :hermite_simpson_modified || method == :midpoint
+            grads = :none
+        end
+
+        # Constants
+        N,dt = solver.N, solver.dt
+        if method == :hermite_simpson_separated
+            nSeg = (N-1)/2
+        else
+            nSeg = N-1
+        end
+        pack = (solver.model.n, solver.model.m, N)
+
+        # Generate the objective/constraint function and its gradients
+        usrfun = gen_usrfun(solver, method, grads=grads)
+
+        # Set up the problem
+        Z0 = packZ(X0,U0)
+        lb,ub = get_bounds(obj,N)
+
+        # Set options
+        options = Dict{String, Any}()
+        options["Derivative option"] = 0
+        options["Verify level"] = 1
+
+        # Solve the problem
+        println("DIRCOL with $method")
+        println("Passing Problem to SNOPT...")
+
+        @time z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
+        @time snopt(usrfun, Z0, lb, ub, options, start=start)
+        # xopt, fopt, info = Z0, Inf, "Nothing"
+        x_opt,u_opt = unpackZ(z_opt,pack)
+
+        println(info)
+        return x_opt, u_opt, fopt
+end
+
+function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
+        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+    x_opt, u_opt = X0, U0
+    for dt in mesh
+        println("Refining mesh at dt=$dt")
+        solver_mod = Solver(solver,dt=dt)
+        x_int, u_int = interp_traj(solver_mod.N, solver.obj.tf, x_opt, u_opt)
+        x_opt, u_opt, f_opt = solve_dircol(solver_mod, x_int, u_int, method=method, grads=grads, start=start)
+        start = :warm  # Use warm starts after the first one
     end
-
-    if obj isa UnconstrainedObjective
-        obj = ConstrainedObjective(obj)
-    end
-
-    # Constants
-    N = size(X0,2)
-    if method == :hermite_simpson_separated
-        nSeg = (N-1)/2
-    else
-        nSeg = N-1
-    end
-    dt = obj.tf/nSeg
-
-    n,m = model.n, model.m
-    pack = (n,m,N)
-
-    # Generate the objective/constraint function and its gradients
-    usrfun, eval_f, eval_g = gen_usrfun(model, obj, dt, pack, method, grads=grads)
-
-    # Set up the problem
-    Z0 = packZ(X0,U0)
-    lb,ub = get_bounds(obj,N)
-
-    # Set options
-    options = Dict{String, Any}()
-    options["Derivative option"] = 0
-    options["Verify level"] = 1
-
-    # Solve the problem
-    println("Passing Problem to SNOPT...")
-    @time z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options)
-    @time snopt(usrfun, Z0, lb, ub, options)
-    # xopt, fopt, info = Z0, Inf, "Nothing"
-    x_opt,u_opt = unpackZ(z_opt,pack)
-
-    println(info)
-    return x_opt, u_opt, fopt
+    # Run the original time step
+    x_int, u_int = interp_traj(solver.N, solver.obj.tf, x_opt, u_opt)
+    x_opt, u_opt, f_opt = solve_dircol(solver, x_int, u_int, method=method, grads=grads, start=:warm)
+    return x_opt, u_opt, f_opt
 end
 
 
+function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
+    X2 = interp_rows(N,tf,X)
+    U2 = interp_rows(N,tf,U)
+    return X2, U2
+end
 
-
-
-
-
-
-
-
-
-
-
-
-
-#
-# Z0 = get_initial_state(obj,N)
-# options = Dict{String, Any}()
-# lb,ub = get_bounds(obj,N)
-# options["Derivative option"] = 0
-# options["Verify level"] = 1
-#
-# @time xopt, fopt, info = snopt(gradfree, Z0, lb, ub, options)
-# x_soln,u_soln = unpackZ(xopt)
-# plot(x_soln')
-# plot(u_soln')
-# eval_g(xopt)
-#
-# # Tests
-# X,U = unpackZ(Z0)
-# X = rand(size(X))
-# U = rand(size(U))
-# Z = packZ(X,U)
-#
-# X2,U2 = unpackZ(Z)
-# @test X2 == X
-# @test U2 == U
-#
-# # Test cost
-# J1 = eval_f(Z)
-# J2 = cost(X,U)
-# @test J1 == J2
-#
-# # Test Constraints
-# g = eval_g(Z)
-#
-# # Test Gradient of Objective
-# grad_f = zeros((n+m)*N)
-# eval_grad_f(Z,grad_f)
-# grad_f
-# grad_f_auto = ForwardDiff.gradient(eval_f,Z)
-# @test grad_f == grad_f_auto
-#
-# # Gradient of Constraints
-# jacob_g = eval_jac_g(Z)
-# jacob_g_auto = ForwardDiff.jacobian(eval_g,Z)
-# @test jacob_g_auto == jacob_g
-#
-# # Test usrfun
-# f_val,g2,df,dg,fail = usrfun(Z)
-# @test f_val == J1
-# @test g2 == g
-# @test df == grad_f
-# @test dg == jacob_g
-# @test ~fail
+function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
+    n,N1 = size(X)
+    t1 = linspace(0,obj.tf,N1)
+    t2 = linspace(0,obj.tf,N)
+    X2 = zeros(n,N)
+    for i = 1:n
+        interp_cubic = CubicSplineInterpolation(t1, X[i,:])
+        X2[i,:] = interp_cubic(t2)
+    end
+    return X2
+end
