@@ -253,21 +253,21 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     E[3*n+2*m+1:end,2*n+m+1:end] = eye(m)
 
     # Boundary conditions
-    xdot1 = zeros(n)
-    xdot2 = zeros(n)
-    solver.model.f(xdot1,X[:,N-1],U[:,N-1])
-    solver.model.f(xdot2,X[:,N],U[:,N])
-    xm = 0.5*X[:,N-1] + dt/8*xdot1 + 0.5*X[:,N] - dt/8*xdot2
+    # xdot1 = zeros(n)
+    # xdot2 = zeros(n)
+    # solver.model.f(xdot1,X[:,N-1],U[:,N-1])
+    # solver.model.f(xdot2,X[:,N],U[:,N])
+    # xm = 0.5*X[:,N-1] + dt/8*xdot1 + 0.5*X[:,N] - dt/8*xdot2
+    #
+    # r1 = (0.5*eye(n) - dt/8*res.Ac[:,:,N])
+    # r2 = -dt/8*res.Bc[:,:,N]
 
-    r1 = (0.5*eye(n) - dt/8*res.Ac[:,:,N])
-    r2 = -dt/8*res.Bc[:,:,N]
-
-    S[1:n,1:n] = Wf + solver.dt/6*W + 4*dt/6*r1'*W*r1
-    s[1:n] = Wf*(X[:,N]-xf) + solver.dt/6*W*(X[:,N] - xf) + 4*dt/6*r1'*W*(xm-xf)
-    S[n+1:n+m,n+1:n+m] = solver.dt/6*R + 4*dt/6*(r2'*W*r2 + 0.25*R)
-    s[n+1:n+m] = solver.dt/6*R*U[:,N] + 4*dt/6*(r2'*W*(xm-xf) + 0.25*R*(U[:,N-1] + U[:,N]))
-    S[1:n,n+1:n+m] = 4*dt/6*r1'*W*r2
-    S[n+1:n+m,1:n] = 4*dt/6*r2'*W*r1
+    S[1:n,1:n] = Wf #+ solver.dt/6*W + 4*dt/6*r1'*W*r1
+    s[1:n] = Wf*(X[:,N]-xf)# + solver.dt/6*W*(X[:,N] - xf) + 4*dt/6*r1'*W*(xm-xf)
+    # S[n+1:n+m,n+1:n+m] = solver.dt/6*R + 4*dt/6*(r2'*W*r2 + 0.25*R)
+    # s[n+1:n+m] = solver.dt/6*R*U[:,N] + 4*dt/6*(r2'*W*(xm-xf) + 0.25*R*(U[:,N-1] + U[:,N]))
+    # S[1:n,n+1:n+m] = 4*dt/6*r1'*W*r2
+    # S[n+1:n+m,1:n] = 4*dt/6*r2'*W*r1
 
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
