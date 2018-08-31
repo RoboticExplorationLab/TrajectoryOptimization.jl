@@ -437,6 +437,153 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     return v1, v2
 end
 
+function backwardpass_foh_alt!(res::SolverIterResults,solver::Solver)
+    N = solver.N
+    n = solver.model.n
+    m = solver.model.m
+
+    Q = solver.obj.Q
+    Qf = solver.obj.Qf
+    xf = solver.obj.xf
+
+    K = res.K
+    b = res.b
+    d = res.d
+
+    dt = solver.dt
+
+    X = res.X
+    U = res.U
+
+    R = getR(solver)
+
+    S = zeros(n+m,n+m)
+    s = zeros(n+m)
+
+    # line search stuff
+    v1 = 0.0
+    v2 = 0.0
+
+
+    # Boundary conditions
+    S[1:n,1:n] = Qf
+    s[1:n] = Qf*(X[:,N]-xf)
+
+    k = N-1
+    while k >= 1
+        ## Calculate the L(x,u,y,v)
+
+        # unpack Jacobians
+        Ac1,Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
+        Ac2,Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
+        Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+
+        # calculate xm, um using cubic and linear splines
+        xdot1 = zeros(n)
+        xdot2 = zeros(n)
+        solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
+        solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+        xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
+        um = (U[:,k] + U[:,k+1])/2.0
+
+        # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
+        Lx = dt/6*Q*(X[:,k] - xf) + 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(xm - xf)
+        Lu = dt/6*R*U[:,k] + 4*dt/6*(dt/8*Bc1)'*Q*(xm - xf) + 4*dt/6*0.5*R*um
+        Ly = dt/6*Q*(X[:,k+1] - xf) + 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(xm - xf)
+        Lv = dt/6*R*U[:,k+1] + 4*dt/6*(-dt/8*Bc2)'*Q*(xm - xf) + 4*dt/6*0.5*R*um
+
+        Lxx = dt/6*Q + 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(0.5*eye(n) + dt/8*Ac1)
+        Luu = dt/6*R + 4*dt/6*(dt/8*Bc1)'*Q*(dt/8*Bc1) + 4*dt/6*0.5*R*0.5
+        Lyy = dt/6*Q + 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(0.5*eye(n) - dt/8*Ac2)
+        Lvv = dt/6*R + 4*dt/6*(-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 4*dt/6*0.5*R*0.5
+
+        Lxu = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(dt/8*Bc1)
+        Lxy = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(0.5*eye(n) - dt/8*Ac2)
+        Lxv = 4*dt/6*(0.5*eye(n) + dt/8*Ac1)'*Q*(-dt/8*Bc2)
+        Luy = 4*dt/6*(dt/8*Bc1)'*Q*(0.5*eye(n) - dt/8*Ac2)
+        Luv = 4*dt/6*(dt/8*Bc1)'*Q*(-dt/8*Bc2)
+        Lyv = 4*dt/6*(0.5*eye(n) - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+
+        # Unpack cost-to-go P, then add L + P
+        Sy = s[1:n]
+        Sv = s[n+1:n+m]
+        Syy = S[1:n,1:n]
+        Svv = S[n+1:n+m,n+1:n+m]
+        Syv = S[1:n,n+1:n+m]
+
+        Ly += Sy
+        Lv += Sv
+        Lyy += Syy
+        Lvv += Svv
+        Lyv += Syv
+
+        # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
+
+        # println("size Lx: $(size(vec(Lx)))")
+        # println("size Ly: $(size(Ly))")
+        # println("size Ad: $(size(Ad))")
+        # println("size Bd: $(size(Bd))")
+
+        Qx = vec(Lx) + Ad'*vec(Ly)
+        Qu = vec(Lu) + Bd'*vec(Ly)
+        Qv = vec(Lv) + Cd'*vec(Ly)
+
+        Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
+        Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd
+        Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
+        Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
+        Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
+
+        #TODO add regularization
+        # regularization
+        # if !isposdef(Qvv)
+        #     mu[1] += solver.opts.mu_reg_update
+        #     k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized")
+        #     end
+        #     break
+        # end
+
+        K[:,:,k+1] .= -Qvv\Qxv'
+        b[:,:,k+1] .= -Qvv\Quv'
+        d[:,k+1] .= -Qvv\vec(Qv)
+
+        Qx_ = vec(Qx) + K[:,:,k+1]'*vec(Qv) + Qxv*vec(d[:,k+1]) + K[:,:,k+1]'Qvv*d[:,k+1]
+        Qu_ = vec(Qu) + b[:,:,k+1]'*vec(Qv) + Quv*vec(d[:,k+1]) + b[:,:,k+1]'*Qvv*d[:,k+1]
+        Qxx_ = Qxx + Qxv*K[:,:,k+1] + K[:,:,k+1]'*Qxv' + K[:,:,k+1]'*Qvv*K[:,:,k+1]
+        Quu_ = Quu + Quv*b[:,:,k+1] + b[:,:,k+1]'*Quv' + b[:,:,k+1]'*Qvv*b[:,:,k+1]
+        Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1]
+
+        # cache (approximate) cost-to-go at timestep k
+        s[1:n] = Qx_
+        s[n+1:n+m] = Qu_
+        S[1:n,1:n] = Qxx_
+        S[n+1:n+m,n+1:n+m] = Quu_
+        S[1:n,n+1:n+m] = Qxu_
+        S[n+1:n+m,1:n] = Qxu_'
+
+        # line search terms
+        v1 += -d[:,k+1]'*vec(Qv)
+        v2 += d[:,k+1]'*Qvv*d[:,k+1]
+
+        # at last time step, optimize over final control
+        if k == 1
+            K[:,:,1] .= -Quu_\Qxu_'
+            b[:,:,1] .= zeros(m,m)
+            d[:,1] .= -Quu_\vec(Qu_)
+
+            v1 += -d[:,1]'*vec(Qu_)
+            v2 += d[:,1]'*Quu_*d[:,1]
+        end
+
+        k = k - 1;
+    end
+
+    return v1, v2
+end
+
 """
 $(SIGNATURES)
 Perform the operation sqrt(A-B), where A and B are Symmetric Matrices

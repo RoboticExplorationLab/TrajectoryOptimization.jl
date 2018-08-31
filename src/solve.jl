@@ -175,7 +175,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Backward pass
             calc_jacobians(results, solver)
             if solver.control_integration == :foh
-                v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
+                # v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
+                v1, v2 = backwardpass_foh_alt!(results,solver) #TODO combine with square root
+
             elseif solver.opts.square_root
                 v1, v2 = backwards_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
