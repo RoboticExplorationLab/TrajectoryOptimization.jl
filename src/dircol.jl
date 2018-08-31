@@ -21,10 +21,14 @@ function get_weights(method,N::Int)
     if method == :trapezoid
         weights = ones(N)
         weights[[1,end]] = 0.5
-    elseif method == :hermite_simpson_separated
-        weights = ones(N)*2/3
-        weights[2:2:end] = 4/3
-        weights[[1,end]] = 1/3
+    elseif method == :hermite_simpson_separated ||
+            method == :hermite_simpson_modified
+        weights = ones(N)*2/6
+        weights[2:2:end] = 4/6
+        weights[[1,end]] = 1/6
+    elseif method == :midpoint
+        weights = ones(N)
+        weights[end] = 0
     end
     return weights
 end
@@ -103,8 +107,9 @@ function rollout_midpoint(solver::Solver,U::Matrix)
             U_[:,k+2] = U[:,j+1]
             solver.fd(view(X_,:,k+2), X_[:,k], U_[1:m,k], U_[1:m,k+2])
         else
-            Ac, Bc = solver.Fc(X_[:,k-1], U_[:,k-1])
-            M = 0.25*[3*eye(n)+solver.dt*Ac solver.dt*Bc eye(n) zeros(n,m)]
+            Ac1, Bc1 = solver.Fc(X_[:,k-1],U_[:,k-1])
+            Ac2, Bc2 = solver.Fc(X_[:,k+1],U_[:,k+1])
+            M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
 
             Xm = M*[X_[:,k-1]; U_[:,k-1]; X_[:,k+1]; U_[:,k+1]]
             Um = (U_[:,k-1] + U_[:,k+1])/2
@@ -116,6 +121,57 @@ function rollout_midpoint(solver::Solver,U::Matrix)
     return X_,U_
 end
 
+function calc_midpoints(X::Matrix, U::Matrix, solver::Solver)
+    N = solver.N
+    n,m = solver.model.n,solver.model.m
+    nSeg = N-1
+    N_ = 2*nSeg + 1
+    X_ = zeros(n,N_)
+    U_ = zeros(size(U,1),N_)
+    X_[:,1:2:end] = X
+    U_[:,1:2:end] = U
+
+    f1 = zeros(n)
+    f2 = zeros(n)
+    for k = 2:2:N_
+
+        f(f1,X_[:,k-1], U_[:,k-1])
+        f(f2,X_[:,k+1], U_[:,k+1])
+        x1 = X_[:,k-1]
+        x2 = X_[:,k+1]
+        Xm = (x1+x2)/2 + dt/8*(f1-f2)
+
+        Um = (U_[:,k-1] + U_[:,k+1])/2
+
+        X_[:,k] = Xm
+        U_[:,k] = Um
+    end
+    return X_,U_
+end
+
+function cost(obj::Objective,f::Function,X::Array{Float64,2},U::Array{Float64,2})
+    # pull out solver/objective values
+    N = size(X,2); Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
+    n,m = get_sizes(obj)
+
+    J = 0.0
+    f1 = zeros(n)
+    f2 = zeros(n)
+    for k = 1:N-1
+        f(f1,X[:,k], U[:,k])
+        f(f2,X[:,k+1], U[:,k+1])
+        x1 = X[:,k]
+        x2 = X[:,k+1]
+
+        Xm = (x1+x2)/2 + dt/8*(f1-f2)
+        Um = (U[:,k] + U[:,k+1])/2
+
+        J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+    end
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+
+    return J
+end
 
 """
 Evaluate Objective Value
@@ -184,8 +240,28 @@ function collocation_constraints(X,U,method,dt,f::Function)
         collocation = - X[:,iUpp] + X[:,iLow] + dt*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
         g[:,iLow] = collocation
         g[:,iMid] = midpoints
+
+    elseif method == :hermite_simpson_modified
+        fm = zeros(n)
+        for k = 1:N-1
+            x1 = X[:,k]
+            x2 = X[:,k+1]
+            xm = (x1+x2)/2 + dt/8*(fVal[:,k]-fVal[:,k+1])
+            um = (U[:,k] + U[:,k+1])/2
+            f(fm, xm, um)
+            g[:,k] = -x2 + x1 + dt*(fVal[:,k] + 4*fm + fVal[:,k+1])/6
+        end
+
+    elseif method == :midpoint
+        fm = zeros(n)
+        for k = 1:N-1
+            x1 = X[:,k]
+            x2 = X[:,k+1]
+            xm = (x1+x2)/2
+            f(fm,xm,U[:,k])
+            g[:,k] = dt*fm - x2 + x1
+        end
     end
-    # reshape(g,n*(N-1),1)
     return vec(g)
 end
 
@@ -251,4 +327,23 @@ function constraint_jacobian(X,U,dt,method,F::Function)
 
 
     return jacob_g
+end
+
+function interp(t,T,X,U,F)
+    k = findlast(t .> T)
+    τ = t-T[k]
+    if method == :trapezoid
+        u = U[:,k] + τ/dt*(F[:,k+1]-F[:,k])
+        x = X[:,k] + F[:,k]*τ + τ^2/(2*dt)*(F[:,k+1]-F[:,k])
+    elseif method == :hermite_simpson_modified || method == :hermite_simpson_separated
+        x1,x2 = X[:,k], X[:,k+1]
+        u1,u2 = U[:,k], U[:,k+1]
+        f1,f2 = F[:,k], F[:,k+1]
+        xm = (x1+x2)/2 + dt/8*(f1-f2)
+        um = (U[:,k] + U[:,k+1])/2
+        
+        u = (2(τ-dt/2)(τ-dt)U[:,k] - 4τ*(τ-dt)Um + 2τ*(τ-dt/2)*U[:,k+1])/dt^2
+        x = X[:,k] + F[:,k]*τ/dt + 1/2*(-3F[:,])
+    end
+    return x,u
 end

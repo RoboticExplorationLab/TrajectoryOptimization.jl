@@ -162,9 +162,9 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
             Xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]]
             Um = (U[:,k] + U[:,k+1])/2
 
-            J += solver.dt/6*(stage_cost(obj,X[:,k],U[:,k]) + 4*stage_cost(obj,Xm,Um) + stage_cost(obj,X[:,k+1],U[:,k+1])) # rk3 foh stage cost (integral approximation)
+            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
         else
-            J += solver.dt*stage_cost(obj,X[:,k],U[:,k])
+            J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)

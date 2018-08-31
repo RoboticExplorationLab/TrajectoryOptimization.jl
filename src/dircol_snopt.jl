@@ -44,7 +44,11 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     # Evaluate the Cost (objective) function)
     function eval_f(Z)
         X,U = unpackZ(Z,pack)
-        cost(X,U,weights,obj)
+        if method == :hermite_simpson_modified
+            return cost(obj,model.f,X,U)
+        else
+            cost(X,U,weights,obj)
+        end
     end
 
     # Evaluate the equality constraint function
@@ -140,21 +144,23 @@ function gen_usrfun(model::Model, obj::ConstrainedObjective, dt::Float64, pack::
     return usrfun, eval_f, eval_c, eval_ceq
 end
 
-function dircol(model::Model,obj::ConstrainedObjective,dt::Float64;
+function dircol(model::Model,obj::Objective,dt::Float64;
         method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic)
 
         # Constants
         nSeg = Int(floor(obj.tf/dt)); # Number of segments
         dt = obj.tf/nSeg
-        if method == :trapezoid
-            N = nSeg + 1
-        elseif method == :hermite_simpson_separated
+        if method == :hermite_simpson_separated
             N = 2*nSeg + 1
+        else
+            N = nSeg + 1
         end
 
         X0, U0 = get_initial_state(obj,N)
         dircol(model, obj, dt, X0, U0, method=method, grads=grads)
 end
+
+
 """
 $(SIGNATURES)
 Solve a trajectory optimization problem with direct collocation
@@ -168,6 +174,7 @@ Solve a trajectory optimization problem with direct collocation
     :trapezoidal - First order interpolation on states and zero order on control.
     :hermite_simpson_separated - Hermite Simpson collocation with the midpoints
         included as additional decision variables with constraints
+    :hermite_simpson_modified -
 * grads: Specifies the gradient information provided to SNOPT.
     :none - returns no gradient information to SNOPT
     :auto - uses ForwardDiff to calculate gradients
@@ -179,16 +186,20 @@ function dircol(model::Model, obj::Objective, dt::Float64, X0::Matrix, U0::Matri
     X0 = copy(X0)
     U0 = copy(U0)
 
+    if method == :hermite_simpson_modified
+        grads = :none
+    end
+
     if obj isa UnconstrainedObjective
         obj = ConstrainedObjective(obj)
     end
 
     # Constants
     N = size(X0,2)
-    if method == :trapezoid
-        nSeg = N-1
-    elseif method == :hermite_simpson_separated
+    if method == :hermite_simpson_separated
         nSeg = (N-1)/2
+    else
+        nSeg = N-1
     end
     dt = obj.tf/nSeg
 
