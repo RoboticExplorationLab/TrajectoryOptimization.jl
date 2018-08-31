@@ -145,6 +145,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
+    dt = solver.dt
     if size(U,1) != m
         m += n
     end

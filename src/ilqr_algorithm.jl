@@ -296,8 +296,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # xm = M*[X[:,k];U[:,k];X[:,k+1];U[:,k+1]] #TODO don't do concatentation
         xdot1 = zeros(n)
         xdot2 = zeros(n)
-        solver.model.f(xdot1,X[:,k],U[:,k])
-        solver.model.f(xdot2,X[:,k+1],U[:,k+1])
+        solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
+        solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
 
         xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
         um = (U[:,k] + U[:,k+1])/2.0
