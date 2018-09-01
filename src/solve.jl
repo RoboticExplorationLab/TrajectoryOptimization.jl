@@ -146,18 +146,20 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
     end
 
-    if solver.opts.cache
-        # Initialize cache and store initial trajectories and cost
-        results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
-        add_iter!(results_cache, results, cost(solver, X, U))
-    end
-
     # Solver Statistics
     iter = 1 # counter for total number of iLQR iterations
     k = 1 # Init outer iter counter to increase its scope
     time_setup = toq()
     J_hist = Vector{Float64}()
     tic()
+
+    if solver.opts.cache
+        # Initialize cache and store initial trajectories and cost
+        results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
+        add_iter!(results_cache, results, cost(solver, X, U))
+    end
+    iter += 1
+
 
     #****************************#
     #         OUTER LOOP         #
@@ -217,12 +219,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-            iter += 1
+
             if solver.opts.cache
                 # Store current results and performance parameters
                 time = (t2-t1)/(1.0e9)
                 add_iter!(results_cache, results, J, time, iter)
             end
+            iter += 1
 
             # Check for cost convergence
             if (results isa UnconstrainedResults && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate)
@@ -280,7 +283,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     end
 
     # Run Stats
-    stats = Dict("iterations"=>iter,
+    stats = Dict("iterations"=>iter-1,
                  "major iterations"=>k,
                  "runtime"=>toq(),
                  "setup_time"=>time_setup,
@@ -298,7 +301,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         for key in keys(stats_feasible)
             stats[key * " (infeasible)"] = stats[key]
         end
-        stats["iterations"] += stats_feasible["iterations"]
+        stats["iterations"] += stats_feasible["iterations"]-1
         stats["major iterations"] += stats_feasible["iterations"]
         stats["runtime"] += stats_feasible["runtime"]
         stats["setup_time"] += stats_feasible["setup_time"]
