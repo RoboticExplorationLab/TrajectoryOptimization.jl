@@ -486,22 +486,6 @@ end
 
 """
 $(SIGNATURES)
-Infeasible start solution is run through standard constrained solve to enforce dynamic feasibility. All infeasible augmented controls are removed.
-"""
-function feasible_traj(results::ConstrainedResults,solver::Solver)
-    solver.opts.infeasible = false
-    if solver.opts.unconstrained
-        # TODO method for generating a new solver with unconstrained objective
-        obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
-        solver_uncon = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
-        return solve(solver_uncon,results.U[1:solver.model.m,:])
-    else
-        return solve(solver,results.U[1:solver.model.m,:],prevResults=results)
-    end
-end
-
-"""
-$(SIGNATURES)
 Linear interpolation trajectory between initial and final state(s)
 """
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
