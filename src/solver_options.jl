@@ -56,7 +56,14 @@ end
 
 copy(opts::SolverOptions) = SolverOptions(;[name=>getfield(opts,name) for name in fieldnames(opts)]...)
 
-
+function Base.:(==)(A::SolverOptions, B::SolverOptions)
+    for name in fieldnames(A)
+        if getfield(A,name) != getfield(B,name)
+            return false
+        end
+    end
+    return true
+end
 
 # function show(io::IO, opts::SolverOptions)
 #     println(io, "SolverOptions:")
