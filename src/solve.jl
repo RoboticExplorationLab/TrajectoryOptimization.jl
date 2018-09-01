@@ -66,7 +66,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         infeasible = true
     end
 
-    # Initialization
+    #****************************#
+    #       INITIALIZATION       #
+    #****************************#
     if solver.obj isa UnconstrainedObjective
         if solver.opts.verbose
             println("Solving Unconstrained Problem...")
@@ -123,7 +125,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     X_ = results.X_ # updated state trajectory
     U_ = results.U_ # updated control trajectory
 
-    ## Solver
+
+    #****************************#
+    #           SOLVER           #
+    #****************************#
     # Initial rollout
     if !infeasible
         X[:,1] = solver.obj.x0 # set state trajector initial conditions
@@ -146,7 +151,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         iter += 1
     end
 
-    # Outer Loop
+    #****************************#
+    #         OUTER LOOP         #
+    #****************************#
     dJ = Inf
     for k = 1:solver.opts.iterations_outerloop
         if solver.opts.verbose
@@ -162,6 +169,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             println("Cost ($k): $J_prev\n")
         end
 
+        #****************************#
+        #         INNER LOOP         #
+        #****************************#
         for i = 1:solver.opts.iterations
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
@@ -171,7 +181,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 t1 = time_ns() # time flag for iLQR inner loop start
             end
 
-            # Backward pass
+            ### BACKWARDS PASS ###
             calc_jacobians(results, solver)
             if solver.control_integration == :foh
                 # v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
@@ -183,14 +193,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 v1, v2 = backwardpass!(results, solver)
             end
 
-            # Forward pass
+            ### FORWARDS PASS ###
             J = forwardpass!(results, solver, v1, v2)
 
             if solver.opts.cache
                 t2 = time_ns() # time flag of iLQR inner loop end
             end
 
-            # Update results
+            ### UPDATE RESULTS ###
             X .= X_
             U .= U_
             p = plot(X')
@@ -217,11 +227,15 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             end
         end
+        ### END INNER LOOP ###
 
         if solver.opts.cache
             results_cache.iter_type[iter-1] = 1 # flag outerloop update
         end
 
+        #****************************#
+        #      OUTER LOOP UPDATE     #
+        #****************************#
         outer_loop_update(results,solver)
 
         if solver.opts.cache
@@ -229,6 +243,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             add_iter_outerloop!(results_cache, results, iter-1) # we already iterated counter but this needs to update those results
         end
 
+        #****************************#
+        #    TERMINATION CRITERIA    #
+        #****************************#
         # Check if maximum constraint violation satisfies termination criteria
         if solver.obj isa ConstrainedObjective
             max_c = max_violation(results, diag_inds)
@@ -245,6 +262,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
     end
+    ### END OUTER LOOP ###
 
     if solver.opts.cache
         # Store final results
