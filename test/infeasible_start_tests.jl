@@ -15,14 +15,14 @@ opts.cache=true
 # opts.c1=1e-4
 # opts.c2=2.0
 # opts.mu_al_update = 10.0
-# opts.eps_constraint = 1e-3
+opts.eps_constraint = 1e-5
 # opts.eps = 1e-6
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
 
 ## Unconstrained
 obj_uncon = Dynamics.pendulum[2]
-obj_uncon.R[:] = [1e-3]
+obj_uncon.R[:] = [1e-2]
 solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
 
 X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
