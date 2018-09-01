@@ -115,3 +115,28 @@ function quadratic_spline(xdot::Array,x1::Array,x2::Array,T::Float64)
         0.5*(2*x2/T^2 - 2*x1/T^2 - 2*xdot/T)*t^2 + xdot*t + x1
     end
 end
+
+function print_solver(solver::Solver,name::String,io::IO=STDOUT)
+    println(io,"###  $name  ###")
+
+    println(io,"\nModel Props")
+    println(io,"-----------")
+    println(io,"\t n: $(solver.model.n)")
+    println(io,"\t m: $(solver.model.m)")
+    println(io,"\t inplace dynamics?: $(is_inplace_dynamics(solver.model))")
+
+    println(io,"\nObjective")
+    println(io,"----------")
+    println(io,"\t tf: $(obj.tf)")
+    println(io,"\t x0: $(obj.x0)")
+    println(io,"\t xf: $(obj.xf)")
+    println(io,"\t Q: $(diag(obj.Q))")
+    println(io,"\t R: $(diag(obj.R))")
+
+    println(io,"\nSolver Settings")
+    println(io,"-----------------")
+    println(io,"\t dt: $(solver.dt)")
+    println(io,"\t N: $(solver.N)")
+    println(io,"\t integration: $(solver.integration)")
+
+end
