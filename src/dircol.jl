@@ -156,6 +156,7 @@ end
 function cost(obj::Objective,f::Function,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = size(X,2); Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
+    dt = obj.tf/(N-1)
     n,m = get_sizes(obj)
 
     J = 0.0
@@ -170,7 +171,7 @@ function cost(obj::Objective,f::Function,X::Array{Float64,2},U::Array{Float64,2}
         Xm = (x1+x2)/2 + dt/8*(f1-f2)
         Um = (U[:,k] + U[:,k+1])/2
 
-        J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+        J += dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
     end
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
 
