@@ -21,7 +21,6 @@ Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
 function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
-    solver.opts.infeasible = true
 
     # If initialize zero controls if none are passed in
     if isempty(U0)
@@ -194,6 +193,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Update results
             X .= X_
             U .= U_
+            p = plot(X')
+            display(p)
+            infeasible ? sleep(0.1) : nothing
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
