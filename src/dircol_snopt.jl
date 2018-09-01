@@ -223,34 +223,47 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         options = Dict{String, Any}()
         options["Derivative option"] = 0
         options["Verify level"] = 1
+        options["Minor feasibility tol"] = solver.opts.eps_constraint
+        # options["Minor optimality  tol"] = solver.opts.eps_intermediate
+        options["Major optimality  tol"] = solver.opts.eps
 
         # Solve the problem
-        println("DIRCOL with $method")
-        println("Passing Problem to SNOPT...")
-
-        @time z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
-        @time snopt(usrfun, Z0, lb, ub, options, start=start)
+        if solver.opts.verbose
+            println("DIRCOL with $method")
+            println("Passing Problem to SNOPT...")
+        end
+        z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
+        stats = parse_snopt_summary()
+        # @time snopt(usrfun, Z0, lb, ub, options, start=start)
         # xopt, fopt, info = Z0, Inf, "Nothing"
         x_opt,u_opt = unpackZ(z_opt,pack)
 
-        println(info)
-        return x_opt, u_opt, fopt
+        if solver.opts.verbose
+            println(info)
+        end
+        return x_opt, u_opt, fopt, stats
 end
 
 function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
         method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
     x_opt, u_opt = X0, U0
+    stats = Dict{String,Any}("iterations"=>0, "major iterations"=>0, "objective calls"=>0)
+    tic()
     for dt in mesh
-        println("Refining mesh at dt=$dt")
+        solver.opts.verbose ? println("Refining mesh at dt=$dt") : nothing
         solver_mod = Solver(solver,dt=dt)
         x_int, u_int = interp_traj(solver_mod.N, solver.obj.tf, x_opt, u_opt)
-        x_opt, u_opt, f_opt = solve_dircol(solver_mod, x_int, u_int, method=method, grads=grads, start=start)
+        x_opt, u_opt, f_opt, stats_run = solve_dircol(solver_mod, x_int, u_int, method=method, grads=grads, start=start)
+        for key in keys(stats)
+            stats[key] += stats_run[key]
+        end
         start = :warm  # Use warm starts after the first one
     end
+    stats["runtime"] = toq()
     # Run the original time step
     x_int, u_int = interp_traj(solver.N, solver.obj.tf, x_opt, u_opt)
     x_opt, u_opt, f_opt = solve_dircol(solver, x_int, u_int, method=method, grads=grads, start=:warm)
-    return x_opt, u_opt, f_opt
+    return x_opt, u_opt, f_opt, stats
 end
 
 
@@ -270,4 +283,25 @@ function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
         X2[i,:] = interp_cubic(t2)
     end
     return X2
+end
+
+function parse_snopt_summary(file="snopt-summary.out")
+    props = Dict()
+
+    function stash_prop(ln::String,prop::String,prop_name::String=prop)
+        if contains(ln, prop)
+            loc = search(ln,prop)
+            val = Int(float(split(ln[loc[end]+1:end])[1]))
+            props[prop_name] = val
+        end
+    end
+
+    open(file) do f
+        for ln in eachline(f)
+            stash_prop(ln,"No. of iterations","iterations")
+            stash_prop(ln,"No. of major iterations","major iterations")
+            stash_prop(ln,"No. of calls to funobj","objective calls")
+        end
+    end
+    return props
 end
