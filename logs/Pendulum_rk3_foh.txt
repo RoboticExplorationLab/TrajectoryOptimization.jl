@@ -1,0 +1,35 @@
+###  Pendulum_rk3_foh  ###
+
+Model Props
+-----------
+	 n: 2
+	 m: 1
+	 inplace dynamics?: true
+
+Objective
+----------
+	 tf: 3.0
+	 x0: [0.0, 0.0]
+	 xf: [3.14159, 0.0]
+	 Q: [0.001, 0.001]
+	 R: [0.01]
+
+Solver Settings
+-----------------
+	 dt: 0.01
+	 N: 301
+	 integration: rk3_foh
+	 final tolerance: 1.0e-8
+	 intermediate tolerance: 0.0001
+	 constraint tolerance: 1.0e-6
+
+Stat                 | iLQR → DIRCOL             | DIRCOL → iLQR            
+-------------------------------------------------------------------------------
+iLQR runtime (sec)   | 3.134683                  | 1.659148249              
+DIRCOL runtime (sec) | 33.663264777              | 22.494358891             
+iLQR cost            | 0.14030243761278446       | 0.05902656237679708      
+DIRCOL cost          | 0.1403091832460199        | 0.059026132883495716     
+iLQR iterations      | 59                        | 28                       
+DIRCOL iterations    | 1187                      | 1147                     
+Max error            | 0.0024060111367716353     | 0.006001418828294192     
+Norm error           | 0.02254662040342973       | 0.043631279990631135     

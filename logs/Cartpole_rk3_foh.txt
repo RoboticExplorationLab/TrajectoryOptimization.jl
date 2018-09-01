@@ -1,0 +1,35 @@
+###  Cartpole_rk3_foh  ###
+
+Model Props
+-----------
+	 n: 4
+	 m: 1
+	 inplace dynamics?: true
+
+Objective
+----------
+	 tf: 2.0
+	 x0: [0.0, 0.0, 0.0, 0.0]
+	 xf: [0.5, 3.14159, 0.0, 0.0]
+	 Q: [0.01, 0.01, 0.01, 0.01]
+	 R: [0.01]
+
+Solver Settings
+-----------------
+	 dt: 0.01
+	 N: 201
+	 integration: rk3_foh
+	 final tolerance: 1.0e-8
+	 intermediate tolerance: 0.0001
+	 constraint tolerance: 1.0e-6
+
+Stat                 | iLQR → DIRCOL             | DIRCOL → iLQR            
+-------------------------------------------------------------------------------
+iLQR runtime (sec)   | 6.224216827               | 6.45690381               
+DIRCOL runtime (sec) | 181.560488623             | 179.806502857            
+iLQR cost            | 1.3427835168951454        | 1.3427835197809292       
+DIRCOL cost          | 1.3429420170356001        | 1.3429420170348338       
+iLQR iterations      | 79                        | 99                       
+DIRCOL iterations    | 1377                      | 1323                     
+Max error            | 0.008297743124805912      | 0.00838898341897032      
+Norm error           | 0.06064341260118077       | 0.06118321462882014      
