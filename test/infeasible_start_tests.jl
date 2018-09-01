@@ -15,20 +15,20 @@ opts.cache=true
 # opts.c1=1e-4
 # opts.c2=2.0
 # opts.mu_al_update = 10.0
-# opts.eps_constraint = 1e-3
+opts.eps_constraint = 1e-5
 # opts.eps = 1e-6
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
 
 ## Unconstrained
 obj_uncon = Dynamics.pendulum[2]
-obj_uncon.R[:] = [1e-3]
+obj_uncon.R[:] = [1e-2]
 solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
 
 X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
 U = ones(solver_uncon.model.m,solver_uncon.N)
 
-results = solve(solver_uncon,X_interp,U)
+results, = solve(solver_uncon,X_interp,U)
 
 plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
@@ -73,7 +73,7 @@ solver = Solver(model!,obj,dt=0.1,opts=opts)
 X_interp = line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
 U = ones(solver.model.m,solver.N)
 
-results = solve(solver,X_interp,U)
+results, = solve(solver,X_interp,U)
 @test norm(results.X[:,end] - solver.obj.xf) < 1e-3
 
 plot(results.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")

@@ -20,30 +20,30 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(solver.model.m, solver.N)
 # @enter TrajectoryOptimization.solve(solver,U)
-results = TrajectoryOptimization.solve(solver,U)
+results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
 #  with square root
 solver.opts.square_root = true
-results = TrajectoryOptimization.solve(solver,U)
+results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
-results = TrajectoryOptimization.solve(solver,U)
+results, =TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
 #  with square root
 solver.opts.square_root = true
-results_sr = TrajectoryOptimization.solve(solver,U)
+results_sr, = TrajectoryOptimization.solve(solver,U)
 @test norm(results_sr.X[:,end]-obj.xf) < 1e-3
 @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12
 
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c = TrajectoryOptimization.solve(solver, U)
+results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
@@ -51,7 +51,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 #   with Square Root
 solver.opts.square_root = true
 solver.opts.verbose = false
-results_c = TrajectoryOptimization.solve(solver, U)
+results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
@@ -59,14 +59,14 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
-results_c = TrajectoryOptimization.solve(solver, U)
+results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
 #   with Square Root
 solver.opts.square_root = true
-results_c = TrajectoryOptimization.solve(solver, U)
+results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
@@ -77,19 +77,19 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 # Unconstrained
 opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
-results = TrajectoryOptimization.solve(solver) # Test random init
+results, =TrajectoryOptimization.solve(solver) # Test random init
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
 # Constrained
 solver = TrajectoryOptimization.Solver(model!,obj_c,dt=0.1,opts=opts)
-results_c = TrajectoryOptimization.solve(solver,U)
+results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
 # Constrained - midpoint
 solver = TrajectoryOptimization.Solver(model!,obj_c, integration=:midpoint, dt=0.1, opts=opts)
-results_c = TrajectoryOptimization.solve(solver,U)
+results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
@@ -117,7 +117,7 @@ obj_uncon.R[:] = [1e-2] # control needs to be properly regularized for infeasibl
 obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
-results_inf = TrajectoryOptimization.solve(solver,X_interp,U)
+results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2

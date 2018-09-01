@@ -36,7 +36,7 @@ U = rand(solver.model.m,solver.N)
 X_interp = line_trajectory(solver)
 
 
-sol = TrajectoryOptimization.solve(solver,X_interp,U)
+sol, = TrajectoryOptimization.solve(solver,X_interp,U)
 plot(sol.X')
 
 println("Final state (foh): $(sol.X[:,end])")

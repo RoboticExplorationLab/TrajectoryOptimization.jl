@@ -26,7 +26,7 @@ rc = TrajectoryOptimization.ResultsCache(n,m,N,N_iter)
 @test size(rc.cost) == (N_iter,)
 
 # Merge caches
-res = TrajectoryOptimization.solve(solver)
+res, = TrajectoryOptimization.solve(solver)
 rc = TrajectoryOptimization.ResultsCache(res,10)
 TrajectoryOptimization.add_iter!(rc,res,10.,0.,1) # Add results to cache
 @test rc.cost[1] == 10
@@ -37,7 +37,7 @@ TrajectoryOptimization.add_iter!(rc,res,10.,0.,1) # Add results to cache
 # Run constrained problem
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj,u_max=2.,u_min=-2.)
 solver_c = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
-res = TrajectoryOptimization.solve(solver_c)
+res, = TrajectoryOptimization.solve(solver_c)
 
 # Cache constrained results
 rc.result[1].X

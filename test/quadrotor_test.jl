@@ -48,8 +48,8 @@ solver_uncon = Solver(model!,obj_uncon,integration=:rk4,dt=dt,opts=opts)
 
 U = ones(solver_uncon.model.m, solver_uncon.N)
 
-results_uncon = solve(solver_uncon,U)
-# results_con = solve(solver_con,U)
+results_uncon, = solve(solver_uncon,U)
+# results_con, = solve(solver_con,U)
 
 # plot(results_uncon.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
 

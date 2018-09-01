@@ -35,9 +35,9 @@ solver_zoh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integra
 U = rand(solver_foh.model.m, solver_foh.N)
 
 println("zoh solve:")
-sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
+sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 println("foh solve:")
-sol_foh = TrajectoryOptimization.solve(solver_foh,U)
+sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 plot(sol_zoh.cost[1:sol_zoh.termination_index])
 plot!(sol_foh.cost[1:sol_foh.termination_index])
@@ -67,8 +67,8 @@ solver_zoh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk
 
 U = rand(solver_foh.model.m, solver_foh.N)
 
-sol_zoh = TrajectoryOptimization.solve(solver_zoh,U)
-sol_foh = TrajectoryOptimization.solve(solver_foh,U)
+sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
+sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 plot(sol_zoh.cost[1:sol_zoh.termination_index])
 plot!(sol_foh.cost[1:sol_foh.termination_index])
@@ -93,8 +93,8 @@ solver_zoh_con = Solver(model_p, obj_con_p, integration=:rk3, dt=dt, opts=opts)
 
 U = rand(solver_foh_con.model.m, solver_foh_con.N)
 
-sol_foh_con = TrajectoryOptimization.solve(solver_foh_con,U)
-sol_zoh_con = TrajectoryOptimization.solve(solver_zoh_con,U)
+sol_foh_con, = TrajectoryOptimization.solve(solver_foh_con,U)
+sol_zoh_con, = TrajectoryOptimization.solve(solver_zoh_con,U)
 
 plot(sol_foh_con.X')
 plot!(sol_zoh_con.X')
@@ -114,8 +114,8 @@ obj_con2_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_mi
 solver_foh_con2 = Solver(model_p, obj_con2_p, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con2 = Solver(model_p, obj_con2_p, integration=:rk3, dt=dt, opts=opts)
 
-sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
-sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,U)
+sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
+sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
 plot(sol_foh_con2.X')
 plot!(sol_zoh_con2.X')
@@ -140,8 +140,8 @@ solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=op
 
 U = 5*rand(solver_foh_con2.model.m,solver_foh_con2.N)
 
-sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,U)
-sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,U)
+sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
+sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 sol_foh_con2.result
 plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
 plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
@@ -165,7 +165,7 @@ solver_uncon_inf = Solver(model_p,obj_uncon_p,integration=:rk3_foh,dt=dt,opts=op
 X_interp = line_trajectory(solver_uncon_inf.obj.x0,solver_uncon_inf.obj.xf,solver_uncon_inf.N)
 U = rand(solver_uncon_inf.model.m,solver_uncon_inf.N)
 
-results_inf = solve(solver_uncon_inf,X_interp,U)
+results_inf, = solve(solver_uncon_inf,X_interp,U)
 
 plot(results_inf.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results_inf.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
@@ -211,7 +211,7 @@ solver_con2 = Solver(model_p,obj_con_p,integration=:rk3_foh,dt=0.1,opts=opts)
 X_interp = line_trajectory(solver_con2.obj.x0,solver_con2.obj.xf,solver_con2.N)
 U = rand(solver_con2.model.m,solver_con2.N)
 
-results_inf2 = solve(solver_con2,X_interp,U)
+results_inf2, = solve(solver_con2,X_interp,U)
 @test norm(results_inf2.X[:,end] - solver_con2.obj.xf) < 1e-3
 
 plot(results_inf2.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
@@ -260,8 +260,8 @@ solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=op
 U = 5*rand(solver_foh_con2.model.m,solver_foh_con2.N)
 X_interp = line_trajectory(solver_foh_con2)
 
-sol_foh_con2 = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
-sol_zoh_con2 = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
+sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
+sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
 plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
 plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
 
