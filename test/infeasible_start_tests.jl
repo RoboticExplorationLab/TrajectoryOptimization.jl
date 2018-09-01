@@ -28,7 +28,7 @@ solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
 X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
 U = ones(solver_uncon.model.m,solver_uncon.N)
 
-results, = solve(solver_uncon,X_interp,U)
+results, stats = solve(solver_uncon,X_interp,U)
 
 plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
@@ -41,9 +41,11 @@ idx = find(x->x==2,results.iter_type)
 @test norm(results.X[:,end] - solver_uncon.obj.xf) < 1e-3
 
 plot(results.result[idx[1]-1].U',color="green")
-plot!(results.result[idx[1]+1].U',color="blue")
+plot!(results.result[idx[1]].U',color="blue")
 plot!(results.result[end].U',color="red")
 results.result[idx[1]].U
+err = results.result[idx[1]-1].U[1:m,:]' - results.result[end].U'
+@test vecnorm(err) < 1
 
 # confirm that control output from infeasible start is a good warm start for constrained solve
 tmp = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
@@ -87,6 +89,9 @@ plot(results.result[end].X')
 plot(results.result[idx[1]-1].U',color="green")
 plot(results.result[idx[1]+1].U',color="blue")
 plot!(results.result[end].U',color="red")
+
+err = results.result[idx[1]-1].U[1:m,:]' - results.result[end].U'
+@test vecnorm(err) < 1
 
 # confirm that control output from infeasible start is a good warm start for constrained solve
 @test norm(results.result[idx[1]-1].U[1,:]-vec(results.result[idx[1]].U)) < 0.05
