@@ -20,7 +20,7 @@ $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
-function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
+function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
 
     # If initialize zero controls if none are passed in
     if isempty(U0)
@@ -34,14 +34,15 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
 
-    _solve(solver,U0,X0,prevResults=prevResults)
+    results, stats = _solve(solver,U0,X0,prevResults=prevResults)
+    return results, stats
 end
 
-function solve(solver::Solver,U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::SolverResults
+function solve(solver::Solver,U0::Array{Float64,2}; prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
     _solve(solver,U0,prevResults=prevResults)
 end
 
-function solve(solver::Solver)::SolverResults
+function solve(solver::Solver)::Tuple{SolverResults,Dict}
     # Generate random control sequence
     U0 = rand(solver.model.m, solver.N)
     solve(solver,U0)
@@ -53,7 +54,9 @@ $(SIGNATURES)
 
 Solve constrained optimization problem specified by `solver`
 """
-function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::SolverResults
+function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
+    tic()
+
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states
@@ -145,15 +148,21 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     if solver.opts.cache
         # Initialize cache and store initial trajectories and cost
-        iter = 1 # counter for total number of iLQR iterations
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
         add_iter!(results_cache, results, cost(solver, X, U))
-        iter += 1
     end
+
+    # Solver Statistics
+    iter = 1 # counter for total number of iLQR iterations
+    k = 1 # Init outer iter counter to increase its scope
+    time_setup = toq()
+    J_hist = Vector{Float64}()
+    tic()
 
     #****************************#
     #         OUTER LOOP         #
     #****************************#
+
     dJ = Inf
     for k = 1:solver.opts.iterations_outerloop
         if solver.opts.verbose
@@ -164,6 +173,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             update_constraints!(results,solver,results.X,results.U)
         end
         J_prev = cost(solver, results, X, U)
+        k == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
 
         if solver.opts.verbose
             println("Cost ($k): $J_prev\n")
@@ -195,6 +205,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, v1, v2)
+            push!(J_hist,J)
 
             if solver.opts.cache
                 t2 = time_ns() # time flag of iLQR inner loop end
@@ -203,17 +214,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             ### UPDATE RESULTS ###
             X .= X_
             U .= U_
-            p = plot(X')
-            display(p)
-            infeasible ? sleep(0.1) : nothing
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
+            iter += 1
             if solver.opts.cache
                 # Store current results and performance parameters
                 time = (t2-t1)/(1.0e9)
                 add_iter!(results_cache, results, J, time, iter)
-                iter += 1
             end
 
             # Check for cost convergence
@@ -271,25 +279,39 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache.U = results.U
     end
 
+    # Run Stats
+    stats = Dict("iterations"=>iter,
+                 "major iterations"=>k,
+                 "runtime"=>toq(),
+                 "setup_time"=>time_setup,
+                 "cost"=>J_hist)
+
     ## Return dynamically feasible trajectory
     if infeasible
-        if solver.opts.cache
-            if solver.opts.verbose
-                println("Infeasible -> Feasible ")
-            end
-            results_cache_2 = feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
-            return merge_results_cache(results_cache,results_cache_2) # return infeasible results and final enforce dynamics results
-        else
-            return feasible_traj(results,solver)
+        if solver.opts.verbose
+            println("Infeasible -> Feasible ")
         end
+        results_feasible, stats_feasible = solve_feasible_traj(results,solver) # using current control solution, warm-start another solve with dynamics strictly enforced
+        if solver.opts.cache
+            results_feasible = merge_results_cache(results_cache,results_feasible) # return infeasible results and final enforce dynamics results
+        end
+        for key in keys(stats_feasible)
+            stats[key * " (infeasible)"] = stats[key]
+        end
+        stats["iterations"] += stats_feasible["iterations"]
+        stats["major iterations"] += stats_feasible["iterations"]
+        stats["runtime"] += stats_feasible["runtime"]
+        stats["setup_time"] += stats_feasible["setup_time"]
+        append!(stats["cost"], stats_feasible["cost"])
+        return results_feasible, stats # TODO: add stats together
     else
         if solver.opts.verbose
             println("***Solve Complete***")
         end
         if solver.opts.cache
-            return results_cache
+            return results_cache, stats
         else
-            return results
+            return results, stats
         end
     end
 end
