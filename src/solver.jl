@@ -127,6 +127,11 @@ struct Solver
             end
         end
 
+        function Jacobians_Continuous!(z)
+            Fc!(Jc,Scdot,z)
+            return Jc[1:n,:]
+        end
+
         # Generate constraint functions
         c_fun, c_jacob = generate_constraint_functions(obj)
 
