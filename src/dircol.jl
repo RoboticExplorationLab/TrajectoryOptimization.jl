@@ -17,12 +17,23 @@ function convertInf!(A::Matrix,infbnd=1.1e20)
     return nothing
 end
 
+
+function convert_N(N::Int,method::Symbol)::Int
+    nSeg = N-1
+    if method == :hermite_simpson_separated
+        N = 2nSeg + 1
+    else
+        N = nSeg + 1
+    end
+    return N
+end
+
 function get_weights(method,N::Int)
     if method == :trapezoid
         weights = ones(N)
         weights[[1,end]] = 0.5
     elseif method == :hermite_simpson_separated ||
-            method == :hermite_simpson_modified
+            method == :hermite_simpson
         weights = ones(N)*2/6
         weights[2:2:end] = 4/6
         weights[[1,end]] = 1/6
@@ -83,11 +94,6 @@ function unpackZ(Z, sze)
     return X,U
 end
 
-function get_pack(Z, obj)
-    n,m = get_sizes(obj)
-    return (n,m, length(Z)//(n*m))
-end
-
 function get_initial_state(obj::Objective, N::Int)
     n,m = get_sizes(obj)
     X0 = line_trajectory(obj.x0, obj.xf, N)
@@ -95,63 +101,6 @@ function get_initial_state(obj::Objective, N::Int)
     return X0, U0
 end
 
-function rollout_midpoint(solver::Solver,U::Matrix)
-    N = solver.N
-    n,m = solver.model.n,solver.model.m
-    nSeg = N-1
-    N_ = 2*nSeg + 1
-    X_ = zeros(n,N_)
-    U_ = zeros(size(U,1),N_)
-    X_[:,1] = solver.obj.x0
-    U_[:,1] = U[:,1]
-
-    for k = 1:N_-1
-        if isodd(k)
-            j = (k+1)÷2
-            U_[:,k+2] = U[:,j+1]
-            solver.fd(view(X_,:,k+2), X_[:,k], U_[1:m,k], U_[1:m,k+2])
-        else
-            Ac1, Bc1 = solver.Fc(X_[:,k-1],U_[:,k-1])
-            Ac2, Bc2 = solver.Fc(X_[:,k+1],U_[:,k+1])
-            M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
-
-            Xm = M*[X_[:,k-1]; U_[:,k-1]; X_[:,k+1]; U_[:,k+1]]
-            Um = (U_[:,k-1] + U_[:,k+1])/2
-
-            X_[:,k] = Xm
-            U_[:,k] = Um
-        end
-    end
-    return X_,U_
-end
-
-function calc_midpoints(X::Matrix, U::Matrix, solver::Solver)
-    N = solver.N
-    n,m = solver.model.n,solver.model.m
-    nSeg = N-1
-    N_ = 2*nSeg + 1
-    X_ = zeros(n,N_)
-    U_ = zeros(size(U,1),N_)
-    X_[:,1:2:end] = X
-    U_[:,1:2:end] = U
-
-    f1 = zeros(n)
-    f2 = zeros(n)
-    for k = 2:2:N_
-
-        f(f1,X_[:,k-1], U_[:,k-1])
-        f(f2,X_[:,k+1], U_[:,k+1])
-        x1 = X_[:,k-1]
-        x2 = X_[:,k+1]
-        Xm = (x1+x2)/2 + dt/8*(f1-f2)
-
-        Um = (U_[:,k-1] + U_[:,k+1])/2
-
-        X_[:,k] = Xm
-        U_[:,k] = Um
-    end
-    return X_,U_
-end
 
 function cost(obj::Objective,f::Function,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
@@ -246,7 +195,7 @@ function collocation_constraints(X,U,method,dt,f::Function)
         g[:,iLow] = collocation
         g[:,iMid] = midpoints
 
-    elseif method == :hermite_simpson_modified
+    elseif method == :hermite_simpson
         fm = zeros(n)
         for k = 1:N-1
             x1 = X[:,k]
@@ -303,6 +252,7 @@ function constraint_jacobian(X,U,dt,method,F::Function)
     elseif method == :hermite_simpson_separated
         nSeg = Int((N-1)/2)
         jacob_g = zeros(n*(N-1),(n+m)N)
+
         fz1 = F(z[:,1])
         Inm = Matrix(I,n,n+m)
 
@@ -334,13 +284,103 @@ function constraint_jacobian(X,U,dt,method,F::Function)
     return jacob_g
 end
 
+
+"""
+$(SIGNATURES)
+Interpolate a trajectory using cubic interpolation
+"""
+function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
+    X2 = interp_rows(N,tf,X)
+    U2 = interp_rows(N,tf,U)
+    return X2, U2
+end
+
+"""
+$(SIGNATURES)
+Interpolate the rows of a matrix using cubic interpolation
+"""
+function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
+    n,N1 = size(X)
+    t1 = linspace(0,obj.tf,N1)
+    t2 = linspace(0,obj.tf,N)
+    X2 = zeros(n,N)
+    for i = 1:n
+        interp_cubic = CubicSplineInterpolation(t1, X[i,:])
+        X2[i,:] = interp_cubic(t2)
+    end
+    return X2
+end
+
+
+# JUNK FUNCTIONS
+
+function rollout_midpoint(solver::Solver,U::Matrix)
+    N = solver.N
+    N = convert_N(N,method)
+    n,m = solver.model.n,solver.model.m
+    nSeg = N-1
+    N_ = 2*nSeg + 1
+    X_ = zeros(n,N_)
+    U_ = zeros(size(U,1),N_)
+    X_[:,1] = solver.obj.x0
+    U_[:,1] = U[:,1]
+
+    for k = 1:N_-1
+        if isodd(k)
+            j = (k+1)÷2
+            U_[:,k+2] = U[:,j+1]
+            solver.fd(view(X_,:,k+2), X_[:,k], U_[1:m,k], U_[1:m,k+2])
+        else
+            Ac1, Bc1 = solver.Fc(X_[:,k-1],U_[:,k-1])
+            Ac2, Bc2 = solver.Fc(X_[:,k+1],U_[:,k+1])
+            M = [(0.5*eye(n) + dt/8*Ac1) (dt/8*Bc1) (0.5*eye(n) - dt/8*Ac2) (-dt/8*Bc2)]
+
+            Xm = M*[X_[:,k-1]; U_[:,k-1]; X_[:,k+1]; U_[:,k+1]]
+            Um = (U_[:,k-1] + U_[:,k+1])/2
+
+            X_[:,k] = Xm
+            U_[:,k] = Um
+        end
+    end
+    return X_,U_
+end
+
+function calc_midpoints(X::Matrix, U::Matrix, solver::Solver)
+    N = solver.N
+    N = convert_N(N,method)
+    n,m = solver.model.n,solver.model.m
+    nSeg = N-1
+    N_ = 2*nSeg + 1
+    X_ = zeros(n,N_)
+    U_ = zeros(size(U,1),N_)
+    X_[:,1:2:end] = X
+    U_[:,1:2:end] = U
+
+    f1 = zeros(n)
+    f2 = zeros(n)
+    for k = 2:2:N_
+
+        f(f1,X_[:,k-1], U_[:,k-1])
+        f(f2,X_[:,k+1], U_[:,k+1])
+        x1 = X_[:,k-1]
+        x2 = X_[:,k+1]
+        Xm = (x1+x2)/2 + dt/8*(f1-f2)
+
+        Um = (U_[:,k-1] + U_[:,k+1])/2
+
+        X_[:,k] = Xm
+        U_[:,k] = Um
+    end
+    return X_,U_
+end
+
 function interp(t,T,X,U,F)
     k = findlast(t .> T)
     τ = t-T[k]
     if method == :trapezoid
         u = U[:,k] + τ/dt*(F[:,k+1]-F[:,k])
         x = X[:,k] + F[:,k]*τ + τ^2/(2*dt)*(F[:,k+1]-F[:,k])
-    elseif method == :hermite_simpson_modified || method == :hermite_simpson_separated
+    elseif method == :hermite_simpson || method == :hermite_simpson_separated
         x1,x2 = X[:,k], X[:,k+1]
         u1,u2 = U[:,k], U[:,k+1]
         f1,f2 = F[:,k], F[:,k+1]

@@ -21,6 +21,7 @@ Generate the custom function to be passed into SNOPT, as well as `eval_f` and
 """
 function gen_usrfun(solver::Solver, method::Symbol; grads=:none)::Function
     n,m,N = solver.model.n, solver.model.m, solver.N
+    N = convert_N(N,method)
     pack = (n,m,N)
     dt = solver.dt
     obj = copy(solver.obj)
@@ -47,7 +48,7 @@ function gen_usrfun(solver::Solver, method::Symbol; grads=:none)::Function
     # Evaluate the Cost (objective) function)
     function eval_f(Z)
         X,U = unpackZ(Z,pack)
-        if method == :hermite_simpson_modified
+        if method == :hermite_simpson
             return cost(obj,solver.model.f,X,U)
         else
             cost(X,U,weights,obj)
@@ -147,22 +148,6 @@ function gen_usrfun(solver::Solver, method::Symbol; grads=:none)::Function
     return usrfun
 end
 
-function dircol(model::Model,obj::Objective,dt::Float64;
-        method::Symbol=:hermite_simpson_separated, grads::Symbol=:quadratic, start=start)
-
-        # Constants
-        nSeg = Int(floor(obj.tf/dt)); # Number of segments
-        dt = obj.tf/nSeg
-        if method == :hermite_simpson_separated
-            N = 2*nSeg + 1
-        else
-            N = nSeg + 1
-        end
-
-        X0, U0 = get_initial_state(obj,N)
-        dircol(model, obj, dt, X0, U0, method=method, grads=grads, start=start)
-end
-
 
 """
 $(SIGNATURES)
@@ -174,10 +159,12 @@ Solve a trajectory optimization problem with direct collocation
 * dt: time step. Used to determine the number of knot points. May be modified
     by the solver in order to achieve an integer number of knot points.
 * method: Collocation method.
+    :midpoint - Zero order interpolation on states and controls.
     :trapezoidal - First order interpolation on states and zero order on control.
     :hermite_simpson_separated - Hermite Simpson collocation with the midpoints
         included as additional decision variables with constraints
-    :hermite_simpson_modified -
+    :hermite_simpson - condensed verision of Hermite Simpson. Currently only
+        supports grads=:auto or grads=:none (recommended)
 * grads: Specifies the gradient information provided to SNOPT.
     :none - returns no gradient information to SNOPT
     :auto - uses ForwardDiff to calculate gradients
@@ -191,26 +178,28 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
 
         if method == :auto
             if solver.integration == :rk3_foh
-                method = :hermite_simpson_modified
+                method = :hermite_simpson
             elseif solver.integration == :midpoint
                 method = :midpoint
             else
-                method = :hermite_simpson_modified
+                method = :hermite_simpson
             end
         end
 
-        if method == :hermite_simpson_modified || method == :midpoint
+        if method == :hermite_simpson || method == :midpoint
             grads = :none
         end
 
         # Constants
         N,dt = solver.N, solver.dt
-        if method == :hermite_simpson_separated
-            nSeg = (N-1)/2
-        else
-            nSeg = N-1
-        end
+        N = convert_N(N,method)
         pack = (solver.model.n, solver.model.m, N)
+
+        if N != size(X0,2)
+            solver.opts.verbose ? println("Interpolating initial guess") : nothing
+            X0,U0 = interp_traj(N,obj.tf,X0,U0)
+            @show size(X0)
+        end
 
         # Generate the objective/constraint function and its gradients
         usrfun = gen_usrfun(solver, method, grads=grads)
@@ -244,6 +233,30 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         return x_opt, u_opt, fopt, stats
 end
 
+"""
+$(SIGNATURES)
+Automatically generate an initial guess by linearly interpolating the state
+between initial and final state and settings the controls to zero.
+"""
+function solve_dircol(solver::Solver;
+        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+    # Constants
+    N = solver.N
+    N = convert_N(N,method)
+
+    X0, U0 = get_initial_state(obj,N)
+    solve_dircol(solver, X0, U0, method=method, grads=grads, start=start)
+end
+
+"""
+$(SIGNATURES)
+MESH REFINEMENT:
+Solve by warm starting with a coarse time step and warm-starting the solver
+with the previous solution
+
+# Arguments
+* mesh: vector of step sizes for refinement prior to step size specified by solver.
+"""
 function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
         method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
     x_opt, u_opt = X0, U0
@@ -266,25 +279,20 @@ function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
     return x_opt, u_opt, f_opt, stats
 end
 
+function solve_dircol(solver::Solver, mesh::Vector;
+        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+    # Constants
+    N = solver.N
+    N = convert_N(N,method)
 
-function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
-    X2 = interp_rows(N,tf,X)
-    U2 = interp_rows(N,tf,U)
-    return X2, U2
+    X0, U0 = get_initial_state(obj,N)
+    solve_dircol(solver, X0, U0, mesh, method=method, grads=grads, start=start)
 end
 
-function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
-    n,N1 = size(X)
-    t1 = linspace(0,obj.tf,N1)
-    t2 = linspace(0,obj.tf,N)
-    X2 = zeros(n,N)
-    for i = 1:n
-        interp_cubic = CubicSplineInterpolation(t1, X[i,:])
-        X2[i,:] = interp_cubic(t2)
-    end
-    return X2
-end
-
+"""
+$(SIGNATURES)
+Extract important information from the SNOPT output file(s)
+"""
 function parse_snopt_summary(file="snopt-summary.out")
     props = Dict()
 
