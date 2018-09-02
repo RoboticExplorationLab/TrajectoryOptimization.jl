@@ -301,8 +301,8 @@ Interpolate the rows of a matrix using cubic interpolation
 """
 function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
     n,N1 = size(X)
-    t1 = linspace(0,obj.tf,N1)
-    t2 = linspace(0,obj.tf,N)
+    t1 = linspace(0,tf,N1)
+    t2 = linspace(0,tf,N)
     X2 = zeros(n,N)
     for i = 1:n
         interp_cubic = CubicSplineInterpolation(t1, X[i,:])

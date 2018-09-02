@@ -5,6 +5,26 @@ using Interpolations
 
 """
 $(SIGNATURES)
+Checks if Snopt.jl is installed and the SNOPT library has been built.
+Does not check if Snopt.jl runs, only that the necessary files are there.
+NOTE: Snopt.jl does not currently support Windows.
+"""
+function check_snopt_installation()::Bool
+    if is_windows()
+        return false
+    end
+    snopt_dir = Pkg.dir("Snopt")
+    if isdir(snopt_dir)
+        if isfile(joinpath(snopt_dir),"deps","src","libsnopt.so")
+            return true
+        end
+    end
+    return false
+end
+
+
+"""
+$(SIGNATURES)
 Generate the custom function to be passed into SNOPT, as well as `eval_f` and
 `eval_g` used to calculate the objective and constraint functions.
 
@@ -172,65 +192,67 @@ Solve a trajectory optimization problem with direct collocation
 """
 function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+    obj = solver.obj
+    model = solver.model
 
-        X0 = copy(X0)
-        U0 = copy(U0)
+    X0 = copy(X0)
+    U0 = copy(U0)
 
-        if method == :auto
-            if solver.integration == :rk3_foh
-                method = :hermite_simpson
-            elseif solver.integration == :midpoint
-                method = :midpoint
-            else
-                method = :hermite_simpson
-            end
+    if method == :auto
+        if solver.integration == :rk3_foh
+            method = :hermite_simpson
+        elseif solver.integration == :midpoint
+            method = :midpoint
+        else
+            method = :hermite_simpson
         end
+    end
 
-        if method == :hermite_simpson || method == :midpoint
-            grads = :none
-        end
+    if method == :hermite_simpson || method == :midpoint
+        grads = :none
+    end
 
-        # Constants
-        N,dt = solver.N, solver.dt
-        N = convert_N(N,method)
-        pack = (solver.model.n, solver.model.m, N)
+    # Constants
+    N,dt = solver.N, solver.dt
+    N = convert_N(N,method)
+    pack = (solver.model.n, solver.model.m, N)
 
-        if N != size(X0,2)
-            solver.opts.verbose ? println("Interpolating initial guess") : nothing
-            X0,U0 = interp_traj(N,obj.tf,X0,U0)
-            @show size(X0)
-        end
+    if N != size(X0,2)
+        solver.opts.verbose ? println("Interpolating initial guess") : nothing
+        X0,U0 = interp_traj(N,obj.tf,X0,U0)
+        @show size(X0)
+    end
 
-        # Generate the objective/constraint function and its gradients
-        usrfun = gen_usrfun(solver, method, grads=grads)
+    # Generate the objective/constraint function and its gradients
+    usrfun = gen_usrfun(solver, method, grads=grads)
 
-        # Set up the problem
-        Z0 = packZ(X0,U0)
-        lb,ub = get_bounds(obj,N)
+    # Set up the problem
+    Z0 = packZ(X0,U0)
+    lb,ub = get_bounds(obj,N)
 
-        # Set options
-        options = Dict{String, Any}()
-        options["Derivative option"] = 0
-        options["Verify level"] = 1
-        options["Minor feasibility tol"] = solver.opts.eps_constraint
-        # options["Minor optimality  tol"] = solver.opts.eps_intermediate
-        options["Major optimality  tol"] = solver.opts.eps
+    # Set options
+    options = Dict{String, Any}()
+    options["Derivative option"] = 0
+    options["Verify level"] = 1
+    options["Minor feasibility tol"] = solver.opts.eps_constraint
+    # options["Minor optimality  tol"] = solver.opts.eps_intermediate
+    options["Major optimality  tol"] = solver.opts.eps
 
-        # Solve the problem
-        if solver.opts.verbose
-            println("DIRCOL with $method")
-            println("Passing Problem to SNOPT...")
-        end
-        z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
-        stats = parse_snopt_summary()
-        # @time snopt(usrfun, Z0, lb, ub, options, start=start)
-        # xopt, fopt, info = Z0, Inf, "Nothing"
-        x_opt,u_opt = unpackZ(z_opt,pack)
+    # Solve the problem
+    if solver.opts.verbose
+        println("DIRCOL with $method")
+        println("Passing Problem to SNOPT...")
+    end
+    z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
+    stats = parse_snopt_summary()
+    # @time snopt(usrfun, Z0, lb, ub, options, start=start)
+    # xopt, fopt, info = Z0, Inf, "Nothing"
+    x_opt,u_opt = unpackZ(z_opt,pack)
 
-        if solver.opts.verbose
-            println(info)
-        end
-        return x_opt, u_opt, fopt, stats
+    if solver.opts.verbose
+        println(info)
+    end
+    return x_opt, u_opt, fopt, stats
 end
 
 """
@@ -244,7 +266,7 @@ function solve_dircol(solver::Solver;
     N = solver.N
     N = convert_N(N,method)
 
-    X0, U0 = get_initial_state(obj,N)
+    X0, U0 = get_initial_state(solver.obj,N)
     solve_dircol(solver, X0, U0, method=method, grads=grads, start=start)
 end
 
@@ -285,7 +307,7 @@ function solve_dircol(solver::Solver, mesh::Vector;
     N = solver.N
     N = convert_N(N,method)
 
-    X0, U0 = get_initial_state(obj,N)
+    X0, U0 = get_initial_state(solver.obj,N)
     solve_dircol(solver, X0, U0, mesh, method=method, grads=grads, start=start)
 end
 
