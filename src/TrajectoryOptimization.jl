@@ -11,6 +11,9 @@ module TrajectoryOptimization
 using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
+using Interpolations
+using Plots
+
 
 const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
 const debug_level = :critical  # (:verbose, :debug, :info, :critical, :none)
@@ -42,12 +45,6 @@ export
     infeasible_control,
     line_trajectory
 
-# DIRCOL methods
-export
-    solve_dircol,
-    gen_usrfun
-
-
 include("model.jl")
 include("integration.jl")
 #include("solver_options.jl")
@@ -58,8 +55,19 @@ include("ilqr_methods.jl")
 include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
-include("dircol.jl")
-include("dircol_snopt.jl")
+
+if check_snopt_installation()
+    using Snopt
+
+    # DIRCOL methods
+    export
+        solve_dircol,
+        gen_usrfun
+        
+    include("dircol.jl")
+    include("dircol_snopt.jl")
+end
+
 
 function set_debug_level(level::Symbol)
     global debug_level
