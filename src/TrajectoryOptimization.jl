@@ -41,7 +41,12 @@ export
     update_objective,
     infeasible_control,
     line_trajectory
-    # dircol
+
+# DIRCOL methods
+export
+    solve_dircol,
+    gen_usrfun
+
 
 include("model.jl")
 include("integration.jl")
@@ -53,8 +58,8 @@ include("ilqr_methods.jl")
 include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
-# include("dircol.jl")
-# include("dircol_snopt.jl")
+include("dircol.jl")
+include("dircol_snopt.jl")
 
 function set_debug_level(level::Symbol)
     global debug_level
