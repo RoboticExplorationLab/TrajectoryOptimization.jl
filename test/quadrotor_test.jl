@@ -10,8 +10,8 @@ opts.square_root = false
 opts.verbose = true
 opts.cache=true
 opts.c1=1e-4
-opts.c2=2.0
-opts.mu_al_update = 10.0
+opts.c2=3.0
+# opts.mu_al_update = 10.0
 opts.eps_constraint = 1e-3
 opts.eps = 1e-3
 opts.iterations_outerloop = 250
@@ -25,7 +25,7 @@ tf = 5.0
 dt = 0.1
 
 x0 = zeros(n)
-quat0 = eul2quat([0.0; pi/2; 0.0]) # ZYX Euler angles
+quat0 = eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
 x0[4:7] = quat0[:,1]
 x0
 
@@ -43,19 +43,25 @@ obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 
 model! = Model(Dynamics.quadrotor_dynamics!,n,m)
 
-solver_uncon = Solver(model!,obj_uncon,integration=:rk4,dt=dt,opts=opts)
-# solver_con = Solver(model!,obj_con,dt=dt,opts=opts)
+solver_uncon = Solver(model!,obj_uncon,integration=:rk3_foh,dt=dt,opts=opts)
+solver_con = Solver(model!,obj_con,dt=dt,opts=opts)
 
 U = ones(solver_uncon.model.m, solver_uncon.N)
 
 results_uncon, = solve(solver_uncon,U)
-# results_con, = solve(solver_con,U)
+results_con, = solve(solver_con,U)
 
-# plot(results_uncon.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
+plot(results_uncon.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
+plot!(results_con.X[1:3,:]')
 
-# plot(results_uncon.U[1:m,:]',color="green")
-# plot!(results_con.U[1:m,:]',color="red")
+plot(results_uncon.U[1:m,:]',color="green")
+plot!(results_con.U[1:m,:]',color="red")
 
 println("Final position: $(results_uncon.X[1:3,end]) | desired: $(obj_uncon.xf[1:3])")
 
-# plot_3D_trajectory(results_con, solver_con, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])
+plot_3D_trajectory(results_uncon, solver_uncon, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])
+
+plot(results_uncon.X[1,:],results_uncon.X[2,:])
+plot(results_uncon.X[2,:],results_uncon.X[3,:])
+
+plot(log.(results_uncon.cost[1:results_uncon.termination_index]))

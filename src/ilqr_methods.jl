@@ -57,7 +57,11 @@ function rollout!(X::Matrix, U::Matrix, solver::Solver)
         if infeasible
             X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
         end
-        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k])
+
+        # Check that rollout has not diverged
+        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k]) || any(X[:,k+1] .> solver.opts.max_state_value) || any(U[:,k] .> solver.opts.max_control_value)
+            # println("X: \n $(X[:,1:k+1])")
+            # println("U: \n $(U[:,1:k])")
             return false
         end
     end
@@ -86,7 +90,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         b = res.b
         du = zeros(m)
         dv = zeros(m)
-        du = alpha*d[:,1] # check on this...
+        du = alpha*d[:,1]
         U_[:,1] .= U[:,1] + du
     end
 
@@ -108,7 +112,10 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
             X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
         end
 
-        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1])
+        # Check that rollout has not diverged
+        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1]) || any(X_[:,k] .> solver.opts.max_state_value) || any(U_[:,k-1] .> solver.opts.max_control_value)
+            # println("X: \n $(X_[:,1:k])")
+            # println("U: \n $(U_[:,1:k-1])")
             return false
         end
     end

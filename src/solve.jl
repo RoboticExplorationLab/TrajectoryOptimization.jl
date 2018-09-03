@@ -193,14 +193,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 t1 = time_ns() # time flag for iLQR inner loop start
             end
 
-            ### BACKWARDS PASS ###
+            ### BACKWARD PASS ###
             calc_jacobians(results, solver)
             if solver.control_integration == :foh
-                # v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
-                v1, v2 = backwardpass_foh_alt!(results,solver) #TODO combine with square root
+                v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
 
             elseif solver.opts.square_root
-                v1, v2 = backwards_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                v1, v2 = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
                 v1, v2 = backwardpass!(results, solver)
             end

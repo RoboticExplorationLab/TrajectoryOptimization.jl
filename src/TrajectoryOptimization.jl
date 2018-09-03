@@ -47,7 +47,6 @@ export
 
 include("model.jl")
 include("integration.jl")
-#include("solver_options.jl")
 include("solver.jl")
 include("results.jl")
 include("ilqr_algorithm.jl")
@@ -63,7 +62,7 @@ if check_snopt_installation()
     export
         solve_dircol,
         gen_usrfun
-        
+
     include("dircol.jl")
     include("dircol_snopt.jl")
 end
