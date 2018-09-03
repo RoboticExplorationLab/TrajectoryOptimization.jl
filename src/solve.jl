@@ -29,10 +29,16 @@ function solve(solver::Solver, X0::Array{Float64,2}, U0::Array{Float64,2}; prevR
 
     # Convert to a constrained problem
     if isa(solver.obj, UnconstrainedObjective)
+        if solver.opts.solve_feasible == false
+            solver.opts.infeasible = true
+        end
+
         obj_c = ConstrainedObjective(solver.obj)
         solver.opts.unconstrained = true
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
+
+
 
     results, stats = _solve(solver,U0,X0,prevResults=prevResults)
     return results, stats
@@ -289,7 +295,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                  "cost"=>J_hist)
 
     ## Return dynamically feasible trajectory
-    if infeasible
+    if infeasible && solver.opts.solve_feasible
         if solver.opts.verbose
             println("Infeasible -> Feasible ")
         end
