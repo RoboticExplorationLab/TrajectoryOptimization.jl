@@ -71,19 +71,19 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
 
         # regularization
-        if !isposdef(Quu)
-            if size(Quu,1) == 1
-                mu[1] = -2.0*Quu
-            else
-                mu[1] = -2.0*minimum(eigvals(Quu))
-                # mu[1] += solver.opts.mu_reg_update
-            end
-            k = N-1
-            if solver.opts.verbose
-                println("regularized (normal bp)")
-            end
-            continue
-        end
+        # if !isposdef(Quu)
+        #     if size(Quu,1) == 1
+        #         mu[1] = -2.0*Quu
+        #     else
+        #         mu[1] = -2.0*minimum(eigvals(Quu))
+        #         # mu[1] += solver.opts.mu_reg_update
+        #     end
+        #     k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized (normal bp)")
+        #     end
+        #     continue
+        # end
 
         # Constraints
         if res isa ConstrainedResults

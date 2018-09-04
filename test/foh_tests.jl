@@ -42,8 +42,8 @@ sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 plot(sol_foh.cost[1:sol_foh.termination_index])
 plot!(sol_zoh.cost[1:sol_zoh.termination_index])
 
-plot(log.(sol_foh.cost[1:sol_foh.termination_index]))
-plot!(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
+# plot(log.(sol_foh.cost[1:sol_foh.termination_index]))
+# plot!(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
 
 plot(sol_foh.X[1,:],sol_foh.X[2,:])
 plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
@@ -70,8 +70,8 @@ U = rand(solver_foh.model.m, solver_foh.N)
 sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
-plot(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
-plot!(log.(sol_foh.cost[1:sol_foh.termination_index]))
+# plot(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
+# plot!(log.(sol_foh.cost[1:sol_foh.termination_index]))
 
 plot(sol_foh.X')
 plot!(sol_zoh.X')
@@ -123,8 +123,8 @@ plot!(sol_zoh_con2.X')
 plot(sol_foh_con2.U')
 plot!(sol_zoh_con2.U')
 
-plot((sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
-plot!((sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
+# plot((sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
+# plot!((sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
 
 sol_foh_con2.X[:,end]
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
@@ -158,8 +158,8 @@ println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])"
 plot(sol_foh_con2.U')
 plot!(sol_zoh_con2.U')
 
-plot(log.(sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
-plot!(log.(sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
+# plot(log.(sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
+# plot!(log.(sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
 
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
 # ###
