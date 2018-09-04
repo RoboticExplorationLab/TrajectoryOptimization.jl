@@ -28,7 +28,7 @@ model_p = Dynamics.pendulum![1]
 ####
 
 ### Unconstrained dubins car foh
-obj_uncon_dc.R[:,:] = (1e-1)*eye(2)
+# obj_uncon_dc.R[:,:] = (1e-1)*eye(2)
 solver_foh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
 solver_zoh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3, opts=opts)
 
@@ -39,11 +39,11 @@ sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 println("foh solve:")
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
-plot(sol_zoh.cost[1:sol_zoh.termination_index])
-plot!(sol_foh.cost[1:sol_foh.termination_index])
+plot(sol_foh.cost[1:sol_foh.termination_index])
+plot!(sol_zoh.cost[1:sol_zoh.termination_index])
 
-plot(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
-plot!(log.(sol_foh.cost[1:sol_foh.termination_index]))
+plot(log.(sol_foh.cost[1:sol_foh.termination_index]))
+plot!(log.(sol_zoh.cost[1:sol_zoh.termination_index]))
 
 plot(sol_foh.X[1,:],sol_foh.X[2,:])
 plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
@@ -85,7 +85,7 @@ plot!(sol_zoh.U')
 ### Control constraints with foh (pendulum)
 u_min = -2.0
 u_max = 2.0
-obj_uncon_p.R[:] = [1e-1]
+# obj_uncon_p.R[:] = [1e-1]
 obj_con_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max) # constrained objective
 
 solver_foh_con = Solver(model_p, obj_con_p, integration=:rk3_foh, dt=dt, opts=opts)
@@ -123,8 +123,8 @@ plot!(sol_zoh_con2.X')
 plot(sol_foh_con2.U')
 plot!(sol_zoh_con2.U')
 
-plot(log.(sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
-plot!(log.(sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
+plot((sol_zoh_con2.cost[1:sol_zoh_con2.termination_index]))
+plot!((sol_foh_con2.cost[1:sol_foh_con2.termination_index]))
 
 sol_foh_con2.X[:,end]
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
@@ -145,7 +145,7 @@ U = 5*rand(solver_foh_con2.model.m,solver_foh_con2.N)
 
 sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
-sol_foh_con2.result
+
 plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
 plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
 
@@ -246,7 +246,7 @@ rollout!(tmp2,solver_con2)
 plot!(tmp2.X')
 
 # confirm that state trajectory from infeasible start is similar to the unconstrained solve
-@test norm(tmp.X' - tmp2.X') < 5.0
+@test norm(tmp.X' - tmp2.X') < 10.0
 ###
 
 ### infeasible start with state and control constraints with foh (dubins car)
@@ -311,4 +311,4 @@ Ac, Bc = solver_test.Fc(x,u)
 
 @test norm((Ac_known - Ac)[:]) < 1e-5
 @test norm((Bc_known - Bc)[:]) < 1e-5
-# ###
+###

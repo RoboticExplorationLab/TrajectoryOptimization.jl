@@ -297,8 +297,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
 
-            Lx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Lu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            Lx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+            Lu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
             Lxx += Cx'*Iμ[:,:,k]*Cx
             Luu += Cu'*Iμ[:,:,k]*Cu
 

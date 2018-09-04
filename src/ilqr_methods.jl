@@ -187,14 +187,14 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
 
     N = solver.N
     for k = 1:N-1
-        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k]) + res.LAMBDA[:,k]'*res.C[:,k]
     end
 
     if solver.control_integration == :foh
-        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
+        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N]) + res.LAMBDA[:,N]'*res.C[:,N]
     end
 
-    J += 0.5*(res.CN'*res.IμN*res.CN + res.λN'*res.CN)
+    J += 0.5*(res.CN'*res.IμN*res.CN) + res.λN'*res.CN
     return J
 end
 
@@ -272,7 +272,7 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
 
         # Inequality constraints [see equation ref]
         for j = 1:pI
-            if res.C[j,k] < 0. || res.LAMBDA[j,k] < 0.
+            if res.C[j,k] > 0.0 || res.LAMBDA[j,k] > 0.0
                 res.Iμ[j,j,k] = res.MU[j,k] # active (or previously active) inequality constraints are penalized
             else
                 res.Iμ[j,j,k] = 0. # inactive inequality constraints are not penalized
@@ -361,8 +361,8 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     pI_u = pI_u_max + pI_u_min
     cI_u = zeros(pI_u)
     function c_control(x,u)
-        [(obj.u_max - u)[u_max_active];
-         (u - obj.u_min)[u_min_active]]
+        [(u - obj.u_max)[u_max_active];
+         (obj.u_min - u)[u_min_active]]
     end
 
     # Inequality on state
@@ -370,8 +370,8 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     pI_x_min = count(x_min_active)
     pI_x = pI_x_max + pI_x_min
     function c_state(x,u)
-        [(obj.x_max - x)[x_max_active];
-         (x - obj.x_min)[x_min_active]]
+        [(x - obj.x_max )[x_max_active];
+         (obj.x_min - x)[x_min_active]]
     end
 
     # Custom constraints
@@ -409,13 +409,13 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     # Declare known jacobians
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = -eye(n)[x_max_active,:]
-    fx_state[pI_x_max+1:end,:] = eye(n)[x_min_active,:]
+    fx_state[1:pI_x_max, :] = eye(n)[x_max_active,:]
+    fx_state[pI_x_max+1:end,:] = -eye(n)[x_min_active,:]
     fx = zeros(p,n)
 
     fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max,:] = -eye(m)[u_max_active,:]
-    fu_control[pI_u_max+1:end,:] = eye(m)[u_min_active,:]
+    fu_control[1:pI_u_max,:] = eye(m)[u_max_active,:]
+    fu_control[pI_u_max+1:end,:] = -eye(m)[u_min_active,:]
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 

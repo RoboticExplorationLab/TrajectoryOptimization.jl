@@ -113,12 +113,12 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
         else
             results.U .= U0 # initialize control to control input sequence
-            if !isempty(prevResults) # bootstrap previous constraint solution
-                results.LAMBDA .= prevResults.LAMBDA[1:p,:]
-                results.MU .= prevResults.MU[1:p,:]
-                results.λN .= prevResults.λN
-                results.μN .= prevResults.μN
-            end
+            # if !isempty(prevResults) # bootstrap previous constraint solution
+            #     results.LAMBDA .= prevResults.LAMBDA[1:p,:]
+            #     results.MU .= prevResults.MU[1:p,:]
+            #     results.λN .= prevResults.λN
+            #     results.μN .= prevResults.μN
+            # end
         end
 
         # Diagonal indicies for the Iμ matrix (fast)
@@ -252,6 +252,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
+        if results isa ConstrainedResults # TODO I think this is redundant
+            update_constraints!(results,solver,results.X,results.U)
+        end
         outer_loop_update(results,solver)
 
         if solver.opts.cache
@@ -359,7 +362,7 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     for jj = 1:final_index
         for ii = 1:p
             if ii <= solver.obj.pI
-                results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*min(results.C[ii,jj],0)
+                results.LAMBDA[ii,jj] .= max(0,results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])
             else
                 results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
             end
