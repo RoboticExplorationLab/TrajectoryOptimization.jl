@@ -181,10 +181,11 @@ obj = copy(obj0)
 obj.x0 = [0;0;0;0.]
 obj.xf = [0.5;pi;0;0]
 obj.tf = 2.
-u_bnd = 50
-x_bnd = [0.6,Inf,Inf,Inf]
+u_bnd = 30
+x_bnd = [0.55,Inf,Inf,Inf]
 dt = 0.01
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_max=x_bnd);
+method = :rk3
 
 solver = Solver(model,obj_con,dt=dt)
 U = ones(1,solver.N)*10
@@ -192,8 +193,10 @@ X = line_trajectory(obj.x0, obj.xf, solver.N)
 solver.opts.verbose = true
 @time results, = solve(solver,X,U);
 cost(solver,results)
+plot(results.X')
 plot(results.U')
 plot!(results.LAMBDA')
+
 # Initial state
 N,dt = TrajectoryOptimization.calc_N(obj.tf, dt)
 
