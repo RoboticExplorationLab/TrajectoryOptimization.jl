@@ -12,8 +12,8 @@ opts.cache = true
 # opts.c2 = 3.0
 opts.mu_al_update = 10.0
 #opts.infeasible_regularization = 1.0
-opts.eps_constraint = 1e-3
-opts.eps_intermediate = 1e-2
+opts.eps_constraint = 1e-5
+opts.eps_intermediate = 1e-3
 opts.eps = 1e-5
 # opts.iterations_outerloop = 100
 # opts.iterations = 1000
@@ -49,8 +49,8 @@ U = ones(solver_foh.model.m,solver_foh.N)
 X_interp = line_trajectory(solver_foh)
 
 
-sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
-sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
+sol_foh, = TrajectoryOptimization.solve(solver_foh,X_interp,U)
+sol_zoh, = TrajectoryOptimization.solve(solver_zoh,X_interp,U)
 
 
 println("Final state (foh): $(sol_foh.X[:,end])")

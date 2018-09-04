@@ -23,6 +23,10 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
     R = getR(solver)
 
+    if solver.model.m != size(res.U,1)
+        m += n
+    end
+
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d
 
@@ -59,17 +63,26 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
         Qxx = lxx + fx'*S*fx
-        Quu = Hermitian(luu + fu'*(S + mu[1]*eye(n))*fu)
-        Qux = fu'*(S + mu[1]*eye(n))*fx
+        # Quu = Hermitian(luu + fu'*(S + mu[1]*eye(n))*fu)
+        # Qux = fu'*(S + mu[1]*eye(n))*fx
+
+        Quu = Hermitian(luu + fu'*S*fu +  + mu[1]*eye(m))
+        Qux = fu'*S*fx
+
 
         # regularization
         if !isposdef(Quu)
-            mu[1] += solver.opts.mu_reg_update
+            if size(Quu,1) == 1
+                mu[1] = -2.0*Quu
+            else
+                mu[1] = -2.0*minimum(eigvals(Quu))
+                # mu[1] += solver.opts.mu_reg_update
+            end
             k = N-1
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
-            break
+            continue
         end
 
         # Constraints
@@ -235,15 +248,16 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-        CxN = res.Cx_N
-        Cx, Cu = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN + Cx'*Iμ[:,:,N]*Cx
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cx'*Iμ[:,:,N]*C[:,N] + Cx'*LAMBDA[:,N]
-        S[n+1:n+m,n+1:n+m] = Cu'*Iμ[:,:,N]*Cu
-        s[n+1:n+m] = Cu'*Iμ[:,:,N]*C[:,N] + Cu'*LAMBDA[:,N]
-        S[1:n,n+1:n+m] = Cx'*Iμ[:,:,N]*Cu
-        S[n+1:n+m,1:n] = Cu'*Iμ[:,:,N]*Cx
+        CxN = res.Cx_N
+        Cx_, Cu_ = res.Cx[:,:,N], res.Cu[:,:,N]
+
+        S[1:n,1:n] += CxN'*res.IμN*CxN + Cx_'*Iμ[:,:,N]*Cx_
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N]
+        S[n+1:n+m,n+1:n+m] = Cu_'*Iμ[:,:,N]*Cu_
+        s[n+1:n+m] = Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N]
+        S[1:n,n+1:n+m] = Cx_'*Iμ[:,:,N]*Cu_
+        S[n+1:n+m,1:n] = Cu_'*Iμ[:,:,N]*Cx_
     end
 
     k = N-1
@@ -317,8 +331,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
 
-        #TODO add regularization
-        #regularization
+        #TODO check regularization
+        # regularization
         if !isposdef(Qvv)
             mu[1] += solver.opts.mu_reg_update
             k = N-1
