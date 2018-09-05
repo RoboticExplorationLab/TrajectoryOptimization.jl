@@ -107,6 +107,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
         ## Initialize results
         results = ConstrainedResults(n,m,p,N) # preallocate memory for results
+        results.MU .*= solver.opts.μ1 # set initial penalty term values
 
         if infeasible
             results.X .= X0 # initialize state trajectory with infeasible trajectory input
@@ -179,6 +180,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
         if results isa ConstrainedResults
             update_constraints!(results,solver,results.X,results.U)
+            if k == 1
+                results.C_prev .= results.C # store initial constraints results for AL method outer loop update, after this first update C_prev gets updated in the outer loop update
+                results.CN_prev .= results.CN
+            end
         end
         J_prev = cost(solver, results, X, U)
         k == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
@@ -224,7 +229,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-
             if solver.opts.cache
                 # Store current results and performance parameters
                 time = (t2-t1)/(1.0e9)
@@ -252,9 +256,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
-        if results isa ConstrainedResults # TODO I think this is redundant
-            update_constraints!(results,solver,results.X,results.U)
-        end
         outer_loop_update(results,solver)
 
         if solver.opts.cache
@@ -352,6 +353,7 @@ Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagra
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     p,N = size(results.C) # note I changed C to be (p,N)
+    pI = solver.obj.pI
 
     if solver.control_integration == :foh
         final_index = N
@@ -360,17 +362,62 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     end
 
     for jj = 1:final_index
+        # Lagrange multiplier update for time step
         for ii = 1:p
-            if ii <= solver.obj.pI
-                results.LAMBDA[ii,jj] .= max(0,results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])
+            if ii <= pI
+                results.V_al_prev[ii,jj] .= results.V_al_current[ii,jj]
+                results.V_al_current[ii,jj] .= min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
+
+                # results.LAMBDA[ii,jj] .= max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])
+                results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
             else
-                results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
+                # results.LAMBDA[ii,jj] .+= results.MU[ii,jj]*results.C[ii,jj]
+                results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
             end
-            results.MU[ii,jj] .*= solver.opts.mu_al_update
+        end
+
+        # Penalty update for time step
+        if max(norm(results.C[pI+1:p,jj]),norm(results.V_al_current[pI+1:p,jj])) <= solver.opts.τ*max(norm(results.C_prev[pI+1:p,jj]),norm(results.V_al_prev[pI+1:p,jj]))
+            if solver.opts.verbose
+                println("no μ update")
+            end
+            # results.MU[:,jj] .*= 1.0
+            results.MU[:,jj] .= min(solver.opts.μ_max, solver.opts.γ_no*results.MU[:,jj])
+
+        else
+            if solver.opts.verbose
+                println("x$(solver.opts.γ) μ update")
+            end
+            # results.MU[:,jj] .*= solver.opts.γ
+            results.MU[:,jj] .= min(solver.opts.μ_max, solver.opts.γ*results.MU[:,jj])
         end
     end
-    results.λN .+= results.μN.*results.CN
-    results.μN .*= solver.opts.mu_al_update
+
+    # Update terminal state equality constraints
+    for ii = 1:solver.model.n
+        results.λN[ii] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+    end
+    # results.λN .+= results.μN.*results.CN
+
+    # Update terminal penalties
+    if norm(results.CN) <= solver.opts.τ*norm(results.CN_prev)
+        if solver.opts.verbose
+            println("no μ update (terminal)")
+        end
+        # results.μN .*= 1.0
+        results.μN .= min(solver.opts.μ_max, solver.opts.γ_no*results.μN)
+    else
+        if solver.opts.verbose
+            println("$(solver.opts.γ)x μ update (terminal)")
+        end
+        # results.μN .*= solver.opts.γ
+        results.μN .= min(solver.opts.μ_max, solver.opts.γ*results.μN)
+    end
+
+    # Store current constraints evaluations for next outer loop update
+    results.C_prev .= results.C
+    results.CN_prev .= results.CN
+
     return nothing
 end
 
