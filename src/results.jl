@@ -374,18 +374,25 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
         X_ = zeros(n,2N-1)
         U_ = zeros(m,2N-1)
         fVal_ = zeros(X_)
+        N_ = size(X_,2)
+        A = zeros(n,n,N_)
+        B = zeros(n,m,N_)
     elseif method == :midpoint
         X_ = zeros(n,N-1)
         U_ = view(U,:,1:N-1)
         fVal_ = zeros(X_)
+        N_ = size(X_,2)
+        A = zeros(n,n,N_)
+        B = zeros(n,m,N_)
     else
         X_ = X
         U_ = U
+        N_ = size(X_,2)
         fVal_ = fVal
+        A = zeros(n,n+m,N_) # These methods conveniently use the gradient of Z
+        B = zeros(0,0,N_)
     end
-    N_ = size(X_,2)
-    A = zeros(n,n,N_)
-    B = zeros(n,m,N_)
+
     weights = get_weights(method,N_)
     DircolResults(Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
 end
