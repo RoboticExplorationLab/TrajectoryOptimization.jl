@@ -41,12 +41,11 @@ function get_weights(method::Symbol,N::Int)
     return weights
 end
 
-function get_bounds(obj::UnconstrainedObjective,N::Int)
-    get_bounds(ConstrainedObjective(obj),N::Int)
-end
 
-function get_bounds(obj::ConstrainedObjective,N::Int)
-    n,m = get_sizes(obj)
+function get_bounds(solver::Solver,method::Symbol)
+    n,m,N = get_sizes(solver)
+    N = convert_N(N,method)
+    obj = solver.obj
     lb = zeros((n+m),N)
     ub = zeros((n+m),N)
 
@@ -92,7 +91,7 @@ function unpackZ(Z, sze)
 end
 
 function get_initial_state(obj::Objective, N::Int)
-    n,m = get_sizes(obj)
+    n = size(obj.Q,1); m = size(obj.R,1)
     X0 = line_trajectory(obj.x0, obj.xf, N)
     U0 = zeros(m,N)
     return X0, U0
@@ -204,10 +203,7 @@ function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
         grad_f .*= dt/6
         grad_f[1:n,N] += Qf*(Xk[:,N] - xf)
     elseif method == :midpoint
-        Xm = zeros(eltype(X),n,N-1)
-        for k = 1:N-1
-            Xm[:,k] = (res.X[:,k] + res.X[:,k+1])/2
-        end
+        Xm = res.X_
 
         grad_f[1:n,1] = Q*(Xm[:,1] - xf)/2
         grad_f[n+1:end,1] = R*U[:,1]
@@ -247,8 +243,6 @@ function get_traj_points!(solver::Solver,res::DircolResults,method::Symbol)
         # Midpoints
         Xm = view(res.X_,:,2:2:N_-1)
         Um = view(res.U_,:,2:2:N_-1)
-        @show size(Um)
-        @show size((U[:,1:end-1] + U[:,2:end])/2)
         Um .= (U[:,1:end-1] + U[:,2:end])/2
         fValm = view(res.fVal_,:,2:2:N_-1)
         for k = 1:N-1
@@ -268,18 +262,28 @@ function get_traj_points!(solver::Solver,res::DircolResults,method::Symbol)
     return nothing
 end
 
-function update_derivatives!(solver::Solver,res::DircolResults)
+function update_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
     # Calculate derivative
-    N = size(res.X,2)
-    for k = 1:N
-        solver.fc(view(res.fVal,:,k),res.X[:,k],res.U[:,k])
+    if method != :midpoint
+        N = size(res.X,2)
+        for k = 1:N
+            solver.fc(view(res.fVal,:,k),res.X[:,k],res.U[:,k])
+        end
     end
 end
 
-function update_jacobians!(solver::Solver,res::DircolResults)
-    N_ = size(res.X_,2)
-    for k = 1:N_
-        res.A[:,:,k], res.B[:,:,k] = solver.Fc(res.X_[:,k],res.U_[:,k])
+function update_jacobians!(solver::Solver,res::DircolResults,method::Symbol)
+    n,N = size(res.X)
+    m,N_ = size(res.U_)
+    if method == :hermite_simpson || method == :midpoint
+        for k = 1:N_
+            res.A[:,:,k], res.B[:,:,k] = solver.Fc(res.X_[:,k],res.U_[:,k])
+        end
+    else
+        z = reshape(res.Z,n+m,N)
+        for k = 1:N_
+            res.A[:,:,k] = solver.Fc(z[:,k])
+        end
     end
 end
 
@@ -308,12 +312,12 @@ function collocation_constraints(solver::Solver, res::DircolResults, method::Sym
         iMid = iLow + 1
         iUpp = iMid + 1
 
-        midpoints =  - X[:,iMid] + (X[:,iLow]+X[:,iUpp])/2 + dt*(fVal[:,iLow] - fVal[:,iUpp])/8
         collocation = - X[:,iUpp] + X[:,iLow] + dt*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
 
         if method == :hermite_simpson
             g .= collocation
         else
+            midpoints =  - X[:,iMid] + (X[:,iLow]+X[:,iUpp])/2 + dt*(fVal[:,iLow] - fVal[:,iUpp])/8
             g[:,iLow] = collocation
             g[:,iMid] = midpoints
         end
@@ -386,16 +390,13 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
     m,N_ = size(res.U_)
     jacob_g = zeros((N-1)*n,N*(n+m))
 
-
-
     if method == :trapezoid
         z = reshape(res.Z,n+m,N)
         Inm = Matrix(I,n,n+m)
-        F = solver.Fc
 
 
         # First time step
-        fz = F(z[:,1])
+        fz = res.A[:,:,1]
         jacob_g[1:n,1:n+m] .= dt*fz/2+Inm
 
         # Loop over time steps
@@ -403,33 +404,32 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
             off_1 = (k-1)*(n)
             off_2 = (k-1)*(n+m)
             # Calculate (n,n+m) Jacobian of both states and controls
-            fz = F(z[:,k])
+            fz = res.A[:,:,k]  #F(z[:,k])
             jacob_g[off_1-n+(1:n),off_2+(1:n+m)] .= dt*fz/2 - Inm
             jacob_g[off_1 + (1:n),off_2+(1:n+m)] .= dt*fz/2 + Inm
         end
 
         # Last time step
-        fz = F(z[:,N])
+        fz = res.A[:,:,N]  # F(z[:,N])
         jacob_g[end-n+1:end,end-n-m+1:end] = dt*fz/2-Inm
 
     elseif method == :hermite_simpson_separated
         nSeg = Int((N-1)/2)
         jacob_g = zeros(n*(N-1),(n+m)N)
-        F = solver.Fc
         z = reshape(res.Z,n+m,N)
 
-        fz1 = F(z[:,1])
+        fz1 = res.A[:,:,1]  # F(z[:,1])
         Inm = Matrix(I,n,n+m)
 
         function calc_block(k)
             vals = zeros(2n,3(n+m))
-            fz = F(z[:,k])
+            fz = res.A[:,:,k]  # F(z[:,k])
             vals[0+(1:n),(1:n+m)] .= dt*fz/6 + Inm
             vals[n+(1:n),(1:n+m)] .= dt*fz/8 + Inm/2
-            fm = F(z[:,k+1])
+            fm = res.A[:,:,k+1]  # F(z[:,k+1])
             vals[0+(1:n),n+m+(1:n+m)] .= 2*dt*fm/3
             vals[n+(1:n),n+m+(1:n+m)] .= -Inm
-            fz1 .= F(z[:,k+2])
+            fz1 .= res.A[:,:,k+2]  # F(z[:,k+2])
             vals[0+(1:n),2(n+m)+(1:n+m)] .=  dt*fz1/6 - Inm
             vals[n+(1:n),2(n+m)+(1:n+m)] .= -dt*fz1/8 + Inm/2
             return vals

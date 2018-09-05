@@ -12,12 +12,19 @@ u_bnd = 50
 x_bnd = [0.6,Inf,Inf,Inf]
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_max=x_bnd)
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
-dt = 0.1
+dt = 0.05
 
 
 
 # Check Jacobians
 solver = Solver(model,obj,dt=dt,integration=:rk3_foh)
+N = solver.N
+U0 = ones(1,N)*1
+X0 = line_trajectory(obj.x0, obj.xf, N)
+
+method = :hermite_simpson
+@time solve_dircol(solver,X0,U0,method=method,grads=:auto)
+@time solve_dircol(solver,X0,U0,method=method,grads=:none)
 
 function check_grads(solver,method)
 
@@ -33,9 +40,9 @@ function check_grads(solver,method)
     Z[1:15] = 1:15
 
     weights = get_weights(method,N)*dt
-    update_derivatives!(solver,res)
+    update_derivatives!(solver,res,method)
     get_traj_points!(solver,res,method)
-    update_jacobians!(solver,res)
+    update_jacobians!(solver,res,method)
 
     function eval_ceq(Z)
         X,U = unpackZ(Z,(n,m,N))
@@ -73,6 +80,14 @@ check_grads(solver,:hermite_simpson)
 check_grads(solver,:hermite_simpson_separated)
 
 
+solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
+solver.opts.verbose = true
+method = :hermite_simpson_separated
+results = DircolResults(get_sizes(solver)...,method)
+usrfun = gen_usrfun(solver, results, method, grads=:none)
+usrfun(results.Z)
+solve_dircol(solver,X0,U0,method=method)
+
 # Solver integration scheme should set the dircol scheme
 solver = Solver(model,obj,dt=dt,integration=:midpoint)
 X,U = solve_dircol(solver,X0,U0)
@@ -96,32 +111,21 @@ X2,U2 = solve_dircol(solver,X0,U0,method=:hermite_simpson)
 
 # Test different derivative options
 method = :hermite_simpson_separated
-solver = Solver(model,obj,dt=dt)
-solver.opts.verbose = true
-X,U = solve_dircol(solver,X0,U0,method=method,grads=:quad)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-@test size(X,2) == 2N-1
+function check_grad_options(method)
+    solver = Solver(model,obj,dt=dt)
+    X,U = solve_dircol(solver,X0,U0,method=method,grads=:none)
+    @test vecnorm(X[:,end]-obj.xf) < 1e-5
 
-X2,U2 = solve_dircol(solver,X0,U0,method=method,grads=:auto)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-@test X ≈ X2
+    X2,U2 = solve_dircol(solver,X0,U0,method=method,grads=:auto)
+    @test vecnorm(X[:,end]-obj.xf) < 1e-5
+    @test norm(X-X2) < 5e-3
+end
 
-X3,U3 = solve_dircol(solver,X0,U0,method=method,grads=:none)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-@test vecnorm(X-X3) < 1e-3
+check_grad_options(:hermite_simpson_separated)
+check_grad_options(:hermite_simpson)
+check_grad_options(:trapezoid)
+check_grad_options(:midpoint)
 
-method = :trapezoid
-solver = Solver(model,obj,dt=dt)
-X,U = solve_dircol(solver,X0,U0,method=method,grads=:quad)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-
-X2,U2 = solve_dircol(solver,X0,U0,method=method,grads=:auto)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-@test X ≈ X2
-
-X3,U3 = solve_dircol(solver,X0,U0,method=method,grads=:none)
-@test vecnorm(X[:,end]-obj.xf) < 1e-5
-@test vecnorm(X-X3) < 1e-3
 
 
 # Mesh refinement
@@ -130,14 +134,15 @@ t1 = @elapsed X,U = solve_dircol(solver,X0,U0)
 t2 = @elapsed X2,U2 = solve_dircol(solver,X0,U0,mesh)
 @test vecnorm(X2[:,end]-obj.xf) < 1e-5
 @test vecnorm(X2-X) < 1e-2
-@test t2 < t1
 
 
 # No initial guess
-mesh = [0.5]
+mesh = [0.2]
+solver.opts.verbose = true
 t1 = @elapsed X,U = solve_dircol(solver)
 t2 = @elapsed X2,U2 = solve_dircol(solver,mesh)
+plot(X')
+plot!(X2',width=2)
 @test vecnorm(X[:,end]-obj.xf) < 1e-5
 @test vecnorm(X2[:,end]-obj.xf) < 1e-5
 @test vecnorm(X2-X) < 1e-2
-@test t2/2 < t1
