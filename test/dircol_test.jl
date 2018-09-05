@@ -2,6 +2,7 @@
 #   CART POLE   #
 #***************#
 model, obj0 = Dynamics.cartpole_analytical
+n,m = model.n, model.m
 
 obj = copy(obj0)
 obj.x0 = [0;0;0;0.]
@@ -13,9 +14,51 @@ obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_ma
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
 dt = 0.1
 
+
+
+# Check Jacobians
+method = :hermite_simpson
 N,dt = TrajectoryOptimization.calc_N(obj.tf, dt)
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
+res = DircolResults(n,m,N,method)
+solver = Solver(model,obj,dt=dt,integration=:rk3_foh)
+res.X .= X0
+res.U .= U0
+Z = res.Z
+Z[1:15] = 1:15
+
+function eval_ceq(Z)
+    X,U = unpackZ(Z,(n,m,N))
+    collocation_constraints(X,U,method,dt,solver.fc)
+end
+
+g = eval_ceq(Z)
+update_derivatives!(solver,res)
+get_traj_points!(solver,res,method)
+update_jacobians!(solver,res)
+g_colloc = collocation_constraints(solver,res,method)
+g_colloc == g
+
+jacob_g = constraint_jacobian(solver,res,method)
+jacob_g_auto = ForwardDiff.jacobian(eval_ceq,Z)
+jacob_g_auto ≈ jacob_g
+
+
+function eval_f(Z)
+    X,U = unpackZ(Z,(n,m,N))
+    J = cost(obj,solver.fc,X,U)
+    return J
+end
+
+J = eval_f(Z)
+eval_f2(Z)
+jacob_f_auto =         ForwardDiff.gradient(eval_f,Z)
+cost(solver,res)
+jacob_f = cost_gradient(solver,res,method)
+@test jacob_f_auto ≈ jacob_f
+
+
 
 # Solver integration scheme should set the dircol scheme
 solver = Solver(model,obj,dt=dt,integration=:midpoint)
