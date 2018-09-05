@@ -37,7 +37,6 @@ function get_weights(method::Symbol,N::Int)
         weights[[1,end]] = 1/6
     elseif method == :midpoint
         weights = ones(N)
-        weights[end] = 0
     end
     return weights
 end
@@ -104,87 +103,68 @@ end
 Evaluate Objective Value
 """
 function cost(solver::Solver,res::DircolResults)
+    n,N = size(res.X)
+    m,N_ = size(res.U_)
     X,U = res.X_,res.U_
-    N_ = size(X,2)
     Qf = solver.obj.Qf; Q = solver.obj.Q;
     xf = solver.obj.xf; R = solver.obj.R;
     J = zeros(eltype(X),N_)
     for k = 1:N_
         J[k] = stage_cost(X[:,k],U[:,k],Q,R,xf)
     end
+
     J = res.weights'J*solver.dt
-    J += 0.5*(X[:,N_] - xf)'*Qf*(X[:,N_] - xf)
+    J += 0.5*(res.X[:,N] - xf)'*Qf*(res.X[:,N] - xf)
 end
 
-function cost(obj::Objective,X::Matrix,U::Matrix,weights::Vector)
-    N = size(X,2)
-    Qf = obj.Qf; xf = obj.xf;
-    J = zeros(eltype(X),N)
-    for k = 1:N
-        J[k] = cost_k(X[:,k],U[:,k],obj)
-    end
-    J = weights'J
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-end
-
-function cost_k(x,u,obj::Objective)
-    xf = obj.xf
-    0.5*(x-xf)'obj.Q*(x-xf) + 0.5*u'obj.R*u
-end
-
-"""
-Cost for Hermite Simpson
-"""
-# function cost(obj::Objective,X,U,fVal::Matrix)
-#     # pull out solver/objective values
-#     N = size(X,2); Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
-#     dt = obj.tf/(N-1)
-#     n,m = get_sizes(obj)
-#
-#     J = 0.0
-#     x1,x2 = zeros(n), zeros(n)
-#     f1 = zeros(n)
-#     f2 = zeros(n)
-#     for k = 1:N-1
-#         f1 .= fVal[:,k]
-#         f2 .= fVal[:,k+1]
-#         x1 .= X[:,k]
-#         x2 .= X[:,k+1]
-#
-#         Xm = (x1+x2)/2 + dt/8*(f1-f2)
-#         Um = (U[:,k] + U[:,k+1])/2
-#
-#         J += dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
-#     end
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#
-#     return J
-# end
-function cost(obj::Objective,f::Function,X::Matrix,U::Matrix)
-
-    # pull out solver/objective values
-    N = size(X,2); Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
-    dt = obj.tf/(N-1)
+function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
+    obj = solver.obj
+    f = solver.fc
+    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
     n,m,N = get_sizes(X,U)
+    dt = solver.dt
 
-    J = zeros(eltype(X),N-1)
-    f1 = zeros(eltype(X),n)
-    f2 = zeros(eltype(X),n)
-    for k = 1:N-1
-        f(f1,X[:,k], U[:,k])
-        f(f2,X[:,k+1], U[:,k+1])
-        x1 = X[:,k]
-        x2 = X[:,k+1]
+    if method == :hermite_simpson
+        # pull out solver/objective values
+        J = zeros(eltype(X),N-1)
+        f1 = zeros(eltype(X),n)
+        f2 = zeros(eltype(X),n)
+        for k = 1:N-1
+            f(f1,X[:,k], U[:,k])
+            f(f2,X[:,k+1], U[:,k+1])
+            x1 = X[:,k]
+            x2 = X[:,k+1]
 
-        Xm = (x1+x2)/2 + dt/8*(f1-f2)
-        Um = (U[:,k] + U[:,k+1])/2
+            Xm = (x1+x2)/2 + dt/8*(f1-f2)
+            Um = (U[:,k] + U[:,k+1])/2
 
-        J[k] = dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J[k] = dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+        end
+        J = sum(J)
+        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        return J
+    elseif method == :midpoint
+        Xm = zeros(eltype(X),n,N-1)
+        for k = 1:N-1
+            Xm[:,k] = (X[:,k] + X[:,k+1])/2
+        end
+        J = zeros(eltype(Xm),N)
+        for k = 1:N-1
+            J[k] = stage_cost(Xm[:,k],U[:,k],Q,R,xf)
+        end
+        J = weights'J
+        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        return J
+
+    else
+        J = zeros(eltype(X),N)
+        for k = 1:N
+            J[k] = stage_cost(X[:,k],U[:,k],Q,R,xf)
+        end
+        J = weights'J
+        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        return J
     end
-    J = sum(J)
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-
-    return J
 end
 
 
@@ -223,12 +203,28 @@ function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
         grad_f[n+1:end,N] = R*Uk[:,N] - 4(dt/8*B[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[:,N-1]/2)
         grad_f .*= dt/6
         grad_f[1:n,N] += Qf*(Xk[:,N] - xf)
+    elseif method == :midpoint
+        Xm = zeros(eltype(X),n,N-1)
+        for k = 1:N-1
+            Xm[:,k] = (res.X[:,k] + res.X[:,k+1])/2
+        end
+
+        grad_f[1:n,1] = Q*(Xm[:,1] - xf)/2
+        grad_f[n+1:end,1] = R*U[:,1]
+        for k = 2:N-1
+            grad_f[1:n,k] = Q*(Xm[:,k] - xf)/2 + Q*(Xm[:,k-1] - xf)/2 # weight includes dt
+            grad_f[n+1:end,k] = R*U[:,k]
+        end
+        grad_f[1:n,N] = Q*(X[:,N-1] - xf)/2
+        grad_f[n+1:end,N] = zeros(m)
+        grad_f .*= dt
+        grad_f[1:n,N] += Qf*(res.X[:,N] - xf)
     else
         for k = 1:N
-            grad_f[1:n,k] = weights[k]*Q*(X[:,k] - xf) # weight includes dt
-            grad_f[n+1:end,k] = weights[k]*R*U[:,k]
+            grad_f[1:n,k] = res.weights[k]*Q*(X[:,k] - xf)*dt
+            grad_f[n+1:end,k] = res.weights[k]*R*U[:,k]*dt
         end
-        grad_f[1:n,N] += Qf*(X[:,N] - xf)
+        grad_f[1:n,N] += Qf*(res.X[:,N] - xf)
     end
     return grad_f_vec
 end
@@ -322,22 +318,11 @@ function collocation_constraints(solver::Solver, res::DircolResults, method::Sym
             g[:,iMid] = midpoints
         end
 
-    # elseif method == :hermite_simpson
-    #     fm = zeros(eltype(X),n)
-    #     for k = 1:N-1
-    #         x1 = X[:,k]
-    #         x2 = X[:,k+1]
-    #         xm = (x1+x2)/2 + dt/8*(fVal[:,k]-fVal[:,k+1])
-    #         um = (U[:,k] + U[:,k+1])/2
-    #         f(fm, xm, um)
-    #         g[:,k] = -x2 + x1 + dt*(fVal[:,k] + 4*fm + fVal[:,k+1])/6
-    #     end
-
     elseif method == :midpoint
         fm = zeros(eltype(X),n)
         for k = 1:N-1
-            x1 = X[:,k]
-            x2 = X[:,k+1]
+            x1 = res.X[:,k]
+            x2 = res.X[:,k+1]
             g[:,k] = dt*fVal[:,k] - x2 + x1
         end
     end
@@ -402,10 +387,12 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
     jacob_g = zeros((N-1)*n,N*(n+m))
 
 
+
     if method == :trapezoid
         z = reshape(res.Z,n+m,N)
-        Inm = Matrix(i,n,n+m)
+        Inm = Matrix(I,n,n+m)
         F = solver.Fc
+
 
         # First time step
         fz = F(z[:,1])
@@ -429,6 +416,7 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
         nSeg = Int((N-1)/2)
         jacob_g = zeros(n*(N-1),(n+m)N)
         F = solver.Fc
+        z = reshape(res.Z,n+m,N)
 
         fz1 = F(z[:,1])
         Inm = Matrix(I,n,n+m)
@@ -480,8 +468,8 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
             Im = Matrix(I,m,m)
 
             vals = zeros(n,2(n+m))
-            vals[:,1:n] =        dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In           # ∇x1
-            vals[:,n+(1:m)] =    dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))            # ∇u1
+            vals[:,1:n] =        dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In    # ∇x1
+            vals[:,n+(1:m)] =    dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))   # ∇u1
             vals[:,n+m+(1:n)] =  dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In    # ∇x2
             vals[:,2n+m+(1:m)] = dt/6*(B2 + 4Am*(-dt/8*B2) + 4Bm*(Im/2))   # ∇u2
             return vals
@@ -494,7 +482,27 @@ function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
         end
 
     elseif method == :midpoint
+        nSeg = N-1
+        jacob_g = zeros(n*nSeg,(n+m)N)
 
+        A = res.A
+        B = res.B
+        In = Matrix(I,n,n)
+
+        function calc_jacob_block_midpoint(k)
+            vals = zeros(n,2(n+m))
+            vals[:,1:n] =        In + dt*A[:,:,k]/2    # ∇x1
+            vals[:,n+(1:m)] =    dt*B[:,:,k]              # ∇u1
+            vals[:,n+m+(1:n)] = -In + dt*A[:,:,k]/2    # ∇x2
+            vals[:,2n+m+(1:m)] = zeros(n,m)            # ∇u2
+            return vals
+        end
+
+        for k = 1:nSeg
+            off_1 = (k-1)*(n)
+            off_2 = (k-1)*(n+m)
+            jacob_g[off_1+(1:n), off_2+(1:2(n+m))] = calc_jacob_block_midpoint(k)
+        end
     end
 
 

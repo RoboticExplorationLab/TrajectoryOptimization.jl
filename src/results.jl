@@ -345,7 +345,7 @@ struct DircolResults <: SolverIterResults
     X::SubArray{Float64}
     U::SubArray{Float64}
     fVal::Matrix{Float64}
-    X_::Matrix{Float64}
+    X_::Union{Matrix{Float64},SubArray{Float64}}
     U_::Union{Matrix{Float64},SubArray{Float64}}
     fVal_::Matrix{Float64}
     A::Array{Float64,3}

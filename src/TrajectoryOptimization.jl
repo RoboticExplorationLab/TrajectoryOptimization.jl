@@ -61,7 +61,8 @@ if check_snopt_installation()
     # DIRCOL methods
     export
         solve_dircol,
-        gen_usrfun
+        gen_usrfun,
+        DircolResults
 
     include("dircol.jl")
     include("dircol_snopt.jl")
