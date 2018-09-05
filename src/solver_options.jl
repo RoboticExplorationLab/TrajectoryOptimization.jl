@@ -50,13 +50,13 @@ mutable struct SolverOptions
     infeasible::Bool
     unconstrained::Bool
 
-    "additional Augmented Lagrangian Method parameters" # terms defined in Practical Augmented Lagrangian Methods for Constrained Optimization
+    "Augmented Lagrangian Method parameters" # terms defined in Practical Augmented Lagrangian Methods for Constrained Optimization
     λ_min::Float64 # minimum Lagrange multiplier
     λ_max::Float64 # maximum Lagrange multiplier
     μ_max::Float64 # maximum penalty term
     μ1::Float64 # initial penalty term
     γ::Float64 # penalty update multiplier; γ > 0
-    γ_no::Float64 # penalty update multiplier when μ should not be update, typically 1.0
+    γ_no::Float64 # penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)
     τ::Float64 # update term; 0 < τ < 1
 
     function SolverOptions(;square_root=false,verbose=false,

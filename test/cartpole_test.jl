@@ -36,7 +36,7 @@ tf = 3.0
 
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
-u_min = -50.0
+u_min = -20.0
 u_max = 50.0
 x_min = [-1.0; -1000; -1000; -1000]
 x_max = [1.0; 1000; 1000; 1000]
@@ -69,3 +69,5 @@ plot!(sol_zoh.U')
 
 plot(sol_foh.X[1:2,:]')
 plot!(sol_zoh.X[1:2,:]')
+
+sol_foh
