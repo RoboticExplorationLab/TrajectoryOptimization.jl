@@ -53,6 +53,7 @@ Generate the custom function to be passed into SNOPT, as well as `eval_f` and
 function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grads=:none)::Function
     n,N = size(results.X)
     m,N_ = size(results.U_)
+    NN = (n+m)N  # Number of decision variables
     dt = solver.dt
 
     # Count constraints
@@ -79,7 +80,7 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
     gI_N = view(c,pE_c+(1:pI_N_c))
 
     # User defined function passed to SNOPT (via Snopt.jl)
-    function usrfun(Z)
+    function usrfun(Z::Vector{Float64})
         results.Z .= Z
 
         # Update Derivatives
@@ -87,9 +88,6 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
 
         # Get points used in integration
         get_traj_points!(solver,results,method)
-
-        # Calculate dynamics jacobians at integration points
-        update_jacobians!(solver,results,method)
 
         # Objective Function (Cost)
         J = cost(solver,results)
@@ -108,6 +106,9 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
                 error("Gradients not defined for custom constraints yets")
             end
 
+            # Calculate dynamics jacobians at integration points
+            update_jacobians!(solver,results,method)
+
             # Gradient of Objective
             grad_f = cost_gradient(solver,results,method)
 
@@ -116,6 +117,30 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
             jacob_c = Float64[]
 
             return J, c, ceq, grad_f, jacob_c, jacob_ceq, fail
+        end
+
+
+    end
+
+    # Specify sparsity structure
+    gceq = constraint_jacobian_sparsity(solver,results,method)
+    gceq_c = spzeros(pE_c,NN)
+    gceq_c[:,1:NN-(n+m)] = 1
+    gceq_N = spzeros(pE_N_c,NN)
+    gceq_N[:,NN-(n+m)+1:end] = 1
+    gceq = [gceq; gceq_c; gceq_N]
+
+    gc_c = spzeros(pI_c,NN)
+    gc_c[:,1:NN-(n+m)] = 1
+    gc_N = spzeros(pI_N_c,NN)
+    gc_N[:,NN-(n+m)+1:end] = 1
+    gc = [gc_c; gc_N]
+
+    function usrfun(s::Symbol)
+        if s == :gceq
+            return gceq
+        elseif s == :gc
+            return gc
         end
     end
 

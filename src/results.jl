@@ -378,8 +378,8 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
         A = zeros(n,n,N_)
         B = zeros(n,m,N_)
     elseif method == :midpoint
-        X_ = zeros(n,N-1)
-        U_ = view(U,:,1:N-1)
+        X_ = zeros(n,N) # midpoints plus terminal
+        U_ = U
         fVal_ = zeros(X_)
         N_ = size(X_,2)
         A = zeros(n,n,N_)
@@ -387,8 +387,8 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     else
         X_ = X
         U_ = U
-        N_ = size(X_,2)
         fVal_ = fVal
+        N_ = size(X_,2)
         A = zeros(n,n+m,N_) # These methods conveniently use the gradient of Z
         B = zeros(0,0,N_)
     end
