@@ -49,7 +49,7 @@ function cI(x,u)
      u[3]]
 end
 
-c_jac = generate_general_constraint_jacobian(cI,pI,n,m)
+c_jac = TrajectoryOptimization.generate_general_constraint_jacobian(cI,pI,n,m)
 
 x = [1;2;3]
 u = [4;5;6]

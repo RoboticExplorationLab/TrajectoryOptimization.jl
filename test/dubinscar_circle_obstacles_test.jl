@@ -27,6 +27,7 @@ obj_uncon_obs.x0[:] = [-1;-1;0]
 obj_uncon_obs.xf[:] = [5;11;pi/2]
 obj_uncon_obs.tf = 2.5
 obj_uncon_obs.Qf[:,:] = 100.0*eye(3)
+obj_uncon_obs.R[:,:] = (1e-3)*eye(2)
 
 u_min = [-20; -100]
 u_max = [10; 10]
@@ -97,3 +98,5 @@ end
 
 plot!(sol_foh_con_obs.X[1,:],sol_foh_con_obs.X[2,:])
 plot!(sol_zoh_con_obs.X[1,:],sol_zoh_con_obs.X[2,:])
+
+sol_foh_con_obs.result[sol_foh_con_obs.termination_index].LAMBDA

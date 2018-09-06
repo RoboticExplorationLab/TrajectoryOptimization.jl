@@ -176,6 +176,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
     end
+
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
 
     return J
@@ -186,15 +187,17 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     J = cost(solver, X, U)
 
     N = solver.N
+
     for k = 1:N-1
-        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k]) + res.LAMBDA[:,k]'*res.C[:,k]
+        J += solver.dt*(0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
 
     if solver.control_integration == :foh
-        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N]) + res.LAMBDA[:,N]'*res.C[:,N]
+        J += solver.dt*(0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
     end
 
-    J += 0.5*(res.CN'*res.IμN*res.CN) + res.λN'*res.CN
+    J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
+
     return J
 end
 
@@ -481,7 +484,15 @@ not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
 function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
-    maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+    if size(results.CN,1) != 0
+        return maximum([abs.(results.C.*(results.Iμ[inds,:] .!= 0))[:]; abs.(results.CN)]) # TODO replace concatenation
+    else
+        return maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+    end
+end
+
+function max_violation(results::UnconstrainedResults)
+    return 0.0
 end
 
 

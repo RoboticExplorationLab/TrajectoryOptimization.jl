@@ -11,7 +11,7 @@ opts.verbose = false
 obj.Q .= eye(2)*1e-3
 obj.R .= eye(1)*1e-2
 obj.tf = 5.
-model! = TrajectoryOptimization.Model(Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
+model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 
 
@@ -39,7 +39,8 @@ solver.opts.square_root = true
 results_sr, = TrajectoryOptimization.solve(solver,U)
 @test norm(results_sr.X[:,end]-obj.xf) < 1e-3
 @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12
-
+results_sr.X - results.X
+results.X
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
