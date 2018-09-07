@@ -1,6 +1,6 @@
 
 
-function convertInf!(A::Matrix,infbnd=1.1e20)
+function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     infs = isinf.(A)
     A[infs] = sign.(A[infs])*infbnd
     return nothing
@@ -47,14 +47,6 @@ function gen_custom_constraint_fun(solver::Solver,method)
     PI = (N-1)pI_c + pI_N_c  # Total number of inequality constraints
     PE = (N-1)pE_c + pE_N_c  # Total number of equality constraints
     P = PI+PE
-
-    # Get bounds
-    lb = zeros(P)
-    ub = zeros(P)
-    lb[1:PE] = 0
-    ub[1:PE] = 0
-    lb[PE+1:end] = Inf
-    ub[PE+1:end] = 0
 
 
     function c_fun!(C_vec::Vector,X::Matrix,U::Matrix)
@@ -119,39 +111,55 @@ function gen_custom_constraint_fun(solver::Solver,method)
         return J
     end
 
-    return c_fun!, jac_c, lb, ub
+    return c_fun!, jac_c
 end
 
 function get_bounds(solver::Solver,method::Symbol)
     n,m,N = get_sizes(solver)
     N,N_ = get_N(N,method)
     obj = solver.obj
-    lb = zeros((n+m),N)
-    ub = zeros((n+m),N)
+    x_L = zeros((n+m),N)
+    x_U = zeros((n+m),N)
 
     ## STATE CONSTRAINTS ##
-    lb[1:n,:] .= obj.x_min
-    ub[1:n,:] .= obj.x_max
-    lb[n+(1:m),:] .= obj.u_min
-    ub[n+(1:m),:] .= obj.u_max
+    x_L[1:n,:] .= obj.x_min
+    x_U[1:n,:] .= obj.x_max
+    x_L[n+(1:m),:] .= obj.u_min
+    x_U[n+(1:m),:] .= obj.u_max
 
     # Initial Condition
-    lb[1:n,1] .= obj.x0
-    ub[1:n,1] .= obj.x0
+    x_L[1:n,1] .= obj.x0
+    x_U[1:n,1] .= obj.x0
 
     # Terminal Constraint
-    lb[1:n,N] .= obj.xf
-    ub[1:n,N] .= obj.xf
+    x_L[1:n,N] .= obj.xf
+    x_U[1:n,N] .= obj.xf
 
-    ## GENERAL CONSTRAINTS ##
-    # Collocation Constraints (equality)
+    ## CONSTRAINTS ##
     p_colloc = (N-1)n
+    pI_obj, pE_obj = count_constraints(solver.obj)
+    pI_c,   pE_c   = pI_obj[2], pE_obj[2]  # Number of custom stage constraints
+    pI_N_c, pE_N_c = pI_obj[4], pE_obj[4]  # Number of custom terminal constraints
+    PE_c = (N-1)pE_c + pE_N_c  # Total number of custom equality constraints
+    PI_c = (N-1)pI_c + pI_N_c  # Total number of custom inequality constraints
+    PE = PE_c + p_colloc  # Total equality constraints
+    PI = PI_c             # Total inequality constraints
+    P = PI+PE             # Total constraints
 
+    # Get bounds
+    g_L = zeros(P)
+    g_U = zeros(P)
+    g_L[1:PE] = 0
+    g_U[1:PE] = 0
+    g_L[PE+1:end] = Inf
+    g_U[PE+1:end] = 0
 
     # Convert Infinite bounds
-    convertInf!(lb)
-    convertInf!(ub)
-    return vec(lb), vec(ub)
+    convertInf!(x_L)
+    convertInf!(x_U)
+    convertInf!(g_L)
+    convertInf!(g_U)
+    return vec(x_L), vec(x_U), g_L, g_U
 end
 
 

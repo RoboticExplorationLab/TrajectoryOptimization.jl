@@ -88,6 +88,7 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
 
         # Get points used in integration
         get_traj_points!(solver,results,method)
+        get_traj_points_derivatives!(solver,results,method)
 
         # Objective Function (Cost)
         J = cost(solver,results)
@@ -123,26 +124,26 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
     end
 
     # Specify sparsity structure
-    gceq = constraint_jacobian_sparsity(solver,results,method)
-    gceq_c = spzeros(pE_c,NN)
-    gceq_c[:,1:NN-(n+m)] = 1
-    gceq_N = spzeros(pE_N_c,NN)
-    gceq_N[:,NN-(n+m)+1:end] = 1
-    gceq = [gceq; gceq_c; gceq_N]
-
-    gc_c = spzeros(pI_c,NN)
-    gc_c[:,1:NN-(n+m)] = 1
-    gc_N = spzeros(pI_N_c,NN)
-    gc_N[:,NN-(n+m)+1:end] = 1
-    gc = [gc_c; gc_N]
-
-    function usrfun(s::Symbol)
-        if s == :gceq
-            return gceq
-        elseif s == :gc
-            return gc
-        end
-    end
+    # gceq = constraint_jacobian_sparsity(solver,results,method)
+    # gceq_c = spzeros(pE_c,NN)
+    # gceq_c[:,1:NN-(n+m)] = 1
+    # gceq_N = spzeros(pE_N_c,NN)
+    # gceq_N[:,NN-(n+m)+1:end] = 1
+    # gceq = [gceq; gceq_c; gceq_N]
+    #
+    # gc_c = spzeros(pI_c,NN)
+    # gc_c[:,1:NN-(n+m)] = 1
+    # gc_N = spzeros(pI_N_c,NN)
+    # gc_N[:,NN-(n+m)+1:end] = 1
+    # gc = [gc_c; gc_N]
+    #
+    # function usrfun(s::Symbol)
+    #     if s == :gceq
+    #         return gceq
+    #     elseif s == :gc
+    #         return gc
+    #     end
+    # end
 
     return usrfun
 end
@@ -226,8 +227,10 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         println("DIRCOL with $method")
         println("Passing Problem to SNOPT...")
     end
-    z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
+    t_eval = @elapsed z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
     stats = parse_snopt_summary()
+    stats["info"] = info
+    stats["runtime"] = t_eval
     # @time snopt(usrfun, Z0, lb, ub, options, start=start)
     # xopt, fopt, info = Z0, Inf, "Nothing"
     x_opt,u_opt = unpackZ(z_opt,pack)
@@ -265,7 +268,7 @@ with the previous solution
 function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
         method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
     x_opt, u_opt = X0, U0
-    stats = Dict{String,Any}("iterations"=>0, "major iterations"=>0, "objective calls"=>0)
+    stats = Dict{String,Any}("iterations"=>0, "major iterations"=>0, "objective calls"=>0, "info"=>Vector{String}())
     tic()
     for dt in mesh
         solver.opts.verbose ? println("Refining mesh at dt=$dt") : nothing
@@ -273,14 +276,26 @@ function solve_dircol(solver::Solver, X0::Matrix, U0::Matrix, mesh::Vector;
         x_int, u_int = interp_traj(solver_mod.N, solver.obj.tf, x_opt, u_opt)
         x_opt, u_opt, f_opt, stats_run = solve_dircol(solver_mod, x_int, u_int, method=method, grads=grads, start=start)
         for key in keys(stats)
-            stats[key] += stats_run[key]
+            if key == "info"
+                push!(stats["info"], stats_run["info"])
+            else
+                stats[key] += stats_run[key]
+            end
         end
         start = :warm  # Use warm starts after the first one
     end
-    stats["runtime"] = toq()
+
     # Run the original time step
     x_int, u_int = interp_traj(solver.N, solver.obj.tf, x_opt, u_opt)
-    x_opt, u_opt, f_opt = solve_dircol(solver, x_int, u_int, method=method, grads=grads, start=:warm)
+    x_opt, u_opt, f_opt, stats_run = solve_dircol(solver, x_int, u_int, method=method, grads=grads, start=:warm)
+    for key in keys(stats)
+        if key == "info"
+            push!(stats["info"], stats_run["info"])
+        else
+            stats[key] += stats_run[key]
+        end
+    end
+    stats["runtime"] = toq()
     return x_opt, u_opt, f_opt, stats
 end
 
