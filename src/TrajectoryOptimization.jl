@@ -45,6 +45,10 @@ export
     infeasible_control,
     line_trajectory
 
+export
+    get_sizes,
+    get_N
+
 include("model.jl")
 include("integration.jl")
 include("solver.jl")
@@ -62,10 +66,25 @@ if check_snopt_installation()
     export
         solve_dircol,
         gen_usrfun,
-        DircolResults
+        DircolResults,
+        DircolVars,
+        collocation_constraints,
+        collocation_constraints!,
+        cost_gradient,
+        cost_gradient!,
+        constraint_jacobian,
+        constraint_jacobian!,
+        get_weights,
+        get_initial_state
+
+    export
+        packZ,
+        unpackZ
+
 
     include("dircol.jl")
     include("dircol_snopt.jl")
+    include("dircol_ipopt.jl")
 end
 
 
