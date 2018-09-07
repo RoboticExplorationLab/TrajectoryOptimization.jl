@@ -2,6 +2,8 @@ using TrajectoryOptimization
 using Base.Test
 using Plots
 
+#TODO cleanup and document each test
+
 # Set up models and objective
 u_bound = 3.
 model,obj = TrajectoryOptimization.Dynamics.pendulum
@@ -38,8 +40,9 @@ results, =TrajectoryOptimization.solve(solver,U)
 solver.opts.square_root = true
 results_sr, = TrajectoryOptimization.solve(solver,U)
 @test norm(results_sr.X[:,end]-obj.xf) < 1e-3
-@test norm(results_sr.X - results.X) ≈ 0. atol=1e-12
-results_sr.X - results.X
+# @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
+@test norm(results_sr.X - results.X) < 1e-12
+norm(results_sr.X - results.X)
 results.X
 ### CONSTRAINED ###
 # rk4

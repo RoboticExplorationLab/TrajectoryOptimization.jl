@@ -456,6 +456,9 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     if pI_c > 0
         cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
     end
+    if pE_c > 0
+        cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,n,m)
+    end
 
     fu_infeasible = eye(n)
     fx_infeasible = zeros(n,n)
@@ -472,9 +475,9 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         if pI_c > 0
             fx[pI_x+pI_u+1:pI_x+pI_u+pI_c,:], fu[pI_x+pI_u+1:pI_x+pI_u+pI_c,:] = cI_custom_jacobian(x,u[1:m])
         end
-        # F_aug = F([x;u]) # TODO handle general constraints
-        # fx = F_aug[:,1:n]
-        # fu = F_aug[:,n+1:n+m]
+        if pE_c > 0
+            fx[pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,:], fu[pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,:] = cE_custom_jacobian(x,u[1:m])
+        end
 
         if infeasible
             return [fx; fx_infeasible], cat((1,2),fu,fu_infeasible)
