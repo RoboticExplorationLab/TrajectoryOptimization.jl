@@ -157,3 +157,60 @@ function check_snopt_installation()::Bool
     end
     return false
 end
+
+"""
+$(SIGNATURES)
+Circle constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function circle_constraint(x,x0,y0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2  - r^2)
+end
+
+"""
+$(SIGNATURES)
+Sphere constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function sphere_constraint(x,x0,y0,z0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2 + (x[3]-z0)^2  - r^2)
+end
+
+"""
+$(SIGNATURES)
+Generate random circle constraints
+"""
+function generate_random_circle_obstacle_field(n_circles::Int64,x_rand::Float64=10.0,y_rand::Float64=10.0,r_rand::Float64=0.5)
+    x0 = x_rand*rand(n_circles)
+    y0 = y_rand*rand(n_circles)
+    r = r_rand*ones(n_circles)
+
+    function constraints(x,u)::Array
+        c = zeros(typeof(x[1]),n_circles)
+
+        for i = 1:n_circles
+            c[i] = circle_constraint(x,x0[i],y0[i],r[i])
+        end
+        c
+    end
+    constraints, (x0, y0, r)
+end
+
+"""
+$(SIGNATURES)
+Generate random sphere constraints
+"""
+function generate_random_sphere_obstacle_field(n_spheres::Int64,x_rand::Float64=10.0,y_rand::Float64=10.0,z_rand::Float64=10.0,r_rand::Float64=0.5)
+    x0 = x_rand*rand(n_sphere)
+    y0 = y_rand*rand(n_spheres)
+    z0 = z_rand*rand(n_spheres)
+    r = r_rand*ones(n_spheres)
+
+    function constraints(x,u)::Array
+        c = zeros(typeof(x[1]),n_spheres)
+
+        for i = 1:n_spheres
+            c[i] = sphere_constraint(x,x0[i],y0[i],z0[i],r[i])
+        end
+        c
+    end
+    constraints, (x0, y0, z0, r)
+end

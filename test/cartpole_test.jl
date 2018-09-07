@@ -45,7 +45,7 @@ x_max = [1000; 1000; 1000; 1000]
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh = Solver(model, obj_con, integration=:rk3_foh, dt=dt, opts=opts)
-solver_zoh = Solver(model, obj_con, integration=:rk3_foh, dt=dt, opts=opts)
+solver_zoh = Solver(model, obj_con, integration=:rk3, dt=dt, opts=opts)
 
 U = ones(solver_zoh.model.m,solver_zoh.N)
 X_interp = line_trajectory(solver_zoh)
