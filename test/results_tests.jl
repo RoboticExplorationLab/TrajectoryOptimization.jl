@@ -97,4 +97,17 @@ res = DircolResults(n,m,N,:hermite_simpson)
 
 res = DircolResults(n,m,N,:trapezoid)
 @test res.X === res.X_
-@test res.fVal === res.fVal_
+@test res.fVal === res.
+
+# Dircol Vars
+X0 = rand(n,N)
+U0 = rand(m,N)
+Z0 = packZ(X0,U0)
+vars = DircolVars(Z0,n,m,N)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 === vars.Z
+vars = DircolVars(X0,U0)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 == vars.Z

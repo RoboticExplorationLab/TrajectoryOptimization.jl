@@ -370,6 +370,12 @@ function DircolVars(n::Int,m::Int,N::Int)
     DircolVars(Z,X,U)
 end
 
+function DircolVars(X::Matrix,U::Matrix)
+    Z = packZ(X,U)
+    n,m,N = get_sizes(X,U)
+    DircolVars(Z,n,m,N)
+end
+
 DiffFloat = Union{Float64,ForwardDiff.Dual}
 struct DircolResults <: SolverIterResults
     vars::DircolVars
@@ -398,6 +404,7 @@ end
 function DircolResults(solver::Solver,method::Symbol)
     DircolResults(get_sizes(solver)...,method)
 end
+
 function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     N,N_ = get_N(N,method)
     Z = zeros(N*(n+m))
