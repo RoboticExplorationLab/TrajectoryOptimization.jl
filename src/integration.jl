@@ -144,6 +144,10 @@ function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+1:n+m])
 end
 
+function f_augmented(f::Function, n::Int, m::Int)
+    f_aug(S::Array) = f(S[1:n], S[n+1:n+m])
+end
+
 """
 $(SIGNATURES)
 Converts a separated dynamics function into an augmented dynamics function (foh version)

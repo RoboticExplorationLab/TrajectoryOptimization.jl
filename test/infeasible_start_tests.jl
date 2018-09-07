@@ -10,12 +10,13 @@ model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 
 opts = SolverOptions()
 opts.square_root = false
-opts.verbose=true
+opts.verbose=false
 opts.cache=true
 # opts.c1=1e-4
 # opts.c2=2.0
 # opts.mu_al_update = 10.0
 opts.eps_constraint = 1e-5
+opts.τ = 0.5
 # opts.eps = 1e-6
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000

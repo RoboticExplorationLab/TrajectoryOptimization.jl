@@ -176,6 +176,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
     end
+
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
 
     return J
@@ -186,15 +187,17 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     J = cost(solver, X, U)
 
     N = solver.N
+
     for k = 1:N-1
-        J += 0.5*(res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k]) + res.LAMBDA[:,k]'*res.C[:,k]
+        J += solver.dt*(0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
 
     if solver.control_integration == :foh
-        J += 0.5*(res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N]) + res.LAMBDA[:,N]'*res.C[:,N]
+        J += solver.dt*(0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
     end
 
-    J += 0.5*(res.CN'*res.IμN*res.CN) + res.λN'*res.CN
+    J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
+
     return J
 end
 
@@ -269,7 +272,6 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
 
     for k = 1:final_index
         res.C[:,k] = c(X[:,k], U[:,k]) # update results with constraint evaluations
-
         # Inequality constraints [see equation ref]
         for j = 1:pI
             if res.C[j,k] > 0.0 || res.LAMBDA[j,k] > 0.0
@@ -325,6 +327,23 @@ function count_constraints(obj::ConstrainedObjective)
 
     return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
 
+end
+
+function generate_general_constraint_jacobian(c::Function,p::Int64,n::Int64,m::Int64)::Function
+    c_aug = f_augmented(c,n,m)
+
+    J = zeros(p,n+m)
+    S = zeros(n+m)
+    F(J,S) = ForwardDiff.jacobian!(J,c_aug,S)
+
+    function c_jacobian(x,u)
+        S[1:n] = x
+        S[n+1:n+m] = u
+        F(J,S)
+        return J[1:p,1:n], J[1:p,n+1:n+m]
+    end
+
+    return c_jacobian
 end
 
 """
@@ -419,6 +438,10 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 
+    if pI_c > 0
+        cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,n,m)
+    end
+
     fu_infeasible = eye(n)
     fx_infeasible = zeros(n,n)
 
@@ -430,6 +453,10 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         fu[1:pI_u, :] = fu_control
         fx[(1:pI_x)+pI_u, :] = fx_state
         fu[(1:pI_x)+pI_u, :] = fu_state
+
+        if pI_c > 0
+            fx[pI_x+pI_u+1:pI_x+pI_u+pI_c,:], fu[pI_x+pI_u+1:pI_x+pI_u+pI_c,:] = cI_custom_jacobian(x,u[1:m])
+        end
         # F_aug = F([x;u]) # TODO handle general constraints
         # fx = F_aug[:,1:n]
         # fu = F_aug[:,n+1:n+m]
@@ -437,7 +464,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         if infeasible
             return [fx; fx_infeasible], cat((1,2),fu,fu_infeasible)
         end
-        return fx,fu
+        return fx, fu
     end
 
     function constraint_jacobian(x::Array)
@@ -457,7 +484,15 @@ not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
 function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
-    maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+    if size(results.CN,1) != 0
+        return maximum([abs.(results.C.*(results.Iμ[inds,:] .!= 0))[:]; abs.(results.CN)]) # TODO replace concatenation
+    else
+        return maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+    end
+end
+
+function max_violation(results::UnconstrainedResults)
+    return 0.0
 end
 
 

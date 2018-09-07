@@ -22,6 +22,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m;
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
     R = getR(solver)
+    dt = solver.dt
 
     if solver.model.m != size(res.U,1)
         m += n
@@ -39,9 +40,9 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     v2 = 0.
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-        Cx = res.Cx_N
-        S += Cx'*res.IμN*Cx
-        s += Cx'*res.IμN*res.CN + Cx'*res.λN
+        CxN = res.Cx_N
+        S += CxN'*res.IμN*CxN
+        s += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
     res.S[:,:,N] .= S
@@ -51,10 +52,10 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     k = N-1
     # Loop backwards
     while k >= 1
-        lx = Q*(X[:,k] - xf)
-        lu = R*(U[:,k])
-        lxx = Q
-        luu = R
+        lx = dt*Q*(X[:,k] - xf)
+        lu = dt*R*(U[:,k])
+        lxx = dt*Q
+        luu = dt*R
 
         # Compute gradients of the dynamics
         fx, fu = res.fx[:,:,k], res.fu[:,:,k]
@@ -69,31 +70,30 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Quu = Hermitian(luu + fu'*S*fu +  + mu[1]*eye(m))
         Qux = fu'*S*fx
 
-
-        # regularization
-        if !isposdef(Quu)
-            if size(Quu,1) == 1
-                mu[1] = -2.0*Quu
-            else
-                mu[1] = -2.0*minimum(eigvals(Quu))
-                # mu[1] += solver.opts.mu_reg_update
-            end
-            k = N-1
-            if solver.opts.verbose
-                println("regularized (normal bp)")
-            end
-            continue
-        end
-
         # Constraints
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
-            Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
-            Qxx += Cx'*Iμ[:,:,k]*Cx
-            Quu += Cu'*Iμ[:,:,k]*Cu
-            Qux += Cu'*Iμ[:,:,k]*Cx
+            Qx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+            Qu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            Qxx += dt*Cx'*Iμ[:,:,k]*Cx
+            Quu += dt*Cu'*Iμ[:,:,k]*Cu
+            Qux += dt*Cu'*Iμ[:,:,k]*Cx
         end
+
+        # regularization
+        # if !isposdef(Quu)
+        #     if size(Quu,1) == 1
+        #         mu[1] += -2.0*Quu[1]
+        #     else
+        #         mu[1] += -2.0*minimum(eigvals(Quu))
+        #     end
+        #     # mu[1] += solver.opts.mu_reg_update
+        #     k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized (normal bp)")
+        #     end
+        #     continue
+        # end
 
         # Compute gains
         K[:,:,k] = Quu\Qux
@@ -124,10 +124,16 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
+
+    if solver.model.m != size(res.U,1)
+        m += n
+    end
+
     Q = solver.obj.Q
     R = solver.obj.R
     xf = solver.obj.xf
     Qf = solver.obj.Qf
+    dt = solver.dt
 
     Uq = chol(Q)
     Ur = chol(R)
@@ -156,16 +162,18 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
 
     # Backwards passes
     while k >= 1
-        lx = Q*(X[:,k] - xf)
-        lu = R*(U[:,k])
-        lxx = Q
-        luu = R
+        lx = dt*Q*(X[:,k] - xf)
+        lu = dt*R*(U[:,k])
+        lxx = dt*Q
+        luu = dt*R
+
         fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 
-        Wxx = qrfact!([Su*fx; Uq])
-        Wuu = qrfact!([Su*fu; Ur])
+        Wxx = qrfact!([Su*fx; sqrt(dt)*Uq])
+        Wuu = qrfact!([Su*fu; sqrt(dt)*Ur + mu[1]*eye(m)])
         Qxu = (fx'*Su')*(Su*fu)
 
         if isa(solver.obj, ConstrainedObjective)
@@ -173,12 +181,12 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
             Iμ2 = sqrt.(Iμ[:,:,k])
-            Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
-            Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
-            Qxu += Cx'*Iμ[:,:,k]*Cu
+            Qx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+            Qu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            Qxu += dt*Cx'*Iμ[:,:,k]*Cu
 
-            Wxx = qrfact!([Wxx[:R]; Iμ2*Cx])
-            Wuu = qrfact!([Wuu[:R]; Iμ2*Cu])
+            Wxx = qrfact!([Wxx[:R]; sqrt(dt)*Iμ2*Cx])
+            Wuu = qrfact!([Wuu[:R]; sqrt(dt)*Iμ2*Cu])
         end
 
         K[:,:,k] = Wuu[:R]\(Wuu[:R]'\Qxu')
@@ -187,13 +195,14 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         s = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
 
         try  # Regularization
-            Su = chol_minus(Wxx[:R]+eye(n)*mu[1],Wuu[:R]'\Qxu')
+            Su = chol_minus(Wxx[:R],Wuu[:R]'\Qxu')
 
         catch ex
             if ex isa LinAlg.PosDefException
-                mu[1] += solver.opts.mu_reg_update
+                mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
                 k = N-1
-                break
+                println("*regularization not implemented") #TODO fix regularization
+                continue
             end
         end
 
@@ -217,6 +226,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     if solver.model.m != size(res.U,1)
         m += n
     end
+
+    dt = solver.dt
 
     Q = solver.obj.Q
     Qf = solver.obj.Qf
@@ -252,12 +263,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         CxN = res.Cx_N
         Cx_, Cu_ = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN + Cx_'*Iμ[:,:,N]*Cx_
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N]
-        S[n+1:n+m,n+1:n+m] = Cu_'*Iμ[:,:,N]*Cu_
-        s[n+1:n+m] = Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N]
-        S[1:n,n+1:n+m] = Cx_'*Iμ[:,:,N]*Cu_
-        S[n+1:n+m,1:n] = Cu_'*Iμ[:,:,N]*Cx_
+        S[1:n,1:n] += CxN'*res.IμN*CxN + dt*Cx_'*Iμ[:,:,N]*Cx_
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + dt*(Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N])
+        S[n+1:n+m,n+1:n+m] = dt*Cu_'*Iμ[:,:,N]*Cu_
+        s[n+1:n+m] = dt*(Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N])
+        S[1:n,n+1:n+m] = dt*Cx_'*Iμ[:,:,N]*Cu_
+        S[n+1:n+m,1:n] = dt*Cu_'*Iμ[:,:,N]*Cx_
     end
 
     k = N-1
@@ -298,7 +309,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # Unpack cost-to-go P, then add L + P
         Sy = s[1:n]
         Sv = s[n+1:n+m]
-        Syy = (S[1:n,1:n] + mu[1]*eye(n)) # TODO determine if regularization is needed anywhere else
+        Syy = S[1:n,1:n]
         Svv = S[n+1:n+m,n+1:n+m]
         Syv = S[1:n,n+1:n+m]
 
@@ -311,12 +322,21 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
 
-            Lx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
-            Lu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
-            Lxx += Cx'*Iμ[:,:,k]*Cx
-            Luu += Cu'*Iμ[:,:,k]*Cu
+            Lx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+            Lu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            Lxx += dt*Cx'*Iμ[:,:,k]*Cx
+            Luu += dt*Cu'*Iμ[:,:,k]*Cu
 
-            Lxu += Cx'*Iμ[:,:,k]*Cu
+            Lxu += dt*Cx'*Iμ[:,:,k]*Cu
+            #
+            # Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+            # Ly += dt*(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
+            # Lv += dt*(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
+            # Lyy += dt*Cy'*Iμ[:,:,k+1]*Cy
+            # Lvv += dt*Cv'*Iμ[:,:,k+1]*Cv
+            #
+            # Lyv += dt*Cy'*Iμ[:,:,k+1]*Cv
+
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -326,21 +346,27 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
         Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
-        Qvv = Hermitian(Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd)
+        Qvv = Hermitian(Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + mu[1]*eye(m))
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
 
         #TODO check regularization
         # regularization
-        if !isposdef(Qvv)
-            mu[1] += solver.opts.mu_reg_update
-            k = N-1
-            if solver.opts.verbose
-                println("regularized")
-            end
-            break
-        end
+        # if !isposdef(Qvv)
+        #     # if size(Qvv,1) > 1
+        #     #     mu[1] += -2.0*minimum(eigvals(Qvv))
+        #     # else
+        #     #     mu[1] += -2.0*Qvv[1]
+        #     # end
+        #     # # mu[1] += solver.opts.mu_reg_update
+        #     # k = N-1
+        #     if solver.opts.verbose
+        #         println("regularized needed")
+        #         # println("Qvv: $(Qvv)")
+        #     end
+        #     continue
+        # end
 
         K[:,:,k+1] .= -Qvv\Qxv'
         b[:,:,k+1] .= -Qvv\Quv'
@@ -477,7 +503,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         end
         println("- Expected improvement: $(dV)")
         println("- Actual improvement: $(J_prev-J)")
-        println("- (z = $z, α = $alpha)\n")
+        println("- (z = $z, α = $alpha)")
+        println("--(v1 = $v1, v2 = $v2)--\n")
     end
 
     return J
