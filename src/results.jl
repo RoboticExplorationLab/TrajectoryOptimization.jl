@@ -385,7 +385,9 @@ end
 #
 # type HermiteSimpson <: DircolMethod end
 
-
+function DircolResults(solver::Solver,method::Symbol)
+    DircolResults(get_sizes(solver)...,method)
+end
 function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     N,N_ = get_N(N,method)
     Z = zeros(N*(n+m))
