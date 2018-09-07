@@ -1,28 +1,4 @@
 
-function get_sizes(solver::Solver)
-    return solver.model.n, solver.model.m, solver.N
-end
-
-function get_N(solver::Solver,method::Symbol)
-    get_N(solver.N,method)
-end
-function get_N(N0::Int,method::Symbol)
-    if method == :midpoint
-        N,N_ = N0,N0
-    elseif method == :trapezoid
-        N,N_ = N0,N0
-    elseif method == :hermite_simpson_separated
-        N,N_ = 2N0-1,2N0-1
-    elseif method == :hermite_simpson
-        N,N_ = N0,2N0-1
-    end
-end
-
-function get_sizes(X::AbstractArray,U::AbstractArray)
-    n,N = size(X)
-    m = size(U,1)
-    return n,m,N
-end
 
 function convertInf!(A::Matrix,infbnd=1.1e20)
     infs = isinf.(A)
@@ -57,14 +33,103 @@ function get_weights(method::Symbol,N::Int)
     return weights
 end
 
+function gen_custom_constraint_fun(solver::Solver,method)
+    N, = get_N(solver,method)
+    n,m = get_sizes(solver)
+    NN = (n+m)N
+    obj = solver.obj
+    pI_obj, pE_obj = count_constraints(solver.obj)
+    pI_c,   pE_c   = pI_obj[2], pE_obj[2]  # Number of custom stage constraints
+    pI_N_c, pE_N_c = pI_obj[4], pE_obj[4]  # Number of custom terminal constraints
+    pC = pE_c + pI_c        # Number of custom stage constraints (total)
+    pC_N = pE_N_c + pI_N_c      # Number of custom terminal constraints (total)
+    P = (N-1)pC + pC_N  # Total number of custom constraints
+    PI = (N-1)pI_c + pI_N_c  # Total number of inequality constraints
+    PE = (N-1)pE_c + pE_N_c  # Total number of equality constraints
+    P = PI+PE
+
+    # Get bounds
+    lb = zeros(P)
+    ub = zeros(P)
+    lb[1:PE] = 0
+    ub[1:PE] = 0
+    lb[PE+1:end] = Inf
+    ub[PE+1:end] = 0
+
+
+    function c_fun!(C_vec::Vector,X::Matrix,U::Matrix)
+        CE = view(C_vec,1:PE)
+        CI = view(C_vec,PE+(1:PI))
+        cE = reshape(view(CE,1:(N-1)pE_c),pE_c,N-1)
+        cI = reshape(view(CI,1:(N-1)pI_c),pI_c,N-1)
+
+        # Equality Constraints
+        for k = 1:N-1
+            cE[:,k] = obj.cE(X[:,k],U[:,k])
+        end
+        if pE_N_c > 0
+            CE[(N-1)pE_c+1:end] = obj.cE(X[:,N])
+        end
+
+        # Inequality Constraints
+        for k = 1:N-1
+            cI[:,k] = obj.cI(X[:,k],U[:,k])
+        end
+        if pI_N > 0
+            CI[(N-1)pI_c+1:end] = obj.cI(X[:,N])
+        end
+        return nothing
+    end
+
+    # Jacobian
+    jac_cI = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
+    jac_cE = generate_general_constraint_jacobian(obj.cE,pE_c,pE_N_c,n,m)
+    J = spzeros(P,NN)
+    JE = view(J,1:PE,:)
+    JI = view(J,PE+1:P,:)
+
+    function jac_c(X,U)
+        # Equality Constraints
+        for k = 1:N-1
+            off_1 = (k-1)pE_c
+            off_2 = (k-1)*(n+m)
+            Ac,Bc = jac_cE(X[:,k],U[:,k])
+            JE[off_1+(1:pE_c),off_2 + (1:n)] = Ac
+            JE[off_1+(1:pE_c),off_2+n+(1:m)] = Bc
+        end
+        if pE_N_c > 0
+            off = (N-1)*(n+m)
+            Ac = jac_cE(X[:,N])
+            JE[(N-1)pE_c+1:end,off+(1:n)] = Ac
+        end
+
+        # Inequality Constraints
+        for k = 1:N-1
+            off_1 = (k-1)pI_c
+            off_2 = (k-1)*(n+m)
+            Ac,Bc = jac_cI(X[:,k],U[:,k])
+            JI[off_1+(1:pI_c),off_2 + (1:n)] = Ac
+            JI[off_1+(1:pI_c),off_2+n+(1:m)] = Bc
+        end
+        if pI_N_c > 0
+            off = (N-1)*(n+m)
+            Ac = jac_cI(X[:,N])
+            JI[pI_c+1:end,off+(1:n)] = Ac
+        end
+        return J
+    end
+
+    return c_fun!, jac_c, lb, ub
+end
 
 function get_bounds(solver::Solver,method::Symbol)
     n,m,N = get_sizes(solver)
-    N = convert_N(N,method)
+    N,N_ = get_N(N,method)
     obj = solver.obj
     lb = zeros((n+m),N)
     ub = zeros((n+m),N)
 
+    ## STATE CONSTRAINTS ##
     lb[1:n,:] .= obj.x_min
     ub[1:n,:] .= obj.x_max
     lb[n+(1:m),:] .= obj.u_min
@@ -77,6 +142,11 @@ function get_bounds(solver::Solver,method::Symbol)
     # Terminal Constraint
     lb[1:n,N] .= obj.xf
     ub[1:n,N] .= obj.xf
+
+    ## GENERAL CONSTRAINTS ##
+    # Collocation Constraints (equality)
+    p_colloc = (N-1)n
+
 
     # Convert Infinite bounds
     convertInf!(lb)
@@ -345,6 +415,9 @@ function get_traj_points(solver,X,U,gfVal,gX_,gU_,method::Symbol,cost_only::Bool
         end
         get_traj_points!(solver,X,U,gX_,gU_,gfVal,method)
         X_,U_ = gX_,gU_
+        if method == :midpoint
+            U_ = U
+        end
     end
     return X_, U_
 end
@@ -428,6 +501,7 @@ end
 function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::Symbol)
     # X,U need to be the "trajectory points", or X_,U_
     N,N_ = get_N(solver,method)
+    n,m = get_sizes(solver)
     g = reshape(g_colloc,n,N-1)
     dt = solver.dt
 
@@ -808,7 +882,7 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
     rows = rows[v]
     cols = cols[v]
 
-    return jacob_g
+    # return jacob_g
     return rows,cols
 end
 

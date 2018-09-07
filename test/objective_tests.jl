@@ -1,6 +1,7 @@
 # include("../iLQR.jl")
 # import iLQR: UnconstrainedObjective, ConstrainedObjective
 using TrajectoryOptimization.Dynamics
+using TrajectoryOptimization: generate_general_constraint_jacobian
 using Base.Test
 
 
@@ -104,3 +105,101 @@ obj = ConstrainedObjective(obj_uncon, u_min=-1)
 # Update objectve
 obj = update_objective(obj, u_max=2, x_max = 4, cE=c)
 @test obj.p == 5
+
+
+### GENERAL CONSTRAINTS ###
+n,m = 3,2
+cE(x,u) = [2x[1:2]+u;
+          x'x + 5]
+pE = 3
+
+x = [1;2;3]
+u = [1;-1]
+@test cE(x,u) == [3; 3; 19]
+
+# Jacobians
+jac_cE = generate_general_constraint_jacobian(cE,pE,0,n,m)
+jac_x(x,u) = [2 0 0;
+           0 2 0;
+           2x']
+jac_u(x,u) = [1 0;
+              0 1;
+              0 0]
+A,B = jac_cE(x,u)
+@test A == jac_x(x,u)
+@test B == jac_u(x,u)
+
+# Add terminal
+cE(x) = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
+pE_N = 2
+
+jac_xN(x) = [-sin(x[1]) x[3] x[2];
+             x[2]^2 2x[1]*x[2] 0]
+jac_cE = generate_general_constraint_jacobian(cE,pE,pE_N,n,m)
+@test jac_cE(x) == jac_xN(x)
+
+A,B = jac_cE(x,u)
+@test A == jac_x(x,u)
+@test B == jac_u(x,u)
+
+cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
+pI = 2
+pI_N = 0
+
+# Test dircol constraint stuff
+model, obj = Dynamics.dubinscar
+obj.tf = 3
+obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
+
+method = :trapezoid
+solver = Solver(model,obj_con,dt=0.1)
+N, = get_N(solver,method)
+X = [1. 2 3 4; 1 2 3 4; 1 2 3 4]
+U = [0. 1 0 0; -1 0 -1 0]
+U = ones(m,N)
+X = line_trajectory(obj.x0,obj.xf,N)
+
+
+obj_con.p_N
+pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
+pI_obj == (pI, pI, 0, 0)
+pE_obj == (pE, pE, pE_N+n, pE_N)
+p_total = (pE + pI)*(N-1) + pE_N + pI_N
+
+c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+@test length(ub) == length(lb) == p_total
+C = zeros(p_total)
+c_fun!(C,X,U)
+Z = packZ(X,U)
+C_expected = [cE(X[:,1],U[:,1]);
+              cE(X[:,2],U[:,2]);
+              cE(X[:,3],U[:,3]);
+              cE(X[:,4]);
+              cI(X[:,1],U[:,1]);
+              cI(X[:,2],U[:,2]);
+              cI(X[:,3],U[:,3])]
+@test C_expected == C
+
+# Bounds
+@test lb == [zeros(3pE+pE_N); ones(3pI)*Inf]
+@test ub == zeros(p_total)
+
+# Jacobian
+c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+J = jac_c(X,U)
+Z = packZ(X,U)
+
+function c_funZ!(C,Z)
+    X,U = unpackZ(Z,(n,m,N))
+    c_fun!(C,X,U)
+end
+C2 = zeros(p_total)
+c_funZ!(C2,Z)
+
+J2 = zeros(size(J))
+jac_c!(J,Z) = ForwardDiff.jacobian!(J,c_funZ!,C2,Z)
+jac_c!(J2,Z)
+@test J2 == J
+
+@time jac_c(X,U)
+@time jac_c!(J2,Z)
