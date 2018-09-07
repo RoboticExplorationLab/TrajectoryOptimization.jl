@@ -1,10 +1,7 @@
 using TrajectoryOptimization
 using Plots
 
-n = 13 # states (quadrotor w/ quaternions)
-m = 4 # controls
-
-# Setup solver options
+### Solver options ###
 opts = SolverOptions()
 opts.square_root = false
 opts.verbose = true
@@ -19,6 +16,14 @@ opts.outer_loop_update = :uniform
 opts.τ = 0.1
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
+######################
+
+### Set up model, objective, solver ###
+# Model
+n = 13 # states (quadrotor w/ quaternions)
+m = 4 # controls
+model! = Model(Dynamics.quadrotor_dynamics!,n,m)
+
 
 # Objective and constraints
 Qf = 100.0*eye(n)
@@ -52,49 +57,59 @@ end
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cI=cI)
 
-model! = Model(Dynamics.quadrotor_dynamics!,n,m)
-
+# Solver
 solver = Solver(model!,obj_con,integration=:rk3,dt=dt,opts=opts)
 
+# - Initial control and state trajectories
 U = ones(solver.model.m, solver.N)
 X_interp = line_trajectory(solver)
+##################
 
+### Solve ###
 results,stats = solve(solver,U)
+#############
 
-println("Final position: $(results.X[1:3,end])\n       desired: $(obj_uncon.xf[1:3])\n    Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+### Results ###
+if opts.verbose
+    println("Final position: $(results.X[1:3,end])\n       desired: $(obj_uncon.xf[1:3])\n    Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
 
-plot(results.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
+    # Position
+    plot(results.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
 
-plot(results.U[1:m,:]',color="green")
+    # Control
+    plot(results.U[1:m,:]',color="green")
 
-plot_3D_trajectory(results, solver, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])
+    # 3D trajectory
+    plot_3D_trajectory(results, solver, xlim=[-1.0;11.0],ylim=[-1.0;11.0],zlim=[-1.0;11.0])
 
-plot(results.X[1,:],results.X[2,:],label=["x";"y"],xlabel="x axis",ylabel="y axis")
-plot(results.X[2,:],results.X[3,:],label=["y";"z"],xlabel="y axis",ylabel="z axis")
+    # xy, yz slice trajectories
+    plot(results.X[1,:],results.X[2,:],label=["x";"y"],xlabel="x axis",ylabel="y axis")
+    plot(results.X[2,:],results.X[3,:],label=["y";"z"],xlabel="y axis",ylabel="z axis")
 
-##2D plots of trajectory and obstacles (xy)
-plot((solver.obj.x0[1],solver.obj.x0[2]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
-plot!((solver.obj.xf[1],solver.obj.xf[2]),marker=(:circle,"green"),label="xf")
+    ## 2D plots of trajectory and obstacles (xy)
+    plot((solver.obj.x0[1],solver.obj.x0[2]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
+    plot!((solver.obj.xf[1],solver.obj.xf[2]),marker=(:circle,"green"),label="xf")
 
-theta = linspace(0,2*pi,100)
-for k = 1:n_spheres
-    x_sphere = spheres[4][k]*cos.(theta)
-    y_sphere = spheres[4][k]*sin.(theta)
-    plot!(x_sphere+spheres[1][k],y_sphere+spheres[2][k],color="red",width=2,fill=(100),legend=:none)
+    theta = linspace(0,2*pi,100)
+    for k = 1:n_spheres
+        x_sphere = spheres[4][k]*cos.(theta)
+        y_sphere = spheres[4][k]*sin.(theta)
+        plot!(x_sphere+spheres[1][k],y_sphere+spheres[2][k],color="red",width=2,fill=(100),legend=:none)
+    end
+
+    plot!(results.X[1,:],results.X[2,:])
+
+    ## 2D plots of trajectory and obstacles (yz)
+    plot((solver.obj.x0[2],solver.obj.x0[3]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
+    plot!((solver.obj.xf[2],solver.obj.xf[3]),marker=(:circle,"green"),label="xf")
+
+    theta = linspace(0,2*pi,100)
+    for k = 1:n_spheres
+        x_sphere = spheres[4][k]*cos.(theta)
+        y_sphere = spheres[4][k]*sin.(theta)
+        plot!(x_sphere+spheres[2][k],y_sphere+spheres[3][k],color="red",width=2,fill=(100),legend=:none)
+    end
+
+    plot!(results.X[2,:],results.X[3,:])
 end
-
-plot!(results.X[1,:],results.X[2,:])
-
-
-##2D plots of trajectory and obstacles (yz)
-plot((solver.obj.x0[2],solver.obj.x0[3]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
-plot!((solver.obj.xf[2],solver.obj.xf[3]),marker=(:circle,"green"),label="xf")
-
-theta = linspace(0,2*pi,100)
-for k = 1:n_spheres
-    x_sphere = spheres[4][k]*cos.(theta)
-    y_sphere = spheres[4][k]*sin.(theta)
-    plot!(x_sphere+spheres[2][k],y_sphere+spheres[3][k],color="red",width=2,fill=(100),legend=:none)
-end
-
-plot!(results.X[2,:],results.X[3,:])
+###############

@@ -2,12 +2,15 @@ using TrajectoryOptimization
 using Base.Test
 
 ### foh augmented dynamics
+
+# Set up Dubins car system
 dt = 0.1
 n_dc = 3
 m_dc = 2
 model_dc = TrajectoryOptimization.Dynamics.dubinscar![1]
 obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
 
+# Use continuous dynamics to create augmented continuous dynamics function
 fc! = model_dc.f
 fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
 fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
@@ -17,6 +20,7 @@ x = ones(n_dc)
 u1 = ones(m_dc)
 u2 = ones(m_dc)
 
+# test that normal dynamics and augmented dynamics outputs match
 @test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
 ###
 
@@ -31,6 +35,7 @@ Bc_known = [cos(x[3]) 0.0; sin(x[3]) 0.0; 0.0 1.0]
 
 Ac, Bc = solver_test.Fc(x,u)
 
+# Compared continous dynamics Jacobian from ForwardDiff to known analytical Jacobian
 @test norm((Ac_known - Ac)[:]) < 1e-5
 @test norm((Bc_known - Bc)[:]) < 1e-5
 ###
@@ -67,21 +72,11 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 n = 13 # states (quadrotor w/ quaternions)
 m = 4 # controls
 
-# Setup solver options
+# Solver options
 opts = TrajectoryOptimization.SolverOptions()
 # opts.square_root = false
 # opts.verbose = true
 opts.cache=true
-# opts.c1=1e-4
-# opts.c2=3.0
-# opts.mu_al_update = 10.0
-# opts.eps_constraint = 1e-3
-# opts.eps_intermediate = 1e-3
-# opts.eps = 1e-3
-# opts.outer_loop_update = :uniform
-# opts.τ = 0.1
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
 
 # Objective and constraints
 Qf = 100.0*eye(n)
@@ -119,16 +114,21 @@ end
 obj_uncon = TrajectoryOptimization.TrajectoryOptimization.UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cI=cI, cE=cE)
 
+# Model
 model! = TrajectoryOptimization.Model(Dynamics.quadrotor_dynamics!,n,m)
 
+# Solver
 solver = TrajectoryOptimization.Solver(model!,obj_con,integration=:rk3,dt=dt,opts=opts)
 
 U = ones(solver.model.m, solver.N)
 X_interp = TrajectoryOptimization.line_trajectory(solver)
 
-results,stats = TrajectoryOptimization.solve(solver,U)
+# Solve
+results, stats = TrajectoryOptimization.solve(solver,U)
 
-println("Final position: $(results.X[1:3,end])\n       desired: $(obj_uncon.xf[1:3])\n    Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+if opts.verbose
+    println("Final position: $(results.X[1:3,end])\n       desired: $(obj_uncon.xf[1:3])\n    Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+end
 
 # Check that quaternion state always meets constraint tolerance
 @test all(results.result[results.termination_index].C .< opts.eps_constraint)
