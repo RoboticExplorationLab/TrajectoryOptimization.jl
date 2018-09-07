@@ -1,68 +1,46 @@
 using Ipopt
 using ForwardDiff
 
+function init_jacobians(solver,method)
+    N,N_ = get_N(solver,method)
+    if method == :trapezoid || method == :hermite_simpson_separated
+        A = zeros(n,n+m,N_)
+        B = zeros(0,0,N_)
+    else
+        A = zeros(n,n,N_)
+        B = zeros(n,m,N_)
+    end
+    return A,B
+end
+
 model, obj0 = Dynamics.cartpole_analytical
 obj = copy(obj0)
 n,m = model.n, model.m
 dt = 0.1
 
 # Set up problem
-method = :trapezoid
+method = :midpoint
 solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
-N,N_ = get_N(solver,method)
+N,N_ = TrajectoryOptimization.get_N(solver,method)
 NN = N*(n+m)
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
-Z = packZ(X0,U0)
+Z = TrajectoryOptimization.packZ(X0,U0)
 
-# SNOPT method
-results = DircolResults(get_sizes(solver)...,method)
+# Init Variables
+results = DircolResults(n,m,solver.N,method)
 results.Z .= Z
-update_derivatives!(solver,results,method)
-get_traj_points!(solver,results,method)
-get_traj_points_derivatives!(solver,results,method)
-J_snopt = cost(solver,results)
-g_snopt = collocation_constraints(solver,results,method)
-grad_f_snopt = cost_gradient(solver,results,method)
+fVal = zeros(X0)
+N,N_ = get_N(solver,method)
+gX_,gU_,fVal_ = init_traj_points(solver,X0,U0,fVal,method)
+weights = get_weights(method,N_)
+A,B = init_jacobians(solver,method)
 
-struct DircolVars
-    Z::Vector{Float64}
-    X::SubArray{Float64}
-    U::SubArray{Float64}
-end
 
-function DircolVars(Z::Vector,n::Int,m::Int,N::Int)
-    z = reshape(Z,n+m,N)
-    X = view(z,1:n,:)
-    U = view(z,n+1:n+m,:)
-    DircolVars(Z,X,U)
-end
 
-function init_traj_points(solver,X,U,fVal,method)
-    N,N_ = get_N(solver,method)
-    if method == :trapezoid || method == :hermite_simpson_separated
-        X_,U_,fVal_ = X,U,fVal
-    else
-        X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
-    end
-    return X_,U_,fVal_
-end
 
-function get_traj_points(solver,X,U,gfVal,gX_,gU_,method::Symbol,cost_only::Bool=false)
-    if !cost_only
-        update_derivatives!(solver,X,U,gfVal)
-    end
-    if method == :trapezoid || method == :hermite_simpson_separated
-        X_,U_ = X,U
-    else
-        if cost_only
-            update_derivatives!(solver,X,U,gfVal)
-        end
-        get_traj_points!(solver,X,U,gX_,gU_,gfVal,method)
-        X_,U_ = gX_,gU_
-    end
-    return X_, U_
-end
+
+
 
 
 
@@ -70,10 +48,6 @@ end
 # COST FUNCTION #
 #################
 
-fVal = zeros(X0)
-N,N_ = get_N(solver,method)
-gX_,gU_,fVal_ = init_traj_points(solver,X0,U0,fVal,method)
-weights = get_weights(method,N_)
 
 function eval_f(Z)
     vars = DircolVars(Z,n,m,N)
@@ -83,7 +57,8 @@ function eval_f(Z)
 end
 
 function eval_f2(Z)
-    X,U = unpackZ(Z)
+    vars = DircolVars(Z,n,m,N)
+    X,U = vars.X, vars.U
     cost(solver,X,U,weights)
 end
 
@@ -95,18 +70,12 @@ function eval_f3(Z)
     cost(solver,results)
 end
 
-@btime eval_f(Z) # == J_snopt
-# @btime eval_f2(Z)
-@btime eval_f3(Z)
+
 
 
 ###########################
 # COLLOCATION CONSTRAINTS #
 ###########################
-
-g0 = zeros((N-1)*n)
-g1 = zeros((N-1)*n)
-g2 = zeros(g0)
 
 function eval_g(Z, g)
     X,U = unpackZ(Z)
@@ -141,12 +110,6 @@ function eval_g2(Z, g)
     return nothing
 end
 
-# @btime eval_g(Z,g0)
-@btime eval_g1(Z,g1)
-@btime eval_g2(Z,g2)
-# g0 == g1
-g2 == g1
-
 
 
 #################
@@ -154,18 +117,96 @@ g2 == g1
 #################
 
 grad_f = zeros(NN)
+grad_f1 = zeros(NN)
+grad_f2 = zeros(NN)
 
 function eval_grad_f(Z, grad_f)
     vars = DircolVars(Z,n,m,N)
     X,U = vars.X, vars.U
-    grad_f = reshape(grad_f, n+m, N)
-    for k = 1:N
-        grad_f[1:n,k] = weights[k]*Q*X[:,k]
-        grad_f[n+1:end,k] = weights[k]*R*U[:,k]
-    end
-    grad_f[1:n,N] += Qf*X[:,N]
+    X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+    get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+    update_jacobians!(solver,X_,U_,A,B,method,true)
+    cost_gradient!(solver, X_, U_, fVal, A, B, weights, grad_f, method)
     return nothing
 end
+eval_grad_f(Z, grad_f)
+@btime eval_grad_f(Z, grad_f1)
+
+function eval_grad_f1(Z, grad_f)
+    results.Z .= Z
+    update_derivatives!(solver,results,method)
+    get_traj_points!(solver,results,method)
+    get_traj_points_derivatives!(solver,results,method)
+    grad_f .= cost_gradient(solver,results,method)
+    return nothing
+end
+eval_grad_f1(Z, grad_f1)
+grad_f == grad_f1
+@btime eval_grad_f1(Z, grad_f1)
+
+
+#######################
+# CONSTRAINT JACOBIAN #
+#######################
+
+function get_nG(solver::Solver,method::Symbol)
+    n,m = get_sizes(solver)
+    N,N_ = get_N(solver,method)
+    if method == :trapezoid || method == :hermite_simpson
+        return 2(n+m)*(N-1)n
+    elseif method == :hermite_simpson_separated
+        return 3(n+m)*(N-1)n
+    elseif method == :midpoint
+        return (2n+m)*(N-1)n
+    end
+end
+nG = get_nG(solver,method)
+jacob_g = constraint_jacobian_sparsity(solver,method)
+Array(jacob_g)
+
+
+function eval_jac_g(Z, mode, rows, cols, vals)
+    if mode == :Structure
+
+    else
+        vars = DircolVars(Z,n,m,N)
+        X,U, = vars.X,vars.U
+        X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+        update_jacobians!(solver,X_,U_,A,B,method)
+        jacob_g = constraint_jacobian(solver,X_,U_,A,B,method)
+    end
+end
+jacob_g = eval_jac_g(Z,:vals,[],[],[])
+
+
+function eval_jac_g1(Z, mode, rows, cols, vals)
+    if mode == :Structure
+
+    else
+        vars = DircolVars(Z,n,m,N)
+        X,U, = vars.X,vars.U
+        X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+        update_jacobians!(solver,X_,U_,A,B,method)
+        constraint_jacobian!(solver,X_,U_,A,B,vals,method)
+    end
+    return nothing
+end
+n_blk = 6(n+m)n
+vals = zeros(nG)
+eval_jac_g1(Z,:vals,[],[],vals)
+jacob_g2 = sparse(rows,cols,vals)
+jacob_g2 == jacob_g
+
+
+
+b3 = Array(jacob_g[4n+(1:2n),4(n+m)+(1:3(n+m))])
+b1 == b3
+
+Array(jacob_g1 - jacob_g)
+
+
 
 function eval_jac_g(x, mode, rows, cols, vals)
     z = reshape(x,n+m,N)
@@ -216,74 +257,4 @@ function eval_h(x, mode, rows, cols, obj_factor, lambda, values)
             end
         end
     end
-end
-
-X = rand(n,N)
-U = rand(m,N)
-Z = packZ(X,U)
-
-X2,U2 = unpackZ(Z)
-g = zeros(n*(N-1))
-eval_g(Z,g)
-g
-grad_f = zeros((n+m)*N)
-eval_grad_f(Z,grad_f)
-
-
-nnz_jac_g = (N-1)*n*2(n+m)
-row = zeros(Int,nnz_jac_g)
-col = zeros(Int,nnz_jac_g)
-val = zeros(nnz_jac_g)
-eval_jac_g(Z,:Structure, row, col, val)
-
-jac_g0 = zeros(Int,(N-1)*n,N*(n+m))
-inds = sub2ind(jac_g0,row,col)
-jac_g0[inds] .= 1:nnz_jac_g
-jac_g0
-
-eval_jac_g(Z,:None,row,col,val)
-val
-
-nnz_h = (n^2 + m^2)*N
-h = zeros(N*(n+m), N*(n+m))
-row = zeros(Int,nnz_h)
-col = zeros(Int,nnz_h)
-vals = zeros(nnz_h)
-lambda = zeros(n, N-1)
-eval_h(Z, :Structure, row, col, 1, lambda, vals)
-
-row
-
-col
-inds = CartesianIndex.(row[1:10],col[1:10])
-h[inds] .= 1:10
-h
-
-
-function packZ(X,U)
-    n, N = size(X)
-    m = size(U,1)
-    Z = zeros(n+m,N)
-    Z[1:n,:] .= X
-    Z[n+1:end,1:end] .= U
-    Z = reshape(Z,1,(n+m)N)
-end
-
-function unpackZ(Z)
-    Z = reshape(Z,n+m,N)
-    X = Z[1:n,:]
-    U = Z[n+1:end,:]
-    return X,U
-end
-
-function cost(X,U)
-    J = 0
-    for k = 1:N-1
-      J += dt/2*(cost_k(X[:,k],U[:,k]) + cost_k(X[:,k+1],U[:,k+1]))
-    end
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-end
-
-function cost_k(x,u)
-    0.5*(x-xf)'Q*(x-xf) + 0.5*u'R*u
 end

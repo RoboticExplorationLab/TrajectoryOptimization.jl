@@ -339,8 +339,31 @@ function check_multipliers(results,solver)
     return nothing
 end
 
+struct DircolVars
+    Z::Vector{Float64}
+    X::SubArray{Float64}
+    U::SubArray{Float64}
+end
+
+function DircolVars(Z::Vector,n::Int,m::Int,N::Int)
+    z = reshape(Z,n+m,N)
+    X = view(z,1:n,:)
+    U = view(z,n+1:n+m,:)
+    DircolVars(Z,X,U)
+end
+
+function DircolVars(n::Int,m::Int,N::Int)
+    Z = zeros((n+m)N)
+    z = reshape(Z,n+m,N)
+    X = view(z,1:n,:)
+    U = view(z,n+1:n+m,:)
+    DircolVars(Z,X,U)
+end
+
 DiffFloat = Union{Float64,ForwardDiff.Dual}
 struct DircolResults <: SolverIterResults
+    vars::DircolVars
+    # vars_::DircolVars
     Z::Vector{Float64}
     X::SubArray{Float64}
     U::SubArray{Float64}
@@ -357,24 +380,22 @@ struct DircolResults <: SolverIterResults
     # DircolResults(Z,X,U,fVal,X_,U_,fVal_,A,B,weights) =
     #     new(Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
 end
-
-abstract type DircolMethod end
-
-type HermiteSimpson <: DircolMethod end
+#
+# abstract type DircolMethod end
+#
+# type HermiteSimpson <: DircolMethod end
 
 
 function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
-    N = convert_N(N,method)
+    N,N_ = get_N(N,method)
     Z = zeros(N*(n+m))
-    z = reshape(Z,n+m,N)
-    X = view(z,1:n,:)
-    U = view(z,n+1:n+m,:)
+    vars = DircolVars(Z,n,m,N)
+    X,U = vars.X,vars.U
     fVal = zeros(X)
     if method == :hermite_simpson
-        X_ = zeros(n,2N-1)
-        U_ = zeros(m,2N-1)
-        fVal_ = zeros(X_)
-        N_ = size(X_,2)
+        X_ = zeros(n,N_)
+        U_ = zeros(m,N_)
+        fVal_ = zeros(n,N_)
         A = zeros(n,n,N_)
         B = zeros(n,m,N_)
     elseif method == :midpoint
@@ -394,5 +415,5 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     end
 
     weights = get_weights(method,N_)
-    DircolResults(Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
+    DircolResults(vars,Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
 end

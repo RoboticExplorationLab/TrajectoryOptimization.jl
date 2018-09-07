@@ -73,11 +73,14 @@ merged = TrajectoryOptimization.merge_results_cache(rc,rc2)
 # DircolResults
 n,m,N = (4,2,51)
 res = DircolResults(n,m,N,:midpoint)
+res.vars
 res.Z[1] = 10.
 @test res.X[1] == 10
 @test res.U[1] === res.Z[5]
 @test res.U[1] === res.U_[1]
-@test size(res.U_) == (m,N-1)
+@test size(res.U_) == (m,N)
+@test res.vars.X == res.X
+@test res.vars.Z == res.Z
 
 res = DircolResults(n,m,N,:hermite_simpson_separated)
 @test size(res.X) == (n,2N-1)
