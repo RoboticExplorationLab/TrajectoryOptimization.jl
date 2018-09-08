@@ -46,7 +46,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     end
 
     res.S[:,:,N] .= S
-    res.s[:,N] = copy(s)
+    res.s[:,N] = s
 
     mu = res.mu_reg
     k = N-1
@@ -152,7 +152,7 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     end
 
     res.S[:,:,N] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
-    res.s[:,N] = copy(s)
+    res.s[:,N] = s
 
     # Initialization
     v1 = 0.
@@ -172,8 +172,8 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 
-        Wxx = qrfact!([Su*fx; sqrt(dt)*Uq])
-        Wuu = qrfact!([Su*fu; sqrt(dt)*Ur + mu[1]*eye(m)])
+        Wxx = qrfact!([Su*fx; chol(lxx)])
+        Wuu = qrfact!([Su*fu; chol(luu) + mu[1]*eye(m)])
         Qxu = (fx'*Su')*(Su*fu)
 
         if isa(solver.obj, ConstrainedObjective)
@@ -198,16 +198,17 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Su = chol_minus(Wxx[:R],Wuu[:R]'\Qxu')
 
         catch ex
-            if ex isa LinAlg.PosDefException
-                mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
-                k = N-1
-                println("*regularization not implemented") #TODO fix regularization
-                continue
-            end
+            # if ex isa LinAlg.PosDefException
+            #     mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
+            #     k = N-1
+            #     println("*regularization not implemented") #TODO fix regularization
+            #     continue
+            # end
+            error("(sqrt bp) regularization not implemented")
         end
 
         res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
-        res.s[:,k] = copy(s)
+        res.s[:,k] = s
 
         # terms for line search
         v1 += float(vec(d[:,k])'*vec(Qu))

@@ -146,3 +146,103 @@ plot!(X2',width=2)
 @test vecnorm(X[:,end]-obj.xf) < 1e-5
 @test vecnorm(X2[:,end]-obj.xf) < 1e-5
 @test vecnorm(X2-X) < 1e-2
+
+# Test dircol constraint stuff
+model, obj = Dynamics.dubinscar
+obj.tf = 3
+obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
+
+method = :trapezoid
+solver = Solver(model,obj_con,dt=0.1)
+N, = TrajectoryOptimization.get_N(solver,method)
+X = [1. 2 3 4; 1 2 3 4; 1 2 3 4]
+U = [0. 1 0 0; -1 0 -1 0]
+U = ones(m,N)
+X = line_trajectory(obj.x0,obj.xf,N)
+
+
+obj_con.p_N
+pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
+pI_obj == (pI, pI, 0, 0)
+pE_obj == (pE, pE, pE_N+n, pE_N)
+p_total = (pE + pI)*(N-1) + pE_N + pI_N
+
+c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+@test length(ub) == length(lb) == p_total
+C = zeros(p_total)
+c_fun!(C,X,U)
+Z = packZ(X,U)
+C_expected = [cE(X[:,1],U[:,1]);
+              cE(X[:,2],U[:,2]);
+              cE(X[:,3],U[:,3]);
+              cE(X[:,4]);
+              cI(X[:,1],U[:,1]);
+              cI(X[:,2],U[:,2]);
+              cI(X[:,3],U[:,3])]
+@test C_expected == C
+
+# Bounds
+@test lb == [zeros(3pE+pE_N); ones(3pI)*Inf]
+@test ub == zeros(p_total)
+
+# Jacobian
+c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+J = jac_c(X,U)
+Z = packZ(X,U)
+
+function c_funZ!(C,Z)
+    X,U = unpackZ(Z,(n,m,N))
+    c_fun!(C,X,U)
+end
+C2 = zeros(p_total)
+c_funZ!(C2,Z)
+
+J2 = zeros(size(J))
+jac_c!(J,Z) = ForwardDiff.jacobian!(J,c_funZ!,C2,Z)
+jac_c!(J2,Z)
+@test J2 == J
+
+@time jac_c(X,U)
+@time jac_c!(J2,Z)
+
+# DircolResults
+n,m,N = (4,2,51)
+res = DircolResults(n,m,N,:midpoint)
+res.vars
+res.Z[1] = 10.
+@test res.X[1] == 10
+@test res.U[1] === res.Z[5]
+@test res.U[1] === res.U_[1]
+@test size(res.U_) == (m,N)
+@test res.vars.X == res.X
+@test res.vars.Z == res.Z
+
+res = DircolResults(n,m,N,:hermite_simpson_separated)
+@test size(res.X) == (n,2N-1)
+@test size(res.X_) == (n,2N-1)
+@test res.X[1] === res.Z[1]
+@test size(res.U) == (m,2N-1)
+@test res.U === res.U_
+@test res.X === res.X_
+
+res = DircolResults(n,m,N,:hermite_simpson)
+@test size(res.X) == (n,N)
+@test size(res.X_) == (n,2N-1)
+@test res.X[1] === res.Z[1]
+
+res = DircolResults(n,m,N,:trapezoid)
+@test res.X === res.X_
+@test res.fVal === res.
+
+# Dircol Vars
+X0 = rand(n,N)
+U0 = rand(m,N)
+Z0 = packZ(X0,U0)
+vars = DircolVars(Z0,n,m,N)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 === vars.Z
+vars = DircolVars(X0,U0)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 == vars.Z

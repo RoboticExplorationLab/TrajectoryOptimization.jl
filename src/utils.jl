@@ -79,7 +79,7 @@ end
 """
 @(SIGNATURES)
 
-    Convert ZYX Euler angles to quaternion [s;v]
+    Convert ZYX Euler angles to quaternion (q =[v;s])
 """
 function eul2quat(eul)
     ## Translate the given Euler angle with a specified axis rotation sequence into the corresponding quaternion:
@@ -100,31 +100,6 @@ function eul2quat(eul)
 	quat[3,1] = s_1*c_2*c_3 - c_1*s_2*s_3
 
     quat
-end
-
-"""
-@(SIGNATURES)
-
-    Convert rotation matrix to Euler angles (ZYX)
-"""
-function rot2eul(R)
-    [atan(R[2,1]/R[1,1]);
-     atan(-R[3,1]/sqrt(1 - R[3,1]^2));
-     atan(R[3,2]/R[3,3])]
-end
-
-"""
-@(SIGNATURES)
-
-    Convert quaternion (q = [s;v]) rotation matrix
-"""
-function quat2rot(q)
-    q1 = q[4]; q2 = q[1]; q3 = q[2]; q4 = q[3]
-    M = zeros(3,3)
-
-    M = [(q1^2 + q2^2 - q3^2 - q4^2) 2*(q2*q3 - q1*q4) 2.*(q2*q4 + q1*q3);
-         2.*(q2*q3 + q1*q4) (q1^2 - q2^2 + q3^2 - q4^2) 2.*(q3*q4 - q1*q2);
-         2.*(q2*q4 - q1*q3) 2*(q3*q4 + q1*q2) (q1^2 - q2^2 - q3^2 + q4^2)]
 end
 
 """
@@ -263,4 +238,33 @@ function generate_random_sphere_obstacle_field(n_spheres::Int64,x_rand::Float64=
         c
     end
     constraints, (x0, y0, z0, r)
+end
+
+"""
+@(SIGNATURES)
+    Convert quaternion to Euler angles
+"""
+function quat2eul(q)
+      q = unit_quat(q) #TODO do we need this?
+      w = q[4]; x = q[1]; y = q[2]; z = q[3]
+
+      t0 = 2.0 * (w * x + y * z)
+      t1 = 1.0 - 2.0 * (x * x + y * y)
+      X = atan2(t0, t1)
+
+      t2 = 2.0 * (w * y - z * x)
+      if t2 > 1.0
+            t2 = 1.0
+      elseif t2 < -1.0
+            t2 = -1.0
+      else
+            nothing
+      end
+      Y = asin(t2)
+
+      t3 = 2.0 * (w * z + x * y);
+      t4 = 1.0 - 2.0 * (y * y + z * z);
+      Z = atan2(t3, t4)
+
+      return [X; Y; Z]
 end

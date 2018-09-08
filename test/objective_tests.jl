@@ -1,5 +1,4 @@
-# include("../iLQR.jl")
-# import iLQR: UnconstrainedObjective, ConstrainedObjective
+using TrajectoryOptimization
 using TrajectoryOptimization.Dynamics
 using TrajectoryOptimization: generate_general_constraint_jacobian
 using Base.Test
@@ -29,8 +28,7 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test obj.x_max == [Inf,Inf]
 @test isa(obj.cI(x0,u0),Void)
 @test isa(obj.cE(x0,u0),Void)
-@test isa(obj.cI_N(x0),Void)
-@test isa(obj.cE_N(x0),Void)
+
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
 @test obj.p_N == 2
@@ -93,8 +91,6 @@ obj = ConstrainedObjective(obj_uncon)
 @test obj.x_max == [Inf,Inf]
 @test isa(obj.cI(x0,u0),Void)
 @test isa(obj.cE(x0,u0),Void)
-@test isa(obj.cI_N(x0),Void)
-@test isa(obj.cE_N(x0),Void)
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
 @test obj.p_N == 2
@@ -145,61 +141,3 @@ A,B = jac_cE(x,u)
 cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
 pI = 2
 pI_N = 0
-
-# Test dircol constraint stuff
-model, obj = Dynamics.dubinscar
-obj.tf = 3
-obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
-
-method = :trapezoid
-solver = Solver(model,obj_con,dt=0.1)
-N, = get_N(solver,method)
-X = [1. 2 3 4; 1 2 3 4; 1 2 3 4]
-U = [0. 1 0 0; -1 0 -1 0]
-U = ones(m,N)
-X = line_trajectory(obj.x0,obj.xf,N)
-
-
-obj_con.p_N
-pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
-pI_obj == (pI, pI, 0, 0)
-pE_obj == (pE, pE, pE_N+n, pE_N)
-p_total = (pE + pI)*(N-1) + pE_N + pI_N
-
-c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
-@test length(ub) == length(lb) == p_total
-C = zeros(p_total)
-c_fun!(C,X,U)
-Z = packZ(X,U)
-C_expected = [cE(X[:,1],U[:,1]);
-              cE(X[:,2],U[:,2]);
-              cE(X[:,3],U[:,3]);
-              cE(X[:,4]);
-              cI(X[:,1],U[:,1]);
-              cI(X[:,2],U[:,2]);
-              cI(X[:,3],U[:,3])]
-@test C_expected == C
-
-# Bounds
-@test lb == [zeros(3pE+pE_N); ones(3pI)*Inf]
-@test ub == zeros(p_total)
-
-# Jacobian
-c_fun!, jac_c, lb, ub = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
-J = jac_c(X,U)
-Z = packZ(X,U)
-
-function c_funZ!(C,Z)
-    X,U = unpackZ(Z,(n,m,N))
-    c_fun!(C,X,U)
-end
-C2 = zeros(p_total)
-c_funZ!(C2,Z)
-
-J2 = zeros(size(J))
-jac_c!(J,Z) = ForwardDiff.jacobian!(J,c_funZ!,C2,Z)
-jac_c!(J2,Z)
-@test J2 == J
-
-@time jac_c(X,U)
-@time jac_c!(J2,Z)

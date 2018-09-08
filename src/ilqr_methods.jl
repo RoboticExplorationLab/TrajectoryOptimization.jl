@@ -356,9 +356,6 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
     S = zeros(n+m)
     F(J,S) = ForwardDiff.jacobian!(J,c_aug,S)
 
-    J_N = zeros(p_N,n)
-    F_N(J_N,x) = ForwardDiff.jacobian!(J_N,c,x)
-
     function c_jacobian(x,u)
         S[1:n] = x
         S[n+1:n+m] = u
@@ -366,9 +363,13 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
         return J[1:p,1:n], J[1:p,n+1:n+m]
     end
 
-    function c_jacobian(x)
-        F_N(J_N,x)
-        return J_N
+    if p_N > 0
+        J_N = zeros(p_N,n)
+        F_N(J_N,x) = ForwardDiff.jacobian!(J_N,c,x)
+        function c_jacobian(x)
+            F_N(J_N,x)
+            return J_N
+        end
     end
 
     return c_jacobian
@@ -477,7 +478,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
     end
     if pE_c > 0
-        cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,n,m)
+        cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,0,n,m)
     end
 
     fu_infeasible = eye(n)
