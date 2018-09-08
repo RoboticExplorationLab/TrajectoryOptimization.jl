@@ -41,30 +41,37 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 """
 function rollout!(res::SolverResults,solver::Solver)
     X = res.X; U = res.U
-    rollout!(X, U, solver)
+    flag = rollout!(X, U, solver)
+    # if solver.control_integration == :foh
+    #     calculate_derivatives!(res,solver,X,U)
+    # end
+    # flag
 end
 
 function rollout!(X::Matrix, U::Matrix, solver::Solver)
     infeasible = solver.model.m != size(U,1)
+    N = solver.N
+    m = solver.model.m
+    n = solver.model.n
+
     X[:,1] = solver.obj.x0
-    for k = 1:solver.N-1
+    for k = 1:N-1
         if solver.control_integration == :foh
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k], U[1:solver.model.m,k+1])
+            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k], U[1:m,k+1])
         else
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k])
         end
 
         if infeasible
-            X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
+            X[:,k+1] .+= U[m+1:m+n,k]
         end
 
         # Check that rollout has not diverged
         if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k]) || any(X[:,k+1] .> solver.opts.max_state_value) || any(U[:,k] .> solver.opts.max_control_value)
-            # println("X: \n $(X[:,1:k+1])")
-            # println("U: \n $(U[:,1:k])")
             return false
         end
     end
+
     return true
 end
 
@@ -79,9 +86,11 @@ Will return a flag indicating if the values are finite for all time steps.
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
     N = solver.N; m = solver.model.m; n = solver.model.n
+
     if infeasible
         m += n
     end
+
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
     X_[:,1] = solver.obj.x0;
@@ -109,16 +118,20 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
 
 
         if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
+            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+n,k-1]
         end
 
         # Check that rollout has not diverged
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1]) || any(X_[:,k] .> solver.opts.max_state_value) || any(U_[:,k-1] .> solver.opts.max_control_value)
-            # println("X: \n $(X_[:,1:k])")
-            # println("U: \n $(U_[:,1:k-1])")
             return false
         end
     end
+
+    # # Calculate state derivatives
+    # if solver.control_integration == :foh
+    #     calculate_derivatives!(res,solver,X_,U_)
+    # end
+
     return true
 end
 
@@ -134,16 +147,6 @@ function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u
 end
 
-# """
-# $(SIGNATURES)
-# Evaluate state midpoint using cubic spline interpolation
-# """
-# function xm_func(x,u,y,dt,fc!)
-#     tmp = zeros(x)
-#     fc!(tmp,x,u)
-#     0.75*x + 0.25*dt*tmp + 0.25*y
-# end
-
 """
 $(SIGNATURES)
 Compute the unconstrained cost
@@ -153,6 +156,7 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
     dt = solver.dt
+
     if size(U,1) != m
         m += n
     end
@@ -165,8 +169,12 @@ function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
 
             xdot1 = zeros(n)
             xdot2 = zeros(n)
-            solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
-            solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+            solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
+            solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+            #
+            # # # #TODO use calculate_derivatives!
+            # xdot1 = res.xdot[:,k]
+            # xdot2 = res.xdot[:,k+1]
 
             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
             Um = (U[:,k] + U[:,k+1])/2
@@ -204,6 +212,18 @@ end
 # Equivalent call signature for constrained cost
 function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     cost(solver,X,U)
+end
+
+"""
+$(SIGNATURES)
+
+Calculate state derivatives (xdot)
+"""
+function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
+    N = size(X,2)
+    for i = 1:N
+        solver.fc(view(results.xdot,:,i),X[:,i],U[:,i])
+    end
 end
 
 """

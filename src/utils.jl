@@ -54,7 +54,7 @@ end
 """
 @(SIGNATURES)
 
-    Convert ZYX Euler angles to quaternion [v;s]
+    Convert ZYX Euler angles to quaternion [s;v]
 """
 function eul2quat(eul)
     ## Translate the given Euler angle with a specified axis rotation sequence into the corresponding quaternion:
@@ -68,13 +68,38 @@ function eul2quat(eul)
 	c_3 = cos(eul[3,1]*0.5)
 	s_3 = sin(eul[3,1]*0.5)
 
-    #TODO As noted in https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19770024290.pdf, the original algorithm has q = [s;v], I've updated the equation so that q = [v;s]; needs to be tested
-	quat[2,1] = c_1*c_2*c_3 + s_1*s_2*s_3
-	quat[3,1] = c_1*c_2*s_3 - s_1*s_2*c_3
-	quat[4,1] = c_1*s_2*c_3 + s_1*c_2*s_3
-	quat[1,1] = s_1*c_2*c_3 - c_1*s_2*s_3
+    # https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19770024290.pdf, the original algorithm has q = [s;v]
+	quat[4,1] = c_1*c_2*c_3 + s_1*s_2*s_3
+	quat[1,1] = c_1*c_2*s_3 - s_1*s_2*c_3
+	quat[2,1] = c_1*s_2*c_3 + s_1*c_2*s_3
+	quat[3,1] = s_1*c_2*c_3 - c_1*s_2*s_3
 
     quat
+end
+
+"""
+@(SIGNATURES)
+
+    Convert rotation matrix to Euler angles (ZYX)
+"""
+function rot2eul(R)
+    [atan(R[2,1]/R[1,1]);
+     atan(-R[3,1]/sqrt(1 - R[3,1]^2));
+     atan(R[3,2]/R[3,3])]
+end
+
+"""
+@(SIGNATURES)
+
+    Convert quaternion (q = [s;v]) rotation matrix
+"""
+function quat2rot(q)
+    q1 = q[4]; q2 = q[1]; q3 = q[2]; q4 = q[3]
+    M = zeros(3,3)
+
+    M = [(q1^2 + q2^2 - q3^2 - q4^2) 2*(q2*q3 - q1*q4) 2.*(q2*q4 + q1*q3);
+         2.*(q2*q3 + q1*q4) (q1^2 - q2^2 + q3^2 - q4^2) 2.*(q3*q4 - q1*q2);
+         2.*(q2*q4 - q1*q3) 2*(q3*q4 + q1*q2) (q1^2 - q2^2 - q3^2 + q4^2)]
 end
 
 """

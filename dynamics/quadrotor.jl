@@ -49,7 +49,7 @@ function quadrotor_dynamics!(xdot,X,u)
       M2 = km*w2;
       M3 = km*w3;
       M4 = km*w4;
-      tmp = hamilton_product(q,hamilton_product([0;0;F1+F2+F3+F4;0],q.*[-1;-1;-1;1])) #TODO does the quaternion need to be unit when we do this rotation? or is unit quaternion only required when we convert quaterion to rotation matrix
+      tmp = hamilton_product(q,hamilton_product([0;0;F1+F2+F3+F4;0],quaternion_conjugate(q))) #TODO does the quaternion need to be unit when we do this rotation? or is unit quaternion only required when we convert quaterion to rotation matrix
       a = (1/m)*([0;0;-m*g] + tmp[1:3]);
 
       xdot[1:3] = v # velocity
@@ -75,13 +75,13 @@ function hamilton_product(q1,q2)
 end
 
 #TODO ForwardDiff does note like this function so I am using a dot product above instead
-function quaternion_congugate(q)
+function quaternion_conjugate(q)
       # calculate the congugate of a quaternion: q^+; q = [v;s] -> q^+ = [-v;s]
-      q_ = zeros(4)
+      q_ = zeros(q)
       q_[1] = -1*q[1]
       q_[2] = -1*q[2]
       q_[3] = -1*q[3]
-      q_[4] = q[4]
+      q_[4] = 1*q[4]
 
       q_
 end

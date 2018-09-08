@@ -283,8 +283,13 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         # calculate xm, um using cubic and linear splines
         xdot1 = zeros(n)
         xdot2 = zeros(n)
-        solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
-        solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+        solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
+        solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+        # #
+        # # #TODO replace with calculate_derivatives!
+        # xdot1 = res.xdot[:,k]
+        # xdot2 = res.xdot[:,k+1]
+
         xm = 0.5*X[:,k] + dt/8.0*xdot1 + 0.5*X[:,k+1] - dt/8.0*xdot2
         um = (U[:,k] + U[:,k+1])/2.0
 
@@ -328,15 +333,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             Luu += dt*Cu'*Iμ[:,:,k]*Cu
 
             Lxu += dt*Cx'*Iμ[:,:,k]*Cu
-            #
-            # Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-            # Ly += dt*(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-            # Lv += dt*(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-            # Lyy += dt*Cy'*Iμ[:,:,k+1]*Cy
-            # Lvv += dt*Cv'*Iμ[:,:,k+1]*Cv
-            #
-            # Lyv += dt*Cy'*Iμ[:,:,k+1]*Cv
-
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
