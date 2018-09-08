@@ -562,7 +562,3 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
     end
     x_traj
 end
-
-function line_trajectory(solver::Solver)
-    line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
-end

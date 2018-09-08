@@ -227,7 +227,11 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         println("DIRCOL with $method")
         println("Passing Problem to SNOPT...")
     end
-    t_eval = @elapsed z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options, start=start)
+    row,col = constraint_jacobian_sparsity(solver,method)
+    # prob = Snopt.createProblem(usrfun, Z0, lb, ub, iE=row, jE=col)
+    prob = Snopt.createProblem(usrfun, Z0, lb, ub)
+    prob.x = Z0
+    t_eval = @elapsed z_opt, fopt, info = snopt(prob, options, start=start)
     stats = parse_snopt_summary()
     stats["info"] = info
     stats["runtime"] = t_eval
