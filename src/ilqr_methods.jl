@@ -349,18 +349,26 @@ function count_constraints(obj::ConstrainedObjective)
 
 end
 
-function generate_general_constraint_jacobian(c::Function,p::Int64,n::Int64,m::Int64)::Function
+function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int64,m::Int64)::Function
     c_aug = f_augmented(c,n,m)
 
     J = zeros(p,n+m)
     S = zeros(n+m)
     F(J,S) = ForwardDiff.jacobian!(J,c_aug,S)
 
+    J_N = zeros(p_N,n)
+    F_N(J_N,x) = ForwardDiff.jacobian!(J_N,c,x)
+
     function c_jacobian(x,u)
         S[1:n] = x
         S[n+1:n+m] = u
         F(J,S)
         return J[1:p,1:n], J[1:p,n+1:n+m]
+    end
+
+    function c_jacobian(x)
+        F_N(J_N,x)
+        return J_N
     end
 
     return c_jacobian
@@ -384,10 +392,17 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
+    # Key: I=> inequality,   E=> equality
+    #     _c=> custom   (lack)=> box constraint
+    #     _N=> terminal (lack)=> stage
+
+    pI_obj, pE_obj = count_constraints(obj)
     p = obj.p # number of constraints
-    pI = obj.pI # number of inequality and equality constraints
-    pE = p-pI # number of equality constraints
-    pE_c = pE  # number of custom equality constraints
+    pI, pI_c, pI_N, pI_N_c = pI_obj
+    pE, pE_c, pE_N, pE_N_c = pE_obj
+    # pI = obj.pI # number of inequality and equality constraints
+    # pE = p-pI # number of equality constraints
+    # pE_c = pE  # number of custom equality constraints
 
     u_min_active = isfinite.(obj.u_min)
     u_max_active = isfinite.(obj.u_max)
@@ -459,7 +474,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     fu = zeros(p,m)
 
     if pI_c > 0
-        cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,n,m)
+        cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
     end
     if pE_c > 0
         cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,n,m)
@@ -553,6 +568,11 @@ end
 $(SIGNATURES)
 Linear interpolation trajectory between initial and final state(s)
 """
+function line_trajectory(solver::Solver, method=:trapezoid)::Array{Float64,2}
+    N, = get_N(solver,method)
+    line_trajectory(solver.obj.x0,solver.obj.xf,N)
+end
+
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
     x_traj = zeros(size(x0,1),N)
     t = linspace(0,N,N)

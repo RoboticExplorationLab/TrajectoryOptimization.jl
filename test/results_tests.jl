@@ -69,3 +69,45 @@ merged = TrajectoryOptimization.merge_results_cache(rc,rc2)
 @test size(merged) == n1+n2
 @test merged.result[1] !== merged.result[2]
 @test merged.result[1].X == merged.result[2].X
+
+# DircolResults
+n,m,N = (4,2,51)
+res = DircolResults(n,m,N,:midpoint)
+res.vars
+res.Z[1] = 10.
+@test res.X[1] == 10
+@test res.U[1] === res.Z[5]
+@test res.U[1] === res.U_[1]
+@test size(res.U_) == (m,N)
+@test res.vars.X == res.X
+@test res.vars.Z == res.Z
+
+res = DircolResults(n,m,N,:hermite_simpson_separated)
+@test size(res.X) == (n,2N-1)
+@test size(res.X_) == (n,2N-1)
+@test res.X[1] === res.Z[1]
+@test size(res.U) == (m,2N-1)
+@test res.U === res.U_
+@test res.X === res.X_
+
+res = DircolResults(n,m,N,:hermite_simpson)
+@test size(res.X) == (n,N)
+@test size(res.X_) == (n,2N-1)
+@test res.X[1] === res.Z[1]
+
+res = DircolResults(n,m,N,:trapezoid)
+@test res.X === res.X_
+@test res.fVal === res.
+
+# Dircol Vars
+X0 = rand(n,N)
+U0 = rand(m,N)
+Z0 = packZ(X0,U0)
+vars = DircolVars(Z0,n,m,N)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 === vars.Z
+vars = DircolVars(X0,U0)
+@test X0 == vars.X
+@test U0 == vars.U
+@test Z0 == vars.Z

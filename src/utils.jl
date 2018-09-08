@@ -1,3 +1,28 @@
+function get_sizes(solver::Solver)
+    return solver.model.n, solver.model.m, solver.N
+end
+
+function get_N(solver::Solver,method::Symbol)
+    get_N(solver.N,method)
+end
+function get_N(N0::Int,method::Symbol)
+    if method == :midpoint
+        N,N_ = N0,N0
+    elseif method == :trapezoid
+        N,N_ = N0,N0
+    elseif method == :hermite_simpson_separated
+        N,N_ = 2N0-1,2N0-1
+    elseif method == :hermite_simpson
+        N,N_ = N0,2N0-1
+    end
+end
+
+function get_sizes(X::AbstractArray,U::AbstractArray)
+    n,N = size(X)
+    m = size(U,1)
+    return n,m,N
+end
+
 function println(level::Symbol, msg::String)::Void
     if level_priorities[level] ≥ level_priorities[debug_level::Symbol]
         println(msg)

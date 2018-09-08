@@ -150,8 +150,7 @@ mutable struct ConstrainedObjective <: Objective
 
     # Terminal Constraints
     use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false)
-    cI_N::Function # terminal inequality constraint function
-    cE_N::Function # terminal equality constraint function
+    # Overload cI and cE with a single argument for terminal constraints
 
     # Constants
     p::Int   # Total number of stage constraints
@@ -163,8 +162,7 @@ mutable struct ConstrainedObjective <: Objective
         u_min, u_max,
         x_min, x_max,
         cI, cE,
-        use_terminal_constraint,
-        cI_N, cE_N)
+        use_terminal_constraint)
 
         n = size(Q,1)
         m = size(R,1)
@@ -193,18 +191,18 @@ mutable struct ConstrainedObjective <: Objective
 
         # Terminal Constraints
         pI_N = pE_N = 0
-        if ~isa(cI_N(x0), Void)
-            pI_N = size(cI_N(x0),1)
+        try cI(x0)
+            pI_N = size(cI(x0),1)
         end
-        if ~isa(cE_N(x0), Void)
-            pE_N = size(cE_N(x0),1)
+        try cE(x0)
+            pE_N = size(cE(x0),1)
         end
         if use_terminal_constraint
             pE_N += n
         end
         p_N = pI_N + pE_N
 
-        new(Q,R,Qf,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, cI_N, cE_N, p, pI, p_N, pI_N)
+        new(Q,R,Qf,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
     end
 end
 
@@ -233,23 +231,20 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
     cI=(x,u)->nothing, cE=(x,u)->nothing,
-    use_terminal_constraint=true,
-    cI_N=(x)->nothing, cE_N=(x)->nothing)
+    use_terminal_constraint=true)
 
     ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
-        use_terminal_constraint,
-        cI_N, cE_N)
+        use_terminal_constraint)
 end
 
 function copy(obj::ConstrainedObjective)
     ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
-        use_terminal_constraint=obj.use_terminal_constraint,
-        cI_N=obj.cI_N, cE_N=obj.cE_N)
+        use_terminal_constraint=obj.use_terminal_constraint)
 end
 
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
@@ -267,15 +262,13 @@ Objective.
 function update_objective(obj::ConstrainedObjective;
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE,
-    use_terminal_constraint=obj.use_terminal_constraint,
-    cI_N=obj.cI_N, cE_N=obj.cE_N)
+    use_terminal_constraint=obj.use_terminal_constraint)
 
     ConstrainedObjective(obj.Q,obj.R,obj.Qf,obj.tf,obj.x0,obj.xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
-        use_terminal_constraint,
-        cI_N, cE_N)
+        use_terminal_constraint)
 
 end
 
