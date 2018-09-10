@@ -456,7 +456,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             if res isa ConstrainedResults
                 update_constraints!(res,solver,X_,U_)
             end
-            J = J_prev
+            J = copy(J_prev)
             z = (J_prev - J)/dV
 
             if solver.opts.verbose

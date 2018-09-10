@@ -61,7 +61,7 @@ mutable struct SolverOptions
     outer_loop_update::Symbol # type of outer loop update (default, uniform, uniform_time_step, individual)
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1.0e-8,c2=10.0,max_state_value=1.0e16,max_control_value=1.0e16,eps=1.0e-5,eps_intermediate=1.0e-2,
+        c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,eps=1.0e-5,eps_intermediate=1.0e-2,
         eps_constraint=1e-3,iterations=1000,iterations_outerloop=50,
         iterations_linesearch=50,mu_reg_update=1.0e-3,mu_al_update=10.0,infeasible_regularization=1e6,cache=false,
         benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.1,outer_loop_update=:uniform)

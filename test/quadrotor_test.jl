@@ -14,7 +14,7 @@ opts.square_root = false
 opts.verbose = true
 opts.cache=true
 # opts.c1=1e-4
-# opts.c2=3.0
+opts.c2=2.0
 # opts.mu_al_update = 10.0
 opts.eps_constraint = 1e-3
 opts.eps_intermediate = 1e-5
@@ -38,7 +38,7 @@ Qf = 100.0*eye(n)
 Q = (0.1)*eye(n)
 R = (0.01)*eye(m)
 tf = 5.0
-dt = 0.05
+dt = 0.1
 
 Qf_euler = 100.0*eye(12)
 Q_euler = (0.1)*eye(12)
@@ -85,7 +85,7 @@ function cI(x,u)
     [sphere_constraint(x,spheres[1][1],spheres[2][1],spheres[3][1],spheres[4][1]+quad_radius);
      sphere_constraint(x,spheres[1][2],spheres[2][2],spheres[3][2],spheres[4][2]+quad_radius);
      sphere_constraint(x,spheres[1][3],spheres[2][3],spheres[3][3],spheres[4][3]+quad_radius);
-     -1 - x[3]]
+     -x[3]]
 end
 
 # -constraint that quaternion should be unit
@@ -99,8 +99,10 @@ obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 obj_con_euler = TrajectoryOptimization.ConstrainedObjective(obj_uncon_euler, u_min=u_min, u_max=u_max,cI=cI)
 
 # Solver
-solver = Solver(model!,obj_uncon,integration=:rk4,dt=dt,opts=opts)
-solver_euler = Solver(model_euler,obj_uncon_euler,integration=:rk4,dt=dt,opts=opts)
+solver = Solver(model!,obj_con,integration=:rk4,dt=dt,opts=opts)
+
+solver_uncon_euler = Solver(model_euler,obj_uncon_euler,integration=:rk4,dt=dt,opts=opts)
+solver_euler = Solver(model_euler,obj_con_euler,integration=:rk4,dt=dt,opts=opts)
 
 
 # - Initial control and state trajectories
@@ -109,8 +111,9 @@ X_interp = line_trajectory(solver)
 ##################
 
 ### Solve ###
-results,stats = solve(solver,U)
-results_euler, stats = solve(solver_euler,U)
+# results,stats = solve(solver,U)
+results_uncon_euler, stats_uncon_euler = solve(solver_uncon_euler,U)
+results_euler, stats_euler = solve(solver_euler,U)#results_uncon_euler.U)
 #############
 #
 # ### Results ###
@@ -184,20 +187,23 @@ results_euler, stats = solve(solver_euler,U)
 #
 #
 # # Plot Euler angle trajectories
-# eul = zeros(3,solver.N)
-# for i = 1:solver.N
-#     eul[:,i] = TrajectoryOptimization.quat2eul(results.X[4:7,i])
-# end
+eul = zeros(3,solver.N)
+for i = 1:solver.N
+    # eul[:,i] = TrajectoryOptimization.quat2eul(results.X[4:7,i])
+    eul[:,i] = results_euler.X[4:6,i]
+end
+
+plot(eul',title=("Euler angle trajectories"))
+plot(results_euler.X[1:3,:]')
+plot(results_euler.U')
+
+# results.X[:,end]
+# results_euler.X[:,end]
+# plot(log.(results.cost[1:results.termination_index]))
+# plot!(log.(results_euler.cost[1:results_euler.termination_index]))
 #
-# plot(eul',title=("Euler angle trajectories"))
-
-results.X[:,end]
-results_euler.X[:,end]
-plot(log.(results.cost[1:results.termination_index]))
-plot!(log.(results_euler.cost[1:results_euler.termination_index]))
-
-plot(results.X[1:3,:]')
-plot!(results_euler.X[1:3,:]')
-
-plot(results.U')
-plot!(results_euler.U')
+# plot(results.X[1:3,:]')
+# plot!(results_euler.X[1:3,:]')
+#
+# plot(results.U')
+# plot!(results_euler.U')

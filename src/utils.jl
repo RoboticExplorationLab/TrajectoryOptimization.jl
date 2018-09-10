@@ -268,3 +268,12 @@ function quat2eul(q)
 
       return [X; Y; Z]
 end
+
+function quat2rot(q)
+      q = q./norm(q)
+      x = q[1]; y = q[2]; z = q[3]; w = q[4]
+
+      [(-z^2 - y^2 + x^2 + w^2) (2*x*y - 2*z*w) (2*x*z + 2*y*w);
+       (2*z*w + 2*x*y) (-z^2 + y^2 - x^2 + w^2) (2*y*z - 2*x*w);
+       (2*x*z - 2*y*w) (2*y*z + 2*x*w) (z^2 - y^2 - x^2 + w^2)]
+end
