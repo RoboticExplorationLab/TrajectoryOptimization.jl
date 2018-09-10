@@ -41,30 +41,37 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 """
 function rollout!(res::SolverResults,solver::Solver)
     X = res.X; U = res.U
-    rollout!(X, U, solver)
+    flag = rollout!(X, U, solver)
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X,U)
+    end
+    flag
 end
 
 function rollout!(X::Matrix, U::Matrix, solver::Solver)
     infeasible = solver.model.m != size(U,1)
+    N = solver.N
+    m = solver.model.m
+    n = solver.model.n
+
     X[:,1] = solver.obj.x0
-    for k = 1:solver.N-1
+    for k = 1:N-1
         if solver.control_integration == :foh
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k], U[1:solver.model.m,k+1])
+            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k], U[1:m,k+1])
         else
-            solver.fd(view(X,:,k+1), X[:,k], U[1:solver.model.m,k])
+            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k])
         end
 
         if infeasible
-            X[:,k+1] .+= U[solver.model.m+1:solver.model.m+solver.model.n,k]
+            X[:,k+1] .+= U[m+1:m+n,k]
         end
 
         # Check that rollout has not diverged
         if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k]) || any(X[:,k+1] .> solver.opts.max_state_value) || any(U[:,k] .> solver.opts.max_control_value)
-            # println("X: \n $(X[:,1:k+1])")
-            # println("U: \n $(U[:,1:k])")
             return false
         end
     end
+
     return true
 end
 
@@ -79,9 +86,11 @@ Will return a flag indicating if the values are finite for all time steps.
 function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U,1)
     N = solver.N; m = solver.model.m; n = solver.model.n
+
     if infeasible
         m += n
     end
+
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
     X_[:,1] = solver.obj.x0;
@@ -109,16 +118,20 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
 
 
         if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+solver.model.n,k-1]
+            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+n,k-1]
         end
 
         # Check that rollout has not diverged
         if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1]) || any(X_[:,k] .> solver.opts.max_state_value) || any(U_[:,k-1] .> solver.opts.max_control_value)
-            # println("X: \n $(X_[:,1:k])")
-            # println("U: \n $(U_[:,1:k-1])")
             return false
         end
     end
+
+    # Calculate state derivatives
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X_,U_)
+    end
+
     return true
 end
 
@@ -134,16 +147,6 @@ function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u
 end
 
-# """
-# $(SIGNATURES)
-# Evaluate state midpoint using cubic spline interpolation
-# """
-# function xm_func(x,u,y,dt,fc!)
-#     tmp = zeros(x)
-#     fc!(tmp,x,u)
-#     0.75*x + 0.25*dt*tmp + 0.25*y
-# end
-
 """
 $(SIGNATURES)
 Compute the unconstrained cost
@@ -156,6 +159,7 @@ function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float6
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
     dt = solver.dt
+
     if size(U,1) != m
         m += n
     end
@@ -166,15 +170,13 @@ function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float6
     for k = 1:N-1
         if solver.control_integration == :foh
 
-            xdot1 = zeros(n)
-            xdot2 = zeros(n)
-            solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
-            solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+            xdot1 = res.xdot[:,k]
+            xdot2 = res.xdot[:,k+1]
 
             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
             Um = (U[:,k] + U[:,k+1])/2
 
-            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
         else
             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
         end
@@ -185,12 +187,10 @@ function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float6
     return J
 end
 
-""" $(SIGNATURES) Compute the Constrained Cost """
-function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    J = cost(solver, X, U)
-
+""" $(SIGNATURES) Compute the Constraints Cost """
+function cost_constraints(solver::Solver, res::ConstrainedResults)
     N = solver.N
-
+    J = 0.0
     for k = 1:N-1
         J += solver.dt*(0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
@@ -204,9 +204,91 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     return J
 end
 
-# Equivalent call signature for constrained cost
 function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    cost(solver,X,U)
+    cost_(solver,res,X,U)
+end
+
+function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+    cost_(solver,res,X,U) + cost_constraints(solver,res)
+end
+
+# """
+# $(SIGNATURES)
+# Compute the unconstrained cost
+# """
+# function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+#     # pull out solver/objective values
+#     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+#     obj = solver.obj
+#     dt = solver.dt
+#
+#     if size(U,1) != m
+#         m += n
+#     end
+#
+#     R = getR(solver)
+#
+#     J = 0.0
+#     for k = 1:N-1
+#         if solver.control_integration == :foh
+#
+#             xdot1 = zeros(n)
+#             xdot2 = zeros(n)
+#             solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
+#             solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+#             #
+#             # # # #TODO use calculate_derivatives!
+#             # xdot1 = res.xdot[:,k]
+#             # xdot2 = res.xdot[:,k+1]
+#
+#             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
+#             Um = (U[:,k] + U[:,k+1])/2
+#
+#             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+#         else
+#             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
+#         end
+#     end
+#
+#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+#
+#     return J
+# end
+#
+# """ $(SIGNATURES) Compute the Constrained Cost """
+# function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+#     J = cost(solver, X, U)
+#
+#     N = solver.N
+#
+#     for k = 1:N-1
+#         J += solver.dt*(0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
+#     end
+#
+#     if solver.control_integration == :foh
+#         J += solver.dt*(0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
+#     end
+#
+#     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
+#
+#     return J
+# end
+#
+# # Equivalent call signature for constrained cost
+# function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+#     cost(solver,X,U)
+# end
+
+"""
+$(SIGNATURES)
+
+Calculate state derivatives (xdot)
+"""
+function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
+    N = size(X,2)
+    for i = 1:N
+        solver.fc(view(results.xdot,:,i),X[:,i],U[:,i])
+    end
 end
 
 """
@@ -339,9 +421,6 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
     S = zeros(n+m)
     F(J,S) = ForwardDiff.jacobian!(J,c_aug,S)
 
-    J_N = zeros(p_N,n)
-    F_N(J_N,x) = ForwardDiff.jacobian!(J_N,c,x)
-
     function c_jacobian(x,u)
         S[1:n] = x
         S[n+1:n+m] = u
@@ -349,9 +428,13 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
         return J[1:p,1:n], J[1:p,n+1:n+m]
     end
 
-    function c_jacobian(x)
-        F_N(J_N,x)
-        return J_N
+    if p_N > 0
+        J_N = zeros(p_N,n)
+        F_N(J_N,x) = ForwardDiff.jacobian!(J_N,c,x)
+        function c_jacobian(x)
+            F_N(J_N,x)
+            return J_N
+        end
     end
 
     return c_jacobian
@@ -460,7 +543,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         cI_custom_jacobian = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
     end
     if pE_c > 0
-        cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,n,m)
+        cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,0,n,m)
     end
 
     fu_infeasible = eye(n)

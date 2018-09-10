@@ -3,7 +3,6 @@ using Base.Test
 using Plots
 
 #TODO cleanup and document each test
-
 # Set up models and objective
 u_bound = 3.
 model,obj = TrajectoryOptimization.Dynamics.pendulum

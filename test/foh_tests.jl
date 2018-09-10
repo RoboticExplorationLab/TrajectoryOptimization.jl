@@ -148,7 +148,7 @@ x_max = [10; 10]
 
 obj_con_p = ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
-solver_con2 = Solver(model_p,obj_con_p,integration=:rk3_foh,dt=0.1,opts=opts)
+solver_con2 = Solver(model_p,obj_con_p,integration=:rk3_foh,dt=dt,opts=opts)
 
 # -Linear interpolation for state trajectory
 X_interp = line_trajectory(solver_con2.obj.x0,solver_con2.obj.xf,solver_con2.N)

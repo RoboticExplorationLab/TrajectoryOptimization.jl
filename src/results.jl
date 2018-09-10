@@ -55,10 +55,11 @@ struct UnconstrainedResults <: SolverIterResults
     Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N)
     Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N)
 
+    xdot::Matrix # Continuous dynamics values (n,N)
     mu_reg::Array{Float64,1}
 
-    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
+    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
     end
 end
 
@@ -86,12 +87,13 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
     Ac = zeros(n,n,N)
     Bc = zeros(n,m,N)
+    xdot = zeros(n,N)
     mu_reg = zeros(1)
-    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,mu_reg)
+    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
 end
 
 function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.mu_reg))
+    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.mu_reg))
 end
 
 """
@@ -118,6 +120,8 @@ struct ConstrainedResults <: SolverIterResults
     Ac::Array{Float64,3}
     Bc::Array{Float64,3}
 
+    xdot::Matrix             # Continous dynamics (n,N)
+
     C::Array{Float64,2}      # Constraint values (p,N)
     C_prev::Array{Float64,2} # Previous constraint values (p,N)
     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N)
@@ -140,8 +144,8 @@ struct ConstrainedResults <: SolverIterResults
     V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
 
-    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
+    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
     end
 end
 
@@ -180,6 +184,8 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     Ac = zeros(n,n,N)
     Bc = zeros(n,m,N)
 
+    xdot = zeros(n,N)
+
     # Stage Constraints
     C = zeros(p,N)
     C_prev = zeros(p,N)
@@ -203,14 +209,14 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
-    ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,
+    ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
         C,C_prev,Iμ,LAMBDA,MU,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
 
 end
 
 function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),
+    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.mu_reg),copy(r.V_al_prev),copy(r.V_al_current))
 end

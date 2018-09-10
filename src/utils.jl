@@ -79,7 +79,7 @@ end
 """
 @(SIGNATURES)
 
-    Convert ZYX Euler angles to quaternion [v;s]
+    Convert ZYX Euler angles to quaternion (q =[v;s])
 """
 function eul2quat(eul)
     ## Translate the given Euler angle with a specified axis rotation sequence into the corresponding quaternion:
@@ -93,11 +93,11 @@ function eul2quat(eul)
 	c_3 = cos(eul[3,1]*0.5)
 	s_3 = sin(eul[3,1]*0.5)
 
-    #TODO As noted in https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19770024290.pdf, the original algorithm has q = [s;v], I've updated the equation so that q = [v;s]; needs to be tested
-	quat[2,1] = c_1*c_2*c_3 + s_1*s_2*s_3
-	quat[3,1] = c_1*c_2*s_3 - s_1*s_2*c_3
-	quat[4,1] = c_1*s_2*c_3 + s_1*c_2*s_3
-	quat[1,1] = s_1*c_2*c_3 - c_1*s_2*s_3
+    # https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19770024290.pdf, the original algorithm has q = [s;v]
+	quat[4,1] = c_1*c_2*c_3 + s_1*s_2*s_3
+	quat[1,1] = c_1*c_2*s_3 - s_1*s_2*c_3
+	quat[2,1] = c_1*s_2*c_3 + s_1*c_2*s_3
+	quat[3,1] = s_1*c_2*c_3 - c_1*s_2*s_3
 
     quat
 end
@@ -238,4 +238,33 @@ function generate_random_sphere_obstacle_field(n_spheres::Int64,x_rand::Float64=
         c
     end
     constraints, (x0, y0, z0, r)
+end
+
+"""
+@(SIGNATURES)
+    Convert quaternion to Euler angles
+"""
+function quat2eul(q)
+      q = q./norm(q) #TODO do we need this?
+      w = q[4]; x = q[1]; y = q[2]; z = q[3]
+
+      t0 = 2.0 * (w * x + y * z)
+      t1 = 1.0 - 2.0 * (x * x + y * y)
+      X = atan2(t0, t1)
+
+      t2 = 2.0 * (w * y - z * x)
+      if t2 > 1.0
+            t2 = 1.0
+      elseif t2 < -1.0
+            t2 = -1.0
+      else
+            nothing
+      end
+      Y = asin(t2)
+
+      t3 = 2.0 * (w * z + x * y);
+      t4 = 1.0 - 2.0 * (y * y + z * z);
+      Z = atan2(t3, t4)
+
+      return [X; Y; Z]
 end

@@ -166,7 +166,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     if solver.opts.cache
         # Initialize cache and store initial trajectories and cost
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
-        add_iter!(results_cache, results, cost(solver, X, U))
+        add_iter!(results_cache, results, cost(solver, results, X, U))
     end
     iter += 1
 

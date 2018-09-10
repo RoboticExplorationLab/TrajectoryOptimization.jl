@@ -46,7 +46,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     end
 
     res.S[:,:,N] .= S
-    res.s[:,N] = copy(s)
+    res.s[:,N] = s
 
     mu = res.mu_reg
     k = N-1
@@ -152,7 +152,7 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     end
 
     res.S[:,:,N] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
-    res.s[:,N] = copy(s)
+    res.s[:,N] = s
 
     # Initialization
     v1 = 0.
@@ -172,8 +172,8 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         Qx = lx + fx'*s
         Qu = lu + fu'*s
 
-        Wxx = qrfact!([Su*fx; sqrt(dt)*Uq])
-        Wuu = qrfact!([Su*fu; sqrt(dt)*Ur + mu[1]*eye(m)])
+        Wxx = qrfact!([Su*fx; chol(lxx)])
+        Wuu = qrfact!([Su*fu; chol(luu) + mu[1]*eye(m)])
         Qxu = (fx'*Su')*(Su*fu)
 
         if isa(solver.obj, ConstrainedObjective)
@@ -198,16 +198,17 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Su = chol_minus(Wxx[:R],Wuu[:R]'\Qxu')
 
         catch ex
-            if ex isa LinAlg.PosDefException
-                mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
-                k = N-1
-                println("*regularization not implemented") #TODO fix regularization
-                continue
-            end
+            # if ex isa LinAlg.PosDefException
+            #     mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
+            #     k = N-1
+            #     println("*regularization not implemented") #TODO fix regularization
+            #     continue
+            # end
+            error("(sqrt bp) regularization not implemented")
         end
 
         res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
-        res.s[:,k] = copy(s)
+        res.s[:,k] = s
 
         # terms for line search
         v1 += float(vec(d[:,k])'*vec(Qu))
@@ -261,30 +262,28 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
 
         CxN = res.Cx_N
-        Cx_, Cu_ = res.Cx[:,:,N], res.Cu[:,:,N]
+        # Cx_, Cu_ = res.Cx[:,:,N], res.Cu[:,:,N]
 
-        S[1:n,1:n] += CxN'*res.IμN*CxN + dt*Cx_'*Iμ[:,:,N]*Cx_
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN + dt*(Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N])
-        S[n+1:n+m,n+1:n+m] = dt*Cu_'*Iμ[:,:,N]*Cu_
-        s[n+1:n+m] = dt*(Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N])
-        S[1:n,n+1:n+m] = dt*Cx_'*Iμ[:,:,N]*Cu_
-        S[n+1:n+m,1:n] = dt*Cu_'*Iμ[:,:,N]*Cx_
+        S[1:n,1:n] += CxN'*res.IμN*CxN# + dt*Cx_'*Iμ[:,:,N]*Cx_
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN# + dt*(Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N])
+        # S[n+1:n+m,n+1:n+m] = dt*Cu_'*Iμ[:,:,N]*Cu_
+        # s[n+1:n+m] = dt*(Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N])
+        # S[1:n,n+1:n+m] = dt*Cx_'*Iμ[:,:,N]*Cu_
+        # S[n+1:n+m,1:n] = dt*Cu_'*Iμ[:,:,N]*Cx_
     end
 
     k = N-1
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
 
-        # unpack Jacobians
+        # unpack Jacobians, ̇x
         Ac1, Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
         Ac2, Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
         Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
 
-        # calculate xm, um using cubic and linear splines
-        xdot1 = zeros(n)
-        xdot2 = zeros(n)
-        solver.model.f(xdot1,X[:,k],U[1:solver.model.m,k])
-        solver.model.f(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+        xdot1 = res.xdot[:,k]
+        xdot2 = res.xdot[:,k+1]
+
         xm = 0.5*X[:,k] + dt/8.0*xdot1 + 0.5*X[:,k+1] - dt/8.0*xdot2
         um = (U[:,k] + U[:,k+1])/2.0
 
@@ -320,6 +319,16 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Lyv += Syv
 
         if res isa ConstrainedResults
+            if k == N-1
+                Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+                Ly += dt*(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
+                Lv += dt*(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
+                Lyy += dt*Cy'*Iμ[:,:,k+1]*Cy
+                Lvv += dt*Cv'*Iμ[:,:,k+1]*Cv
+
+                Lyv += dt*Cy'*Iμ[:,:,k+1]*Cv
+            end
+
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
 
             Lx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
@@ -328,15 +337,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             Luu += dt*Cu'*Iμ[:,:,k]*Cu
 
             Lxu += dt*Cx'*Iμ[:,:,k]*Cu
-            #
-            # Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-            # Ly += dt*(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-            # Lv += dt*(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-            # Lyy += dt*Cy'*Iμ[:,:,k+1]*Cy
-            # Lvv += dt*Cv'*Iμ[:,:,k+1]*Cv
-            #
-            # Lyv += dt*Cy'*Iμ[:,:,k+1]*Cv
-
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -496,8 +496,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
 
     if solver.opts.verbose
         println("New cost: $J")
-        if res isa ConstrainedResults# && !solver.opts.unconstrained
-            println("- state+control cost: $(cost(solver,X_,U_))")
+        if res isa ConstrainedResults
+            println("- state+control cost: $(cost(solver,res,X_,U_))")
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end
