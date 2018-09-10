@@ -176,6 +176,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #****************************#
 
     dJ = Inf
+    grad = Inf
+
     i = 0 # declare outsize for scope
     k = 0
     for k = 1:solver.opts.iterations_outerloop
@@ -221,7 +223,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, v1, v2)
+            J = forwardpass!(results, solver, grad, v1, v2)
             push!(J_hist,J)
 
             if solver.opts.cache

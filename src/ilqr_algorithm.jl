@@ -436,7 +436,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, grad::Float64, v1::Float64, v2::Float64)
 
     # Pull out values from results
     X = res.X
@@ -516,6 +516,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
         end
         println("- Expected improvement: $(dV)")
         println("- Actual improvement: $(J_prev-J)")
+        println("- gradient: $(grad)")
         println("- (z = $z, α = $alpha)")
         println("--(v1 = $v1, v2 = $v2)--\n")
     end
