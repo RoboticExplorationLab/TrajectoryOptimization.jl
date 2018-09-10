@@ -3,6 +3,7 @@ using ForwardDiff
 
 function init_jacobians(solver,method)
     N,N_ = get_N(solver,method)
+    n,m = get_sizes(solver)
     if method == :trapezoid || method == :hermite_simpson_separated
         A = zeros(n,n+m,N_)
         B = zeros(0,0,N_)
@@ -27,11 +28,12 @@ end
 
 function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     N,N_ = TrajectoryOptimization.get_N(solver,method)
+    n,m = get_sizes(solver)
     NN = N*(n+m)
 
     # Initialize Variables
     fVal = zeros(n,N)
-    gX_,gU_,fVal_ = init_traj_points(solver,X0,U0,fVal,method)
+    gX_,gU_,fVal_ = init_traj_points(solver,method)
     weights = get_weights(method,N_)
     A,B = init_jacobians(solver,method)
 
@@ -42,7 +44,8 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         vars = DircolVars(Z,n,m,N)
         X,U = vars.X, vars.U
         X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method,true)
-        cost(solver,X_,U_,weights)
+        J = cost(solver,X_,U_,weights)
+        return J
     end
 
     ###########################
@@ -115,7 +118,7 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     P = length(g_L)  # Total number of constraints
 
     # Create Problem
-    prob = createProblem(NN, x_L, x_U, P, g_L, g_U, nG, nH,
+    prob = Ipopt.createProblem(NN, x_L, x_U, P, g_L, g_U, nG, nH,
         eval_f, eval_g, eval_grad_f, eval_jac_g)  # Ipopt.jl method
     prob.x =  Z0  # Set initial state
 
@@ -145,6 +148,10 @@ Extract important information from the SNOPT output file(s)
 """
 function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"logs","ipopt.out"))
     props = Dict()
+    obj = Vector{Float64}()
+    c_max = Vector{Float64}()
+    iter_lines = false  # Flag true if it's parsing the iteration summary lines
+
 
     function stash_prop(ln::String,prop::String,prop_name::String=prop,vartype::Type=Float64)
         if contains(ln, prop)
@@ -152,20 +159,39 @@ function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"lo
             if vartype <: Real
                 val = convert(vartype,float(split(ln)[end]))
                 props[prop_name] = val
+                return true
+            end
+        end
+        return false
+    end
+
+    function store_itervals(ln::String)
+        if iter_lines
+            vals = split(ln)
+            if length(vals) == 10 && vals[1] != "iter" && vals[1] != "Restoration"
+                push!(obj, float(vals[2]))
+                push!(c_max, float(vals[3]))
             end
         end
     end
 
+
     open(file) do f
         for ln in eachline(f)
-            stash_prop(ln,"Number of Iterations","iterations",Int64)
+            stash_prop(ln,"Number of Iterations","iterations",Int64) ? iter_lines = false : nothing
             stash_prop(ln,"Total CPU secs in IPOPT (w/o function evaluations)","self time")
             stash_prop(ln,"Total CPU secs in NLP function evaluations","function time")
             stash_prop(ln,"Number of objective function evaluations","objective calls",Int64)
+            length(ln) > 0 && split(ln)[1] == "iter" && iter_lines == false ? iter_lines = true : nothing
+            store_itervals(ln)
         end
     end
+    props["cost"] = obj
+    props["c_max"] = c_max
     return props
 end
+
+parse_ipopt_summary()
 
 
 

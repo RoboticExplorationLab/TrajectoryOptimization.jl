@@ -1,5 +1,70 @@
 
 
+
+"""
+$(SIGNATURES)
+Solve a trajectory optimization problem with direct collocation
+
+# Arguments
+* model: TrajectoryOptimization.Model for the dynamics
+* obj: TrajectoryOptimization.ConstrainedObjective to describe the cost function
+* dt: time step. Used to determine the number of knot points. May be modified
+    by the solver in order to achieve an integer number of knot points.
+* method: Collocation method.
+    :midpoint - Zero order interpolation on states and controls.
+    :trapezoidal - First order interpolation on states and zero order on control.
+    :hermite_simpson_separated - Hermite Simpson collocation with the midpoints
+        included as additional decision variables with constraints
+    :hermite_simpson - condensed verision of Hermite Simpson. Currently only
+        supports grads=:auto or grads=:none (recommended)
+* grads: Specifies the gradient information provided to SNOPT.
+    :none - returns no gradient information to SNOPT
+    :auto - uses ForwardDiff to calculate gradients
+    :quadratic - uses functions exploiting quadratic cost functions
+"""
+function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
+        nlp::Symbol=:ipopt, method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+
+    if solver.obj isa UnconstrainedObjective
+        solver = Solver(solver,obj=ConstrainedObjective(solver.obj))
+    end
+
+    obj = solver.obj
+    model = solver.model
+
+    X0 = copy(X0)
+    U0 = copy(U0)
+
+    if method == :auto
+        if solver.integration == :rk3_foh
+            method = :hermite_simpson
+        elseif solver.integration == :midpoint
+            method = :midpoint
+        else
+            method = :hermite_simpson
+        end
+    end
+
+    # Constants
+    n,m,N = get_sizes(solver)
+    dt = solver.dt
+    N = convert_N(N,method)
+
+    if N != size(X0,2)
+        solver.opts.verbose ? println("Interpolating initial guess") : nothing
+        X0,U0 = interp_traj(N,obj.tf,X0,U0)
+    end
+
+    if nlp == :ipopt
+        return solve_ipopt(solver,X0,U0,method)
+    elseif nlp == :snopt
+        return solve_snopt(solver,X0,U0, method=method, grads=grads, start=start)
+    else
+        ArgumentError("$nlp is not a known NLP solver. Options are (:ipopt, :snopt)")
+    end
+    # return sol, stats, prob
+end
+
 function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     infs = isinf.(A)
     A[infs] = sign.(A[infs])*infbnd
@@ -264,17 +329,6 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
     end
 end
 
-function init_traj_points(solver::Solver,X,U,fVal,method::Symbol)
-    N,N_ = get_N(solver,method)
-    if method == :trapezoid || method == :hermite_simpson_separated
-        X_,U_,fVal_ = X,U,fVal
-    else
-        X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
-    end
-    return X_,U_,fVal_
-end
-
-
 """
 Gradient of Objective
 """
@@ -361,6 +415,14 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
     end
     return nothing
 end
+
+function init_traj_points(solver::Solver,method::Symbol)
+    N,N_ = get_N(solver,method)
+    n,m = get_sizes(solver)
+    X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
+    return X_,U_,fVal_
+end
+
 
 """
 $(SIGNATURES)

@@ -123,6 +123,15 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
 
     end
 
+    function usrfun(Z::Vector{Float64},mode::Symbol)
+        if mode == :ceq
+            row,col = constraint_jacobian_sparsity(solver,method)
+        else
+            row,col = [],[]
+        end
+        return row,col
+    end
+
     # Specify sparsity structure
     # gceq = constraint_jacobian_sparsity(solver,results,method)
     # gceq_c = spzeros(pE_c,NN)
@@ -170,48 +179,21 @@ Solve a trajectory optimization problem with direct collocation
     :auto - uses ForwardDiff to calculate gradients
     :quadratic - uses functions exploiting quadratic cost functions
 """
-function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
+function solve_snopt(solver::Solver,X0::Matrix,U0::Matrix;
         method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
 
-    if solver.obj isa UnconstrainedObjective
-        solver = Solver(solver,obj=ConstrainedObjective(solver.obj))
-    end
-
-    obj = solver.obj
-    model = solver.model
-
-    X0 = copy(X0)
-    U0 = copy(U0)
-
-    if method == :auto
-        if solver.integration == :rk3_foh
-            method = :hermite_simpson
-        elseif solver.integration == :midpoint
-            method = :midpoint
-        else
-            method = :hermite_simpson
-        end
-    end
-
-    # Constants
-    n,m,N = get_sizes(solver)
-    dt = solver.dt
-    N = convert_N(N,method)
-    pack = (solver.model.n, solver.model.m, N)
+    N,N_ = get_N(solver,method)
+    n,m = get_sizes(solver)
 
     # Create results structure
     results = DircolResults(n,m,solver.N,method)
-
-    if N != size(X0,2)
-        solver.opts.verbose ? println("Interpolating initial guess") : nothing
-        X0,U0 = interp_traj(N,obj.tf,X0,U0)
-    end
+    var0 = DircolVars(X0,U0)
+    Z0 = var0.Z
 
     # Generate the objective/constraint function and its gradients
     usrfun = gen_usrfun(solver, results, method, grads=grads)
 
     # Set up the problem
-    Z0 = packZ(X0,U0)
     lb,ub = get_bounds(solver,method)
 
     # Set options
@@ -228,8 +210,8 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         println("Passing Problem to SNOPT...")
     end
     row,col = constraint_jacobian_sparsity(solver,method)
-    # prob = Snopt.createProblem(usrfun, Z0, lb, ub, iE=row, jE=col)
-    prob = Snopt.createProblem(usrfun, Z0, lb, ub)
+    prob = Snopt.createProblem(usrfun, Z0, lb, ub, iE=row, jE=col)
+    # prob = Snopt.createProblem(usrfun, Z0, lb, ub)
     prob.x = Z0
     t_eval = @elapsed z_opt, fopt, info = snopt(prob, options, start=start)
     stats = parse_snopt_summary()
@@ -237,12 +219,12 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
     stats["runtime"] = t_eval
     # @time snopt(usrfun, Z0, lb, ub, options, start=start)
     # xopt, fopt, info = Z0, Inf, "Nothing"
-    x_opt,u_opt = unpackZ(z_opt,pack)
+    sol = DircolVars(z_opt,n,m,N)
 
     if solver.opts.verbose
         println(info)
     end
-    return x_opt, u_opt, fopt, stats
+    return sol, stats, prob
 end
 
 """
