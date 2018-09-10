@@ -245,7 +245,7 @@ end
     Convert quaternion to Euler angles
 """
 function quat2eul(q)
-      q = unit_quat(q) #TODO do we need this?
+      q = q./norm(q) #TODO do we need this?
       w = q[4]; x = q[1]; y = q[2]; z = q[3]
 
       t0 = 2.0 * (w * x + y * z)

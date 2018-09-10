@@ -30,6 +30,7 @@ opts.τ = 0.1
 n = 13 # states (quadrotor w/ quaternions)
 m = 4 # controls
 model! = Model(Dynamics.quadrotor_dynamics!,n,m)
+model_euler = Model(Dynamics.quadrotor_euler,12,m)
 
 
 # Objective and constraints
@@ -39,11 +40,16 @@ R = (0.1)*eye(m)
 tf = 5.0
 dt = 0.05
 
+Qf_euler = 100.0*eye(12)
+Q_euler = (0.1)*eye(12)
+
 # -initial state
 x0 = zeros(n)
 quat0 = eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
 x0[4:7] = quat0
 x0
+
+x0_euler = zeros(12)
 
 # -final state
 xf = zeros(n)
@@ -51,6 +57,9 @@ xf[1:3] = [20.0;20.0;0.0] # xyz position
 quatf = eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
 xf[4:7] = quatf
 xf
+
+xf_euler = zeros(12)
+xf_euler[1:3] = [20.0;20.0;0.0]
 
 # -control limits
 u_min = -10.0
@@ -85,10 +94,14 @@ function cE(x,u)
 end
 
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon_euler = UnconstrainedObjective(Q_euler, R, Qf_euler, tf, x0_euler, xf_euler)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE,cI=cI)
+obj_con_euler = TrajectoryOptimization.ConstrainedObjective(obj_uncon_euler, u_min=u_min, u_max=u_max,cI=cI)
 
 # Solver
 solver = Solver(model!,obj_con,integration=:rk4,dt=dt,opts=opts)
+solver_euler = Solver(model_euler,obj_con_euler,integration=:rk4,dt=dt,opts=opts)
+
 
 # - Initial control and state trajectories
 U = ones(solver.model.m, solver.N)
@@ -96,12 +109,14 @@ X_interp = line_trajectory(solver)
 ##################
 
 ### Solve ###
-results,stats = solve(solver,U)
+# results,stats = solve(solver,U)
+results_euler,stats = solve(solver_euler,U)
 #############
 
 ### Results ###
 if opts.verbose
     println("Final position: $(results.X[1:3,end])\n       desired: $(obj_uncon.xf[1:3])\n    Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+    println("Final position (euler): $(results_euler.X[1:3,end])\n       desired: $(obj_uncon_euler.xf[1:3])\n    Iterations: $(stats_euler["iterations"])\n Max violation: $(max_violation(results_euler.result[results.termination_index]))")
 
     # Position
     plot(results.X[1:3,:]',title="Quadrotor Position xyz",xlabel="Time",ylabel="Position",label=["x";"y";"z"])
@@ -171,7 +186,7 @@ end
 # Plot Euler angle trajectories
 eul = zeros(3,solver.N)
 for i = 1:solver.N
-    eul[:,i] = quat2eul(results.X[4:7,i])
+    eul[:,i] = TrajectoryOptimization.quat2eul(results.X[4:7,i])
 end
 
 plot(eul',title=("Euler angle trajectories"))
