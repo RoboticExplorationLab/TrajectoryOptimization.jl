@@ -38,6 +38,8 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
     v1 = 0.
     v2 = 0.
+    grad = 0.
+
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
@@ -108,10 +110,13 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         v1 += vec(d[:,k])'*vec(Qu)
         v2 += vec(d[:,k])'*Quu*vec(d[:,k])
 
+        # gradient (see Computational Aspects of Discrete-Time Optimal Control)
+        grad += 0.5*Qu'*Quu*Qu
+
         k = k - 1;
     end
 
-    return v1, v2
+    return v1, v2, grad
 end
 
 """
@@ -157,6 +162,8 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     # Initialization
     v1 = 0.
     v2 = 0.
+    grad = 0.
+
     mu = res.mu_reg
     k = N-1
 
@@ -213,10 +220,12 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         # terms for line search
         v1 += float(vec(d[:,k])'*vec(Qu))
         v2 += float(vec(d[:,k])'*Wuu[:R]'Wuu[:R]*vec(d[:,k]))
+        grad += 0.5*Qu'*Wuu[:R]'*Wuu[:R]*Qu
 
         k = k - 1;
     end
-    return v1, v2
+
+    return v1, v2, grad
 end
 
 function backwardpass_foh!(res::SolverIterResults,solver::Solver)
@@ -251,6 +260,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     # line search stuff
     v1 = 0.0
     v2 = 0.0
+    grad = 0.0
 
     mu = res.mu_reg
 
@@ -390,6 +400,8 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         v1 += -d[:,k+1]'*vec(Qv)
         v2 += d[:,k+1]'*Qvv*d[:,k+1]
 
+        grad += 0.5*Qv'*Qvv*Qv #TODO check on this
+
         # at last time step, optimize over final control
         if k == 1
             K[:,:,1] .= -Quu_\Qxu_'
@@ -398,12 +410,13 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
             v1 += -d[:,1]'*vec(Qu_)
             v2 += d[:,1]'*Quu_*d[:,1]
+            grad += 0.5*Qu_'*Quu_*Qu_
         end
 
         k = k - 1;
     end
 
-    return v1, v2
+    return v1, v2, grad
 end
 
 """

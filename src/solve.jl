@@ -213,11 +213,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             ### BACKWARD PASS ###
             calc_jacobians(results, solver)
             if solver.control_integration == :foh
-                v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
+                v1, v2, grad = backwardpass_foh!(results,solver) #TODO combine with square root
             elseif solver.opts.square_root
-                v1, v2 = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                v1, v2, grad = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
-                v1, v2 = backwardpass!(results, solver)
+                v1, v2, grad = backwardpass!(results, solver)
             end
 
             ### FORWARDS PASS ###
@@ -247,7 +247,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Check for cost convergence
-            if (~is_constrained && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
+            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
                     if results isa UnconstrainedResults
@@ -255,7 +255,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                     end
                 end
                 break
-            elseif (is_constrained && dJ < solver.opts.eps && c_max < solver.opts.eps_constraint)
+            elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
                 end
