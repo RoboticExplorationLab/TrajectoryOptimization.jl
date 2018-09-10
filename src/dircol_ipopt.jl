@@ -1,5 +1,3 @@
-using Ipopt
-using ForwardDiff
 
 function init_jacobians(solver,method)
     N,N_ = get_N(solver,method)
@@ -33,7 +31,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
 
     # Initialize Variables
     fVal = zeros(n,N)
-    gX_,gU_,fVal_ = init_traj_points(solver,method)
+    gX_,gU_,fVal_ = init_traj_points(solver,fVal,method)
     weights = get_weights(method,N_)
     A,B = init_jacobians(solver,method)
 
@@ -191,7 +189,18 @@ function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"lo
     return props
 end
 
-parse_ipopt_summary()
+function write_ipopt_options(
+        optfile=joinpath(Pkg.dir("TrajectoryOptimization"),"ipopt.opt"),
+        outfile=joinpath(Pkg.dir("TrajectoryOptimization"),"logs","ipopt.out"))
+    f = open(optfile,"w")
+    println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
+    println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
+    println(f,"hessian_approximation limited-memory\n")
+    println(f,"# Output file")
+    println(f,"file_print_level 5")
+    println(f,"output_file $outfile")
+    close(f)
+end
 
 
 

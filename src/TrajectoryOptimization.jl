@@ -1,3 +1,5 @@
+__precompile__()
+
 """
     TrajectoryOptimization
 Primary module for setting up and solving trajectory optimization problems with
@@ -61,33 +63,34 @@ include("utils.jl")
 include("dynamics.jl")
 
 if check_snopt_installation()
-    using Snopt
+    # using Snopt # not safe for precompilation
+    include("dircol_snopt.jl")
+
+    using Ipopt
 
     # DIRCOL methods
     export
-        solve_dircol,
-        gen_usrfun,
-        DircolResults,
-        DircolVars,
-        collocation_constraints,
-        collocation_constraints!,
-        cost_gradient,
-        cost_gradient!,
-        constraint_jacobian,
-        constraint_jacobian!,
-        get_weights,
-        get_initial_state
+    solve_dircol,
+    gen_usrfun,
+    DircolResults,
+    DircolVars,
+    collocation_constraints,
+    collocation_constraints!,
+    cost_gradient,
+    cost_gradient!,
+    constraint_jacobian,
+    constraint_jacobian!,
+    get_weights,
+    get_initial_state
 
     export
-        packZ,
-        unpackZ
-
+    packZ,
+    unpackZ
 
     include("dircol.jl")
-    include("dircol_snopt.jl")
     include("dircol_ipopt.jl")
+    write_ipopt_options()
 end
-
 
 function set_debug_level(level::Symbol)
     global debug_level
