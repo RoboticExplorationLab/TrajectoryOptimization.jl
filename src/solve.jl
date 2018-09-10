@@ -85,10 +85,12 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
         results.U .= U0
+        is_constrained = false
 
     elseif solver.obj isa ConstrainedObjective
         p = solver.obj.p # number of inequality and equality constraints
         pI = solver.obj.pI # number of inequality constraints
+        is_constrained = true
 
         if infeasible
             if solver.opts.verbose
@@ -158,6 +160,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     k = 1 # Init outer iter counter to increase its scope
     time_setup = toq()
     J_hist = Vector{Float64}()
+    c_max_hist = Vector{Float64}()
     tic()
 
     if solver.opts.cache
@@ -238,8 +241,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
             iter += 1
 
+            if is_constrained
+                c_max = max_violation(results,diag_inds)
+                push!(c_max_hist, c_max)
+            end
+
             # Check for cost convergence
-            if (results isa UnconstrainedResults && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
+            if (~is_constrained && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
                     if results isa UnconstrainedResults
@@ -247,7 +255,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                     end
                 end
                 break
-            elseif (results isa ConstrainedResults && dJ < solver.opts.eps && max_violation(results,diag_inds) < solver.opts.eps_constraint)
+            elseif (is_constrained && dJ < solver.opts.eps && c_max < solver.opts.eps_constraint)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
                 end
@@ -303,7 +311,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                  "major iterations"=>k,
                  "runtime"=>toq(),
                  "setup_time"=>time_setup,
-                 "cost"=>J_hist)
+                 "cost"=>J_hist,
+                 "c_max"=>c_max_hist)
 
     if ((k == solver.opts.iterations_outerloop) && (i == solver.opts.iterations)) && solver.opts.verbose
         println("*Solve reached max iterations*")
@@ -325,6 +334,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         stats["runtime"] += stats_feasible["runtime"]
         stats["setup_time"] += stats_feasible["setup_time"]
         append!(stats["cost"], stats_feasible["cost"])
+        append!(stats["c_max"], stats_feasible["c_max"])
         return results_feasible, stats # TODO: add stats together
     else
         if solver.opts.verbose
