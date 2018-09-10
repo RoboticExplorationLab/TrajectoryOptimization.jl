@@ -30,7 +30,7 @@ end
 end
 
 if TrajectoryOptimization.check_snopt_installation()
-    @testset "Direct Collocation (SNOPT)" begin
+    @testset "Direct Collocation" begin
         include("dircol_test.jl")
     end
     @testset "Direct Collocation (IPOPT)" begin

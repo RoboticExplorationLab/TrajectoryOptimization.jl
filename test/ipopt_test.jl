@@ -6,6 +6,7 @@ dt = 0.1
 
 
 function test_ipopt_funcs(method)
+    method = :trapezoid
     # Set up problem
     solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
     N,N_ = TrajectoryOptimization.get_N(solver,method)
@@ -31,6 +32,7 @@ function test_ipopt_funcs(method)
     eval_jac_g(Z,:vals,rows,cols,vals)
     jac_g = sparse(rows,cols,vals)
 
+
     function eval_all(Z)
         eval_f(Z)
         eval_g(Z,g)
@@ -49,6 +51,7 @@ function test_ipopt_funcs(method)
     update_jacobians!(solver,results,method)
     J_snopt = cost(solver,results)
     g_snopt = collocation_constraints(solver,results,method)
+    results.X_
     grad_f_snopt = cost_gradient(solver,results,method)
     jac_g_snopt = constraint_jacobian(solver,results,method)
 
@@ -84,7 +87,7 @@ test_ipopt_funcs(:hermite_simpson_separated)
 
 
 # Try IPOPT
-method = :hermite_simpson
+method = :hermite_simpson_separated
 u_bnd = 10
 dt = 0.01
 solver = Solver(model,ConstrainedObjective(obj,u_max=u_bnd,u_min=-u_bnd),dt=dt,integration=:rk3_foh)
@@ -92,36 +95,5 @@ N, = get_N(solver.N,method)
 U0 = zeros(m,N)
 X0 = line_trajectory(solver,method)
 Z = packZ(X0,U0)
-@time sol, stats, prob = solve_ipopt(solver,X0,U0,method)
-plot(sol.U')
-
-N,N_ = TrajectoryOptimization.get_N(solver,method)
-NN = N*(n+m)
-nG = TrajectoryOptimization.get_nG(solver,method)
-nH = 0  # Number of Hessian components
-U0 = ones(1,N_)*1
-X0 = line_trajectory(obj.x0, obj.xf, N_)
-Z = TrajectoryOptimization.packZ(X0,U0)
-
-# Init vars
-g = zeros((N-1)n)
-grad_f = zeros(NN)
-rows = zeros(nG)
-cols = zeros(nG)
-vals = zeros(nG)
-
-# Get functions and evaluate
-eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
-x_L, x_U, g_L, g_U = get_bounds(solver)
-P = length(g_L)
-
-
-prob = createProblem(NN, x_L, x_U, P, g_L, g_U, nG, nH,
-     eval_f, eval_g, eval_grad_f, eval_jac_g)
-
-prob.x =  Z
-addOption(prob,"hessian_approximation","limited-memory")
-status = solveProblem(prob)
-z_opt = prob.x
-x_opt,u_opt = unpackZ(z_opt,(n,m,N))
-plot(u_opt')
+@time sol, stats, prob = solve_dircol(solver,X0,U0,method=method,nlp=:ipopt)
+@test norm(sol.X[:,end]-obj.xf) < 1e-6

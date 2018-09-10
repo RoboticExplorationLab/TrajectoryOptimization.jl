@@ -154,7 +154,7 @@ Compute the unconstrained cost
 function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
-function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
+function cost_(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -212,48 +212,48 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     cost_(solver,res,X,U) + cost_constraints(solver,res)
 end
 
-# """
-# $(SIGNATURES)
-# Compute the unconstrained cost
-# """
-# function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
-#     # pull out solver/objective values
-#     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-#     obj = solver.obj
-#     dt = solver.dt
-#
-#     if size(U,1) != m
-#         m += n
-#     end
-#
-#     R = getR(solver)
-#
-#     J = 0.0
-#     for k = 1:N-1
-#         if solver.control_integration == :foh
-#
-#             xdot1 = zeros(n)
-#             xdot2 = zeros(n)
-#             solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
-#             solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
-#             #
-#             # # # #TODO use calculate_derivatives!
-#             # xdot1 = res.xdot[:,k]
-#             # xdot2 = res.xdot[:,k+1]
-#
-#             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
-#             Um = (U[:,k] + U[:,k+1])/2
-#
-#             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
-#         else
-#             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
-#         end
-#     end
-#
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#
-#     return J
-# end
+"""
+$(SIGNATURES)
+Compute the unconstrained cost
+"""
+function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+    # pull out solver/objective values
+    N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    obj = solver.obj
+    dt = solver.dt
+
+    if size(U,1) != m
+        m += n
+    end
+
+    R = getR(solver)
+
+    J = 0.0
+    for k = 1:N-1
+        if solver.control_integration == :foh
+
+            xdot1 = zeros(n)
+            xdot2 = zeros(n)
+            solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
+            solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+            #
+            # # # #TODO use calculate_derivatives!
+            # xdot1 = res.xdot[:,k]
+            # xdot2 = res.xdot[:,k+1]
+
+            Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
+            Um = (U[:,k] + U[:,k+1])/2
+
+            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+        else
+            J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
+        end
+    end
+
+    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+
+    return J
+end
 #
 # """ $(SIGNATURES) Compute the Constrained Cost """
 # function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)

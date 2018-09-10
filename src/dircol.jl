@@ -132,7 +132,7 @@ function gen_custom_constraint_fun(solver::Solver,method)
         for k = 1:N-1
             cI[:,k] = obj.cI(X[:,k],U[:,k])
         end
-        if pI_N > 0
+        if pI_N_c > 0
             CI[(N-1)pI_c+1:end] = obj.cI(X[:,N])
         end
         return nothing
@@ -416,10 +416,13 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
     return nothing
 end
 
-function init_traj_points(solver::Solver,method::Symbol)
+function init_traj_points(solver::Solver,fVal::Matrix,method::Symbol)
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
     X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
+    if method == :trapezoid || method == :hermite_simpson_separated
+        fVal_ = fVal
+    end
     return X_,U_,fVal_
 end
 
