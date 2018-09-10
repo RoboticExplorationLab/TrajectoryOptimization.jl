@@ -148,7 +148,10 @@ end
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+function cost(solver::Solver,vars::DircolVars)
+    cost(solver,vars.X,vars.U)
+end
+function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
