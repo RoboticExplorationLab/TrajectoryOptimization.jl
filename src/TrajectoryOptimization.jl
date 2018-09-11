@@ -1,5 +1,3 @@
-# __precompile__()
-
 """
     TrajectoryOptimization
 Primary module for setting up and solving trajectory optimization problems with
@@ -14,7 +12,8 @@ using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 using Interpolations
-using Plots
+using RecipesBase
+using LinearAlgebra
 
 
 const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
@@ -67,35 +66,35 @@ include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
 
-if check_snopt_installation()
-    # using Snopt # not safe for precompilation
-    include("dircol_snopt.jl")
+using Ipopt
 
-    using Ipopt
+# DIRCOL methods
+export
+solve_dircol,
+gen_usrfun,
+DircolResults,
+DircolVars,
+collocation_constraints,
+collocation_constraints!,
+cost_gradient,
+cost_gradient!,
+constraint_jacobian,
+constraint_jacobian!,
+get_weights,
+get_initial_state
 
-    # DIRCOL methods
-    export
-    solve_dircol,
-    gen_usrfun,
-    DircolResults,
-    DircolVars,
-    collocation_constraints,
-    collocation_constraints!,
-    cost_gradient,
-    cost_gradient!,
-    constraint_jacobian,
-    constraint_jacobian!,
-    get_weights,
-    get_initial_state
+export
+packZ,
+unpackZ
 
-    export
-    packZ,
-    unpackZ
-
-    include("dircol.jl")
-    include("dircol_ipopt.jl")
-    write_ipopt_options()
-end
+include("dircol.jl")
+include("dircol_ipopt.jl")
+write_ipopt_options()
+#
+# if check_snopt_installation()
+#     # using Snopt # not safe for precompilation
+#     include("dircol_snopt.jl")
+# end
 
 function set_debug_level(level::Symbol)
     global debug_level

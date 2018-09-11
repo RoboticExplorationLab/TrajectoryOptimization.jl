@@ -1,9 +1,3 @@
-using RigidBodyDynamics
-using ForwardDiff
-using Plots
-using Base.Test
-using BenchmarkTools
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
 #     SUMMARY: Important methods used by the forward and backward iLQR passes
