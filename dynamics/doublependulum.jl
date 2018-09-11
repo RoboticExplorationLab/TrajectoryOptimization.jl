@@ -1,6 +1,8 @@
 ## Double Pendulum
 # TODO test
-urdf_folder = joinpath(Pkg.dir("TrajectoryOptimization"), "dynamics/urdf")
+import TrajectoryOptimization
+traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+urdf_folder = joinpath(traj_folder, "dynamics/urdf")
 urdf_doublependulum = joinpath(urdf_folder, "doublependulum.urdf")
 #isfile(urdf_doublependulum)
 
@@ -13,9 +15,9 @@ x0 = [0.;0.;0.;0.]
 xf = [pi;0.;0.;0.]
 
 # costs
-Q = 0.0001*eye(model.n)
-Qf = 250.0*eye(model.n)
-R = 0.0001*eye(model.m)
+Q = 0.0001*Diagonal(I,n)
+Qf = 250.0*Diagonal(I,n)
+R = 0.0001*Diagonal(I,m)
 
 # simulation
 tf = 5.0

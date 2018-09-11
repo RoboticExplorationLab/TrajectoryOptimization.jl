@@ -37,20 +37,20 @@ function pendulum_dynamics!(xdot,x,u)
     xdot[1] = x[2]
     xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
 end
-
-model = Model(pendulum_dynamics,2,1)
-model! = Model(pendulum_dynamics!,2,1) # inplace model
+n,m = 2,1
+model = Model(pendulum_dynamics,n,m)
+model! = Model(pendulum_dynamics!,n,m) # inplace model
 
 # initial conditions
-x0 = [0; 0]
+x0 = [0; 0.]
 
 # goal
 xf = [pi; 0] # (ie, swing up)
 
 # costs
-Q = (1e-3)*eye(model.n)
-Qf = 100.0*eye(model.n)
-R = (1e-2)*eye(model.m)
+Q = 1e-3*Diagonal(I,n)
+Qf = 100.0*Diagonal(I,n)
+R = 1e-2*Diagonal(I,m)
 
 # simulation
 tf = 5.

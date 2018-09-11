@@ -16,8 +16,8 @@ function ballonbeam_dynamics(x,u)
 
     sys = [zdot; thetadot; zddot; thetaddot];
 end
-
-model = Model(ballonbeam_dynamics,4,1)
+n,m = 4,1
+model = Model(ballonbeam_dynamics,n,m)
 
 # initial and goal states
 x0 = [.1;0;0.;0.]
@@ -25,9 +25,9 @@ xf = [.5;0.;0.;0.]
 
 # costs
 #TODO these costs are taken from the notebook
-Q = 5e-4*eye(model.n)
-Qf = 500.0*eye(model.n)
-R = 1e-5*eye(model.m)
+Q = 5e-4*Diagonal(I,n)
+Qf = 500.0*Diagonal(I,n)
+R = 1e-5*Diagonal(I,m)
 
 # simulation
 tf = 1.0

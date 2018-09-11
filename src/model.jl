@@ -106,10 +106,10 @@ abstract type Objective end
 $(TYPEDEF)
 Defines a quadratic objective for an unconstrained optimization problem
 """
-mutable struct UnconstrainedObjective <: Objective
-    Q::Array{Float64,2}   # Quadratic stage cost for states (n,n)
-    R::Array{Float64,2}   # Quadratic stage cost for controls (m,m)
-    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (n,n)
+mutable struct UnconstrainedObjective{TQ,TR,TQf} <: Objective
+    Q::TQ                 # Quadratic stage cost for states (n,n)
+    R::TR                 # Quadratic stage cost for controls (m,m)
+    Qf::TQf               # Quadratic final cost for terminal state (n,n)
     tf::Float64           # Final time (sec)
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
@@ -128,10 +128,10 @@ Define a quadratic objective for a constrained optimization problem.
 * Inequality constraints: `f(x,u) ≥ 0`
 
 """
-mutable struct ConstrainedObjective <: Objective
-    Q::Array{Float64,2}   # Quadratic stage cost for states (n,n)
-    R::Array{Float64,2}   # Quadratic stage cost for controls (m,m)
-    Qf::Array{Float64,2}  # Quadratic final cost for terminal state (n,n)
+mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:AbstractArray} <: Objective
+    Q::TQ                 # Quadratic stage cost for states (n,n)
+    R::TR                 # Quadratic stage cost for controls (m,m)
+    Qf::TQf               # Quadratic final cost for terminal state (n,n)
     tf::Float64           # Final time (sec)
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
@@ -158,11 +158,11 @@ mutable struct ConstrainedObjective <: Objective
     p_N::Int  # Number of terminal constraints
     pI_N::Int  # Number of terminal inequality constraints
 
-    function ConstrainedObjective(Q,R,Qf,tf,x0,xf,
+    function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
-        use_terminal_constraint)
+        use_terminal_constraint) where {TQ,TR,TQf}
 
         n = size(Q,1)
         m = size(R,1)
@@ -193,16 +193,20 @@ mutable struct ConstrainedObjective <: Objective
         pI_N = pE_N = 0
         try cI(x0)
             pI_N = size(cI(x0),1)
+        catch
+            pI_N = 0
         end
         try cE(x0)
             pE_N = size(cE(x0),1)
+        catch
+            pE_N = 0
         end
         if use_terminal_constraint
             pE_N += n
         end
         p_N = pI_N + pE_N
 
-        new(Q,R,Qf,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
+        new{TQ,TR,TQf}(Q,R,Qf,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
     end
 end
 

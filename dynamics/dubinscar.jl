@@ -12,8 +12,9 @@ function dubins_dynamics(x,u)
     return [u[1]*cos(x[3]); u[1]*sin(x[3]); u[2]]
 end
 
-model = Model(dubins_dynamics,3,2)
-model! = Model(dubins_dynamics!,3,2)
+n,m = 3,2
+model = Model(dubins_dynamics,n,m)
+model! = Model(dubins_dynamics!,n,m)
 
 
 # initial and goal states
@@ -21,9 +22,9 @@ x0 = [0.;0.;0.]
 xf = [0.;1.;0.]
 
 # costs
-Q = (1e-2)*eye(model.n)
-Qf = 1000.0*eye(model.n)
-R = (1e-2)*eye(model.m)
+Q = (1e-2)*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
 
 # simulation
 tf = 5.0

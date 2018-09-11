@@ -1,6 +1,8 @@
 ## Cartpole / Inverted Pendulum
 #TODO test
-urdf_folder = joinpath(Pkg.dir("TrajectoryOptimization"), "dynamics/urdf")
+import TrajectoryOptimization
+traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+urdf_folder = joinpath(traj_folder, "dynamics/urdf")
 urdf_cartpole = joinpath(urdf_folder, "cartpole.urdf")
 
 model = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
@@ -34,17 +36,17 @@ function cartpole_dynamics!(Xdot, X, U)
     Xdot[3:4] = qdd
     return nothing
 end
-
-model_analytical = Model(cartpole_dynamics!,4,1)
+n,m = 4,1
+model_analytical = Model(cartpole_dynamics!,n,m)
 
 # initial and goal states
 x0 = [0.;0.;0.;0.]
 xf = [0.;pi;0.;0.]
 
 # costs
-Q = 0.01*eye(model.n)
-Qf = 1000.0*eye(model.n)
-R = 0.01*eye(model.m)
+Q = 0.01*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = 0.01*Diagonal(I,m)
 
 # simulation
 tf = 5.0
