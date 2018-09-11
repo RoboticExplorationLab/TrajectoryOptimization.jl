@@ -154,8 +154,7 @@ Compute the unconstrained cost
 function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
-
-function _cost(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Float64,2})
+function cost_(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -193,11 +192,11 @@ function cost_constraints(solver::Solver, res::ConstrainedResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
-        J += 0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k]
+        J += (0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
     end
 
     if solver.control_integration == :foh
-        J += 0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N]
+        J += (0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
     end
 
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
@@ -206,11 +205,11 @@ function cost_constraints(solver::Solver, res::ConstrainedResults)
 end
 
 function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    _cost(solver,res,X,U)
+    cost_(solver,res,X,U)
 end
 
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    _cost(solver,res,X,U) + cost_constraints(solver,res)
+    cost_(solver,res,X,U) + cost_constraints(solver,res)
 end
 
 """
@@ -258,7 +257,6 @@ end
 
 """
 $(SIGNATURES)
-
 Calculate state derivatives (xdot)
 """
 function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
@@ -624,19 +622,5 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
     for i = 1:size(x0,1)
         x_traj[i,:] = slope[i].*t
     end
-    x_traj
-end
-
-function line_trajectory_quadrotor_quaternion(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
-    x_traj = zeros(size(x0,1),N)
-    t = linspace(0,N,N)
-    slope = (xf-x0)./N
-    for i = 1:size(x0,1)
-        x_traj[i,:] = slope[i].*t
-    end
-    # provide unit quaternion
-    x_traj[4:6,:] = 0.0
-    x_traj[7,:] = 1.0
-
     x_traj
 end

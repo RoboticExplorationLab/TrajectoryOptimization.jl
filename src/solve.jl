@@ -57,7 +57,6 @@ end
 
 """
 $(SIGNATURES)
-
 Solve constrained optimization problem specified by `solver`
 """
 function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(0,0); prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
@@ -178,6 +177,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     dJ = Inf
     grad = Inf
+    Δv = Inf
 
     i = 0 # declare outsize for scope
     k = 0
@@ -250,36 +250,25 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Check for cost convergence
+            # Check for cost convergence
             d_grad = maximum(abs.(results.d[:]))
             s_grad = maximum(abs.(results.s[:,1]))
-            # println("d gradient: $(maximum(abs.(results.d)))")
-            # println("s gradient: $(maximum(abs.(results.s[:,1])))")
-            if true
-                grad = s_grad
-            else
-                grad = d_grad
+            todorov_grad = mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            if solver.opts.verbose
+                println("d gradient: $(maximum(abs.(results.d)))")
+                println("s gradient: $(maximum(abs.(results.s[:,1])))")
+                println("todorov gradient $(todorov_grad)")
             end
 
-            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_intermediate_tolerance) && k != solver.opts.iterations_outerloop)
+            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
-                    if grad < solver.opts.gradient_tolerance
-                        println("-gradient tolerance met $(grad)")
-                    else
-                        println("-dJ tolerance met")
-                    end
                     if results isa UnconstrainedResults
                         println("Unconstrained solve complete")
                     end
                 end
                 break
             elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
-                if grad < solver.opts.gradient_tolerance
-                    println("-gradient tolerance met $(grad)")
-                else
-                    println("-dJ tolerance met")
-                end
-
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
                 end
@@ -396,7 +385,6 @@ end
 
 """
 $(SIGNATURES)
-
 Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void

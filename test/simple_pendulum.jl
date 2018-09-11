@@ -5,7 +5,7 @@ using Plots
 #TODO cleanup and document each test
 # Set up models and objective
 u_bound = 3.
-model,obj = TrajectoryOptimization.Dynamics.pendulum
+model, obj = TrajectoryOptimization.Dynamics.pendulum
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
 
@@ -60,6 +60,8 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
+results_c.d
+
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
@@ -70,11 +72,11 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 
 # with Square Root
 solver.opts.square_root = true
+solver.opts.verbose = false
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
-
 
 
 ### In-place dynamics ###
