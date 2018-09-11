@@ -286,8 +286,9 @@ Calculate state derivatives (xdot)
 """
 function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
     N = size(X,2)
+    n,m = get_sizes(solver)
     for i = 1:N
-        solver.fc(view(results.xdot,:,i),X[:,i],U[:,i])
+        solver.fc(view(results.xdot,:,i),X[:,i],U[1:m,i])
     end
 end
 
