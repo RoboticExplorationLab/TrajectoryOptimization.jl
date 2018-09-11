@@ -306,6 +306,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache.U = results.U
     end
 
+    if ~is_constrained
+        solver.opts.iterations_outerloop = iterations_outerloop_original
+    end
+
     # Run Stats
     stats = Dict("iterations"=>iter-1,
                  "major iterations"=>k,
