@@ -180,10 +180,10 @@ mutable struct ConstrainedObjective <: Objective
         pI += count(isfinite, x_max)
 
         u0 = zeros(m)
-        if ~isa(cI(x0,u0), Void)
+        if ~isa(cI(x0,u0), Nothing)
             pI += size(cI(x0,u0),1)
         end
-        if ~isa(cE(x0,u0), Void)
+        if ~isa(cE(x0,u0), Nothing)
             pE += size(cE(x0,u0),1)
         end
         p = pI + pE

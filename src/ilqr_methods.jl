@@ -272,7 +272,7 @@ $(SIGNATURES)
 Calculate Jacobians prior to the backwards pass
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
-function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO change to inplace '!' notation throughout the code
+function calc_jacobians(res::ConstrainedResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -293,7 +293,7 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Void #TODO cha
     return nothing
 end
 
-function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Void
+function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Nothing
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -319,7 +319,7 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, U::Array)::Void
+function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, U::Array)::Nothing
 
     p, N = size(res.C) # note, C is now (p,N)
     c = solver.c_fun

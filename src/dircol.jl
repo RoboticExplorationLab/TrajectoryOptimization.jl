@@ -340,7 +340,7 @@ function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
     return grad_f
 end
 
-function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float64}, vals::Vector{Float64}, method::Symbol)::Void
+function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float64}, vals::Vector{Float64}, method::Symbol)::Nothing
     # println("simple")
     n,m = get_sizes(X,U)
     N,N_ = get_N(solver,method)

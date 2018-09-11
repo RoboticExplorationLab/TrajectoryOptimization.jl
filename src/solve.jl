@@ -387,7 +387,7 @@ end
 $(SIGNATURES)
 Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
 """
-function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
+function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     p,N = size(results.C)
     pI = solver.obj.pI
 
@@ -487,6 +487,6 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Void
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Void
+function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Nothing
     return nothing
 end

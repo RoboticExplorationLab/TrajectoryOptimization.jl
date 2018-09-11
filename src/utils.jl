@@ -23,7 +23,7 @@ function get_sizes(X::AbstractArray,U::AbstractArray)
     return n,m,N
 end
 
-function println(level::Symbol, msg::String)::Void
+function println(level::Symbol, msg::String)::Nothing
     if level_priorities[level] ≥ level_priorities[debug_level::Symbol]
         println(msg)
     end
@@ -107,7 +107,7 @@ end
 
 Plot a 3D trajectory (static)
 """
-function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10.0],ylim=[-10.0;10.0],zlim=[-10.0;10.0],title::String="3D Trajectory")::Void
+function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10.0],ylim=[-10.0;10.0],zlim=[-10.0;10.0],title::String="3D Trajectory")::Nothing
     # initialize a 3D plot with 1 empty series
     plt = path3d(1, xlim=(xlim[1],xlim[2]), ylim=(ylim[1],ylim[2]), zlim=(zlim[1],zlim[2]),
                     xlab = "", ylab = "", zlab = "",
