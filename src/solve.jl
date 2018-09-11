@@ -82,6 +82,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         if solver.opts.verbose
             println("Solving Unconstrained Problem...")
         end
+        iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
         results = UnconstrainedResults(n,m,N)
         results.U .= U0
