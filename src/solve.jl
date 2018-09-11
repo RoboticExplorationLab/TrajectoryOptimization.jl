@@ -157,7 +157,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Solver Statistics
     iter = 1 # counter for total number of iLQR iterations
-    k = 1 # Init outer iter counter to increase its scope
+    iter_outer = 1
+    iter_inner = 1
     time_setup = toq()
     J_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
@@ -179,9 +180,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     grad = Inf
     Δv = Inf
 
-    i = 0 # declare outsize for scope
-    k = 0
     for k = 1:solver.opts.iterations_outerloop
+        iter_outer = k
         if solver.opts.verbose
             println("Outer loop $k (begin)")
         end
@@ -205,6 +205,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
 
         for i = 1:solver.opts.iterations
+            iter_inner = i
             if solver.opts.verbose
                 println("--Iteration: $k-($i)--")
             end
@@ -325,13 +326,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     # Run Stats
     stats = Dict("iterations"=>iter-1,
-                 "major iterations"=>k,
+                 "major iterations"=>iter_outer,
                  "runtime"=>toq(),
                  "setup_time"=>time_setup,
                  "cost"=>J_hist,
                  "c_max"=>c_max_hist)
 
-    if ((k == solver.opts.iterations_outerloop) && (i == solver.opts.iterations)) && solver.opts.verbose
+    if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
         println("*Solve reached max iterations*")
     end
     ## Return dynamically feasible trajectory
