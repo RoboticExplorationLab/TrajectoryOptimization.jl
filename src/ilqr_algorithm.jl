@@ -16,7 +16,7 @@ $(SIGNATURES)
 Solve the dynamic programming problem, starting from the terminal time step
 Computes the gain matrices K and d by applying the principle of optimality at
 each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
-function. Also returns parameters `v1` and `v2` (see Eq. 25a in Yuval Tassa Thesis)
+function.
 """
 function backwardpass!(res::SolverIterResults,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m;
@@ -28,28 +28,27 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         m += n
     end
 
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d
+    # Unpack values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
 
-    # Terminal Values
-    S = Qf
-    s = Qf*(X[:,N] - xf)
+    # Boundary conditions
+    S[:,:,N] = Qf
+    s[:,N] = Qf*(X[:,N] - xf)
 
+    # Initialize expected change in cost-to-go
+    Δv = 0.0
 
-    v1 = 0.
-    v2 = 0.
+    # Terminal constraints
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
-        S += CxN'*res.IμN*CxN
-        s += CxN'*res.IμN*res.CN + CxN'*res.λN
+        S[:,:,N] += CxN'*res.IμN*CxN
+        s[:,N] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
-
-    res.S[:,:,N] .= S
-    res.s[:,N] = s
 
     mu = res.mu_reg
     k = N-1
+
     # Loop backwards
     while k >= 1
         lx = dt*Q*(X[:,k] - xf)
@@ -61,23 +60,23 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         fx, fu = res.fx[:,:,k], res.fu[:,:,k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*s
-        Qu = lu + fu'*s
-        Qxx = lxx + fx'*S*fx
+        Qx = lx + fx'*s[:,k+1]
+        Qu = lu + fu'*s[:,k+1]
+        Qxx = lxx + fx'*S[:,:,k+1]*fx
         # Quu = Hermitian(luu + fu'*(S + mu[1]*eye(n))*fu)
         # Qux = fu'*(S + mu[1]*eye(n))*fx
 
-        Quu = Hermitian(luu + fu'*S*fu +  + mu[1]*eye(m))
-        Qux = fu'*S*fx
+        Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu + mu[1]*eye(m))
+        Qux = fu'*S[:,:,k+1]*fx
 
         # Constraints
         if res isa ConstrainedResults
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Qx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Qu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            Qxx += dt*Cx'*Iμ[:,:,k]*Cx
-            Quu += dt*Cu'*Iμ[:,:,k]*Cu
-            Qux += dt*Cu'*Iμ[:,:,k]*Cx
+            Qx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+            Qu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
+            Qxx += Cx'*Iμ[:,:,k]*Cx
+            Quu += Cu'*Iμ[:,:,k]*Cu
+            Qux += Cu'*Iμ[:,:,k]*Cx
         end
 
         # regularization
@@ -95,23 +94,20 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         #     continue
         # end
 
-        # Compute gains
+        # Compute control gains
         K[:,:,k] = Quu\Qux
         d[:,k] = Quu\Qu
-        s = Qx - Qux'd[:,k]
-        S = Qxx - Qux'K[:,:,k]
 
-        res.S[:,:,k] .= S
-        res.s[:,k] = copy(s)
+        # Compute Hessian and gradient for cost-to-go
+        s[:,k] = Qx - Qux'd[:,k]
+        S[:,:,k] = Qxx - Qux'K[:,:,k]
 
-        # terms for line search
-        v1 += vec(d[:,k])'*vec(Qu)
-        v2 += vec(d[:,k])'*Quu*vec(d[:,k])
+        # Expected change in cost-to-go
+        Δv += 1.5*Qu'*vec(d[:,k])
 
         k = k - 1;
     end
-
-    return v1, v2
+    return Δv
 end
 
 """
@@ -151,16 +147,15 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         s = Qf*(X[:,N] - xf)
     end
 
-    res.S[:,:,N] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
+    res.S[:,:,N] = Su # note: the sqrt root of the cost-to-go Hessian is cached
     res.s[:,N] = s
 
     # Initialization
-    v1 = 0.
-    v2 = 0.
+    Δv = 0.0
     mu = res.mu_reg
     k = N-1
 
-    # Backwards passes
+    # Backward pass
     while k >= 1
         lx = dt*Q*(X[:,k] - xf)
         lu = dt*R*(U[:,k])
@@ -181,12 +176,12 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
             Iμ2 = sqrt.(Iμ[:,:,k])
-            Qx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Qu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            Qxu += dt*Cx'*Iμ[:,:,k]*Cu
+            Qx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+            Qu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+            Qxu += Cx'*Iμ[:,:,k]*Cu
 
-            Wxx = qrfact!([Wxx[:R]; sqrt(dt)*Iμ2*Cx])
-            Wuu = qrfact!([Wuu[:R]; sqrt(dt)*Iμ2*Cu])
+            Wxx = qrfact!([Wxx[:R]; Iμ2*Cx])
+            Wuu = qrfact!([Wuu[:R]; Iμ2*Cu])
         end
 
         K[:,:,k] = Wuu[:R]\(Wuu[:R]'\Qxu')
@@ -204,19 +199,17 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             #     println("*regularization not implemented") #TODO fix regularization
             #     continue
             # end
-            error("(sqrt bp) regularization not implemented")
         end
 
-        res.S[:,:,k] .= Su # note: the sqrt root of the cost-to-go Hessian is cached
+        res.S[:,:,k] = Su # note: the sqrt root of the cost-to-go Hessian is cached
         res.s[:,k] = s
-
-        # terms for line search
-        v1 += float(vec(d[:,k])'*vec(Qu))
-        v2 += float(vec(d[:,k])'*Wuu[:R]'Wuu[:R]*vec(d[:,k]))
+        # expected change in cost-to-go
+        Δv += 1.5*Qu'*vec(d[:,k])
 
         k = k - 1;
     end
-    return v1, v2
+
+    return Δv
 end
 
 function backwardpass_foh!(res::SolverIterResults,solver::Solver)
@@ -248,9 +241,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     S = zeros(n+m,n+m)
     s = zeros(n+m)
 
-    # line search stuff
-    v1 = 0.0
-    v2 = 0.0
+    Δv = 0.0 # initialize expected change in cost-to-go
 
     mu = res.mu_reg
 
@@ -260,16 +251,9 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
     if res isa ConstrainedResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-
         CxN = res.Cx_N
-        # Cx_, Cu_ = res.Cx[:,:,N], res.Cu[:,:,N]
-
-        S[1:n,1:n] += CxN'*res.IμN*CxN# + dt*Cx_'*Iμ[:,:,N]*Cx_
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN# + dt*(Cx_'*Iμ[:,:,N]*C[:,N] + Cx_'*LAMBDA[:,N])
-        # S[n+1:n+m,n+1:n+m] = dt*Cu_'*Iμ[:,:,N]*Cu_
-        # s[n+1:n+m] = dt*(Cu_'*Iμ[:,:,N]*C[:,N] + Cu_'*LAMBDA[:,N])
-        # S[1:n,n+1:n+m] = dt*Cx_'*Iμ[:,:,N]*Cu_
-        # S[n+1:n+m,1:n] = dt*Cu_'*Iμ[:,:,N]*Cx_
+        S[1:n,1:n] += CxN'*res.IμN*CxN
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
     k = N-1
@@ -321,22 +305,20 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         if res isa ConstrainedResults
             if k == N-1
                 Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-                Ly += dt*(Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-                Lv += dt*(Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-                Lyy += dt*Cy'*Iμ[:,:,k+1]*Cy
-                Lvv += dt*Cv'*Iμ[:,:,k+1]*Cv
-
-                Lyv += dt*Cy'*Iμ[:,:,k+1]*Cv
+                Ly += Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1]
+                Lv += Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1]
+                Lyy += Cy'*Iμ[:,:,k+1]*Cy
+                Lvv += Cv'*Iμ[:,:,k+1]*Cv
+                Lyv += Cy'*Iμ[:,:,k+1]*Cv
             end
 
             Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
 
-            Lx += dt*(Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Lu += dt*(Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            Lxx += dt*Cx'*Iμ[:,:,k]*Cx
-            Luu += dt*Cu'*Iμ[:,:,k]*Cu
-
-            Lxu += dt*Cx'*Iμ[:,:,k]*Cu
+            Lx += Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k]
+            Lu += Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k]
+            Lxx += Cx'*Iμ[:,:,k]*Cx
+            Luu += Cu'*Iμ[:,:,k]*Cu
+            Lxu += Cx'*Iμ[:,:,k]*Cu
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -368,9 +350,9 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         #     continue
         # end
 
-        K[:,:,k+1] .= -Qvv\Qxv'
-        b[:,:,k+1] .= -Qvv\Quv'
-        d[:,k+1] .= -Qvv\vec(Qv)
+        K[:,:,k+1] = -Qvv\Qxv'
+        b[:,:,k+1] = -Qvv\Quv'
+        d[:,k+1] = -Qvv\vec(Qv)
 
         Qx_ = vec(Qx) + K[:,:,k+1]'*vec(Qv) + Qxv*vec(d[:,k+1]) + K[:,:,k+1]'Qvv*d[:,k+1]
         Qu_ = vec(Qu) + b[:,:,k+1]'*vec(Qv) + Quv*vec(d[:,k+1]) + b[:,:,k+1]'*Qvv*d[:,k+1]
@@ -386,24 +368,25 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[1:n,n+1:n+m] = Qxu_
         S[n+1:n+m,1:n] = Qxu_'
 
-        # line search terms
-        v1 += -d[:,k+1]'*vec(Qv)
-        v2 += d[:,k+1]'*Qvv*d[:,k+1]
+        # expected change in cost-to-go
+        Δv += -1.5*Qv'*vec(d[:,k+1])
 
         # at last time step, optimize over final control
         if k == 1
-            K[:,:,1] .= -Quu_\Qxu_'
-            b[:,:,1] .= zeros(m,m)
-            d[:,1] .= -Quu_\vec(Qu_)
+            K[:,:,1] = -Quu_\Qxu_'
+            # b[:,:,1] = zeros(m,m)
+            d[:,1] = -Quu_\vec(Qu_)
 
-            v1 += -d[:,1]'*vec(Qu_)
-            v2 += d[:,1]'*Quu_*d[:,1]
+            res.s[:,1] = Qx_ - Qxu_*vec(d[:,1])
+
+            # expected change in cost-to-go
+            Δv += -1.5*Qu_'*vec(d[:,k])
         end
 
         k = k - 1;
     end
 
-    return v1, v2
+    return Δv
 end
 
 """
@@ -423,7 +406,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Float64)
 
     # Pull out values from results
     X = res.X
@@ -456,8 +439,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             if res isa ConstrainedResults
                 update_constraints!(res,solver,X_,U_)
             end
-            J = J_prev
-            z = (J_prev - J)/dV
+            J = copy(J_prev)
+            z = 0.0
 
             if solver.opts.verbose
                 println("Max iterations (forward pass)\n -No improvement made")
@@ -485,9 +468,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             update_constraints!(res,solver,X_,U_)
         end
         J = cost(solver, res, X_, U_)
-
-        dV = alpha*v1 + (alpha^2)*v2/2.
-        z = (J_prev - J)/dV
+        z = (J_prev - J)/(alpha*Δv)
 
         alpha /= 2.0
 
@@ -501,10 +482,9 @@ function forwardpass!(res::SolverIterResults, solver::Solver, v1::Float64, v2::F
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end
-        println("- Expected improvement: $(dV)")
+        println("- Expected improvement: $(Δv)")
         println("- Actual improvement: $(J_prev-J)")
-        println("- (z = $z, α = $alpha)")
-        println("--(v1 = $v1, v2 = $v2)--\n")
+        println("- (z = $z, α = $(alpha*2.0)") # note the 2x since we have already decremented α
     end
 
     return J

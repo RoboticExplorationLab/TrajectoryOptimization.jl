@@ -40,9 +40,10 @@ solver.opts.square_root = true
 results_sr, = TrajectoryOptimization.solve(solver,U)
 @test norm(results_sr.X[:,end]-obj.xf) < 1e-3
 # @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
-@test norm(results_sr.X - results.X) < 1e-12
-norm(results_sr.X - results.X)
+# @test norm(results_sr.X - results.X) < 1e-12 # breaks macOS test??
+@test all(isapprox.(results_sr.X,results.X))
 results.X
+
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
@@ -51,7 +52,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
-#   with Square Root
+# with Square Root
 solver.opts.square_root = true
 solver.opts.verbose = false
 results_c, = TrajectoryOptimization.solve(solver, U)
@@ -67,7 +68,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
-#   with Square Root
+# with Square Root
 solver.opts.square_root = true
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)

@@ -176,6 +176,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #****************************#
 
     dJ = Inf
+    grad = Inf
+
     i = 0 # declare outsize for scope
     k = 0
     for k = 1:solver.opts.iterations_outerloop
@@ -213,15 +215,15 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             ### BACKWARD PASS ###
             calc_jacobians(results, solver)
             if solver.control_integration == :foh
-                v1, v2 = backwardpass_foh!(results,solver) #TODO combine with square root
+                Δv = backwardpass_foh!(results,solver) #TODO combine with square root
             elseif solver.opts.square_root
-                v1, v2 = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+                Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
-                v1, v2 = backwardpass!(results, solver)
+                Δv = backwardpass!(results, solver)
             end
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, v1, v2)
+            J = forwardpass!(results, solver, Δv)
             push!(J_hist,J)
 
             if solver.opts.cache
@@ -247,15 +249,36 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Check for cost convergence
-            if (~is_constrained && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
+            d_grad = maximum(abs.(results.d[:]))
+            s_grad = maximum(abs.(results.s[:,1]))
+            # println("d gradient: $(maximum(abs.(results.d)))")
+            # println("s gradient: $(maximum(abs.(results.s[:,1])))")
+            if true
+                grad = s_grad
+            else
+                grad = d_grad
+            end
+
+            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_intermediate_tolerance) && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
+                    if grad < solver.opts.gradient_tolerance
+                        println("-gradient tolerance met $(grad)")
+                    else
+                        println("-dJ tolerance met")
+                    end
                     if results isa UnconstrainedResults
                         println("Unconstrained solve complete")
                     end
                 end
                 break
-            elseif (is_constrained && dJ < solver.opts.eps && c_max < solver.opts.eps_constraint)
+            elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
+                if grad < solver.opts.gradient_tolerance
+                    println("-gradient tolerance met $(grad)")
+                else
+                    println("-dJ tolerance met")
+                end
+
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
                 end

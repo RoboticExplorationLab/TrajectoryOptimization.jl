@@ -1,4 +1,4 @@
-__precompile__()
+# __precompile__()
 
 """
     TrajectoryOptimization
@@ -50,7 +50,12 @@ export
 
 export
     get_sizes,
-    get_N
+    get_N,
+    eul2quat,
+    quat2rot,
+    eul2rot,
+    sphere_constraints,
+    circle_constraints
 
 include("model.jl")
 include("integration.jl")
