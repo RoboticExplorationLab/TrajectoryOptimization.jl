@@ -122,7 +122,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         end
 
         # Check that rollout has not diverged
-        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1]) || any(X_[:,k] .> solver.opts.max_state_value) || any(U_[:,k-1] .> solver.opts.max_control_value)
+        if ~(maximum(X_[:,k]) < solver.opts.max_state_value || maximum(U_[:,k]) < solver.opts.max_control_value)
             return false
         end
     end
