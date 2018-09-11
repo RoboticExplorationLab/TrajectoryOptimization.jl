@@ -190,8 +190,8 @@ function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"lo
 end
 
 function write_ipopt_options(
-        optfile=joinpath(Pkg.dir("TrajectoryOptimization"),"ipopt.opt"),
-        outfile=joinpath(Pkg.dir("TrajectoryOptimization"),"logs","ipopt.out"))
+        optfile=joinpath(dirname(pathof(TrajectoryOptimization)),"..","ipopt.opt"),
+        outfile=joinpath(dirname(pathof(TrajectoryOptimization)),"..","logs","ipopt.out"))
     f = open(optfile,"w")
     println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
     println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
