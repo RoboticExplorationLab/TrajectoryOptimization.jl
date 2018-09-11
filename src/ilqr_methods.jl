@@ -139,7 +139,7 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,Q,R,xf)
+function stage_cost(x::Vector{Float64},u::Vector{Float64},Q::Matrix{Float64},R::Matrix{Float64},xf::Vector{Float64})::Float64
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
@@ -157,7 +157,7 @@ end
 
 function _cost(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
     dt = solver.dt
 
