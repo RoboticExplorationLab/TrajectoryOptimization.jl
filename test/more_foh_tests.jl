@@ -1,5 +1,3 @@
-using TrajectoryOptimization
-
 # Set random seed
 srand(7)
 
@@ -45,7 +43,7 @@ results_inf, = solve(solver_con,X_interp,U)
 # Test final state from foh solve
 @test norm(results_inf.X[:,end] - solver_con.obj.xf) < 1e-3
 
-plot(results_inf.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
-plot(results_inf.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
-println("Final state: $(results_inf.X[:,end])")
-println("Final cost: $(results_inf.cost[end])")
+# plot(results_inf.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
+# plot(results_inf.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
+# println("Final state: $(results_inf.X[:,end])")
+# println("Final cost: $(results_inf.cost[end])")

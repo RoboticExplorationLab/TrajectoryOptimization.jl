@@ -1,5 +1,3 @@
-using TrajectoryOptimization
-
 model, obj0 = Dynamics.cartpole_analytical
 
 

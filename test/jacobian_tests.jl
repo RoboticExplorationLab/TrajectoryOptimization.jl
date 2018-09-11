@@ -1,6 +1,3 @@
-using TrajectoryOptimization
-using Base.Test
-
 ### foh augmented dynamics
 
 # Set up Dubins car system

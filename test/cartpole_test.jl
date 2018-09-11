@@ -1,7 +1,3 @@
-using TrajectoryOptimization
-using Base.Test
-using Plots
-
 ### Solver Options ###
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false

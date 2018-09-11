@@ -1,6 +1,3 @@
-using TrajectoryOptimization
-using Base.Test
-
 model,obj = TrajectoryOptimization.Dynamics.dubinscar
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false

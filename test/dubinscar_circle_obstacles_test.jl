@@ -1,5 +1,3 @@
-using TrajectoryOptimization
-using Plots
 
 ### Solver Options ###
 dt = 0.01
@@ -74,21 +72,21 @@ if opts.verbose
 
     println("Termination index\n foh: $(sol_foh_con_obs.termination_index)\n zoh: $(sol_foh_con_obs.termination_index)")
 
-    plot(sol_foh_con_obs.U')
-    plot!(sol_zoh_con_obs.U')
-
-    ## Plot obstacle field and trajectory
-    plot((solver_zoh_con_obs.obj.x0[1],solver_zoh_con_obs.obj.x0[2]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
-    plot!((solver_zoh_con_obs.obj.xf[1],solver_zoh_con_obs.obj.xf[2]),marker=(:circle,"green"),label="xf")
-
-    theta = linspace(0,2*pi,100)
-    for k = 1:n_circles
-        x_circle = circles[3][k]*cos.(theta)
-        y_circle = circles[3][k]*sin.(theta)
-        plot!(x_circle+circles[1][k],y_circle+circles[2][k],color="red",width=2,fill=(100),legend=:none)
-    end
-
-    plot!(sol_foh_con_obs.X[1,:],sol_foh_con_obs.X[2,:])
-    plot!(sol_zoh_con_obs.X[1,:],sol_zoh_con_obs.X[2,:])
+    # plot(sol_foh_con_obs.U')
+    # plot!(sol_zoh_con_obs.U')
+    #
+    # ## Plot obstacle field and trajectory
+    # plot((solver_zoh_con_obs.obj.x0[1],solver_zoh_con_obs.obj.x0[2]),marker=(:circle,"red"),label="x0",xlim=(-1.1,11.1),ylim=(-1.1,11.1))
+    # plot!((solver_zoh_con_obs.obj.xf[1],solver_zoh_con_obs.obj.xf[2]),marker=(:circle,"green"),label="xf")
+    #
+    # theta = linspace(0,2*pi,100)
+    # for k = 1:n_circles
+    #     x_circle = circles[3][k]*cos.(theta)
+    #     y_circle = circles[3][k]*sin.(theta)
+    #     plot!(x_circle+circles[1][k],y_circle+circles[2][k],color="red",width=2,fill=(100),legend=:none)
+    # end
+    #
+    # plot!(sol_foh_con_obs.X[1,:],sol_foh_con_obs.X[2,:])
+    # plot!(sol_zoh_con_obs.X[1,:],sol_zoh_con_obs.X[2,:])
 end
 ###############

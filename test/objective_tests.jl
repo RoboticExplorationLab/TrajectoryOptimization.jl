@@ -1,7 +1,5 @@
-using TrajectoryOptimization
-using TrajectoryOptimization.Dynamics
 using TrajectoryOptimization: generate_general_constraint_jacobian
-using Base.Test
+
 
 
 """ Simple Pendulum """

@@ -1,7 +1,3 @@
-using TrajectoryOptimization
-using Base.Test
-using Plots
-
 #TODO cleanup and document each test
 # Set up models and objective
 u_bound = 3.
@@ -131,10 +127,6 @@ max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 # test that control output from infeasible start is a good warm start (ie, that infeasible control output is "near" dynamically constrained control output)
 idx = find(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
 
-# plot(results_inf.result[end].X')
-# plot(results_inf.result[idx[1]].U',color="green")
-# plot!(results_inf.result[end].U',color="red")
-
 @test norm(results_inf.result[idx[1]].U-results_inf.result[end].U) < 5.0 # confirm that infeasible and final feasible controls are "near"
 
 tmp = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
@@ -144,9 +136,6 @@ tmp2.U[:,:] = results_inf.result[end].U # store
 
 TrajectoryOptimization.rollout!(tmp,solver)
 TrajectoryOptimization.rollout!(tmp2,solver)
-
-plot(tmp.X')
-plot!(tmp2.X')
 
 @test norm(tmp.X[:]-tmp2.X[:]) < 10.0 # test that infeasible state trajectory rollout is "near" dynamically constrained state trajectory rollout
 

@@ -1,8 +1,3 @@
-using TrajectoryOptimization
-using Plots
-using BenchmarkTools
-using Base.Test
-
 ### Solver options ###
 opts = SolverOptions()
 opts.square_root = false
@@ -37,26 +32,26 @@ results, stats = solve(solver_uncon,X_interp,U)
 
 idx = find(x->x==2,results.iter_type) # get index for infeasible -> feasible solve switch
 
-if opts.verbose
-    plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
-    plot(results.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
-
-    plot(results.result[idx[1]-1].U',color="green")
-    plot!(results.result[idx[1]].U',color="blue")
-    plot!(results.result[end].U',color="red")
-
-    # Confirm visually that control output from infeasible start is a good warm start for constrained solve
-    tmp = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
-    tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
-    tmp2 = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
-    tmp2.U[:,:] = results.result[end].U
-
-    rollout!(tmp,solver_uncon)
-    rollout!(tmp2,solver_uncon)
-
-    plot(tmp.X')
-    plot!(tmp2.X')
-end
+# if opts.verbose
+#     plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
+#     plot(results.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
+#
+#     plot(results.result[idx[1]-1].U',color="green")
+#     plot!(results.result[idx[1]].U',color="blue")
+#     plot!(results.result[end].U',color="red")
+#
+#     # Confirm visually that control output from infeasible start is a good warm start for constrained solve
+#     tmp = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
+#     tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
+#     tmp2 = ConstrainedResults(solver_uncon.model.n,solver_uncon.model.m,size(results.result[1].C,1),solver_uncon.N)
+#     tmp2.U[:,:] = results.result[end].U
+#
+#     rollout!(tmp,solver_uncon)
+#     rollout!(tmp2,solver_uncon)
+#
+#     plot(tmp.X')
+#     plot!(tmp2.X')
+# end
 
 # Test that infeasible control output is good warm start for dynamically constrained solve
 @test norm(results.result[idx[1]-1].U[1,:]-vec(results.result[idx[1]+1].U)) < 1.0
@@ -84,18 +79,18 @@ results, = solve(solver,X_interp,U)
 
 idx = find(x->x==2,results.iter_type)
 
-if opts.verbose
-    plot(results.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
-    plot(results.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
-    println(results.X[:,end])
-
-    # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
-    # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
-
-    plot(results.result[idx[1]-1].U',color="green")
-    plot(results.result[idx[1]+1].U',color="blue")
-    plot!(results.result[end].U',color="red")
-end
+# if opts.verbose
+#     plot(results.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
+#     plot(results.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
+#     println(results.X[:,end])
+#
+#     # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
+#     # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
+#
+#     plot(results.result[idx[1]-1].U',color="green")
+#     plot(results.result[idx[1]+1].U',color="blue")
+#     plot!(results.result[end].U',color="red")
+# end
 
 # Test final state from foh solve
 @test norm(results.X[:,end] - solver.obj.xf) < 1e-3
@@ -103,16 +98,16 @@ end
 # Test that control output from infeasible start is a good warm start for constrained solve
 @test norm(results.result[idx[1]-1].U[1,:]-vec(results.result[idx[1]+1].U)) < 1.0
 
-if opts.verbose
-    # Check control outputs at important solve iterations
-    tmp = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
-    tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
-    tmp2 = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
-    tmp2.U[:,:] = results.result[end].U
-
-    rollout!(tmp,solver)
-    plot(tmp.X')
-
-    rollout!(tmp2,solver)
-    plot!(tmp2.X')
-end
+# if opts.verbose
+#     # Check control outputs at important solve iterations
+#     tmp = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
+#     tmp.U[:,:] = results.result[idx[1]-1].U[1,:]
+#     tmp2 = ConstrainedResults(solver.model.n,solver.model.m,size(results.result[1].C,1),solver.N)
+#     tmp2.U[:,:] = results.result[end].U
+#
+#     rollout!(tmp,solver)
+#     plot(tmp.X')
+#
+#     rollout!(tmp2,solver)
+#     plot!(tmp2.X')
+# end

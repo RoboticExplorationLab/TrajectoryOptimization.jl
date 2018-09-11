@@ -1,7 +1,3 @@
-using TrajectoryOptimization
-using Plots
-using Base.Test
-
 ### Solver options ###
 dt = 0.01
 opts = TrajectoryOptimization.SolverOptions()

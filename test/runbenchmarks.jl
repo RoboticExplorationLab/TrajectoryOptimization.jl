@@ -1,5 +1,3 @@
-using TrajectoryOptimization
-using Base.Test
 using BenchmarkTools
 
 println("\nRUNNING BENCHMARKS\n")

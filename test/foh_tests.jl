@@ -1,7 +1,3 @@
-using TrajectoryOptimization
-using Plots
-using Base.Test
-
 # Set random seed
 srand(7)
 
@@ -35,13 +31,13 @@ sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # -compare foh and zoh state and control trajectories
-if opts.verbose
-    plot(sol_foh.X')
-    plot!(sol_zoh.X')
-
-    plot(sol_foh.U')
-    plot!(sol_zoh.U')
-end
+# if opts.verbose
+#     plot(sol_foh.X')
+#     plot!(sol_zoh.X')
+#
+#     plot(sol_foh.U')
+#     plot!(sol_zoh.U')
+# end
 
 # Test final state from foh solve
 @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3
@@ -60,12 +56,12 @@ U = ones(solver_foh_con.model.m, solver_foh_con.N)
 sol_foh_con, = TrajectoryOptimization.solve(solver_foh_con,U)
 sol_zoh_con, = TrajectoryOptimization.solve(solver_zoh_con,U)
 
-if opts.verbose
-    plot(sol_foh_con.X')
-    plot!(sol_zoh_con.X')
-    plot(sol_foh_con.U')
-    plot!(sol_zoh_con.U')
-end
+# if opts.verbose
+#     plot(sol_foh_con.X')
+#     plot!(sol_zoh_con.X')
+#     plot(sol_foh_con.U')
+#     plot!(sol_zoh_con.U')
+# end
 
 # Test final state from foh solve
 @test norm(sol_foh_con.X[:,end] - solver_foh_con.obj.xf) < 1e-3
@@ -84,13 +80,13 @@ solver_zoh_con2 = Solver(model_p, obj_con2_p, integration=:rk3, dt=dt, opts=opts
 sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
-if opts.verbose
-    plot(sol_foh_con2.X')
-    plot!(sol_zoh_con2.X')
-
-    plot(sol_foh_con2.U')
-    plot!(sol_zoh_con2.U')
-end
+# if opts.verbose
+#     plot(sol_foh_con2.X')
+#     plot!(sol_zoh_con2.X')
+#
+#     plot(sol_foh_con2.U')
+#     plot!(sol_zoh_con2.U')
+# end
 
 # Test final state from foh solve
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
@@ -105,12 +101,12 @@ U = ones(solver_uncon_inf.model.m,solver_uncon_inf.N)
 
 results_inf, = solve(solver_uncon_inf,X_interp,U)
 
-if opts.verbose
-    plot(results_inf.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
-    plot(results_inf.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
-    println("Final state: $(results_inf.X[:,end])")
-    println("Final cost: $(results_inf.cost[end])")
-end
+# if opts.verbose
+#     plot(results_inf.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
+#     plot(results_inf.U',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="u(t)")
+#     println("Final state: $(results_inf.X[:,end])")
+#     println("Final cost: $(results_inf.cost[end])")
+# end
 idx = find(x->x==2,results_inf.iter_type)
 
 # Test that infeasible control output is good warm start for dynamically constrained solve
@@ -119,25 +115,25 @@ idx = find(x->x==2,results_inf.iter_type)
 # Test final (dynamically constrained) state from foh solve
 @test norm(results_inf.X[:,end] - solver_uncon_inf.obj.xf) < 1e-3
 
-if opts.verbose
-    plot(results_inf.result[idx[1]-1].U',color="green")
-    plot!(results_inf.result[idx[1]+1].U',color="blue")
-    plot!(results_inf.result[end].U',color="red")
-    results_inf.result[idx[1]].U
-
-    # Confirm visually that control output from infeasible start is a good warm start for constrained solve
-    tmp = ConstrainedResults(solver_uncon_inf.model.n,solver_uncon_inf.model.m,size(results_inf.result[1].C,1),solver_uncon_inf.N)
-    tmp.U[:,:] = results_inf.result[idx[1]-1].U[1,:]
-    tmp2 = ConstrainedResults(solver_uncon_inf.model.n,solver_uncon_inf.model.m,size(results_inf.result[1].C,1),solver_uncon_inf.N)
-    tmp2.U[:,:] = results_inf.result[end].U
-
-    rollout!(tmp,solver_uncon_inf)
-    plot(tmp.X')
-    tmp.X[:,end]
-
-    rollout!(tmp2,solver_uncon_inf)
-    plot!(tmp2.X')
-end
+# if opts.verbose
+#     plot(results_inf.result[idx[1]-1].U',color="green")
+#     plot!(results_inf.result[idx[1]+1].U',color="blue")
+#     plot!(results_inf.result[end].U',color="red")
+#     results_inf.result[idx[1]].U
+#
+#     # Confirm visually that control output from infeasible start is a good warm start for constrained solve
+#     tmp = ConstrainedResults(solver_uncon_inf.model.n,solver_uncon_inf.model.m,size(results_inf.result[1].C,1),solver_uncon_inf.N)
+#     tmp.U[:,:] = results_inf.result[idx[1]-1].U[1,:]
+#     tmp2 = ConstrainedResults(solver_uncon_inf.model.n,solver_uncon_inf.model.m,size(results_inf.result[1].C,1),solver_uncon_inf.N)
+#     tmp2.U[:,:] = results_inf.result[end].U
+#
+#     rollout!(tmp,solver_uncon_inf)
+#     plot(tmp.X')
+#     tmp.X[:,end]
+#
+#     rollout!(tmp2,solver_uncon_inf)
+#     plot!(tmp2.X')
+# end
 ##
 
 ## Infeasible start with constraints pendulum (foh)
@@ -158,21 +154,21 @@ results_inf2, = solve(solver_con2,X_interp,U)
 
 # Test final state from foh solve
 @test norm(results_inf2.X[:,end] - solver_con2.obj.xf) < 1e-3
-
-if opts.verbose
-    plot(results_inf2.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
-    plot(results_inf2.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
-    println("Final state: $(results_inf2.X[:,end])")
-    println("Final cost: $(results_inf2.cost[end])")
-    # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
-    # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
-end
+#
+# if opts.verbose
+#     plot(results_inf2.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")
+#     plot(results_inf2.U',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="u(t)")
+#     println("Final state: $(results_inf2.X[:,end])")
+#     println("Final cost: $(results_inf2.cost[end])")
+#     # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
+#     # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
+# end
 idx = find(x->x==2,results_inf2.iter_type)
 
-if opts.verbose
-    plot(results_inf2.result[idx[1]-1].U',color="green")
-    plot!(results_inf2.result[idx[1]+1].U',color="red")
-end
+# if opts.verbose
+#     plot(results_inf2.result[idx[1]-1].U',color="green")
+#     plot!(results_inf2.result[idx[1]+1].U',color="red")
+# end
 
 # Confirm that control output from infeasible start is a good warm start for constrained solve
 @test norm(results_inf2.result[idx[1]-1].U[1,:]-results_inf2.result[idx[1]].U[1,:]) < 1e-3
@@ -185,10 +181,10 @@ tmp2.U[:,:] = results_inf2.result[end].U
 rollout!(tmp,solver_con2)
 rollout!(tmp2,solver_con2)
 
-if opts.verbose
-    plot(tmp.X')
-    plot!(tmp2.X')
-end
+# if opts.verbose
+#     plot(tmp.X')
+#     plot!(tmp2.X')
+# end
 
 # Confirm that state trajectory from infeasible start is similar to the unconstrained solve
 @test norm(tmp.X' - tmp2.X') < 15.0
@@ -209,19 +205,19 @@ U = rand(solver_foh.model.m, solver_foh.N)
 sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
-if opts.verbose
-    plot(sol_foh.X[1,:],sol_foh.X[2,:])
-    plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
-
-    plot(sol_foh.U')
-    plot!(sol_zoh.U')
-
-    println("Final state (foh): $(sol_foh.X[:,end])")
-    println("Final state (zoh): $(sol_zoh.X[:,end])")
-
-    println("Final state cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
-    println("Final state cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
-end
+# if opts.verbose
+#     plot(sol_foh.X[1,:],sol_foh.X[2,:])
+#     plot!(sol_zoh.X[1,:],sol_zoh.X[2,:])
+#
+#     plot(sol_foh.U')
+#     plot!(sol_zoh.U')
+#
+#     println("Final state (foh): $(sol_foh.X[:,end])")
+#     println("Final state (zoh): $(sol_zoh.X[:,end])")
+#
+#     println("Final state cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
+#     println("Final state cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
+# end
 
 # Test final state from foh solve
 @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
@@ -243,19 +239,19 @@ U = 5*rand(solver_foh_con2.model.m,solver_foh_con2.N)
 sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
-if opts.verbose
-    plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
-    plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
-
-    println("Final state (foh): $(sol_foh_con2.X[:,end])")
-    println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
-
-    println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
-    println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
-
-    plot(sol_foh_con2.U')
-    plot!(sol_zoh_con2.U')
-end
+# if opts.verbose
+#     plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
+#     plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
+#
+#     println("Final state (foh): $(sol_foh_con2.X[:,end])")
+#     println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
+#
+#     println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
+#     println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
+#
+#     plot(sol_foh_con2.U')
+#     plot!(sol_zoh_con2.U')
+# end
 
 # Test final state from foh solve
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
@@ -279,19 +275,19 @@ X_interp = line_trajectory(solver_foh_con2)
 sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
 
-if opts.verbose
-    plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
-    plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
-
-    println("Final state (foh): $(sol_foh_con2.X[:,end])")
-    println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
-
-    println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
-    println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
-
-    plot(sol_foh_con2.U')
-    plot!(sol_zoh_con2.U')
-end
+# if opts.verbose
+#     plot(sol_foh_con2.X[1,:],sol_foh_con2.X[2,:])
+#     plot!(sol_zoh_con2.X[1,:],sol_zoh_con2.X[2,:])
+#
+#     println("Final state (foh): $(sol_foh_con2.X[:,end])")
+#     println("Final state (zoh): $(sol_zoh_con2.X[:,end])")
+#
+#     println("Final cost (foh): $(sol_foh_con2.cost[sol_foh_con2.termination_index])")
+#     println("Final cost (zoh): $(sol_zoh_con2.cost[sol_zoh_con2.termination_index])")
+#
+#     plot(sol_foh_con2.U')
+#     plot!(sol_zoh_con2.U')
+# end
 
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
 ##
