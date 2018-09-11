@@ -16,7 +16,7 @@ function quadrotor_dynamics_euler!(xdot,x,u)
     #Parameters
     m = .5;
     I = diagm([0.0023;0.0023;0.004]);
-    invI = diagm(1./[0.0023;0.0023;0.004]);
+    invI = diagm(1/[0.0023;0.0023;0.004]);
     g = 9.81;
     L = 0.1750;
 
