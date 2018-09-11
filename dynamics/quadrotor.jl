@@ -53,17 +53,16 @@ function quadrotor_dynamics!(xdot,X,u)
       tmp = hamilton_product(unit_quat(q),hamilton_product([0;0;F1+F2+F3+F4;0],quaternion_conjugate(unit_quat(q))))#TODO does the quaternion need to be unit when we do this rotation? or is unit quaternion only required when we convert quaterion to rotation matrix
       a = (1/m)*([0;0;-m*g] + tmp[1:3]);
 
-      if !all(isapprox.(quat2rot(q)*[0;0;F1+F2+F3+F4],tmp[1:3]))
-            println("$(tmp[1:3])")
-            println("$(quat2rot(q)*[0;0;F1+F2+F3+F4])")
-            error("hamilton product does not match rotation matrix")
-      end
+      # if !all(isapprox.(quat2rot(q)*[0;0;F1+F2+F3+F4],tmp[1:3]))
+      #       println("$(tmp[1:3])")
+      #       println("$(quat2rot(q)*[0;0;F1+F2+F3+F4])")
+      #       error("hamilton product does not match rotation matrix")
+      # end
 
       # a = (1/m)*([0;0;-m*g] + quat2rot(q)*[0;0;F1+F2+F3+F4]);
 
-
       xdot[1:3] = v # velocity
-      xdot[4:7] = 0.5*hamilton_product(unit_quat(q),[omega;0]) # should q be unit?
+      xdot[4:7] = 0.5*hamilton_product(unit_quat(q),[omega;0]) # TODO should q be unit?
       xdot[8:10] = a # acceleration
       xdot[11:13] = invI*([L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] - cross(omega,I*omega)) # ̇ω; Euler's equation: I(̇ω) + ω x Iω = τ
 end
@@ -121,3 +120,11 @@ function quat2rot(q)
        (2*z*w + 2*x*y) (-z^2 + y^2 - x^2 + w^2) (2*y*z - 2*x*w);
        (2*x*z - 2*y*w) (2*y*z + 2*x*w) (z^2 - y^2 - x^2 + w^2)]
 end
+
+# w = [1;2;3;4]
+# w /= norm(w)
+#
+# omega = [1;2;3]
+#
+# hamilton_product(w,[omega;0])
+# hamilton_product([omega;0],w)

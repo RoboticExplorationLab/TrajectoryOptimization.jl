@@ -82,6 +82,7 @@ function quadrotor_dynamics_euler!(xdot,x,u)
     xdot[10:12] = rpy_ddot
 end
 
+# Utilities
 function rpy2rotmat(rpy)
     # equivalent to rotz(rpy(3))*roty(rpy(2))*rotx(rpy(1))
 

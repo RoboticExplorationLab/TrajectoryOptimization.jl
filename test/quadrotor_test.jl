@@ -38,7 +38,7 @@ Qf = 100.0*eye(n)
 Q = (0.1)*eye(n)
 R = (0.01)*eye(m)
 tf = 5.0
-dt = 0.1
+dt = 0.05
 
 Qf_euler = 100.0*eye(12)
 Q_euler = (0.1)*eye(12)
@@ -99,6 +99,7 @@ obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 obj_con_euler = TrajectoryOptimization.ConstrainedObjective(obj_uncon_euler, u_min=u_min, u_max=u_max,cI=cI)
 
 # Solver
+solver_uncon = Solver(model!,obj_uncon,integration=:rk4,dt=dt,opts=opts)
 solver = Solver(model!,obj_con,integration=:rk4,dt=dt,opts=opts)
 
 solver_uncon_euler = Solver(model_euler,obj_uncon_euler,integration=:rk4,dt=dt,opts=opts)
@@ -107,13 +108,17 @@ solver_euler = Solver(model_euler,obj_con_euler,integration=:rk4,dt=dt,opts=opts
 
 # - Initial control and state trajectories
 U = ones(solver.model.m, solver.N)
-X_interp = line_trajectory(solver)
+# X_interp = line_trajectory(solver)
+X_interp = line_trajectory_quadrotor_quaternion(solver.obj.x0,solver.obj.xf,solver.N)::Array{Float64,2}
 ##################
 
 ### Solve ###
+# results_uncon, stats_uncon = solve(solver_uncon,X_interp,U)
 # results,stats = solve(solver,U)
-results_uncon_euler, stats_uncon_euler = solve(solver_uncon_euler,U)
-results_euler, stats_euler = solve(solver_euler,U)#results_uncon_euler.U)
+
+solve_dircol(solver,X_interp,U)
+# results_uncon_euler, stats_uncon_euler = solve(solver_uncon_euler,U)
+# results_euler, stats_euler = solve(solver_euler,U)#results_uncon_euler.U)
 #############
 #
 # ### Results ###
