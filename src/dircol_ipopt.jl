@@ -121,7 +121,7 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     prob.x =  Z0  # Set initial state
 
     # Set options
-    dir = Pkg.dir("TrajectoryOptimization")
+    dir = root_dir()
     opt_file = joinpath(dir,"ipopt.opt")
     addOption(prob,"option_file_name",opt_file)
     if solver.opts.verbose == false
@@ -144,7 +144,7 @@ end
 $(SIGNATURES)
 Extract important information from the SNOPT output file(s)
 """
-function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"logs","ipopt.out"))
+function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
     props = Dict()
     obj = Vector{Float64}()
     c_max = Vector{Float64}()
@@ -190,8 +190,8 @@ function parse_ipopt_summary(file=joinpath(Pkg.dir("TrajectoryOptimization"),"lo
 end
 
 function write_ipopt_options(
-        optfile=joinpath(dirname(pathof(TrajectoryOptimization)),"..","ipopt.opt"),
-        outfile=joinpath(dirname(pathof(TrajectoryOptimization)),"..","logs","ipopt.out"))
+        optfile=joinpath(root_dir(),"ipopt.opt"),
+        outfile=joinpath(root_dir(),"logs","ipopt.out"))
     f = open(optfile,"w")
     println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
     println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")

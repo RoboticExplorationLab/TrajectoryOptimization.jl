@@ -29,6 +29,10 @@ function println(level::Symbol, msg::String)::Nothing
     end
 end
 
+function root_dir()
+    joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+end
+
 print_info(msg) = println(:info,msg)
 print_debug(msg) = println(:debug,msg)
 
