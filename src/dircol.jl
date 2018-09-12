@@ -101,12 +101,12 @@ end
 function get_weights(method::Symbol,N::Int)
     if method == :trapezoid
         weights = ones(N)
-        weights[[1,end]] = 0.5
+        weights[[1,end]] .= 0.5
     elseif method == :hermite_simpson_separated ||
             method == :hermite_simpson
         weights = ones(N)*2/6
-        weights[2:2:end] = 4/6
-        weights[[1,end]] = 1/6
+        weights[2:2:end] .= 4/6
+        weights[[1,end]] .= 1/6
     elseif method == :midpoint
         weights = ones(N)
         weights[end] = 0
@@ -132,7 +132,7 @@ function gen_custom_constraint_fun(solver::Solver,method)
 
     function c_fun!(C_vec::Vector,X::Matrix,U::Matrix)
         CE = view(C_vec,1:PE)
-        CI = view(C_vec,PE+(1:PI))
+        CI = view(C_vec,PE.+(1:PI))
         cE = reshape(view(CE,1:(N-1)pE_c),pE_c,N-1)
         cI = reshape(view(CI,1:(N-1)pI_c),pI_c,N-1)
 
@@ -167,13 +167,13 @@ function gen_custom_constraint_fun(solver::Solver,method)
             off_1 = (k-1)pE_c
             off_2 = (k-1)*(n+m)
             Ac,Bc = jac_cE(X[:,k],U[:,k])
-            JE[off_1+(1:pE_c),off_2 + (1:n)] = Ac
-            JE[off_1+(1:pE_c),off_2+n+(1:m)] = Bc
+            JE[off_1.+(1:pE_c),off_2  .+ (1:n)] = Ac
+            JE[off_1.+(1:pE_c),off_2.+n.+(1:m)] = Bc
         end
         if pE_N_c > 0
             off = (N-1)*(n+m)
             Ac = jac_cE(X[:,N])
-            JE[(N-1)pE_c+1:end,off+(1:n)] = Ac
+            JE[(N-1)pE_c.+1:end,off.+(1:n)] = Ac
         end
 
         # Inequality Constraints
@@ -181,13 +181,13 @@ function gen_custom_constraint_fun(solver::Solver,method)
             off_1 = (k-1)pI_c
             off_2 = (k-1)*(n+m)
             Ac,Bc = jac_cI(X[:,k],U[:,k])
-            JI[off_1+(1:pI_c),off_2 + (1:n)] = Ac
-            JI[off_1+(1:pI_c),off_2+n+(1:m)] = Bc
+            JI[off_1.+(1:pI_c),off_2  .+ (1:n)] = Ac
+            JI[off_1.+(1:pI_c),off_2.+n.+(1:m)] = Bc
         end
         if pI_N_c > 0
             off = (N-1)*(n+m)
             Ac = jac_cI(X[:,N])
-            JI[pI_c+1:end,off+(1:n)] = Ac
+            JI[pI_c.+1:end,off.+(1:n)] = Ac
         end
         return J
     end
@@ -205,8 +205,8 @@ function get_bounds(solver::Solver,method::Symbol)
     ## STATE CONSTRAINTS ##
     x_L[1:n,:] .= obj.x_min
     x_U[1:n,:] .= obj.x_max
-    x_L[n+(1:m),:] .= obj.u_min
-    x_U[n+(1:m),:] .= obj.u_max
+    x_L[n.+(1:m),:] .= obj.u_min
+    x_U[n.+(1:m),:] .= obj.u_max
 
     # Initial Condition
     x_L[1:n,1] .= obj.x0
@@ -230,10 +230,10 @@ function get_bounds(solver::Solver,method::Symbol)
     # Get bounds
     g_L = zeros(P)
     g_U = zeros(P)
-    g_L[1:PE] = 0
-    g_U[1:PE] = 0
-    g_L[PE+1:end] = Inf
-    g_U[PE+1:end] = 0
+    g_L[1:PE] .= 0
+    g_U[1:PE] .= 0
+    g_L[PE+1:end] .= Inf
+    g_U[PE+1:end] .= 0
 
     # Convert Infinite bounds
     convertInf!(x_L)
@@ -601,8 +601,8 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
         end
     elseif method == :hermite_simpson_separated || method == :hermite_simpson
         iLow = 1:2:N_-1
-        iMid = iLow + 1
-        iUpp = iMid + 1
+        iMid = iLow .+ 1
+        iUpp = iMid .+ 1
 
         collocation = - X[:,iUpp] + X[:,iLow] + dt*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
 
@@ -645,8 +645,8 @@ function collocation_constraints(X,U,method,dt,f::Function)
         end
     elseif method == :hermite_simpson_separated
         iLow = 1:2:N-1
-        iMid = iLow + 1
-        iUpp = iMid + 1
+        iMid = iLow .+ 1
+        iUpp = iMid .+ 1
 
         midpoints =  - X[:,iMid] + (X[:,iLow]+X[:,iUpp])/2 + dt*(fVal[:,iLow] - fVal[:,iUpp])/8
         collocation = - X[:,iUpp] + X[:,iLow] + dt*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
@@ -709,8 +709,8 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
             off_2 = (k-1)*(n+m)
             # Calculate (n,n+m) Jacobian of both states and controls
             fz = A[:,:,k]  #F(z[:,k])
-            jacob_g[off_1-n+(1:n),off_2+(1:n+m)] .= dt*fz/2 - Inm
-            jacob_g[off_1 + (1:n),off_2+(1:n+m)] .= dt*fz/2 + Inm
+            jacob_g[off_1.-n.+(1:n),off_2.+(1:n+m)] .= dt*fz/2 - Inm
+            jacob_g[off_1  .+ (1:n),off_2.+(1:n+m)] .= dt*fz/2 + Inm
         end
 
         # Last time step
@@ -727,14 +727,14 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
         function calc_block(k)
             vals = zeros(2n,3(n+m))
             fz = A[:,:,k]  # F(z[:,k])
-            vals[0+(1:n),(1:n+m)] .= dt*fz/6 + Inm
-            vals[n+(1:n),(1:n+m)] .= dt*fz/8 + Inm/2
+            vals[   (1:n),(1:n+m)] .= dt*fz/6 + Inm
+            vals[n.+(1:n),(1:n+m)] .= dt*fz/8 + Inm/2
             fm = A[:,:,k+1]  # F(z[:,k+1])
-            vals[0+(1:n),n+m+(1:n+m)] .= 2*dt*fm/3
-            vals[n+(1:n),n+m+(1:n+m)] .= -Inm
+            vals[   (1:n),n.+m.+(1:n+m)] .= 2*dt*fm/3
+            vals[n.+(1:n),n.+m.+(1:n+m)] .= -Inm
             fz1 .= A[:,:,k+2]  # F(z[:,k+2])
-            vals[0+(1:n),2(n+m)+(1:n+m)] .=  dt*fz1/6 - Inm
-            vals[n+(1:n),2(n+m)+(1:n+m)] .= -dt*fz1/8 + Inm/2
+            vals[   (1:n),2(n+m).+(1:n+m)] .=  dt*fz1/6 - Inm
+            vals[n.+(1:n),2(n+m).+(1:n+m)] .= -dt*fz1/8 + Inm/2
             return vals
         end
 
@@ -744,7 +744,7 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
             off_2 = 2(i-1)*(n+m)
             k = 2i-1
 
-            jacob_g[off_1+(1:2n), off_2+(1:3(n+m))] = calc_block(k)
+            jacob_g[off_1.+(1:2n), off_2.+(1:3(n+m))] = calc_block(k)
         end
     elseif method == :hermite_simpson
         nSeg = N-1
@@ -770,17 +770,17 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
             Im = Matrix(I,m,m)
 
             vals = zeros(n,2(n+m))
-            vals[:,1:n] =        dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In    # ∇x1
-            vals[:,n+(1:m)] =    dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))   # ∇u1
-            vals[:,n+m+(1:n)] =  dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In    # ∇x2
-            vals[:,2n+m+(1:m)] = dt/6*(B2 + 4Am*(-dt/8*B2) + 4Bm*(Im/2))   # ∇u2
+            vals[:,1:n] =          dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In    # ∇x1
+            vals[:,n.+(1:m)] =     dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))   # ∇u1
+            vals[:,n.+m.+(1:n)] =  dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In    # ∇x2
+            vals[:,2n.+m.+(1:m)] = dt/6*(B2 + 4Am*(-dt/8*B2) + 4Bm*(Im/2))   # ∇u2
             return vals
         end
 
         for k = 1:nSeg
             off_1 = (k-1)*(n)
             off_2 = (k-1)*(n+m)
-            jacob_g[off_1+(1:n), off_2+(1:2(n+m))] = calc_jacob_block(k)
+            jacob_g[off_1.+(1:n), off_2.+(1:2(n+m))] = calc_jacob_block(k)
         end
 
     elseif method == :midpoint
@@ -789,17 +789,17 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
 
         function calc_jacob_block_midpoint(k)
             vals = zeros(n,2(n+m))
-            vals[:,1:n] =        In + dt*A[:,:,k]/2    # ∇x1
-            vals[:,n+(1:m)] =    dt*B[:,:,k]           # ∇u1
-            vals[:,n+m+(1:n)] = -In + dt*A[:,:,k]/2    # ∇x2
-            vals[:,2n+m+(1:m)] = zeros(n,m)            # ∇u2
+            vals[:,1:n] =          In + dt*A[:,:,k]/2    # ∇x1
+            vals[:,n.+(1:m)] =     dt*B[:,:,k]           # ∇u1
+            vals[:,n.+m.+(1:n)] = -In + dt*A[:,:,k]/2    # ∇x2
+            vals[:,2n.+m.+(1:m)] = zeros(n,m)            # ∇u2
             return vals
         end
 
         for k = 1:nSeg
             off_1 = (k-1)*(n)
             off_2 = (k-1)*(n+m)
-            jacob_g[off_1+(1:n), off_2+(1:2(n+m))] = calc_jacob_block_midpoint(k)
+            jacob_g[off_1.+(1:n), off_2.+(1:2(n+m))] = calc_jacob_block_midpoint(k)
         end
     end
 
@@ -820,15 +820,15 @@ function constraint_jacobian!(solver::Solver, X, U, A, B, vals, method::Symbol)
 
         function calc_block_trap(k,blk)
             blk = reshape(blk,n,2(n+m))
-            blk[:,1:n+m] =       dt*A[:,:,k  ]/2+Inm
-            blk[:,n+m+(1:n+m)] = dt*A[:,:,k+1]/2-Inm
+            blk[:,1:n+m] =         dt*A[:,:,k  ]/2+Inm
+            blk[:,n.+m.+(1:n+m)] = dt*A[:,:,k+1]/2-Inm
             return nothing
         end
 
 
         for k = 1:N-1
             off = (k-1)*n_blk
-            block = view(vals,off+(1:n_blk))
+            block = view(vals,off.+(1:n_blk))
             calc_block_trap(k,block)
         end
 
@@ -841,21 +841,21 @@ function constraint_jacobian!(solver::Solver, X, U, A, B, vals, method::Symbol)
         function calc_block_sep!(k,val_block)
             blk = reshape(val_block,2n,3(n+m))
             fz = A[:,:,k]  # F(z[:,k])
-            blk[0+(1:n),(1:n+m)] = dt*fz/6 + Inm
-            blk[n+(1:n),(1:n+m)] = dt*fz/8 + Inm/2
+            blk[   (1:n),(1:n+m)] = dt*fz/6 + Inm
+            blk[n.+(1:n),(1:n+m)] = dt*fz/8 + Inm/2
             fm = A[:,:,k+1]  # F(z[:,k+1])
-            blk[0+(1:n),n+m+(1:n+m)] = 2*dt*fm/3
-            blk[n+(1:n),n+m+(1:n+m)] = -Inm
+            blk[   (1:n),n.+m.+(1:n+m)] = 2*dt*fm/3
+            blk[n.+(1:n),n.+m.+(1:n+m)] = -Inm
             fz1 = A[:,:,k+2]  # F(z[:,k+2])
-            blk[0+(1:n),2(n+m)+(1:n+m)] =  dt*fz1/6 - Inm
-            blk[n+(1:n),2(n+m)+(1:n+m)] = -dt*fz1/8 + Inm/2
+            blk[   (1:n),2(n+m).+(1:n+m)] =  dt*fz1/6 - Inm
+            blk[n.+(1:n),2(n+m).+(1:n+m)] = -dt*fz1/8 + Inm/2
             return nothing
         end
 
         for i = 1:nSeg
             k = 2i-1
             off = (i-1)*n_blk
-            block = view(vals,off+(1:n_blk))
+            block = view(vals,off.+(1:n_blk))
             calc_block_sep!(k,block)
         end
     elseif method == :hermite_simpson
@@ -884,15 +884,15 @@ function constraint_jacobian!(solver::Solver, X, U, A, B, vals, method::Symbol)
 
             vals = reshape(vals,n,2(n+m))
             vals[:,1:n] =        dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In    # ∇x1
-            vals[:,n+(1:m)] =    dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))   # ∇u1
-            vals[:,n+m+(1:n)] =  dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In    # ∇x2
-            vals[:,2n+m+(1:m)] = dt/6*(B2 + 4Am*(-dt/8*B2) + 4Bm*(Im/2))   # ∇u2
+            vals[:,n.+(1:m)] =    dt/6*(B1 + 4Am*( dt/8*B1) + 4Bm*(Im/2))   # ∇u1
+            vals[:,n.+m.+(1:n)] =  dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In    # ∇x2
+            vals[:,2n.+m.+(1:m)] = dt/6*(B2 + 4Am*(-dt/8*B2) + 4Bm*(Im/2))   # ∇u2
             return nothing
         end
 
         for k = 1:nSeg
             off = (k-1)*n_blk
-            block = view(vals,off+(1:n_blk))
+            block = view(vals,off.+(1:n_blk))
             calc_block_hs!(k,block)
         end
 
@@ -904,14 +904,14 @@ function constraint_jacobian!(solver::Solver, X, U, A, B, vals, method::Symbol)
         function calc_jacob_block_midpoint!(k,blk)
             blk = reshape(blk,n,2n+m)
             blk[:,1:n] =        In + dt*A[:,:,k]/2    # ∇x1
-            blk[:,n+(1:m)] =    dt*B[:,:,k]           # ∇u1
-            blk[:,n+m+(1:n)] = -In + dt*A[:,:,k]/2    # ∇x2
+            blk[:,n.+(1:m)] =    dt*B[:,:,k]           # ∇u1
+            blk[:,n.+m.+(1:n)] = -In + dt*A[:,:,k]/2    # ∇x2
             return nothing
         end
 
         for k = 1:nSeg
             off = (k-1)*n_blk
-            block = view(vals,off+(1:n_blk))
+            block = view(vals,off.+(1:n_blk))
             calc_jacob_block_midpoint!(k,block)
         end
     end
@@ -935,7 +935,7 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
         for k = 1:N-1
             off_1 = (k-1)*(n)
             off_2 = (k-1)*(n+m)
-            jacob_g[off_1+(1:n), off_2+(1:2(n+m))] = num_block + i
+            jacob_g[off_1.+(1:n), off_2.+(1:2(n+m))] = num_block .+ i
             i += n_blk
         end
 
@@ -949,7 +949,7 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
             off_1 = 2(k-1)*(n)
             off_2 = 2(k-1)*(n+m)
 
-            jacob_g[off_1+(1:2n), off_2+(1:3(n+m))] = num_block + i
+            jacob_g[off_1.+(1:2n), off_2.+(1:3(n+m))] = num_block .+ i
             i += n_blk
         end
 
@@ -961,7 +961,7 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
         for k = 1:nSeg
             off_1 = (k-1)*(n)
             off_2 = (k-1)*(n+m)
-            jacob_g[off_1+(1:n), off_2+(1:2n+m)] = num_block + i
+            jacob_g[off_1.+(1:n), off_2.+(1:2n+m)] = num_block .+ i
             i += n_blk
         end
     end
