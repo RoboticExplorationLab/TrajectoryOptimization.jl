@@ -1,4 +1,3 @@
-using Random
 # Set random seed
 Random.seed!(7)
 

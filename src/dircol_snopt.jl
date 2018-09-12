@@ -229,21 +229,6 @@ end
 
 """
 $(SIGNATURES)
-Automatically generate an initial guess by linearly interpolating the state
-between initial and final state and settings the controls to zero.
-"""
-function solve_dircol(solver::Solver;
-        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
-    # Constants
-    N = solver.N
-    N = convert_N(N,method)
-
-    X0, U0 = get_initial_state(solver.obj,N)
-    solve_dircol(solver, X0, U0, method=method, grads=grads, start=start)
-end
-
-"""
-$(SIGNATURES)
 MESH REFINEMENT:
 Solve by warm starting with a coarse time step and warm-starting the solver
 with the previous solution

@@ -1,5 +1,6 @@
 using BenchmarkTools
 using LinearAlgebra
+using Test
 
 println("\nRUNNING BENCHMARKS\n")
 system = "Simple Pendulum"

@@ -6,6 +6,10 @@ else
 end
 
 using BenchmarkTools
+using LinearAlgebra
+using Random
+using SparseArrays
+using ForwardDiff
 
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")
@@ -28,15 +32,12 @@ end
 @testset "Infeasible Start" begin
     include("infeasible_start_tests.jl")
 end
-
-# if TrajectoryOptimization.check_snopt_installation()
-#     @testset "Direct Collocation" begin
-#         include("dircol_test.jl")
-#     end
-#     @testset "Direct Collocation (IPOPT)" begin
-#         include("ipopt_test.jl")
-#     end
-# end
+@testset "Direct Collocation (IPOPT)" begin
+    include("ipopt_test.jl")
+end
+@testset "Direct Collocation" begin
+    include("dircol_test.jl")
+end
 
 """
 # NEEDED TESTS:

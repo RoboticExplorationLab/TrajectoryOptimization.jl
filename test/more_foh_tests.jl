@@ -1,5 +1,5 @@
 # Set random seed
-srand(7)
+Random.seed!(7)
 
 ### Solver Options ###
 dt = 0.1
