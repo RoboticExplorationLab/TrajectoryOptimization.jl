@@ -57,7 +57,7 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
 @test obj.p == 4
 @test obj.pI == 4
 
-@test_throws DimensionMismatch obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
+@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,
     x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
     x_min=-[Inf,4], x_max=[3,Inf])

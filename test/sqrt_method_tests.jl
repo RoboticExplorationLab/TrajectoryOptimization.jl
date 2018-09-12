@@ -22,7 +22,7 @@ TrajectoryOptimization.backwardpass_sqrt!(results_sqrt,solver)
 @test all(isapprox.(results.s,results_sqrt.s))
 tmp = zeros(size(results_sqrt.S))
 for i = 1:solver.N
- tmp[:,:,i] = results_sqrt.S[:,:,i]'*results_sqrt.S[:,:,i]
+    tmp[:,:,i] = results_sqrt.S[:,:,i]'*results_sqrt.S[:,:,i]
 end
 @test all(isapprox.(results.S,tmp))
 
@@ -51,6 +51,6 @@ results_con_sqrt.S
 @test all(isapprox.(results_con.s,results_con_sqrt.s))
 tmp = zeros(size(results_con_sqrt.S))
 for i = 1:solver.N
- tmp[:,:,i] = results_con_sqrt.S[:,:,i]''*results_con_sqrt.S[:,:,i]
+    tmp[:,:,i] = results_con_sqrt.S[:,:,i]''*results_con_sqrt.S[:,:,i]
 end
 @test all(isapprox.(results_con.S,results_con.S))

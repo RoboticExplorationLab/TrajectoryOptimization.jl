@@ -18,7 +18,7 @@ rc = TrajectoryOptimization.ResultsCache(solver,N_iter)
 @test size(rc.X) == (n,N)
 @test size(rc.U) == (m,N)
 @test size(rc.cost) == (N_iter,)
-@test_throws MethodError c = TrajectoryOptimization.ResultsCache(solver,float(N_iter)) # Error on float size
+@test_throws MethodError TrajectoryOptimization.ResultsCache(solver,float(N_iter)) # Error on float size
 
 rc = TrajectoryOptimization.ResultsCache(n,m,N,N_iter)
 @test size(rc.X) == (n,N)
@@ -61,8 +61,7 @@ for i = 1:n2
     rc2.result[i] = TrajectoryOptimization.ConstrainedResults(2,2,2,2)
 end
 R1 = TrajectoryOptimization.ResultsCache(rc.result[1],n1+n2)
-i = n1
-R1.result[i] = copy(rc.result[i]) # store all valid results
+R1.result[n1] = copy(rc.result[n1]) # store all valid results
 
 merged = TrajectoryOptimization.merge_results_cache(rc,rc2)
 @test size(merged) == length(merged)
