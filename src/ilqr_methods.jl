@@ -133,7 +133,7 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x::Vector{Float64},u::Vector{Float64},Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Float64
+function stage_cost(x::Vector,u::Vector,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Union{Float64,ForwardDiff.Dual}
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
