@@ -78,7 +78,7 @@ mutable struct SolverOptions
     end
 end
 
-copy(opts::SolverOptions) = SolverOptions(;[name=>getfield(opts,name) for name in fieldnames(opts)]...)
+copy(opts::SolverOptions) = SolverOptions(;[name=>getfield(opts,name) for name in fieldnames(typeof(opts))]...)
 
 function Base.:(==)(A::SolverOptions, B::SolverOptions)
     for name in fieldnames(A)
