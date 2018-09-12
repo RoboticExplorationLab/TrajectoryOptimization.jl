@@ -4,6 +4,8 @@ RigidBodyDynamics 0.6.1
 BenchmarkTools 0.3.1
 DocStringExtensions 0.4.4
 LinearAlgebra
+Statistics
+Random
 RecipesBase
 Interpolations
 Ipopt
