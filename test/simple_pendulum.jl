@@ -1,12 +1,13 @@
+using LinearAlgebra
 #TODO cleanup and document each test
 # Set up models and objective
 u_bound = 3.
-model, obj = TrajectoryOptimization.Dynamics.pendulum
+model, obj = TrajectoryOptimization.Dynamics.pendulum!
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
 
-obj.Q .= eye(2)*1e-3
-obj.R .= eye(1)*1e-2
+obj.Q = 1e-3*Diagonal(I,2)
+obj.R = 1e-2*Diagonal(I,1)
 obj.tf = 5.
 model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective

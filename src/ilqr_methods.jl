@@ -497,15 +497,17 @@ function generate_constraint_functions(obj::ConstrainedObjective)
 
     ### Jacobians ###
     # Declare known jacobians
+    In = Matrix(I,n,n)
     fx_control = zeros(pI_u,n)
     fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = eye(n)[x_max_active,:]
-    fx_state[pI_x_max+1:end,:] = -eye(n)[x_min_active,:]
+    fx_state[1:pI_x_max, :] = In[x_max_active,:]
+    fx_state[pI_x_max+1:end,:] = -In[x_min_active,:]
     fx = zeros(p,n)
 
+    Im = Matrix(I,m,m)
     fu_control = zeros(pI_u,m)
-    fu_control[1:pI_u_max,:] = eye(m)[u_max_active,:]
-    fu_control[pI_u_max+1:end,:] = -eye(m)[u_min_active,:]
+    fu_control[1:pI_u_max,:] = Im[u_max_active,:]
+    fu_control[pI_u_max+1:end,:] = -Im[u_min_active,:]
     fu_state = zeros(pI_x,m)
     fu = zeros(p,m)
 
@@ -516,10 +518,10 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,0,n,m)
     end
 
-    fu_infeasible = eye(n)
+    fu_infeasible = Im
     fx_infeasible = zeros(n,n)
 
-    fx_N = eye(n)  # Jacobian of final state
+    fx_N = In  # Jacobian of final state
 
     function constraint_jacobian(x::Array,u::Array)
         infeasible = length(u) != m

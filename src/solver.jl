@@ -101,13 +101,13 @@ struct Solver
 
             if control_integration == :foh
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] eye(n)], [Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] eye(n)] # fx, [fu I], [fv I]
+                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I], [Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] I] # fx, [fu I], [fv I]
                 else
                     return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m], Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] # fx, fu, fv
                 end
             else
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] eye(n)] # fx, [fu I]
+                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I] # fx, [fu I]
                 else
                     return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m] # fx, fu
                 end
@@ -190,7 +190,7 @@ If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
     if solver.opts.infeasible
-        R = solver.opts.infeasible_regularization*trace(solver.obj.R)*eye(solver.model.m+solver.model.n)
+        R = solver.opts.infeasible_regularization*tr(solver.obj.R)*Diagonal(I,solver.model.m+solver.model.n)
         R[1:solver.model.m,1:solver.model.m] = solver.obj.R
         return R
     else
