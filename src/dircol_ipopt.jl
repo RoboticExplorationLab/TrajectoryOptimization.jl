@@ -152,10 +152,10 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
 
 
     function stash_prop(ln::String,prop::String,prop_name::String=prop,vartype::Type=Float64)
-        if contains(ln, prop)
-            loc = search(ln,prop)
+        if occursin(prop,ln)
+            loc = findfirst(prop,ln)
             if vartype <: Real
-                val = convert(vartype,float(split(ln)[end]))
+                val = convert(vartype,parse(Float64,split(ln)[end]))
                 props[prop_name] = val
                 return true
             end
@@ -167,8 +167,8 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
         if iter_lines
             vals = split(ln)
             if length(vals) == 10 && vals[1] != "iter" && vals[1] != "Restoration"
-                push!(obj, float(vals[2]))
-                push!(c_max, float(vals[3]))
+                push!(obj, parse(Float64,vals[2]))
+                push!(c_max, parse(Float64,vals[3]))
             end
         end
     end
