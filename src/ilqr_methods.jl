@@ -617,7 +617,7 @@ end
 
 function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
     x_traj = zeros(size(x0,1),N)
-    t = linspace(0,N,N)
+    t = range(0,stop=N,length=N)
     slope = (xf-x0)./N
     for i = 1:size(x0,1)
         x_traj[i,:] = slope[i].*t
