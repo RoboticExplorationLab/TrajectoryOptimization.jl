@@ -125,7 +125,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
         # Diagonal indicies for the Iμ matrix (fast)
-        diag_inds = CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2))
+        diag_inds = CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2))
 
         # Generate constraint function and jacobian functions from the objective
         update_constraints!(results,solver,results.X,results.U)

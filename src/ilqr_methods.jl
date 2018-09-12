@@ -559,7 +559,7 @@ Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
-function max_violation(results::ConstrainedResults,inds=CartesianIndex.(indices(results.Iμ,1),indices(results.Iμ,2)))
+function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
         return maximum([abs.(results.C.*(results.Iμ[inds,:] .!= 0))[:]; abs.(results.CN)]) # TODO replace concatenation
     else
