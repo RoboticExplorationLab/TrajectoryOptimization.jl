@@ -7,3 +7,4 @@ deps/deps.jl
 .out
 *.DS_Store
 ipopt.opt
+ipopt.out
