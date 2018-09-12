@@ -159,10 +159,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     iter = 1 # counter for total number of iLQR iterations
     iter_outer = 1
     iter_inner = 1
-    time_setup = toq()
+    time_setup = time_ns() - t_start
     J_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
-    tic()
+    t_solve_start = time_ns()
 
     if solver.opts.cache
         # Initialize cache and store initial trajectories and cost
@@ -327,8 +327,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Run Stats
     stats = Dict("iterations"=>iter-1,
                  "major iterations"=>iter_outer,
-                 "runtime"=>toq(),
-                 "setup_time"=>time_setup,
+                 "runtime"=>float(time_ns() - t_solve_start)/1e9,
+                 "setup_time"=>float(time_setup)/1e9,
                  "cost"=>J_hist,
                  "c_max"=>c_max_hist)
 
