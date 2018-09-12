@@ -6,13 +6,13 @@ using TrajectoryOptimization: generate_general_constraint_jacobian
 pendulum = Dynamics.pendulum[1]
 n = pendulum.n
 m = pendulum.m
-x0 = [0; 0];
+x0 = [0; 0.];
 xf = [pi; 0]; # (ie, swing up)
 u0 = [1]
-Q = 1e-3*eye(n);
-Qf = 100*eye(n);
-R = 1e-3*eye(m);
-tf = 5
+Q = 1e-3*Diagonal(I,n);
+Qf = 100*Diagonal(I,n)
+R = 1e-3*Diagonal(I,m)
+tf = 5.
 
 @test_nowarn UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)

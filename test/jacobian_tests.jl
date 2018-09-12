@@ -90,9 +90,9 @@ model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.quadrotor_
 
 
 # Objective and constraints
-Qf = 100.0*eye(n)
-Q = (0.1)*eye(n)
-R = (0.1)*eye(m)
+Qf = 100.0*Diagonal(I,n)
+Q = (0.1)*Diagonal(I,n)
+R = (0.1)*Diagonal(I,m)
 tf = 5.0
 dt = 0.05
 

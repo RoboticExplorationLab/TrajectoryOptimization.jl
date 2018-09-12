@@ -344,7 +344,7 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
 
     # Terminal constraint
     res.CN .= c(X[:,N])
-    res.IμN .= diagm(res.μN)
+    res.IμN .= Matrix(Diagonal(res.μN))
     return nothing # TODO allow for more general terminal constraint
 end
 

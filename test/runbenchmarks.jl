@@ -8,16 +8,16 @@ u_bound = 2.
 model,obj = TrajectoryOptimization.Dynamics.pendulum!
 opts = TrajectoryOptimization.SolverOptions()
 
-obj.Q .= eye(2)*1e-3
-obj.R .= eye(1)*1e-3
-obj.Qf .= eye(2)*30
+obj.Q .= Diagonal(I,2)*1e-3
+obj.R .= Diagonal(I,1)*1e-3
+obj.Qf .= Diagonal(I,2)*30
 obj.tf = 5.
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 
 # Unconstrained
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = ones(model.m,solver.N)
-results, = TrajectoryOptimization.solve(solver,U) # Test random init
+@time results,stats = TrajectoryOptimization.solve(solver,U) # Test random init
 err = norm(results.X[:,end]-obj.xf)
 @test err < 1e-3
 println("$system - Unconstrained")
