@@ -542,7 +542,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         end
 
         if infeasible
-            return [fx; fx_infeasible], cat((1,2),fu,fu_infeasible)
+            return [fx; fx_infeasible], cat(fu,fu_infeasible,dims=(1,2))
         end
         return fx, fu
     end
