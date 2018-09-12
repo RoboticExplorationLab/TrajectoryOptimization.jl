@@ -17,7 +17,6 @@ dt = 0.05
 
 # Check Jacobians
 solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
-solver.opts.verbose = true
 N = solver.N
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
@@ -93,62 +92,32 @@ check_grads(solver,:hermite_simpson_separated)
 # Solver integration scheme should set the dircol scheme
 solver = Solver(model,obj,dt=dt,integration=:midpoint)
 sol,stats = solve_dircol(solver,X0,U0)
-@test vecnorm(sol.X[:,end]-obj.xf) < 1e-5
+@test norm(sol.X[:,end]-obj.xf) < 1e-5
 @test stats["info"] == :Solve_Succeeded
 
 solver = Solver(model,obj,dt=dt)
 sol2,stats = solve_dircol(solver,X0,U0,method=:midpoint)
-@test vecnorm(sol2.X[:,end]-obj.xf) < 1e-5
+@test norm(sol2.X[:,end]-obj.xf) < 1e-5
 @test sol.X == sol2.X
 @test sol.U == sol2.U
 @test stats["info"] == :Solve_Succeeded
 
 solver = Solver(model,obj,dt=dt,integration=:rk3_foh)
 sol,stats = solve_dircol(solver,X0,U0)
-@test vecnorm(sol.X[:,end]-obj.xf) < 1e-5
+@test norm(sol.X[:,end]-obj.xf) < 1e-5
 @test stats["info"] == :Solve_Succeeded
 
 solver = Solver(model,obj,dt=dt)
 sol2,stats = solve_dircol(solver,X0,U0,method=:hermite_simpson)
-@test vecnorm(sol2.X[:,end]-obj.xf) < 1e-5
+@test norm(sol2.X[:,end]-obj.xf) < 1e-5
 @test sol.X == sol2.X
 @test sol.U == sol2.U
 @test stats["info"] == :Solve_Succeeded
 
-# Test different derivative options
-method = :hermite_simpson_separated
-function check_grad_options(method)
-    solver = Solver(model,obj,dt=dt)
-    sol,stats = solve_dircol(solver,X0,U0,method=method,nlp=:snopt,grads=:none)
-    @test vecnorm(sol.X[:,end]-obj.xf) < 1e-5
-
-    sol2,stats = solve_dircol(solver,X0,U0,method=method,nlp=:snopt,grads=:auto)
-    @test vecnorm(sol2.X[:,end]-obj.xf) < 1e-5
-    @test norm(sol.X-sol2.X) < 5e-3
-end
-
-# check_grad_options(:hermite_simpson_separated)
-# check_grad_options(:hermite_simpson)
-# check_grad_options(:trapezoid)
-# check_grad_options(:midpoint)
-
-
-
-# Mesh refinement # TODO: mesh for ipopt
-# mesh = [0.5,0.2]
-# t1 = @elapsed sol,stats = solve_dircol(solver,X0,U0,nlp=:snopt)
-# t2 = @elapsed sol2,stats = solve_dircol(solver,X0,U0,mesh,)
-# @test vecnorm(sol.X[:,end]-obj.xf) < 1e-5
-# @test vecnorm(sol.X-sol.X2) < 1e-2
-# @test stats["info"][end] == "Finished successfully: optimality conditions satisfied"
-
 # No initial guess
 mesh = [0.2]
 t1 = @elapsed sol,stats = solve_dircol(solver)
-# t2 = @elapsed X2,U2,f,stats = solve_dircol(solver,mesh)
-@test vecnorm(sol.X[:,end]-obj.xf) < 1e-5
-# @test vecnorm(X2[:,end]-obj.xf) < 1e-5
-# @test vecnorm(X2-X) < 1e-2
+@test norm(sol.X[:,end]-obj.xf) < 1e-5
 
 # Test dircol constraint stuff
 n,m = 3,2
