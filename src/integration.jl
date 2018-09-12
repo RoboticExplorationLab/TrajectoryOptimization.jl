@@ -28,7 +28,7 @@ function midpoint(f!::Function, dt::Float64)
         f!(xdot,x,u)
         xdot .*= dt/2.
         f!(xdot, x + xdot, u)
-        copy!(xdot,x + xdot*dt)
+        copyto!(xdot,x + xdot*dt)
     end
 end
 
@@ -38,7 +38,7 @@ function midpoint(f_aug!::Function)
         f_aug!(dS, S)
         dS .*= dt/2.
         f_aug!(dS, S + dS)
-        copy!(dS,S + dS*dt)
+        copyto!(dS,S + dS*dt)
     end
 end
 
@@ -61,7 +61,7 @@ function rk4(f!::Function, dt::Float64)
         f!(k2, x + k1/2, u); k2 *= dt;
         f!(k3, x + k2/2, u); k3 *= dt;
         f!(k4, x + k3, u);    k4 *= dt;
-        copy!(xdot, x + (k1 + 2*k2 + 2*k3 + k4)/6)
+        copyto!(xdot, x + (k1 + 2*k2 + 2*k3 + k4)/6)
     end
 end
 
@@ -75,7 +75,7 @@ function rk4(f_aug!::Function)
         f_aug!(k2,S + k1/2); k2 *= dt;
         f_aug!(k3,S + k2/2); k3 *= dt;
         f_aug!(k4,S + k3);    k4 *= dt;
-        copy!(dS, S + (k1 + 2*k2 + 2*k3 + k4)/6)
+        copyto!(dS, S + (k1 + 2*k2 + 2*k3 + k4)/6)
     end
 end
 
@@ -97,7 +97,7 @@ function rk3(f!::Function, dt::Float64) #TODO - test that this is correct
         f!(k1, x, u);               k1 *= dt;
         f!(k2, x + k1/2, u);       k2 *= dt;
         f!(k3, x - k1 + 2*k2, u);  k3 *= dt;
-        copy!(xdot, x + (k1 + 4*k2 + k3)/6)
+        copyto!(xdot, x + (k1 + 4*k2 + k3)/6)
     end
 end
 
@@ -109,7 +109,7 @@ function rk3(f_aug!::Function)
         f_aug!(k1,S);              k1 *= dt;
         f_aug!(k2,S + k1/2);      k2 *= dt;
         f_aug!(k3,S - k1 + 2*k2); k3 *= dt;
-        copy!(dS, S + (k1 + 4*k2 + k3)/6)
+        copyto!(dS, S + (k1 + 4*k2 + k3)/6)
     end
 end
 
@@ -120,7 +120,7 @@ function rk3_foh(f!::Function, dt::Float64)
         f!(k1, x, u1);                   k1 *= dt;
         f!(k2, x + k1/2, (u1 + u2)./2); k2 *= dt;
         f!(k3, x - k1 + 2*k2, u2);      k3 *= dt;
-        copy!(xdot, x + (k1 + 4*k2 + k3)/6)
+        copyto!(xdot, x + (k1 + 4*k2 + k3)/6)
     end
 end
 
@@ -132,7 +132,7 @@ function rk3_foh(f_aug!::Function)
         f_aug!(k1,S);              k1 *= dt;
         f_aug!(k2,S + k1/2);      k2 *= dt;
         f_aug!(k3,S - k1 + 2*k2); k3 *= dt;
-        copy!(dS, S + (k1 + 4*k2 + k3)/6)
+        copyto!(dS, S + (k1 + 4*k2 + k3)/6)
     end
 end
 

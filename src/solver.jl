@@ -178,7 +178,7 @@ Makes the dynamics function `f(x,u)` appear to operate as an inplace operation o
 form `f!(xdot,x,u)`.
 """
 function wrap_inplace(f::Function)
-    f!(xdot,x,u) = copy!(xdot, f(x,u))
+    f!(xdot,x,u) = copyto!(xdot, f(x,u))
 end
 
 
