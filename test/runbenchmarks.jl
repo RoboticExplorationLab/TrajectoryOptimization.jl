@@ -1,4 +1,5 @@
 using BenchmarkTools
+using LinearAlgebra
 
 println("\nRUNNING BENCHMARKS\n")
 system = "Simple Pendulum"
@@ -25,7 +26,7 @@ println("$system - Unconstrained")
 
 # Constrained
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver,U)
+@time results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2

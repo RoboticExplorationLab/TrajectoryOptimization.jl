@@ -29,14 +29,14 @@ end
     include("infeasible_start_tests.jl")
 end
 
-if TrajectoryOptimization.check_snopt_installation()
-    @testset "Direct Collocation" begin
-        include("dircol_test.jl")
-    end
-    @testset "Direct Collocation (IPOPT)" begin
-        include("ipopt_test.jl")
-    end
-end
+# if TrajectoryOptimization.check_snopt_installation()
+#     @testset "Direct Collocation" begin
+#         include("dircol_test.jl")
+#     end
+#     @testset "Direct Collocation (IPOPT)" begin
+#         include("ipopt_test.jl")
+#     end
+# end
 
 """
 # NEEDED TESTS:
