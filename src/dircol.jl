@@ -617,7 +617,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
     elseif method == :midpoint
         Xm = X
         # Calculate the knot points from the midpoints (and the terminal point)
-        Xk = zeros(Xm)
+        Xk = zero(Xm)
         Xk[:,end] = Xm[:,end]
         for k = N-1:-1:1
             Xk[:,k] = 2Xm[:,k] - Xk[:,k+1]

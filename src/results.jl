@@ -416,7 +416,7 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     Z = zeros(N*(n+m))
     vars = DircolVars(Z,n,m,N)
     X,U = vars.X,vars.U
-    fVal = zeros(X)
+    fVal = zero(X)
     if method == :hermite_simpson
         X_ = zeros(n,N_)
         U_ = zeros(m,N_)
@@ -426,7 +426,7 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     elseif method == :midpoint
         X_ = zeros(n,N) # midpoints plus terminal
         U_ = U
-        fVal_ = zeros(X_)
+        fVal_ = zero(X_)
         N_ = size(X_,2)
         A = zeros(n,n,N_)
         B = zeros(n,m,N_)

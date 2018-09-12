@@ -61,7 +61,7 @@ function check_grads(solver,method)
     Xm = res.X_
     X = res.X
 
-    X1 = zeros(Xm)
+    X1 = zero(Xm)
     X1[:,end] = Xm[:,end]
     for k = N-1:-1:1
         X1[:,k] = 2Xm[:,k] - X1[:,k+1]
