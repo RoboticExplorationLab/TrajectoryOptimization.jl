@@ -65,6 +65,22 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
     # return sol, stats, prob
 end
 
+"""
+$(SIGNATURES)
+Automatically generate an initial guess by linearly interpolating the state
+between initial and final state and settings the controls to zero.
+"""
+function solve_dircol(solver::Solver;
+        method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+    # Constants
+    N = solver.N
+    N = convert_N(N,method)
+
+    X0, U0 = get_initial_state(solver.obj,N)
+    solve_dircol(solver, X0, U0, method=method, grads=grads, start=start)
+end
+
+
 function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     infs = isinf.(A)
     A[infs] = sign.(A[infs])*infbnd
