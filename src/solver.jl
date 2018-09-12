@@ -77,12 +77,12 @@ struct Solver
         # Initialize discrete and continuous dynamics Jacobians
         Jd = zeros(nm1, nm1)
         Sd = zeros(nm1)
-        Sdotd = zeros(Sd)
+        Sdotd = zero(Sd)
         Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
 
         Jc = zeros(model.n+model.m,model.n+model.m)
         Sc = zeros(model.n+model.m)
-        Scdot = zeros(Sc)
+        Scdot = zero(Sc)
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))

@@ -68,7 +68,7 @@ function quadrotor_dynamics!(xdot,X,u)
 end
 
 function quadrotor_dynamics(X,u)
-      xdot = zeros(13,1)
+      xdot = zero(13,1)
       quadrotor_dynamics!(xdot,X,u)
       xdot
 end
@@ -103,7 +103,7 @@ end
 """
 function quaternion_conjugate(q)
       # calculate the congugate of a quaternion: q^+; q = [v;s] -> q^+ = [-v;s]
-      q_ = zeros(q)
+      q_ = zero(q)
       q_[1] = -1*q[1]
       q_[2] = -1*q[2]
       q_[3] = -1*q[3]
