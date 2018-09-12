@@ -133,7 +133,7 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x::Vector{Float64},u::Vector{Float64},Q::Matrix{Float64},R::Matrix{Float64},xf::Vector{Float64})::Float64
+function stage_cost(x::Vector{Float64},u::Vector{Float64},Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Float64
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
@@ -472,8 +472,10 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     CI = zeros(pI)
     function cI(x,u)
         CI[1:pI_u] = c_control(x,u)
-        CI[(1:pI_x)+pI_u] = c_state(x,u)
-        CI[(1:pI_c)+pI_u+pI_x] = obj.cI(x,u)
+        CI[(1:pI_x).+pI_u] = c_state(x,u)
+        if pI_c > 0
+            CI[(1:pI_c).+pI_u.+pI_x] .= obj.cI(x,u)
+        end
         return CI
     end
 
@@ -482,7 +484,9 @@ function generate_constraint_functions(obj::ConstrainedObjective)
     function c_fun(x,u)
         infeasible = length(u) != m
         C[1:pI] = cI(x,u[1:m])
-        C[(1:pE_c)+pI] = obj.cE(x,u[1:m])
+        if pE_c > 0
+            C[(1:pE_c).+pI] .= obj.cE(x,u[1:m])
+        end
         if infeasible
             return [C; u[m+1:end]]
         end
@@ -518,7 +522,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         cE_custom_jacobian = generate_general_constraint_jacobian(obj.cE,pE_c,0,n,m)
     end
 
-    fu_infeasible = Im
+    fu_infeasible = In
     fx_infeasible = zeros(n,n)
 
     fx_N = In  # Jacobian of final state
@@ -527,8 +531,8 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         infeasible = length(u) != m
         fx[1:pI_u, :] = fx_control
         fu[1:pI_u, :] = fu_control
-        fx[(1:pI_x)+pI_u, :] = fx_state
-        fu[(1:pI_x)+pI_u, :] = fu_state
+        fx[(1:pI_x).+pI_u, :] = fx_state
+        fu[(1:pI_x).+pI_u, :] = fu_state
 
         if pI_c > 0
             fx[pI_x+pI_u+1:pI_x+pI_u+pI_c,:], fu[pI_x+pI_u+1:pI_x+pI_u+pI_c,:] = cI_custom_jacobian(x,u[1:m])
@@ -561,7 +565,7 @@ precomputed and passed in.
 """
 function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
-        return maximum([abs.(results.C.*(results.Iμ[inds,:] .!= 0))[:]; abs.(results.CN)]) # TODO replace concatenation
+        return max(maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0))), maximum(abs.(results.CN))) # TODO replace concatenation
     else
         return maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
     end
