@@ -258,7 +258,7 @@ end
 function ResultsCache(n::Int, m::Int, N::Int, n_allocation::Int64)
     X = zeros(n,N)
     U = zeros(m, N)
-    result = Array{SolverResults}(n_allocation)
+    result = Array{SolverResults}(undef,n_allocation)
     cost = zeros(n_allocation)
     time = zeros(n_allocation)
     iter_type = zeros(n_allocation)
