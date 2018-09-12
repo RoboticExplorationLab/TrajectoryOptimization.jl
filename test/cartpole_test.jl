@@ -28,8 +28,8 @@ model,  = TrajectoryOptimization.Dynamics.cartpole_analytical
 
 # Objective
 Q = 0.01*eye(model.n)
-Qf = 100.0*eye(model.n)
-R = 0.001*eye(model.m)
+Qf = 10000.0*eye(model.n)
+R = 0.0001*eye(model.m)
 
 x0 = [0.;0.;0.;0.]
 xf = [0.;pi;0.;0.]
@@ -47,7 +47,7 @@ x_max = [1000; 1000; 1000; 1000]
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 # Solver (foh & zoh)
-solver_foh = Solver(model, obj_con, integration=:rk3_foh, dt=dt, opts=opts)
+# solver_foh = Solver(model, obj_con, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh = Solver(model, obj_con, integration=:rk3, dt=dt, opts=opts)
 
 # -Initial control and state trajectories
@@ -57,27 +57,27 @@ X_interp = line_trajectory(solver_zoh)
 #######################################
 
 ### Solve ###
-@time sol_foh, = TrajectoryOptimization.solve(solver_foh,X_interp,U)
-@time sol_zoh, = TrajectoryOptimization.solve(solver_zoh,X_interp,U)
+# @time sol_foh, = TrajectoryOptimization.solve(solver_foh,X_interp,U)
+@time sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 #############
 
-### Results ###
-if opts.verbose
-    println("Final state (foh): $(sol_foh.X[:,end])")
-    println("Final state (zoh): $(sol_zoh.X[:,end])")
-
-    println("Termination index\n foh: $(sol_foh.termination_index)\n zoh: $(sol_foh.termination_index)")
-
-    println("Final cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
-    println("Final cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
-
-    plot((sol_foh.cost[1:sol_foh.termination_index]))
-    plot!((sol_zoh.cost[1:sol_zoh.termination_index]))
-
-    plot(sol_foh.U')
-    plot!(sol_zoh.U')
-
-    plot(sol_foh.X[1:2,:]')
-    plot!(sol_zoh.X[1:2,:]')
-end
+# ### Results ###
+# if opts.verbose
+#     # println("Final state (foh): $(sol_foh.X[:,end])")
+#     println("Final state (zoh): $(sol_zoh.X[:,end])")
+#
+#     # println("Termination index\n foh: $(sol_foh.termination_index)\n zoh: $(sol_foh.termination_index)")
+#
+#     # println("Final cost (foh): $(sol_foh.cost[sol_foh.termination_index])")
+#     println("Final cost (zoh): $(sol_zoh.cost[sol_zoh.termination_index])")
+#
+#     # plot((sol_foh.cost[1:sol_foh.termination_index]))
+#     plot!((sol_zoh.cost[1:sol_zoh.termination_index]))
+#
+#     # plot(sol_foh.U')
+#     plot!(sol_zoh.U')
+#
+#     # plot(sol_foh.X[1:2,:]')
+#     plot!(sol_zoh.X[1:2,:]')
+# end
 ###############

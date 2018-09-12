@@ -176,7 +176,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
     dJ = Inf
     grad = Inf
-    Δv = Inf
+    Δv = [Inf Inf]
 
     i = 0 # declare outsize for scope
     k = 0
@@ -252,7 +252,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Check for cost convergence
             d_grad = maximum(abs.(results.d[:]))
             s_grad = maximum(abs.(results.s[:,1]))
-            todorov_grad = mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            todorov_grad = maximum(abs.(results.d[:])./(abs.(results.U[:])+1))
             if solver.opts.verbose
                 println("d gradient: $(maximum(abs.(results.d)))")
                 println("s gradient: $(maximum(abs.(results.s[:,1])))")

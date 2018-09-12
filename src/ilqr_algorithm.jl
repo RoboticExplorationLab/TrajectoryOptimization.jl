@@ -36,7 +36,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     s[:,N] = Qf*(X[:,N] - xf)
 
     # Initialize expected change in cost-to-go
-    Δv = 0.
+    Δv = [0.0 0.0]
 
     # Terminal constraints
     if res isa ConstrainedResults
@@ -64,7 +64,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Qu = lu + fu'*s[:,k+1]
         Qxx = lxx + fx'*S[:,:,k+1]*fx
 
-        Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu +  + mu[1]*eye(m))
+        Quu = luu + fu'*S[:,:,k+1]*fu + mu[1]*eye(m)
         Qux = fu'*S[:,:,k+1]*fx
 
         # Constraints
@@ -77,20 +77,25 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
             Qux += Cu'*Iμ[:,:,k]*Cx
         end
 
-        # regularization
-        # if !isposdef(Quu)
-        #     if size(Quu,1) == 1
-        #         mu[1] += -2.0*Quu[1]
-        #     else
-        #         mu[1] += -2.0*minimum(eigvals(Quu))
-        #     end
-        #     # mu[1] += solver.opts.mu_reg_update
-        #     k = N-1
-        #     if solver.opts.verbose
-        #         println("regularized (normal bp)")
-        #     end
-        #     continue
-        # end
+        Quu = Hermitian(Quu)
+
+        try
+            chol(Quu)
+        catch
+            println("unreliable regularization")
+            # if solver.opts.verbose
+            #     println("regularized (normal bp)")
+            # end
+            #
+            # if size(Quu,1) == 1
+            #     mu[1] += -10.0*Quu[1]
+            # else
+            #     mu[1] += -10.0*minimum(eigvals(Quu))
+            # end
+            # println("mu: $(mu[1])")
+            # k = N-1
+            # continue
+        end
 
         # Compute gains
         K[:,:,k] = Quu\Qux
@@ -98,11 +103,14 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         s[:,k] = Qx - Qux'd[:,k]
         S[:,:,k] = Qxx - Qux'K[:,:,k]
 
-        Δv += 1.5*vec(Qu)'*vec(d[:,k])
+        Δv += [vec(Qu)'*vec(d[:,k]) 0.5*vec(d[:,k])'*Quu*vec(d[:,k])]
 
         k = k - 1;
     end
-
+    if solver.opts.verbose
+        plt = plot(res.d')
+        display(plt)
+    end
     return Δv
 end
 
@@ -144,7 +152,7 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     end
 
     # Initialization of expected change in cost-to-go
-    Δv = 0.
+    Δv = [0.0 0.0]
 
     mu = res.mu_reg
     k = N-1
@@ -183,21 +191,26 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
 
         s[:,k] = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
 
-        try  # Regularization
+        # Regularization
+        try
             Su[:,:,k] = chol_minus(Wxx[:R],Wuu[:R]'\Qxu')
-
-        catch ex
-            # if ex isa LinAlg.PosDefException
-            #     mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
-            #     k = N-1
-            #     println("*regularization not implemented") #TODO fix regularization
-            #     continue
+        catch
+            println("unreliable regularization")
+            # if solver.opts.verbose
+            #     println("regularized (sqrt bp)")
             # end
-            error("(sqrt bp) regularization not implemented")
+            #
+            # if size(Wuu[:R],1) == 1
+            #     mu[1] += -10.0*Wuu[:R][1]
+            # else
+            #     mu[1] += -10.0*minimum(eigvals(Wuu[:R]))
+            # end
+            # k = N-1
+            # continue
         end
 
         # Expected change in cost-to-go
-        Δv += 1.5*vec(Qu)'*vec(d[:,k])
+        Δv += [vec(Qu)'*vec(d[:,k]) 0.5*(vec(d[:,k])'*Wuu[:R])*(Wuu[:R]*vec(d[:,k]))]
 
         k = k - 1;
     end
@@ -235,7 +248,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     s = zeros(n+m)
 
     # Initialization of expected change in cost-to-go
-    Δv = 0.
+    Δv = [0.0 0.0]
 
     mu = res.mu_reg
 
@@ -321,27 +334,35 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
         Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
-        Qvv = Hermitian(Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + mu[1]*eye(m))
+        Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + mu[1]*eye(m)
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
 
-        #TODO check regularization
-        # regularization
-        # if !isposdef(Qvv)
-        #     # if size(Qvv,1) > 1
-        #     #     mu[1] += -2.0*minimum(eigvals(Qvv))
-        #     # else
-        #     #     mu[1] += -2.0*Qvv[1]
-        #     # end
-        #     # # mu[1] += solver.opts.mu_reg_update
-        #     # k = N-1
-        #     if solver.opts.verbose
-        #         println("regularized needed")
-        #         # println("Qvv: $(Qvv)")
-        #     end
-        #     continue
-        # end
+        Qvv = Hermitian(Qvv)
+
+        #TODO fix regularization?
+        try
+            chol(Qvv)
+        catch
+            println("unreliable regularization")
+            # if solver.opts.verbose
+            #     println("regularized (foh bp)")
+            #     println("Qvv: $Qvv")
+            #     println("iteration: $k")
+            # end
+            #
+            # if size(Qvv,1) == 1
+            #     mu[1] += -10.0*Qvv[1]
+            # else
+            #     mu[1] += -10.0*minimum(eigvals(Qvv))
+            # end
+            # println("mu: $(mu[1])\n")
+            # println("isposdef?:\n $(Qvv + mu[1]*eye(m))")
+            #
+            # k = N-1
+            # continue
+        end
 
         K[:,:,k+1] = -Qvv\Qxv'
         b[:,:,k+1] = -Qvv\Quv'
@@ -362,20 +383,44 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        Δv += -1.5*vec(Qv)'*vec(d[:,k+1])
+        Δv += [-vec(Qv)'*vec(d[:,k+1]) 0.5*vec(d[:,k+1])'*Qvv*vec(d[:,k+1])]
 
         # at last time step, optimize over final control
         if k == 1
+            Quu_ = Hermitian(Quu_)
+            #TODO fix regularization
+            try
+                chol(Quu_)
+            catch
+                println("unreliable regularization")
+                # if solver.opts.verbose
+                #     println("regularized (foh bp)")
+                #     println("iteration: $k")
+                # end
+                #
+                # if size(Quu_,1) == 1
+                #     mu[1] += -10.0*Quu_[1]
+                # else
+                #     mu[1] += -10.0*minimum(eigvals(Quu_))
+                # end
+                # k = N-1
+                # continue
+            end
+
             K[:,:,1] = -Quu_\Qxu_'
             b[:,:,1] = zeros(m,m)
             d[:,1] = -Quu_\vec(Qu_)
 
             res.s[:,1] = Qx_ - Qxu_*vec(d[:,1])
 
-            Δv += -1.5*vec(Qu_)'*vec(d[:,1])
+            Δv += [vec(Qu_)'*vec(d[:,1]) 0.5*vec(d[:,1])'*Quu_*vec(d[:,1])]
         end
 
         k = k - 1;
+    end
+    if solver.opts.verbose
+        plt = plot(res.d')
+        display(plt)
     end
 
     return Δv
@@ -398,7 +443,7 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
 
     # Pull out values from results
     X = res.X
@@ -459,7 +504,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Float64)
             update_constraints!(res,solver,X_,U_)
         end
         J = cost(solver, res, X_, U_)
-        z = (J_prev - J)/(alpha*Δv)
+        z = (J_prev - J)/(alpha*(Δv[1] + alpha*Δv[2]))
 
         alpha /= 2.0
 
@@ -473,7 +518,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Float64)
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end
-        println("- Expected improvement (Δv): $(Δv)")
+        println("- Expected improvement (Δv): $((Δv[1] + Δv[2]))")
         println("- Actual improvement : $(J_prev-J)")
         println("- (z = $z, α = $(2.0*alpha)")
     end
