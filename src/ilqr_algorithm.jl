@@ -186,7 +186,7 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Qxu += Cx'*Iμ[:,:,k]*Cu
 
             Wxx = chol_plus(Wxx.R, Iμ2*Cx)
-            Wuu = chol_plus(Wxx.R, Iμ2*Cu)
+            Wuu = chol_plus(Wuu.R, Iμ2*Cu)
         end
 
         K[:,:,k] = Wuu.R\(Wuu.R'\Qxu')
@@ -400,7 +400,7 @@ function chol_minus(A,B::Matrix)
     for i = 1:size(B,1)
         lowrankdowndate!(AmB,B[i,:])
     end
-    U = AmB[:U]
+    U = AmB.U
 end
 
 
