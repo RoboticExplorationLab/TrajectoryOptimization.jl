@@ -122,7 +122,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
         end
 
         # Check that rollout has not diverged
-        if ~all(isfinite, X_[:,k]) || ~all(isfinite, U_[:,k-1]) || any(X_[:,k] .> solver.opts.max_state_value) || any(U_[:,k-1] .> solver.opts.max_control_value)
+        if ~(maximum(X_[:,k]) < solver.opts.max_state_value || maximum(U_[:,k]) < solver.opts.max_control_value)
             return false
         end
     end
@@ -139,7 +139,7 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,Q,R,xf)
+function stage_cost(x::Vector{Float64},u::Vector{Float64},Q::Matrix{Float64},R::Matrix{Float64},xf::Vector{Float64})::Float64
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
@@ -156,7 +156,7 @@ function cost(solver::Solver,vars::DircolVars)
 end
 function cost_(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Float64,2})
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
     dt = solver.dt
 
@@ -216,7 +216,7 @@ end
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::Array{Float64,2},U::Array{Float64,2})
+function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -261,8 +261,9 @@ Calculate state derivatives (xdot)
 """
 function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
     N = size(X,2)
+    n,m = get_sizes(solver)
     for i = 1:N
-        solver.fc(view(results.xdot,:,i),X[:,i],U[:,i])
+        solver.fc(view(results.xdot,:,i),X[:,i],U[1:m,i])
     end
 end
 
