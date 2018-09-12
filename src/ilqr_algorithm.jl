@@ -64,7 +64,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         Qu = lu + fu'*s[:,k+1]
         Qxx = lxx + fx'*S[:,:,k+1]*fx
 
-        Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu +  + mu[1]*eye(m))
+        Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu + mu[1]*I)
         Qux = fu'*S[:,:,k+1]*fx
 
         # Constraints
@@ -106,6 +106,15 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
+function chol_plus(A,B)
+    n1,m = size(A)
+    n2 = size(B,1)
+    P = zeros(n1+n2,m)
+    P[1:n1,:] = A
+    P[n1+1:end,:] = B
+    qr(P)
+end
+
 """
 $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
@@ -127,8 +136,8 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     Qf = solver.obj.Qf
     dt = solver.dt
 
-    Uq = chol(Q)
-    Ur = chol(R)
+    Uq = cholesky(Q).U
+    Ur = cholesky(R).U
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
@@ -136,10 +145,10 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
     # Terminal Cost-to-go
     if isa(solver.obj, ConstrainedObjective)
         Cx = res.Cx_N
-        Su[:,:,N] = chol(Qf + Cx'*res.IμN*Cx)
+        Su[:,:,N] = cholesky(Qf + Cx'*res.IμN*Cx).U
         s[:,N] = Qf*(X[:,N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
     else
-        Su[:,:,N] = chol(Qf)
+        Su[:,:,N] = cholesky(Qf).U
         s[:,N] = Qf*(X[:,N] - xf)
     end
 
@@ -161,8 +170,10 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         Qx = lx + fx'*s[:,k+1]
         Qu = lu + fu'*s[:,k+1]
 
-        Wxx = qrfact!([Su[:,:,k+1]*fx; chol(lxx)])
-        Wuu = qrfact!([Su[:,:,k+1]*fu; chol(luu) + mu[1]*eye(m)])
+        Wxx = chol_plus(Su[:,:,k+1]*fx, cholesky(lxx).U)
+        Wuu = chol_plus(Su[:,:,k+1]*fu, cholesky(luu).U + mu[1]*I)
+        # Wxx = qrfact!([Su[:,:,k+1]*fx; chol(lxx)])
+        # Wuu = qrfact!([Su[:,:,k+1]*fu; chol(luu) + mu[1]*I])
         Qxu = (fx'*Su[:,:,k+1]')*(Su[:,:,k+1]*fu)
 
         if isa(solver.obj, ConstrainedObjective)
@@ -174,18 +185,17 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
             Qu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
             Qxu += Cx'*Iμ[:,:,k]*Cu
 
-            Wxx = qrfact!([Wxx[:R]; Iμ2*Cx])
-            Wuu = qrfact!([Wuu[:R]; Iμ2*Cu])
+            Wxx = chol_plus(Wxx.R, Iμ2*Cx)
+            Wuu = chol_plus(Wxx.R, Iμ2*Cu)
         end
 
-        K[:,:,k] = Wuu[:R]\(Wuu[:R]'\Qxu')
-        d[:,k] = Wuu[:R]\(Wuu[:R]'\Qu)
+        K[:,:,k] = Wuu.R\(Wuu.R'\Qxu')
+        d[:,k] = Wuu.R\(Wuu.R'\Qu)
 
-        s[:,k] = Qx - Qxu*(Wuu[:R]\(Wuu[:R]'\Qu))
+        s[:,k] = Qx - Qxu*(Wuu.R\(Wuu.R'\Qu))
 
         try  # Regularization
-            Su[:,:,k] = chol_minus(Wxx[:R],Wuu[:R]'\Qxu')
-
+            Su[:,:,k] = chol_minus(Wxx.R,(Wuu.R')\(Qxu'))
         catch ex
             # if ex isa LinAlg.PosDefException
             #     mu[1] += -2.0*minimum(eigvals(Wxx[:R]))
@@ -385,10 +395,10 @@ end
 $(SIGNATURES)
 Perform the operation sqrt(A-B), where A and B are Symmetric Matrices
 """
-function chol_minus(A::Matrix,B::Matrix)
-    AmB = LinAlg.Cholesky(copy(A),'U')
+function chol_minus(A,B::Matrix)
+    AmB = Cholesky(A,:U,0)
     for i = 1:size(B,1)
-        LinAlg.lowrankdowndate!(AmB,B[i,:])
+        lowrankdowndate!(AmB,B[i,:])
     end
     U = AmB[:U]
 end
