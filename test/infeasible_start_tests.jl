@@ -30,7 +30,7 @@ U = ones(solver_uncon.model.m,solver_uncon.N)
 
 results, stats = solve(solver_uncon,X_interp,U)
 
-idx = find(x->x==2,results.iter_type) # get index for infeasible -> feasible solve switch
+idx = findall(x->x==2,results.iter_type) # get index for infeasible -> feasible solve switch
 
 # if opts.verbose
 #     plot(results.X',title="Pendulum (Infeasible start with unconstrained control and states (inplace dynamics))",ylabel="x(t)")
@@ -77,7 +77,7 @@ U = ones(solver.model.m,solver.N)
 
 results, = solve(solver,X_interp,U)
 
-idx = find(x->x==2,results.iter_type)
+idx = findall(x->x==2,results.iter_type)
 
 # if opts.verbose
 #     plot(results.X',title="Pendulum (Infeasible start with constrained control and states (inplace dynamics))",ylabel="x(t)")

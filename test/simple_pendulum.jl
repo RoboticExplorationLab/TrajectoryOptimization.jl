@@ -126,7 +126,7 @@ max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test max_c < 1e-2
 
 # test that control output from infeasible start is a good warm start (ie, that infeasible control output is "near" dynamically constrained control output)
-idx = find(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
+idx = findall(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
 
 @test norm(results_inf.result[idx[1]].U-results_inf.result[end].U) < 5.0 # confirm that infeasible and final feasible controls are "near"
 

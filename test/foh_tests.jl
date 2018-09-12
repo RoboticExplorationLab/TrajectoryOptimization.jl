@@ -107,7 +107,7 @@ results_inf, = solve(solver_uncon_inf,X_interp,U)
 #     println("Final state: $(results_inf.X[:,end])")
 #     println("Final cost: $(results_inf.cost[end])")
 # end
-idx = find(x->x==2,results_inf.iter_type)
+idx = findall(x->x==2,results_inf.iter_type)
 
 # Test that infeasible control output is good warm start for dynamically constrained solve
 @test norm(results_inf.result[idx[1]-1].U[1,:]-results_inf.result[idx[1]+1].U[1,:]) < 100.0 # TODO fix
@@ -163,7 +163,7 @@ results_inf2, = solve(solver_con2,X_interp,U)
 #     # trajectory_animation(results,filename="infeasible_start_state.gif",fps=5)
 #     # trajectory_animation(results,traj="control",filename="infeasible_start_control.gif",fps=5)
 # end
-idx = find(x->x==2,results_inf2.iter_type)
+idx = findall(x->x==2,results_inf2.iter_type)
 
 # if opts.verbose
 #     plot(results_inf2.result[idx[1]-1].U',color="green")
