@@ -404,12 +404,12 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     for jj = 1:final_index
         for ii = 1:p
             if ii <= pI
-                results.V_al_current[ii,jj] .= min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
+                results.V_al_current[ii,jj] = min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
 
-                results.LAMBDA[ii,jj] .= max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
                 # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
             else
-                results.LAMBDA[ii,jj] .= results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
 
                 # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
             end
@@ -437,15 +437,15 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     end
     # Lagrange multiplier terminal state equality constraints update
     for ii = 1:solver.model.n
-        results.λN[ii] .= results.λN[ii] + results.μN[ii].*results.CN[ii]
+        results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
         # results.λN[ii] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
     end
 
     ## Penalty update
     #---Default---
     if solver.opts.outer_loop_update == :default # update all μ default
-        results.MU .= solver.opts.γ*results.MU
-        results.μN .= solver.opts.γ*results.μN
+        results.MU = solver.opts.γ*results.MU
+        results.μN = solver.opts.γ*results.μN
         # results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
         # results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
     end
