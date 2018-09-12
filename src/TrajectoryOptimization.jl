@@ -16,6 +16,7 @@ using RecipesBase
 using LinearAlgebra
 using Statistics
 using Random
+using SparseArrays
 
 
 const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)

@@ -9,3 +9,4 @@ Random
 RecipesBase
 Interpolations
 Ipopt
+SparseArrays
