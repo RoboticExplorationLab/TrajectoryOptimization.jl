@@ -1,4 +1,4 @@
-
+using Test
 # Unconstrained Results Constructors
 n = rand(1:10)
 m = rand(1:10)
@@ -7,6 +7,14 @@ r = TrajectoryOptimization.UnconstrainedResults(n,m,N)
 @test size(r.X) == (n,N)
 @test size(r.U) == (m,N)
 @test size(r.K) == (m,n,N)
+
+# Static Results
+r = TrajectoryOptimization.UnconstrainedResultsStatic(n,m,N)
+@test length(r.X) == N
+@test length(r.X[1]) == n
+@test length(r.U) == N
+@test length(r.U[1]) == m
+@test size(r.K[1]) == (m,n)
 
 # Results Cache (pendulum)
 n,m = 2,1
