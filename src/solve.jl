@@ -472,12 +472,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
             if ii <= pI
                 results.V_al_current[ii,jj] = min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
 
-                results.LAMBDA[ii,jj] = max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
-                # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
+                # results.LAMBDA[ii,jj] = max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
             else
-                results.LAMBDA[ii,jj] = results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
-
-                # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
+                # results.LAMBDA[ii,jj] = results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
             end
 
             # # Penalty update (individual)
@@ -503,17 +502,17 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     end
     # Lagrange multiplier terminal state equality constraints update
     for ii = 1:solver.model.n
-        results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
-        # results.λN[ii] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+        # results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
+        results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
     end
 
     ## Penalty update
     #---Default---
     if solver.opts.outer_loop_update == :default # update all μ default
-        results.MU = solver.opts.γ*results.MU
-        results.μN = solver.opts.γ*results.μN
-        # results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
-        # results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+        # results.MU = solver.opts.γ*results.MU
+        # results.μN = solver.opts.γ*results.μN
+        results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
+        results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
     end
     #-------------
 
@@ -526,19 +525,19 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     # end
 
     if solver.opts.outer_loop_update == :uniform
-        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[pI+1:p,:][:])) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[pI+1:p,:][:]))
-            results.MU .= solver.opts.γ_no*results.MU
-            results.μN .= solver.opts.γ_no*results.μN
-            # results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
-            # results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
+        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:])) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+            # results.MU .= solver.opts.γ_no*results.MU
+            # results.μN .= solver.opts.γ_no*results.μN
+            results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
             if solver.opts.verbose
                 println("no μ update\n")
             end
         else
-            results.MU .= solver.opts.γ*results.MU
-            results.μN .= solver.opts.γ*results.μN
-            # results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
-            # results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+            # results.MU .= solver.opts.γ*results.MU
+            # results.μN .= solver.opts.γ*results.μN
+            results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
             if solver.opts.verbose
                 println("$(solver.opts.γ)x μ update\n")
             end
