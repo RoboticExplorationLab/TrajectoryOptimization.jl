@@ -146,6 +146,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     X_ = results.X_ # updated state trajectory
     U_ = results.U_ # updated control trajectory
 
+    # Set initial regularization
+    results.ρ[1] *= solver.opts.ρ_initial
 
     #****************************#
     #           SOLVER           #
@@ -190,7 +192,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #****************************#
 
     dJ = Inf
-    grad = Inf
+    gradient = Inf
     Δv = Inf
 
     for k = 1:solver.opts.iterations_outerloop
@@ -237,6 +239,42 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 Δv = backwardpass!(results, solver)
             end
 
+            ## Check gradients for convergence ##
+            if use_static
+                d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
+                s_grad = maximum(abs.(results.s[1]))
+                todorov_grad = Inf # mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            else
+                d_grad = maximum(abs.(results.d[:]))
+                s_grad = maximum(abs.(results.s[:,1]))
+                todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
+            end
+            if solver.opts.verbose
+                println("d gradient: $d_grad")
+                println("s gradient: $s_grad")
+                println("todorov gradient $(todorov_grad)")
+            end
+            gradient = todorov_grad
+
+            if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (results isa ConstrainedResults && gradient < solver.opts.gradient_intermediate_tolerance && k != solver.opts.iterations_outerloop)
+                if solver.opts.verbose
+                    println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
+                    if results isa UnconstrainedResults
+                        println("Unconstrained solve complete")
+                    end
+                    println("---Gradient tolerance met")
+                end
+                break
+            # Check for gradient and constraint tolerance convergence
+            elseif (is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.eps_constraint)
+                if solver.opts.verbose
+                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
+                    println("---Gradient tolerance met\n")
+                end
+                break
+            end
+            #####################
+
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv)
             push!(J_hist,J)
@@ -268,44 +306,32 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 push!(c_max_hist, c_max)
             end
 
-            # Check for cost convergence
-            if use_static
-                d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
-                s_grad = maximum(abs.(results.s[1]))
-                todorov_grad = Inf # mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
-            else
-                d_grad = maximum(abs.(results.d[:]))
-                s_grad = maximum(abs.(results.s[:,1]))
-                todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
-            end
-            if solver.opts.verbose
-                println("d gradient: $d_grad")
-                println("s gradient: $s_grad")
-                println("todorov gradient $(todorov_grad)")
-            end
-            grad = todorov_grad
-
-            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
+            ## Check for cost convergence ##
+            if (~is_constrained && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
                     if results isa UnconstrainedResults
                         println("Unconstrained solve complete")
                     end
+                    println("---Cost met tolerance")
                 end
                 break
-            elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
+            # Check for cost and constraint tolerance convergence
+            elseif (is_constrained && dJ < solver.opts.eps  && c_max < solver.opts.eps_constraint)
                 if solver.opts.verbose
-                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
+                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
+                    println("---Cost met tolerance\n")
+                end
+                break
+            # Check for maxed regularization
+            elseif results.ρ[1] > solver.opts.ρ_max
+                if solver.opts.verbose
+                    println("*Regularization maxed out*\n - terminating solve - ")
                 end
                 break
             end
+            ################################
 
-            if results.ρ[1] > solver.opts.ρ_max
-                if solver.opts.verbose
-                    println("--Regularization maxed out\n - terminating solve")
-                end
-                break
-            end
         end
         ### END INNER LOOP ###
 
@@ -326,13 +352,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
         #    TERMINATION CRITERIA    #
         #****************************#
-        # Check if maximum constraint violation satisfies termination criteria
+        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
         if solver.obj isa ConstrainedObjective
             max_c = max_violation(results, diag_inds)
-            if max_c < solver.opts.eps_constraint && dJ < solver.opts.eps
+            if max_c < solver.opts.eps_constraint && (dJ < solver.opts.eps || gradient < solver.opts.gradient_tolerance)
                 if solver.opts.verbose
                     println("-Outer loop cost and constraint eps criteria met at outer iteration: $k\n")
                     println("Constrained solve complete")
+                    if dJ < solver.opts.eps
+                        println("--Cost tolerance met")
+                    else
+                        println("--Gradient tolerance met")
+                    end
                 end
                 break
             end
