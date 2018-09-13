@@ -81,11 +81,12 @@ struct UnconstrainedResultsStatic{N,M} <: SolverIterResults
     Bc::Vector{MMatrix{N,M,Float64}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
-    mu_reg::Vector{Float64}
+    ρ::Vector{Float64}
+    dρ::Vector{Float64}
 
     function UnconstrainedResultsStatic(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
-            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg) where {N,M}
-        new{N,M}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ) where {N,M}
+        new{N,M}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
     end
 end
 
@@ -140,9 +141,9 @@ function UnconstrainedResultsStatic(n::Int,m::Int,N::Int)
     Ac = [@MMatrix zeros(n,n) for i = 1:N]
     Bc = [@MMatrix zeros(n,m) for i = 1:N]
     xdot  = [@MVector zeros(n)   for i = 1:N]
-    mu_reg = zeros(1)
-
-    UnconstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+    ρ = zeros(1)
+    dρ = zeros(1)
+    UnconstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
 end
 
 function copy(r::UnconstrainedResults)

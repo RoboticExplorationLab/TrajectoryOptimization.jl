@@ -24,7 +24,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     R = getR(solver)
     dt = solver.dt
 
-    use_static = res isa UnconstrainedResultsStatic
+    use_static = false #res isa UnconstrainedResultsStatic
 
     if solver.model.m != size(res.U,1)
         m += n

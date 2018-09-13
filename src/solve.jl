@@ -74,7 +74,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         infeasible = true
     end
 
-    use_static = true
+    use_static = false
 
     #****************************#
     #       INITIALIZATION       #
@@ -300,7 +300,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             end
 
-            if results.ρ > solver.opts.ρ_max
+            if results.ρ[1] > solver.opts.ρ_max
                 if solver.opts.verbose
                     println("--Regularization maxed out\n - terminating solve")
                 end
