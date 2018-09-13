@@ -754,3 +754,13 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
     end
     x_traj
 end
+
+function regularization_update!(results::SolverResults,solver::Solver,status::Bool)
+    if status # increase regularization
+        results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
+        results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
+    else # decrease regularization
+        results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
+        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]>solver.opts.ρ_factor)
+    end
+end

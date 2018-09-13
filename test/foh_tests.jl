@@ -1,4 +1,5 @@
 # Set random seed
+using Random
 Random.seed!(7)
 
 ### Solver Options ###
@@ -19,7 +20,7 @@ opts.cache = true
 
 ### Simple Pendulum ###
 obj_uncon_p = TrajectoryOptimization.Dynamics.pendulum![2]
-model_p = Dynamics.pendulum![1]
+model_p = TrajectoryOptimization.Dynamics.pendulum![1]
 
 ## Unconstrained pendulum (foh)
 solver_foh = TrajectoryOptimization.Solver(model_p, obj_uncon_p, integration=:rk3_foh, dt=dt, opts=opts)
