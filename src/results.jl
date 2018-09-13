@@ -118,6 +118,10 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
 end
 
+function UnconstrainedResults(res::UnconstrainedResultsStatic)
+    UnconstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
+end
+
 function UnconstrainedResultsStatic(n::Int,m::Int,N::Int)
     X  = [@MVector zeros(n)   for i = 1:N]
     U  = [@MVector zeros(m)   for i = 1:N]

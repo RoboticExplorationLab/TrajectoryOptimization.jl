@@ -1,3 +1,5 @@
+import Base: convert
+
 function get_sizes(solver::Solver)
     return solver.model.n, solver.model.m, solver.N
 end
@@ -21,6 +23,20 @@ function get_sizes(X::AbstractArray,U::AbstractArray)
     n,N = size(X)
     m = size(U,1)
     return n,m,N
+end
+
+function to_array(X::Vector{T}) where {T<:MArray}
+    N = length(X)
+    Y = zeros(size(X[1])...,N)
+    ax = axes(Y)
+    for i = 1:N
+        Y[ax[1:end-1]...,i] = X[i]
+    end
+    Y
+end
+
+function convert(::Type{Array}, X::Vector{T}) where {T<:MArray}
+    to_array(X)
 end
 
 function println(level::Symbol, msg::String)::Nothing
