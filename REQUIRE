@@ -6,3 +6,4 @@ DocStringExtensions 0.4.4
 RecipesBase
 Interpolations
 Ipopt
+StaticArrays
