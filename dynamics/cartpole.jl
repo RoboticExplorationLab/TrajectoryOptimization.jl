@@ -36,6 +36,36 @@ function cartpole_dynamics!(Xdot, X, U)
     Xdot[3:4] = qdd
     return nothing
 end
+
+function cartpole_dynamic_udp!(Xdot, X, U)
+    mc = 10.0;   # mass of the cart in kg (10)
+    mp = 1.0;    # mass of the pole (point mass at the end) in kg
+    l = 0.5;   # length of the pole in m
+    g = 9.81;  # gravity m/s^2
+
+    q = X[1:2];
+    qd = X[3:4];
+
+    if isfinite(q[2])
+        s = sin(q[2])
+        c = cos(q[2])
+    else
+        s = Inf
+        c = Inf
+    end
+
+    H = [mc+mp mp*l*c; mp*l*c mp*l^2];
+    C = [0 -mp*qd[2]*l*s; 0 0];
+    G = [0; mp*g*l*s];
+    B = [1; 0];
+
+    qdd = -H\(C*qd + G - B*U');
+
+    Xdot[1:2] = qd
+    Xdot[3:4] = qdd
+    return nothing
+end
+
 n,m = 4,1
 model_analytical = Model(cartpole_dynamics!,n,m)
 

@@ -254,12 +254,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Check for cost convergence
             d_grad = maximum(abs.(results.d[:]))
             s_grad = maximum(abs.(results.s[:,1]))
-            todorov_grad = mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
             if solver.opts.verbose
-                println("d gradient: $(maximum(abs.(results.d)))")
-                println("s gradient: $(maximum(abs.(results.s[:,1])))")
+                println("d gradient: $(d_grad)")
+                println("s gradient: $(s_grad)")
                 println("todorov gradient $(todorov_grad)")
             end
+            grad = todorov_grad
 
             if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
@@ -272,6 +273,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
+                end
+                break
+            end
+
+            if results.ρ > solver.opts.ρ_max
+                if solver.opts.verbose
+                    println("--Regularization maxed out\n - terminating solve")
                 end
                 break
             end
