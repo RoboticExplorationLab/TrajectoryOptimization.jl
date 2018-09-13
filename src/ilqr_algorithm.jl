@@ -24,6 +24,8 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     R = getR(solver)
     dt = solver.dt
 
+    use_static = res isa UnconstrainedResultsStatic
+
     if solver.model.m != size(res.U,1)
         m += n
     end
@@ -32,8 +34,13 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
 
     # Boundary Conditions
-    S[:,:,N] = Qf
-    s[:,N] = Qf*(X[:,N] - xf)
+    if use_static
+        S[N] = Qf
+        s[N] = Qf*(X[N] - xf)
+    else
+        S[:,:,N] = Qf
+        s[:,N] = Qf*(X[:,N] - xf)
+    end
 
     # Initialize expected change in cost-to-go
     Δv = 0.
@@ -51,21 +58,40 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
     # Backward pass
     while k >= 1
-        lx = dt*Q*(X[:,k] - xf)
-        lu = dt*R*(U[:,k])
-        lxx = dt*Q
-        luu = dt*R
 
-        # Compute gradients of the dynamics
-        fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+        if use_static
+            lx = dt*Q*(X[k] - xf)
+            lu = dt*R*(U[k])
+            lxx = dt*Q
+            luu = dt*R
 
-        # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*s[:,k+1]
-        Qu = lu + fu'*s[:,k+1]
-        Qxx = lxx + fx'*S[:,:,k+1]*fx
+            # Compute gradients of the dynamics
+            fx, fu = res.fx[k], res.fu[k]
 
-        Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu + mu[1]*I)
-        Qux = fu'*S[:,:,k+1]*fx
+            # Gradients and Hessians of Taylor Series Expansion of Q
+            Qx = lx + fx'*s[k+1]
+            Qu = lu + fu'*s[k+1]
+            Qxx = lxx + fx'*S[k+1]*fx
+
+            Quu = luu + fu'*S[k+1]*fu + mu[1]*I
+            Qux = fu'*S[k+1]*fx
+        else
+            lx = dt*Q*(X[:,k] - xf)
+            lu = dt*R*(U[:,k])
+            lxx = dt*Q
+            luu = dt*R
+
+            # Compute gradients of the dynamics
+            fx, fu = res.fx[:,:,k], res.fu[:,:,k]
+
+            # Gradients and Hessians of Taylor Series Expansion of Q
+            Qx = lx + fx'*s[:,k+1]
+            Qu = lu + fu'*s[:,k+1]
+            Qxx = lxx + fx'*S[:,:,k+1]*fx
+
+            Quu = Hermitian(luu + fu'*S[:,:,k+1]*fu + mu[1]*I)
+            Qux = fu'*S[:,:,k+1]*fx
+        end
 
         # Constraints
         if res isa ConstrainedResults
@@ -93,12 +119,21 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         # end
 
         # Compute gains
-        K[:,:,k] = Quu\Qux
-        d[:,k] = Quu\Qu
-        s[:,k] = Qx - Qux'd[:,k]
-        S[:,:,k] = Qxx - Qux'K[:,:,k]
+        if use_static
+            K[k] = Quu\Qux
+            d[k] = Quu\Qu
+            s[k] = Qx - Qux'd[k]
+            S[k][:] = Qxx - Qux'K[k]
 
-        Δv += 1.5*vec(Qu)'*vec(d[:,k])
+            Δv += 1.5*vec(Qu)'*vec(d[k])
+        else
+            K[:,:,k] = Quu\Qux
+            d[:,k] = Quu\Qu
+            s[:,k] = Qx - Qux'd[:,k]
+            S[:,:,k] = Qxx - Qux'K[:,:,k]
+
+            Δv += 1.5*vec(Qu)'*vec(d[:,k])
+        end
 
         k = k - 1;
     end
@@ -417,6 +452,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Float64)
     d = res.d
     X_ = res.X_
     U_ = res.U_
+
+    use_static = res isa UnconstrainedResultsStatic
 
     # Compute original cost
     if res isa ConstrainedResults

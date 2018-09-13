@@ -42,6 +42,34 @@ function rollout!(res::SolverResults,solver::Solver)
     flag
 end
 
+function rollout!(res::UnconstrainedResultsStatic, solver::Solver)
+    X,U = res.X,res.U
+    infeasible = solver.model.m != size(U[1],1)
+    N = solver.N
+    m = solver.model.m
+    n = solver.model.n
+
+    X[1] = solver.obj.x0
+    for k = 1:N-1
+        if solver.control_integration == :foh
+            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m])
+        else
+            solver.fd(X[k+1], X[k], U[k][1:m])
+        end
+
+        if infeasible
+            X[k+1] .+= U[k][m+1:m+n]
+        end
+
+        # Check that rollout has not diverged
+        if ~(maximum(X[k]) < solver.opts.max_state_value || maximum(U[k]) < solver.opts.max_control_value)
+            return false
+        end
+    end
+
+    return true
+end
+
 function rollout!(X::Matrix, U::Matrix, solver::Solver)
     infeasible = solver.model.m != size(U,1)
     N = solver.N
@@ -129,11 +157,63 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     return true
 end
 
+function rollout!(res::UnconstrainedResultsStatic,solver::Solver,alpha::Float64)
+    infeasible = solver.model.m != size(res.U[1],1)
+    N = solver.N; m = solver.model.m; n = solver.model.n
+
+    if infeasible
+        m += n
+    end
+
+    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
+
+    X_[1] = solver.obj.x0;
+
+    if solver.control_integration == :foh
+        b = res.b
+        du = zeros(m)
+        dv = zeros(m)
+        du = alpha*d[1]
+        U_[1] .= U[1] + du
+    end
+
+    for k = 2:N
+        delta = X_[k-1] - X[k-1]
+
+        if solver.control_integration == :foh
+            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
+            U_[:,k] .= U[:,k] + dv
+            solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
+            du = dv
+        else
+            U_[k-1] = U[k-1] - K[k-1]*delta - alpha*d[k-1]
+            solver.fd(X_[k], X_[k-1], U_[k-1])
+        end
+
+
+        if infeasible
+            X_[k] .+= U_[k-1]
+        end
+
+        # Check that rollout has not diverged
+        if ~(maximum(X_[k]) < solver.opts.max_state_value || maximum(U_[k]) < solver.opts.max_control_value)
+            return false
+        end
+    end
+
+    # Calculate state derivatives
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X_,U_)
+    end
+
+    return true
+end
+
 """
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x::Vector,u::Vector,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Union{Float64,ForwardDiff.Dual}
+function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Union{Float64,ForwardDiff.Dual}
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
@@ -177,6 +257,39 @@ function cost_(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Fl
     end
 
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+
+    return J
+end
+
+function cost(solver::Solver,res::UnconstrainedResultsStatic,X=res.X,U=res.U)
+    # pull out solver/objective values
+    N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    obj = solver.obj
+    dt = solver.dt
+
+    if size(U,1) != m
+        m += n
+    end
+
+    R = getR(solver)
+
+    J = 0.0
+    for k = 1:N-1
+        if solver.control_integration == :foh
+
+            xdot1 = res.xdot[k]
+            xdot2 = res.xdot[k+1]
+
+            Xm = 0.5*X[k] + dt/8*xdot1 + 0.5*X[k+1] - dt/8*xdot2
+            Um = (U[k] + U[k+1])/2
+
+            J += solver.dt/6*(stage_cost(X[k],U[k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[k+1],U[k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+        else
+            J += solver.dt*stage_cost(X[k],U[k],Q,R,xf)
+        end
+    end
+
+    J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
 
     return J
 end
@@ -299,6 +412,23 @@ function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=fa
     end
     if solver.control_integration == :foh
         res.Ac[:,:,N], res.Bc[:,:,N] = solver.Fc(res.X[:,N], res.U[:,N])
+    end
+
+    return nothing
+end
+
+function calc_jacobians(res::UnconstrainedResultsStatic, solver::Solver, infeasible=false)::Nothing
+    N = solver.N
+    for k = 1:N-1
+        if solver.control_integration == :foh
+            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
+            res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
+        else
+            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
+        end
+    end
+    if solver.control_integration == :foh
+        res.Ac[N], res.Bc[N] = solver.Fc(res.X[N], res.U[N])
     end
 
     return nothing
