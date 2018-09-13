@@ -74,6 +74,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         infeasible = true
     end
 
+    use_static = true
+
     #****************************#
     #       INITIALIZATION       #
     #****************************#
@@ -83,8 +85,15 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
         iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
-        results = UnconstrainedResults(n,m,N)
-        results.U .= U0
+        if use_static
+            results = UnconstrainedResultsStatic(n,m,N)
+            for i = 1:N
+                results.U[i] = U0[:,i]
+            end
+        else
+            results = UnconstrainedResults(n,m,N)
+            results.U .= U0
+        end
         is_constrained = false
 
     elseif solver.obj isa ConstrainedObjective
@@ -143,7 +152,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #****************************#
     # Initial rollout
     if !infeasible
-        X[:,1] = solver.obj.x0 # set state trajector initial conditions
+        if use_static
+            X[1] = solver.obj.x0
+        else
+            X[:,1] = solver.obj.x0 # set state trajector initial conditions
+        end
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
@@ -233,8 +246,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             ### UPDATE RESULTS ###
-            X .= X_
-            U .= U_
+            if use_static
+                X .= deepcopy(X_)
+                U .= deepcopy(U_)
+            else
+                X .= X_
+                U .= U_
+            end
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
@@ -251,13 +269,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             # Check for cost convergence
-            # Check for cost convergence
-            d_grad = maximum(abs.(results.d[:]))
-            s_grad = maximum(abs.(results.s[:,1]))
-            todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
+            if use_static
+                d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
+                s_grad = maximum(abs.(results.s[1]))
+                todorov_grad = Inf # mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            else
+                d_grad = maximum(abs.(results.d[:]))
+                s_grad = maximum(abs.(results.s[:,1]))
+                todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
+            end
             if solver.opts.verbose
-                println("d gradient: $(d_grad)")
-                println("s gradient: $(s_grad)")
+                println("d gradient: $d_grad")
+                println("s gradient: $s_grad")
                 println("todorov gradient $(todorov_grad)")
             end
             grad = todorov_grad
@@ -326,6 +349,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache.termination_index = iter-1
         results_cache.X = results.X
         results_cache.U = results.U
+    end
+
+    if use_static
+        results = UnconstrainedResults(results)
     end
 
     if ~is_constrained
@@ -497,5 +524,9 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
 end
 
 function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Nothing
+    return nothing
+end
+
+function outer_loop_update(results::UnconstrainedResultsStatic,solver::Solver)::Nothing
     return nothing
 end

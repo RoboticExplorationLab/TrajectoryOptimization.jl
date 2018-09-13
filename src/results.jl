@@ -64,6 +64,32 @@ struct UnconstrainedResults <: SolverIterResults
     end
 end
 
+struct UnconstrainedResultsStatic{N,M} <: SolverIterResults
+    X::Vector{MVector{N,Float64}}  # States (n,N)
+    U::Vector{MVector{M,Float64}}  # Controls (m,N)
+    K::Vector{MMatrix{M,N,Float64}} # Feedback (state) gain (m,n,N)
+    b::Vector{MMatrix{M,M,Float64}}  # Feedback (control) gain (m,m,N)
+    d::Vector{MVector{M,Float64}}  # Feedforward gain (m,N)
+    X_::Vector{MVector{N,Float64}} # Predicted states (n,N)
+    U_::Vector{MVector{M,Float64}} # Predicted controls (m,N)
+    S::Vector{MMatrix{N,N,Float64}}  # Cost-to-go hessian (n,n)
+    s::Vector{MVector{N,Float64}}  # Cost-to-go gradient (n,1)
+    fx::Vector{MMatrix{N,N,Float64}} # State jacobian (n,n,N)
+    fu::Vector{MMatrix{N,M,Float64}} # Control (k) jacobian (n,m,N-1)
+    fv::Vector{MMatrix{N,M,Float64}} # Control (k+1) jacobian (n,m,N-1)
+    Ac::Vector{MMatrix{N,N,Float64}} # Continous dynamics state jacobian (n,n,N)
+    Bc::Vector{MMatrix{N,M,Float64}} # Continuous dynamics control jacobian (n,m,N)
+
+    xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
+    mu_reg::Vector{Float64}
+
+    function UnconstrainedResultsStatic(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
+            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg) where {N,M}
+        new{N,M}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+    end
+end
+
+
 """
 $(SIGNATURES)
 Construct results from sizes
@@ -92,6 +118,31 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     ρ = zeros(1)
     dρ = zeros(1)
     UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+end
+
+function UnconstrainedResults(res::UnconstrainedResultsStatic)
+    UnconstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
+end
+
+function UnconstrainedResultsStatic(n::Int,m::Int,N::Int)
+    X  = [@MVector zeros(n)   for i = 1:N]
+    U  = [@MVector zeros(m)   for i = 1:N]
+    K  = [@MMatrix zeros(m,n) for i = 1:N]
+    b  = [@MMatrix zeros(m,m) for i = 1:N]
+    d  = [@MVector zeros(m)   for i = 1:N]
+    X_ = [@MVector zeros(n)   for i = 1:N]
+    U_ = [@MVector zeros(m)   for i = 1:N]
+    S  = [@MMatrix zeros(n,n) for i = 1:N]
+    s  = [@MVector zeros(n)   for i = 1:N]
+    fx = [@MMatrix zeros(n,n) for i = 1:N-1]
+    fu = [@MMatrix zeros(n,m) for i = 1:N-1]
+    fv = [@MMatrix zeros(n,m) for i = 1:N-1]
+    Ac = [@MMatrix zeros(n,n) for i = 1:N]
+    Bc = [@MMatrix zeros(n,m) for i = 1:N]
+    xdot  = [@MVector zeros(n)   for i = 1:N]
+    mu_reg = zeros(1)
+
+    UnconstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
 end
 
 function copy(r::UnconstrainedResults)
