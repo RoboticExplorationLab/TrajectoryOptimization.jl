@@ -1,5 +1,9 @@
 import Base: convert
 
+function get_cost_matrices(solver::Solver)
+    solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
+end
+
 function get_sizes(solver::Solver)
     return solver.model.n, solver.model.m, solver.N
 end
@@ -7,6 +11,7 @@ end
 function get_N(solver::Solver,method::Symbol)
     get_N(solver.N,method)
 end
+
 function get_N(N0::Int,method::Symbol)
     if method == :midpoint
         N,N_ = N0,N0
