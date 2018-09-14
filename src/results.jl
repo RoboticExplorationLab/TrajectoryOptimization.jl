@@ -33,6 +33,8 @@ Abstract type for the output of a single iteration step
 """
 abstract type SolverIterResults <: SolverResults end
 
+abstract type SolverIterResultsStatic <: SolverIterResults end
+
 """
 $(TYPEDEF)
 Values computed for an unconstrained optimization problem
@@ -64,7 +66,7 @@ struct UnconstrainedResults <: SolverIterResults
     end
 end
 
-struct UnconstrainedResultsStatic{N,M} <: SolverIterResults
+struct UnconstrainedResultsStatic{N,M} <: SolverIterResultsStatic
     X::Vector{MVector{N,Float64}}  # States (n,N)
     U::Vector{MVector{M,Float64}}  # Controls (m,N)
     K::Vector{MMatrix{M,N,Float64}} # Feedback (state) gain (m,n,N)
@@ -81,11 +83,13 @@ struct UnconstrainedResultsStatic{N,M} <: SolverIterResults
     Bc::Vector{MMatrix{N,M,Float64}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
-    mu_reg::Vector{Float64}
+
+    ρ::Array{Float64,1}
+    dρ::Array{Float64,1}
 
     function UnconstrainedResultsStatic(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
-            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg) where {N,M}
-        new{N,M}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ) where {N,M}
+        new{N,M}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
     end
 end
 
@@ -140,9 +144,10 @@ function UnconstrainedResultsStatic(n::Int,m::Int,N::Int)
     Ac = [@MMatrix zeros(n,n) for i = 1:N]
     Bc = [@MMatrix zeros(n,m) for i = 1:N]
     xdot  = [@MVector zeros(n)   for i = 1:N]
-    mu_reg = zeros(1)
+    ρ = zeros(1)
+    dρ = zeros(1)
 
-    UnconstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,mu_reg)
+    UnconstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
 end
 
 function copy(r::UnconstrainedResults)
@@ -155,7 +160,7 @@ Values computed for a constrained optimization problem
 
 Time steps are always concatenated along the last dimension
 """
-struct ConstrainedResultsStatic{N,M,P,PN} <: SolverIterResults
+struct ConstrainedResultsStatic{N,M,P,PN} <: SolverIterResultsStatic
     X::Vector{MVector{N,Float64}}  # States (n,N)
     U::Vector{MVector{M,Float64}}  # Controls (m,N)
     K::Vector{MMatrix{M,N,Float64}} # Feedback (state) gain (m,n,N)
@@ -190,7 +195,8 @@ struct ConstrainedResultsStatic{N,M,P,PN} <: SolverIterResults
 
     Cx_N::MMatrix{PN,N,Float64}
 
-    mu_reg::Array{Float64,1}
+    ρ::Array{Float64,1}
+    dρ::Array{Float64,1}
 
     V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
@@ -198,12 +204,12 @@ struct ConstrainedResultsStatic{N,M,P,PN} <: SolverIterResults
     function ConstrainedResultsStatic(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
             K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
             C::Vector{MVector{P,Float64}},C_prev,Iμ,LAMBDA,MU,
-            CN::MVector{PN,Float64},CN_prev::MVector{PN,Float64},IμN::MVector{PN,Float64},λN::MVector{PN,Float64},μN::MVector{PN,Float64},
-            cx,cu,cxn,mu_reg,V_al_prev,V_al_current) where {N,M,P,PN}
-        @show P
-        @show PN
-        @show typeof(cxn)
-        new{N,M,P,PN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
+            CN::MVector{PN,Float64},CN_prev,IμN,λN,μN,
+            cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current) where {N,M,P,PN}
+        # @show P
+        # @show PN
+        # @show typeof(cxn)
+        new{N,M,P,PN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -322,6 +328,12 @@ function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
 end
 
+function ConstrainedResults(res::ConstrainedResultsStatic)
+    ConstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
+end
+
+
+
 function ConstrainedResultsStatic(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X  = [@MVector zeros(n)   for i = 1:N]
     U  = [@MVector zeros(m)   for i = 1:N]
@@ -357,14 +369,15 @@ function ConstrainedResultsStatic(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu  = [@MMatrix zeros(p,m)   for i = 1:N]
     cxn = zeros(p_N,n)
 
-    mu_reg = zeros(1)
+    ρ = zeros(1)
+    dρ = zeros(1)
 
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
     ConstrainedResultsStatic(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
         C,C_prev,Iμ,LAMBDA,MU,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,mu_reg,V_al_prev,V_al_current)
+        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
 end
 

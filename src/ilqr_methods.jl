@@ -42,7 +42,7 @@ function rollout!(res::SolverResults,solver::Solver)
     flag
 end
 
-function rollout!(res::UnconstrainedResultsStatic, solver::Solver)
+function rollout!(res::SolverIterResultsStatic, solver::Solver)
     X,U = res.X,res.U
     infeasible = solver.model.m != size(U[1],1)
     N = solver.N
@@ -157,11 +157,12 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     return true
 end
 
-function rollout!(res::UnconstrainedResultsStatic,solver::Solver,alpha::Float64)
+function rollout!(res::SolverIterResultsStatic,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U[1],1)
     N = solver.N; m = solver.model.m; n = solver.model.n
 
     if infeasible
+        m0 = m
         m += n
     end
 
@@ -192,7 +193,7 @@ function rollout!(res::UnconstrainedResultsStatic,solver::Solver,alpha::Float64)
 
 
         if infeasible
-            X_[k] .+= U_[k-1]
+            X_[k] .+= U_[k-1][m0.+(1:n)]
         end
 
         # Check that rollout has not diverged
@@ -261,7 +262,7 @@ function cost_(solver::Solver,res::SolverResults,X::Array{Float64,2},U::Array{Fl
     return J
 end
 
-function cost(solver::Solver,res::UnconstrainedResultsStatic,X=res.X,U=res.U)
+function cost_(solver::Solver,res::SolverIterResultsStatic,X=res.X,U=res.U)
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -311,11 +312,36 @@ function cost_constraints(solver::Solver, res::ConstrainedResults)
     return J
 end
 
+function cost_constraints(solver::Solver, res::ConstrainedResultsStatic)
+    N = solver.N
+    J = 0.0
+    for k = 1:N-1
+        J += (0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.LAMBDA[k]'*res.C[k])
+    end
+
+    if solver.control_integration == :foh
+        J += (0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.LAMBDA[N]'*res.C[N])
+    end
+
+    J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
+
+    return J
+end
+
+
 function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
     cost_(solver,res,X,U)
 end
 
 function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
+    cost_(solver,res,X,U) + cost_constraints(solver,res)
+end
+
+function cost(solver::Solver, res::UnconstrainedResultsStatic, X::Vector=res.X, U::Vector{MVector{S,Float64}}=res.U) where {S}
+    cost_(solver,res,X,U)
+end
+
+function cost(solver::Solver, res::ConstrainedResultsStatic, X::Vector=res.X, U::Vector{MVector{S,Float64}}=res.U) where {S}
     cost_(solver,res,X,U) + cost_constraints(solver,res)
 end
 
@@ -400,6 +426,27 @@ function calc_jacobians(res::ConstrainedResults, solver::Solver)::Nothing #TODO 
     return nothing
 end
 
+function calc_jacobians(res::ConstrainedResultsStatic, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
+    N = solver.N
+    for k = 1:N-1
+        if solver.control_integration == :foh
+            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[:,k], res.U[k+1])
+            res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
+        else
+            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
+        end
+        res.Cx[k], res.Cu[k] = solver.c_jacobian(res.X[k],res.U[k])
+    end
+
+    if solver.control_integration == :foh
+        res.Ac[N], res.Bc[N] = solver.Fc(res.X[:,N], res.U[N])
+        res.Cx[N], res.Cu[N] = solver.c_jacobian(res.X[N],res.U[N])
+    end
+
+    res.Cx_N .= solver.c_jacobian(res.X[N])
+    return nothing
+end
+
 function calc_jacobians(res::UnconstrainedResults, solver::Solver, infeasible=false)::Nothing
     N = solver.N
     for k = 1:N-1
@@ -434,6 +481,16 @@ function calc_jacobians(res::UnconstrainedResultsStatic, solver::Solver, infeasi
     return nothing
 end
 
+todorov_grad(res::SolverIterResults) = mean(maximum(abs.(res.d[:])./(abs.(res.U[:]) .+ 1)))
+
+function todorov_grad(res::SolverIterResultsStatic)
+    N = length(res.X)
+    grad = -Inf
+    for i = 1:N
+        grad = max(grad, maximum(abs.(res.d[i]) ./ (abs.(res.U[i]) + 1)))
+    end
+    grad
+end
 
 ########################################
 ### METHODS FOR CONSTRAINED PROBLEMS ###
@@ -476,6 +533,50 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     res.CN .= c(X[:,N])
     res.IμN .= Matrix(Diagonal(res.μN))
     return nothing # TODO allow for more general terminal constraint
+end
+
+function update_constraints!(res::ConstrainedResultsStatic, solver::Solver, X::Array, U::Array)::Nothing
+
+    N = length(res.C) # note, C is now (p,N)
+    p = length(res.C[1])
+    c = solver.c_fun
+    pI = solver.obj.pI
+
+    if solver.control_integration == :foh
+        final_index = N
+    else
+        final_index = N-1
+    end
+
+    for k = 1:final_index
+        res.C[k] = c(X[k], U[k]) # update results with constraint evaluations
+        # Inequality constraints [see equation ref]
+        for j = 1:pI
+            if res.C[k][j] > 0.0 || res.LAMBDA[k][j] > 0.0
+                res.Iμ[k][j,j] = res.MU[k][j] # active (or previously active) inequality constraints are penalized
+            else
+                res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
+            end
+        end
+
+        # Equality constraints
+        for j = pI+1:p
+            res.Iμ[k][j,j] = res.MU[k][j] # equality constraints are penalized
+        end
+    end
+
+    # Terminal constraint
+    res.CN .= c(X[N])
+    res.IμN .= Diagonal(res.μN)
+    return nothing # TODO allow for more general terminal constraint
+end
+
+function update_constraints!(res::UnconstrainedResults, solver::Solver, X::Array, U::Array)::Nothing
+    return nothing
+end
+
+function update_constraints!(res::UnconstrainedResultsStatic, solver::Solver, X::Array, U::Array)::Nothing
+    return nothing
 end
 
 function count_constraints(obj::ConstrainedObjective)
@@ -657,7 +758,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
 
     fx_N = In  # Jacobian of final state
 
-    function constraint_jacobian(x::Array,u::Array)
+    function constraint_jacobian(x::AbstractArray,u::AbstractArray)
         infeasible = length(u) != m
         fx[1:pI_u, :] = fx_control
         fu[1:pI_u, :] = fu_control
@@ -677,7 +778,7 @@ function generate_constraint_functions(obj::ConstrainedObjective)
         return fx, fu
     end
 
-    function constraint_jacobian(x::Array)
+    function constraint_jacobian(x::AbstractArray)
         return fx_N
     end
 
@@ -701,7 +802,19 @@ function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(res
     end
 end
 
+function max_violation(results::ConstrainedResultsStatic,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
+    if size(results.CN,1) != 0
+        return max(maximum(maximum.(map((x)->x.>0, results.Iμ) .* results.C)), maximum(abs.(results.CN)))
+    else
+        return maximum(maximum.((results.Iμ .* map((x)->x.>0, results.Iμ))))
+    end
+end
+
 function max_violation(results::UnconstrainedResults)
+    return 0.0
+end
+
+function max_violation(results::UnconstrainedResultsStatic)
     return 0.0
 end
 

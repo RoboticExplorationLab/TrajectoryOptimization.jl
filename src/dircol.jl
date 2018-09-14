@@ -282,7 +282,7 @@ function cost(solver::Solver,res::DircolResults)
     cost(solver,res.X_,res.U_,res.weights)
 end
 
-function cost(solver::Solver,X,U,weights)
+function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{Float64})
     n,m,N = get_sizes(X,U)
     Qf = solver.obj.Qf; Q = solver.obj.Q;
     xf = solver.obj.xf; R = solver.obj.R;

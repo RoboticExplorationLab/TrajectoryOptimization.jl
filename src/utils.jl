@@ -1,7 +1,13 @@
-import Base: convert
+import Base: convert, copyto!, Array
+import LinearAlgebra: norm
 
 function get_sizes(solver::Solver)
     return solver.model.n, solver.model.m, solver.N
+end
+
+function get_sizes(X::Vector{T}, U::Vector{T}) where {T<:MVector}
+    N = length(X)
+    n,m = length(X[1]), length(U[1])
 end
 
 function get_N(solver::Solver,method::Symbol)
@@ -25,6 +31,34 @@ function get_sizes(X::AbstractArray,U::AbstractArray)
     return n,m,N
 end
 
+function norm(X::Vector{MVector{S,Float64}}) where {S}
+    sqrt(norm2(X))
+end
+
+function norm2(X::Vector{MVector{S,Float64}}) where {S}
+    v = 0.
+    for i = 1:size(X,1)
+        v += X[i]'X[i]
+    end
+    v
+end
+
+function norm2(X::MVector{S,Float64}) where {S}
+    norm(X)^2
+end
+
+function norm(X::Vector{MVector{S,Float64}},inds::UnitRange{Int64}) where {S}
+    sqrt(norm2(X,inds))
+end
+
+function norm2(X::Vector{MVector{S,Float64}},inds::UnitRange{Int64}) where {S}
+    v = 0.
+    for i = 1:size(X,1)
+        v += X[i][inds]'X[i][inds]
+    end
+    v
+end
+
 function to_array(X::Vector{T}) where {T<:MArray}
     N = length(X)
     Y = zeros(size(X[1])...,N)
@@ -33,6 +67,40 @@ function to_array(X::Vector{T}) where {T<:MArray}
         Y[ax[1:end-1]...,i] = X[i]
     end
     Y
+end
+
+function to_array(A::Vector{D} where {D<:Diagonal})
+    n = size(A[1],1)
+    N = length(A)
+    B = zeros(n,n,N)
+    for i = 1:N
+        B[:,:,i] = A[i]
+    end
+    return B
+end
+
+function to_svecs(X::Array)
+    N = size(X)[end]
+    s = size(X)[1:end-1]
+    ax = axes(X)[1:end-1]
+    [MArray{Tuple{s...}}(X[ax...,1]) for i = 1:N]
+end
+
+function copyto!(A::Vector{T}, B::Array) where {T<:MArray}
+    N = size(B)[end]
+    ax = axes(B)[1:end-1]
+    for i = 1:N
+        A[i] = B[ax...,i]
+    end
+    A
+end
+
+function Array{Float64,3}(X::Vector{D}) where {D<:Diagonal}
+    to_array(X)
+end
+
+function convert(::Type{Array{Float64,3}}, X::Vector{Diagonal{Float64,V}}) where {V}
+    to_array(X)
 end
 
 function convert(::Type{Array}, X::Vector{T}) where {T<:MArray}

@@ -74,7 +74,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         infeasible = true
     end
 
-    use_static = true
+    use_static = solver.opts.use_static
 
     #****************************#
     #       INITIALIZATION       #
@@ -87,13 +87,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         solver.opts.iterations_outerloop = 1
         if use_static
             results = UnconstrainedResultsStatic(n,m,N)
-            for i = 1:N
-                results.U[i] = U0[:,i]
-            end
         else
             results = UnconstrainedResults(n,m,N)
-            results.U .= U0
         end
+        copyto!(results.U, U0)
         is_constrained = false
 
     elseif solver.obj isa ConstrainedObjective
@@ -117,15 +114,19 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         end
 
         ## Initialize results
-        results = ConstrainedResults(n,m,p,N) # preallocate memory for results
+        if use_static
+            results = ConstrainedResultsStatic(n,m,p,N)
+        else
+            results = ConstrainedResults(n,m,p,N) # preallocate memory for results
+        end
         results.MU .*= solver.opts.μ1 # set initial penalty term values
 
         if infeasible
-            results.X .= X0 # initialize state trajectory with infeasible trajectory input
-            results.U .= [U0; ui] # augment control with additional control inputs that produce infeasible state trajectory
+            copyto!(results.X, X0)  # initialize state trajectory with infeasible trajectory input
+            copyto!(results.U, [U0; ui])  # augment control with additional control inputs that produce infeasible state trajectory
         else
-            results.U .= U0 # initialize control to control input sequence
-            # if !isempty(prevResults) # bootstrap previous constraint solution
+            copyto!(results.U, U0) # initialize control to control input sequence
+            # if !isempty(prevResults) # bootstrap previous constraint solution # TODO: Copy gains
             #     results.LAMBDA .= prevResults.LAMBDA[1:p,:]
             #     results.MU .= prevResults.MU[1:p,:]
             #     results.λN .= prevResults.λN
@@ -199,11 +200,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             println("Outer loop $k (begin)")
         end
 
-        if results isa ConstrainedResults
+        if results isa ConstrainedResults || results isa ConstrainedResultsStatic
             update_constraints!(results,solver,results.X,results.U)
             if k == 1
-                results.C_prev .= results.C # store initial constraints results for AL method outer loop update, after this first update C_prev gets updated in the outer loop update
-                results.CN_prev .= results.CN
+                results.C_prev .= deepcopy(results.C)
+                results.CN_prev .= deepcopy(results.CN)
+                # results.C_prev .= results.C # store initial constraints results for AL method outer loop update, after this first update C_prev gets updated in the outer loop update
+                # results.CN_prev .= results.CN
             end
         end
         J_prev = cost(solver, results, X, U)
@@ -272,23 +275,23 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             if use_static
                 d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
                 s_grad = maximum(abs.(results.s[1]))
-                todorov_grad = Inf # mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
             else
                 d_grad = maximum(abs.(results.d[:]))
                 s_grad = maximum(abs.(results.s[:,1]))
-                todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
             end
+            t_grad = todorov_grad(results)
             if solver.opts.verbose
                 println("d gradient: $d_grad")
                 println("s gradient: $s_grad")
-                println("todorov gradient $(todorov_grad)")
+                println("todorov gradient $(t_grad)")
             end
-            grad = todorov_grad
+            grad = t_grad
 
-            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) || (results isa ConstrainedResults && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
+            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) ||
+                (is_constrained && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
-                    if results isa UnconstrainedResults
+                    if ~is_constrained
                         println("Unconstrained solve complete")
                     end
                 end
@@ -300,7 +303,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             end
 
-            if results.ρ > solver.opts.ρ_max
+            if results.ρ[1] > solver.opts.ρ_max
                 if solver.opts.verbose
                     println("--Regularization maxed out\n - terminating solve")
                 end
@@ -351,11 +354,11 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache.U = results.U
     end
 
-    if use_static
-        results = UnconstrainedResults(results)
-    end
 
-    if ~is_constrained
+    if is_constrained
+        # use_static ? results = ConstrainedResults(results) : nothing
+    else
+        # use_static ? results = UnconstrainedResults(results) : nothing
         solver.opts.iterations_outerloop = iterations_outerloop_original
     end
 
@@ -495,7 +498,7 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     # end
 
     if solver.opts.outer_loop_update == :uniform
-        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[pI+1:p,:][:])) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[pI+1:p,:][:]))
+        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current)) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev))
             results.MU .= solver.opts.γ_no*results.MU
             results.μN .= solver.opts.γ_no*results.μN
             # results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
@@ -517,6 +520,73 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= results.C
     results.CN_prev .= results.CN
+
+    #TODO properly cache V, mu, lambda
+
+    return nothing
+end
+
+function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::Nothing
+    N = solver.N
+    p = solver.obj.pI
+    pI = solver.obj.pI
+
+    if solver.control_integration == :foh
+        final_index = N
+    else
+        final_index = N-1
+    end
+
+    results.V_al_prev .= deepcopy(results.V_al_current)
+    # results.V_al_prev .= results.V_al_current
+
+    ## Lagrange multiplier update for time step
+    for jj = 1:final_index
+        for ii = 1:p
+            if ii <= pI
+                results.V_al_current[ii,jj] = min(-1.0*results.C[jj][ii], results.LAMBDA[jj][ii]/results.MU[jj][ii])
+                results.LAMBDA[jj][ii] = max(0.0, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii]) # λ_min < λ < λ_max
+            else
+                results.LAMBDA[jj][ii] = results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii] # λ_min < λ < λ_max
+            end
+
+        end
+
+    end
+    # Lagrange multiplier terminal state equality constraints update
+    for ii = 1:solver.model.n
+        results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
+        # results.λN[ii] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+    end
+
+    ## Penalty update
+    #---Default---
+    if solver.opts.outer_loop_update == :default # update all μ default
+        results.MU .*= solver.opts.γ
+        results.μN .*= solver.opts.γ
+    end
+
+    if solver.opts.outer_loop_update == :uniform
+        if max(sqrt(norm2(results.C, pI+1:p) + norm2(results.CN)), norm(results.V_al_current)) <= solver.opts.τ*max(sqrt(norm2(results.C_prev, pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+            results.MU .*= solver.opts.γ_no
+            results.μN .*= solver.opts.γ_no
+            if solver.opts.verbose
+                println("no μ update\n")
+            end
+        else
+            results.MU .*= solver.opts.γ
+            results.μN .*= solver.opts.γ
+            if solver.opts.verbose
+                println("$(solver.opts.γ)x μ update\n")
+            end
+        end
+    end
+
+    ## Store current constraints evaluations for next outer loop update
+    results.C_prev .= deepcopy(results.C)
+    results.CN_prev .= deepcopy(results.CN)
+    # results.C_prev .= results.C
+    # results.CN_prev .= results.CN
 
     #TODO properly cache V, mu, lambda
 

@@ -24,7 +24,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     R = getR(solver)
     dt = solver.dt
 
-    use_static = res isa UnconstrainedResultsStatic
+    use_static = res isa SolverIterResultsStatic
 
     if solver.model.m != size(res.U,1)
         m += n
@@ -52,6 +52,11 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
         CxN = res.Cx_N
         S[:,:,N] += CxN'*res.IμN*CxN
         s[:,N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    elseif res isa ConstrainedResultsStatic
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
     k = N-1
@@ -91,6 +96,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
             Quu = luu + fu'*S[:,:,k+1]*fu + res.ρ[1]*I
             Qux = fu'*S[:,:,k+1]*fx
+
         end
 
         # Constraints
@@ -101,12 +107,17 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
             Qxx += Cx'*Iμ[:,:,k]*Cx
             Quu += Cu'*Iμ[:,:,k]*Cu
             Qux += Cu'*Iμ[:,:,k]*Cx
+        elseif res isa ConstrainedResultsStatic
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
         end
 
-        Quu = Hermitian(Quu)
-
         # regularization
-        if !isposdef(Quu)
+        if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
             regularization_update!(res,solver,true)
             k = N-1
             if solver.opts.verbose
@@ -120,7 +131,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
             K[k] = Quu\Qux
             d[k] = Quu\Qu
             s[k] = Qx - Qux'd[k]
-            S[k][:] = Qxx - Qux'K[k]
+            S[k] = Qxx - Qux'K[k]
 
             Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
         else
@@ -228,7 +239,7 @@ function backwardpass_sqrt!(res::SolverResults,solver::Solver)
         try  # Regularization
             Su[:,:,k] = chol_minus(Wxx.R,(Wuu.R')\(Qxu'))
         catch ex
-            if ex isa LinAlg.PosDefException
+            if ex isa LinearAlgebra.PosDefException
                 regularization_update!(res,solver,true)
                 k = N-1
                 if solver.opts.verbose
@@ -453,12 +464,11 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     X_ = res.X_
     U_ = res.U_
 
-    use_static = res isa UnconstrainedResultsStatic
+    use_static = res isa SolverIterResultsStatic
 
     # Compute original cost
-    if res isa ConstrainedResults
-        update_constraints!(res,solver,X,U)
-    end
+    update_constraints!(res,solver,X,U)
+
     J_prev = cost(solver, res, X, U)
 
     J = Inf
@@ -474,9 +484,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             X_ .= X
             U_ .= U
 
-            if res isa ConstrainedResults
-                update_constraints!(res,solver,X_,U_)
-            end
+            update_constraints!(res,solver,X_,U_)
             J = copy(J_prev)
             z = 0.
 
@@ -504,9 +512,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         end
 
         # Calcuate cost
-        if res isa ConstrainedResults
-            update_constraints!(res,solver,X_,U_)
-        end
+        update_constraints!(res,solver,X_,U_)
         J = cost(solver, res, X_, U_)
         z = (J_prev - J)/(alpha*(Δv[1] + alpha*Δv[2]))
 
@@ -517,8 +523,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
     if solver.opts.verbose
         println("New cost: $J")
-        if res isa ConstrainedResults
-            println("- state+control cost: $(cost(solver,X_,U_))")
+        if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+            println("- state+control cost: $(cost_(solver,res,res.X_,res.U_))")
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end
