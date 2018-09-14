@@ -1,6 +1,7 @@
 #***************#
 #   CART POLE   #
 #***************#
+using Test
 model, obj0 = Dynamics.cartpole_analytical
 n,m = model.n, model.m
 

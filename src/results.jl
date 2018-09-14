@@ -76,16 +76,15 @@ struct UnconstrainedResultsStatic{N,M} <: SolverIterResultsStatic
     U_::Vector{MVector{M,Float64}} # Predicted controls (m,N)
     S::Vector{MMatrix{N,N,Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{MVector{N,Float64}}  # Cost-to-go gradient (n,1)
-    fx::Vector{MMatrix{N,N,Float64}} # State jacobian (n,n,N)
-    fu::Vector{MMatrix{N,M,Float64}} # Control (k) jacobian (n,m,N-1)
+    fx::Vector{MMatrix{N,N,Float64}} # Discrete dynamics state jacobian (n,n,N)
+    fu::Vector{MMatrix{N,M,Float64}} # Discrete dynamics control jacobian (n,m,N-1)
     fv::Vector{MMatrix{N,M,Float64}} # Control (k+1) jacobian (n,m,N-1)
     Ac::Vector{MMatrix{N,N,Float64}} # Continous dynamics state jacobian (n,n,N)
     Bc::Vector{MMatrix{N,M,Float64}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
-
-    ρ::Array{Float64,1}
-    dρ::Array{Float64,1}
+    ρ::Vector{Float64}
+    dρ::Vector{Float64}
 
     function UnconstrainedResultsStatic(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
             K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ) where {N,M}

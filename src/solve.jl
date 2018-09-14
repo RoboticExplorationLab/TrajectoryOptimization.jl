@@ -147,6 +147,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     X_ = results.X_ # updated state trajectory
     U_ = results.U_ # updated control trajectory
 
+    # Set initial regularization
+    results.ρ[1] *= solver.opts.ρ_initial
 
     #****************************#
     #           SOLVER           #
@@ -191,7 +193,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #****************************#
 
     dJ = Inf
-    grad = Inf
+    gradient = Inf
     Δv = Inf
 
     for k = 1:solver.opts.iterations_outerloop
@@ -240,6 +242,42 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 Δv = backwardpass!(results, solver)
             end
 
+            ## Check gradients for convergence ##
+            if use_static
+                d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
+                s_grad = maximum(abs.(results.s[1]))
+                todorov_grad = Inf # mean(max.(abs.(results.d[:])./(abs.(results.U[:]) + results.d[:]), results.d[:]))
+            else
+                d_grad = maximum(abs.(results.d[:]))
+                s_grad = maximum(abs.(results.s[:,1]))
+                todorov_grad = mean(maximum(abs.(results.d[:])./(abs.(results.U[:]) .+ 1)))
+            end
+            if solver.opts.verbose
+                println("d gradient: $d_grad")
+                println("s gradient: $s_grad")
+                println("todorov gradient $(todorov_grad)")
+            end
+            gradient = todorov_grad
+
+            if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (results isa ConstrainedResults && gradient < solver.opts.gradient_intermediate_tolerance && k != solver.opts.iterations_outerloop)
+                if solver.opts.verbose
+                    println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
+                    if results isa UnconstrainedResults
+                        println("Unconstrained solve complete")
+                    end
+                    println("---Gradient tolerance met")
+                end
+                break
+            # Check for gradient and constraint tolerance convergence
+            elseif (is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.eps_constraint)
+                if solver.opts.verbose
+                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
+                    println("---Gradient tolerance met\n")
+                end
+                break
+            end
+            #####################
+
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv)
             push!(J_hist,J)
@@ -271,44 +309,32 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 push!(c_max_hist, c_max)
             end
 
-            # Check for cost convergence
-            if use_static
-                d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
-                s_grad = maximum(abs.(results.s[1]))
-            else
-                d_grad = maximum(abs.(results.d[:]))
-                s_grad = maximum(abs.(results.s[:,1]))
-            end
-            t_grad = todorov_grad(results)
-            if solver.opts.verbose
-                println("d gradient: $d_grad")
-                println("s gradient: $s_grad")
-                println("todorov gradient $(t_grad)")
-            end
-            grad = t_grad
-
-            if (~is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance)) ||
-                (is_constrained && (dJ < solver.opts.eps_intermediate || grad < solver.opts.gradient_tolerance) && k != solver.opts.iterations_outerloop)
+            ## Check for cost convergence ##
+            if (~is_constrained && dJ < solver.opts.eps) || (results isa ConstrainedResults && dJ < solver.opts.eps_intermediate && k != solver.opts.iterations_outerloop)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
                     if ~is_constrained
                         println("Unconstrained solve complete")
                     end
+                    println("---Cost met tolerance")
                 end
                 break
-            elseif (is_constrained && (dJ < solver.opts.eps || grad < solver.opts.gradient_tolerance) && c_max < solver.opts.eps_constraint)
+            # Check for cost and constraint tolerance convergence
+            elseif (is_constrained && dJ < solver.opts.eps  && c_max < solver.opts.eps_constraint)
                 if solver.opts.verbose
-                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i\n")
+                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
+                    println("---Cost met tolerance\n")
+                end
+                break
+            # Check for maxed regularization
+            elseif results.ρ[1] > solver.opts.ρ_max
+                if solver.opts.verbose
+                    println("*Regularization maxed out*\n - terminating solve - ")
                 end
                 break
             end
+            ################################
 
-            if results.ρ[1] > solver.opts.ρ_max
-                if solver.opts.verbose
-                    println("--Regularization maxed out\n - terminating solve")
-                end
-                break
-            end
         end
         ### END INNER LOOP ###
 
@@ -329,13 +355,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
         #    TERMINATION CRITERIA    #
         #****************************#
-        # Check if maximum constraint violation satisfies termination criteria
+        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
         if solver.obj isa ConstrainedObjective
             max_c = max_violation(results, diag_inds)
-            if max_c < solver.opts.eps_constraint && dJ < solver.opts.eps
+            if max_c < solver.opts.eps_constraint && (dJ < solver.opts.eps || gradient < solver.opts.gradient_tolerance)
                 if solver.opts.verbose
                     println("-Outer loop cost and constraint eps criteria met at outer iteration: $k\n")
                     println("Constrained solve complete")
+                    if dJ < solver.opts.eps
+                        println("--Cost tolerance met")
+                    else
+                        println("--Gradient tolerance met")
+                    end
                 end
                 break
             end
@@ -444,12 +475,11 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
             if ii <= pI
                 results.V_al_current[ii,jj] = min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
 
-                results.LAMBDA[ii,jj] = max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
-                # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
+                # results.LAMBDA[ii,jj] = max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]) # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
             else
-                results.LAMBDA[ii,jj] = results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
-
-                # results.LAMBDA[ii,jj] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
+                # results.LAMBDA[ii,jj] = results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj] # λ_min < λ < λ_max
+                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
             end
 
             # # Penalty update (individual)
@@ -475,17 +505,17 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     end
     # Lagrange multiplier terminal state equality constraints update
     for ii = 1:solver.model.n
-        results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
-        # results.λN[ii] .= max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+        # results.λN[ii] = results.λN[ii] + results.μN[ii].*results.CN[ii]
+        results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
     end
 
     ## Penalty update
     #---Default---
     if solver.opts.outer_loop_update == :default # update all μ default
-        results.MU = solver.opts.γ*results.MU
-        results.μN = solver.opts.γ*results.μN
-        # results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
-        # results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+        # results.MU = solver.opts.γ*results.MU
+        # results.μN = solver.opts.γ*results.μN
+        results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
+        results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
     end
     #-------------
 
@@ -498,19 +528,19 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     # end
 
     if solver.opts.outer_loop_update == :uniform
-        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current)) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev))
-            results.MU .= solver.opts.γ_no*results.MU
-            results.μN .= solver.opts.γ_no*results.μN
-            # results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
-            # results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
+        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:])) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+            # results.MU .= solver.opts.γ_no*results.MU
+            # results.μN .= solver.opts.γ_no*results.μN
+            results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
             if solver.opts.verbose
                 println("no μ update\n")
             end
         else
-            results.MU .= solver.opts.γ*results.MU
-            results.μN .= solver.opts.γ*results.μN
-            # results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
-            # results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+            # results.MU .= solver.opts.γ*results.MU
+            # results.μN .= solver.opts.γ*results.μN
+            results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
             if solver.opts.verbose
                 println("$(solver.opts.γ)x μ update\n")
             end

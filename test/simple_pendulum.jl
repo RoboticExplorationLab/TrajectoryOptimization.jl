@@ -13,7 +13,7 @@ obj.tf = 5.
 model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 
-
+using Test
 ### UNCONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
