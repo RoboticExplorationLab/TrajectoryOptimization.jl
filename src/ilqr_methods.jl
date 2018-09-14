@@ -796,17 +796,17 @@ precomputed and passed in.
 """
 function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
-        return max(maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0))), maximum(abs.(results.CN))) # TODO replace concatenation
+        return max(norm(results.C.*(results.Iμ[inds,:] .!= 0),Inf), norm(results.CN,Inf)) # TODO replace concatenation
     else
-        return maximum(abs.(results.C.*(results.Iμ[inds,:] .!= 0)))
+        return norm(results.C.*(results.Iμ[inds,:] .!= 0),Inf)
     end
 end
 
 function max_violation(results::ConstrainedResultsStatic,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
-        return max(maximum(maximum.(map((x)->x.>0, results.Iμ) .* results.C)), maximum(abs.(results.CN)))
+        return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), maximum(abs.(results.CN)))
     else
-        return maximum(maximum.((results.Iμ .* map((x)->x.>0, results.Iμ))))
+        return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
     end
 end
 
