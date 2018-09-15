@@ -102,13 +102,91 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-function chol_plus(A,B)
-    n1,m = size(A)
-    n2 = size(B,1)
-    P = zeros(n1+n2,m)
-    P[1:n1,:] = A
-    P[n1+1:end,:] = B
-    qr(P)
+function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
+    N = solver.N; n = solver.model.n; m = solver.model.m;
+    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
+    R = getR(solver)
+    dt = solver.dt
+
+    if solver.model.m != length(res.U[1])
+        m += n
+    end
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+
+    # Terminal constraints
+
+    if res isa ConstrainedResultsStatic
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+    k = N-1
+
+    # Backward pass
+    while k >= 1
+
+        lx = dt*Q*(X[k] - xf)
+        lu = dt*R*(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fx, fu = res.fx[k], res.fu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fx'*s[k+1]
+        Qu = lu + fu'*s[k+1]
+        Qxx = lxx + fx'*S[k+1]*fx
+
+        Quu = luu + fu'*S[k+1]*fu + res.ρ[1]*I
+        Qux = fu'*S[k+1]*fx
+
+
+        # Constraints
+
+        if res isa ConstrainedResultsStatic
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+        end
+
+        # regularization
+        if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
+            regularization_update!(res,solver,true)
+            k = N-1
+            if solver.opts.verbose
+                println("regularized (normal bp)")
+            end
+            continue
+        end
+
+        # Compute gains
+        K[k] = Quu\Qux
+        d[k] = Quu\Qu
+        s[k] = Qx - Qux'd[k]
+        S[k] = Qxx - Qux'K[k]
+
+        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    return Δv
 end
 
 """
@@ -211,95 +289,10 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
-    N = solver.N; n = solver.model.n; m = solver.model.m;
-    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
-    R = getR(solver)
-    dt = solver.dt
-
-    if solver.model.m != length(res.U[1])
-        m += n
-    end
-
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
-
-    # Boundary Conditions
-    S[N] = Qf
-    s[N] = Qf*(X[N] - xf)
-
-    # Initialize expected change in cost-to-go
-    Δv = [0.0 0.0]
+# TODO bp sqrt static arrays
 
 
-    # Terminal constraints
-
-    if res isa ConstrainedResultsStatic
-        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
-    end
-
-    k = N-1
-
-    # Backward pass
-    while k >= 1
-
-        lx = dt*Q*(X[k] - xf)
-        lu = dt*R*(U[k])
-        lxx = dt*Q
-        luu = dt*R
-
-        # Compute gradients of the dynamics
-        fx, fu = res.fx[k], res.fu[k]
-
-        # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*s[k+1]
-        Qu = lu + fu'*s[k+1]
-        Qxx = lxx + fx'*S[k+1]*fx
-
-        Quu = luu + fu'*S[k+1]*fu + res.ρ[1]*I
-        Qux = fu'*S[k+1]*fx
-
-
-        # Constraints
-
-        if res isa ConstrainedResultsStatic
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
-            Qxx += Cx'*Iμ[k]*Cx
-            Quu += Cu'*Iμ[k]*Cu
-            Qux += Cu'*Iμ[k]*Cx
-        end
-
-        # regularization
-        if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
-            regularization_update!(res,solver,true)
-            k = N-1
-            if solver.opts.verbose
-                println("regularized (normal bp)")
-            end
-            continue
-        end
-
-        # Compute gains
-        K[k] = Quu\Qux
-        d[k] = Quu\Qu
-        s[k] = Qx - Qux'd[k]
-        S[k] = Qxx - Qux'K[k]
-
-        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
-
-        k = k - 1;
-    end
-
-    return Δv
-end
-
-
-
+# TODO problem with foh and constraints??
 function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -318,8 +311,6 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     K = res.K
     b = res.b
     d = res.d
-
-    dt = solver.dt
 
     X = res.X
     U = res.U
@@ -413,7 +404,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Qv = vec(Lv) + Cd'*vec(Ly)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
-        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + res.ρ[1]*I
         Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + res.ρ[1]*I
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
@@ -426,7 +417,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             regularization_update!(res,solver,true)
             k = N-1
             if solver.opts.verbose
-                println("*NOT implemented* regularized (foh bp)")
+                println("regularized --not reliable-- (foh bp)")
             end
             continue
         end
@@ -459,7 +450,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
                 regularization_update!(res,solver::Solver,true)
                 k = N-1
                 if solver.opts.verbose
-                    println("regularized (foh bp)")
+                    println("regularized --not reliable-- (foh bp)")
                 end
                 continue
             end
@@ -479,7 +470,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-# Static array version
+# TODO fix static array version
 function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -595,7 +586,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Qv = vec(Lv) + Cd'*vec(Ly)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
-        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + res.ρ[1]*I
         Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + res.ρ[1]*I
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
@@ -673,6 +664,14 @@ function chol_minus(A,B::Matrix)
     U = AmB.U
 end
 
+function chol_plus(A,B)
+    n1,m = size(A)
+    n2 = size(B,1)
+    P = zeros(n1+n2,m)
+    P[1:n1,:] = A
+    P[n1+1:end,:] = B
+    qr(P)
+end
 
 """
 $(SIGNATURES)
@@ -717,7 +716,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             end
             alpha = 0.0
             regularization_update!(res,solver,true) # increase regularization
-
             break
         end
 

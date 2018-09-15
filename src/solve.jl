@@ -497,12 +497,13 @@ end
 """
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
-    -ALGENCAN uniform update: see "Practical Augmented Lagrangian Methods for Constrained Optimization (Algorithm 4.1, p.33)"
-
+    -ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
+    -'individual' update: see Bertsekas Constrained Optimization (eq. 47, p.123)
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
-    p,N = size(results.C)
-    pI = solver.obj.pI
+    n = solver.model.n # number of terminal constraints (equal to number of states)
+    p, N = size(results.C) # number of constraints and problem horizon (ie knot points)
+    pI = solver.obj.pI # number of inequality constraints
 
     if solver.control_integration == :foh
         final_index = N
@@ -510,28 +511,47 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
         final_index = N-1
     end
 
-    results.V_al_prev .= results.V_al_current
+    # store previous term for penalty update
+    if solver.opts.outer_loop_update == :uniform
+        results.V_al_prev .= results.V_al_current
+    end
 
-    ## Lagrange multiplier update for time step
+    ### Lagrange multiplier updates ###
     for jj = 1:final_index
         for ii = 1:p
+            # inequality constraints
             if ii <= pI
-                results.V_al_current[ii,jj] = min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
+                # calculate term for penalty update (see ALGENCAN ref.)
+                if solver.opts.outer_loop_update == :uniform
+                    results.V_al_current[ii,jj] = min(-1.0*results.C[ii,jj], results.LAMBDA[ii,jj]/results.MU[ii,jj])
+                end
 
+                # Lagrange multiplier update (1st order)
                 results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
+
+                # penalty update for 'individual' scheme
+                if  solver.opts.outer_loop_update == :individual
+                    if max(0.0,results.C[ii,jj]) <= solver.opts.τ*max(0.0,results.C_prev[ii,jj])
+                        results.MU[ii,jj] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii,jj])
+                    else
+                        results.MU[ii,jj] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii,jj])
+                    end
+                end
+
+            # equality constraints
             else
+                # Lagrange multiplier update (1st order)
                 results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
+
+                # penalty update for 'individual' scheme
+                if  solver.opts.outer_loop_update == :individual
+                    if abs(results.C[ii,jj]) <= solver.opts.τ*abs(results.C_prev[ii,jj])
+                        results.MU[ii,jj] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii,jj])
+                    else
+                        results.MU[ii,jj] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii,jj])
+                    end
+                end
             end
-
-            # # Penalty update (individual)
-            # if solver.opts.outer_loop_update == :individual
-            #     if max(norm(results.C[ii,jj]),norm(results.V_al_current[ii,jj])) <= solver.opts.τ*max(norm(results.C_prev[ii,jj]),norm(results.V_al_prev[ii,jj]))
-            #         results.MU[ii,jj] .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii,jj])
-            #     else
-            #         results.MU[ii,jj] .= min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii,jj])
-            #     end
-            # end
-
         end
     end
 
@@ -539,19 +559,20 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     for ii = 1:solver.model.n
         results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
     end
+    ###################################
 
-    ## Penalty update
-    # 'default' - all penalty terms are updated
-    if solver.opts.outer_loop_update == :default # update all μ default
+    ### Penalty updates ###
+    # 'default' penaltiy update - all penalty terms are updated (no conditions)
+    if solver.opts.outer_loop_update == :default
         results.MU .= min.(solver.opts.μ_max, solver.opts.γ*results.MU)
         results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
     end
-    #-------------
 
-    # 'uniform' penalty update (see ALGENCAN reference)
+    # 'uniform' penalty update - see ALGENCAN reference
     if solver.opts.outer_loop_update == :uniform
-        v1 = max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:]))
-        v2 = max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+        v1 = max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current))
+        v2 = max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev))
+
         if v1 <= solver.opts.τ*v2
             results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
             results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
@@ -566,6 +587,18 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
             end
         end
     end
+
+    # 'individual' penalty update (only terminal constraints left to update)
+    if solver.opts.outer_loop_update == :individual
+        for ii = 1:n
+            if abs(results.CN[ii]) <= solver.opts.τ*abs(results.CN_prev[ii])
+                results.μN[ii] = min.(solver.opts.μ_max, solver.opts.γ_no*results.μN[ii])
+            else
+                results.μN[ii] = min.(solver.opts.μ_max, solver.opts.γ*results.μN[ii])
+            end
+        end
+    end
+    #######################
 
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= results.C
@@ -585,28 +618,47 @@ function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::No
         final_index = N-1
     end
 
-    results.V_al_prev .= deepcopy(results.V_al_current)
+    # store previous term for penalty update
+    if solver.opts.outer_loop_update == :uniform
+        results.V_al_prev .= deepcopy(results.V_al_current)
+    end
 
-    ## Lagrange multiplier update for time step
+    ### Lagrange multiplier updates ###
     for jj = 1:final_index
         for ii = 1:p
+            ## inequality constraints
             if ii <= pI
-                results.V_al_current[ii,jj] = min(-1.0*results.C[jj][ii], results.LAMBDA[jj][ii]/results.MU[jj][ii])
+                # calculate term for penalty update (see ALGENCAN ref.)
+                if solver.opts.outer_loop_update == :uniform
+                    results.V_al_current[ii,jj] = min(-1.0*results.C[jj][ii], results.LAMBDA[jj][ii]/results.MU[jj][ii])
+                end
 
+                # Lagrange multiplier update (1st order)
                 results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii]))) # λ_min < λ < λ_max
+
+                # penalty update for 'individual' scheme
+                if  solver.opts.outer_loop_update == :individual
+                    if max(0.0,results.C[ii][jj]) <= solver.opts.τ*max(0.0,results.C_prev[ii][jj])
+                        results.MU[ii][jj] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii][jj])
+                    else
+                        results.MU[ii][jj] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii][jj])
+                    end
+                end
+
+            # equality constraints
             else
+                # Lagrange multiplier update (1st order)
                 results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii])) # λ_min < λ < λ_max
+
+                # penalty update for 'individual' scheme
+                if  solver.opts.outer_loop_update == :individual
+                    if abs(results.C[ii][jj]) <= solver.opts.τ*abs(results.C_prev[ii][jj])
+                        results.MU[ii][jj] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii][jj])
+                    else
+                        results.MU[ii][jj] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii][jj])
+                    end
+                end
             end
-
-            # # Penalty update (individual)
-            # if solver.opts.outer_loop_update == :individual
-            #     if max(norm(results.C[ii,jj]),norm(results.V_al_current[ii,jj])) <= solver.opts.τ*max(norm(results.C_prev[ii,jj]),norm(results.V_al_prev[ii,jj]))
-            #         results.MU[ii,jj] .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii,jj])
-            #     else
-            #         results.MU[ii,jj] .= min.(solver.opts.μ_max, solver.opts.γ*results.MU[ii,jj])
-            #     end
-            # end
-
         end
     end
 
@@ -614,30 +666,31 @@ function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::No
     for ii = 1:solver.model.n
         results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
     end
+    ##############################
 
-    ## Penalty update
+    ### Penalty updates ###
     # 'default' penalty update - update all penalty terms
     if solver.opts.outer_loop_update == :default
         results.MU .= min.(solver.opts.μ_max, solver.opts.γ.*results.MU)
         results.μN .= min.(solver.opts.μ_max, solver.opts.γ.*results.μN)
     end
-    #-------------
 
     # 'uniform' penalty update (see ALGENCAN reference)
     if solver.opts.outer_loop_update == :uniform
         v1 = max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current))
         v2 = max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+
         if v1 <= solver.opts.τ*v2
             for jj = 1:N
-                results.MU[jj] .= min.(solver.opts.μ_max, solver.opts.γ_no.*results.MU[jj])
+                results.MU[jj] = min.(solver.opts.μ_max, solver.opts.γ_no.*results.MU[jj])
             end
-            results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no.*results.μN)
+            results.μN = min.(solver.opts.μ_max, solver.opts.γ_no.*results.μN)
             if solver.opts.verbose
                 println("no μ update\n")
             end
         else
             for jj = 1:N
-                results.MU[jj] .= min.(solver.opts.μ_max, solver.opts.γ.*results.MU[jj])
+                results.MU[jj] = min.(solver.opts.μ_max, solver.opts.γ.*results.MU[jj])
             end
             results.μN .= min.(solver.opts.μ_max, solver.opts.γ.*results.μN)
             if solver.opts.verbose
@@ -645,6 +698,18 @@ function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::No
             end
         end
     end
+
+    # 'individual' penalty update (only terminal constraints left to update)
+    if solver.opts.outer_loop_update == :individual
+        for ii = 1:n
+            if abs(results.CN[ii]) <= solver.opts.τ*abs(results.CN_prev[ii])
+                results.μN[ii] = min.(solver.opts.μ_max, solver.opts.γ_no*results.μN[ii])
+            else
+                results.μN[ii] = min.(solver.opts.μ_max, solver.opts.γ*results.μN[ii])
+            end
+        end
+    end
+    #######################
 
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= deepcopy(results.C)
