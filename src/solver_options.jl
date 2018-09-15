@@ -27,11 +27,11 @@ mutable struct SolverOptions
     gradient_intermediate_tolerance::Float64
 
     "final cost convergence criteria"
-    eps::Float64
+    cost_tolerance::Float64
     "intermediate cost convergence criteria for outerloop of constrained solve"
-    eps_intermediate::Float64
+    cost_intermediate_tolerance::Float64
     "maximum constraint violation termination criteria"
-    eps_constraint::Float64
+    constraint_tolerance::Float64
     "iterations for iLQR solve"
     iterations::Int64
     "iterations for outer loop of constraint solve"
@@ -39,8 +39,6 @@ mutable struct SolverOptions
     "maximum number of backtracking steps during forward pass line search"
     iterations_linesearch::Int64
 
-    "value increase mu_k by at each outer loop iteration"
-    mu_al_update::Float64
     "regularization term for augmented controls during infeasible start"
     infeasible_regularization::Float64
     "cache all intermediate state and control trajectories"
@@ -53,6 +51,7 @@ mutable struct SolverOptions
     solve_feasible::Bool
     infeasible::Bool
     unconstrained::Bool
+    resolve_feasible::Bool # resolve feasible problem post infeasible solve
 
     "Augmented Lagrangian Method parameters" # terms defined in Practical Augmented Lagrangian Methods for Constrained Optimization
     λ_min::Float64 # minimum Lagrange multiplier
@@ -73,16 +72,16 @@ mutable struct SolverOptions
     use_static::Bool
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,gradient_tolerance=1e-4,gradient_intermediate_tolerance=1e-4,eps=1.0e-5,eps_intermediate=1.0e-2,
-        eps_constraint=1e-3,iterations=1000,iterations_outerloop=50,
-        iterations_linesearch=50,mu_al_update=10.0,infeasible_regularization=1e6,cache=false,
-        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.1,outer_loop_update=:uniform,
+        c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,gradient_tolerance=1e-4,gradient_intermediate_tolerance=1e-4,cost_tolerance=1.0e-5,cost_intermediate_tolerance=1.0e-2,
+        constraint_tolerance=1e-3,iterations=1000,iterations_outerloop=50,
+        iterations_linesearch=10,infeasible_regularization=1e6,cache=false,
+        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:uniform,
         ρ_initial=1.0,ρ_factor=1.6,ρ_max=1.0e10,ρ_min=1e-6,use_static=true)
 
-        new(square_root,verbose,c1,c2,max_state_value,max_control_value,gradient_tolerance,gradient_intermediate_tolerance,eps,eps_intermediate,
-        eps_constraint,iterations,iterations_outerloop,
-        iterations_linesearch,mu_al_update,infeasible_regularization,cache,
-        benchmark,solve_feasible,infeasible,unconstrained,
+        new(square_root,verbose,c1,c2,max_state_value,max_control_value,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
+        constraint_tolerance,iterations,iterations_outerloop,
+        iterations_linesearch,infeasible_regularization,cache,
+        benchmark,solve_feasible,infeasible,unconstrained,resolve_feasible,
         λ_min,λ_max,μ_max,μ1,γ,γ_no,τ,outer_loop_update,ρ_initial,ρ_factor,ρ_max,ρ_min,
         use_static)
     end
