@@ -13,13 +13,10 @@ obj.tf = 5.
 model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 
-using Test
 ### UNCONSTRAINED ###
 # rk4
-opts.eps = 1e-5
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(solver.model.m, solver.N)
-# @enter TrajectoryOptimization.solve(solver,U)
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[:,end]-obj.xf) < 1e-3
 
@@ -106,9 +103,8 @@ opts.verbose = false
 opts.cache=true
 # opts.c1=1e-4
 # opts.c2=2.0
-# opts.mu_al_update = 10.0
-# opts.eps_constraint = 1e-3
-# opts.eps = 1e-5
+# opts.constraint_tolerance = 1e-3
+# opts.cost_tolerance = 1e-5
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
 
@@ -123,24 +119,9 @@ obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
-max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
+# max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
 @test norm(results_inf.X[:,end]-obj.xf) < 1e-3
 @test max_c < 1e-2
-
-# test that control output from infeasible start is a good warm start (ie, that infeasible control output is "near" dynamically constrained control output)
-idx = findall(x->x==2,results_inf.iter_type) # results index where switch from infeasible solve to dynamically constrained solve occurs
-
-@test norm(results_inf.result[idx[1]].U-results_inf.result[end].U) < 5.0 # confirm that infeasible and final feasible controls are "near"
-
-tmp = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
-tmp.U[:,:] = results_inf.result[idx[1]].U # store infeasible control output
-tmp2 = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m,size(results_inf.result[1].C,1),solver.N)
-tmp2.U[:,:] = results_inf.result[end].U # store
-
-TrajectoryOptimization.rollout!(tmp,solver)
-TrajectoryOptimization.rollout!(tmp2,solver)
-
-@test norm(tmp.X[:]-tmp2.X[:]) < 10.0 # test that infeasible state trajectory rollout is "near" dynamically constrained state trajectory rollout
 
 # test linear interpolation for state trajectory
 @test norm(X_interp[:,1] - solver.obj.x0) < 1e-8

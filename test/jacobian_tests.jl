@@ -72,12 +72,11 @@ opts.verbose = false
 opts.cache=true
 # opts.c1=1e-4
 # opts.c2=3.0
-# opts.mu_al_update = 10.0
-opts.eps_constraint = 1e-3
-opts.eps_intermediate = 1e-3
-opts.eps = 1e-3
+opts.constraint_tolerance = 1e-3
+opts.cost_intermediate_tolerance = 1e-3
+opts.cost_tolerance = 1e-3
 opts.outer_loop_update = :uniform
-opts.τ = 0.1
+# opts.τ = 0.1
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
 ######################
@@ -88,11 +87,10 @@ n = 13 # states (quadrotor w/ quaternions)
 m = 4 # controls
 model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.quadrotor_dynamics!,n,m)
 
-
 # Objective and constraints
 Qf = 100.0*Diagonal(I,n)
-Q = (0.1)*Diagonal(I,n)
-R = (0.1)*Diagonal(I,m)
+Q = (0.01)*Diagonal(I,n)
+R = (0.01)*Diagonal(I,m)
 tf = 5.0
 dt = 0.05
 
@@ -104,36 +102,14 @@ x0
 
 # -final state
 xf = zeros(n)
-xf[1:3] = [20.0;20.0;0.0] # xyz position
+xf[1:3] = [10.0;10.0;1.0] # xyz position
 quatf = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
 xf[4:7] = quatf
 xf
 
 # -control limits
-u_min = -10.0
-u_max = 10.0
-
-# -obstacles
-quad_radius = 3.0
-sphere_radius = 1.0
-
-# x0[1:3] = -1.*ones(3)
-# xf[1:3] = 11.0*ones(3)
-# n_spheres = 3
-# spheres = ([5.0;7.0;3.0],[5.0;7.0;3.0],[5.0;7;3.0],[sphere_radius;sphere_radius;sphere_radius])
-# function cI(x,u)
-#     [sphere_constraint(x,spheres[1][1],spheres[2][1],spheres[3][1],spheres[4][1]+quad_radius);
-#      sphere_constraint(x,spheres[1][2],spheres[2][2],spheres[3][2],spheres[4][2]+quad_radius);
-#      sphere_constraint(x,spheres[1][3],spheres[2][3],spheres[3][3],spheres[4][3]+quad_radius)]
-# end
-
-# n_spheres = 3
-# spheres = ([5.0;9.0;15.0;],[5.0;9.0;15.0],[0.0;0.0;0.0],[sphere_radius;sphere_radius;sphere_radius])
-# function cI(x,u)
-#     [TrajectoryOptimization.sphere_constraint(x,spheres[1][1],spheres[2][1],spheres[3][1],spheres[4][1]+quad_radius);
-#      TrajectoryOptimization.sphere_constraint(x,spheres[1][2],spheres[2][2],spheres[3][2],spheres[4][2]+quad_radius);
-#      TrajectoryOptimization.sphere_constraint(x,spheres[1][3],spheres[2][3],spheres[3][3],spheres[4][3]+quad_radius)]
-# end
+u_min = -20.0
+u_max = 20.0
 
 # -constraint that quaternion should be unit
 function cE(x,u)
@@ -154,4 +130,4 @@ X_interp = TrajectoryOptimization.line_trajectory(solver)
 ### Solve ###
 results,stats = TrajectoryOptimization.solve(solver,U)
 #############
-@test all(results.result[results.termination_index].C .< opts.eps_constraint)
+@test all(results.result[results.termination_index].C .< opts.constraint_tolerance)

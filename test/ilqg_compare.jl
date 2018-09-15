@@ -16,7 +16,7 @@ xf = [pi; 0.0]
 obj = UnconstrainedObjective(Q,R,Qf,tf,x0,xf)
 
 opts = SolverOptions()
-opts.eps = 1e-5
+opts.cost_tolerance = 1e-5
 opts.gradient_tolerance = 1e-5
 opts.verbose = true
 opts.cache = true
@@ -44,7 +44,7 @@ xf = [0.0; pi; 0.0; 0.0]
 obj = UnconstrainedObjective(Q,R,Qf,tf,x0,xf)
 
 opts = SolverOptions()
-opts.eps = 1e-5
+opts.cost_tolerance = 1e-5
 opts.gradient_tolerance = 1e-5
 opts.verbose = true
 opts.cache = true
