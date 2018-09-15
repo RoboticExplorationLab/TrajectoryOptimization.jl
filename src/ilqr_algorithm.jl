@@ -151,7 +151,10 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
         k = k - 1;
     end
-
+    if solver.opts.verbose
+        plt = plot(res.d')
+        display(plt)
+    end
     return Δv
 end
 
@@ -512,6 +515,10 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
         end
 
         k = k - 1;
+    end
+    if solver.opts.verbose
+        plt = plot(res.d')
+        display(plt)
     end
 
     return Δv

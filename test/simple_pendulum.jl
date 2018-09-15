@@ -16,6 +16,7 @@ obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u
 using Test
 ### UNCONSTRAINED ###
 # rk4
+opts.eps = 1e-5
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(solver.model.m, solver.N)
 # @enter TrajectoryOptimization.solve(solver,U)
