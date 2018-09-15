@@ -9,12 +9,27 @@ r = TrajectoryOptimization.UnconstrainedResults(n,m,N)
 @test size(r.K) == (m,n,N)
 
 # Static Results
-r = TrajectoryOptimization.UnconstrainedResultsStatic(n,m,N)
-@test length(r.X) == N
-@test length(r.X[1]) == n
-@test length(r.U) == N
-@test length(r.U[1]) == m
-@test size(r.K[1]) == (m,n)
+rs = TrajectoryOptimization.UnconstrainedResultsStatic(n,m,N)
+@test length(rs.X) == N
+@test length(rs.X[1]) == n
+@test length(rs.U) == N
+@test length(rs.U[1]) == m
+@test size(rs.K[1]) == (m,n)
+UnconstrainedResults(rs)
+
+# Constrained Results
+p = rand(1:5)
+p_N = rand(1:5)
+r = ConstrainedResults(n,m,p,N,p_N)
+@test size(r.C) == (p,N)
+@test size(r.Iμ) == (p,p,N)
+
+
+# Static Constrained
+r = TrajectoryOptimization.ConstrainedResultsStatic(n,m,p,N,p_N)
+ax = axes(r.K[1])
+r.K[1][ax...]
+# maximum(maximum.((r.Iμ .* map((x)->x.>0, r.Iμ))))
 
 # Results Cache (pendulum)
 n,m = 2,1

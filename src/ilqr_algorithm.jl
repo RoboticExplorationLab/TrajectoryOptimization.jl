@@ -26,8 +26,14 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
     use_static = res isa SolverIterResultsStatic
 
-    if solver.model.m != size(res.U,1)
-        m += n
+    if use_static
+        if solver.model.m != length(res.U[1])
+            m += n
+        end
+    else
+        if solver.model.m != size(res.U,1)
+            m += n
+        end
     end
 
     # pull out values from results
@@ -427,7 +433,7 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
         # Qvv = Hermitian(Qvv)
         #TODO check regularization
         # regularization
-        if !isposdef(Hermitian(Qvv))
+        if !isposdef(Qvv)
             regularization_update!(res,solver,true)
             k = N-1
             if solver.opts.verbose
