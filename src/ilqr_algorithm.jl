@@ -263,8 +263,16 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
     n = solver.model.n
     m = solver.model.m
 
-    if solver.model.m != size(res.U,1)
-        m += n
+    use_static = res isa SolverIterResultsStatic
+
+    if use_static
+        if solver.model.m != length(res.U[1])
+            m += n
+        end
+    else
+        if solver.model.m != size(res.U,1)
+            m += n
+        end
     end
 
     dt = solver.dt
@@ -291,37 +299,61 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
     Δv = [0. 0.]
 
     # Boundary conditions
-    S[1:n,1:n] = Qf
-    s[1:n] = Qf*(X[:,N]-xf)
+    if use_static
+        S[1:n,1:n] = Qf
+        s[1:n] = Qf*(X[N]-xf)
+    else
+        S[1:n,1:n] = Qf
+        s[1:n] = Qf*(X[:,N]-xf)
+    end
 
     # Terminal constraints
-    if res isa ConstrainedResults
+    if res isa ConstrainedResults || res isa ConstrainedResultsStatic
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
         S[1:n,1:n] += CxN'*res.IμN*CxN
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
+
     k = N-1
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
 
         # Unpack Jacobians, ̇x
-        Ac1, Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
-        Ac2, Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
-        Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+        if use_static
+            Ac1, Bc1 = res.Ac[k], res.Bc[k]
+            Ac2, Bc2 = res.Ac[k+1], res.Bc[k+1]
+            Ad, Bd, Cd = res.fx[k], res.fu[k], res.fv[k]
 
-        xdot1 = res.xdot[:,k]
-        xdot2 = res.xdot[:,k+1]
+            xdot1 = res.xdot[k]
+            xdot2 = res.xdot[k+1]
 
-        xm = 0.5*X[:,k] + dt/8.0*xdot1 + 0.5*X[:,k+1] - dt/8.0*xdot2
-        um = (U[:,k] + U[:,k+1])/2.0
+            xm = 0.5*X[k] + dt/8.0*xdot1 + 0.5*X[k+1] - dt/8.0*xdot2
+            um = (U[k] + U[k+1])/2.0
 
-        # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
-        Lx = dt/6*Q*(X[:,k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
-        Lu = dt/6*R*U[:,k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
-        Ly = dt/6*Q*(X[:,k+1] - xf) + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(xm - xf)
-        Lv = dt/6*R*U[:,k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+            # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
+            Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
+            Lu = dt/6*R*U[k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+            Ly = dt/6*Q*(X[k+1] - xf) + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(xm - xf)
+            Lv = dt/6*R*U[k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+        else
+            Ac1, Bc1 = res.Ac[:,:,k], res.Bc[:,:,k]
+            Ac2, Bc2 = res.Ac[:,:,k+1], res.Bc[:,:,k+1]
+            Ad, Bd, Cd = res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k]
+
+            xdot1 = res.xdot[:,k]
+            xdot2 = res.xdot[:,k+1]
+
+            xm = 0.5*X[:,k] + dt/8.0*xdot1 + 0.5*X[:,k+1] - dt/8.0*xdot2
+            um = (U[:,k] + U[:,k+1])/2.0
+
+            # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
+            Lx = dt/6*Q*(X[:,k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
+            Lu = dt/6*R*U[:,k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+            Ly = dt/6*Q*(X[:,k+1] - xf) + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(xm - xf)
+            Lv = dt/6*R*U[:,k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+        end
 
         Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1)
         Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
@@ -363,6 +395,21 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
             Lxx += Cx'*Iμ[:,:,k]*Cx
             Luu += Cu'*Iμ[:,:,k]*Cu
             Lxu += Cx'*Iμ[:,:,k]*Cu
+        elseif res isa ConstrainedResultsStatic
+            if k == N-1
+                Cy, Cv = res.Cx[k+1], res.Cu[k+1]
+                Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
+                Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
+                Lyy += Cy'*Iμ[k+1]*Cy
+                Lvv += Cv'*Iμ[k+1]*Cv
+                Lyv += Cy'*Iμ[k+1]*Cv
+            end
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Lx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+            Lu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Lxx += Cx'*Iμ[k]*Cx
+            Luu += Cu'*Iμ[k]*Cu
+            Lxu += Cx'*Iμ[k]*Cu
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -377,10 +424,10 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd
 
-        Qvv = Hermitian(Qvv)
+        # Qvv = Hermitian(Qvv)
         #TODO check regularization
         # regularization
-        if !isposdef(Qvv)
+        if !isposdef(Hermitian(Qvv))
             regularization_update!(res,solver,true)
             k = N-1
             if solver.opts.verbose
@@ -389,15 +436,28 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
             continue
         end
 
-        K[:,:,k+1] = -Qvv\Qxv'
-        b[:,:,k+1] = -Qvv\Quv'
-        d[:,k+1] = -Qvv\vec(Qv)
 
-        Qx_ = vec(Qx) + K[:,:,k+1]'*vec(Qv) + Qxv*vec(d[:,k+1]) + K[:,:,k+1]'Qvv*d[:,k+1]
-        Qu_ = vec(Qu) + b[:,:,k+1]'*vec(Qv) + Quv*vec(d[:,k+1]) + b[:,:,k+1]'*Qvv*d[:,k+1]
-        Qxx_ = Qxx + Qxv*K[:,:,k+1] + K[:,:,k+1]'*Qxv' + K[:,:,k+1]'*Qvv*K[:,:,k+1]
-        Quu_ = Quu + Quv*b[:,:,k+1] + b[:,:,k+1]'*Quv' + b[:,:,k+1]'*Qvv*b[:,:,k+1] + res.ρ[1]*I
-        Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1]
+        if use_static
+            K[k+1] = -Qvv\Qxv'
+            b[k+1] = -Qvv\Quv'
+            d[k+1] = -Qvv\vec(Qv)
+
+            Qx_ = vec(Qx) + K[k+1]'*vec(Qv) + Qxv*vec(d[k+1]) + K[k+1]'Qvv*d[k+1]
+            Qu_ = vec(Qu) + b[k+1]'*vec(Qv) + Quv*vec(d[k+1]) + b[k+1]'*Qvv*d[k+1]
+            Qxx_ = Qxx + Qxv*K[k+1] + K[k+1]'*Qxv' + K[k+1]'*Qvv*K[k+1]
+            Quu_ = Quu + Quv*b[k+1] + b[k+1]'*Quv' + b[k+1]'*Qvv*b[k+1] + res.ρ[1]*I
+            Qxu_ = Qxu + K[k+1]'*Quv' + Qxv*b[k+1] + K[k+1]'*Qvv*b[k+1]
+        else
+            K[:,:,k+1] = -Qvv\Qxv'
+            b[:,:,k+1] = -Qvv\Quv'
+            d[:,k+1] = -Qvv\vec(Qv)
+
+            Qx_ = vec(Qx) + K[:,:,k+1]'*vec(Qv) + Qxv*vec(d[:,k+1]) + K[:,:,k+1]'Qvv*d[:,k+1]
+            Qu_ = vec(Qu) + b[:,:,k+1]'*vec(Qv) + Quv*vec(d[:,k+1]) + b[:,:,k+1]'*Qvv*d[:,k+1]
+            Qxx_ = Qxx + Qxv*K[:,:,k+1] + K[:,:,k+1]'*Qxv' + K[:,:,k+1]'*Qvv*K[:,:,k+1]
+            Quu_ = Quu + Quv*b[:,:,k+1] + b[:,:,k+1]'*Quv' + b[:,:,k+1]'*Qvv*b[:,:,k+1] + res.ρ[1]*I
+            Qxu_ = Qxu + K[:,:,k+1]'*Quv' + Qxv*b[:,:,k+1] + K[:,:,k+1]'*Qvv*b[:,:,k+1]
+        end
 
         # cache (approximate) cost-to-go at timestep k
         s[1:n] = Qx_
@@ -408,7 +468,11 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
         S[n+1:n+m,1:n] = Qxu_'
 
         # line search terms
-        Δv += [-vec(Qv)'*vec(d[:,k+1]) 0.5*vec(d[:,k+1])'*Qvv*vec(d[:,k+1])]
+        if use_static
+            Δv += [-vec(Qv)'*vec(d[k+1]) 0.5*vec(d[k+1])'*Qvv*vec(d[k+1])]
+        else
+            Δv += [-vec(Qv)'*vec(d[:,k+1]) 0.5*vec(d[:,k+1])'*Qvv*vec(d[:,k+1])]
+        end
 
         # at last time step, optimize over final control
         if k == 1
@@ -422,13 +486,23 @@ function backwardpass_foh!(res::SolverResults,solver::Solver)
                 continue
             end
 
-            K[:,:,1] = -Quu_\Qxu_'
-            b[:,:,1] = zeros(m,m)
-            d[:,1] = -Quu_\vec(Qu_)
+            if use_static
+                K[1] = -Quu_\Qxu_'
+                b[1] = zeros(m,m)
+                d[1] = -Quu_\vec(Qu_)
 
-            res.s[:,1] = Qx_ + Qxu_*vec(d[:,1])
+                res.s[1] = Qx_ + Qxu_*vec(d[1])
 
-            Δv += [-vec(Qu_)'*vec(d[:,1]) 0.5*vec(d[:,1])'*Quu_*vec(d[:,1])]
+                Δv += [-vec(Qu_)'*vec(d[1]) 0.5*vec(d[1])'*Quu_*vec(d[1])]
+            else
+                K[:,:,1] = -Quu_\Qxu_'
+                b[:,:,1] = zeros(m,m)
+                d[:,1] = -Quu_\vec(Qu_)
+
+                res.s[:,1] = Qx_ + Qxu_*vec(d[:,1])
+
+                Δv += [-vec(Qu_)'*vec(d[:,1]) 0.5*vec(d[:,1])'*Quu_*vec(d[:,1])]
+            end
         end
 
         k = k - 1;

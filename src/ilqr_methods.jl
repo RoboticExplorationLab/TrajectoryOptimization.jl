@@ -182,8 +182,8 @@ function rollout!(res::SolverIterResultsStatic,solver::Solver,alpha::Float64)
         delta = X_[k-1] - X[k-1]
 
         if solver.control_integration == :foh
-            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
-            U_[:,k] .= U[:,k] + dv
+            dv .= K[k]*delta + b[k]*du + alpha*d[k]
+            U_[k] .= U[k] + dv
             solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
             du = dv
         else
@@ -395,8 +395,15 @@ Calculate state derivatives (xdot)
 function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
     N = size(X,2)
     n,m = get_sizes(solver)
-    for i = 1:N
-        solver.fc(view(results.xdot,:,i),X[:,i],U[1:m,i])
+    for k = 1:N
+        solver.fc(view(results.xdot,:,k),X[:,k],U[1:m,k])
+    end
+end
+
+function calculate_derivatives!(results::SolverIterResultsStatic, solver::Solver, X::Vector, U::Vector)
+    n,m,N = get_sizes(solver)
+    for k = 1:N
+        solver.fc(results.xdot[k],X[k],U[k][1:m])
     end
 end
 
@@ -430,7 +437,7 @@ function calc_jacobians(res::ConstrainedResultsStatic, solver::Solver)::Nothing 
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
-            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[:,k], res.U[k+1])
+            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
             res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
         else
             res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
@@ -439,7 +446,7 @@ function calc_jacobians(res::ConstrainedResultsStatic, solver::Solver)::Nothing 
     end
 
     if solver.control_integration == :foh
-        res.Ac[N], res.Bc[N] = solver.Fc(res.X[:,N], res.U[N])
+        res.Ac[N], res.Bc[N] = solver.Fc(res.X[N], res.U[N])
         res.Cx[N], res.Cu[N] = solver.c_jacobian(res.X[N],res.U[N])
     end
 

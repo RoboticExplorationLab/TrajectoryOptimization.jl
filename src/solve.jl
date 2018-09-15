@@ -528,7 +528,9 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     # end
 
     if solver.opts.outer_loop_update == :uniform
-        if max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:])) <= solver.opts.τ*max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+        v1 = max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:]))
+        v2 = max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+        if v1 <= solver.opts.τ*v2
             # results.MU .= solver.opts.γ_no*results.MU
             # results.μN .= solver.opts.γ_no*results.μN
             results.MU .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU)
@@ -558,7 +560,7 @@ end
 
 function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::Nothing
     N = solver.N
-    p = solver.obj.pI
+    p = length(results.C[1])
     pI = solver.obj.pI
 
     if solver.control_integration == :foh
@@ -628,7 +630,9 @@ function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::No
     # end
 
     if solver.opts.outer_loop_update == :uniform
-        if max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current)) <= solver.opts.τ*max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+        v1 = max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current))
+        v2 = max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+        if v1 <= solver.opts.τ*v2
             # results.MU .= solver.opts.γ_no*results.MU
             # results.μN .= solver.opts.γ_no*results.μN
             for jj = 1:N
@@ -659,6 +663,15 @@ function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::No
 
     return nothing
 end
+
+function update_criteria(results::ConstrainedResultsStatic)
+    max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current)), max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+end
+
+function update_criteria(results::ConstrainedResults)
+    max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:])), max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
+end
+
 #
 # function outer_loop_update(results::ConstrainedResultsStatic,solver::Solver)::Nothing
 #     N = solver.N
