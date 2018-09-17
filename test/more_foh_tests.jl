@@ -16,7 +16,7 @@ opts.cost_tolerance = 1e-5
 # opts.iterations = 1000
 # opts.iterations_linesearch = 50
 opts.infeasible_regularization = 1e6
-opts.outer_loop_update = :default
+opts.outer_loop_update = :individual
 opts.τ = 0.1
 ######################
 

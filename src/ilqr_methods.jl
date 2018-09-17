@@ -43,7 +43,7 @@ function rollout!(res::SolverResults,solver::Solver)
 end
 
 function rollout!(res::SolverIterResultsStatic, solver::Solver)
-    X,U = res.X,res.U
+    X, U = res.X, res.U
     infeasible = solver.model.m != size(U[1],1)
     N = solver.N
     m = solver.model.m

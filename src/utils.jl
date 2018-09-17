@@ -1,6 +1,15 @@
 import Base: convert, copyto!, Array
 import LinearAlgebra: norm
 
+"""
+$(SIGNATURES)
+    Calculate Hessian of vector valued function
+        -returns 3D tensor (p,n,n)
+"""
+function hessian_of_vector_function(f::Function,z::Vector,p::Int64,n::Int64)
+    reshape(ForwardDiff.jacobian(x -> ForwardDiff.jacobian(f, x), z),p,n,n)
+end
+
 function get_cost_matrices(solver::Solver)
     solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
 end
@@ -131,7 +140,7 @@ function plot_cost(results::ResultsCache)
 end
 
 # """
-# @(SIGNATURES)
+# $(SIGNATURES)
 #
 # Generate an animation of a trajectory as it evolves during a solve
 # """
@@ -154,7 +163,7 @@ end
 # end
 #
 # """
-# @(SIGNATURES)
+# $(SIGNATURES)
 #
 # Generate an animation of a pendulum
 # """
@@ -170,7 +179,7 @@ end
 # end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
 
     Convert ZYX Euler angles to quaternion (q =[v;s])
 """
@@ -196,7 +205,7 @@ function eul2quat(eul)
 end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
 
 Plot a 3D trajectory (static)
 """
@@ -334,7 +343,7 @@ function generate_random_sphere_obstacle_field(n_spheres::Int64,x_rand::Float64=
 end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
     Convert quaternion to Euler angles
 """
 function quat2eul(q)

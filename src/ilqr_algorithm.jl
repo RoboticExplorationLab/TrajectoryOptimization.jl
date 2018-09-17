@@ -382,20 +382,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Lyv += Syv
 
         if res isa ConstrainedResults
-            if k == N-1
-                Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-                Ly += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-                Lv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-                Lyy += Cy'*Iμ[:,:,k+1]*Cy
-                Lvv += Cv'*Iμ[:,:,k+1]*Cv
-                Lyv += Cy'*Iμ[:,:,k+1]*Cv
-            end
-            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Lx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Lu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            Lxx += Cx'*Iμ[:,:,k]*Cx
-            Luu += Cu'*Iμ[:,:,k]*Cu
-            Lxu += Cx'*Iμ[:,:,k]*Cu
+            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+            Ly += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
+            Lv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
+            Lyy += Cy'*Iμ[:,:,k+1]*Cy
+            Lvv += Cv'*Iμ[:,:,k+1]*Cv
+            Lyv += Cy'*Iμ[:,:,k+1]*Cv
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -445,6 +437,15 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         # at last time step, optimize over final control
         if k == 1
+            if res isa ConstrainedResults
+                Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+                Qx_ += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+                Qu_ += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+                Qxx_ += Cx'*Iμ[:,:,k]*Cx
+                Quu_ += Cu'*Iμ[:,:,k]*Cu
+                Qxu_ += Cx'*Iμ[:,:,k]*Cu
+            end
+
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
                 regularization_update!(res,solver::Solver,true)
@@ -515,7 +516,6 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
-
     k = N-1
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
@@ -562,22 +562,13 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Lvv += Svv
         Lyv += Syv
 
-
         if res isa ConstrainedResultsStatic
-            if k == N-1
-                Cy, Cv = res.Cx[k+1], res.Cu[k+1]
-                Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
-                Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
-                Lyy += Cy'*Iμ[k+1]*Cy
-                Lvv += Cv'*Iμ[k+1]*Cv
-                Lyv += Cy'*Iμ[k+1]*Cv
-            end
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Lx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-            Lu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
-            Lxx += Cx'*Iμ[k]*Cx
-            Luu += Cu'*Iμ[k]*Cu
-            Lxu += Cx'*Iμ[k]*Cu
+            Cy, Cv = res.Cx[k+1], res.Cu[k+1]
+            Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
+            Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
+            Lyy += Cy'*Iμ[k+1]*Cy
+            Lvv += Cv'*Iμ[k+1]*Cv
+            Lyv += Cy'*Iμ[k+1]*Cv
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -586,7 +577,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Qv = vec(Lv) + Cd'*vec(Ly)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
-        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + res.ρ[1]*I
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
         Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + res.ρ[1]*I
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
@@ -596,6 +587,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         # regularization
         if !isposdef(Qvv)
             regularization_update!(res,solver,true)
+
             k = N-1
             if solver.opts.verbose
                 println("*NOT implemented* regularized (foh bp)")
@@ -626,6 +618,15 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
 
         # at last time step, optimize over final control
         if k == 1
+            if res isa ConstrainedResultsStatic
+                Cx, Cu = res.Cx[k], res.Cu[k]
+                Qx_ += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+                Qu_ += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+                Qxx_ += Cx'*Iμ[k]*Cx
+                Quu_ += Cu'*Iμ[k]*Cu
+                Qxu_ += Cx'*Iμ[k]*Cu
+            end
+
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
                 regularization_update!(res,solver::Solver,true)
