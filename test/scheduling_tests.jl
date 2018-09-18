@@ -30,7 +30,7 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-solver = Solver(model,obj_uncon,integration=:rk3_foh,dt=dt,opts=opts)
+solver = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = ones(solver.model.n,solver.N)
@@ -39,7 +39,7 @@ U = ones(solver.model.m,solver.N)
 #######################################
 
 ### Solve ###
-@time results,stats = solve(solver,U)
+@time results,stats = solve(solver,X_interp,U)
 ############
 
 ### Results ###

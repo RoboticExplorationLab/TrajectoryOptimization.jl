@@ -80,11 +80,13 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
         # regularization
         if !isposdef(Quu)
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0.0 0.0]
             continue
         end
 
@@ -167,11 +169,13 @@ function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
 
         # regularization
         if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0.0 0.0]
             continue
         end
 
@@ -271,11 +275,14 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
             Su[:,:,k] = chol_minus(Wxx.R,(Wuu.R')\(Qxu'))
         catch ex
             if ex isa LinAlg.PosDefException
-                regularization_update!(res,solver,true)
-                k = N-1
                 if solver.opts.verbose
                     println("regularized (sqrt bp)")
                 end
+
+                regularization_update!(res,solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
                 continue
             end
         end
@@ -406,11 +413,27 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         #TODO check regularization
         # regularization
         if !isposdef(Qvv)
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized --not reliable-- (foh bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0. 0.]
+
+            ## Reset BCs #TODO store S
+            # Boundary conditions
+            S[1:n,1:n] = Qf
+            s[1:n] = Qf*(X[:,N]-xf)
+
+            # Terminal constraints
+            if res isa ConstrainedResults
+                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                CxN = res.Cx_N
+                S[1:n,1:n] += CxN'*res.IμN*CxN
+                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            end
+            ############
             continue
         end
 
@@ -448,11 +471,27 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
-                regularization_update!(res,solver::Solver,true)
-                k = N-1
                 if solver.opts.verbose
                     println("regularized --not reliable-- (foh bp)")
                 end
+
+                regularization_update!(res,solver::Solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
+                ## Reset BCs #TODO store S
+                # Boundary conditions
+                S[1:n,1:n] = Qf
+                s[1:n] = Qf*(X[:,N]-xf)
+
+                # Terminal constraints
+                if res isa ConstrainedResults
+                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    CxN = res.Cx_N
+                    S[1:n,1:n] += CxN'*res.IμN*CxN
+                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                end
+                ############
                 continue
             end
 
@@ -471,7 +510,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-# TODO fix static array version
+# TODO fix static array version??
 function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -586,12 +625,27 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         # Qvv = Hermitian(Qvv)
         # regularization
         if !isposdef(Qvv)
-            regularization_update!(res,solver,true)
-
-            k = N-1
             if solver.opts.verbose
                 println("*NOT implemented* regularized (foh bp)")
             end
+
+            regularization_update!(res,solver,true)
+            Δv = [0. 0.]
+            k = N-1
+
+            ## Reset BCs ##
+            # Boundary conditions
+            S[1:n,1:n] = Qf
+            s[1:n] = Qf*(X[N]-xf)
+
+            # Terminal constraints
+            if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                CxN = res.Cx_N
+                S[1:n,1:n] += CxN'*res.IμN*CxN
+                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            end
+            ################
             continue
         end
 
@@ -629,11 +683,27 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
 
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
-                regularization_update!(res,solver::Solver,true)
-                k = N-1
                 if solver.opts.verbose
                     println("regularized (foh bp)")
                 end
+
+                regularization_update!(res,solver::Solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
+                ## Reset BCs ##
+                # Boundary conditions
+                S[1:n,1:n] = Qf
+                s[1:n] = Qf*(X[N]-xf)
+
+                # Terminal constraints
+                if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    CxN = res.Cx_N
+                    S[1:n,1:n] += CxN'*res.IμN*CxN
+                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                end
+                ################
                 continue
             end
 
@@ -747,7 +817,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     if solver.opts.verbose
         println("New cost: $J")
         if res isa ConstrainedResults || res isa ConstrainedResultsStatic
-            println("- state+control cost: $(cost_(solver,res,res.X_,res.U_))")
+            println("- state+control cost: $(_cost(solver,res,res.X_,res.U_))")
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end

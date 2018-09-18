@@ -227,7 +227,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             ### BACKWARD PASS ###
-            calc_jacobians(results, solver)
+            calculate_jacobians!(results, solver)
             if solver.control_integration == :foh
                 Δv = backwardpass_foh!(results,solver) #TODO combine with square root
             elseif solver.opts.square_root
@@ -514,7 +514,7 @@ function λ_update_second_order(results::ConstrainedResults, solver::Solver)
 
     for k = 1:solver.N
 
-        c_aug_zz .= hessian_of_vector_function(c_aug,p,q,q)
+        c_aug_zz .= hessian_of_vector_function(c_aug,[results.X[:,k]; results.U[:,k]],p,q)
         c_aug_z = [results.Cx[:,:,k] results.Cu[:,:,k]]
         for i = 1:q
             for j = 1:q
