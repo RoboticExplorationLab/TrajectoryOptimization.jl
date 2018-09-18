@@ -270,7 +270,7 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
         try  # Regularization
             Su[:,:,k] = chol_minus(Wxx.R,(Wuu.R')\(Qxu'))
         catch ex
-            if ex isa LinAlg.PosDefException
+            if ex isa LinearAlgebra.PosDefException
                 regularization_update!(res,solver,true)
                 k = N-1
                 if solver.opts.verbose
@@ -289,7 +289,100 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-# TODO bp sqrt static arrays
+function backwardpass_sqrt!(res::TrajectoryOptimization.SolverIterResultsStatic,solver::Solver)
+
+    N = solver.N
+    n = solver.model.n
+    m = solver.model.m
+
+    if solver.model.m != length(res.U[1])
+        m += n
+    end
+
+    Q = solver.obj.Q
+    R = solver.obj.R
+    xf = solver.obj.xf
+    Qf = solver.obj.Qf
+    dt = solver.dt
+
+    Uq = cholesky(Q).U
+    Ur = cholesky(R).U
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
+
+    # Terminal Cost-to-go
+    if isa(solver.obj, ConstrainedObjective)
+        Cx = res.Cx_N
+        Su[N] = cholesky(Qf + Cx'*res.IμN*Cx).U
+        s[N] = Qf*(X[N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+    else
+        Su[N] = cholesky(Qf).U
+        s[N] = Qf*(X[N] - xf)
+    end
+
+    # Initialization of expected change in cost-to-go
+    Δv = [0. 0.]
+
+    k = N-1
+
+    # Backward pass
+    while k >= 1
+        lx = dt*Q*(X[k] - xf)
+        lu = dt*R*(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        fx, fu = res.fx[k], res.fu[k]
+
+        Qx = lx + fx'*s[k+1]
+        Qu = lu + fu'*s[k+1]
+
+        Wxx = chol_plus(Su[k+1]*fx, cholesky(lxx).U)
+        Wuu = chol_plus(Su[k+1]*fu, cholesky(luu).U + res.ρ[1]*I)
+        # Wxx = qrfact!([Su[:,:,k+1]*fx; chol(lxx)])
+        # Wuu = qrfact!([Su[:,:,k+1]*fu; chol(luu) + mu[1]*I])
+        Qxu = (fx'*Su[k+1]')*(Su[k+1]*fu)
+
+        if isa(solver.obj, ConstrainedObjective)
+            # Constraints
+            Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Iμ2 = sqrt.(Iμ[k])
+            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qxu += Cx'*Iμ[k]*Cu
+
+            Wxx = chol_plus(Wxx.R, Iμ2*Cx)
+            Wuu = chol_plus(Wuu.R, Iμ2*Cu)
+        end
+
+        K[k] = Wuu.R\(Array(Wuu.R')\Array(Qxu'))
+        d[k] = Wuu.R\(Wuu.R'\Qu)
+
+        s[k] = Qx - Qxu*(Wuu.R\(Wuu.R'\Qu))
+
+        try  # Regularization
+            Su[k] = chol_minus(Wxx.R,(Array(Wuu.R'))\Array(Qxu'))
+        catch ex
+            if ex isa LinAlg.PosDefException
+                regularization_update!(res,solver,true)
+                k = N-1
+                if solver.opts.verbose
+                    println("regularized (sqrt bp)")
+                end
+                continue
+            end
+        end
+
+        # Expected change in cost-to-go
+        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu.R*Wuu.R*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    return Δv
+end
 
 
 # TODO problem with foh and constraints??
