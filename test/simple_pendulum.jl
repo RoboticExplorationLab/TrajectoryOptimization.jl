@@ -1,5 +1,3 @@
-using TrajectoryOptimization
-using LinearAlgebra
 #TODO cleanup and document each test
 # Set up models and objective
 u_bound = 3.

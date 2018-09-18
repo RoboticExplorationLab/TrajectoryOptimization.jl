@@ -227,7 +227,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             end
 
             ### BACKWARD PASS ###
-            calc_jacobians(results, solver)
+            calculate_jacobians!(results, solver)
             if solver.control_integration == :foh
                 Δv = backwardpass_foh!(results,solver) #TODO combine with square root
             elseif solver.opts.square_root
@@ -492,13 +492,52 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     return results_feasible
 end
 
+"""
+$(SIGNATURES)
+    Second order update for Lagrange multipliers (sequential)
+        -see Bertsekas 'Constrained Optimization' (eq. 24, p. 133)
+"""
+function λ_update_second_order(results::ConstrainedResults, solver::Solver)
+    n = solver.model.n
+    m = solver.model.m
+    q = n + m
+    p = size(results.C,1)
 
+    Q = solver.obj.Q
+    R = solver.obj.R
+    pI = solver.obj.pI
+
+    c_aug = f_augmented(solver.c_fun,n,m)
+    c_aug_zz = zeros(p,q,q)
+    tmp1 = zeros(q,q)
+    tmp2 = zeros(q,q)
+
+    for k = 1:solver.N
+
+        c_aug_zz .= hessian_of_vector_function(c_aug,[results.X[:,k]; results.U[:,k]],p,q)
+        c_aug_z = [results.Cx[:,:,k] results.Cu[:,:,k]]
+        for i = 1:q
+            for j = 1:q
+                tmp1[i,j] = c_aug_zz[:,j,i]'*(I*results.C[:,k])
+                tmp2[i,j] = c_aug_zz[:,j,i]'*results.LAMBDA[:,k]
+            end
+        end
+        L_zz = [Q zeros(n,m); zeros(m,n) R] + tmp1 + c_aug_z'*results.Iμ[:,:,k]*c_aug_z + tmp2
+        B = c_aug_z'*(L_zz\c_aug_z)
+
+        results.LAMBDA[:,k] = results.LAMBDA[:,k] + B\results.C[:,k]
+
+        # additional criteria for inequality constraints
+        results.LAMBDA[1:pI,k] = max.(0.0,results.LAMBDA[1:pI,k])
+    end
+
+end
 
 """
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
-    -ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
-    -'individual' update: see Bertsekas Constrained Optimization (eq. 47, p.123)
+        -ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
+        -'individual' update: see Bertsekas 'Constrained Optimization' (eq. 47, p.123)
 """
 function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
     n = solver.model.n # number of terminal constraints (equal to number of states)

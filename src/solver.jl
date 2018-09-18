@@ -39,13 +39,14 @@ struct Solver
     function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
         N, dt = calc_N(obj.tf, dt)
         n, m = model.n, model.m
-
-        # Make dynamics inplace
-        if is_inplace_dynamics(model)
-            f! = model.f
-        else
-            f! = wrap_inplace(model.f)
-        end
+        #
+        # # Make dynamics inplace
+        # if is_inplace_dynamics(model)
+        #     f! = model.f
+        # else
+        #     f! = wrap_inplace(model.f)
+        # end
+        f! = model.f # checked in model now
 
         # Get integration scheme
         if isdefined(TrajectoryOptimization,integration)
@@ -72,7 +73,6 @@ struct Solver
             fd_aug! = discretizer(f_aug!)
             nm1 = model.n + model.m + 1
         end
-
 
         # Initialize discrete and continuous dynamics Jacobians
         Jd = zeros(nm1, nm1)
@@ -152,35 +152,6 @@ function calc_N(tf::Float64, dt::Float64)::Tuple
     dt = tf/(N-1)
     return N, dt
 end
-
-"""
-$(SIGNATURES)
-Determine if the dynamics in model are in place. i.e. the function call is of
-the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
-"""
-function is_inplace_dynamics(model::Model)::Bool
-    x = rand(model.n)
-    u = rand(model.m)
-    xdot = rand(model.n)
-    try
-        model.f(xdot,x,u)
-    catch x
-        if x isa MethodError
-            return false
-        end
-    end
-    return true
-end
-
-"""
-$(SIGNATURES)
-Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
-form `f!(xdot,x,u)`.
-"""
-function wrap_inplace(f::Function)
-    f!(xdot,x,u) = copyto!(xdot, f(x,u))
-end
-
 
 """
 $(SIGNATURES)

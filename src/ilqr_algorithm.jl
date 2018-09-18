@@ -80,11 +80,13 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
 
         # regularization
         if !isposdef(Quu)
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0.0 0.0]
             continue
         end
 
@@ -167,11 +169,13 @@ function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
 
         # regularization
         if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0.0 0.0]
             continue
         end
 
@@ -276,6 +280,11 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
                 if solver.opts.verbose
                     println("regularized (sqrt bp)")
                 end
+
+                regularization_update!(res,solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
                 continue
             end
         end
@@ -475,20 +484,12 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         Lyv += Syv
 
         if res isa ConstrainedResults
-            if k == N-1
-                Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
-                Ly += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
-                Lv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
-                Lyy += Cy'*Iμ[:,:,k+1]*Cy
-                Lvv += Cv'*Iμ[:,:,k+1]*Cv
-                Lyv += Cy'*Iμ[:,:,k+1]*Cv
-            end
-            Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
-            Lx += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
-            Lu += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
-            Lxx += Cx'*Iμ[:,:,k]*Cx
-            Luu += Cu'*Iμ[:,:,k]*Cu
-            Lxu += Cx'*Iμ[:,:,k]*Cu
+            Cy, Cv = res.Cx[:,:,k+1], res.Cu[:,:,k+1]
+            Ly += (Cy'*Iμ[:,:,k+1]*C[:,k+1] + Cy'*LAMBDA[:,k+1])
+            Lv += (Cv'*Iμ[:,:,k+1]*C[:,k+1] + Cv'*LAMBDA[:,k+1])
+            Lyy += Cy'*Iμ[:,:,k+1]*Cy
+            Lvv += Cv'*Iμ[:,:,k+1]*Cv
+            Lyv += Cy'*Iμ[:,:,k+1]*Cv
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -507,11 +508,27 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
         #TODO check regularization
         # regularization
         if !isposdef(Qvv)
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("regularized --not reliable-- (foh bp)")
             end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0. 0.]
+
+            ## Reset BCs #TODO store S
+            # Boundary conditions
+            S[1:n,1:n] = Qf
+            s[1:n] = Qf*(X[:,N]-xf)
+
+            # Terminal constraints
+            if res isa ConstrainedResults
+                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                CxN = res.Cx_N
+                S[1:n,1:n] += CxN'*res.IμN*CxN
+                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            end
+            ############
             continue
         end
 
@@ -538,13 +555,38 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 
         # at last time step, optimize over final control
         if k == 1
+            if res isa ConstrainedResults
+                Cx, Cu = res.Cx[:,:,k], res.Cu[:,:,k]
+                Qx_ += (Cx'*Iμ[:,:,k]*C[:,k] + Cx'*LAMBDA[:,k])
+                Qu_ += (Cu'*Iμ[:,:,k]*C[:,k] + Cu'*LAMBDA[:,k])
+                Qxx_ += Cx'*Iμ[:,:,k]*Cx
+                Quu_ += Cu'*Iμ[:,:,k]*Cu
+                Qxu_ += Cx'*Iμ[:,:,k]*Cu
+            end
+
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
-                regularization_update!(res,solver::Solver,true)
-                k = N-1
                 if solver.opts.verbose
                     println("regularized --not reliable-- (foh bp)")
                 end
+
+                regularization_update!(res,solver::Solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
+                ## Reset BCs #TODO store S
+                # Boundary conditions
+                S[1:n,1:n] = Qf
+                s[1:n] = Qf*(X[:,N]-xf)
+
+                # Terminal constraints
+                if res isa ConstrainedResults
+                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    CxN = res.Cx_N
+                    S[1:n,1:n] += CxN'*res.IμN*CxN
+                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                end
+                ############
                 continue
             end
 
@@ -563,7 +605,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-# TODO fix static array version
+# TODO fix static array version??
 function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -607,7 +649,6 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         S[1:n,1:n] += CxN'*res.IμN*CxN
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
-
 
     k = N-1
     while k >= 1
@@ -655,22 +696,13 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Lvv += Svv
         Lyv += Syv
 
-
         if res isa ConstrainedResultsStatic
-            if k == N-1
-                Cy, Cv = res.Cx[k+1], res.Cu[k+1]
-                Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
-                Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
-                Lyy += Cy'*Iμ[k+1]*Cy
-                Lvv += Cv'*Iμ[k+1]*Cv
-                Lyv += Cy'*Iμ[k+1]*Cv
-            end
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Lx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-            Lu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
-            Lxx += Cx'*Iμ[k]*Cx
-            Luu += Cu'*Iμ[k]*Cu
-            Lxu += Cx'*Iμ[k]*Cu
+            Cy, Cv = res.Cx[k+1], res.Cu[k+1]
+            Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
+            Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
+            Lyy += Cy'*Iμ[k+1]*Cy
+            Lvv += Cv'*Iμ[k+1]*Cv
+            Lyv += Cy'*Iμ[k+1]*Cv
         end
 
         # Substitute in discrete dynamics dx = (Ad)dx + (Bd)du1 + (Cd)du2
@@ -679,7 +711,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Qv = vec(Lv) + Cd'*vec(Ly)
 
         Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad
-        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + res.ρ[1]*I
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd
         Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + res.ρ[1]*I
         Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd
@@ -688,11 +720,27 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         # Qvv = Hermitian(Qvv)
         # regularization
         if !isposdef(Qvv)
-            regularization_update!(res,solver,true)
-            k = N-1
             if solver.opts.verbose
                 println("*NOT implemented* regularized (foh bp)")
             end
+
+            regularization_update!(res,solver,true)
+            Δv = [0. 0.]
+            k = N-1
+
+            ## Reset BCs ##
+            # Boundary conditions
+            S[1:n,1:n] = Qf
+            s[1:n] = Qf*(X[N]-xf)
+
+            # Terminal constraints
+            if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                CxN = res.Cx_N
+                S[1:n,1:n] += CxN'*res.IμN*CxN
+                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            end
+            ################
             continue
         end
 
@@ -719,13 +767,38 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
 
         # at last time step, optimize over final control
         if k == 1
+            if res isa ConstrainedResultsStatic
+                Cx, Cu = res.Cx[k], res.Cu[k]
+                Qx_ += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+                Qu_ += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+                Qxx_ += Cx'*Iμ[k]*Cx
+                Quu_ += Cu'*Iμ[k]*Cu
+                Qxu_ += Cx'*Iμ[k]*Cu
+            end
+
             Quu_ = Hermitian(Quu_)
             if !isposdef(Quu_)
-                regularization_update!(res,solver::Solver,true)
-                k = N-1
                 if solver.opts.verbose
                     println("regularized (foh bp)")
                 end
+
+                regularization_update!(res,solver::Solver,true)
+                k = N-1
+                Δv = [0. 0.]
+
+                ## Reset BCs ##
+                # Boundary conditions
+                S[1:n,1:n] = Qf
+                s[1:n] = Qf*(X[N]-xf)
+
+                # Terminal constraints
+                if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    CxN = res.Cx_N
+                    S[1:n,1:n] += CxN'*res.IμN*CxN
+                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                end
+                ################
                 continue
             end
 
@@ -839,7 +912,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     if solver.opts.verbose
         println("New cost: $J")
         if res isa ConstrainedResults || res isa ConstrainedResultsStatic
-            println("- state+control cost: $(cost_(solver,res,res.X_,res.U_))")
+            println("- state+control cost: $(_cost(solver,res,res.X_,res.U_))")
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")
         end

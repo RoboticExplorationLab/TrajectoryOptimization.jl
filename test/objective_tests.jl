@@ -24,8 +24,8 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
 @test obj.x_max == [Inf,Inf]
-@test isa(obj.cI(x0,u0),Nothing)
-@test isa(obj.cE(x0,u0),Nothing)
+@test isa(obj.cI(ones(0),x0,u0),Nothing)
+@test isa(obj.cE(ones(0),x0,u0),Nothing)
 
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
@@ -71,7 +71,9 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
 
 
 # Custom constraints
-c(x,u) = x[2]+u[1]-2
+function c(cdot,x,u)
+    cdot[1] = x[2]+u[1]-2
+end
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
     cI=c)
 @test obj.p == 1
@@ -87,8 +89,8 @@ obj = ConstrainedObjective(obj_uncon)
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
 @test obj.x_max == [Inf,Inf]
-@test isa(obj.cI(x0,u0),Nothing)
-@test isa(obj.cE(x0,u0),Nothing)
+@test isa(obj.cI(ones(0),x0,u0),Nothing)
+@test isa(obj.cE(ones(0),x0,u0),Nothing)
 @test obj.p == 0
 @test obj.use_terminal_constraint == true
 @test obj.p_N == 2
@@ -102,40 +104,61 @@ obj = update_objective(obj, u_max=2, x_max = 4, cE=c)
 
 
 ### GENERAL CONSTRAINTS ###
-n,m = 3,2
-cE(x,u) = [2x[1:2]+u;
-          x'x + 5]
+n, m = 3,2
+function cE(cdot,x,u)
+     cdot[1:2] = 2x[1:2]+u
+     cdot[3] = x'x + 5
+end
 pE = 3
 
 x = [1;2;3]
 u = [1;-1]
-@test cE(x,u) == [3; 3; 19]
+cdot = zeros(3)
+cE(cdot,x,u)
+@test cdot == [3; 3; 19]
+
+# Jc = zeros(pE,n+m)
+# dS = zeros(pE)
+# S = zeros(n+m)
+# c_aug! = f_augmented!(cE,n,m)
+# Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,c_aug!,dS,S)
+# Fc!(Jc,dS,S)
+
 
 # Jacobians
 jac_cE = generate_general_constraint_jacobian(cE,pE,0,n,m)
 jac_x(x,u) = [2 0 0;
-           0 2 0;
-           2x']
+              0 2 0;
+              2x']
 jac_u(x,u) = [1 0;
               0 1;
               0 0]
-A,B = jac_cE(x,u)
+A = zeros(3,3)
+B = zeros(3,2)
+jac_cE(A,B,x,u)
 @test A == jac_x(x,u)
 @test B == jac_u(x,u)
 
 # Add terminal
-cE(x) = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
+function cE(xdot,x)
+    xdot[1:2] = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
+end
+
 pE_N = 2
 
-jac_xN(x) = [-sin(x[1]) x[3] x[2];
-             x[2]^2 2x[1]*x[2] 0]
+jac_xN(x) = [-sin(x[1]) x[3] x[2]; x[2]^2 2x[1]*x[2] 0]
+
 jac_cE = generate_general_constraint_jacobian(cE,pE,pE_N,n,m)
-@test jac_cE(x) == jac_xN(x)
+tmp1 = zeros(pE_N,n)
+jac_cE(tmp1,x)
+@test tmp1 == jac_xN(x)
 
-A,B = jac_cE(x,u)
-@test A == jac_x(x,u)
-@test B == jac_u(x,u)
+A1 = zeros(3,3)
+B1 = zeros(3,2)
+jac_cE(A1,B1,x,u)
+@test A1 == jac_x(x,u)
+@test B1 == jac_u(x,u)
 
-cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
-pI = 2
-pI_N = 0
+# cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
+# pI = 2
+# pI_N = 0

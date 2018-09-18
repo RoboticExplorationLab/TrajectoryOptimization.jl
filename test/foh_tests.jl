@@ -25,9 +25,6 @@ sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # Test final state from foh solve
 @test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh.X - sol_zoh.X) < 1.0
 ##################################
 
 ## Control constraints pendulum (foh) ##
@@ -45,9 +42,6 @@ sol_zoh_con, = TrajectoryOptimization.solve(solver_zoh_con,U)
 
 # Test final state from foh solve
 @test norm(sol_foh_con.X[:,end] - solver_foh_con.obj.xf) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh_con.X - sol_zoh_con.X) < 5.0
 ########################################
 
 ## State and control constraints pendulum (foh) ##
@@ -65,9 +59,6 @@ sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
 # Test final state from foh solve
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh_con2.X - sol_zoh_con2.X) < 10.0
 ###################################################
 
 ## Unconstrained infeasible start pendulum (foh) ##
@@ -120,9 +111,6 @@ sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # Test final state from foh solve
 @test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh.X - sol_zoh.X) < 1.0
 #####################################
 
 ## State and control constraints Dubins car (foh) ##
@@ -143,9 +131,6 @@ sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
 # Test final state from foh solve
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh_con2.X - sol_zoh_con2.X) < 5.0
 ####################################################
 
 ## Infeasible start with state and control constraints Dubins car (foh) ##
@@ -167,7 +152,4 @@ sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
 
 @test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
-
-# Test similarity of foh and zoh solutions
-@test norm(sol_foh_con2.X - sol_zoh_con2.X) < 10.0
 ###########################################################################

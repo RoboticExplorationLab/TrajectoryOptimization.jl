@@ -38,7 +38,14 @@ struct Model
 
     # Construct a model from an explicit differential equation
     function Model(f::Function, n::Int64, m::Int64)
-        new(f,n,m)
+        # Make dynamics inplace
+        if is_inplace_dynamics(f,n,m)
+            f! =f
+        else
+            f! = wrap_inplace(f)
+        end
+
+        new(f!,n,m)
     end
 
     # Construct model from a `Mechanism` type from `RigidBodyDynamics`
@@ -71,7 +78,10 @@ struct Model
 
             [qd; Array(mass_matrix(state))\(torques.*u) - Array(mass_matrix(state))\Array(dynamics_bias(state))]
         end
-        new(fc, n, convert(Int,sum(torques)))
+
+        f! = wrap_inplace(fc)
+
+        new(f!, n, convert(Int,sum(torques)))
     end
 end
 
@@ -90,7 +100,106 @@ function Model(urdf::String,torques::Array{Float64,1})
     Model(mech,torques)
 end
 
+"""
+$(SIGNATURES)
+    Determine if the constraints are inplace. Returns boolean and number of constraints
+"""
+function is_inplace_constraints(c::Function,n::Int64,m::Int64)
+    x = rand(n)
+    u = rand(m)
+    q = 100
+    xdot = NaN*ones(q)
+    iter = 1
 
+    while iter < 5
+        try
+            c(xdot,x,u)
+        catch x
+            if x isa MethodError
+                return false, 0
+            end
+        end
+
+        p = count(isfinite.(xdot))
+        if p > 0
+            return true, p
+        else
+            q *= 10
+            iter += 1
+        end
+    end
+    #println("Constraint function is inplace but does not modify output")
+    return true, 0
+end
+
+function is_inplace_constraints(c::Function,n::Int64)
+    x = rand(n)
+    q = 100
+    xdot = NaN*ones(q)
+    iter = 1
+
+    while iter < 5
+        try
+            c(xdot,x)
+        catch x
+            if x isa MethodError
+                return false, 0
+            end
+        end
+
+        p = count(isfinite.(xdot))
+        if p > 0
+            return true, p
+        else
+            q *= 10
+            iter += 1
+        end
+    end
+    #println("Constraint function is inplace but does not modify output")
+    return true, 0
+end
+
+"""
+$(SIGNATURES)
+Determine if the dynamics in model are in place. i.e. the function call is of
+the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
+"""
+function is_inplace_dynamics(model::Model)::Bool
+    x = rand(model.n)
+    u = rand(model.m)
+    xdot = rand(model.n)
+    try
+        model.f(xdot,x,u)
+    catch x
+        if x isa MethodError
+            return false
+        end
+    end
+    return true
+end
+
+function is_inplace_dynamics(f::Function,n::Int64,m::Int64)::Bool
+    x = rand(n)
+    u = rand(m)
+    xdot = rand(n)
+    try
+        f(xdot,x,u)
+    catch x
+        if x isa MethodError
+            return false
+        end
+    end
+    return true
+end
+
+"""
+$(SIGNATURES)
+Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
+form `f!(xdot,x,u)`.
+"""
+function wrap_inplace(f::Function)
+    f!(xdot,x,u) = copyto!(xdot, f(x,u))
+end
 
 #*********************************#
 #        OBJECTIVE CLASS          #
@@ -145,8 +254,8 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
     x_max::Array{Float64,1}  # Upper state bounds (n,)
 
     # General Stage Constraints
-    cI::Function  # inequality constraint function
-    cE::Function  # equality constraint function
+    cI::Function  # inequality constraint function (inplace)
+    cE::Function  # equality constraint function (inplace)
 
     # Terminal Constraints
     use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false)
@@ -167,6 +276,19 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
         n = size(Q,1)
         m = size(R,1)
 
+        # Make general inequality/equality constraints inplace
+        flag_cI, pI_c = is_inplace_constraints(cI,n,m)
+        if !flag_cI
+            cI = wrap_inplace(cI)
+            println("Custom inequality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
+        end
+
+        flag_cE, pE_c = is_inplace_constraints(cE,n,m)
+        if !flag_cE
+            cE = wrap_inplace(cE)
+            println("Custom equality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
+        end
+
         # Validity Tests
         u_max, u_min = _validate_bounds(u_max,u_min,m)
         x_max, x_min = _validate_bounds(x_max,x_min,n)
@@ -179,28 +301,32 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
         pI += count(isfinite, x_min)
         pI += count(isfinite, x_max)
 
-        u0 = zeros(m)
-        if ~isa(cI(x0,u0), Nothing)
-            pI += size(cI(x0,u0),1)
-        end
-        if ~isa(cE(x0,u0), Nothing)
-            pE += size(cE(x0,u0),1)
-        end
+        # u0 = zeros(m)
+        # if ~isa(cI(x0,u0), Nothing)
+        #     pI += size(cI(x0,u0),1)
+        # end
+        # if ~isa(cE(x0,u0), Nothing)
+        #     pE += size(cE(x0,u0),1)
+        # end
+        pI += pI_c
+        pE += pE_c
+
         p = pI + pE
 
-
+        #TODO custom terminal constraints
         # Terminal Constraints
         pI_N = pE_N = 0
-        try cI(x0)
-            pI_N = size(cI(x0),1)
-        catch
-            pI_N = 0
-        end
-        try cE(x0)
-            pE_N = size(cE(x0),1)
-        catch
-            pE_N = 0
-        end
+
+        # try cI(x0)
+        #     pI_N = size(cI(x0),1)
+        # catch
+        #     pI_N = 0
+        # end
+        # try cE(x0)
+        #     pE_N = size(cE(x0),1)
+        # catch
+        #     pE_N = 0
+        # end
         if use_terminal_constraint
             pE_N += n
         end
@@ -234,7 +360,7 @@ where `c` is of size (pI_c_N,) or (pE_c_N,).
 function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
-    cI=(x,u)->nothing, cE=(x,u)->nothing,
+    cI=(c,x,u)->nothing, cE=(c,x,u)->nothing,
     use_terminal_constraint=true)
 
     ConstrainedObjective(Q,R,Qf,tf,x0,xf,
