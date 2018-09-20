@@ -104,7 +104,7 @@ function backwardpass!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
+function backwardpass!(res::SolverVectorResults,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m;
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
     R = getR(solver)
@@ -127,7 +127,7 @@ function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
 
     # Terminal constraints
 
-    if res isa ConstrainedResultsStatic
+    if res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
         S[N] += CxN'*res.IμN*CxN
@@ -158,7 +158,7 @@ function backwardpass!(res::SolverIterResultsStatic,solver::Solver)
 
         # Constraints
 
-        if res isa ConstrainedResultsStatic
+        if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
             Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
             Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
@@ -298,7 +298,7 @@ function backwardpass_sqrt!(res::SolverIterResults,solver::Solver)
     return Δv
 end
 
-function backwardpass_sqrt!(res::TrajectoryOptimization.SolverIterResultsStatic,solver::Solver)
+function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
     N = solver.N
     n = solver.model.n
@@ -374,7 +374,7 @@ function backwardpass_sqrt!(res::TrajectoryOptimization.SolverIterResultsStatic,
         try  # Regularization
             Su[k] = chol_minus(Wxx.R,(Array(Wuu.R'))\Array(Qxu'))
         catch ex
-            if ex isa LinAlg.PosDefException
+            if ex isa LinearAlgebra.PosDefException
                 regularization_update!(res,solver,true)
                 k = N-1
                 if solver.opts.verbose
@@ -606,7 +606,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
 end
 
 # TODO fix static array version??
-function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
+function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -643,7 +643,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
     s[1:n] = Qf*(X[N]-xf)
 
     # Terminal constraints
-    if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+    if res isa ConstrainedResults || res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
         CxN = res.Cx_N
         S[1:n,1:n] += CxN'*res.IμN*CxN
@@ -696,7 +696,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
         Lvv += Svv
         Lyv += Syv
 
-        if res isa ConstrainedResultsStatic
+        if res isa ConstrainedIterResults
             Cy, Cv = res.Cx[k+1], res.Cu[k+1]
             Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
             Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
@@ -719,7 +719,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
 
         # Qvv = Hermitian(Qvv)
         # regularization
-        if !isposdef(Qvv)
+        if !isposdef(Array(Qvv))
             if solver.opts.verbose
                 println("*NOT implemented* regularized (foh bp)")
             end
@@ -734,7 +734,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
             s[1:n] = Qf*(X[N]-xf)
 
             # Terminal constraints
-            if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+            if res isa ConstrainedResults || res isa ConstrainedIterResults
                 C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
                 CxN = res.Cx_N
                 S[1:n,1:n] += CxN'*res.IμN*CxN
@@ -767,7 +767,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
 
         # at last time step, optimize over final control
         if k == 1
-            if res isa ConstrainedResultsStatic
+            if res isa ConstrainedIterResults
                 Cx, Cu = res.Cx[k], res.Cu[k]
                 Qx_ += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
                 Qu_ += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
@@ -777,7 +777,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
             end
 
             Quu_ = Hermitian(Quu_)
-            if !isposdef(Quu_)
+            if !isposdef(Array(Quu_))
                 if solver.opts.verbose
                     println("regularized (foh bp)")
                 end
@@ -792,7 +792,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
                 s[1:n] = Qf*(X[N]-xf)
 
                 # Terminal constraints
-                if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+                if res isa ConstrainedResults || res isa ConstrainedIterResults
                     C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
                     CxN = res.Cx_N
                     S[1:n,1:n] += CxN'*res.IμN*CxN
@@ -802,7 +802,7 @@ function backwardpass_foh!(res::SolverIterResultsStatic,solver::Solver)
                 continue
             end
 
-            K[1] = -Quu_\Qxu_'
+            K[1] = Array(-Quu_)\Array(Qxu_')
             b[1] = zeros(m,m)
             d[1] = -Quu_\vec(Qu_)
 
@@ -853,7 +853,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     X_ = res.X_
     U_ = res.U_
 
-    use_static = res isa SolverIterResultsStatic
+    use_static = res isa SolverVectorResults
 
     # Compute original cost
     update_constraints!(res,solver,X,U)
@@ -911,7 +911,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
     if solver.opts.verbose
         println("New cost: $J")
-        if res isa ConstrainedResults || res isa ConstrainedResultsStatic
+        if res isa ConstrainedResults || res isa ConstrainedIterResults
             println("- state+control cost: $(_cost(solver,res,res.X_,res.U_))")
             max_c = max_violation(res)
             println("- Max constraint violation: $max_c")

@@ -40,7 +40,7 @@ function norm(X::Vector{MVector{S,Float64}}) where {S}
     sqrt(norm2(X))
 end
 
-function norm2(X::Vector{MVector{S,Float64}}) where {S}
+function norm2(X::Union{Vector{MVector{S,Float64} where S}, Vector{Vector{Float64}}})
     v = 0.
     for i = 1:size(X,1)
         v += X[i]'X[i]
@@ -48,7 +48,7 @@ function norm2(X::Vector{MVector{S,Float64}}) where {S}
     v
 end
 
-function norm2(X::MVector{S,Float64}) where {S}
+function norm2(X::Union{MVector{S,Float64},Vector{Float64}}) where {S}
     norm(X)^2
 end
 
@@ -56,13 +56,34 @@ function norm(X::Vector{MVector{S,Float64}},inds::UnitRange{Int64}) where {S}
     sqrt(norm2(X,inds))
 end
 
-function norm2(X::Vector{MVector{S,Float64}},inds::UnitRange{Int64}) where {S}
+function norm2(X::Union{Vector{MVector{S,Float64}} where S, Vector{Vector{Float64}}},inds::UnitRange{Int64})
     v = 0.
     for i = 1:size(X,1)
         v += X[i][inds]'X[i][inds]
     end
     v
 end
+
+function to_array(X::Vector{Vector{Float64}})
+    N = length(X)
+    n = length(X[1])
+    Y = zeros(n,N)
+    for i = 1:N
+        Y[:,i] = X[i]
+    end
+    Y
+end
+
+function to_array(X::Vector{Matrix{Float64}})
+    N = length(X)
+    n,m = size(X[1])
+    Y = zeros(n,m,N)
+    for i = 1:N
+        Y[:,:,i] = X[i]
+    end
+    Y
+end
+
 
 function to_array(X::Vector{T}) where {T<:MArray}
     N = length(X)
@@ -91,7 +112,7 @@ function to_svecs(X::Array)
     [MArray{Tuple{s...}}(X[ax...,1]) for i = 1:N]
 end
 
-function copyto!(A::Vector{T}, B::Array) where {T<:MArray}
+function copyto!(A::Vector{T}, B::Array) where {T<:Union{MArray,VecOrMat}}
     N = size(B)[end]
     ax = axes(B)[1:end-1]
     for i = 1:N

@@ -42,7 +42,7 @@ function rollout!(res::SolverResults,solver::Solver)
     flag
 end
 
-function rollout!(res::SolverIterResultsStatic, solver::Solver)
+function rollout!(res::SolverVectorResults, solver::Solver)
     X, U = res.X, res.U
     infeasible = solver.model.m != size(U[1],1)
     N = solver.N
@@ -157,7 +157,7 @@ function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
     return true
 end
 
-function rollout!(res::SolverIterResultsStatic,solver::Solver,alpha::Float64)
+function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U[1],1)
     N = solver.N; m = solver.model.m; n = solver.model.n
 
@@ -263,7 +263,7 @@ function _cost(solver::Solver,res::SolverIterResults,X::Array{Float64,2},U::Arra
     return J
 end
 
-function _cost(solver::Solver,res::SolverIterResultsStatic,X=res.X,U=res.U)
+function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -313,7 +313,7 @@ function cost_constraints(solver::Solver, res::ConstrainedResults)
     return J
 end
 
-function cost_constraints(solver::Solver, res::ConstrainedResultsStatic)
+function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
@@ -338,11 +338,11 @@ function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
-function cost(solver::Solver, res::UnconstrainedResultsStatic, X::Vector=res.X, U::Vector{MVector{S,Float64}}=res.U) where {S}
+function cost(solver::Solver, res::UnconstrainedIterResults, X::Vector=res.X, U::Vector=res.U)
     _cost(solver,res,X,U)
 end
 
-function cost(solver::Solver, res::ConstrainedResultsStatic, X::Vector=res.X, U::Vector{MVector{S,Float64}}=res.U) where {S}
+function cost(solver::Solver, res::ConstrainedIterResults, X::Vector=res.X, U::Vector=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
@@ -401,7 +401,7 @@ function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matri
     end
 end
 
-function calculate_derivatives!(results::SolverIterResultsStatic, solver::Solver, X::Vector, U::Vector)
+function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.fc(results.xdot[k],X[k],U[k][1:m])
@@ -434,7 +434,7 @@ function calculate_jacobians!(res::ConstrainedResults, solver::Solver)::Nothing 
     return nothing
 end
 
-function calculate_jacobians!(res::ConstrainedResultsStatic, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
+function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -472,7 +472,7 @@ function calculate_jacobians!(res::UnconstrainedResults, solver::Solver, infeasi
     return nothing
 end
 
-function calculate_jacobians!(res::UnconstrainedResultsStatic, solver::Solver, infeasible=false)::Nothing
+function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver, infeasible=false)::Nothing
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -497,7 +497,7 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, U::Array)::Nothing
+function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
 
     p, N = size(res.C) # note, C is now (p,N)
     c = solver.c_fun
@@ -532,7 +532,7 @@ function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array, 
     return nothing # TODO allow for more general terminal constraint
 end
 
-function update_constraints!(res::ConstrainedResultsStatic, solver::Solver, X::Array, U::Array)::Nothing
+function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
 
     N = length(res.C) # note, C is now (p,N)
     p = length(res.C[1])
@@ -568,11 +568,11 @@ function update_constraints!(res::ConstrainedResultsStatic, solver::Solver, X::A
     return nothing # TODO allow for more general terminal constraint
 end
 
-function update_constraints!(res::UnconstrainedResults, solver::Solver, X::Array, U::Array)::Nothing
+function update_constraints!(res::UnconstrainedResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
     return nothing
 end
 
-function update_constraints!(res::UnconstrainedResultsStatic, solver::Solver, X::Array, U::Array)::Nothing
+function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
     return nothing
 end
 
@@ -803,7 +803,7 @@ function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(res
     end
 end
 
-function max_violation(results::ConstrainedResultsStatic,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
+function max_violation(results::ConstrainedIterResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
         return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), maximum(abs.(results.CN)))
     else
@@ -815,7 +815,7 @@ function max_violation(results::UnconstrainedResults)
     return 0.0
 end
 
-function max_violation(results::UnconstrainedResultsStatic)
+function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
 
