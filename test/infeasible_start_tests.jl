@@ -1,7 +1,7 @@
 ### Solver options ###
 opts = SolverOptions()
 opts.square_root = false
-opts.verbose=false
+opts.verbose=true
 opts.cache=true
 # opts.c1=1e-4
 # opts.c2=2.0
@@ -20,8 +20,8 @@ model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
 
 ## Unconstrained (infeasible)
 obj_uncon = Dynamics.pendulum[2]
-obj_uncon.R[:] = [1e-2]
-obj_uncon.tf = 3.0
+# obj_uncon.R[:] = [1e-2]
+# obj_uncon.tf = 3.0
 solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
 
 # -Initial state and control trajectories

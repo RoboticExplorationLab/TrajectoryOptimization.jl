@@ -73,7 +73,7 @@ mutable struct SolverOptions
     use_static::Bool
 
     function SolverOptions(;square_root=false,verbose=false,
-        c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,gradient_tolerance=1e-4,gradient_intermediate_tolerance=1e-4,cost_tolerance=1.0e-5,cost_intermediate_tolerance=1.0e-2,
+        c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-5,cost_intermediate_tolerance=1.0e-2,
         constraint_tolerance=1e-3,iterations=1000,iterations_outerloop=50,
         iterations_linesearch=10,infeasible_regularization=1e6,cache=false,
         benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:uniform,λ_second_order_update=true,
