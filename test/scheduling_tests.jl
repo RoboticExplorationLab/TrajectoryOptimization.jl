@@ -30,7 +30,8 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-solver = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts)
+opts.λ_second_order_update = true
+solver = Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = ones(solver.model.n,solver.N)
@@ -43,13 +44,17 @@ U = ones(solver.model.m,solver.N)
 ############
 
 ### Results ###
-using Plotly
+using Plots
 plot(results.X',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="x(t)")
 plot(results.U',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="u(t)")
-
 
 println("Final state: $(results.X[:,end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
 
 # Test that final state matches goal state to within tolerance
 # @test norm(results.X[:,end] - solver.obj.xf) < 1e-5
 ###############
+
+
+
+λ_update_second_order!(results.result[2], solver)
+results.result[1]

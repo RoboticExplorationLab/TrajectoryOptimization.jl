@@ -323,7 +323,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 end
                 break
             # Check for cost and constraint tolerance convergence
-        elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
+            elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 if solver.opts.verbose
                     println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
                     println("---Cost met tolerance\n")
@@ -348,7 +348,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
-        outer_loop_update(results,solver)
+
+        outer_loop_update(results,solver,max_violation(results))
 
         if solver.opts.cache
             # Store current results and performance parameters
@@ -387,7 +388,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache.X = results.X
         results_cache.U = results.U
     end
-
 
     if is_constrained
         # use_static ? results = ConstrainedResults(results) : nothing
@@ -487,6 +487,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     else
         Δv = backwardpass!(results_feasible, solver)
     end
+
     # rollout solution
     forwardpass!(results_feasible,solver,Δv)
     results_feasible.X .= results_feasible.X_
@@ -503,43 +504,94 @@ end
 
 """
 $(SIGNATURES)
-    Second order update for Lagrange multipliers (sequential)
-        -see Bertsekas 'Constrained Optimization' (eq. 24, p. 133)
+    Return constraints, Jacobians, and numbers relating to the current active constraints
+    - inequality constraints are defined as c() < 0
 """
-function λ_update_second_order(results::ConstrainedResults, solver::Solver)
-    n = solver.model.n
-    m = solver.model.m
-    q = n + m
-    p = size(results.C,1)
-
-    Q = solver.obj.Q
-    R = solver.obj.R
-    pI = solver.obj.pI
-
-    c_aug = f_augmented(solver.c_fun,n,m)
-    c_aug_zz = zeros(p,q,q)
-    tmp1 = zeros(q,q)
-    tmp2 = zeros(q,q)
-
-    for k = 1:solver.N
-
-        c_aug_zz .= hessian_of_vector_function(c_aug,[results.X[:,k]; results.U[:,k]],p,q)
-        c_aug_z = [results.Cx[:,:,k] results.Cu[:,:,k]]
-        for i = 1:q
-            for j = 1:q
-                tmp1[i,j] = c_aug_zz[:,j,i]'*(I*results.C[:,k])
-                tmp2[i,j] = c_aug_zz[:,j,i]'*results.LAMBDA[:,k]
-            end
+function get_active_constraints(c::AbstractVector,cx::AbstractMatrix,p::Int64,pI::Int64,n::Int64)
+    # create a mask for inactive inequality constraints
+    mask = ones(Bool,p)
+    for i = 1:pI
+        if c[i] < 0.0
+            mask[i] = false
         end
-        L_zz = [Q zeros(n,m); zeros(m,n) R] + tmp1 + c_aug_z'*results.Iμ[:,:,k]*c_aug_z + tmp2
-        B = c_aug_z'*(L_zz\c_aug_z)
+    end
+    mask
 
-        results.LAMBDA[:,k] = results.LAMBDA[:,k] + B\results.C[:,k]
+    # get indicies of active constraints (inequality and equality)
+    idx_active = findall(x->x==1,mask)
+    idx_inactive = findall(x->x==0,mask)
 
-        # additional criteria for inequality constraints
+    p_active = count(mask)
+    p_inactive = p - p_active
+
+    c_active = zeros(p_active)
+    cx_active = zeros(p_active,n)
+    c_active .= c[idx_active]
+    cx_active .= cx[idx_active,:]
+
+    c_active, cx_active, p_active, p_inactive, idx_active, idx_inactive
+end
+
+"""
+$(SIGNATURES)
+    First order update for Lagrange multipliers (sequential individual)
+        -see Bertsekas 'Constrained Optimization' (p. 101)
+"""
+function λ_update_first_order!(results::ConstrainedResults,solver::Solver,i::Int64,j::Int64,mode::Symbol=:stage,constraint_type::Symbol=:equality)
+    if mode == :stage
+        if constraint_type == :equality
+            results.LAMBDA[i,j] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[i,j] + results.MU[i,j]*results.C[i,j])) # λ_min < λ < λ_max
+        end
+        if constraint_type == :inequality
+            results.LAMBDA[i,j] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[i,j] + results.MU[i,j]*results.C[i,j]))) # λ_min < λ < λ_max
+        end
+    elseif mode == :terminal
+        results.λN[i] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[i] + results.μN[i].*results.CN[i]))
+    end
+end
+
+"""
+$(SIGNATURES)
+    Second order update for Lagrange multipliers (sequential by timestep)
+        -see Bertsekas 'Constrained Optimization' (eq. 24, p. 133)
+        -note we use the augmented state z = [x; u]
+"""
+function λ_update_second_order!(results::ConstrainedResults,solver::Solver,mode::Symbol=:stage,k::Int64=0)
+    # update stage multipliers
+    if mode == :stage
+        n = solver.model.n
+        m = solver.model.m
+
+        Q = solver.obj.Q
+        R = solver.obj.R
+        if size(results.U,1) != m
+            R = getR(solver)
+            m = size(R,1)
+        end
+        dt = solver.dt
+
+        pI = solver.obj.pI
+        p = size(results.C,1)
+
+        c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[:,k],[results.Cx[:,:,k] results.Cu[:,:,k]],p,pI,n+m)
+        lzz = [dt*Q zeros(n,m); zeros(m,n) dt*R]
+        Lzz = lzz + cz_active'*results.Iμ[idx_active,idx_active,k]*cz_active
+        B = cz_active*(Lzz\cz_active')
+
+        results.LAMBDA[idx_active,k] = results.LAMBDA[idx_active,k] + B\results.C[idx_active,k]
+        results.LAMBDA[idx_inactive,k] = results.LAMBDA[idx_inactive,k] + Matrix(Diagonal(results.MU[idx_inactive,k]))*results.C[idx_inactive,k]
+
+        # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
         results.LAMBDA[1:pI,k] = max.(0.0,results.LAMBDA[1:pI,k])
     end
 
+    # update for terminal constraints
+    if mode == :terminal
+        lzz = solver.obj.Qf
+        Lzz = lzz + results.Cx_N'*results.IμN*results.Cx_N
+        B = results.Cx_N*(Lzz\results.Cx_N')
+        results.λN .= results.λN + B\results.CN
+    end
 end
 
 """
@@ -549,7 +601,7 @@ $(SIGNATURES)
         -  ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
         - 'individual' update: see Bertsekas 'Constrained Optimization' (eq. 47, p.123)
 """
-function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
+function outer_loop_update(results::ConstrainedResults,solver::Solver,max_constraint::Float64=Inf)::Nothing
     n = solver.model.n # number of terminal constraints (equal to number of states)
     p, N = size(results.C) # number of constraints and problem horizon (ie knot points)
     pI = solver.obj.pI # number of inequality constraints
@@ -576,7 +628,10 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
                 end
 
                 # Lagrange multiplier update (1st order)
-                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
+                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                    λ_update_first_order!(results,solver,ii,jj,:stage,:inequality)
+                    # results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
+                end
 
                 # penalty update for 'individual' scheme
                 if  solver.opts.outer_loop_update == :individual
@@ -590,10 +645,13 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
             # equality constraints
             else
                 # Lagrange multiplier update (1st order)
-                results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
+                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                    λ_update_first_order!(results,solver,ii,jj,:stage,:equality)
+                    # results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
+                end
 
                 # penalty update for 'individual' scheme
-                if  solver.opts.outer_loop_update == :individual
+                if solver.opts.outer_loop_update == :individual
                     if abs(results.C[ii,jj]) <= solver.opts.τ*abs(results.C_prev[ii,jj])
                         results.MU[ii,jj] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[ii,jj])
                     else
@@ -602,12 +660,32 @@ function outer_loop_update(results::ConstrainedResults,solver::Solver)::Nothing
                 end
             end
         end
+
+        # Lagrange multiplier update (2nd order)
+        if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+            # if solver.opts.verbose
+            #     println("**λ second order update**")
+            # end
+            λ_update_second_order!(results,solver,:stage,jj)
+        end
     end
 
-    # Lagrange multiplier update for terminal state equality constraints
-    for ii = 1:solver.model.n
-        results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+    # Lagrange multiplier (1st order) update for terminal state equality constraints
+    if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+        for ii = 1:solver.model.n
+            λ_update_first_order!(results,solver,ii,0,:terminal)
+            # results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+        end
     end
+
+    # Lagrange multiplier (2st order) update for terminal state equality constraints
+    if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+        # if solver.opts.verbose
+        #     println("**λ second order update**")
+        # end
+        λ_update_second_order!(results,solver,:terminal)
+    end
+
     ###################################
 
     ### Penalty updates ###
@@ -684,8 +762,9 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
                 end
 
                 # Lagrange multiplier update (1st order)
-                results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii]))) # λ_min < λ < λ_max
-
+                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                    results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii]))) # λ_min < λ < λ_max
+                end
                 # penalty update for 'individual' scheme
                 if  solver.opts.outer_loop_update == :individual
                     if max(0.0,results.C[jj][ii]) <= solver.opts.τ*max(0.0,results.C_prev[jj][ii])
@@ -698,7 +777,9 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
             # equality constraints
             else
                 # Lagrange multiplier update (1st order)
-                results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii])) # λ_min < λ < λ_max
+                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                    results.LAMBDA[jj][ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[jj][ii] + results.MU[jj][ii]*results.C[jj][ii])) # λ_min < λ < λ_max
+                end
 
                 # penalty update for 'individual' scheme
                 if  solver.opts.outer_loop_update == :individual
@@ -712,9 +793,19 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
         end
     end
 
-    # Lagrange multiplier update for terminal state equality constraints
-    for ii = 1:solver.model.n
-        results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+    # Lagrange multiplier (1st order) update for terminal state equality constraints (note terminal is already taken care in 2nd order update)
+    if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+        for ii = 1:solver.model.n
+            results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
+        end
+    end
+
+    # Lagrange multiplier update (2nd order)
+    if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+        λ_update_second_order!(results, solver)
+        if solver.opts.verbose
+            println("**λ second order update**")
+        end
     end
     ###################################
 
@@ -779,7 +870,7 @@ function update_criteria(results::ConstrainedResults)
     max(norm([results.C[pI+1:p,:][:]; results.CN]),norm(results.V_al_current[:])), max(norm([results.C_prev[pI+1:p,:][:];results.CN_prev]),norm(results.V_al_prev[:]))
 end
 
-function outer_loop_update(results::UnconstrainedResults,solver::Solver)::Nothing
+function outer_loop_update(results::UnconstrainedResults,solver::Solver,max_constraint::Float64)::Nothing
     return nothing
 end
 
