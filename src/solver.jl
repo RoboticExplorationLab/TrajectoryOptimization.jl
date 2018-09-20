@@ -21,9 +21,9 @@ Contains all information to solver a trajectory optimization problem.
 The Solver type is immutable so is unique to the particular problem. However,
 anything in `Solver.opts` can be changed dynamically.
 """
-struct Solver
+struct Solver{O<:Objective}
     model::Model         # Dynamics model
-    obj::Objective       # Objective (cost function and constraints)
+    obj::O               # Objective (cost function and constraints)
     opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
     dt::Float64          # Time step
     fd::Function         # Discrete in place dynamics function, `fd(_,x,u)`
@@ -36,7 +36,7 @@ struct Solver
     integration::Symbol
     control_integration::Symbol
 
-    function Solver(model::Model, obj::Objective; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false)
+    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false) where {O}
         N, dt = calc_N(obj.tf, dt)
         n, m = model.n, model.m
         #
@@ -138,7 +138,7 @@ struct Solver
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
+        new{O}(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
     end
 end
 
