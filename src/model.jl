@@ -431,3 +431,21 @@ function _validate_bounds(max,min,n::Int)
     end
     return max, min
 end
+
+
+function to_static(obj::ConstrainedObjective)
+    n = size(obj.Q,1)
+    m = size(obj.R,2)
+    ConstrainedObjective(SMatrix{n,n}(Array(obj.Q)),SMatrix{m,m}(Array(obj.R)), SMatrix{n,n}(Array(obj.Qf)),
+        obj.tf, obj.x0, obj.xf,
+        u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
+        cI=obj.cI, cE=obj.cE,
+        use_terminal_constraint=obj.use_terminal_constraint)
+end
+
+function to_static(obj::UnconstrainedObjective)
+    n = size(obj.Q,1)
+    m = size(obj.R,2)
+    UnconstrainedObjective(SMatrix{n,n}(Array(obj.Q)),SMatrix{m,m}(Array(obj.R)), SMatrix{n,n}(Array(obj.Qf)),
+        obj.tf, obj.x0, obj.xf)
+end
