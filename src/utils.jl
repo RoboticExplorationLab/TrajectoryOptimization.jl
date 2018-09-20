@@ -112,13 +112,21 @@ function to_svecs(X::Array)
     [MArray{Tuple{s...}}(X[ax...,1]) for i = 1:N]
 end
 
-function copyto!(A::Vector{T}, B::Array) where {T<:Union{MArray,VecOrMat}}
+function copyto!(A::Vector{T}, B::Array{Float64}) where {T<:Union{MArray,VecOrMat}}
     N = size(B)[end]
     ax = axes(B)[1:end-1]
     for i = 1:N
         A[i] = B[ax...,i]
     end
     A
+end
+
+function copyto!(A::Vector{T}, B::Vector{T}) where {T<:VecOrMat{Float64}}
+    A .= copy.(B)
+end
+
+function copyto!(A::Vector{T}, B::Vector{T}) where {T<:SArray{S,Float64,N,L} where {S,N,L}}
+    A .= copy.(B)
 end
 
 function Array{Float64,3}(X::Vector{D}) where {D<:Diagonal}

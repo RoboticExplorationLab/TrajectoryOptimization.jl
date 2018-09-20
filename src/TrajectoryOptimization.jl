@@ -34,8 +34,10 @@ export
     SolverResults,
     ConstrainedObjective,
     UnconstrainedObjective,
-    ConstrainedResults,
-    UnconstrainedResults,
+    ConstrainedVectorResults,
+    UnconstrainedVectorResults,
+    ConstrainedStaticResults,
+    UnconstrainedStaticResults,
     SolverOptions
 
 # Primary methods

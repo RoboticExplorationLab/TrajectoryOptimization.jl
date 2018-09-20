@@ -153,8 +153,11 @@ function UnconstrainedResults(n::Int,m::Int,N::Int)
     UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
 end
 
-function copy(r::UnconstrainedResults)
-    UnconstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+function copy(r::UnconstrainedVectorResults)
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+end
+function copy(r::UnconstrainedStaticResults)
+    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
 end
 
 function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
@@ -204,7 +207,6 @@ end
 function UnconstrainedResults(res::UnconstrainedStaticResults)
     UnconstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
 end
-
 
 """
 $(TYPEDEF)
@@ -533,13 +535,82 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
 end
 
-function copy(r::ConstrainedResults)
-    ConstrainedResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
+function UnconstrainedResults(r::Union{UnconstrainedVectorResults, ConstrainedVectorResults})
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),
+        copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+end
+
+function UnconstrainedResults(r::Union{UnconstrainedStaticResults, ConstrainedStaticResults})
+    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),
+        copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+end
+
+function ConstrainedResults(r::UnconstrainedVectorResults)
+    ConstrainedVectorResults
+end
+
+function copy(r::ConstrainedVectorResults)
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
+        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
+end
+function copy(r::ConstrainedStaticResults)
+    ConstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
 
+"""
+$(SIGNATURES)
+    For infeasible solve, return an unconstrained results from a prior unconstrained or constrained results
+        -removes infeasible controls and infeasible components in Jacobians
+"""
+function new_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
+    n,m,N = get_sizes(solver)
+    if solver.opts.use_static
+        results = UnconstrainedStaticResults(n,m,N)
+    else
+        results = UnconstrainedVectorResults(n,m,N)
+    end
+    copyto!(results.X,r.X)
+    copyto!(results.xdot,r.xdot)
+    for k = 1:N
+        results.U[k] .= r.U[k][1:m]
+        results.Ac[k] .= r.Ac[k][1:n,1:n]
+        results.Bc[k] .= r.Bc[k][1:n,1:m]
+        k == N ? continue : nothing
+        results.fx[k] .= r.fx[k][1:n,1:n]
+        results.fu[k] .= r.fu[k][1:n,1:m]
+    end
+    results
+end
 
+"""
+$(SIGNATURES)
+    For infeasible solve, return a constrained results from a prior unconstrained or constrained results
+"""
+function new_constrained_results(r::SolverIterResults,solver::Solver)::ConstrainedIterResults
+    n,m,N = get_sizes(solver)
+    p = solver.obj.p
+    p_N = solver.obj.p_N
+    if solver.opts.use_static
+        results = ConstrainedStaticResults(n,m,p,N,p_N)
+    else
+        results = ConstrainedVectorResults(n,m,p,N,p_N)
+    end
+    copyto!(results.X,r.X)
+    copyto!(results.xdot,r.xdot)
+    for k = 1:N
+        results.U[k] .= r.U[k][1:m]
+        results.Ac[k] .= r.Ac[k][1:n,1:n]
+        results.Bc[k] .= r.Bc[k][1:n,1:m]
+        k == N ? continue : nothing
+        results.fx[k] .= r.fx[k][1:n,1:n]
+        results.fu[k] .= r.fu[k][1:n,1:m]
+        results.fv[k] .= r.fv[k][1:n,1:m]
+    end
+    results
+end
 
 
 #################################
@@ -551,8 +622,8 @@ $(TYPEDEF)
 Values cached for each solve iteration
 """
 mutable struct ResultsCache <: SolverResults #TODO look into making an immutable struct
-    X::Array{Float64,2}            # Final state trajectory (n,N)
-    U::Array{Float64,2}            # Final control trajectory (m,N-1)
+    X::Vector{Vector{Float64}}     # Final state trajectory (n,N)
+    U::Vector{Vector{Float64}}     # Final control trajectory (m,N-1)
     result::Array{SolverResults,1} # SolverResults at each solve iteration
     cost::Array{Float64,1}         # Objective cost at each solve iteration
     time::Array{Float64,1}         # iLQR inner loop evaluation time at each solve iteration
@@ -575,14 +646,15 @@ function ResultsCache(solver::Solver,n_allocation::Int64)
 end
 
 function ResultsCache(results::SolverIterResults,n_allocation::Int64)
-    m,n,N = size(results.K)
+    N = length(results.X)
+    m,n = size(results.K[1])
     #N += 1 # K is (m,n,N-1) <- changed K to be (m,n,N)
     ResultsCache(n,m,N,n_allocation)
 end
 
 function ResultsCache(n::Int, m::Int, N::Int, n_allocation::Int64)
-    X = zeros(n,N)
-    U = zeros(m, N)
+    X = [zeros(n) for k = 1:N]
+    U = [zeros(m) for k = 1:N]
     result = Array{SolverResults}(undef,n_allocation)
     cost = zeros(n_allocation)
     time = zeros(n_allocation)

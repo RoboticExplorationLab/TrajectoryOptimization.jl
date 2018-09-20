@@ -1,5 +1,6 @@
 # Set random seed
 using Random
+using Test
 Random.seed!(7)
 
 ### Solver Options ###
@@ -24,7 +25,7 @@ sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # Test final state from foh solve
-@test norm(solver_foh.obj.xf - sol_foh.X[:,end]) < 1e-3
+@test norm(solver_foh.obj.xf - sol_foh.X[end]) < 1e-3
 ##################################
 
 ## Control constraints pendulum (foh) ##
@@ -41,7 +42,7 @@ sol_foh_con, = TrajectoryOptimization.solve(solver_foh_con,U)
 sol_zoh_con, = TrajectoryOptimization.solve(solver_zoh_con,U)
 
 # Test final state from foh solve
-@test norm(sol_foh_con.X[:,end] - solver_foh_con.obj.xf) < 1e-3
+@test norm(sol_foh_con.X[end] - solver_foh_con.obj.xf) < 1e-3
 ########################################
 
 ## State and control constraints pendulum (foh) ##
@@ -58,7 +59,7 @@ sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
 # Test final state from foh solve
-@test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
+@test norm(sol_foh_con2.X[end] - solver_foh_con2.obj.xf) < 1e-3
 ###################################################
 
 ## Unconstrained infeasible start pendulum (foh) ##
@@ -66,12 +67,13 @@ solver_uncon_inf = Solver(model_p,obj_uncon_p,integration=:rk3_foh,dt=dt,opts=op
 
 # -initial state and control trajectories
 X_interp = line_trajectory(solver_uncon_inf.obj.x0,solver_uncon_inf.obj.xf,solver_uncon_inf.N)
-U = ones(solver_uncon_inf.model.m,solver_uncon_inf.N)
+U = ones(solver_uncon_inf.model.m, solver_uncon_inf.N)
 
 results_inf, = solve(solver_uncon_inf,X_interp,U)
 
 # Test final (dynamically constrained) state from foh solve
-@test norm(results_inf.X[:,end] - solver_uncon_inf.obj.xf) < 1e-3
+@test norm(results_inf.X[end] - solver_uncon_inf.obj.xf) < 1e-3
+
 ####################################################
 
 ## Infeasible start with constraints pendulum (foh) ##
@@ -91,7 +93,7 @@ U = ones(solver_con2.model.m,solver_con2.N)
 results_inf2, = solve(solver_con2,X_interp,U)
 
 # Test final state from foh solve
-@test norm(results_inf2.X[:,end] - solver_con2.obj.xf) < 1e-3
+@test norm(results_inf2.X[end] - solver_con2.obj.xf) < 1e-3
 ######################################################
 
 #----------------#
@@ -110,7 +112,7 @@ sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # Test final state from foh solve
-@test norm(sol_foh.X[:,end] - solver_foh.obj.xf) < 1e-3
+@test norm(sol_foh.X[end] - solver_foh.obj.xf) < 1e-3
 #####################################
 
 ## State and control constraints Dubins car (foh) ##
@@ -130,7 +132,7 @@ sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,U)
 
 # Test final state from foh solve
-@test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
+@test norm(sol_foh_con2.X[end] - solver_foh_con2.obj.xf) < 1e-3
 ####################################################
 
 ## Infeasible start with state and control constraints Dubins car (foh) ##
@@ -151,5 +153,7 @@ X_interp = line_trajectory(solver_foh_con2)
 sol_foh_con2, = TrajectoryOptimization.solve(solver_foh_con2,X_interp,U)
 sol_zoh_con2, = TrajectoryOptimization.solve(solver_zoh_con2,X_interp,U)
 
-@test norm(sol_foh_con2.X[:,end] - solver_foh_con2.obj.xf) < 1e-3
+sol_foh_con2.X[end]
+@test norm(sol_foh_con2.X[end] - solver_foh_con2.obj.xf) < 1e-3
+sol_foh_con2.X[end]
 ###########################################################################

@@ -133,4 +133,5 @@ X_interp = TrajectoryOptimization.line_trajectory(solver)
 ### Solve ###
 results,stats = TrajectoryOptimization.solve(solver,U)
 #############
-@test all(results.result[results.termination_index].C .< opts.constraint_tolerance)
+res = results.result[length(results)]
+@test all(TrajectoryOptimization.to_array(res.C) .< opts.constraint_tolerance)

@@ -513,6 +513,7 @@ function backwardpass_foh!(res::SolverIterResults,solver::Solver)
             end
 
             regularization_update!(res,solver,true)
+
             k = N-1
             Δv = [0. 0.]
 
@@ -719,28 +720,30 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
         # Qvv = Hermitian(Qvv)
         # regularization
-        if !isposdef(Array(Qvv))
+        # println(Qvv)
+        # println(ishermitian(Array(Qvv)))
+        if !isposdef(Hermitian(Array(Qvv)))
             if solver.opts.verbose
-                println("*NOT implemented* regularized (foh bp)")
+                println("regularized --not reliable-- (foh bp)")
             end
 
             regularization_update!(res,solver,true)
-            Δv = [0. 0.]
             k = N-1
+            Δv = [0. 0.]
 
-            ## Reset BCs ##
+            ## Reset BCs #TODO store S
             # Boundary conditions
             S[1:n,1:n] = Qf
             s[1:n] = Qf*(X[N]-xf)
 
             # Terminal constraints
-            if res isa ConstrainedResults || res isa ConstrainedIterResults
+            if res isa ConstrainedResults
                 C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
                 CxN = res.Cx_N
                 S[1:n,1:n] += CxN'*res.IμN*CxN
                 s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
             end
-            ################
+            ############
             continue
         end
 
@@ -804,7 +807,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
             K[1] = Array(-Quu_)\Array(Qxu_')
             b[1] = zeros(m,m)
-            d[1] = -Quu_\vec(Qu_)
+            d[1] = Array(-Quu_)\vec(Qu_)
 
             res.s[1] = Qx_ + Qxu_*vec(d[1])
 
