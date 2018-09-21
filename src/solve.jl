@@ -229,7 +229,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
             if solver.control_integration == :foh
-                Δv = backwardpass_foh!(results,solver) #TODO combine with square root
+                Δv = backwardpass_foh_alt!(results,solver) #TODO combine with square root
             elseif solver.opts.square_root
                 Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             else
@@ -549,6 +549,7 @@ $(SIGNATURES)
 """
 function λ_update_second_order!(results::ConstrainedResults,solver::Solver,mode::Symbol=:stage,k::Int64=0)
     # update stage multipliers
+    # println("***Second order λ update***")
     if mode == :stage && solver.control_integration == :zoh
         n = solver.model.n
         m = solver.model.m

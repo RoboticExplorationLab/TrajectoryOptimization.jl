@@ -5,7 +5,7 @@ opts.square_root = false
 opts.verbose = true
 opts.cache = true
 # opts.c1 = 1e-4
-# opts.c2 = 2.0
+opts.c2 = 5.0
 opts.cost_intermediate_tolerance = 1e-5
 opts.constraint_tolerance = 1e-5
 opts.cost_tolerance = 1e-5
@@ -34,8 +34,8 @@ opts.λ_second_order_update = true
 solver = Solver(model,obj_con,integration=:rk3,dt=dt,opts=opts)
 
 # -Initial state and control trajectories
-X_interp = ones(solver.model.n,solver.N)
-# X_interp = line_trajectory(solver.obj.x0,solver.obj.xf,solver.N).*(1 + 0.05*rand(solver.model.n,solver.N))
+# X_interp = ones(solver.model.n,solver.N)
+X_interp = line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
 U = ones(solver.model.m,solver.N)
 #######################################
 
@@ -44,7 +44,8 @@ U = ones(solver.model.m,solver.N)
 ############
 
 ### Results ###
-# using Plots
+# using Plotly
+# plot(results.cost[1:50])
 # plot(results.X',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="x(t)")
 # plot(results.U',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="u(t)")
 
