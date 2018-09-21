@@ -3,30 +3,37 @@ using Test
 n = rand(1:10)
 m = rand(1:10)
 N = rand(10:10:100)
-r = TrajectoryOptimization.UnconstrainedResults(n,m,N)
-@test size(r.X) == (n,N)
-@test size(r.U) == (m,N)
-@test size(r.K) == (m,n,N)
+r = TrajectoryOptimization.UnconstrainedVectorResults(n,m,N)
+@test (length(r.X[1]),length(r.X)) == (n,N)
+@test (length(r.U[1]),length(r.U)) == (m,N)
+@test (size(r.K[1])...,length(r.K)) == (m,n,N)
+
+r2 = TrajectoryOptimization.UnconstrainedVectorResults(n,m,N)
+r.X[1] .= 1:n
+copyto!(r2.X,r.X)
+@test r2.X[1] == 1:n  # Make sure the copy worked
+r2.X[1][1] = 4
+@test r.X[1][1] == 1  # Make sure the copies aren't linked
+
 
 # Static Results
-rs = TrajectoryOptimization.UnconstrainedResultsStatic(n,m,N)
+rs = TrajectoryOptimization.UnconstrainedStaticResults(n,m,N)
 @test length(rs.X) == N
 @test length(rs.X[1]) == n
 @test length(rs.U) == N
 @test length(rs.U[1]) == m
 @test size(rs.K[1]) == (m,n)
-UnconstrainedResults(rs)
 
 # Constrained Results
 p = rand(1:5)
 p_N = rand(1:5)
-r = ConstrainedResults(n,m,p,N,p_N)
-@test size(r.C) == (p,N)
-@test size(r.Iμ) == (p,p,N)
+r = ConstrainedVectorResults(n,m,p,N,p_N)
+@test (length(r.C[1]),length(r.C)) == (p,N)
+@test (size(r.Iμ[1])...,length(r.Iμ)) == (p,p,N)
 
 
 # Static Constrained
-r = TrajectoryOptimization.ConstrainedResultsStatic(n,m,p,N,p_N)
+r = TrajectoryOptimization.ConstrainedStaticResults(n,m,p,N,p_N)
 ax = axes(r.K[1])
 r.K[1][ax...]
 # maximum(maximum.((r.Iμ .* map((x)->x.>0, r.Iμ))))
@@ -38,14 +45,14 @@ solver = TrajectoryOptimization.Solver(model,obj,dt=0.1)
 N = solver.N
 N_iter = rand(10:10:100)
 rc = TrajectoryOptimization.ResultsCache(solver,N_iter)
-@test size(rc.X) == (n,N)
-@test size(rc.U) == (m,N)
+@test size(rc.X) == (N,)
+@test size(rc.U) == (N,)
 @test size(rc.cost) == (N_iter,)
 @test_throws MethodError TrajectoryOptimization.ResultsCache(solver,float(N_iter)) # Error on float size
 
 rc = TrajectoryOptimization.ResultsCache(n,m,N,N_iter)
-@test size(rc.X) == (n,N)
-@test size(rc.U) == (m,N)
+@test size(rc.X) == (N,)
+@test size(rc.U) == (N,)
 @test size(rc.cost) == (N_iter,)
 
 # Merge caches
@@ -78,10 +85,10 @@ TrajectoryOptimization.add_iter!(rc2,res,20.,1.,1)
 n1 = rc.termination_index
 n2 = rc2.termination_index
 for i = 1:n1
-    rc.result[i] = TrajectoryOptimization.ConstrainedResults(1,1,1,1)
+    rc.result[i] = TrajectoryOptimization.ConstrainedVectorResults(1,1,1,1)
 end
 for i = 1:n2
-    rc2.result[i] = TrajectoryOptimization.ConstrainedResults(2,2,2,2)
+    rc2.result[i] = TrajectoryOptimization.ConstrainedVectorResults(2,2,2,2)
 end
 R1 = TrajectoryOptimization.ResultsCache(rc.result[1],n1+n2)
 R1.result[n1] = copy(rc.result[n1]) # store all valid results
