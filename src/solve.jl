@@ -638,17 +638,24 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
         # Calculate B
         B = cz_aug[idx_active_aug,:]*(Lzz\cz_aug[idx_active_aug,:]')
 
-        # # update inactive multipliers (1st order)
-        # results.LAMBDA[idx_inactive_aug] = results.LAMBDA[idx_inactive_aug] + Matrix(Diagonal(results.MU[idx_inactive_aug]))*results.C[idx_inactive_aug]
-        #
-        # # update active multipliers (2nd order)
-        # results.LAMBDA[idx_active_aug] = results.LAMBDA[idx_active_aug] + B\results.C[idx_active_aug]
-        #
+        # Convert array of vector/matrices to array #TODO do something more intelligent
+        λ_array = to_array(results.LAMBDA)
+        μ_array = to_array(results.MU)
+        c_array = to_array(results.C)
+
+        # update inactive multipliers (1st order)
+            # results.LAMBDA[idx_inactive_aug] = results.LAMBDA[idx_inactive_aug] + Matrix(Diagonal(results.MU[idx_inactive_aug]))*results.C[idx_inactive_aug]
+        λ_array[idx_inactive_aug] = λ_array[idx_inactive_aug] + Matrix(Diagonal(μ_array[idx_inactive_aug]))*c_array[idx_inactive_aug]
+
+        # update active multipliers (2nd order)
+            # results.LAMBDA[idx_active_aug] = results.LAMBDA[idx_active_aug] + B\results.C[idx_active_aug]
+        λ_array[idx_active_aug] = λ_array[idx_active_aug] + B\c_array[idx_active_aug]
+
+        copyto!(results.LAMBDA,λ_array)
+
         for i = 1:N
-            results.LAMBDA[i] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[i] + results.MU[i]*results.C[i])) # λ_min < λ < λ_max
             results.LAMBDA[i][1:pI] = max.(0.0,results.LAMBDA[i][1:pI])
         end
-
     end
 
     # update for terminal constraints
@@ -696,7 +703,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
                 # Lagrange multiplier update (1st order)
                 if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
                     λ_update_first_order!(results,solver,ii,jj,:stage,:inequality)
-                    # results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, max(0.0, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj]))) # λ_min < λ < λ_max
                 end
 
                 # penalty update for 'individual' scheme
@@ -713,7 +719,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
                 # Lagrange multiplier update (1st order)
                 if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
                     λ_update_first_order!(results,solver,ii,jj,:stage,:equality)
-                    # results.LAMBDA[ii,jj] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.LAMBDA[ii,jj] + results.MU[ii,jj]*results.C[ii,jj])) # λ_min < λ < λ_max
                 end
 
                 # penalty update for 'individual' scheme
@@ -742,7 +747,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
     if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
         for ii = 1:solver.model.n
             λ_update_first_order!(results,solver,ii,0,:terminal)
-            # results.λN[ii] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[ii] + results.μN[ii].*results.CN[ii]))
         end
     end
 

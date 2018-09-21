@@ -243,9 +243,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
-    # Initialize stage cost expansion pieces
-
-
+    # TODO streamline
     k = N-1
     while k >= 1
         # (x,u)_{k-1}, (x,u)_{k}, (x,u)_{k+1} -> (w,r), (x,u), (y,v)

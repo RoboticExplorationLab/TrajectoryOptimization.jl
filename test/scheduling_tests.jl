@@ -30,7 +30,7 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-opts.λ_second_order_update = false
+opts.λ_second_order_update = true
 solver = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts)
 
 # -Initial state and control trajectories
