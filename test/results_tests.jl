@@ -14,9 +14,6 @@ copyto!(r2.X,r.X)
 @test r2.X[1] == 1:n  # Make sure the copy worked
 r2.X[1][1] = 4
 @test r.X[1][1] == 1  # Make sure the copies aren't linked
-@btime copyto!(r2.X,r.X)
-@btime r2.X .= copy.(r.X)
-using BenchmarkTools
 
 
 # Static Results

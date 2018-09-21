@@ -39,37 +39,21 @@ abstract type SolverVectorResults <: SolverIterResults end
 abstract type UnconstrainedIterResults <: SolverVectorResults end
 abstract type ConstrainedIterResults <: SolverVectorResults end
 
+
+
+
+################################################################################
+#                                                                              #
+#                   UNCONSTRAINED RESULTS STRUCTURE                            #
+#                                                                              #
+################################################################################
+
 """
 $(TYPEDEF)
 Values computed for an unconstrained optimization problem
 
 Time steps are always concatenated along the last dimension
 """
-struct UnconstrainedResults <: SolverIterResults
-    X::Array{Float64,2}  # States (n,N)
-    U::Array{Float64,2}  # Controls (m,N)
-    K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
-    b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
-    d::Array{Float64,2}  # Feedforward gain (m,N)
-    X_::Array{Float64,2} # Predicted states (n,N)
-    U_::Array{Float64,2} # Predicted controls (m,N)
-    S::Array{Float64,3}  # Cost-to-go hessian (n,n)
-    s::Array{Float64,2}  # Cost-to-go gradient (n,1)
-    fx::Array{Float64,3} # State jacobian (n,n,N)
-    fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
-    fv::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
-    Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N)
-    Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N)
-
-    xdot::Matrix # Continuous dynamics values (n,N)
-    ρ::Array{Float64,1}
-    dρ::Array{Float64,1}
-
-    function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
-    end
-end
-
 struct UnconstrainedStaticResults{N,M,NN,MM,NM} <: UnconstrainedIterResults
     X::Vector{MVector{N,Float64}}  # States (n,N)
     U::Vector{MVector{M,Float64}}  # Controls (m,N)
@@ -132,32 +116,26 @@ Construct results from sizes
 * m: number of controls
 * N: number of time steps
 """
-function UnconstrainedResults(n::Int,m::Int,N::Int)
-    X = zeros(n,N)
-    U = zeros(m,N)
-    K = zeros(m,n,N)
-    b = zeros(m,m,N)
-    d = zeros(m,N)
-    X_ = zeros(n,N)
-    U_ = zeros(m,N)
-    S = zeros(n,n,N)
-    s = zeros(n,N)
-    fx = zeros(n,n,N-1)
-    fu = zeros(n,m,N-1)
-    fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
-    Ac = zeros(n,n,N)
-    Bc = zeros(n,m,N)
-    xdot = zeros(n,N)
+function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
+    X  = [zeros(n)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for i = 1:N]
+    b  = [zeros(m,m) for i = 1:N]
+    d  = [zeros(m)   for i = 1:N]
+    X_ = [zeros(n)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N]
+    S  = [zeros(n,n) for i = 1:N]
+    s  = [zeros(n)   for i = 1:N]
+    fx = [zeros(n,n) for i = 1:N-1]
+    fu = [zeros(n,m) for i = 1:N-1]
+    fv = [zeros(n,m) for i = 1:N-1]
+    Ac = [zeros(n,n) for i = 1:N]
+    Bc = [zeros(n,m) for i = 1:N]
+    xdot  = [zeros(n) for i = 1:N]
     ρ = zeros(1)
     dρ = zeros(1)
-    UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
-end
 
-function copy(r::UnconstrainedVectorResults)
-    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
-end
-function copy(r::UnconstrainedStaticResults)
-    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
 end
 
 function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
@@ -182,31 +160,21 @@ function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
     UnconstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
 end
 
-function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
-    X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
-    K  = [zeros(m,n) for i = 1:N]
-    b  = [zeros(m,m) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
-    X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
-    S  = [zeros(n,n) for i = 1:N]
-    s  = [zeros(n)   for i = 1:N]
-    fx = [zeros(n,n) for i = 1:N-1]
-    fu = [zeros(n,m) for i = 1:N-1]
-    fv = [zeros(n,m) for i = 1:N-1]
-    Ac = [zeros(n,n) for i = 1:N]
-    Bc = [zeros(n,m) for i = 1:N]
-    xdot  = [zeros(n) for i = 1:N]
-    ρ = zeros(1)
-    dρ = zeros(1)
-
-    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+function copy(r::UnconstrainedVectorResults)
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+end
+function copy(r::UnconstrainedStaticResults)
+    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
 end
 
-function UnconstrainedResults(res::UnconstrainedStaticResults)
-    UnconstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
-end
+
+
+
+################################################################################
+#                                                                              #
+#                     CONSTRAINED RESULTS STRUCTURE                            #
+#                                                                              #
+################################################################################
 
 """
 $(TYPEDEF)
@@ -214,62 +182,6 @@ Values computed for a constrained optimization problem
 
 Time steps are always concatenated along the last dimension
 """
-struct ConstrainedResults <: SolverIterResults
-    X::Array{Float64,2}  # States (n,N)
-    U::Array{Float64,2}  # Controls (m,N)
-    K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
-    b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
-    d::Array{Float64,2}  # Feedforward gain (m,N)
-    X_::Array{Float64,2} # Predicted states (n,N)
-    U_::Array{Float64,2} # Predicted controls (m,N)
-    S::Array{Float64,3}  # Cost-to-go hessian (n,n)
-    s::Array{Float64,2}  # Cost-to-go gradient (n,1)
-
-    fx::Array{Float64,3}
-    fu::Array{Float64,3}
-    fv::Array{Float64,3}
-
-    Ac::Array{Float64,3}
-    Bc::Array{Float64,3}
-
-    xdot::Matrix             # Continous dynamics (n,N)
-
-    C::Array{Float64,2}      # Constraint values (p,N)
-    C_prev::Array{Float64,2} # Previous constraint values (p,N)
-    Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N)
-    LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N)
-    MU::Array{Float64,2}     # Penalty terms (p,N)
-
-    CN::Array{Float64,1}      # Final constraint values (p_N,)
-    CN_prev::Array{Float64,1} # Previous final constraint values (p_N,)
-    IμN::Array{Float64,2}     # Final constraint penalty matrix (p_N,p_N)
-    λN::Array{Float64,1}      # Final lagrange multipliers (p_N,)
-    μN::Array{Float64,1}      # Final penalty terms (p_N,)
-
-    Cx::Array{Float64,3}
-    Cu::Array{Float64,3}
-
-    Cx_N::Array{Float64,2}
-
-    ρ::Array{Float64,1}
-    dρ::Array{Float64,1}
-
-    V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
-    V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
-
-    function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-    end
-end
-
-function ConstrainedResults()
-    ConstrainedResults(0,0,0,0)
-end
-
-isempty(res::ConstrainedResults) = isempty(res.X) && isempty(res.U)
-
-# {N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}
-
 struct ConstrainedStaticResults{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN} <: ConstrainedIterResults
     X::Vector{MVector{N,Float64}}  # States (n,N)
     U::Vector{MVector{M,Float64}}  # Controls (m,N)
@@ -373,6 +285,10 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     end
 end
 
+isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
+
+ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0)
+
 
 """
 $(SIGNATURES)
@@ -385,109 +301,6 @@ Construct results from sizes
 * N: number of time steps
 * p_N (default=n): number of terminal constraints
 """
-function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
-    X = zeros(n,N)
-    U = zeros(m,N)
-    K = zeros(m,n,N)
-    b = zeros(m,m,N)
-    d = zeros(m,N)
-    X_ = zeros(n,N)
-    U_ = zeros(m,N)
-    S = zeros(n,n,N)
-    s = zeros(n,N)
-
-    fx = zeros(n,n,N-1)
-    fu = zeros(n,m,N-1)
-    fv = zeros(n,m,N-1)
-
-    Ac = zeros(n,n,N)
-    Bc = zeros(n,m,N)
-
-    xdot = zeros(n,N)
-
-    # Stage Constraints
-    C = zeros(p,N)
-    C_prev = zeros(p,N)
-    Iμ = zeros(p,p,N)
-    LAMBDA = zeros(p,N)
-    MU = ones(p,N)
-
-    # Terminal Constraints (make 2D so it works well with stage values)
-    C_N = zeros(p_N)
-    C_N_prev = zeros(p_N)
-    Iμ_N = zeros(p_N,p_N)
-    λ_N = zeros(p_N)
-    μ_N = ones(p_N)
-
-    cx = zeros(p,n,N)
-    cu = zeros(p,m,N)
-    cxn = zeros(p_N,n)
-
-    ρ = zeros(1)
-    dρ = zeros(1)
-
-    V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
-    V_al_current = zeros(p,N)
-
-    ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
-        C,C_prev,Iμ,LAMBDA,MU,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-
-end
-
-function ConstrainedResults(res::ConstrainedStaticResults)
-    ConstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
-end
-
-
-
-function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
-    X  = [@MVector zeros(n)   for i = 1:N]
-    U  = [@MVector zeros(m)   for i = 1:N]
-    K  = [@MMatrix zeros(m,n) for i = 1:N]
-    b  = [@MMatrix zeros(m,m) for i = 1:N]
-    d  = [@MVector zeros(m)   for i = 1:N]
-    X_ = [@MVector zeros(n)   for i = 1:N]
-    U_ = [@MVector zeros(m)   for i = 1:N]
-    S  = [@MMatrix zeros(n,n) for i = 1:N]
-    s  = [@MVector zeros(n)   for i = 1:N]
-    fx = [@MMatrix zeros(n,n) for i = 1:N-1]
-    fu = [@MMatrix zeros(n,m) for i = 1:N-1]
-    fv = [@MMatrix zeros(n,m) for i = 1:N-1]
-    Ac = [@MMatrix zeros(n,n) for i = 1:N]
-    Bc = [@MMatrix zeros(n,m) for i = 1:N]
-    xdot  = [@MVector zeros(n)   for i = 1:N]
-
-    # Stage Constraints
-    C      = [@MVector zeros(p)  for i = 1:N]
-    C_prev = [@MVector zeros(p)  for i = 1:N]
-    Iμ     = [@MMatrix zeros(p,p) for i = 1:N]
-    LAMBDA = [@MVector zeros(p)  for i = 1:N]
-    MU     = [@MVector ones(p)   for i = 1:N]
-
-    # Terminal Constraints (make 2D so it works well with stage values)
-    C_N      = @MVector zeros(p_N)
-    C_N_prev = @MVector zeros(p_N)
-    Iμ_N     = @MMatrix zeros(p_N,p_N)
-    λ_N      = @MVector zeros(p_N)
-    μ_N      = @MVector ones(p_N)
-
-    cx  = [@MMatrix zeros(p,n)   for i = 1:N]
-    cu  = [@MMatrix zeros(p,m)   for i = 1:N]
-    cxn = @MMatrix zeros(p_N,n)
-
-    ρ = zeros(1)
-    dρ = zeros(1)
-
-    V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
-    V_al_current = zeros(p,N)
-
-    ConstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
-        C,C_prev,Iμ,LAMBDA,MU,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-
-end
-
 function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X  = [zeros(n)   for i = 1:N]
     U  = [zeros(m)   for i = 1:N]
@@ -535,18 +348,51 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
 
 end
 
-function UnconstrainedResults(r::Union{UnconstrainedVectorResults, ConstrainedVectorResults})
-    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),
-        copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
-end
+function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
+    X  = [@MVector zeros(n)   for i = 1:N]
+    U  = [@MVector zeros(m)   for i = 1:N]
+    K  = [@MMatrix zeros(m,n) for i = 1:N]
+    b  = [@MMatrix zeros(m,m) for i = 1:N]
+    d  = [@MVector zeros(m)   for i = 1:N]
+    X_ = [@MVector zeros(n)   for i = 1:N]
+    U_ = [@MVector zeros(m)   for i = 1:N]
+    S  = [@MMatrix zeros(n,n) for i = 1:N]
+    s  = [@MVector zeros(n)   for i = 1:N]
+    fx = [@MMatrix zeros(n,n) for i = 1:N-1]
+    fu = [@MMatrix zeros(n,m) for i = 1:N-1]
+    fv = [@MMatrix zeros(n,m) for i = 1:N-1]
+    Ac = [@MMatrix zeros(n,n) for i = 1:N]
+    Bc = [@MMatrix zeros(n,m) for i = 1:N]
+    xdot  = [@MVector zeros(n)   for i = 1:N]
 
-function UnconstrainedResults(r::Union{UnconstrainedStaticResults, ConstrainedStaticResults})
-    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),
-        copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
-end
+    # Stage Constraints
+    C      = [@MVector zeros(p)  for i = 1:N]
+    C_prev = [@MVector zeros(p)  for i = 1:N]
+    Iμ     = [@MMatrix zeros(p,p) for i = 1:N]
+    LAMBDA = [@MVector zeros(p)  for i = 1:N]
+    MU     = [@MVector ones(p)   for i = 1:N]
 
-function ConstrainedResults(r::UnconstrainedVectorResults)
-    ConstrainedVectorResults
+    # Terminal Constraints (make 2D so it works well with stage values)
+    C_N      = @MVector zeros(p_N)
+    C_N_prev = @MVector zeros(p_N)
+    Iμ_N     = @MMatrix zeros(p_N,p_N)
+    λ_N      = @MVector zeros(p_N)
+    μ_N      = @MVector ones(p_N)
+
+    cx  = [@MMatrix zeros(p,n)   for i = 1:N]
+    cu  = [@MMatrix zeros(p,m)   for i = 1:N]
+    cxn = @MMatrix zeros(p_N,n)
+
+    ρ = zeros(1)
+    dρ = zeros(1)
+
+    V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
+    V_al_current = zeros(p,N)
+
+    ConstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
+        C,C_prev,Iμ,LAMBDA,MU,
+        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+
 end
 
 function copy(r::ConstrainedVectorResults)
@@ -613,9 +459,14 @@ function new_constrained_results(r::SolverIterResults,solver::Solver)::Constrain
 end
 
 
-#################################
-#        RESULTS CACHE          #
-#################################
+
+
+
+################################################################################
+#                                                                              #
+#                          RESULTS CACHE STRUCTURE                             #
+#                                                                              #
+################################################################################
 
 """
 $(TYPEDEF)
@@ -752,6 +603,13 @@ function check_multipliers(results,solver)
     return nothing
 end
 
+
+################################################################################
+#                                                                              #
+#                        DIRCOL VARIABLES STRUCTURE                            #
+#                                                                              #
+################################################################################
+
 struct DircolVars
     Z::Vector{Float64}
     X::SubArray{Float64}
@@ -839,3 +697,160 @@ function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
     weights = get_weights(method,N_)
     DircolResults(vars,Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
 end
+
+
+# struct UnconstrainedResults <: SolverIterResults
+#     X::Array{Float64,2}  # States (n,N)
+#     U::Array{Float64,2}  # Controls (m,N)
+#     K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
+#     b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
+#     d::Array{Float64,2}  # Feedforward gain (m,N)
+#     X_::Array{Float64,2} # Predicted states (n,N)
+#     U_::Array{Float64,2} # Predicted controls (m,N)
+#     S::Array{Float64,3}  # Cost-to-go hessian (n,n)
+#     s::Array{Float64,2}  # Cost-to-go gradient (n,1)
+#     fx::Array{Float64,3} # State jacobian (n,n,N)
+#     fu::Array{Float64,3} # Control (k) jacobian (n,m,N-1)
+#     fv::Array{Float64,3} # Control (k+1) jacobian (n,n,N-1)
+#     Ac::Array{Float64,3} # Continous dynamics state jacobian (n,n,N)
+#     Bc::Array{Float64,3} # Continuous dynamics control jacobian (n,n,N)
+#
+#     xdot::Matrix # Continuous dynamics values (n,N)
+#     ρ::Array{Float64,1}
+#     dρ::Array{Float64,1}
+#
+#     function UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+#         new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+#     end
+# end
+#
+# function UnconstrainedResults(n::Int,m::Int,N::Int)
+#     X = zeros(n,N)
+#     U = zeros(m,N)
+#     K = zeros(m,n,N)
+#     b = zeros(m,m,N)
+#     d = zeros(m,N)
+#     X_ = zeros(n,N)
+#     U_ = zeros(m,N)
+#     S = zeros(n,n,N)
+#     s = zeros(n,N)
+#     fx = zeros(n,n,N-1)
+#     fu = zeros(n,m,N-1)
+#     fv = zeros(n,m,N-1) # gradient with respect to u_{k+1}
+#     Ac = zeros(n,n,N)
+#     Bc = zeros(n,m,N)
+#     xdot = zeros(n,N)
+#     ρ = zeros(1)
+#     dρ = zeros(1)
+#     UnconstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+# end
+#
+#
+# function UnconstrainedResults(res::UnconstrainedStaticResults)
+#     UnconstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
+# end
+# struct ConstrainedResults <: SolverIterResults
+#     X::Array{Float64,2}  # States (n,N)
+#     U::Array{Float64,2}  # Controls (m,N)
+#     K::Array{Float64,3}  # Feedback (state) gain (m,n,N)
+#     b::Array{Float64,3}  # Feedback (control) gain (m,m,N)
+#     d::Array{Float64,2}  # Feedforward gain (m,N)
+#     X_::Array{Float64,2} # Predicted states (n,N)
+#     U_::Array{Float64,2} # Predicted controls (m,N)
+#     S::Array{Float64,3}  # Cost-to-go hessian (n,n)
+#     s::Array{Float64,2}  # Cost-to-go gradient (n,1)
+#
+#     fx::Array{Float64,3}
+#     fu::Array{Float64,3}
+#     fv::Array{Float64,3}
+#
+#     Ac::Array{Float64,3}
+#     Bc::Array{Float64,3}
+#
+#     xdot::Matrix             # Continous dynamics (n,N)
+#
+#     C::Array{Float64,2}      # Constraint values (p,N)
+#     C_prev::Array{Float64,2} # Previous constraint values (p,N)
+#     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N)
+#     LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N)
+#     MU::Array{Float64,2}     # Penalty terms (p,N)
+#
+#     CN::Array{Float64,1}      # Final constraint values (p_N,)
+#     CN_prev::Array{Float64,1} # Previous final constraint values (p_N,)
+#     IμN::Array{Float64,2}     # Final constraint penalty matrix (p_N,p_N)
+#     λN::Array{Float64,1}      # Final lagrange multipliers (p_N,)
+#     μN::Array{Float64,1}      # Final penalty terms (p_N,)
+#
+#     Cx::Array{Float64,3}
+#     Cu::Array{Float64,3}
+#
+#     Cx_N::Array{Float64,2}
+#
+#     ρ::Array{Float64,1}
+#     dρ::Array{Float64,1}
+#
+#     V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
+#     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
+#
+#     function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+#         new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+#     end
+# end
+#
+# function ConstrainedResults()
+#     ConstrainedResults(0,0,0,0)
+# end
+#
+# function ConstrainedResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
+#     X = zeros(n,N)
+#     U = zeros(m,N)
+#     K = zeros(m,n,N)
+#     b = zeros(m,m,N)
+#     d = zeros(m,N)
+#     X_ = zeros(n,N)
+#     U_ = zeros(m,N)
+#     S = zeros(n,n,N)
+#     s = zeros(n,N)
+#
+#     fx = zeros(n,n,N-1)
+#     fu = zeros(n,m,N-1)
+#     fv = zeros(n,m,N-1)
+#
+#     Ac = zeros(n,n,N)
+#     Bc = zeros(n,m,N)
+#
+#     xdot = zeros(n,N)
+#
+#     # Stage Constraints
+#     C = zeros(p,N)
+#     C_prev = zeros(p,N)
+#     Iμ = zeros(p,p,N)
+#     LAMBDA = zeros(p,N)
+#     MU = ones(p,N)
+#
+#     # Terminal Constraints (make 2D so it works well with stage values)
+#     C_N = zeros(p_N)
+#     C_N_prev = zeros(p_N)
+#     Iμ_N = zeros(p_N,p_N)
+#     λ_N = zeros(p_N)
+#     μ_N = ones(p_N)
+#
+#     cx = zeros(p,n,N)
+#     cu = zeros(p,m,N)
+#     cxn = zeros(p_N,n)
+#
+#     ρ = zeros(1)
+#     dρ = zeros(1)
+#
+#     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
+#     V_al_current = zeros(p,N)
+#
+#     ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
+#         C,C_prev,Iμ,LAMBDA,MU,
+#         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+#
+# end
+#
+# function ConstrainedResults(res::ConstrainedStaticResults)
+#     ConstrainedResults([convert(Array,getfield(res,name)) for name in fieldnames(typeof(res))]...)
+# end

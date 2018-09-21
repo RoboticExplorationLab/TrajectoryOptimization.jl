@@ -20,7 +20,7 @@ $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
-function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
+function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
 
     # If initialize zero controls if none are passed in
     if isempty(U0)
@@ -42,7 +42,7 @@ function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverRe
     return results, stats
 end
 
-function solve(solver::Solver,U0::VecOrMat; prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
+function solve(solver::Solver,U0::VecOrMat; prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
     _solve(solver,U0,prevResults=prevResults)
 end
 
@@ -57,7 +57,7 @@ end
 $(SIGNATURES)
 Solve constrained optimization problem specified by `solver`
 """
-function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); prevResults::SolverResults=ConstrainedResults())::Tuple{SolverResults,Dict}
+function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters

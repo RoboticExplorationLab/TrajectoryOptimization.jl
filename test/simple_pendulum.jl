@@ -131,14 +131,14 @@ U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = TrajectoryOptimization.ConstrainedResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
-results_infeasible.U[:,:] = [U_infeasible;ui]
+results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
+copyto!(results_infeasible.U, [U_infeasible;ui])
 # solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 
 @test all(ui[1,1:end-1] .== ui[1,1]) # special case for state trajectory of all ones, control 1 should all be same
 @test all(ui[2,1:end-1] .== ui[2,1]) # special case for state trajectory of all ones, control 2 should all be same
-@test all(results_infeasible.X .== X_infeasible)
+@test all(TrajectoryOptimization.to_array(results_infeasible.X) == X_infeasible)
 # rolled out trajectory should be equivalent to infeasible trajectory after applying augmented controls
 
 ### OTHER TESTS ###

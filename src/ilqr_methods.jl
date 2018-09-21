@@ -70,33 +70,6 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     return true
 end
 
-function rollout!(X::Matrix, U::Matrix, solver::Solver)
-    infeasible = solver.model.m != size(U,1)
-    N = solver.N
-    m = solver.model.m
-    n = solver.model.n
-
-    X[:,1] = solver.obj.x0
-    for k = 1:N-1
-        if solver.control_integration == :foh
-            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k], U[1:m,k+1])
-        else
-            solver.fd(view(X,:,k+1), X[:,k], U[1:m,k])
-        end
-
-        if infeasible
-            X[:,k+1] .+= U[m+1:m+n,k]
-        end
-
-        # Check that rollout has not diverged
-        if ~all(isfinite, X[:,k+1]) || ~all(isfinite, U[:,k]) || any(X[:,k+1] .> solver.opts.max_state_value) || any(U[:,k] .> solver.opts.max_control_value)
-            return false
-        end
-    end
-
-    return true
-end
-
 """
 $(SIGNATURES)
 Roll out the dynamics using the gains and optimal controls computed by the
@@ -105,58 +78,6 @@ Updates `res.X` by propagating the dynamics at each timestep, by applying the
 gains `res.K` and `res.d` to the difference between states
 Will return a flag indicating if the values are finite for all time steps.
 """
-function rollout!(res::SolverResults,solver::Solver,alpha::Float64)
-    infeasible = solver.model.m != size(res.U,1)
-    N = solver.N; m = solver.model.m; n = solver.model.n
-
-    if infeasible
-        m += n
-    end
-
-    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
-
-    X_[:,1] = solver.obj.x0;
-
-    if solver.control_integration == :foh
-        b = res.b
-        du = zeros(m)
-        dv = zeros(m)
-        du = alpha*d[:,1]
-        U_[:,1] .= U[:,1] + du
-    end
-
-    for k = 2:N
-        delta = X_[:,k-1] - X[:,k-1]
-
-        if solver.control_integration == :foh
-            dv .= K[:,:,k]*delta + b[:,:,k]*du + alpha*d[:,k]
-            U_[:,k] .= U[:,k] + dv
-            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1], U_[1:solver.model.m,k])
-            du = dv
-        else
-            U_[:, k-1] = U[:, k-1] - K[:,:,k-1]*delta - alpha*d[:,k-1]
-            solver.fd(view(X_,:,k), X_[:,k-1], U_[1:solver.model.m,k-1])
-        end
-
-
-        if infeasible
-            X_[:,k] .+= U_[solver.model.m+1:solver.model.m+n,k-1]
-        end
-
-        # Check that rollout has not diverged
-        if ~(maximum(X_[:,k]) < solver.opts.max_state_value || maximum(U_[:,k]) < solver.opts.max_control_value)
-            return false
-        end
-    end
-
-    # Calculate state derivatives
-    if solver.control_integration == :foh
-        calculate_derivatives!(res,solver,X_,U_)
-    end
-
-    return true
-end
-
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     infeasible = solver.model.m != size(res.U[1],1)
     N = solver.N; m = solver.model.m; n = solver.model.n
@@ -230,39 +151,6 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
-function _cost(solver::Solver,res::SolverIterResults,X::Array{Float64,2},U::Array{Float64,2})
-    # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-    obj = solver.obj
-    dt = solver.dt
-
-    if size(U,1) != m
-        m += n
-    end
-
-    R = getR(solver)
-
-    J = 0.0
-    for k = 1:N-1
-        if solver.control_integration == :foh
-
-            xdot1 = res.xdot[:,k]
-            xdot2 = res.xdot[:,k+1]
-
-            Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
-            Um = (U[:,k] + U[:,k+1])/2
-
-            J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
-        else
-            J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
-        end
-    end
-
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-
-    return J
-end
-
 function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
@@ -297,22 +185,6 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
 end
 
 """ $(SIGNATURES) Compute the Constraints Cost """
-function cost_constraints(solver::Solver, res::ConstrainedResults)
-    N = solver.N
-    J = 0.0
-    for k = 1:N-1
-        J += (0.5*res.C[:,k]'*res.Iμ[:,:,k]*res.C[:,k] + res.LAMBDA[:,k]'*res.C[:,k])
-    end
-
-    if solver.control_integration == :foh
-        J += (0.5*res.C[:,N]'*res.Iμ[:,:,N]*res.C[:,N] + res.LAMBDA[:,N]'*res.C[:,N])
-    end
-
-    J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
-
-    return J
-end
-
 function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
@@ -327,15 +199,6 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
 
     return J
-end
-
-
-function cost(solver::Solver, res::UnconstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    _cost(solver,res,X,U)
-end
-
-function cost(solver::Solver, res::ConstrainedResults, X::Array{Float64,2}=res.X, U::Array{Float64,2}=res.U)
-    _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
 function cost(solver::Solver, res::UnconstrainedIterResults, X::Vector=res.X, U::Vector=res.U)
@@ -393,14 +256,6 @@ end
 $(SIGNATURES)
     Calculate state derivatives (xdot)
 """
-function calculate_derivatives!(results::SolverResults, solver::Solver, X::Matrix, U::Matrix)
-    N = size(X,2)
-    n,m = get_sizes(solver)
-    for k = 1:N
-        solver.fc(view(results.xdot,:,k),X[:,k],U[1:m,k])
-    end
-end
-
 function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
     n,m,N = get_sizes(solver)
     for k = 1:N
@@ -413,27 +268,6 @@ $(SIGNATURES)
 Calculate Jacobians prior to the backwards pass
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
-function calculate_jacobians!(res::ConstrainedResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
-    N = solver.N
-    for k = 1:N-1
-        if solver.control_integration == :foh
-            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
-            res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
-        else
-            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
-        end
-        solver.c_jacobian(view(res.Cx,:,:,k), view(res.Cu,:,:,k), res.X[:,k], res.U[:,k])
-    end
-
-    if solver.control_integration == :foh
-        res.Ac[:,:,N], res.Bc[:,:,N] = solver.Fc(res.X[:,N], res.U[:,N])
-        solver.c_jacobian(view(res.Cx,:,:,N), view(res.Cu,:,:,N), res.X[:,N], res.U[:,N])
-    end
-
-    solver.c_jacobian(res.Cx_N, res.X[:,N])
-    return nothing
-end
-
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
     N = solver.N
     for k = 1:N-1
@@ -452,23 +286,6 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     end
 
     solver.c_jacobian(res.Cx_N, res.X[N])
-    return nothing
-end
-
-function calculate_jacobians!(res::UnconstrainedResults, solver::Solver, infeasible=false)::Nothing
-    N = solver.N
-    for k = 1:N-1
-        if solver.control_integration == :foh
-            res.fx[:,:,k], res.fu[:,:,k], res.fv[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k], res.U[:,k+1])
-            res.Ac[:,:,k], res.Bc[:,:,k] = solver.Fc(res.X[:,k], res.U[:,k])
-        else
-            res.fx[:,:,k], res.fu[:,:,k] = solver.Fd(res.X[:,k], res.U[:,k])
-        end
-    end
-    if solver.control_integration == :foh
-        res.Ac[:,:,N], res.Bc[:,:,N] = solver.Fc(res.X[:,N], res.U[:,N])
-    end
-
     return nothing
 end
 
@@ -497,41 +314,6 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
-
-    p, N = size(res.C) # note, C is now (p,N)
-    c = solver.c_fun
-    pI = solver.obj.pI
-
-    if solver.control_integration == :foh
-        final_index = N
-    else
-        final_index = N-1
-    end
-
-    for k = 1:final_index
-        c(view(res.C,:,k), X[:,k], U[:,k]) # update results with constraint evaluations
-        # Inequality constraints [see equation ref]
-        for j = 1:pI
-            if res.C[j,k] > 0.0 || res.LAMBDA[j,k] > 0.0
-                res.Iμ[j,j,k] = res.MU[j,k] # active (or previously active) inequality constraints are penalized
-            else
-                res.Iμ[j,j,k] = 0. # inactive inequality constraints are not penalized
-            end
-        end
-
-        # Equality constraints
-        for j = pI+1:p
-            res.Iμ[j,j,k] = res.MU[j,k] # equality constraints are penalized
-        end
-    end
-
-    # Terminal constraint
-    c(res.CN, X[:,N])
-    res.IμN .= Matrix(Diagonal(res.μN))
-    return nothing # TODO allow for more general terminal constraint
-end
-
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
 
     N = length(res.C) # note, C is now (p,N)
@@ -566,10 +348,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
     c(res.CN,X[N])
     res.IμN .= Diagonal(res.μN)
     return nothing # TODO allow for more general terminal constraint
-end
-
-function update_constraints!(res::UnconstrainedResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
-    return nothing
 end
 
 function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
@@ -795,24 +573,12 @@ Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
-function max_violation(results::ConstrainedResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
-    if size(results.CN,1) != 0
-        return max(norm(results.C.*(results.Iμ[inds,:] .!= 0),Inf), norm(results.CN,Inf)) # TODO replace concatenation
-    else
-        return norm(results.C.*(results.Iμ[inds,:] .!= 0),Inf)
-    end
-end
-
 function max_violation(results::ConstrainedIterResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
     if size(results.CN,1) != 0
         return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), maximum(abs.(results.CN)))
     else
         return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
     end
-end
-
-function max_violation(results::UnconstrainedResults)
-    return 0.0
 end
 
 function max_violation(results::UnconstrainedIterResults)
