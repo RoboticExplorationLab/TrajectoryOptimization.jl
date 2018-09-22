@@ -542,14 +542,14 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
 
         Q = solver.obj.Q
         R = solver.obj.R
-        if size(results.U,1) != m
+        if length(results.U[1]) != m
             R = getR(solver)
             m = size(R,1)
         end
         dt = solver.dt
 
         pI = solver.obj.pI
-        p = size(results.C[1],1)
+        p = length(results.C[1])
 
         c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[k],[results.Cx[k] results.Cu[k]],p,pI,n+m)
         lzz = [dt*Q zeros(n,m); zeros(m,n) dt*R]
@@ -570,7 +570,7 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
         m = solver.model.m
 
         # infeasible
-        if size(results.U[1],1) != m
+        if length(results.U[1]) != m
             m += n
         end
         q = n + m
