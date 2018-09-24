@@ -167,6 +167,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     J_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
     t_solve_start = time_ns()
+    λ_second_order_idx = Vector{Int64}()
+
 
     if solver.opts.cache
         # Initialize cache and store initial trajectories and cost
@@ -183,6 +185,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     dJ = Inf
     gradient = Inf
     Δv = Inf
+    sqrt_tolerance = false
 
     for k = 1:solver.opts.iterations_outerloop
         iter_outer = k
@@ -327,7 +330,16 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         #      OUTER LOOP UPDATE     #
         #****************************#
 
-        outer_loop_update(results,solver,c_max)
+        # check sqrt convergence criteria for second order lagrange multiplier update
+        if solver.opts.λ_second_order_update
+            if c_max <= sqrt(solver.opts.constraint_tolerance) && (dJ <= sqrt(solver.opts.cost_tolerance) || gradient <= sqrt(solver.opts.gradient_tolerance))
+                sqrt_tolerance = true
+                push!(λ_second_order_idx, iter-1)
+            end
+        end
+
+        # update multiplier and penalty terms
+        outer_loop_update(results,solver,sqrt_tolerance)
 
         if solver.opts.cache
             # Store current results and performance parameters
@@ -380,7 +392,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                  "runtime"=>float(time_ns() - t_solve_start)/1e9,
                  "setup_time"=>float(time_setup)/1e9,
                  "cost"=>J_hist,
-                 "c_max"=>c_max_hist)
+                 "c_max"=>c_max_hist,
+                 "λ_second_order"=>λ_second_order_idx)
 
     if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
         println("*Solve reached max iterations*")
@@ -419,6 +432,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             stats["setup_time"] += stats_feasible["setup_time"]
             append!(stats["cost"], stats_feasible["cost"])
             append!(stats["c_max"], stats_feasible["c_max"])
+            append!(stats["λ_second_order"],stats_feasible["λ_second_order"])
         end
 
         # return (now) feasible results
@@ -485,11 +499,11 @@ $(SIGNATURES)
     Return constraints, Jacobians, and numbers relating to the current active constraints
     - inequality constraints are defined as c() < 0
 """
-function get_active_constraints(c::AbstractVector,cx::AbstractMatrix,p::Int64,pI::Int64,n::Int64)
+function get_active_constraints(c::AbstractVector,cx::AbstractMatrix,Iμ::AbstractMatrix,p::Int64,pI::Int64,n::Int64)
     # create a mask for inactive inequality constraints
     mask = ones(Bool,p)
     for i = 1:pI
-        if c[i] <= 0.0
+        if c[i] <= 0 && Iμ[i,i] == 0.0
             mask[i] = false
         end
     end
@@ -551,13 +565,12 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
         pI = solver.obj.pI
         p = length(results.C[1])
 
-        c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[k],[results.Cx[k] results.Cu[k]],p,pI,n+m)
+        c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[k],[results.Cx[k] results.Cu[k]],results.Iμ[k],p,pI,n+m)
         lzz = [dt*Q zeros(n,m); zeros(m,n) dt*R]
         Lzz = lzz + cz_active'*results.Iμ[k][idx_active,idx_active]*cz_active
         B = cz_active*(Lzz\cz_active')
 
         results.LAMBDA[k][idx_active] = results.LAMBDA[k][idx_active] + B\results.C[k][idx_active]
-        results.LAMBDA[k][idx_inactive] = results.LAMBDA[k][idx_inactive] + Matrix(Diagonal(results.MU[k][idx_inactive]))*results.C[k][idx_inactive]
 
         # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
         results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
@@ -590,10 +603,10 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
             Bc2 = results.Bc[i+1]
 
             # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
-            Lxx = dt/6*Q + (dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1)) # l(x,u) and l(xm,um) terms
-            Luu = dt/6*R + (dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)) # l(x,u) and l(xm,um) terms
-            Lyy = dt/6*Q + (dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)) # l(y,v) and l(xm,um) terms
-            Lvv = dt/6*R + (dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)) # l(y,v) and l(xm,um) terms
+            Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1) # l(x,u) and l(xm,um) terms
+            Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5) # l(x,u) and l(xm,um) terms
+            Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2) # l(y,v) and l(xm,um) terms
+            Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5) # l(y,v) and l(xm,um) terms
 
             Lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
             Lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
@@ -619,11 +632,11 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
         idx_inactive_aug = []
 
         for i = 1:N
-            c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints(results.C[i],[results.Cx[i] results.Cu[i]],p,pI,q)
+            c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints(results.C[i],[results.Cx[i] results.Cu[i]],results.Iμ[i],p,pI,q)
 
             Lzz[q*(i-1)+1:q*(i-1)+q, q*(i-1)+1:q*(i-1)+q] += cz_active'*results.Iμ[i][idx_active,idx_active]*cz_active
 
-            idx = (i-1)*p .+ idx_active
+            idx = idx_active .+ (i-1)*p
 
             if p_active > 0
                 c_aug[idx] = c_active
@@ -645,11 +658,10 @@ function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,
 
         # update inactive multipliers (1st order)
             # results.LAMBDA[idx_inactive_aug] = results.LAMBDA[idx_inactive_aug] + Matrix(Diagonal(results.MU[idx_inactive_aug]))*results.C[idx_inactive_aug]
-        λ_array[idx_inactive_aug] = λ_array[idx_inactive_aug] + Matrix(Diagonal(μ_array[idx_inactive_aug]))*c_array[idx_inactive_aug]
+        # λ_array[idx_inactive_aug] = λ_array[idx_inactive_aug] + Matrix(Diagonal(μ_array[idx_inactive_aug]))*c_array[idx_inactive_aug]
 
         # update active multipliers (2nd order)
-            # results.LAMBDA[idx_active_aug] = results.LAMBDA[idx_active_aug] + B\results.C[idx_active_aug]
-        λ_array[idx_active_aug] = λ_array[idx_active_aug] + B\c_array[idx_active_aug]
+        λ_array[idx_active_aug] = λ_array[idx_active_aug] + B\c_aug[idx_active_aug]
 
         copyto!(results.LAMBDA,λ_array)
 
@@ -674,7 +686,11 @@ $(SIGNATURES)
         -  ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
         - 'individual' update: see Bertsekas 'Constrained Optimization' (eq. 47, p.123)
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_constraint::Float64=Inf)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
+
+    if sqrt_tolerance
+        println("**Second order update**")
+    end
     n,m,N = get_sizes(solver)
     p = length(results.C[1])  # number of constraints
     pI = solver.obj.pI  # number of inequality constraints
@@ -701,7 +717,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
                 end
 
                 # Lagrange multiplier update (1st order)
-                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                if !solver.opts.λ_second_order_update || !sqrt_tolerance
                     λ_update_first_order!(results,solver,ii,jj,:stage,:inequality)
                 end
 
@@ -717,7 +733,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
             # equality constraints
             else
                 # Lagrange multiplier update (1st order)
-                if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+                if !solver.opts.λ_second_order_update || !sqrt_tolerance
                     λ_update_first_order!(results,solver,ii,jj,:stage,:equality)
                 end
 
@@ -733,25 +749,25 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
         end
 
         # Lagrange multiplier update (2nd order) [if: stage]
-        if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+        if solver.opts.λ_second_order_update && sqrt_tolerance
             λ_update_second_order!(results,solver,:stage,jj)
         end
     end
 
     # Lagrange multiplier (2st order) update stage (foh) [if: nonsequential]
-    if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+    if solver.opts.λ_second_order_update && sqrt_tolerance
         λ_update_second_order!(results,solver,:nonsequential)
     end
 
     # Lagrange multiplier (1st order) update for terminal state equality constraints
-    if !solver.opts.λ_second_order_update || max_constraint > sqrt(solver.opts.constraint_tolerance)
+    if !solver.opts.λ_second_order_update || !sqrt_tolerance
         for ii = 1:solver.model.n
             λ_update_first_order!(results,solver,ii,0,:terminal)
         end
     end
 
     # Lagrange multiplier (2st order) update for terminal state equality constraints
-    if solver.opts.λ_second_order_update && max_constraint <= sqrt(solver.opts.constraint_tolerance)
+    if solver.opts.λ_second_order_update && sqrt_tolerance
         λ_update_second_order!(results,solver,:terminal)
     end
 
@@ -810,7 +826,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,max_co
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver,max_constraint::Float64)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver,sqrt_tolerance::Bool)::Nothing
     return nothing
 end
 

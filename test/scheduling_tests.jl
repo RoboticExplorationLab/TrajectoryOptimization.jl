@@ -1,3 +1,5 @@
+using PyPlot
+
 ### Solver options ###
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
@@ -19,7 +21,7 @@ opts.outer_loop_update = :individual
 ### Set up model, objective, solver ###
 # Model, objective (unconstrained)
 model, obj_uncon = TrajectoryOptimization.Dynamics.pendulum!
-
+obj_uncon.tf = 5.0
 # -Constraints
 u_min = -2
 u_max = 2
@@ -30,8 +32,14 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-opts.λ_second_order_update = true
+opts.use_static = false
+opts.resolve_feasible = true
+opts.λ_second_order_update = false
 solver = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts)
+
+opts2 = copy(opts)
+opts2.λ_second_order_update = true
+solver2 = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts2)
 
 # -Initial state and control trajectories
 # X_interp = ones(solver.model.n,solver.N)
@@ -41,16 +49,47 @@ U = ones(solver.model.m,solver.N)
 
 ### Solve ###
 @time results,stats = solve(solver,X_interp,U)
+@time results2,stats2 = solve(solver2,X_interp,U)
 ############
-
 ### Results ###
-# using Plotly
-# plot(results.cost[1:50])
-# plot(results.X',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="x(t)")
-# plot(results.U',title="Pendulum (with constrained control and states (inplace dynamics))",ylabel="u(t)")
 
-println("Final state: $(results.X[end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+println("Final state (1): $(results.X[end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+println("Final state (2): $(results2.X[end])\n Iterations: $(stats2["iterations"])\n Max violation: $(max_violation(results2.result[results2.termination_index]))")
 
 # Test that final state matches goal state to within tolerance
 # @test norm(results.X[:,end] - solver.obj.xf) < 1e-5
 ###############
+PyPlot.figure()
+iters = range(0,step=solver.dt,length=solver.N)
+iters2 = range(0,step=solver2.dt,length=solver2.N)
+PyPlot.plot(iters, to_array(results.X)',label="1st order")
+PyPlot.plot(iters2, to_array(results2.X)',label="2nd order")
+PyPlot.xlabel("time step")
+PyPlot.ylabel("state")
+PyPlot.legend()
+PyPlot.title("Pendulum (w/ control and state constraints)")
+PyPlot.show()
+
+
+PyPlot.figure()
+iters = range(0,step=1,length=stats["iterations"]+1)
+iters2 = range(0,step=1,length=stats2["iterations"]+1)
+# PyPlot.plot(iters, log.(results.cost[1:results.termination_index] .+ -1*minimum(results.cost[1:results.termination_index])),label="1st order")
+# PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index] .+ -1*minimum(results2.cost[1:results2.termination_index])),label="2nd order")
+# PyPlot.plot(iters, results.cost[1:results.termination_index],label="1st order")
+# PyPlot.plot(iters2, results2.cost[1:results2.termination_index],label="2nd order")
+PyPlot.plot(iters, log.(results.cost[1:results.termination_index]),label="1st order")
+PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index]),label="2nd order")
+PyPlot.xlabel("Iteration")
+PyPlot.ylabel("log(cost)")
+PyPlot.legend()
+PyPlot.title("Pendulum (infeasible start w/ control and state constraints)")
+PyPlot.show()
+
+results.cost[1:results.termination_index]
+length(iters)
+
+results2.cost
+length(iters2)
+
+stats2["λ_second_order"]

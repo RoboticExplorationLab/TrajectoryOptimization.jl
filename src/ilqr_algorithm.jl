@@ -243,7 +243,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
-    # TODO streamline
+    # TODO streamline and make type stable
     k = N-1
     while k >= 1
         # (x,u)_{k-1}, (x,u)_{k}, (x,u)_{k+1} -> (w,r), (x,u), (y,v)
