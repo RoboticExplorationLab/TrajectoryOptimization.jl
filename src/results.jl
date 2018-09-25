@@ -68,12 +68,13 @@ struct UnconstrainedStaticResults{N,M,NN,MM,NM} <: UnconstrainedIterResults
     Bc::Vector{MMatrix{N,M,Float64,NM}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
+    xmid::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N) should really be (n,N-1)
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
     function UnconstrainedStaticResults(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
-            K::Vector{MMatrix{M,N,Float64,NM}},b::Vector{MMatrix{M,M,Float64,MM}},d,X_,U_,S,s,fx::Vector{MMatrix{N,N,Float64,NN}},fu,fv,Ac,Bc,xdot,ρ,dρ) where {N,M,NN,MM,NM}
-        new{N,M,NN,MM,NM}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+            K::Vector{MMatrix{M,N,Float64,NM}},b::Vector{MMatrix{M,M,Float64,MM}},d,X_,U_,S,s,fx::Vector{MMatrix{N,N,Float64,NN}},fu,fv,Ac,Bc,xdot,xmid,ρ,dρ) where {N,M,NN,MM,NM}
+        new{N,M,NN,MM,NM}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
     end
 end
 
@@ -94,12 +95,13 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
     Bc::Vector{Matrix{Float64}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{Vector{Float64}} # Continuous dynamics values (n,N)
+    xmid::Vector{Vector{Float64}} # State midpoints (n,N) should be (n,N-1)
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
     function UnconstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
     end
 end
 
@@ -128,11 +130,12 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     fv = [zeros(n,m) for i = 1:N-1]
     Ac = [zeros(n,n) for i = 1:N]
     Bc = [zeros(n,m) for i = 1:N]
-    xdot  = [zeros(n) for i = 1:N]
+    xdot = [zeros(n) for i = 1:N]
+    xmid = [zeros(n) for i = 1:N]
     ρ = zeros(1)
     dρ = zeros(1)
 
-    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
 end
 
 function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
@@ -150,18 +153,19 @@ function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
     fv = [@MMatrix zeros(n,m) for i = 1:N-1]
     Ac = [@MMatrix zeros(n,n) for i = 1:N]
     Bc = [@MMatrix zeros(n,m) for i = 1:N]
-    xdot  = [@MVector zeros(n)   for i = 1:N]
+    xdot = [@MVector zeros(n)   for i = 1:N]
+    xmid = [@MVector zeros(n)   for i = 1:N]
     ρ = zeros(1)
     dρ = zeros(1)
 
-    UnconstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,ρ,dρ)
+    UnconstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
 end
 
 function copy(r::UnconstrainedVectorResults)
-    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),copy(r.ρ),copy(r.dρ))
 end
 function copy(r::UnconstrainedStaticResults)
-    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.ρ),copy(r.dρ))
+    UnconstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),copy(r.ρ),copy(r.dρ))
 end
 
 ################################################################################
@@ -192,11 +196,11 @@ struct ConstrainedStaticResults{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN} <: Constrain
     Ac::Vector{MMatrix{N,N,Float64,NN}} # Continous dynamics state jacobian (n,n,N)
     Bc::Vector{MMatrix{N,M,Float64,NM}} # Continuous dynamics control jacobian (n,m,N)
 
-    xdot::Vector{MVector{N,Float64}} # Continuous dynamics values (n,N)
-
+    xdot::Vector{MVector{N,Float64}}   # Continuous dynamics values (n,N)
+    xmid::Vector{MVector{N,Float64}}   # State midpoints (n,N)
     C::Vector{MVector{P,Float64}}      # Constraint values (p,N)
     C_prev::Vector{MVector{P,Float64}} # Previous constraint values (p,N)
-    Iμ::Vector{MMatrix{P,P,Float64,PP}}        # Active constraint penalty matrix (p,p,N)
+    Iμ::Vector{MMatrix{P,P,Float64,PP}}# Active constraint penalty matrix (p,p,N)
     LAMBDA::Vector{MVector{P,Float64}} # Lagrange multipliers (p,N)
     MU::Vector{MVector{P,Float64}}     # Penalty terms (p,N)
 
@@ -217,14 +221,14 @@ struct ConstrainedStaticResults{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN} <: Constrain
     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
 
     function ConstrainedStaticResults(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
-            K::Vector{MMatrix{M,N,Float64,NM}},b::Vector{MMatrix{M,M,Float64,MM}},d,X_,U_,S::Vector{MMatrix{N,N,Float64,NN}},s,fx,fu,fv,Ac,Bc,xdot,
+            K::Vector{MMatrix{M,N,Float64,NM}},b::Vector{MMatrix{M,M,Float64,MM}},d,X_,U_,S::Vector{MMatrix{N,N,Float64,NN}},s,fx,fu,fv,Ac,Bc,xdot,xmid,
             C::Vector{MVector{P,Float64}},C_prev,Iμ::Vector{MMatrix{P,P,Float64,PP}},LAMBDA,MU,
             CN::MVector{PN,Float64},CN_prev,IμN::MMatrix{PN,PN,Float64,PPN},λN,μN,
             cx::Vector{MMatrix{P,N,Float64,NP}},cu::Vector{MMatrix{P,M,Float64,MP}},cxn::MMatrix{PN,N,Float64,NPN},ρ,dρ,V_al_prev,V_al_current) where {N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}
         # @show P
         # @show PN
         # @show typeof(cxn)
-        new{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+        new{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -245,7 +249,7 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     Bc::Vector{Matrix{Float64}} # Continuous dynamics control jacobian (n,m,N)
 
     xdot::Vector{Vector{Float64}} # Continuous dynamics values (n,N)
-
+    xmid::Vector{Vector{Float64}} # State midpoints (n,N) should be (n,N-1)
     C::Vector{Vector{Float64}}      # Constraint values (p,N)
     C_prev::Vector{Vector{Float64}} # Previous constraint values (p,N)
     Iμ::Vector{Diagonal{Float64,Vector{Float64}}}        # Active constraint penalty matrix (p,p,N)
@@ -270,12 +274,12 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
 
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
+            K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
             C::Vector{Vector{Float64}},C_prev,Iμ,LAMBDA,MU,
             CN::Vector{Float64},CN_prev,IμN,λN,μN,
             cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -310,7 +314,8 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     fv = [zeros(n,m) for i = 1:N-1]
     Ac = [zeros(n,n) for i = 1:N]
     Bc = [zeros(n,m) for i = 1:N]
-    xdot  = [zeros(n)   for i = 1:N]
+    xdot = [zeros(n)   for i = 1:N]
+    xmid = [zeros(n)   for i = 1:N]
 
     # Stage Constraints
     C      = [zeros(p)  for i = 1:N]
@@ -336,7 +341,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
-    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
+    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
         C,C_prev,Iμ,LAMBDA,MU,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
@@ -357,7 +362,8 @@ function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     fv = [@MMatrix zeros(n,m) for i = 1:N-1]
     Ac = [@MMatrix zeros(n,n) for i = 1:N]
     Bc = [@MMatrix zeros(n,m) for i = 1:N]
-    xdot  = [@MVector zeros(n)   for i = 1:N]
+    xdot = [@MVector zeros(n)   for i = 1:N]
+    xmid = [@MVector zeros(n)   for i = 1:N]
 
     # Stage Constraints
     C      = [@MVector zeros(p)  for i = 1:N]
@@ -383,19 +389,19 @@ function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
-    ConstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
+    ConstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
         C,C_prev,Iμ,LAMBDA,MU,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
 end
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
 function copy(r::ConstrainedStaticResults)
-    ConstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),
+    ConstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
@@ -414,6 +420,7 @@ function new_unconstrained_results(r::SolverIterResults,solver::Solver)::Unconst
     end
     copyto!(results.X,r.X)
     copyto!(results.xdot,r.xdot)
+    copyto!(results.xmid,r.xmid)
     for k = 1:N
         results.U[k] .= r.U[k][1:m]
         results.Ac[k] .= r.Ac[k][1:n,1:n]
@@ -440,6 +447,7 @@ function new_constrained_results(r::SolverIterResults,solver::Solver)::Constrain
     end
     copyto!(results.X,r.X)
     copyto!(results.xdot,r.xdot)
+    copyto!(results.xmid,r.xmid)
     for k = 1:N
         results.U[k] .= r.U[k][1:m]
         results.Ac[k] .= r.Ac[k][1:n,1:n]

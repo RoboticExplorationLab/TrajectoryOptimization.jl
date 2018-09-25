@@ -38,6 +38,7 @@ function rollout!(res::SolverResults,solver::Solver)
     flag = rollout!(X, U, solver)
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X,U)
+        calculate_midpoints!(res, solver, X, U)
     end
     flag
 end
@@ -50,9 +51,10 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     n = solver.model.n
 
     X[1] = solver.obj.x0
+
     for k = 1:N-1
         if solver.control_integration == :foh
-            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m])
+            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m]) # get new state
         else
             solver.fd(X[k+1], X[k], U[k][1:m])
         end
@@ -126,6 +128,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     # Calculate state derivatives
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X_,U_)
+        calculate_midpoints!(res, solver, X_, U_)
     end
 
     return true
@@ -170,7 +173,8 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             xdot1 = res.xdot[k]
             xdot2 = res.xdot[k+1]
 
-            Xm = 0.5*X[k] + dt/8*xdot1 + 0.5*X[k+1] - dt/8*xdot2
+            # Xm = 0.5*X[k] + dt/8*xdot1 + 0.5*X[k+1] - dt/8*xdot2
+            Xm = res.xmid[k]
             Um = (U[k] + U[k+1])/2
 
             J += solver.dt/6*(stage_cost(X[k],U[k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[k+1],U[k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
@@ -213,7 +217,7 @@ end
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
+function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2}) #TODO THIS FUNCTION NEEDS TO GO
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -250,6 +254,25 @@ function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float6
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
 
     return J
+end
+
+"""
+$(SIGNATURES)
+    Calculate state midpoint using cubic spline
+"""
+function cubic_midpoint(x1::AbstractVector,xdot1::AbstractVector,x2::AbstractVector,xdot2::AbstractVector,dt::Float64)
+    0.5*x1 + dt/8.0*xdot1 + 0.5*x2 - dt/8.0*xdot2
+end
+
+"""
+$(SIGNATURES)
+    Calculate state midpoints (xmid)
+"""
+function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+    n,m,N = get_sizes(solver)
+    for k = 1:N-1
+        results.xmid[k] = cubic_midpoint(results.X[k],results.xdot[k],results.X[k+1],results.xdot[k+1],solver.dt)
+    end
 end
 
 """
