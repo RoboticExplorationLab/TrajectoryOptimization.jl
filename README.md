@@ -1,6 +1,7 @@
 # TrajectoryOptimization
 
 ![Build Status](https://travis-ci.org/RoboticExplorationLab/TrajectoryOptimization.jl.svg?branch=master)
+[![codecov](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl)
 
 A package for solving constrained and unconstrained trajectory optimization problems in Julia.
 
