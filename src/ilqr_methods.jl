@@ -64,7 +64,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(X[k]) < solver.opts.max_state_value || maximum(U[k]) < solver.opts.max_control_value)
+        if ~(maximum(abs.(X[k+1])) < solver.opts.max_state_value || maximum(abs.(U[k])) < solver.opts.max_control_value)
             return false
         end
     end
@@ -120,7 +120,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(X_[k]) < solver.opts.max_state_value || maximum(U_[k]) < solver.opts.max_control_value)
+        if ~(maximum(abs.(X_[k])) < solver.opts.max_state_value || maximum(abs.(U_[k-1])) < solver.opts.max_control_value)
             return false
         end
     end
@@ -128,7 +128,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     # Calculate state derivatives
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X_,U_)
-        calculate_midpoints!(res, solver, X_, U_)
+        calculate_midpoints!(res,solver, X_, U_)
     end
 
     return true
