@@ -1,4 +1,4 @@
-using PyPlot
+# using PyPlot
 
 ### Solver options ###
 dt = 0.1
@@ -15,7 +15,7 @@ opts.iterations_outerloop = 50
 opts.iterations = 500
 # opts.iterations_linesearch = 50
 opts.τ = 0.25
-opts.outer_loop_update = :individual
+opts.outer_loop_update = :default
 ######################
 
 ### Set up model, objective, solver ###
@@ -48,8 +48,8 @@ U = ones(solver.model.m,solver.N)
 #######################################
 
 ### Solve ###
-@time results,stats = solve(solver,X_interp,U)
-@time results2,stats2 = solve(solver2,X_interp,U)
+@time results,stats = solve(solver,U)
+@time results2,stats2 = solve(solver2,U)
 ############
 ### Results ###
 
@@ -59,37 +59,37 @@ println("Final state (2): $(results2.X[end])\n Iterations: $(stats2["iterations"
 # Test that final state matches goal state to within tolerance
 # @test norm(results.X[:,end] - solver.obj.xf) < 1e-5
 ###############
-PyPlot.figure()
-iters = range(0,step=solver.dt,length=solver.N)
-iters2 = range(0,step=solver2.dt,length=solver2.N)
-PyPlot.plot(iters, to_array(results.X)',label="1st order")
-PyPlot.plot(iters2, to_array(results2.X)',label="2nd order")
-PyPlot.xlabel("time step")
-PyPlot.ylabel("state")
-PyPlot.legend()
-PyPlot.title("Pendulum (w/ control and state constraints)")
-PyPlot.show()
-
-
-PyPlot.figure()
-iters = range(0,step=1,length=stats["iterations"]+1)
-iters2 = range(0,step=1,length=stats2["iterations"]+1)
-# PyPlot.plot(iters, log.(results.cost[1:results.termination_index] .+ -1*minimum(results.cost[1:results.termination_index])),label="1st order")
-# PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index] .+ -1*minimum(results2.cost[1:results2.termination_index])),label="2nd order")
-# PyPlot.plot(iters, results.cost[1:results.termination_index],label="1st order")
-# PyPlot.plot(iters2, results2.cost[1:results2.termination_index],label="2nd order")
-PyPlot.plot(iters, log.(results.cost[1:results.termination_index]),label="1st order")
-PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index]),label="2nd order")
-PyPlot.xlabel("Iteration")
-PyPlot.ylabel("log(cost)")
-PyPlot.legend()
-PyPlot.title("Pendulum (infeasible start w/ control and state constraints)")
-PyPlot.show()
-
-results.cost[1:results.termination_index]
-length(iters)
-
-results2.cost
-length(iters2)
-
-stats2["λ_second_order"]
+# PyPlot.figure()
+# iters = range(0,step=solver.dt,length=solver.N)
+# iters2 = range(0,step=solver2.dt,length=solver2.N)
+# PyPlot.plot(iters, to_array(results.X)',label="1st order")
+# PyPlot.plot(iters2, to_array(results2.X)',label="2nd order")
+# PyPlot.xlabel("time step")
+# PyPlot.ylabel("state")
+# PyPlot.legend()
+# PyPlot.title("Pendulum (w/ control and state constraints)")
+# PyPlot.show()
+#
+#
+# PyPlot.figure()
+# iters = range(0,step=1,length=stats["iterations"]+1)
+# iters2 = range(0,step=1,length=stats2["iterations"]+1)
+# # PyPlot.plot(iters, log.(results.cost[1:results.termination_index] .+ -1*minimum(results.cost[1:results.termination_index])),label="1st order")
+# # PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index] .+ -1*minimum(results2.cost[1:results2.termination_index])),label="2nd order")
+# # PyPlot.plot(iters, results.cost[1:results.termination_index],label="1st order")
+# # PyPlot.plot(iters2, results2.cost[1:results2.termination_index],label="2nd order")
+# PyPlot.plot(iters, log.(results.cost[1:results.termination_index]),label="1st order")
+# PyPlot.plot(iters2, log.(results2.cost[1:results2.termination_index]),label="2nd order")
+# PyPlot.xlabel("Iteration")
+# PyPlot.ylabel("log(cost)")
+# PyPlot.legend()
+# PyPlot.title("Pendulum (infeasible start w/ control and state constraints)")
+# PyPlot.show()
+#
+# results.cost[1:results.termination_index]
+# length(iters)
+#
+# results2.cost
+# length(iters2)
+#
+# stats2["λ_second_order"]

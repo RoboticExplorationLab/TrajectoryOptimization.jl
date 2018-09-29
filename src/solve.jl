@@ -741,7 +741,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
             # generate all inequality constraint indices
             idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
 
-            #assemble constraints
+            # assemble constraints
             c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
             cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
 
@@ -757,8 +757,8 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         λ[(N-1)*p+1:(N-1)*p+n] = results.λN
         μ[(N-1)*p+1:(N-1)*p+n,(N-1)*p+1:(N-1)*p+n] = results.IμN
 
+        # first order multiplier update
         if !solver.opts.λ_second_order_update
-            # first order multiplier update
             λ .= λ + μ*c
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
 
@@ -796,7 +796,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
         if solver.opts.λ_second_order_update
-            λ[idx_active] = λ[idx_active] + B\c[idx_active]
+            λ[idx_active] = λ[idx_active] + B\I*c[idx_active] #this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here as well
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
         end
 
@@ -805,7 +805,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
             results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
         end
         results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
-        
+
         return nothing
     end
 
@@ -837,47 +837,54 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         tmp = [i for i = 1:pI]
 
         for k = 1:N
+            # get all inequality indices
             idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
-        end
-        idx_inequality
 
-        # assemble constraints
-        for k = 1:N
+            # assemble constraints
             c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
             cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
-        end
-        c[N*p+1:N*p+n] = results.CN
-        cz[N*p+1:N*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
 
-        # assemble lagrange multipliers
-        for k = 1:N
+            # assemble lagrange multipliers
             λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
-        end
-        λ[N*p+1:N*p+n] = results.λN
 
-        # assemble penalty matrix
-        for k = 1:N
+            # assemble penalty matrix
             μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
         end
+        # assemble from terminal
+        c[N*p+1:N*p+n] = results.CN
+        cz[N*p+1:N*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
+        λ[N*p+1:N*p+n] = results.λN
         μ[N*p+1:N*p+n,N*p+1:N*p+n] = results.IμN
 
+        # first order multiplier update
         if !solver.opts.λ_second_order_update
-            # first order multiplier update
             λ .= λ + μ*c
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+
+            # update results
+            for k = 1:N
+                results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+            end
+            results.λN .= λ[N*p+1:N*p+n]
+
+            return nothing
         end
+
         # second order multiplier update
         constraint_status = ones(Bool,N*p+n)
 
+        # get active constraints
         for i in idx_inequality
             if c[i] <= 0.0
                 constraint_status[i] = false
             end
         end
 
+        # get indices of active constraints
         idx_active = findall(x->x==true,constraint_status)
 
-        # build Hessian
+        ## Build Hessian
+        # stage costs
         for k = 1:N-1
             # Unpack Jacobians, ̇x
             Ac1, Bc1 = results.Ac[k], results.Bc[k]
@@ -903,20 +910,23 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         end
         L[(N-1)*(n+m)+1:(N-1)*(n+m)+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = Qf
 
+        # active constraints
         L .+= cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
 
-        B = cz[idx_active,:]*inv(L)*cz[idx_active,:]'
+        B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
         if solver.opts.λ_second_order_update
-            λ[idx_active] = λ[idx_active] + inv(B)*c[idx_active]
+            λ[idx_active] = λ[idx_active] + B\I*c[idx_active] # this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
         end
 
-        # store results
+        # update results
         for k = 1:N
             results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
         end
         results.λN .= λ[N*p+1:N*p+n]
+
+        return nothing
     end
 end
 
