@@ -711,7 +711,7 @@ end
 
 function λ_update(results::ConstrainedIterResults,solver::Solver)
     if solver.control_integration == :zoh
-        # Build the Hessian of the Lagrangian, stacked: constraints, Jacobians, multipliers
+        # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
         n = solver.model.n
         m = solver.model.m
         p = solver.obj.p
@@ -738,66 +738,75 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         tmp = [i for i = 1:pI]
 
         for k = 1:N-1
+            # generate all inequality constraint indices
             idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
-        end
-        idx_inequality
 
-        # assemble constraints
-        for k = 1:N-1
+            #assemble constraints
             c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
             cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
-        end
-        c[(N-1)*p+1:(N-1)*p+n] = results.CN
-        cz[(N-1)*p+1:(N-1)*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
 
-        # assemble lagrange multipliers
-        for k = 1:N-1
+            # assemble lagrange multipliers
             λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
-        end
-        λ[(N-1)*p+1:(N-1)*p+n] = results.λN
 
-        # assemble penalty matrix
-        for k = 1:N-1
+            # assemble penalty matrix
             μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
         end
+        # assemble pieces from terminal condition
+        c[(N-1)*p+1:(N-1)*p+n] = results.CN
+        cz[(N-1)*p+1:(N-1)*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
+        λ[(N-1)*p+1:(N-1)*p+n] = results.λN
         μ[(N-1)*p+1:(N-1)*p+n,(N-1)*p+1:(N-1)*p+n] = results.IμN
 
         if !solver.opts.λ_second_order_update
             # first order multiplier update
             λ .= λ + μ*c
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+
+            # update results
+            for k = 1:N-1
+                results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+            end
+            results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
+            return nothing
         end
+
         # second order multiplier update
         constraint_status = ones(Bool,p*(N-1)+n)
 
+        # check for active inequality constraints
         for i in idx_inequality
-            if c[i] <= 0.0 #&& λ[i] == 0.0
+            if c[i] <= 0.0
                 constraint_status[i] = false
             end
         end
 
+        # get indices of all active constraints
         idx_active = findall(x->x==true,constraint_status)
 
-        # build Hessian
+        ## Build Hessian
+        # stage costs
         for k = 1:N-1
             L[(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m),(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [dt*Q zeros(n,m); zeros(m,n) dt*R]
         end
         L[(N-1)*(n+m)+1:(N-1)*(n+m)+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = Qf
 
+        # constraints (active inequality and equality)
         L .+= cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
 
-        B = cz[idx_active,:]*inv(L)*cz[idx_active,:]'
+        B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
         if solver.opts.λ_second_order_update
-            λ[idx_active] = λ[idx_active] + inv(B)*c[idx_active]
+            λ[idx_active] = λ[idx_active] + B\c[idx_active]
             λ[idx_inequality] = max.(0.0,λ[idx_inequality])
         end
 
-        # store results
+        # update results
         for k = 1:N-1
             results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
         end
         results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
+        
+        return nothing
     end
 
     if solver.control_integration == :foh
@@ -861,7 +870,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         constraint_status = ones(Bool,N*p+n)
 
         for i in idx_inequality
-            if c[i] <= 0.0 #&& λ[i] == 0.0
+            if c[i] <= 0.0
                 constraint_status[i] = false
             end
         end
