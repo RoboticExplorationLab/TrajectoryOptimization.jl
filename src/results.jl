@@ -155,8 +155,8 @@ function UnconstrainedStaticResults(n::Int,m::Int,N::Int)
     Bc = [@MMatrix zeros(n,m) for i = 1:N]
     xdot = [@MVector zeros(n)   for i = 1:N]
     xmid = [@MVector zeros(n)   for i = 1:N]
-    ρ = zeros(1)
-    dρ = zeros(1)
+    ρ = ones(1)
+    dρ = ones(1)
 
     UnconstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
 end
@@ -335,8 +335,8 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu  = [zeros(p,m)   for i = 1:N]
     cxn = zeros(p_N,n)
 
-    ρ = zeros(1)
-    dρ = zeros(1)
+    ρ = ones(1)
+    dρ = ones(1)
 
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
@@ -383,8 +383,8 @@ function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     cu  = [@MMatrix zeros(p,m)   for i = 1:N]
     cxn = @MMatrix zeros(p_N,n)
 
-    ρ = zeros(1)
-    dρ = zeros(1)
+    ρ = ones(1)
+    dρ = ones(1)
 
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
@@ -405,63 +405,6 @@ function copy(r::ConstrainedStaticResults)
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
-
-"""
-$(SIGNATURES)
-    For infeasible solve, return an unconstrained results from a prior unconstrained or constrained results
-        -removes infeasible controls and infeasible components in Jacobians
-"""
-function new_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
-    n,m,N = get_sizes(solver)
-    if solver.opts.use_static
-        results = UnconstrainedStaticResults(n,m,N)
-    else
-        results = UnconstrainedVectorResults(n,m,N)
-    end
-    copyto!(results.X,r.X)
-    copyto!(results.xdot,r.xdot)
-    copyto!(results.xmid,r.xmid)
-    for k = 1:N
-        results.U[k] .= r.U[k][1:m]
-        results.Ac[k] .= r.Ac[k][1:n,1:n]
-        results.Bc[k] .= r.Bc[k][1:n,1:m]
-        k == N ? continue : nothing
-        results.fx[k] .= r.fx[k][1:n,1:n]
-        results.fu[k] .= r.fu[k][1:n,1:m]
-    end
-    results
-end
-
-"""
-$(SIGNATURES)
-    For infeasible solve, return a constrained results from a prior unconstrained or constrained results
-"""
-function new_constrained_results(r::SolverIterResults,solver::Solver)::ConstrainedIterResults
-    n,m,N = get_sizes(solver)
-    p = solver.obj.p
-    p_N = solver.obj.p_N
-    if solver.opts.use_static
-        results = ConstrainedStaticResults(n,m,p,N,p_N)
-    else
-        results = ConstrainedVectorResults(n,m,p,N,p_N)
-    end
-    copyto!(results.X,r.X)
-    copyto!(results.xdot,r.xdot)
-    copyto!(results.xmid,r.xmid)
-    for k = 1:N
-        results.U[k] .= r.U[k][1:m]
-        results.Ac[k] .= r.Ac[k][1:n,1:n]
-        results.Bc[k] .= r.Bc[k][1:n,1:m]
-        k == N ? continue : nothing
-        results.fx[k] .= r.fx[k][1:n,1:n]
-        results.fu[k] .= r.fu[k][1:n,1:m]
-        results.fv[k] .= r.fv[k][1:n,1:m]
-    end
-    results
-end
-
-
-
 
 
 ################################################################################

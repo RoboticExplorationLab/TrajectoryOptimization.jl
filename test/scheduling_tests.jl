@@ -4,7 +4,7 @@ using TrajectoryOptimization
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = true
+opts.verbose = false
 opts.cache = true
 # opts.c1 = 1e-4
 opts.c2 = 5.0

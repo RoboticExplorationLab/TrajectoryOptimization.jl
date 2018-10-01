@@ -91,6 +91,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         copyto!(results.U, U0)
         is_constrained = false
 
+        # Set initial regularization
+        results.ρ[1] *= solver.opts.ρ_initial
+
     elseif solver.obj isa ConstrainedObjective
         p = solver.obj.p # number of inequality and equality constraints
         pI = solver.obj.pI # number of inequality constraints
@@ -117,7 +120,12 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         else
             results = ConstrainedVectorResults(n,m,p,N)
         end
-        results.MU .*= solver.opts.μ1 # set initial penalty term values
+
+        # Set initial penalty term values
+        results.MU .*= solver.opts.μ1
+
+        # Set initial regularization
+        results.ρ[1] *= solver.opts.ρ_initial
 
         if infeasible
             copyto!(results.X, X0)  # initialize state trajectory with infeasible trajectory input
@@ -127,7 +135,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
             # bootstrap previous constrained solution
             if !isempty(prevResults)
-                println("BOOTSTRAPPING λ")
+                # results.ρ[1] = prevResults.ρ[1]
                 for k = 1:solver.N
                     results.LAMBDA[k] = prevResults.LAMBDA[k][1:solver.obj.p]
                 end
@@ -148,9 +156,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     X_ = results.X_ # updated state trajectory
     U_ = results.U_ # updated control trajectory
 
-    # Set initial regularization
-    results.ρ[1] *= solver.opts.ρ_initial
-
     #****************************#
     #           SOLVER           #
     #****************************#
@@ -169,9 +174,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     end
 
     # Solver Statistics
-    iter = 1 # counter for total number of iLQR iterations
-    iter_outer = 1
-    iter_inner = 1
+    iter = 0 # counter for total number of iLQR iterations
+    iter_outer = 0
+    iter_inner = 0
     time_setup = time_ns() - t_start
     J_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
@@ -493,7 +498,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained
-        results_feasible = new_constrained_results(results_feasible,solver,results.LAMBDA,results.λN)
+        results_feasible = new_constrained_results(results_feasible,solver,results.LAMBDA,results.λN,results.ρ)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end
@@ -529,9 +534,9 @@ end
 
 """
 $(SIGNATURES)
-    For infeasible solve, return a constrained results from a prior unconstrained or constrained results
+    For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
 """
-function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
+function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ)::ConstrainedIterResults
     n,m,N = get_sizes(solver)
     p = solver.obj.p
     p_N = solver.obj.p_N
@@ -543,6 +548,7 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::Co
     copyto!(results.X,r.X)
     copyto!(results.xdot,r.xdot)
     copyto!(results.xmid,r.xmid)
+    results.ρ[1] = ρ[1]
     for k = 1:N
         results.U[k] = r.U[k][1:m]
         results.Ac[k] = r.Ac[k][1:n,1:n]
@@ -559,7 +565,18 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::Co
 end
 
 function λ_update(results::ConstrainedIterResults,solver::Solver,k::Int64)
-    if solver.control_integration == :zoh
+    if solver.control_integration == :zoh && !solver.opts.λ_second_order_update
+        if k != solver.N
+            pI = solver.obj.pI
+            results.LAMBDA[k] = results.LAMBDA[k] + results.Iμ[k]*results.C[k]
+            results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
+        else
+            results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
+        end
+        return nothing
+    end
+
+    if solver.control_integration == :zoh && solver.opts.λ_second_order_update
         # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
         n = solver.model.n
         m = solver.model.m
@@ -595,14 +612,14 @@ function λ_update(results::ConstrainedIterResults,solver::Solver,k::Int64)
             μ = results.IμN
         end
 
-        # first order multiplier update
-        if !solver.opts.λ_second_order_update
-            λ .= λ + μ*c
-            if k != solver.N
-                λ[idx_inequality] = max.(0.0,λ[idx_inequality])
-            end
-            return nothing
-        end
+        # # first order multiplier update
+        # if !solver.opts.λ_second_order_update
+        #     λ .= λ + μ*c
+        #     if k != solver.N
+        #         λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+        #     end
+        #     return nothing
+        # end
 
         # second order multiplier update
         if k != solver.N
@@ -1014,7 +1031,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
     # 'default' penaltiy update - all penalty terms are updated (no conditions)
     if solver.opts.outer_loop_update == :default
         for k = 1:final_index
-            results.MU[k] .= min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
+            results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
         end
         results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
     end
