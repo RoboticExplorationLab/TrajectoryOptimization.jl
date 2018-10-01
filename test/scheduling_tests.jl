@@ -1,5 +1,5 @@
 # using PyPlot
-
+using TrajectoryOptimization
 ### Solver options ###
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
@@ -21,7 +21,7 @@ opts.outer_loop_update = :default
 ### Set up model, objective, solver ###
 # Model, objective (unconstrained)
 model, obj_uncon = TrajectoryOptimization.Dynamics.pendulum!
-obj_uncon.tf = 5.0
+
 # -Constraints
 u_min = -2
 u_max = 2
@@ -32,14 +32,14 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
+intergrator = :rk3
 opts.use_static = false
-opts.resolve_feasible = true
 opts.λ_second_order_update = false
-solver = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts)
+solver = Solver(model,obj_con,integration=intergrator,dt=dt,opts=opts)
 
 opts2 = copy(opts)
 opts2.λ_second_order_update = true
-solver2 = Solver(model,obj_con,integration=:rk3_foh,dt=dt,opts=opts2)
+solver2 = Solver(model,obj_con,integration=intergrator,dt=dt,opts=opts2)
 
 # -Initial state and control trajectories
 # X_interp = ones(solver.model.n,solver.N)
@@ -50,12 +50,19 @@ U = ones(solver.model.m,solver.N)
 ### Solve ###
 @time results,stats = solve(solver,U)
 @time results2,stats2 = solve(solver2,U)
-############
+@time results3,stats3 = solve(solver,X_interp,U)
+@time results4,stats4 = solve(solver2,X_interp,U)
+
 ### Results ###
 
-println("Final state (1): $(results.X[end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
-println("Final state (2): $(results2.X[end])\n Iterations: $(stats2["iterations"])\n Max violation: $(max_violation(results2.result[results2.termination_index]))")
+println("Final state (1st): $(results.X[end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
+println("Final state (2nd): $(results2.X[end])\n Iterations: $(stats2["iterations"])\n Max violation: $(max_violation(results2.result[results2.termination_index]))")
+println("Final state (1st inf): $(results3.X[end])\n Iterations: $(stats3["iterations"])\n Max violation: $(max_violation(results3.result[results3.termination_index]))")
+println("Final state (2nd inf): $(results4.X[end])\n Iterations: $(stats4["iterations"])\n Max violation: $(max_violation(results4.result[results4.termination_index]))")
 
+solver
+
+x = 1
 # Test that final state matches goal state to within tolerance
 # @test norm(results.X[:,end] - solver.obj.xf) < 1e-5
 ###############

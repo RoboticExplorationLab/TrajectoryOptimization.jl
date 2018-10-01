@@ -535,178 +535,392 @@ end
 #     end
 # end
 
-"""
-$(SIGNATURES)
-    Second order update for Lagrange multipliers (sequential by timestep)
-        -see Bertsekas 'Constrained Optimization' (eq. 24, p. 133)
-        -note we use the augmented state z = [x; u]
-"""
-function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,mode::Symbol=:stage,k::Int64=0)
-    # update stage multipliers
-    if mode == :stage && solver.control_integration == :zoh
+# """
+# $(SIGNATURES)
+#     Second order update for Lagrange multipliers (sequential by timestep)
+#         -see Bertsekas 'Constrained Optimization' (eq. 24, p. 133)
+#         -note we use the augmented state z = [x; u]
+# """
+# function λ_update_second_order!(results::ConstrainedIterResults,solver::Solver,mode::Symbol=:stage,k::Int64=0)
+#     # update stage multipliers
+#     if mode == :stage && solver.control_integration == :zoh
+#
+#         n = solver.model.n
+#         m = solver.model.m
+#
+#         Q = solver.obj.Q
+#         R = solver.obj.R
+#         if length(results.U[1]) != m
+#             R = getR(solver)
+#             m = size(R,1)
+#         end
+#         dt = solver.dt
+#
+#         pI = solver.obj.pI
+#         p = length(results.C[1])
+#
+#         c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[k],[results.Cx[k] results.Cu[k]],results.LAMBDA[k],p,pI,n+m)
+#         lzz = [dt*Q zeros(n,m); zeros(m,n) dt*R]
+#         Lzz = lzz + cz_active'*results.Iμ[k][idx_active,idx_active]*cz_active
+#         B = cz_active*(Lzz\cz_active')
+#
+#         # Lagrange multiplier update (2nd order) for active constraints
+#         results.LAMBDA[k][idx_active] = results.LAMBDA[k][idx_active] + B\results.C[k][idx_active]
+#
+#         # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
+#         results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
+#     end
+#
+#     if mode == :nonsequential && solver.control_integration == :foh
+#         N = solver.N
+#         n = solver.model.n
+#         m = solver.model.m
+#
+#         # infeasible
+#         if length(results.U[1]) != m
+#             m += n
+#         end
+#         q = n + m
+#         q2 = 2*q
+#         Q = solver.obj.Q
+#         R = getR(solver)
+#         dt = solver.dt
+#
+#         # Initialized Hessian of Lagrangian
+#         Lzz = zeros(q*N,q*N)
+#
+#         # Collect terms from stage cost
+#         for kk = 1:N-1
+#             Ac1 = results.Ac[kk]
+#             Bc1 = results.Bc[kk]
+#             Ac2 = results.Ac[kk+1]
+#             Bc2 = results.Bc[kk+1]
+#
+#             # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
+#             Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1) # l(x,u) and l(xm,um) terms
+#             Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5) # l(x,u) and l(xm,um) terms
+#             Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2) # l(y,v) and l(xm,um) terms
+#             Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5) # l(y,v) and l(xm,um) terms
+#
+#             Lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
+#             Lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
+#             Lxv = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
+#             Luy = 4*dt/6*(dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
+#             Luv = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+#             Lyv = 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+#
+#             L = [Lxx Lxu Lxy Lxv;
+#                  Lxu' Luu Luy Luv;
+#                  Lxy' Luy' Lyy Lyv;
+#                  Lxv' Luv' Lyv' Lvv]
+#
+#             Lzz[q*(kk-1)+1:q*(kk-1)+q2, q*(kk-1)+1:q*(kk-1)+q2] += L
+#         end
+#
+#         # Collect terms from constraints
+#         p = length(results.C[1])
+#         pI = solver.obj.pI
+#         p_N = solver.obj.p_N
+#         c_aug = zeros(p*N+p_N)
+#         cz_aug = zeros(p*N+p_N,q*N)
+#         idx_active_aug = []
+#         idx_inactive_aug = []
+#
+#         for kk = 1:N
+#             if kk == N
+#                 c_active1, cz_active1, p_active1, p_inactive1, idx_active1, idx_inactive1 = TrajectoryOptimization.get_active_constraints(results.C[kk],[results.Cx[kk] results.Cu[kk]],results.LAMBDA[kk],p,pI,q)
+#                 c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints([results.C[kk];results.CN],[results.Cx[kk] results.Cu[kk]; results.Cx_N zeros(n,m)],[results.LAMBDA[kk];results.λN],p+p_N,pI,q)
+#                 penalty_matrix = zeros(p_active,p_active)
+#                 penalty_matrix[1:p_active1,1:p_active1] = results.Iμ[kk][idx_active1,idx_active1]
+#                 penalty_matrix[p_active1+1:p_active,p_active1+1:p_active] = results.IμN
+#                 Lzz[q*(kk-1)+1:q*(kk-1)+q, q*(kk-1)+1:q*(kk-1)+q] += cz_active'*penalty_matrix*cz_active
+#             else
+#                 c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints(results.C[kk],[results.Cx[kk] results.Cu[kk]],results.LAMBDA[kk],p,pI,q)
+#                 Lzz[q*(kk-1)+1:q*(kk-1)+q, q*(kk-1)+1:q*(kk-1)+q] += cz_active'*results.Iμ[kk][idx_active,idx_active]*cz_active
+#             end
+#
+#             idx = idx_active .+ (kk-1)*p
+#
+#             if p_active > 0
+#                 c_aug[idx] = c_active
+#                 cz_aug[idx,(kk-1)*q+1:(kk-1)*q+q] = cz_active
+#                 idx_active_aug = cat(idx_active_aug,idx,dims=(1,1))
+#             elseif p_inactive > 0
+#                 idx_inactive_aug = cat(idx_inactive_aug,(kk-1)*p .+ idx_inactive,dims=(1,1))
+#             end
+#         end
+#         # Calculate B
+#         B = cz_aug[idx_active_aug,:]*(Lzz\cz_aug[idx_active_aug,:]')
+#
+#         # Convert array of vector/matrices to array #TODO do something more intelligent
+#         λ_array = to_array(results.LAMBDA)
+#         μ_array = to_array(results.MU)
+#         c_array = to_array(results.C)
+#
+#         # update active multipliers (2nd order)
+#         λ_tmp = [λ_array[:];results.λN]
+#
+#         λ_tmp[idx_active_aug] = λ_tmp[idx_active_aug] + B\c_aug[idx_active_aug]
+#
+#         copyto!(results.LAMBDA,reshape(λ_tmp[1:end-p_N],p,N))
+#
+#         for kk = 1:N
+#             results.LAMBDA[kk][1:pI] = max.(0.0,results.LAMBDA[kk][1:pI])
+#         end
+#     end
+#
+#     # update for terminal constraints
+#     if mode == :terminal
+#         n = solver.model.n
+#         m = solver.model.m
+#
+#         Q = solver.obj.Q
+#         R = solver.obj.R
+#         Qf = solver.obj.Qf
+#         if length(results.U[1]) != m
+#             R = getR(solver)
+#             m = size(R,1)
+#         end
+#         dt = solver.dt
+#
+#         pI = solver.obj.pI
+#         p = length(results.C[1])
+#         p_N = solver.obj.p_N
+#
+#         c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.CN,results.Cx_N,results.λN,p_N,0,n)
+#
+#         println("p active: $p_active")
+#         println("p_inactive: $p_inactive")
+#         println(cz_active)
+#         lzz = Qf
+#         Lzz = lzz + cz_active'*results.IμN*cz_active
+#         B = cz_active*(Lzz\cz_active')
+#
+#         # Lagrange multiplier update (2nd order) for active constraints
+#         results.λN .= results.λN + B\results.CN
+#
+#         # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
+#         # results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
+#         # Lzz = solver.obj.Qf + results.Cx_N'*results.IμN*results.Cx_N
+#         # B = results.Cx_N*(Lzz\results.Cx_N')
+#         # results.λN .= results.λN + B\results.CN
+#         # # results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.μN.*results.CN))
+#         # println("CN: $(results.CN)")
+#     end
+# end
 
+function λ_update(results::ConstrainedIterResults,solver::Solver,k::Int64)
+    if solver.control_integration == :zoh
+        # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
         n = solver.model.n
         m = solver.model.m
-
-        Q = solver.obj.Q
-        R = solver.obj.R
-        if length(results.U[1]) != m
-            R = getR(solver)
-            m = size(R,1)
-        end
-        dt = solver.dt
-
-        pI = solver.obj.pI
         p = length(results.C[1])
-
-        c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.C[k],[results.Cx[k] results.Cu[k]],results.LAMBDA[k],p,pI,n+m)
-        lzz = [dt*Q zeros(n,m); zeros(m,n) dt*R]
-        Lzz = lzz + cz_active'*results.Iμ[k][idx_active,idx_active]*cz_active
-        B = cz_active*(Lzz\cz_active')
-
-        # Lagrange multiplier update (2nd order) for active constraints
-        results.LAMBDA[k][idx_active] = results.LAMBDA[k][idx_active] + B\results.C[k][idx_active]
-
-        # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
-        results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
-    end
-
-    if mode == :nonsequential && solver.control_integration == :foh
+        pI = solver.obj.pI
         N = solver.N
-        n = solver.model.n
-        m = solver.model.m
-
-        # infeasible
-        if length(results.U[1]) != m
-            m += n
-        end
-        q = n + m
-        q2 = 2*q
         Q = solver.obj.Q
         R = getR(solver)
-        dt = solver.dt
-
-        # Initialized Hessian of Lagrangian
-        Lzz = zeros(q*N,q*N)
-
-        # Collect terms from stage cost
-        for kk = 1:N-1
-            Ac1 = results.Ac[kk]
-            Bc1 = results.Bc[kk]
-            Ac2 = results.Ac[kk+1]
-            Bc2 = results.Bc[kk+1]
-
-            # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
-            Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1) # l(x,u) and l(xm,um) terms
-            Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5) # l(x,u) and l(xm,um) terms
-            Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2) # l(y,v) and l(xm,um) terms
-            Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5) # l(y,v) and l(xm,um) terms
-
-            Lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
-            Lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
-            Lxv = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
-            Luy = 4*dt/6*(dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
-            Luv = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
-            Lyv = 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
-
-            L = [Lxx Lxu Lxy Lxv;
-                 Lxu' Luu Luy Luv;
-                 Lxy' Luy' Lyy Lyv;
-                 Lxv' Luv' Lyv' Lvv]
-
-            Lzz[q*(kk-1)+1:q*(kk-1)+q2, q*(kk-1)+1:q*(kk-1)+q2] += L
-        end
-
-        # Collect terms from constraints
-        p = length(results.C[1])
-        pI = solver.obj.pI
-        p_N = solver.obj.p_N
-        c_aug = zeros(p*N+p_N)
-        cz_aug = zeros(p*N+p_N,q*N)
-        idx_active_aug = []
-        idx_inactive_aug = []
-
-        for kk = 1:N
-            if kk == N
-                c_active1, cz_active1, p_active1, p_inactive1, idx_active1, idx_inactive1 = TrajectoryOptimization.get_active_constraints(results.C[kk],[results.Cx[kk] results.Cu[kk]],results.LAMBDA[kk],p,pI,q)
-                c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints([results.C[kk];results.CN],[results.Cx[kk] results.Cu[kk]; results.Cx_N zeros(n,m)],[results.LAMBDA[kk];results.λN],p+p_N,pI,q)
-                penalty_matrix = zeros(p_active,p_active)
-                penalty_matrix[1:p_active1,1:p_active1] = results.Iμ[kk][idx_active1,idx_active1]
-                penalty_matrix[p_active1+1:p_active,p_active1+1:p_active] = results.IμN
-                Lzz[q*(kk-1)+1:q*(kk-1)+q, q*(kk-1)+1:q*(kk-1)+q] += cz_active'*penalty_matrix*cz_active
-            else
-                c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = TrajectoryOptimization.get_active_constraints(results.C[kk],[results.Cx[kk] results.Cu[kk]],results.LAMBDA[kk],p,pI,q)
-                Lzz[q*(kk-1)+1:q*(kk-1)+q, q*(kk-1)+1:q*(kk-1)+q] += cz_active'*results.Iμ[kk][idx_active,idx_active]*cz_active
-            end
-
-            idx = idx_active .+ (kk-1)*p
-
-            if p_active > 0
-                c_aug[idx] = c_active
-                cz_aug[idx,(kk-1)*q+1:(kk-1)*q+q] = cz_active
-                idx_active_aug = cat(idx_active_aug,idx,dims=(1,1))
-            elseif p_inactive > 0
-                idx_inactive_aug = cat(idx_inactive_aug,(kk-1)*p .+ idx_inactive,dims=(1,1))
-            end
-        end
-        # Calculate B
-        B = cz_aug[idx_active_aug,:]*(Lzz\cz_aug[idx_active_aug,:]')
-
-        # Convert array of vector/matrices to array #TODO do something more intelligent
-        λ_array = to_array(results.LAMBDA)
-        μ_array = to_array(results.MU)
-        c_array = to_array(results.C)
-
-        # update active multipliers (2nd order)
-        λ_tmp = [λ_array[:];results.λN]
-
-        λ_tmp[idx_active_aug] = λ_tmp[idx_active_aug] + B\c_aug[idx_active_aug]
-
-        copyto!(results.LAMBDA,reshape(λ_tmp[1:end-p_N],p,N))
-
-        for kk = 1:N
-            results.LAMBDA[kk][1:pI] = max.(0.0,results.LAMBDA[kk][1:pI])
-        end
-    end
-
-    # update for terminal constraints
-    if mode == :terminal
-        n = solver.model.n
-        m = solver.model.m
-
-        Q = solver.obj.Q
-        R = solver.obj.R
         Qf = solver.obj.Qf
-        if length(results.U[1]) != m
-            R = getR(solver)
-            m = size(R,1)
-        end
         dt = solver.dt
+        if solver.model.m != length(results.U[1])
+            m += n
+        end
 
-        pI = solver.obj.pI
-        p = length(results.C[1])
-        p_N = solver.obj.p_N
+        if k != solver.N
+            # get inequality indices
+            idx_inequality = [i for i = 1:pI]
 
-        c_active, cz_active, p_active, p_inactive, idx_active, idx_inactive = get_active_constraints(results.CN,results.Cx_N,results.λN,p_N,0,n)
+            # assemble constraints
+            c = results.C[k]
+            cz = [results.Cx[k] results.Cu[k]]
 
-        println("p active: $p_active")
-        println("p_inactive: $p_inactive")
-        println(cz_active)
-        lzz = Qf
-        Lzz = lzz + cz_active'*results.IμN*cz_active
-        B = cz_active*(Lzz\cz_active')
+            # assemble lagrange multipliers
+            λ = results.LAMBDA[k]
 
-        # Lagrange multiplier update (2nd order) for active constraints
-        results.λN .= results.λN + B\results.CN
+            # assemble penalty matrix
+            μ = results.Iμ[k]
+        else
+            # assemble pieces from terminal condition
+            c = results.CN
+            cz = results.Cx_N
+            λ = results.λN
+            μ = results.IμN
+        end
 
-        # additional criteria for inequality constraints (ie, λ for inequality constraints should not go negative)
-        # results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
-        # Lzz = solver.obj.Qf + results.Cx_N'*results.IμN*results.Cx_N
-        # B = results.Cx_N*(Lzz\results.Cx_N')
-        # results.λN .= results.λN + B\results.CN
-        # # results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.μN.*results.CN))
-        # println("CN: $(results.CN)")
+        # first order multiplier update
+        if !solver.opts.λ_second_order_update
+            λ .= λ + μ*c
+            if k != solver.N
+                λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+            #     # update results
+            #     results.LAMBDA[k] = λ
+            # else
+            #     results.λN .= λ
+            end
+            return nothing
+        end
+
+        # second order multiplier update
+        if k != solver.N
+            constraint_status = ones(Bool,p)
+
+            # check for active inequality constraints
+            for i in idx_inequality
+                if c[i] <= 0.0
+                    constraint_status[i] = false
+                end
+            end
+        else
+            constraint_status = ones(Bool,n)
+        end
+
+        # get indices of all active constraints
+        idx_active = findall(x->x==true,constraint_status)
+
+        ## Build Hessian
+        # stage costs
+        if k != solver.N
+            L = [dt*Q zeros(n,m); zeros(m,n) dt*R]
+        else
+            L = Qf
+        end
+
+        # constraints (active inequality and equality)
+        L += cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
+
+        B = cz[idx_active,:]*(L\cz[idx_active,:]')
+
+        λ[idx_active] = λ[idx_active] + B\I*c[idx_active] #this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here as well
+
+        if k != solver.N
+            λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+        #     # update results
+        #     results.LAMBDA[k] = λ
+        # else
+        #     results.λN .= λ
+        end
+
+        return nothing
     end
+
+    # if solver.control_integration == :foh
+    #     n = solver.model.n
+    #     m = solver.model.m
+    #     q = n+m
+    #     p = solver.obj.p
+    #     pI = solver.obj.pI
+    #     N = solver.N
+    #     Q = solver.obj.Q
+    #     R = getR(solver)
+    #     Qf = solver.obj.Qf
+    #     dt = solver.dt
+    #     if solver.model.m != length(results.U[1])
+    #         m += n
+    #         p += n
+    #     end
+    #
+    #     # initialize
+    #     L = zeros((n+m)*N,(n+m)*N)
+    #     c = zeros(p*N+n)
+    #     cz = zeros(p*N+n,(n+m)*N)
+    #     λ = zeros(p*N+n)
+    #     μ = zeros(p*N+n,p*N+n)
+    #
+    #     # get inequality indices
+    #     idx_inequality = []
+    #     tmp = [i for i = 1:pI]
+    #
+    #     for k = 1:N
+    #         # get all inequality indices
+    #         idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
+    #
+    #         # assemble constraints
+    #         c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
+    #         cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
+    #
+    #         # assemble lagrange multipliers
+    #         λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
+    #
+    #         # assemble penalty matrix
+    #         μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
+    #     end
+    #     # assemble from terminal
+    #     c[N*p+1:N*p+n] = results.CN
+    #     cz[N*p+1:N*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
+    #     λ[N*p+1:N*p+n] = results.λN
+    #     μ[N*p+1:N*p+n,N*p+1:N*p+n] = results.IμN
+    #
+    #     # first order multiplier update
+    #     if !solver.opts.λ_second_order_update
+    #         λ .= λ + μ*c
+    #         λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+    #
+    #         # update results
+    #         for k = 1:N
+    #             results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+    #         end
+    #         results.λN .= λ[N*p+1:N*p+n]
+    #
+    #         return nothing
+    #     end
+    #
+    #     # second order multiplier update
+    #     constraint_status = ones(Bool,N*p+n)
+    #
+    #     # get active constraints
+    #     for i in idx_inequality
+    #         if c[i] <= 0.0
+    #             constraint_status[i] = false
+    #         end
+    #     end
+    #
+    #     # get indices of active constraints
+    #     idx_active = findall(x->x==true,constraint_status)
+    #
+    #     ## Build Hessian
+    #     # stage costs
+    #     for k = 1:N-1
+    #         # Unpack Jacobians, ̇x
+    #         Ac1, Bc1 = results.Ac[k], results.Bc[k]
+    #         Ac2, Bc2 = results.Ac[k+1], results.Bc[k+1]
+    #         Ad, Bd, Cd = results.fx[k], results.fu[k], results.fv[k]
+    #
+    #         xm = results.xmid[k]
+    #         um = (U[k] + U[k+1])/2.0
+    #
+    #         lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1)
+    #         luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
+    #         lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)
+    #         lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+    #
+    #         lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
+    #         lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
+    #         lxv = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
+    #         luy = 4*dt/6*(dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
+    #         luv = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+    #         lyv = 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+    #
+    #         L[(k-1)*(n+m)+1:(k-1)*(n+m)+2*(n+m),(k-1)*(n+m)+1:(k-1)*(n+m)+2*(n+m)] = [lxx lxu lxy lxv; lxu' luu luy luv; lxy' luy' lyy lyv; lxv' luv' lyv' lvv]
+    #     end
+    #     L[(N-1)*(n+m)+1:(N-1)*(n+m)+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = Qf
+    #
+    #     # active constraints
+    #     L += cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
+    #
+    #     B = cz[idx_active,:]*(L\cz[idx_active,:]')
+    #
+    #     if solver.opts.λ_second_order_update
+    #         λ[idx_active] = λ[idx_active] + B\I*c[idx_active] # this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here
+    #         λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+    #     end
+    #
+    #     # update results
+    #     for k = 1:N
+    #         results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+    #     end
+    #     results.λN .= λ[N*p+1:N*p+n]
+    #
+    #     return nothing
+    # end
 end
 
 function λ_update(results::ConstrainedIterResults,solver::Solver)
@@ -791,7 +1005,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         L[(N-1)*(n+m)+1:(N-1)*(n+m)+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = Qf
 
         # constraints (active inequality and equality)
-        L .+= cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
+        L += cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
 
         B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
@@ -911,7 +1125,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         L[(N-1)*(n+m)+1:(N-1)*(n+m)+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = Qf
 
         # active constraints
-        L .+= cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
+        L += cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
 
         B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
@@ -948,14 +1162,18 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
         final_index = N-1
     end
 
-    # ## Lagrange multiplier updates ###
+    ## Lagrange multiplier updates ###
     # for k = 1:final_index
-    #     results.LAMBDA[k] = results.LAMBDA[k] + results.MU[k].*results.C[k]
+    #     results.LAMBDA[k] = results.LAMBDA[k] + results.Iμ[k]*results.C[k]
     #     results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
     # end
-    #
-    # results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.μN.*results.CN))
-    λ_update(results,solver)
+
+    # results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
+    for k = 1:solver.N
+        λ_update(results,solver,k)
+    end
+    # λ_update(results,solver)
+
 
     ### Penalty updates ###
     # 'default' penaltiy update - all penalty terms are updated (no conditions)
