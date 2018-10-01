@@ -710,13 +710,12 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
                 Qxu_ += Cx'*Iμ[k]*Cu
             end
 
-            Quu_ = Hermitian(Quu_)
-            if !isposdef(Array(Quu_))
+            if !isposdef(Array(Hermitian(Quu_)))
                 if solver.opts.verbose
                     println("regularized (foh bp)")
                 end
 
-                regularization_update!(res,solver::Solver,true)
+                regularization_update!(res,solver,true)
                 k = N-1
                 Δv = [0. 0.]
 

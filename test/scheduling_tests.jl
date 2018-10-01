@@ -15,6 +15,7 @@ opts.iterations_outerloop = 50
 opts.iterations = 500
 # opts.iterations_linesearch = 50
 opts.τ = 0.25
+opts.ρ_initial = 0.0
 opts.outer_loop_update = :default
 ######################
 
@@ -32,8 +33,9 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-intergrator = :rk3
+intergrator = :rk3_foh
 opts.use_static = false
+opts.resolve_feasible = false
 opts.λ_second_order_update = false
 solver = Solver(model,obj_con,integration=intergrator,dt=dt,opts=opts)
 
@@ -54,7 +56,6 @@ U = ones(solver.model.m,solver.N)
 @time results4,stats4 = solve(solver2,X_interp,U)
 
 ### Results ###
-
 println("Final state (1st): $(results.X[end])\n Iterations: $(stats["iterations"])\n Max violation: $(max_violation(results.result[results.termination_index]))")
 println("Final state (2nd): $(results2.X[end])\n Iterations: $(stats2["iterations"])\n Max violation: $(max_violation(results2.result[results2.termination_index]))")
 println("Final state (1st inf): $(results3.X[end])\n Iterations: $(stats3["iterations"])\n Max violation: $(max_violation(results3.result[results3.termination_index]))")

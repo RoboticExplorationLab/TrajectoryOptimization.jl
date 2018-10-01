@@ -928,7 +928,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
         n = solver.model.n
         m = solver.model.m
-        p = solver.obj.p
+        p = length(results.C[1])
         pI = solver.obj.pI
         N = solver.N
         Q = solver.obj.Q
@@ -937,7 +937,6 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         dt = solver.dt
         if solver.model.m != length(results.U[1])
             m += n
-            p += n
         end
 
         # initialize
@@ -1027,7 +1026,7 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         n = solver.model.n
         m = solver.model.m
         q = n+m
-        p = solver.obj.p
+        p = length(results.C[1])
         pI = solver.obj.pI
         N = solver.N
         Q = solver.obj.Q
@@ -1036,7 +1035,6 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
         dt = solver.dt
         if solver.model.m != length(results.U[1])
             m += n
-            p += n
         end
 
         # initialize
@@ -1103,7 +1101,6 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
             # Unpack Jacobians, ̇x
             Ac1, Bc1 = results.Ac[k], results.Bc[k]
             Ac2, Bc2 = results.Ac[k+1], results.Bc[k+1]
-            Ad, Bd, Cd = results.fx[k], results.fu[k], results.fv[k]
 
             xm = results.xmid[k]
             um = (U[k] + U[k+1])/2.0
@@ -1129,10 +1126,8 @@ function λ_update(results::ConstrainedIterResults,solver::Solver)
 
         B = cz[idx_active,:]*(L\cz[idx_active,:]')
 
-        if solver.opts.λ_second_order_update
-            λ[idx_active] = λ[idx_active] + B\I*c[idx_active] # this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here
-            λ[idx_inequality] = max.(0.0,λ[idx_inequality])
-        end
+        λ[idx_active] = λ[idx_active] + B\I*c[idx_active] # this is a bit mysterious to me, but I was finding on the foh that without the I, the \ was giving different results from using inv(), so I've included the I here
+        λ[idx_inequality] = max.(0.0,λ[idx_inequality])
 
         # update results
         for k = 1:N
@@ -1167,12 +1162,12 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
     #     results.LAMBDA[k] = results.LAMBDA[k] + results.Iμ[k]*results.C[k]
     #     results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
     # end
-
+    #
     # results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
-    for k = 1:solver.N
-        λ_update(results,solver,k)
-    end
-    # λ_update(results,solver)
+    # for k = 1:solver.N
+    #     λ_update(results,solver,k)
+    # end
+    λ_update(results,solver)
 
 
     ### Penalty updates ###
