@@ -35,7 +35,7 @@ obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min,
 # Solver
 intergrator = :rk3
 opts.use_static = false
-opts.resolve_feasible = true
+opts.resolve_feasible = false
 opts.λ_second_order_update = false
 solver = Solver(model,obj_con,integration=intergrator,dt=dt,opts=opts)
 

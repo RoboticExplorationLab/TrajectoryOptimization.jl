@@ -529,25 +529,63 @@ function add_iter_outerloop!(cache::ResultsCache, results::SolverIterResults, it
     return nothing
 end
 
-function check_multipliers(results,solver)
-    p,N = size(results.C)
-    pI = solver.obj.pI
-    for i = 1:N
-        if (results.LAMBDA[1:pI,i]'*results.C[1:pI,i]) < 0.0
-            println("multiplier problem @ $i")
-            println("$(results.LAMBDA[1:pI,i].*results.C[1:pI,i] .< 0.0)")
-            println("$(results.LAMBDA[1:pI,i])")
-            println("$(results.C[1:pI,i])\n")
-            break
-        else
-            nothing
-            # println("no multiplier problems\n")
-        end
+"""
+$(SIGNATURES)
+    For infeasible solve, return an unconstrained results from a prior unconstrained or constrained results
+        -removes infeasible controls and infeasible components in Jacobians
+"""
+function no_infeasible_controls_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
+    n,m,N = get_sizes(solver)
+    if solver.opts.use_static
+        results = UnconstrainedStaticResults(n,m,N)
+    else
+        results = UnconstrainedVectorResults(n,m,N)
     end
-
-    return nothing
+    copyto!(results.X,r.X)
+    copyto!(results.xdot,r.xdot)
+    copyto!(results.xmid,r.xmid)
+    for k = 1:N
+        results.U[k] = r.U[k][1:m]
+        results.Ac[k] = r.Ac[k][1:n,1:n]
+        results.Bc[k] = r.Bc[k][1:n,1:m]
+        k == N ? continue : nothing
+        results.fx[k] = r.fx[k][1:n,1:n]
+        results.fu[k] = r.fu[k][1:n,1:m]
+    end
+    results
 end
 
+"""
+$(SIGNATURES)
+    For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
+"""
+function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ)::ConstrainedIterResults
+    n,m,N = get_sizes(solver)
+    p = solver.obj.p
+    p_N = solver.obj.p_N
+    if solver.opts.use_static
+        results = ConstrainedStaticResults(n,m,p,N,p_N)
+    else
+        results = ConstrainedVectorResults(n,m,p,N,p_N)
+    end
+    copyto!(results.X,r.X)
+    copyto!(results.xdot,r.xdot)
+    copyto!(results.xmid,r.xmid)
+    results.ρ[1] = ρ[1]
+    for k = 1:N
+        results.U[k] = r.U[k][1:m]
+        results.Ac[k] = r.Ac[k][1:n,1:n]
+        results.Bc[k] = r.Bc[k][1:n,1:m]
+        results.LAMBDA[k] = λ[k][1:p]
+        k == N ? continue : nothing
+        results.fx[k] = r.fx[k][1:n,1:n]
+        results.fu[k] = r.fu[k][1:n,1:m]
+        results.fv[k] = r.fv[k][1:n,1:m]
+    end
+    results.λN .= λN
+
+    results
+end
 
 ################################################################################
 #                                                                              #
