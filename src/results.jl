@@ -571,7 +571,7 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ):
     copyto!(results.X,r.X)
     copyto!(results.xdot,r.xdot)
     copyto!(results.xmid,r.xmid)
-    results.ρ[1] = ρ[1]
+    # results.ρ[1] = ρ[1]
     for k = 1:N
         results.U[k] = r.U[k][1:m]
         results.Ac[k] = r.Ac[k][1:n,1:n]

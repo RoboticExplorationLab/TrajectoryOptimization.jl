@@ -508,13 +508,14 @@ end
 
 """
 @(SIGNATURES)
-    Lagrange multiplier update
+    Lagrange multiplier updates
         -zoh sequential (1st and 2nd order)
         -zoh nonsequential (1st and 2nd order)
         -foh sequential (1st order)
         -foh nonsequential (1st and 2nd order)
 
         -see Bertsekas 'Constrained Optimization' chapter 2 (p.135)
+        -see Toussaint 'A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates'
 """
 function λ_update!(results::ConstrainedIterResults,solver::Solver,second_order::Bool=false)
     # ZOH
@@ -887,40 +888,164 @@ function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
+""" @(SIGNATURES) Penalty update """
+function μ_update!(results::ConstrainedIterResults,solver::Solver)
+    if solver.opts.outer_loop_update == :default
+        μ_update_default!(results,solver)
+    elseif solver.opts.outer_loop_update == :individual
+        μ_update_individual!(results,solver)
+    elseif solver.opts.outer_loop_update == :sequential
+        μ_update_sequential!(results,solver,:post)
+    end
+    return nothing
+end
+
+""" @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
+function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
+    if solver.control_integration == :foh
+        final_index = solver.N
+    else
+        final_index = solver.N-1
+    end
+
+    for k = 1:final_index
+        results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
+    end
+
+    results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+
+    return nothing
+end
+
 """
-$(SIGNATURES)
-    Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrange Method. λ is updated for equality and inequality constraints
-    according to [insert equation ref] and μ is incremented by a constant term for all constraint types.
-        -  ALGENCAN 'uniform' update: see 'Practical Augmented Lagrangian Methods for Constrained Optimization' (Algorithm 4.1, p.33)
-        - 'individual' update: see Bertsekas 'Constrained Optimization' (eq. 47, p.123)
+@(SIGNATURES)
+    Penalty update scheme ('individual')- all penalty terms are updated according to ALGENCAN heuristic
+    -note that
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
-    n,m,N = get_sizes(solver)
-    p = length(results.C[1])  # number of constraints
-    pI = solver.obj.pI  # number of inequality constraints
+function μ_update_sequential!(results::ConstrainedIterResults,solver::Solver,status::Symbol)
+    p = length(results.C[1])
+    pI = solver.obj.pI
+    n = solver.model.n
 
     if solver.control_integration == :foh
-        final_index = N
+        final_index = solver.N
     else
-        final_index = N-1
+        final_index = solver.N-1
+    end
+
+    if status == :pre
+        results.V_al_prev .= deepcopy(results.V_al_current)
+
+        for k = 1:final_index
+            for i = 1:p
+                # inequality constraints
+                if i <= pI
+                    # calculate term for penalty update (see ALGENCAN ref.)
+                    results.V_al_current[i,k] = min(-1.0*results.C[k][i], results.LAMBDA[k][i]/results.MU[k][i])
+                end
+            end
+        end
+
+    elseif status == :post
+        v1 = max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current))
+        v2 = max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
+
+        if v1 <= solver.opts.τ*v2
+            for k = 1:final_index
+                results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[k])
+            end
+
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
+
+            if solver.opts.verbose
+                println("no μ update\n")
+            end
+        else
+            for k = 1:final_index
+                results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
+            end
+
+            results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
+
+            if solver.opts.verbose
+                println("$(solver.opts.γ)x μ update\n")
+            end
+        end
+    end
+
+    return nothing
+end
+
+
+""" @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
+function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
+    p = length(results.C[1])
+    pI = solver.obj.pI
+    n = solver.model.n
+
+    τ = solver.opts.τ
+    μ_max = solver.opts.μ_max
+    γ_no  = solver.opts.γ_no
+    γ = solver.opts.γ
+
+    if solver.control_integration == :foh
+        final_index = solver.N
+    else
+        final_index = solver.N-1
+    end
+
+    # Stage constraints
+    for k = 1:final_index
+        for i = 1:p
+            if p <= pI
+                if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
+                    results.MU[k][i] = min(μ_max, γ_no*results.MU[k][i])
+                else
+                    results.MU[k][i] = min(μ_max, γ*results.MU[k][i])
+                end
+            else
+                if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
+                    results.MU[k][i] = min(μ_max, γ_no*results.MU[k][i])
+                else
+                    results.MU[k][i] = min(μ_max, γ*results.MU[k][i])
+                end
+            end
+        end
+    end
+
+    # Terminal constraints
+    for i = 1:n
+        if abs(results.CN[i]) <= τ*abs(results.CN_prev[i])
+            results.μN[i] = min(μ_max, γ_no*results.μN[i])
+        else
+            results.μN[i] = min(μ_max, γ*results.μN[i])
+        end
+    end
+
+    return nothing
+end
+
+"""
+$(SIGNATURES)
+    Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
+"""
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
+
+    if solver.opts.outer_loop_update == :sequential
+        μ_update_sequential!(results,solver,:pre)
     end
 
     ## Lagrange multiplier updates ###
     λ_update!(results,solver,solver.opts.λ_second_order_update)
 
-    ### Penalty updates ###
-    # 'default' penaltiy update - all penalty terms are updated (no conditions)
-    if solver.opts.outer_loop_update == :default
-        for k = 1:final_index
-            results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
-        end
-        results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
-    end
-
+    ## Penalty updates
+    μ_update!(results,solver)
 
     ## Store current constraints evaluations for next outer loop update
-    results.C_prev .= deepcopy(results.C)
-    results.CN_prev .= deepcopy(results.CN)
+    # results.C_prev .= deepcopy(results.C)
+    # results.CN_prev .= deepcopy(results.CN)
+    copyto!(results.C_prev,results.C)
+    copyto!(results.CN_prev,results.CN)
 
     return nothing
 end

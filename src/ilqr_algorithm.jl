@@ -812,7 +812,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
                 println("Max iterations (forward pass)\n -No improvement made")
             end
             alpha = 0.0
-            regularization_update!(res,solver,true) # increase regularization
+            # regularization_update!(res,solver,true) # increase regularization
             break
         end
 

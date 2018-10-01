@@ -4,7 +4,7 @@ using TrajectoryOptimization
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.cache = true
 # opts.c1 = 1e-4
 opts.c2 = 5.0
@@ -16,7 +16,7 @@ opts.iterations = 500
 # opts.iterations_linesearch = 50
 opts.τ = 0.25
 opts.ρ_initial = 0.0
-opts.outer_loop_update = :default
+opts.outer_loop_update = :sequential
 ######################
 
 ### Set up model, objective, solver ###
@@ -33,9 +33,9 @@ x_max = [20; 20]
 obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 # Solver
-intergrator = :rk3
+intergrator = :rk3_foh
 opts.use_static = false
-opts.resolve_feasible = false
+opts.resolve_feasible = true
 opts.λ_second_order_update = false
 solver = Solver(model,obj_con,integration=intergrator,dt=dt,opts=opts)
 
