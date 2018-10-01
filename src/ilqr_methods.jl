@@ -38,7 +38,7 @@ function rollout!(res::SolverResults,solver::Solver)
     flag = rollout!(X, U, solver)
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res, solver, X, U)
+        calculate_midpoints!(res,solver, X, U)
     end
     flag
 end
@@ -67,6 +67,11 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         if ~(maximum(abs.(X[k+1])) < solver.opts.max_state_value || maximum(abs.(U[k])) < solver.opts.max_control_value)
             return false
         end
+    end
+    # Calculate state derivatives
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X,U)
+        calculate_midpoints!(res,solver, X, U)
     end
 
     return true
