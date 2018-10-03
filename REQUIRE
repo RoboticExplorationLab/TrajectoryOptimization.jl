@@ -7,3 +7,4 @@ RecipesBase
 Interpolations
 Ipopt
 StaticArrays
+Formatting

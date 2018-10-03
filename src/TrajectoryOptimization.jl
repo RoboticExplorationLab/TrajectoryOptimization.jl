@@ -18,6 +18,8 @@ using Statistics
 using Random
 using SparseArrays
 using StaticArrays
+using Logging
+using Formatting
 
 
 const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
@@ -71,6 +73,7 @@ include("ilqr_methods.jl")
 include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
+include("logger.jl")
 
 using Ipopt
 
