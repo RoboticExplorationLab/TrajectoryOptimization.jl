@@ -76,7 +76,7 @@ mutable struct SolverOptions
         c1=1.0e-8,c2=2.0,max_state_value=1.0e16,max_control_value=1.0e16,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-5,cost_intermediate_tolerance=1.0e-2,
         constraint_tolerance=1e-3,iterations=1000,iterations_outerloop=50,
         iterations_linesearch=10,infeasible_regularization=1e6,cache=false,
-        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:uniform,λ_second_order_update=false,
+        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
         ρ_initial=1.0,ρ_factor=1.6,ρ_max=1.0e10,ρ_min=1e-6,use_static=true)
 
         new(square_root,verbose,c1,c2,max_state_value,max_control_value,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,

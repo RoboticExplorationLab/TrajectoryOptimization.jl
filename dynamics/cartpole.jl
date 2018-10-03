@@ -37,7 +37,7 @@ function cartpole_dynamics!(Xdot, X, U)
     return nothing
 end
 
-function cartpole_dynamic_udp!(Xdot, X, U)
+function cartpole_dynamics_udp!(Xdot, X, U)
     mc = 10.0;   # mass of the cart in kg (10)
     mp = 1.0;    # mass of the pole (point mass at the end) in kg
     l = 0.5;   # length of the pole in m
@@ -68,6 +68,7 @@ end
 
 n,m = 4,1
 model_analytical = Model(cartpole_dynamics!,n,m)
+model_udp = Model(cartpole_dynamics_udp!,n,m)
 
 # initial and goal states
 x0 = [0.;0.;0.;0.]
@@ -86,4 +87,5 @@ obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
 cartpole = [model, obj_uncon]
 cartpole_analytical = [model_analytical, obj_uncon]
+cartpole_udp = [model_udp, obj_uncon]
 cartpole_mechanism = MechanismState(parse_urdf(Float64,urdf_cartpole))

@@ -63,10 +63,12 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         Qu = lu + fu'*s[k+1]
         Qxx = lxx + fx'*S[k+1]*fx
 
+        # Quu = luu + fu'*(S[k+1] + res.ρ[1]*I)*fu
+        # Qux = fu'*(S[k+1] + res.ρ[1]*I)*fx
         Quu = luu + fu'*S[k+1]*fu + res.ρ[1]*I
         Qux = fu'*S[k+1]*fx
 
-
+        # println("Quu: $Quu")
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
@@ -76,12 +78,19 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
         end
+        # println("constraints: $(Cu'*Iμ[k]*Cu)")
+        # println("rho: $(res.ρ[1])")
 
         # Regularization
         if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose
                 println("regularized (normal bp)")
             end
+            # println("regularized (normal bp)")
+            # println("-condition number: $(cond(Array(Quu)))")
+            # println("Quu: $Quu")
+            # println("iteration: $k")
+            # error("stop")
 
             regularization_update!(res,solver,true)
             k = N-1
@@ -94,6 +103,7 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         d[k] = Quu\Qu
         s[k] = Qx - Qux'd[k]
         S[k] = Qxx - Qux'K[k]
+        S[k] = 0.5*(S[k] + S[k]')
 
         Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
 
@@ -812,7 +822,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
                 println("Max iterations (forward pass)\n -No improvement made")
             end
             alpha = 0.0
-            # regularization_update!(res,solver,true) # increase regularization
+            regularization_update!(res,solver,true) # increase regularization
             break
         end
 

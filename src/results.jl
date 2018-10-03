@@ -132,8 +132,8 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     Bc = [zeros(n,m) for i = 1:N]
     xdot = [zeros(n) for i = 1:N]
     xmid = [zeros(n) for i = 1:N]
-    ρ = zeros(1)
-    dρ = zeros(1)
+    ρ = ones(1)
+    dρ = ones(1)
 
     UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,ρ,dρ)
 end

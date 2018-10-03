@@ -14,19 +14,6 @@ function pendulum_dynamics(x,u)
     return xdot
 end
 
-function pendulum_dynamics_test(x,u)
-    m = 1.
-    l = 0.5
-    b = 0.1
-    lc = 0.5
-    I = 0.25
-    g = 9.81
-    # xdot = zeros(x)
-    # xdot[1] = x[2]
-    # xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
-    return [x[2];(u[1] - m*g*lc*sin(x[1]) - b*x[2])/I]
-end
-
 function pendulum_dynamics!(xdot,x,u)
     m = 1.
     l = 0.5
