@@ -842,14 +842,15 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     end
 
     if solver.opts.verbose
-        println("New cost: $J")
+
         if res isa ConstrainedIterResults
-            println("- state+control cost: $(_cost(solver,res,res.X_,res.U_))")
-            println("- Max constraint violation: $(max_violation(res))")
+            # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
+            @logmsg InnerLoop :c_max value=max_violation(res)
         end
-        println("- Expected improvement (Δv): $(Δv[1]+Δv[2])")
-        println("- Actual improvement : $(J_prev-J)")
-        println("- (z = $z, α = $(2.0*alpha)")
+        @logmsg InnerLoop :expected value=Δv[1]+Δv[2]
+        @logmsg InnerLoop :actual value=J_prev-J
+        @logmsg InnerLoop :z value=z
+        @logmsg InnerLoop :α value=2*alpha 
     end
 
     if alpha > 0.0

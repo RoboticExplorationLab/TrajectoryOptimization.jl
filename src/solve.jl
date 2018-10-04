@@ -78,9 +78,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #       INITIALIZATION       #
     #****************************#
     if solver.obj isa UnconstrainedObjective
-        if solver.opts.verbose
-            println("Solving Unconstrained Problem...")
-        end
+        println("Solving Unconstrained Problem...")
+
         iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
         if use_static
@@ -97,17 +96,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         is_constrained = true
 
         if infeasible
-            if solver.opts.verbose
-                println("Solving Constrained Problem with Infeasible Start...")
-            end
+            @info println("Solving Constrained Problem with Infeasible Start...")
+
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
             solver.opts.infeasible = true
         else
-            if solver.opts.verbose
-                println("Solving Constrained Problem...")
-            end
+            @info println("Solving Constrained Problem...")
             solver.opts.infeasible = false
         end
 
@@ -142,6 +138,20 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # Set initial regularization
     results.ρ[1] *= solver.opts.ρ_initial
 
+    # Set up logger
+    if solver.opts.verbose == false
+        min_level = Logging.Warn
+    else
+        min_level = InnerLoop
+    end
+    logger = SolverLogger(min_level)
+    inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
+    inner_widths = [5,     14,      14,        14,  14, 14,   14,      50]
+    outer_cols = [:outeriter, :iter, :iterations, :info]
+    outer_widths = [10,          5,        12,        40]
+    add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
+    add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
+
     #****************************#
     #           SOLVER           #
     #****************************#
@@ -160,7 +170,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     end
 
     # Solver Statistics
-    iter = 1 # counter for total number of iLQR iterations
+    iter = 0 # counter for total number of iLQR iterations
     iter_outer = 1
     iter_inner = 1
     time_setup = time_ns() - t_start
@@ -174,7 +184,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         results_cache = ResultsCache(solver,solver.opts.iterations*solver.opts.iterations_outerloop+1) #TODO preallocate smaller arrays
         add_iter!(results_cache, results, cost(solver, results, X, U))
     end
-    iter += 1
 
     #****************************#
     #         OUTER LOOP         #
@@ -185,11 +194,10 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     Δv = Inf
     sqrt_tolerance = false
 
+    with_logger(logger) do
     for j = 1:solver.opts.iterations_outerloop
         iter_outer = j
-        if solver.opts.verbose
-            println("Outer loop $j (begin)")
-        end
+        @info "Outer loop $j (begin)"
 
         if is_constrained
             update_constraints!(results,solver,results.X,results.U)
@@ -202,23 +210,12 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         J_prev = cost(solver, results, X, U)
         j == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
 
-        if solver.opts.verbose
-            println("Cost ($j): $J_prev\n")
-        end
-
         #****************************#
         #         INNER LOOP         #
         #****************************#
 
-        for i = 1:solver.opts.iterations
-            iter_inner = i
-            if solver.opts.verbose
-                println("--Iteration: $j-($i)--")
-            end
-
-            if solver.opts.cache
-                t1 = time_ns() # time flag for iLQR inner loop start
-            end
+        for ii = 1:solver.opts.iterations
+            iter_inner = ii
 
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
@@ -245,16 +242,12 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-            if solver.opts.cache
-                # Store current results and performance parameters
-                time = (t2-t1)/(1.0e9)
-                add_iter!(results_cache, results, J, time, iter)
-            end
             iter += 1
 
             if is_constrained
                 c_max = max_violation(results,diag_inds)
                 push!(c_max_hist, c_max)
+                @logmsg InnerLoop :c_max value=c_max
             end
 
             ## Check gradients for convergence ##
@@ -262,55 +255,45 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             s_grad = maximum(abs.(results.s[1]))
             todorov_grad = calculate_todorov_gradient(results)
 
-            if solver.opts.verbose
-                println("d gradient: $d_grad")
-                println("s gradient: $s_grad")
-                println("todorov gradient $(todorov_grad)")
-            end
+            @logmsg InnerLoop :dgrad value=d_grad
+            @logmsg InnerLoop :sgrad value=s_grad
+            @logmsg InnerLoop :grad value=todorov_grad
             gradient = todorov_grad
 
+            # Print Log
+            @logmsg InnerLoop :iter value=iter
+            @logmsg InnerLoop :cost value=J
+            @logmsg InnerLoop :dJ value=dJ loc=3
+            if ii % 10 == 1
+                print_header(logger,InnerLoop)
+            end
+            print_row(logger,InnerLoop)
+
             if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                if solver.opts.verbose
-                    println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
-                    if ~is_constrained
-                        println("Unconstrained solve complete")
-                    end
-                    println("---Gradient tolerance met")
-                end
+                @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii\n"
                 break
 
             # Check for gradient and constraint tolerance convergence
             elseif (is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance)
-                if solver.opts.verbose
-                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
-                    println("---Gradient tolerance met\n")
-                end
+                @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
                 break
             end
             #####################
 
             ## Check for cost convergence ##
             if (~is_constrained && dJ < solver.opts.cost_tolerance) || (is_constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                if solver.opts.verbose
-                    println("--iLQR (inner loop) cost eps criteria met at iteration: $i\n")
-                    if ~is_constrained
-                        println("Unconstrained solve complete")
-                    end
-                    println("---Cost met tolerance")
+                @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii\n"
+                if ~is_constrained
+                    @info "Unconstrained solve complete"
                 end
                 break
             # Check for cost and constraint tolerance convergence
             elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
-                if solver.opts.verbose
-                    println("--iLQR (inner loop) cost and constraint eps criteria met at iteration: $i")
-                    println("---Cost met tolerance\n")
-                end
+                @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
                 break
             # Check for maxed regularization
             elseif results.ρ[1] > solver.opts.ρ_max
-                if solver.opts.verbose
-                    println("*Regularization maxed out*\n - terminating solve - ")
-                end
+                @warn "*Regularization maxed out*\n - terminating solve - "
                 break
             end
             ################################
@@ -361,10 +344,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             end
         end
-        if solver.opts.verbose
-            println("Outer loop $j (end)\n -----")
-        end
 
+    end
     end
     ### END OUTER LOOP ###
 
