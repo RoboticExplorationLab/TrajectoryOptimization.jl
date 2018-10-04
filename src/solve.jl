@@ -78,7 +78,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     #       INITIALIZATION       #
     #****************************#
     if solver.obj isa UnconstrainedObjective
-        println("Solving Unconstrained Problem...")
+        @info "Solving Unconstrained Problem..."
 
         iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
