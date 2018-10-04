@@ -27,12 +27,12 @@
 ###         GENERAL METHODS          ###
 ########################################
 
-"""
-$(SIGNATURES)
-Roll out the dynamics for a given control sequence (initial)
-Updates `res.X` by propagating the dynamics, using the controls specified in
-`res.U`.
-"""
+# """
+# $(SIGNATURES)
+# Roll out the dynamics for a given control sequence (initial)
+# Updates `res.X` by propagating the dynamics, using the controls specified in
+# `res.U`.
+# """
 # function rollout!(res::SolverResults,solver::Solver)
 #     X = res.X; U = res.U
 #     flag = rollout!(X, U, solver)
@@ -115,7 +115,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
             du = dv
         else
-            U_[k-1] = U[k-1] - K[k-1]*delta - alpha*d[k-1]
+            U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
             solver.fd(X_[k], X_[k-1], U_[k-1])
         end
 
@@ -661,14 +661,14 @@ end
 """
 $(SIGNATURES)
     Regularization update scheme
-        - see Todorov iLQG code (MATLAB)
+        - see "Synthesis and Stabilization of Complex Behaviors through Online Trajectory Optimization"
 """
-function regularization_update!(results::SolverResults,solver::Solver,status::Bool)
-    if status # increase regularization
+function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
+    if status == :increase # increase regularization
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
-    else # decrease regularization
+    elseif status == :decrease # decrease regularization
         results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
-        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]>solver.opts.ρ_factor)
+        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.ρ_min)
     end
 end

@@ -1,12 +1,12 @@
 using TrajectoryOptimization
-using PyPlot
+# using PyPlot
 using Random
 Random.seed!(7)
 ### Solver options ###
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.cache = false
 opts.c1 = 1e-8
 opts.c2 = 10.0
@@ -28,6 +28,23 @@ opts.λ_second_order_update = false
 ### Set up model, objective, solver ###
 # Model, objective (unconstrained)
 model_pendulum, obj_uncon_pendulum = TrajectoryOptimization.Dynamics.pendulum!
+
+# # initial conditions
+# x0 = [0; 0.]
+#
+# # goal
+# xf = [pi; 0] # (ie, swing up)
+#
+# # costs
+# Q = 0.3*Diagonal(I,2)
+# Qf = 30.0*Diagonal(I,2)
+# R = 0.3*Diagonal(I,1)
+#
+# # simulation
+# tf = 5.
+#
+# obj_uncon_pendulum = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+
 model_dubins, obj_uncon_dubins = TrajectoryOptimization.Dynamics.dubinscar!
 model_cartpole, obj_uncon_cartpole = TrajectoryOptimization.Dynamics.cartpole_udp
 
@@ -55,7 +72,6 @@ x_max_cartpole = [10; 1000; 1000; 1000]
 obj_con_pendulum = ConstrainedObjective(obj_uncon_pendulum, u_min=u_min_pendulum, u_max=u_max_pendulum, x_min=x_min_pendulum, x_max=x_max_pendulum)
 obj_con_dubins = ConstrainedObjective(obj_uncon_dubins, u_min=u_min_dubins, u_max=u_max_dubins, x_min=x_min_dubins, x_max=x_max_dubins)
 obj_con_cartpole = ConstrainedObjective(obj_uncon_cartpole, u_min=u_min_cartpole, u_max=u_max_cartpole, x_min=x_min_cartpole, x_max=x_max_cartpole)
-
 
 # Solver
 intergrator = :rk4
