@@ -209,11 +209,11 @@ Usage Example:
 @info :myvar value=10.2  # Sends a value of 10.2 to the column "myvar"
 
 """
-function Logging.handle_message(logger::SolverLogger, level, message::Symbol, _module, group, id, file, line; value=NaN, print=true)
+function Logging.handle_message(logger::SolverLogger, level, message::Symbol, _module, group, id, file, line; value=NaN, print=true, loc=0)
     if level in keys(logger.leveldata)  && level >= logger.min_level
         ldata = logger.leveldata[level]
         if !(message in ldata.cols)
-            :info in ldata.cols ? idx = -1 : idx = 0  # add before last "info" column
+            :info in ldata.cols ? idx = loc : idx = 0  # add before last "info" column
             add_col!(ldata, message, logger.default_width, idx, do_print=print, vartype=typeof(value))
         end
         logger.leveldata[level].data[message] = value
