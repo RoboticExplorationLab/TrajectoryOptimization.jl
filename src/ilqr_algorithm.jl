@@ -810,7 +810,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             z = 0.
 
             if solver.opts.verbose
-                println("Max iterations (forward pass)\n -No improvement made")
+                @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             end
             alpha = 0.0
             regularization_update!(res,solver,true) # increase regularization
@@ -824,7 +824,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         if ~flag
             # Reduce step size if rollout returns non-finite values (NaN or Inf)
             if solver.opts.verbose
-                println("Non-finite values in rollout")
+                @debug "Non-finite values in rollout"
             end
             iter += 1
             alpha /= 2.0
@@ -850,7 +850,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         @logmsg InnerLoop :expected value=Δv[1]+Δv[2]
         @logmsg InnerLoop :actual value=J_prev-J
         @logmsg InnerLoop :z value=z
-        @logmsg InnerLoop :α value=2*alpha 
+        @logmsg InnerLoop :α value=2*alpha
     end
 
     if alpha > 0.0

@@ -96,14 +96,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         is_constrained = true
 
         if infeasible
-            @info println("Solving Constrained Problem with Infeasible Start...")
+            @info "Solving Constrained Problem with Infeasible Start..."
 
             ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
             m += n # augment the number of control input sequences by the number of states
             p += n # increase the number of constraints by the number of additional control input sequences
             solver.opts.infeasible = true
         else
-            @info println("Solving Constrained Problem...")
+            @info "Solving Constrained Problem..."
             solver.opts.infeasible = false
         end
 
@@ -146,7 +146,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     end
     logger = SolverLogger(min_level)
     inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
-    inner_widths = [5,     14,      14,        14,  14, 14,   14,      50]
+    inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
     outer_cols = [:outeriter, :iter, :iterations, :info]
     outer_widths = [10,          5,        12,        40]
     add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
@@ -270,7 +270,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             print_row(logger,InnerLoop)
 
             if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii\n"
+                @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
                 break
 
             # Check for gradient and constraint tolerance convergence
@@ -282,7 +282,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
             ## Check for cost convergence ##
             if (~is_constrained && dJ < solver.opts.cost_tolerance) || (is_constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii\n"
+                @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
                 if ~is_constrained
                     @info "Unconstrained solve complete"
                 end
@@ -293,7 +293,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 break
             # Check for maxed regularization
             elseif results.ρ[1] > solver.opts.ρ_max
-                @warn "*Regularization maxed out*\n - terminating solve - "
+                @warn "*Regularization maxed out* - terminating solve - "
                 break
             end
             ################################
@@ -324,6 +324,13 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Store current results and performance parameters
             add_iter_outerloop!(results_cache, results, iter-1) # we already iterated counter but this needs to update those results
         end
+
+        # Logger output
+        @logmsg OuterLoop :outeriter value=j
+        @logmsg OuterLoop :iter value=iter
+        @logmsg OuterLoop :iterations value=iter_inner
+        print_header(logger,OuterLoop)
+        print_row(logger,OuterLoop)
 
         #****************************#
         #    TERMINATION CRITERIA    #
@@ -373,14 +380,14 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                  "λ_second_order"=>λ_second_order_idx)
 
     if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
-        println("*Solve reached max iterations*")
+        @warn "*Solve reached max iterations*"
     end
 
     ## Return dynamically feasible trajectory
     if infeasible && solver.opts.solve_feasible
         if solver.opts.verbose
             # println("Infeasible -> Feasible ")
-            println("Infeasible solve complete")
+            @info "Infeasible solve complete"
         end
 
         # run single backward pass/forward pass to get dynamically feasible solution
@@ -388,8 +395,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
         # resolve feasible solution if necessary (should be fast)
         if solver.opts.resolve_feasible
+            @info "Resolving feasible"
             if solver.opts.verbose
-                println("Resolving feasible")
             end
             # create unconstrained solver from infeasible solver if problem is unconstrained
             if solver.opts.unconstrained
@@ -428,7 +435,7 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
     # if feasible solve, return results
     else
         if solver.opts.verbose
-            println("***Solve Complete***")
+            @info "***Solve Complete***"
         end
         if solver.opts.cache
             return results_cache, stats
@@ -667,7 +674,7 @@ $(SIGNATURES)
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
 
     if sqrt_tolerance
-        println("**Second order update**")
+        @info "**Second order update**"
     end
     n,m,N = get_sizes(solver)
     p = length(results.C[1])  # number of constraints
@@ -770,17 +777,13 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
                 results.MU[k] .= min.(solver.opts.μ_max, solver.opts.γ_no*results.MU[k])
             end
             results.μN .= min.(solver.opts.μ_max, solver.opts.γ_no*results.μN)
-            if solver.opts.verbose
-                println("no μ update\n")
-            end
+            @logmsg OuterLoop :μ_upate value="no μ update" width=20
         else
             for k = 1:N
                 results.MU[k] .= min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
             end
             results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
-            if solver.opts.verbose
-                println("$(solver.opts.γ)x μ update\n")
-            end
+            @logmsg OuterLoop :μ_upate value="$(solver.opts.γ)x μ update" width=20
         end
     end
 
