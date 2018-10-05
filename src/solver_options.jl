@@ -69,6 +69,7 @@ mutable struct SolverOptions
     ρ_factor::Float64 # scaling factor
     ρ_max::Float64 # maximum regularization value
     ρ_min::Float64 # minimum regularization value
+    regularization_type::Symbol # type of regularization- control: () + ρI, state: (S + ρI); see "Synthesis and Stabilization of Complex Behaviors through Online Trajectory Optimization"
 
     use_static::Bool
 
@@ -77,13 +78,13 @@ mutable struct SolverOptions
         constraint_tolerance=1e-3,iterations=1000,iterations_outerloop=50,
         iterations_linesearch=10,infeasible_regularization=1e6,cache=false,
         benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
-        ρ_initial=1.0,ρ_factor=2.0,ρ_max=1.0e10,ρ_min=1e-6,use_static=true)
+        ρ_initial=1.0,ρ_factor=2.0,ρ_max=1.0e10,ρ_min=1e-6,regularization_type=:state,use_static=true)
 
         new(square_root,verbose,c1,c2,max_state_value,max_control_value,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
         constraint_tolerance,iterations,iterations_outerloop,
         iterations_linesearch,infeasible_regularization,cache,
         benchmark,solve_feasible,infeasible,unconstrained,resolve_feasible,
-        λ_min,λ_max,μ_max,μ1,γ,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,
+        λ_min,λ_max,μ_max,μ1,γ,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,regularization_type,
         use_static)
     end
 end
