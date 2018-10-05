@@ -115,7 +115,7 @@ struct Solver{O<:Objective}
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))
-            infeasible = length(u) != m
+            infeasible = length(u) != m̄
 
             Sd[1:n] = x
             Sd[n+1:n+m] = u[1:m]
@@ -124,7 +124,8 @@ struct Solver{O<:Objective}
                 Sd[n+m+1:n+m+m] = v[1:m]
             end
 
-            Sd[end] = dt
+            min_time ? h = u[m̄] : h = √dt
+            Sd[end] = h
 
             Fd!(Jd,Sdotd,Sd)
 
