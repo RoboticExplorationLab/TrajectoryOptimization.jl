@@ -36,8 +36,44 @@ struct Solver{O<:Objective}
     integration::Symbol
     control_integration::Symbol
 
-    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false) where {O}
-        N, dt = calc_N(obj.tf, dt)
+    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
+        # Check for minimum time
+        if obj.tf == 0
+            min_time = true
+            dt = 0.
+            if N==-1
+                throw(ArgumentError("N must be specified for a minimum-time problem"))
+            end
+        else
+            min_time = false
+
+            # Handle combination of N and dt
+            if isnan(dt) && N>0
+                dt = obj.tf / N
+            elseif ~isnan(dt) && N==-1
+                N, dt = calc_N(obj.tf, dt)
+            elseif isnan(dt) && N==-1
+                @warn "Neither dt or N were specified. Setting N = 50"
+                N = 50
+                dt = obj.tf/N
+            elseif ~isnan(dt) && N>0
+                if dt !== obj.tf/N
+                    throw(ArgumentError("Specified time step, number of knot points, and final time do not agree ($dt ≢ $(obj.tf)/$N)"))
+                end
+            end
+            if dt == 0
+                throw(ArgumentError("dt must be non-zero for non-minimum time problems"))
+            end
+        end
+
+        # Check for valid entries
+        if N < 0
+            err = ArgumentError("$N is not a valid entry for N. Number of knot points must be a positive integer.")
+            throw(err)
+        elseif dt < 0
+            err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
+            throw(err)
+        end
         n, m = model.n, model.m
         f! = model.f # checked in model now
 
