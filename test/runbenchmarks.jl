@@ -20,9 +20,10 @@ obj.tf = 5.
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 obj = TrajectoryOptimization.to_static(obj)
 obj_c =TrajectoryOptimization.to_static(obj_c)
+dt = 0.1
 
 # Unconstrained
-solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts,integration=integration)
+solver = TrajectoryOptimization.Solver(model,obj,dt=dt,opts=opts,integration=integration)
 solver.opts.verbose = false
 U = ones(model.m,solver.N)
 solver.opts.use_static = true
@@ -36,7 +37,7 @@ disable_logging(Logging.Info)
 
 
 # Constrained
-solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts,integration=integration)
+solver = TrajectoryOptimization.Solver(model,obj_c,dt=dt,opts=opts,integration=integration)
 solver.opts.verbose = false
 solver.opts.cost_intermediate_tolerance = 1e-2
 solver.opts.use_static = true
@@ -52,7 +53,7 @@ println("$system - Constrained")
 
 ### Infeasible Start
 obj_c2 = TrajectoryOptimization.update_objective(obj_c)
-solver = TrajectoryOptimization.Solver(model, obj_c2, dt=0.1, opts=opts, integration=integration)
+solver = TrajectoryOptimization.Solver(model, obj_c2, dt=dt, opts=opts, integration=integration)
 X_interp = TrajectoryOptimization.line_trajectory(obj.x0, obj.xf,solver.N)
 solver.opts.verbose = false
 solver.opts.solve_feasible = false
