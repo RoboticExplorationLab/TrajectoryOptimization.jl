@@ -27,21 +27,36 @@
 ###         GENERAL METHODS          ###
 ########################################
 
-# """
-# $(SIGNATURES)
-# Roll out the dynamics for a given control sequence (initial)
-# Updates `res.X` by propagating the dynamics, using the controls specified in
-# `res.U`.
-# """
-# function rollout!(res::SolverResults,solver::Solver)
-#     X = res.X; U = res.U
-#     flag = rollout!(X, U, solver)
-#     if solver.control_integration == :foh
-#         calculate_derivatives!(res,solver,X,U)
-#         calculate_midpoints!(res,solver, X, U)
-#     end
-#     flag
-# end
+function is_min_time(solver::Solver)
+    if solver.dt == 0 && solver.N > 0
+        return true
+    end
+    return false
+end
+
+function get_num_controls(solver::Solver)
+    n,m = get_sizes(solver)
+    m̄ = m
+    is_min_time(solver) ? m̄ += 1 : nothing
+    solver.opts.infeasible ? mm = m̄ + n : mm = m̄
+    return m̄, mm
+end
+
+"""
+$(SIGNATURES)
+Roll out the dynamics for a given control sequence (initial)
+Updates `res.X` by propagating the dynamics, using the controls specified in
+`res.U`.
+"""
+function rollout!(res::SolverResults,solver::Solver)
+    X = res.X; U = res.U
+    flag = rollout!(X, U, solver)
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X,U)
+        calculate_midpoints!(res, solver, X, U)
+    end
+    flag
+end
 
 function rollout!(res::SolverVectorResults, solver::Solver)
     X, U = res.X, res.U
