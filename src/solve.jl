@@ -501,66 +501,66 @@ function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int6
     return nothing
 end
 
-# """@(SIGNATURES) 1st order multiplier update for zoh (nonsequential)"""
-# function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
-#     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-#     n = solver.model.n
-#     m = solver.model.m
-#     p = length(results.C[1])
-#     pI = solver.obj.pI
-#     N = solver.N
-#     Q = solver.obj.Q
-#     R = getR(solver)
-#     Qf = solver.obj.Qf
-#     dt = solver.dt
-#     if solver.model.m != length(results.U[1])
-#         m += n
-#     end
-#
-#     # initialize
-#     L = zeros((n+m)*(N-1)+n,(n+m)*(N-1)+n)
-#     c = zeros(p*(N-1)+n)
-#     cz = zeros(p*(N-1)+n,(n+m)*(N-1)+n)
-#     λ = zeros(p*(N-1)+n)
-#     μ = zeros(p*(N-1)+n,p*(N-1)+n)
-#
-#     # get inequality indices
-#     idx_inequality = []
-#     tmp = [i for i = 1:pI]
-#
-#     for k = 1:N-1
-#         # generate all inequality constraint indices
-#         idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
-#
-#         # assemble constraints
-#         c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
-#         cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
-#
-#         # assemble lagrange multipliers
-#         λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
-#
-#         # assemble penalty matrix
-#         μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
-#     end
-#     # assemble pieces from terminal condition
-#     c[(N-1)*p+1:(N-1)*p+n] = results.CN
-#     cz[(N-1)*p+1:(N-1)*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
-#     λ[(N-1)*p+1:(N-1)*p+n] = results.λN
-#     μ[(N-1)*p+1:(N-1)*p+n,(N-1)*p+1:(N-1)*p+n] = results.IμN
-#
-#     # first order multiplier update
-#     if !solver.opts.λ_second_order_update
-#         λ .= λ + μ*c
-#         λ[idx_inequality] = max.(0.0,λ[idx_inequality])
-#
-#         # update results
-#         for k = 1:N-1
-#             results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
-#         end
-#         results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
-#         return nothing
-#     end
-# end
+"""@(SIGNATURES) 1st order multiplier update for zoh (nonsequential)"""
+function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
+    # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
+    n = solver.model.n
+    m = solver.model.m
+    p = length(results.C[1])
+    pI = solver.obj.pI
+    N = solver.N
+    Q = solver.obj.Q
+    R = getR(solver)
+    Qf = solver.obj.Qf
+    dt = solver.dt
+    if solver.model.m != length(results.U[1])
+        m += n
+    end
+
+    # initialize
+    L = zeros((n+m)*(N-1)+n,(n+m)*(N-1)+n)
+    c = zeros(p*(N-1)+n)
+    cz = zeros(p*(N-1)+n,(n+m)*(N-1)+n)
+    λ = zeros(p*(N-1)+n)
+    μ = zeros(p*(N-1)+n,p*(N-1)+n)
+
+    # get inequality indices
+    idx_inequality = []
+    tmp = [i for i = 1:pI]
+
+    for k = 1:N-1
+        # generate all inequality constraint indices
+        idx_inequality = cat(idx_inequality,tmp .+ (k-1)*p,dims=(1,1))
+
+        # assemble constraints
+        c[(k-1)*p+1:(k-1)*p+p] = results.C[k]
+        cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
+
+        # assemble lagrange multipliers
+        λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
+
+        # assemble penalty matrix
+        μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
+    end
+    # assemble pieces from terminal condition
+    c[(N-1)*p+1:(N-1)*p+n] = results.CN
+    cz[(N-1)*p+1:(N-1)*p+n,(N-1)*(n+m)+1:(N-1)*(n+m)+n] = results.Cx_N
+    λ[(N-1)*p+1:(N-1)*p+n] = results.λN
+    μ[(N-1)*p+1:(N-1)*p+n,(N-1)*p+1:(N-1)*p+n] = results.IμN
+
+    # first order multiplier update
+    if !solver.opts.λ_second_order_update
+        λ .= λ + μ*c
+        λ[idx_inequality] = max.(0.0,λ[idx_inequality])
+
+        # update results
+        for k = 1:N-1
+            results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+        end
+        results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
+        return nothing
+    end
+end
 
 """@(SIGNATURES) 2nd order multiplier update for zoh (sequential)"""
 function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
@@ -853,6 +853,7 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
 function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
+    println("default penalty update")
     if solver.control_integration == :foh
         final_index = solver.N
     else
@@ -898,6 +899,7 @@ function μ_update_sequential!(results::ConstrainedIterResults,solver::Solver,st
         end
 
     elseif status == :post
+        println("sequential penalty update")
         v1 = max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current))
         v2 = max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
 
@@ -927,9 +929,9 @@ function μ_update_sequential!(results::ConstrainedIterResults,solver::Solver,st
     return nothing
 end
 
-
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
+    println("individual penalty update")
     p = length(results.C[1])
     pI = solver.obj.pI
     n = solver.model.n
@@ -981,6 +983,10 @@ $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
+
+    if solver.opts.outer_loop_update == :sequential
+        μ_update_sequential!(results,solver,:pre)
+    end
 
     ## Lagrange multiplier updates
     λ_update!(results,solver,false)
