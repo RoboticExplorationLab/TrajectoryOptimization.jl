@@ -134,127 +134,6 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-# function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
-#     N = solver.N
-#     n = solver.model.n
-#     m = solver.model.m
-#
-#     if solver.model.m != length(res.U[1])
-#         m += n
-#     end
-#
-#     Q = solver.obj.Q
-#     R = solver.obj.R
-#     xf = solver.obj.xf
-#     Qf = solver.obj.Qf
-#     dt = solver.dt
-#
-#     Uq = cholesky(Q).U
-#     Ur = cholesky(R).U
-#
-#     # pull out values from results
-#     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
-#
-#     # Terminal Cost-to-go
-#     if isa(solver.obj, ConstrainedObjective)
-#         Cx = res.Cx_N
-#         Su[N] = cholesky(Qf + Cx'*res.IμN*Cx).U
-#         s[N] = Qf*(X[N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
-#     else
-#         Su[N] = cholesky(Qf).U
-#         s[N] = Qf*(X[N] - xf)
-#     end
-#
-#     # Initialization of expected change in cost-to-go
-#     Δv = [0. 0.]
-#
-#     # Backward pass
-#     k = N-1
-#     while k >= 1
-#         lx = dt*Q*(X[k] - xf)
-#         lu = dt*R*(U[k])
-#         lxx = dt*Q
-#         luu = dt*R
-#
-#         fx, fu = res.fx[k], res.fu[k]
-#
-#         Qx = lx + fx'*s[k+1]
-#         Qu = lu + fu'*s[k+1]
-#
-#         Wxx = chol_plus(cholesky(lxx).U, Su[k+1]*fx)
-#         Wuu = chol_plus(cholesky(luu).U, Su[k+1]*fu)
-#         Qxu = (fx'*Su[k+1]')*(Su[k+1]*fu)
-#
-#         # regularize versions of Wuu, Qxu
-#         if solver.opts.regularization_type == :state
-#         #     Su_reg = chol_plus(Su[k+1], sqrt(res.ρ[1])*Matrix(I,n,n))
-#         #     Wuu_reg = chol_plus(cholesky(luu).U, Su_reg*fu)
-#         #     Qxu_reg = (fx'*Su_reg')*(Su_reg*fu)
-#         # elseif solver.opts.regularization_type == :control
-#         #     Wuu_reg = chol_plus(cholesky(luu).U, Su[k+1]*fu, sqrt(res.ρ[1])*Matrix(I,n,n))
-#         #     Qxu_reg = Qxu
-#         end
-#
-#         Wuu_reg = Wuu
-#         Qxu_reg = Qxu
-#
-#         # Constraints
-#         if isa(solver.obj, ConstrainedObjective)
-#             Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
-#             Cx, Cu = res.Cx[k], res.Cu[k]
-#             Iμ_sqrt = sqrt.(Iμ[k])
-#
-#             Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
-#             Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
-#             Wxx = chol_plus(Wxx, Iμ_sqrt*Cx)
-#             Wuu = chol_plus(Wuu, Iμ_sqrt*Cu)
-#             Qxu += Cx'*Iμ[k]*Cu
-#
-#             # regularized Quu|Wuu, Qxu
-#             Wuu_reg = chol_plus(Wuu_reg, Iμ_sqrt*Cu)
-#             Qxu_reg += Cx'*Iμ[k]*Cu
-#         end
-#
-#         # Regularization
-#         if !isposdef(Hermitian(Array(Wuu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
-#             if solver.opts.verbose
-#                 println("regularized (normal bp)")
-#                 println("-condition number: $(cond(Array(Wuu_reg)))")
-#                 println("Wuu_reg: $Wuu_reg")
-#             end
-#             error("stop")
-#
-#             # increase regularization
-#             regularization_update!(res,solver,:increase)
-#
-#             # reset backward pass
-#             k = N-1
-#             Δv = [0.0 0.0]
-#             continue
-#         end
-#
-#         # calculate gains
-#         K[k] = Wuu_reg\(Wuu_reg'\Qxu_reg')
-#         d[k] = Wuu_reg\(Wuu_reg'\vec(Qu))
-#
-#         # calculate cost-to-go (sqrt version)
-#         s[k] = vec(Qx) + (K[k]'*Wuu')*(Wuu*vec(d[k])) + K[k]'*vec(Qu) + Qxu*vec(d[k])
-#         # S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qxu' + Qux'*K[k]
-#
-#         println("Qxu: $Qxu")
-#         println("K: $(K[k])")
-#
-#         S[k] = chol_plus(Wxx, Wuu*K[k], cholesky(K[k]'*Qxu' + Qxu*K[k]).U)
-#         error("stop")
-#         # calculated change is cost-to-go over entire trajectory
-#         Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Wuu'*Wuu*vec(d[k])]
-#
-#         k = k - 1;
-#     end
-#
-#     return Δv
-# end
-
 function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     N = solver.N
     n = solver.model.n
@@ -289,9 +168,8 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     # Initialization of expected change in cost-to-go
     Δv = [0. 0.]
 
-    k = N-1
-
     # Backward pass
+    k = N-1
     while k >= 1
         lx = dt*Q*(X[k] - xf)
         lu = dt*R*(U[k])
@@ -303,22 +181,10 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         Qx = lx + fx'*s[k+1]
         Qu = lu + fu'*s[k+1]
 
-        Wxx = chol_plus(cholesky(lxx).U, Su[k+1]*fx)
-        Wuu = chol_plus(cholesky(luu).U, Su[k+1]*fu)
+        Wxx = chol_plus(Su[k+1]*fx, cholesky(lxx).U)
+        Wuu = chol_plus(Su[k+1]*fu, cholesky(luu).U)
+
         Qxu = (fx'*Su[k+1]')*(Su[k+1]*fu)
-
-        # regularized versions of Wuu, Qxu
-        if solver.opts.regularization_type == :state
-            Su_reg = chol_plus(Su[k+1], sqrt(res.ρ[1])*Matrix(I,n,n))
-            Wuu_reg = chol_plus(cholesky(luu).U, Su_reg*fu)
-            Qxu_reg = (fx'*Su_reg')*(Su_reg*fu)
-        elseif solver.opts.regularization_type == :control
-            Wuu_reg = chol_plus(cholesky(luu).U, Su[k+1]*fu, sqrt(res.ρ[1])*Matrix(I,n,n))
-            Qxu_reg = Qxu
-        end
-
-        Wuu_reg = Wuu
-        Qxu_reg = Qxu
 
         # Constraints
         if isa(solver.obj, ConstrainedObjective)
@@ -328,36 +194,25 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
             Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
             Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
-            Wxx = chol_plus(Wxx, Iμ_sqrt*Cx)
-            Wuu = chol_plus(Wuu, Iμ_sqrt*Cu)
             Qxu += Cx'*Iμ[k]*Cu
 
-            # regularized Quu|Wuu, Qxu
-            Wuu_reg = chol_plus(Wuu_reg, Iμ_sqrt*Cu)
-            Qxu_reg += Cx'*Iμ[k]*Cu
+            Wxx = chol_plus(Wxx.R, Iμ_sqrt*Cx)
+            Wuu = chol_plus(Wuu.R, Iμ_sqrt*Cu)
         end
 
-        K[k] = -Wuu\(Wuu'\Qxu')
-        d[k] = -Wuu\(Wuu'\Qu)
+        K[k] = -Wuu.R\(Wuu.R'\Qxu')
+        d[k] = -Wuu.R\(Wuu.R'\Qu)
 
-        s[k] = Qx + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu + Qxu*d[k]
+        s[k] = Qx - Qxu*(Wuu.R\(Wuu.R'\Qu))
 
-        println("Is pos.def: $(isposdef(Wuu_reg))")
         try  # Regularization
-            Su[k] = chol_minus(Wxx,Wuu'\Qxu')
+            Su[k] = chol_minus(Wxx.R,(Array(Wuu.R'))\Array(Qxu'))
         catch ex
-            # if ex isa LinearAlgebra.PosDefException
-            #     regularization_update!(res,solver,:increase)
-            #     k = N-1
-            #     if solver.opts.verbose
-            #         println("regularized (sqrt bp)")
-            #     end
-            #     continue
-            # end
+            error("sqrt reg. not implemented")
         end
 
         # Expected change in cost-to-go
-        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu'*Wuu*vec(d[k])]
+        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu.R'*Wuu.R*vec(d[k])]
 
         k = k - 1;
     end
@@ -535,7 +390,6 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
                 Qxx_ += Cx'*Iμ[k]*Cx
                 Quu_ += Cu'*Iμ[k]*Cu
                 Qxu_ += Cx'*Iμ[k]*Cu
-
             end
 
             # regularize Quu_
@@ -603,43 +457,7 @@ function chol_plus(A,B)
     P = zeros(n1+n2,m)
     P[1:n1,:] = A
     P[n1+1:end,:] = B
-    Q, R = qr(P)
-    R
-end
-
-
-"""
-$(SIGNATURES)
-Perform the operation sqrt(A + B + C), where A and B are Symmetric Matrices
-"""
-function chol_plus(A,B,C)
-    n1,m = size(A)
-    n2 = size(B,1)
-    n3 = size(C,1)
-    P = zeros(n1+n2+n3,m)
-    P[1:n1,:] = A
-    P[n1+1:n1+n2,:] = B
-    P[n1+n2+1:n1+n2+n3,:] = C
-    Q, R = qr(P)
-    R
-end
-
-"""
-$(SIGNATURES)
-Perform the operation sqrt(A + B + C + D), where A and B are Symmetric Matrices
-"""
-function chol_plus(A,B,C,D)
-    n1,m = size(A)
-    n2 = size(B,1)
-    n3 = size(C,1)
-    n4 = size(D,1)
-    P = zeros(n1+n2+n3+n4,m)
-    P[1:n1,:] = A
-    P[n1+1:n1+n2,:] = B
-    P[n1+n2+1:n1+n2+n3,:] = C
-    P[n1+n2+n3+1:n1+n2+n3+n4,:]
-    Q, R = qr(P)
-    R
+    qr(P)
 end
 
 """

@@ -23,9 +23,10 @@ end
 @testset "Jacobians" begin
     include("jacobian_tests.jl")
 end
-@testset "Square Root Method" begin
-    include("sqrt_method_tests.jl")
-end
+
+# @testset "Square Root Method" begin
+#     include("sqrt_method_tests.jl")
+# end
 @testset "First Order Hold" begin
     include("foh_tests.jl")
 end

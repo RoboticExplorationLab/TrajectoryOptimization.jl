@@ -447,10 +447,10 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     results_feasible.U .= results_feasible.U_
 
     # return constrained results if input was constrained
-    if is_constrained
-        results_feasible = new_constrained_results(results_feasible,solver_feasible,results.LAMBDA,results.λN,results.ρ)
-        update_constraints!(results_feasible,solver_feasible,results_feasible.X,results_feasible.U)
-        calculate_jacobians!(results_feasible,solver_feasible)
+    if !solver.opts.unconstrained
+        results_feasible = new_constrained_results(results_feasible,solver,results.LAMBDA,results.λN,results.ρ)
+        update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
+        calculate_jacobians!(results_feasible,solver)
     end
 
     return results_feasible
@@ -853,7 +853,7 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
 function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
-    println("default penalty update")
+    # println("default penalty update")
     if solver.control_integration == :foh
         final_index = solver.N
     else
@@ -899,7 +899,7 @@ function μ_update_sequential!(results::ConstrainedIterResults,solver::Solver,st
         end
 
     elseif status == :post
-        println("sequential penalty update")
+        # println("sequential penalty update")
         v1 = max(sqrt(norm2(results.C,pI+1:p) + norm2(results.CN)), norm(results.V_al_current))
         v2 = max(sqrt(norm2(results.C_prev,pI+1:p) + norm2(results.CN_prev)), norm(results.V_al_prev))
 
@@ -931,7 +931,7 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
-    println("individual penalty update")
+    # println("individual penalty update")
     p = length(results.C[1])
     pI = solver.obj.pI
     n = solver.model.n
@@ -984,6 +984,7 @@ $(SIGNATURES)
 """
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
 
+    # store metrics for sequential update
     if solver.opts.outer_loop_update == :sequential
         μ_update_sequential!(results,solver,:pre)
     end
