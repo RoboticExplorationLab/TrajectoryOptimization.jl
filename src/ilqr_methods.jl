@@ -27,25 +27,25 @@
 ###         GENERAL METHODS          ###
 ########################################
 
-"""
-$(SIGNATURES)
-Roll out the dynamics for a given control sequence (initial)
-Updates `res.X` by propagating the dynamics, using the controls specified in
-`res.U`.
-"""
-function rollout!(res::SolverResults,solver::Solver)
-    X = res.X; U = res.U
-    flag = rollout!(X, U, solver)
-    if solver.control_integration == :foh
-        calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res, solver, X, U)
-    end
-    flag
-end
+# """
+# $(SIGNATURES)
+# Roll out the dynamics for a given control sequence (initial)
+# Updates `res.X` by propagating the dynamics, using the controls specified in
+# `res.U`.
+# """
+# function rollout!(res::SolverResults,solver::Solver)
+#     X = res.X; U = res.U
+#     flag = rollout!(X, U, solver)
+#     if solver.control_integration == :foh
+#         calculate_derivatives!(res,solver,X,U)
+#         calculate_midpoints!(res,solver, X, U)
+#     end
+#     flag
+# end
 
 function rollout!(res::SolverVectorResults, solver::Solver)
     X, U = res.X, res.U
-    infeasible = solver.model.m != size(U[1],1)
+    infeasible = solver.model.m != length(U[1])
     N = solver.N
     m = solver.model.m
     n = solver.model.n
@@ -60,13 +60,18 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         end
 
         if infeasible
-            X[k+1] .+= U[k][m+1:m+n]
+            X[k+1] += U[k][m+1:m+n]
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(X[k]) < solver.opts.max_state_value || maximum(U[k]) < solver.opts.max_control_value)
+        if ~(maximum(abs.(X[k+1])) < solver.opts.max_state_value || maximum(abs.(U[k])) < solver.opts.max_control_value)
             return false
         end
+    end
+    # Calculate state derivatives
+    if solver.control_integration == :foh
+        calculate_derivatives!(res,solver,X,U)
+        calculate_midpoints!(res,solver, X, U)
     end
 
     return true
@@ -81,7 +86,7 @@ gains `res.K` and `res.d` to the difference between states
 Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
-    infeasible = solver.model.m != size(res.U[1],1)
+    infeasible = solver.model.m != length(res.U[1])
     N = solver.N; m = solver.model.m; n = solver.model.n
 
     if infeasible
@@ -98,7 +103,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         du = zeros(m)
         dv = zeros(m)
         du = alpha*d[1]
-        U_[1] .= U[1] + du
+        U_[1] = U[1] + du
     end
 
     for k = 2:N
@@ -106,21 +111,21 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
         if solver.control_integration == :foh
             dv .= K[k]*delta + b[k]*du + alpha*d[k]
-            U_[k] .= U[k] + dv
+            U_[k] = U[k] + dv
             solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
             du = dv
         else
-            U_[k-1] = U[k-1] - K[k-1]*delta - alpha*d[k-1]
+            U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
             solver.fd(X_[k], X_[k-1], U_[k-1])
         end
 
 
         if infeasible
-            X_[k] .+= U_[k-1][m0.+(1:n)]
+            X_[k] += U_[k-1][m0.+(1:n)]
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(X_[k]) < solver.opts.max_state_value || maximum(U_[k]) < solver.opts.max_control_value)
+        if ~(maximum(abs.(X_[k])) < solver.opts.max_state_value || maximum(abs.(U_[k-1])) < solver.opts.max_control_value)
             return false
         end
     end
@@ -128,7 +133,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     # Calculate state derivatives
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X_,U_)
-        calculate_midpoints!(res, solver, X_, U_)
+        calculate_midpoints!(res,solver, X_, U_)
     end
 
     return true
@@ -160,10 +165,6 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     obj = solver.obj
     dt = solver.dt
 
-    if size(U,1) != m
-        m += n
-    end
-
     R = getR(solver)
 
     J = 0.0
@@ -173,7 +174,6 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             xdot1 = res.xdot[k]
             xdot2 = res.xdot[k+1]
 
-            # Xm = 0.5*X[k] + dt/8*xdot1 + 0.5*X[k+1] - dt/8*xdot2
             Xm = res.xmid[k]
             Um = (U[k] + U[k+1])/2
 
@@ -193,11 +193,11 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
-        J += (0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.LAMBDA[k]'*res.C[k])
+        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.LAMBDA[k]'*res.C[k]
     end
 
     if solver.control_integration == :foh
-        J += (0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.LAMBDA[N]'*res.C[N])
+        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.LAMBDA[N]'*res.C[N]
     end
 
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
@@ -354,7 +354,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
         c(res.C[k], X[k], U[k]) # update results with constraint evaluations
         # Inequality constraints [see equation ref]
         for j = 1:pI
-            if res.C[k][j] > 0.0 || res.LAMBDA[k][j] > 0.0
+            if res.C[k][j] >= 0.0 || res.LAMBDA[k][j] > 0.0
                 res.Iμ[k][j,j] = res.MU[k][j] # active (or previously active) inequality constraints are penalized
             else
                 res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
@@ -661,14 +661,14 @@ end
 """
 $(SIGNATURES)
     Regularization update scheme
-        - see Todorov iLQG code (MATLAB)
+        - see "Synthesis and Stabilization of Complex Behaviors through Online Trajectory Optimization"
 """
-function regularization_update!(results::SolverResults,solver::Solver,status::Bool)
-    if status # increase regularization
+function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
+    if status == :increase # increase regularization
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
-    else # decrease regularization
+    elseif status == :decrease # decrease regularization
         results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
-        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]>solver.opts.ρ_factor)
+        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.ρ_min)
     end
 end

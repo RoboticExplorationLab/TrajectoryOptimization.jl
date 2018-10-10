@@ -1,5 +1,4 @@
 ### foh augmented dynamics
-
 # Set up Dubins car system
 dt = 0.1
 n_dc = 3
@@ -72,13 +71,12 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cache=true
 # opts.c1=1e-4
 # opts.c2=3.0
 opts.constraint_tolerance = 1e-3
 opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
-opts.outer_loop_update = :uniform
+opts.outer_loop_update = :default
 # opts.τ = 0.1
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
@@ -133,5 +131,4 @@ X_interp = TrajectoryOptimization.line_trajectory(solver)
 ### Solve ###
 results,stats = TrajectoryOptimization.solve(solver,U)
 #############
-res = results.result[length(results)]
-@test all(TrajectoryOptimization.to_array(res.C) .< opts.constraint_tolerance)
+@test stats["c_max"][end] < opts.constraint_tolerance

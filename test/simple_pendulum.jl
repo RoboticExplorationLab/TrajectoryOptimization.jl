@@ -1,5 +1,6 @@
 #TODO cleanup and document each test
 # Set up models and objective
+using Test
 u_bound = 3.
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
 opts = TrajectoryOptimization.SolverOptions()
