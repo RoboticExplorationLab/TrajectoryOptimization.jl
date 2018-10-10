@@ -120,13 +120,11 @@ gains `res.K` and `res.d` to the difference between states
 Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
-    infeasible = solver.model.m != length(res.U[1])
-    N = solver.N; m = solver.model.m; n = solver.model.n
-
-    if infeasible
-        m0 = m
-        m += n
-    end
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    infeasible = m̄ != size(res.U[1],1)
+    min_time = is_min_time(solver)
+    dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
@@ -145,17 +143,18 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
         if solver.control_integration == :foh
             dv .= K[k]*delta + b[k]*du + alpha*d[k]
-            U_[k] = U[k] + dv
-            solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
+            U_[k] .= U[k] + dv
+            min_time ? dt = U_[k][m̄]^2 : nothing
+            solver.fd(X_[k], X_[k-1], U_[k-1], U_[k], dt)
             du = dv
         else
-            U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
-            solver.fd(X_[k], X_[k-1], U_[k-1])
+            U_[k-1] = U[k-1] - K[k-1]*delta - alpha*d[k-1]
+            min_time ? dt = U_[k-1][m̄]^2 : nothing
+            solver.fd(X_[k], X_[k-1], U_[k-1], dt)
         end
 
-
         if infeasible
-            X_[k] += U_[k-1][m0.+(1:n)]
+            X_[k] .+= U_[k-1][m̄.+(1:n)]
         end
 
         # Check that rollout has not diverged
@@ -166,8 +165,8 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
     # Calculate state derivatives
     if solver.control_integration == :foh
-        calculate_derivatives!(res,solver,X_,U_)
-        calculate_midpoints!(res,solver, X_, U_)
+        calculate_derivatives!(res, solver, X_, U_)
+        calculate_midpoints!(res, solver, X_, U_)
     end
 
     return true
@@ -177,8 +176,8 @@ end
 $(SIGNATURES)
 Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64})::Union{Float64,ForwardDiff.Dual}
-    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64},c::Float64=0)::Union{Float64,ForwardDiff.Dual}
+    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u + c
 end
 
 function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
@@ -195,14 +194,19 @@ end
 
 function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     # pull out solver/objective values
-    N = solver.N; Q = solver.obj.Q; xf::Vector{Float64} = solver.obj.xf; Qf::Matrix{Float64} = solver.obj.Qf; m = solver.model.m; n = solver.model.n
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
     obj = solver.obj
+    Q = obj.Q; xf::Vector{Float64} = obj.xf; Qf::Matrix{Float64} = obj.Qf; c::Float64 = obj.c;
     dt = solver.dt
+
+    min_time = is_min_time(solver)
 
     R = getR(solver)
 
     J = 0.0
     for k = 1:N-1
+        min_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
 
             xdot1 = res.xdot[k]
@@ -211,9 +215,9 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             Xm = res.xmid[k]
             Um = (U[k] + U[k+1])/2
 
-            J += solver.dt/6*(stage_cost(X[k],U[k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[k+1],U[k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            J += dt/6*(stage_cost(X[k],U[k],Q,R,xf,c) + 4*stage_cost(Xm,Um,Q,R,xf,c) + stage_cost(X[k+1],U[k+1],Q,R,xf,c)) # Simpson quadrature (integral approximation) for foh stage cost
         else
-            J += solver.dt*stage_cost(X[k],U[k],Q,R,xf)
+            J += dt*stage_cost(X[k],U[k],Q,R,xf,c)
         end
     end
 
@@ -239,11 +243,12 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     return J
 end
 
-function cost(solver::Solver, res::UnconstrainedIterResults, X::Vector=res.X, U::Vector=res.U)
-    _cost(solver,res,X,U)
+function cost_constraints(solver::Solver, res::UnconstrainedIterResults)
+    return 0.
 end
 
-function cost(solver::Solver, res::ConstrainedIterResults, X::Vector=res.X, U::Vector=res.U)
+
+function cost(solver::Solver, res::SolverIterResults, X::Vector=res.X, U::Vector=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
