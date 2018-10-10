@@ -18,8 +18,8 @@ opts.iterations = 250
 opts.iterations_linesearch = 25
 opts.τ = 0.25
 opts.γ = 10.0
-opts.ρ_initial = 0.0
-opts.outer_loop_update = :sequential
+opts.ρ_initial = 1.0
+opts.outer_loop_update = :individual
 opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
@@ -83,7 +83,6 @@ U_cartpole = rand(solver_cartpole.model.m,solver_cartpole.N)
 println("Final state (pendulum)-> res: $(results_pendulum.X[end]), goal: $(solver_pendulum.obj.xf)\n Iterations: $(stats_pendulum["iterations"])\n Outer loop iterations: $(stats_pendulum["major iterations"])\n Max violation: $(stats_pendulum["c_max"][end])\n Max μ: $(maximum([to_array(results_pendulum.MU)[:]; results_pendulum.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_pendulum.LAMBDA)[:]; results_pendulum.λN[:]])))\n")
 println("Final state (dubins)-> res: $(results_dubins.X[end]), goal: $(solver_dubins.obj.xf)\n Iterations: $(stats_dubins["iterations"])\n Outer loop iterations: $(stats_dubins["major iterations"])\n Max violation: $(stats_dubins["c_max"][end])\n Max μ: $(maximum([to_array(results_dubins.MU)[:]; results_dubins.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_dubins.LAMBDA)[:]; results_dubins.λN[:]])))\n")
 println("Final state (cartpole)-> res: $(results_cartpole.X[end]), goal: $(solver_cartpole.obj.xf)\n Iterations: $(stats_cartpole["iterations"])\n Outer loop iterations: $(stats_cartpole["major iterations"])\n Max violation: $(stats_cartpole["c_max"][end])\n Max μ: $(maximum([to_array(results_cartpole.MU)[:]; results_cartpole.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_cartpole.LAMBDA)[:]; results_cartpole.λN[:]])))\n")
-results_pendulum
 a = 1
 # ### Plots
 # # pendulum
