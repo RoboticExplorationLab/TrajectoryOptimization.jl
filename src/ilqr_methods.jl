@@ -332,14 +332,21 @@ Updates both dyanmics and constraint jacobians, depending on the results type.
 """
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
     N = solver.N
+    dt = solver.dt
+    min_time = is_min_time(solver)
+    m̄,mm = get_num_controls(solver)
     for k = 1:N-1
+        min_time ? dt = res.U[m̄] : nothing
         if solver.control_integration == :foh
-            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
+            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1], dt)
             res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
         else
-            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
+            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k], dt)
         end
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+        if min_time && k < N-1
+            res.Cu[k][end,m̄] = 1
+        end
     end
 
     if solver.control_integration == :foh
@@ -377,11 +384,11 @@ $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
-
-    N = length(res.C) # note, C is now (p,N)
-    p = length(res.C[1])
+    N = solver.N
+    p,pI,pE = get_num_constraints(solver)
+    m̄,mm = get_num_controls(solver)
+    min_time = is_min_time(solver)
     c = solver.c_fun
-    pI = solver.obj.pI
 
     if solver.control_integration == :foh
         final_index = N
@@ -391,6 +398,11 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
     for k = 1:final_index
         c(res.C[k], X[k], U[k]) # update results with constraint evaluations
+
+        if min_time && k < N-1
+            res.C[k][end] = res.U[k][m̄] - res.U[k+1][m̄]
+        end
+
         # Inequality constraints [see equation ref]
         for j = 1:pI
             if res.C[k][j] >= 0.0 || res.LAMBDA[k][j] > 0.0
