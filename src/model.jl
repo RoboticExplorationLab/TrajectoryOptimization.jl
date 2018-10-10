@@ -401,7 +401,6 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf; c::Float64=0.0,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
     cI=(c,x,u)->nothing, cE=(c,x,u)->nothing,
     use_terminal_constraint=true)
-    println("default")
 
     ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
         u_min, u_max,
@@ -412,20 +411,16 @@ end
 
 # Positional arguments match unconstrained
 function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Float64,x0,xf; kwargs...)
-    @show c
-    println("positional")
     ConstrainedObjective(Q,R,Qf,tf,x0,xf,c=c; kwargs...)
 end
 
 # Minimum time constructor (c not specified)
 function ConstrainedObjective(Q,R,Qf,tf::Symbol,x0,xf; kwargs...)
-    println("symbol c not")
     ConstrainedObjective(Q,R,Qf,1.0,tf,x0,xf; kwargs...)
 end
 
 # Minimum time constructor (c specified)
 function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Symbol,x0,xf; kwargs...)
-    println("symbol c")
     if tf == :min
         ConstrainedObjective(Q,R,Qf,c,0.,x0,xf; kwargs...)
     else
@@ -460,10 +455,10 @@ function update_objective(obj::ConstrainedObjective;
     use_terminal_constraint=obj.use_terminal_constraint)
 
     ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
-        u_min, u_max,
-        x_min, x_max,
-        cI, cE,
-        use_terminal_constraint)
+        u_min=u_min, u_max=u_max,
+        x_min=x_min, x_max=x_max,
+        cI=cI, cE=cE,
+        use_terminal_constraint=use_terminal_constraint)
 
 end
 
