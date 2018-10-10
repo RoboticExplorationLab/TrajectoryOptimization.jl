@@ -534,8 +534,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     pI, pI_c, pI_N, pI_N_c = pI_obj
     pE, pE_c, pE_N, pE_N_c = pE_obj
 
-    m_all = m
-    min_time ? m_all += 1 : nothing
+    m̄ = m
+    min_time ? m̄ += 1 : nothing
 
     # Append on min time bounds
     u_max = obj.u_max
@@ -584,13 +584,13 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
 
     # Augment functions together
     function c_fun!(c,x,u)::Nothing
-        infeasible = length(u) != m_all
-        cI!(view(c,1:pI),x,u[1:m_all])
+        infeasible = length(u) != m̄
+        cI!(view(c,1:pI),x,u[1:m̄])
         if pE_c > 0
             obj.cE(view(c,(1:pE_c).+pI),x,u[1:m])
         end
         if infeasible
-            c[pI.+pE_c.+(1:n)] = u[m_all.+(1:n)]
+            c[pI.+pE_c.+(1:n)] = u[m̄.+(1:n)]
         end
         return nothing
         # min time equality constraint gets updated in update_constraints (needs access to next time step)
@@ -611,12 +611,12 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     fx_state[pI_x_max+1:end,:] = -In[x_min_active,:]
     fx = zeros(p,n)
 
-    Im = Matrix(I,m_all,m_all)
-    fu_control = zeros(pI_u,m_all)
+    Im = Matrix(I,m̄,m̄)
+    fu_control = zeros(pI_u,m̄)
     fu_control[1:pI_u_max,:] = Im[u_max_active,:]
     fu_control[pI_u_max+1:end,:] = -Im[u_min_active,:]
-    fu_state = zeros(pI_x,m_all)
-    fu = zeros(p,m_all)
+    fu_state = zeros(pI_x,m̄)
+    fu = zeros(p,m̄)
 
     if pI_c > 0
         cI_custom_jacobian! = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
@@ -631,8 +631,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     fx_N = In  # Jacobian of final state
 
     function constraint_jacobian!(fx::AbstractMatrix, fu::AbstractMatrix, x::AbstractArray,u::AbstractArray)
-        infeasible = length(u) != m
-        let m = m_all
+        infeasible = length(u) != m̄
+        let m = m̄
             fx[1:pI_u, 1:n] = fx_control
             fu[1:pI_u, 1:m] = fu_control
             fx[(1:pI_x).+pI_u, 1:n] = fx_state
@@ -647,7 +647,7 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
         end
 
         if infeasible
-            let m = m_all
+            let m = m̄
                 fx[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,1:n] = fx_infeasible
                 fu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m+1:m+n] = fu_infeasible
             end
