@@ -139,7 +139,7 @@ struct Solver{O<:Objective}
                 if infeasible
                     return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I] # fx, [fu I]
                 else
-                    return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m] # fx, fu
+                    return Jd[1:model.n,1:model.n], Jd[1:n,n.+(1:m̄)] # fx, fu
                 end
             end
         end
@@ -190,11 +190,18 @@ Return the quadratic control stage cost R
 If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
-    if solver.opts.infeasible
-        R = solver.opts.infeasible_regularization*tr(solver.obj.R)*Diagonal(I,solver.model.m+solver.model.n)
-        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
-        return R
-    else
+    if !solver.opts.infeasible && !is_min_time(solver)
         return solver.obj.R
+    else
+        m̄,mm = get_num_controls(solver)
+        R = zeros(mm,mm)
+        R[1:m,1:m] = solver.obj.R
+        if is_min_time(solver)
+            R[m̄,m̄] = solver.opts.min_time_regularization
+        end
+        if solver.opts.infeasible
+            R[m̄+1:end,m̄+1:end] = I*solver.opts.infeasible_regularization*tr(solver.obj.R)
+        end
+        return R
     end
-end
+end # TODO: make this type stable (maybe make it a type so it only calculates once)
