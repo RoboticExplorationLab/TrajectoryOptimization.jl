@@ -27,6 +27,7 @@
 ###         GENERAL METHODS          ###
 ########################################
 
+"$(SIGNATURES) determine if the solver is solving a minimum time problem"
 function is_min_time(solver::Solver)
     if solver.dt == 0 && solver.N > 0
         return true
@@ -34,6 +35,13 @@ function is_min_time(solver::Solver)
     return false
 end
 
+"""
+$(SIGNATURES)
+Get number of controls, accounting for minimum time and infeasible start
+# Output
+- m̄ = number of non infeasible controls. Augmented by one if time is included as a control for minimum time problems.
+- mm = total number of controls
+"""
 function get_num_controls(solver::Solver)
     n,m = get_sizes(solver)
     m̄ = m
@@ -44,34 +52,45 @@ end
 
 """
 $(SIGNATURES)
+Get true number of constraints, accounting for minimum time and infeasible start constraints
+"""
+function get_num_constraints(solver::Solver)
+    p = solver.obj.p
+    pI = solver.obj.pI
+    pE = p - pI
+    if is_min_time(solver)
+        pI += 2
+        pE += 1
+    end
+    if solver.opts.infeasible
+        pE += solver.model.n
+    end
+    p = pI + pE
+    return p, pI, pE
+end
+
+"""
+$(SIGNATURES)
 Roll out the dynamics for a given control sequence (initial)
 Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
-function rollout!(res::SolverResults,solver::Solver)
-    X = res.X; U = res.U
-    flag = rollout!(X, U, solver)
-    if solver.control_integration == :foh
-        calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res, solver, X, U)
-    end
-    flag
-end
-
 function rollout!(res::SolverVectorResults, solver::Solver)
     X, U = res.X, res.U
-    infeasible = solver.model.m != length(U[1])
-    N = solver.N
-    m = solver.model.m
-    n = solver.model.n
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    dt = solver.dt
+    min_time = is_min_time(solver)
+    infeasible = m̄ != size(U[1],1)
 
     X[1] = solver.obj.x0
-
     for k = 1:N-1
+        min_time ? dt = U[k][m̄]^2 : nothing
+
         if solver.control_integration == :foh
-            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m]) # get new state
+            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m], dt) # get new state
         else
-            solver.fd(X[k+1], X[k], U[k][1:m])
+            solver.fd(X[k+1], X[k], U[k][1:m], dt)
         end
 
         if infeasible
