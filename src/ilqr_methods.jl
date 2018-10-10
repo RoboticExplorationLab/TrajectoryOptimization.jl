@@ -98,7 +98,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(abs.(X[k+1])) < solver.opts.max_state_value || maximum(abs.(U[k])) < solver.opts.max_control_value)
+        if ~(norm(X[k],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
             return false
         end
     end
@@ -159,7 +159,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         end
 
         # Check that rollout has not diverged
-        if ~(maximum(abs.(X_[k])) < solver.opts.max_state_value || maximum(abs.(U_[k-1])) < solver.opts.max_control_value)
+        if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
             return false
         end
     end
