@@ -925,7 +925,7 @@ $(SIGNATURES)
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
 
     ## Lagrange multiplier updates
-    λ_update!(results,solver,solver.opts.λ_second_order_update)
+    λ_update!(results,solver,false)
 
     ## Penalty updates
     μ_update!(results,solver)

@@ -67,21 +67,19 @@ struct Model
         num_joints = length(joints(mech))-1  # subtract off joint to world
         m = num_joints # Default to number of joints
 
-        function fc(x,u) # TODO: make this an in place operation
-            state = MechanismState{eltype(x)}(mech)
-
+        function fc(xdot,x,u)
+            state = MechanismState{eltype(u)}(mech)
             # set the state variables:
             q = x[1:num_joints]
-            qd = x[(1:num_joints)+num_joints]
+            qd = x[1+num_joints:num_joints+num_joints]
             set_configuration!(state, q)
             set_velocity!(state, qd)
-
-            [qd; Array(mass_matrix(state))\(torques.*u) - Array(mass_matrix(state))\Array(dynamics_bias(state))]
+            xdot[1:num_joints] = qd
+            xdot[num_joints+1:num_joints+num_joints] = Array(mass_matrix(state))\(torques.*u) - Array(mass_matrix(state))\Array(dynamics_bias(state))
+            return nothing
         end
 
-        f! = wrap_inplace(fc)
-
-        new(f!, n, convert(Int,sum(torques)))
+        new(fc, n, convert(Int,sum(torques)))
     end
 end
 

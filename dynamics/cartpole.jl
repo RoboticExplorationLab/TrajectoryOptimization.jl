@@ -5,8 +5,7 @@ traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
 urdf_folder = joinpath(traj_folder, "dynamics/urdf")
 urdf_cartpole = joinpath(urdf_folder, "cartpole.urdf")
 
-model = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
-
+model_urdf = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
 
 function cartpole_dynamics!(Xdot, X, U)
     mc = 2;   # mass of the cart in kg (10)
@@ -74,6 +73,9 @@ model_udp = Model(cartpole_dynamics_udp!,n,m)
 x0 = [0.;0.;0.;0.]
 xf = [0.;pi;0.;0.]
 
+x0_flipped = [0.;pi;0.;0.]
+xf_flipped = [0.;0.;0.;0.]
+
 # costs
 Q = 0.01*Diagonal(I,n)
 Qf = 1000.0*Diagonal(I,n)
@@ -84,8 +86,9 @@ tf = 5.0
 dt = 0.1
 
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon_flipped = UnconstrainedObjective(Q, R, Qf, tf, x0_flipped, xf_flipped)
 
-cartpole = [model, obj_uncon]
+cartpole = [model_urdf, obj_uncon_flipped]
 cartpole_analytical = [model_analytical, obj_uncon]
 cartpole_udp = [model_udp, obj_uncon]
 cartpole_mechanism = MechanismState(parse_urdf(Float64,urdf_cartpole))

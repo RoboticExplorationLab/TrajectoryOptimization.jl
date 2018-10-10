@@ -39,13 +39,6 @@ struct Solver{O<:Objective}
     function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false) where {O}
         N, dt = calc_N(obj.tf, dt)
         n, m = model.n, model.m
-        #
-        # # Make dynamics inplace
-        # if is_inplace_dynamics(model)
-        #     f! = model.f
-        # else
-        #     f! = wrap_inplace(model.f)
-        # end
         f! = model.f # checked in model now
 
         # Get integration scheme
