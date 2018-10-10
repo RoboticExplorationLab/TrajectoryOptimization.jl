@@ -129,6 +129,109 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
+function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+    R = getR(solver)
+    dt = solver.dt
+
+    min_time = is_min_time(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+    k = N-1
+
+    # Backward pass
+    while k >= 1
+        min_time ? dt = U[k][m̄]^2 : nothing
+
+        lx = dt*Q*(X[k] - xf)
+        lu = dt*R*(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fx, fu = res.fx[k], res.fu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fx'*s[k+1]
+        Qu = lu + fu'*s[k+1]
+        Qxx = lxx + fx'*S[k+1]*fx
+
+        Quu = luu + fu'*S[k+1]*fu + res.ρ[1]*I
+        Qux = fu'*S[k+1]*fx
+
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
+            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+
+            if min_time
+                h = U[k][m̄]
+                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
+                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
+                tmp = zero(Quu)
+                tmp[:,m̄] = R*U[k]
+                Quu += 2h*(tmp+tmp')
+                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
+
+                if k > 1
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][m̄,m̄] - LAMBDA[k-1][m̄]
+                    Quu[m̄,m̄] += Iμ[k-1][m̄,m̄]
+                end
+
+            end
+
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
+            if solver.opts.verbose
+                @logmsg InnerLoop "regularized"
+            end
+
+            regularization_update!(res,solver,true)
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = Quu\Qux
+        d[k] = Quu\Qu
+        s[k] = Qx - Qux'd[k]
+        S[k] = Qxx - Qux'K[k]
+
+        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    return Δv
+end
+
 """
 $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
