@@ -568,6 +568,8 @@ $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
 function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
+    status = :progress_made
+
     # Pull out values from results
     X = res.X
     U = res.U
@@ -579,20 +581,42 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     # Compute original cost
     update_constraints!(res,solver,X,U)
 
-    J_prev = cost(solver, res, X, U)
+    Ju_prev = _cost(solver, res, X, U)   # Unconstrained cost
+    Jc_prev = cost_constraints(solver, res)  # constraint cost
+    J_prev = Ju_prev + Jc_prev
+
 
     J = Inf
     alpha = 1.0
     iter = 0
     z = 0.
 
+    logger = current_logger()
+    print_header(logger,InnerIters)
+    @logmsg InnerIters :iter value=0
+    @logmsg InnerIters :cost value=J_prev
+    print_row(logger,InnerIters)
     while z ≤ solver.opts.c1 || z > solver.opts.c2
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
+            Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+            Jc = cost_constraints(solver, res)  # constraint cost
+
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
+
+            zu = (Ju_prev - Ju)/(alpha*(Δv[1] + alpha*Δv[2]))
+            zc = (Jc_prev - Jc)/(alpha*(Δv[1] + alpha*Δv[2]))
+
+            status = :no_progress_made
+            if solver.opts.c1 <= zu <= solver.opts.c2
+                status = :uncon_progress_made
+            end
+            if solver.opts.c1 <= zc <= solver.opts.c2
+                status = :constraint_progress_made
+            end
 
             update_constraints!(res,solver,X_,U_)
             J = copy(J_prev)
@@ -622,25 +646,35 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
         # Calcuate cost
         update_constraints!(res,solver,X_,U_)
+
+        Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+        Jc = cost_constraints(solver, res)  # constraint cost
+        J = Ju + Jc
         J = cost(solver, res, X_, U_)
         z = (J_prev - J)/(-alpha*(Δv[1] + alpha*Δv[2]))
 
-        alpha /= 2.0
-
         iter += 1
+
+        # Log messages
+        @logmsg InnerIters :iter value=iter
+        @logmsg InnerIters :α value=alpha
+        @logmsg InnerIters :cost value=J
+        @logmsg InnerIters :z value=z
+        print_row(logger,InnerIters)
+
+        alpha /= 2.0
     end
 
-    if solver.opts.verbose
-        alpha *= 2.0 # we decremented since the last implemenation of alpha so we need to return to previous value
-        if res isa ConstrainedIterResults
-            # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
-            @logmsg InnerLoop :c_max value=max_violation(res)
-        end
-        @logmsg InnerLoop :expected value=-(alpha)*(Δv[1] + (alpha)*Δv[2])
-        @logmsg InnerLoop :actual value=J_prev-J
-        @logmsg InnerLoop :z value=z
-        @logmsg InnerLoop :α value=alpha
+    if res isa ConstrainedIterResults
+        # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
+        @logmsg InnerLoop :c_max value=max_violation(res)
     end
+    @logmsg InnerLoop :cost value=J
+    @logmsg InnerLoop :dJ value=J_prev-J
+    @logmsg InnerLoop :expected value=Δv[1]+Δv[2]
+    @logmsg InnerLoop :actual value=J_prev-J
+    @logmsg InnerLoop :z value=z
+    @logmsg InnerLoop :α value=2*alpha
 
     # if alpha > 0.0
     #     regularization_update!(res,solver,false)
