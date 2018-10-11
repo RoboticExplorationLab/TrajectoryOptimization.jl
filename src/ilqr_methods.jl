@@ -682,6 +682,16 @@ function max_violation(results::UnconstrainedIterResults)
 end
 
 
+function total_time(solver::Solver, results::SolverVectorResults)
+    if is_min_time(solver)
+        m̄,mm = get_num_controls(solver)
+        T = sum([u[m̄]^2 for u in results.U])
+    else
+        T = solver.dt*(solver.N-1)
+    end
+    return T::Float64
+end
+
 ####################################
 ### METHODS FOR INFEASIBLE START ###
 ####################################
