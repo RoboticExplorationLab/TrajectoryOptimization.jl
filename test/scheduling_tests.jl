@@ -1,5 +1,4 @@
 using TrajectoryOptimization
-# using PyPlot
 using Random
 Random.seed!(7)
 ### Solver options ###
@@ -83,36 +82,3 @@ U_cartpole = rand(solver_cartpole.model.m,solver_cartpole.N)
 println("Final state (pendulum)-> res: $(results_pendulum.X[end]), goal: $(solver_pendulum.obj.xf)\n Iterations: $(stats_pendulum["iterations"])\n Outer loop iterations: $(stats_pendulum["major iterations"])\n Max violation: $(stats_pendulum["c_max"][end])\n Max μ: $(maximum([to_array(results_pendulum.MU)[:]; results_pendulum.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_pendulum.LAMBDA)[:]; results_pendulum.λN[:]])))\n")
 println("Final state (dubins)-> res: $(results_dubins.X[end]), goal: $(solver_dubins.obj.xf)\n Iterations: $(stats_dubins["iterations"])\n Outer loop iterations: $(stats_dubins["major iterations"])\n Max violation: $(stats_dubins["c_max"][end])\n Max μ: $(maximum([to_array(results_dubins.MU)[:]; results_dubins.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_dubins.LAMBDA)[:]; results_dubins.λN[:]])))\n")
 println("Final state (cartpole)-> res: $(results_cartpole.X[end]), goal: $(solver_cartpole.obj.xf)\n Iterations: $(stats_cartpole["iterations"])\n Outer loop iterations: $(stats_cartpole["major iterations"])\n Max violation: $(stats_cartpole["c_max"][end])\n Max μ: $(maximum([to_array(results_cartpole.MU)[:]; results_cartpole.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_cartpole.LAMBDA)[:]; results_cartpole.λN[:]])))\n")
-a = 1
-# ### Plots
-# # pendulum
-# iters_pendulum = range(0,step=solver_pendulum.dt,length=solver_pendulum.N)
-# PyPlot.figure()
-# PyPlot.plot(iters_pendulum, to_array(results_pendulum.X)')
-# PyPlot.title("Pendulum State")
-#
-# PyPlot.figure()
-# PyPlot.plot(iters_pendulum, to_array(results_pendulum.U)')
-# PyPlot.title("Pendulum Control")
-#
-# # dubins car
-# iters_dubins = range(0,step=solver_dubins.dt,length=solver_dubins.N)
-# PyPlot.figure()
-# PyPlot.plot(to_array(results_dubins.X)[1,:],to_array(results_dubins.X)[2,:])
-# PyPlot.title("Dubins x-y traj.")
-#
-# PyPlot.figure()
-# PyPlot.plot(iters_dubins, to_array(results_dubins.U)')
-# PyPlot.title("Pendulum Control")
-#
-# # cartpole
-# iters_cartpole = range(0,step=solver_cartpole.dt,length=solver_cartpole.N)
-# PyPlot.figure()
-# PyPlot.plot(iters_cartpole,to_array(results_cartpole.X)')
-# PyPlot.title("Cartpole State")
-#
-# PyPlot.figure()
-# PyPlot.plot(iters_cartpole, to_array(results_cartpole.U)')
-# PyPlot.title("Cartpole Control")
-#
-# PyPlot.show()

@@ -212,7 +212,7 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         end
 
         # Expected change in cost-to-go
-        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu.R*Wuu.R*vec(d[k])]
+        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu.R'*Wuu.R*vec(d[k])]
 
         k = k - 1;
     end
