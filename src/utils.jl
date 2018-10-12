@@ -1,6 +1,37 @@
 import Base: convert, copyto!, Array
 import LinearAlgebra: norm
 
+"""@(SIGNATURES) Simulate discrete system using LQR tracker"""
+function simulate_lqr_tracking(f::Function,integration::Symbol,dt::Float64,X,U,K,x0,tf)
+    # get discrete dynamics
+    discretizer = eval(integration)
+    fd = discretizer(f, dt)
+
+    # # get state, control, horizon dimensions
+    N_interp_state = size(X)[1]
+    N_interp_control = size(K)[1]
+    m, n = size(K[1])
+
+    # get interpolation objects for gains and state and control trajectories
+    K_interp = interpolate(K,BSpline(Linear()))
+    X_interp = interpolate(X,BSpline(Linear()))
+    U_interp = interpolate(U,BSpline(Linear()))
+
+    # determine number of knot points for simulation
+    N = convert(Int64,floor(tf/dt))+1
+
+    # allocate memory for simulated state and control trajectories
+    X_ = zeros(n,N)
+    X_[:,1] = x0
+    U_ = zeros(m,N)
+
+    for (k,i) in enumerate(range(1,length=N-1,stop=N_interp_control))
+        U_[:,k] = K_interp(i)*(X_[:,k] - X_interp(i)) + U_interp(i)
+        fd(view(X_,:,k+1), X_[:,k], U_[:,k])
+    end
+    X_, U_
+end
+
 function get_cost_matrices(solver::Solver)
     solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
 end

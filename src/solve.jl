@@ -484,7 +484,7 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver,second_order:
     # FOH
     if solver.control_integration == :foh && !second_order
         for k = 1:solver.N
-            λ_update_1_zoh!(results,solver,k)
+            λ_update_1_foh!(results,solver,k)
         end
     elseif solver.control_integration == :foh && second_order
         λ_update_2_foh!(results,solver)

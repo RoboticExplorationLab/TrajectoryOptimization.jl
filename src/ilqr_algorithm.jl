@@ -64,7 +64,6 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         Qx = lx + fx'*vec(s[k+1])
         Qu = lu + fu'*vec(s[k+1])
         Qxx = lxx + fx'*S[k+1]*fx
-
         Quu = luu + fu'*S[k+1]*fu
         Qux = fu'*S[k+1]*fx
 
@@ -261,6 +260,10 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
+    # create a copy of BC in case of regularization
+    SN = copy(S)
+    sN = copy(s)
+
     # Backward pass
     k = N-1
     while k >= 1
@@ -294,8 +297,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             Cy, Cv = res.Cx[k+1], res.Cu[k+1]
-            Ly += (Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1])
-            Lv += (Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1])
+            Ly += Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1]
+            Lv += Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1]
             Lyy += Cy'*Iμ[k+1]*Cy
             Lvv += Cv'*Iμ[k+1]*Cv
             Lyv += Cy'*Iμ[k+1]*Cv
@@ -342,18 +345,20 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             Δv = [0. 0.]
 
             # Reset BCs
-            S = zeros(n+m,n+m)
-            s = zeros(n+m)
-            S[1:n,1:n] = Qf
-            s[1:n] = Qf*(X[N]-xf)
-
-            # Terminal constraints
-            if res isa ConstrainedIterResults
-                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-                CxN = res.Cx_N
-                S[1:n,1:n] += CxN'*res.IμN*CxN
-                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-            end
+            # S = zeros(n+m,n+m)
+            # s = zeros(n+m)
+            # S[1:n,1:n] = Qf
+            # s[1:n] = Qf*(X[N]-xf)
+            #
+            # # Terminal constraints
+            # if res isa ConstrainedIterResults
+            #     C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+            #     CxN = res.Cx_N
+            #     S[1:n,1:n] += CxN'*res.IμN*CxN
+            #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            # end
+            S = SN
+            s = sN
             ############
             continue
         end
@@ -385,8 +390,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         if k == 1
             if res isa ConstrainedIterResults
                 Cx, Cu = res.Cx[k], res.Cu[k]
-                Qx_ += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-                Qu_ += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+                Qx_ += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
+                Qu_ += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
                 Qxx_ += Cx'*Iμ[k]*Cx
                 Quu_ += Cu'*Iμ[k]*Cu
                 Qxu_ += Cx'*Iμ[k]*Cu
@@ -406,27 +411,29 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
                 Δv = [0. 0.]
 
                 ## Reset BCs ##
-                S = zeros(n+m,n+m)
-                s = zeros(n+m)
-                S[1:n,1:n] = Qf
-                s[1:n] = Qf*(X[N]-xf)
-
-                # Terminal constraints
-                if res isa ConstrainedIterResults
-                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-                    CxN = res.Cx_N
-                    S[1:n,1:n] += CxN'*res.IμN*CxN
-                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-                end
+                # S = zeros(n+m,n+m)
+                # s = zeros(n+m)
+                # S[1:n,1:n] = Qf
+                # s[1:n] = Qf*(X[N]-xf)
+                #
+                # # Terminal constraints
+                # if res isa ConstrainedIterResults
+                #     C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                #     CxN = res.Cx_N
+                #     S[1:n,1:n] += CxN'*res.IμN*CxN
+                #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                # end
+                S = SN
+                s = sN
                 ################
                 continue
             end
 
-            K[1] = -Array(Quu__reg)\Array(Qxu_')
+            K[1] = -Quu__reg\Qxu_'
             b[1] = zeros(m,m)
-            d[1] = -Array(Quu__reg)\vec(Qu_)
+            d[1] = -Quu__reg\vec(Qu_)
 
-            res.s[1] = Qx_ + Qxu_*vec(d[1])
+            res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1])
 
             Δv += [vec(Qu_)'*vec(d[1]) 0.5*vec(d[1])'*Quu_*vec(d[1])]
 
@@ -435,6 +442,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         k = k - 1;
     end
 
+    # if successful backward pass, reduce regularization
     regularization_update!(res,solver,:decrease)
     return Δv
 end
@@ -538,10 +546,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         @logmsg InnerLoop :z value=z
         @logmsg InnerLoop :α value=alpha
     end
-
-    # if alpha > 0.0
-    #     regularization_update!(res,solver,false)
-    # end
 
     return J
 end

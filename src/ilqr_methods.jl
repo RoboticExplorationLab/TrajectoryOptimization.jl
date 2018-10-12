@@ -68,7 +68,8 @@ function rollout!(res::SolverVectorResults, solver::Solver)
             return false
         end
     end
-    # Calculate state derivatives
+
+    # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X,U)
         calculate_midpoints!(res,solver, X, U)
@@ -119,7 +120,6 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             solver.fd(X_[k], X_[k-1], U_[k-1])
         end
 
-
         if infeasible
             X_[k] += U_[k-1][m0.+(1:n)]
         end
@@ -130,7 +130,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         end
     end
 
-    # Calculate state derivatives
+    # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X_,U_)
         calculate_midpoints!(res,solver, X_, U_)
@@ -170,10 +170,6 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     J = 0.0
     for k = 1:N-1
         if solver.control_integration == :foh
-
-            xdot1 = res.xdot[k]
-            xdot2 = res.xdot[k+1]
-
             Xm = res.xmid[k]
             Um = (U[k] + U[k+1])/2
 

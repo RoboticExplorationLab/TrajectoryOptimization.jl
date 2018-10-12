@@ -3,18 +3,16 @@ using Random
 using Interpolations
 using Plots
 
-# Random.seed!(7)
 ### Solver options ###
-dt = 0.25
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.cache = false
 opts.c1 = 1e-8
 opts.c2 = 10.0
-opts.cost_intermediate_tolerance = 1e-4
-opts.constraint_tolerance = 1e-4
-opts.cost_tolerance = 1e-4
+opts.cost_intermediate_tolerance = 1e-5
+opts.constraint_tolerance = 1e-5
+opts.cost_tolerance = 1e-5
 opts.iterations_outerloop = 50
 opts.iterations = 250
 opts.iterations_linesearch = 25
@@ -67,12 +65,13 @@ obj = obj_con_pendulum
 intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
+dt = 0.25
 solver_zoh = Solver(model,obj,integration=intergrator_zoh,dt=dt,opts=opts)
 solver_foh = Solver(model,obj,integration=intergrator_foh,dt=dt,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = line_trajectory(solver_zoh.obj.x0,solver_zoh.obj.xf,solver_zoh.N)
-U = zeros(solver_zoh.model.m,solver_zoh.N)
+U = rand(solver_zoh.model.m,solver_zoh.N)
 
 #######################################
 
@@ -98,44 +97,23 @@ dt_sim = 0.001
 X_zoh_sim, U_zoh_sim = simulate_lqr_tracking(solver_zoh.model.f,:rk3,dt_sim,X_zoh,U_zoh,K_zoh,solver_zoh.obj.x0,solver_zoh.obj.tf)
 X_foh_sim, U_foh_sim = simulate_lqr_tracking(solver_foh.model.f,:rk3,dt_sim,X_foh,U_foh,K_foh,solver_foh.obj.x0,solver_foh.obj.tf)
 
-p_zoh = plot(to_array(results_zoh.X)')
+# rms error on final state
+xf_rms_zoh = sqrt(mean((X_zoh[end] - X_zoh_sim[:,end]).^2))
+xf_rms_foh = sqrt(mean((X_foh[end] - X_foh_sim[:,end]).^2))
+
+# zoh case
+p_zoh = plot(to_array(results_zoh.X)',color="black",title="zoh (N = $(solver_foh.N),dt=$dt,tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 for i = 1:solver_zoh.model.n
-    p_zoh = plot!(range(0,length=convert(Int64,floor(solver_zoh.obj.tf/dt_sim))+1,stop=solver_zoh.N),X_zoh_sim[i,:])
+    p_zoh = plot!(range(0,length=convert(Int64,floor(solver_zoh.obj.tf/dt_sim))+1,stop=solver_zoh.N),X_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 end
 display(p_zoh)
+savefig("knotpointtest_zoh.png")
 
-p_foh = plot(to_array(results_foh.X)')
+
+# foh case
+p_foh = plot(to_array(results_foh.X)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf))) sim @ $(convert(Int64,1/dt_sim))Hz",label="")
 for i = 1:solver_foh.model.n
-    p_foh = plot!(range(0,length=convert(Int64,floor(solver_foh.obj.tf/dt_sim))+1,stop=solver_foh.N),X_foh_sim[i,:])
+    p_foh = plot!(range(0,length=convert(Int64,floor(solver_foh.obj.tf/dt_sim))+1,stop=solver_foh.N),X_foh_sim[i,:],color="purple",label="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 end
 display(p_foh)
-
-function simulate_lqr_tracking(f::Function,integration::Symbol,dt::Float64,X,U,K,x0,tf)
-    # get discrete dynamics
-    discretizer = eval(integration)
-    fd = discretizer(f, dt)
-
-    # # get state, control, horizon dimensions
-    N_interp_state = size(X)[1]
-    N_interp_control = size(K)[1]
-    m, n = size(K[1])
-
-    # get interpolation objects for gains and state and control trajectories
-    K_interp = interpolate(K,BSpline(Linear()))
-    X_interp = interpolate(X,BSpline(Linear()))
-    U_interp = interpolate(U,BSpline(Linear()))
-
-    # determine number of knot points for simulation
-    N = convert(Int64,floor(tf/dt))+1
-
-    # allocate memory for simulated state and control trajectories
-    X_ = zeros(n,N)
-    X_[:,1] = x0
-    U_ = zeros(m,N)
-
-    for (k,i) in enumerate(range(1,length=N-1,stop=N_interp_control))
-        U_[:,k] = K_interp(i)*(X_[:,k] - X_interp(i)) + U_interp(i)
-        fd(view(X_,:,k+1), X_[:,k], U_[:,k])
-    end
-    X_, U_
-end
+savefig("knotpointtest_foh.png")
