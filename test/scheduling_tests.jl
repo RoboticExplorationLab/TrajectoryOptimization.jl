@@ -1,5 +1,6 @@
 using TrajectoryOptimization
 using Random
+using BenchmarkTools
 Random.seed!(7)
 ### Solver options ###
 dt = 0.1
@@ -79,6 +80,6 @@ U_cartpole = rand(solver_cartpole.model.m,solver_cartpole.N)
 @time results_cartpole, stats_cartpole = solve(solver_cartpole,U_cartpole)
 
 ### Results ###
-println("Final state (pendulum)-> res: $(results_pendulum.X[end]), goal: $(solver_pendulum.obj.xf)\n Iterations: $(stats_pendulum["iterations"])\n Outer loop iterations: $(stats_pendulum["major iterations"])\n Max violation: $(stats_pendulum["c_max"][end])\n Max μ: $(maximum([to_array(results_pendulum.MU)[:]; results_pendulum.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_pendulum.LAMBDA)[:]; results_pendulum.λN[:]])))\n")
-println("Final state (dubins)-> res: $(results_dubins.X[end]), goal: $(solver_dubins.obj.xf)\n Iterations: $(stats_dubins["iterations"])\n Outer loop iterations: $(stats_dubins["major iterations"])\n Max violation: $(stats_dubins["c_max"][end])\n Max μ: $(maximum([to_array(results_dubins.MU)[:]; results_dubins.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_dubins.LAMBDA)[:]; results_dubins.λN[:]])))\n")
-println("Final state (cartpole)-> res: $(results_cartpole.X[end]), goal: $(solver_cartpole.obj.xf)\n Iterations: $(stats_cartpole["iterations"])\n Outer loop iterations: $(stats_cartpole["major iterations"])\n Max violation: $(stats_cartpole["c_max"][end])\n Max μ: $(maximum([to_array(results_cartpole.MU)[:]; results_cartpole.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_cartpole.LAMBDA)[:]; results_cartpole.λN[:]])))\n")
+# println("Final state (pendulum)-> res: $(results_pendulum.X[end]), goal: $(solver_pendulum.obj.xf)\n Iterations: $(stats_pendulum["iterations"])\n Outer loop iterations: $(stats_pendulum["major iterations"])\n Max violation: $(stats_pendulum["c_max"][end])\n Max μ: $(maximum([to_array(results_pendulum.MU)[:]; results_pendulum.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_pendulum.LAMBDA)[:]; results_pendulum.λN[:]])))\n")
+# println("Final state (dubins)-> res: $(results_dubins.X[end]), goal: $(solver_dubins.obj.xf)\n Iterations: $(stats_dubins["iterations"])\n Outer loop iterations: $(stats_dubins["major iterations"])\n Max violation: $(stats_dubins["c_max"][end])\n Max μ: $(maximum([to_array(results_dubins.MU)[:]; results_dubins.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_dubins.LAMBDA)[:]; results_dubins.λN[:]])))\n")
+# println("Final state (cartpole)-> res: $(results_cartpole.X[end]), goal: $(solver_cartpole.obj.xf)\n Iterations: $(stats_cartpole["iterations"])\n Outer loop iterations: $(stats_cartpole["major iterations"])\n Max violation: $(stats_cartpole["c_max"][end])\n Max μ: $(maximum([to_array(results_cartpole.MU)[:]; results_cartpole.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_cartpole.LAMBDA)[:]; results_cartpole.λN[:]])))\n")
