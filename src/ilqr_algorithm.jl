@@ -156,14 +156,14 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
-    k = N-1
 
     # Backward pass
+    k = N-1
     while k >= 1
         min_time ? dt = U[k][m̄]^2 : nothing
 
-        lx = dt*Q*(X[k] - xf)
-        lu = dt*R*(U[k])
+        lx = dt*Q*vec(X[k] - xf)
+        lu = dt*R*vec(U[k])
         lxx = dt*Q
         luu = dt*R
 
@@ -171,19 +171,20 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         fx, fu = res.fx[k], res.fu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*s[k+1]
-        Qu = lu + fu'*s[k+1]
+        Qx = lx + fx'*vec(s[k+1])
+        Qu = lu + fu'*vec(s[k+1])
         Qxx = lxx + fx'*S[k+1]*fx
 
-        Quu = luu + fu'*S[k+1]*fu + res.ρ[1]*I
+        Quu = luu + fu'*S[k+1]*fu
         Qux = fu'*S[k+1]*fx
+
 
 
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
@@ -206,28 +207,49 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
 
         end
 
+        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + fu'*(res.ρ[1]*I)*fu
+            Qux_reg = Qux + fu'*(res.ρ[1]*I)*fx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
         # Regularization
-        if !isposdef(Hermitian(Array(Quu)))  # need to wrap Array since isposdef doesn't work for static arrays
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose
-                @logmsg InnerLoop "regularized"
+                println("regularized (normal bp)")
+                println("-condition number: $(cond(Array(Quu_reg)))")
+                println("Quu_reg: $(eigvals(Quu_reg))")
             end
 
-            regularization_update!(res,solver,true)
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
             k = N-1
             Δv = [0.0 0.0]
             continue
         end
 
         # Compute gains
-        K[k] = Quu\Qux
-        d[k] = Quu\Qu
-        s[k] = Qx - Qux'd[k]
-        S[k] = Qxx - Qux'K[k]
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu
 
-        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Quu*vec(d[k])]
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
 
         k = k - 1;
     end
+
+    # decrease regularization after successful backward pass
+    regularization_update!(res,solver,:decrease)
 
     return Δv
 end

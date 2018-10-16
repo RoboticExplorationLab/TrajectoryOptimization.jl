@@ -148,7 +148,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
             du = dv
         else
-            U_[k-1] = U[k-1] - K[k-1]*delta - alpha*d[k-1]
+            U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
             min_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
