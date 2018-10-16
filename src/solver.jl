@@ -76,6 +76,11 @@ struct Solver{O<:Objective}
         end
         n, m = model.n, model.m
         f! = model.f # checked in model now
+        m̄ = m
+
+        if min_time
+            m̄ += 1
+        end
 
         # Get integration scheme
         if isdefined(TrajectoryOptimization,integration)

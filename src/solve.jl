@@ -249,8 +249,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-            iter += 1
-
             if is_constrained
                 c_max = max_violation(results,diag_inds)
                 push!(c_max_hist, c_max)
@@ -457,7 +455,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
     Lagrange multiplier updates
         -zoh sequential (1st and 2nd order)
         -zoh nonsequential (1st and 2nd order)
@@ -491,8 +489,8 @@ end
 
 """@(SIGNATURES) 1st order multiplier update for zoh (sequential)"""
 function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
+    p,pI,pE = get_num_constraints(solver)
     if k != solver.N
-        pI = solver.obj.pI
         results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
         results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
     else
@@ -504,16 +502,14 @@ end
 """@(SIGNATURES) 1st order multiplier update for zoh (nonsequential)"""
 function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -565,16 +561,14 @@ end
 """@(SIGNATURES) 2nd order multiplier update for zoh (sequential)"""
 function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -640,16 +634,14 @@ end
 """@(SIGNATURES) 2nd order multiplier update for zoh (nonsequential)"""
 function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])  # should do mm instead of adding to m
         m += n
     end
 
@@ -723,7 +715,7 @@ end
 
 """@(SIGNATURES) 1st order multiplier update for foh (sequential)"""
 function λ_update_1_foh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
-    pI = solver.obj.pI
+    p,pI,pE = get_num_constraints(solver)
     results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
     results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
 
@@ -735,17 +727,15 @@ end
 
 """@(SIGNATURES) 2nd order multiplier update for foh (nonsequential)"""
 function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
-    n = solver.model.n
-    m = solver.model.m
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     q = n+m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -870,8 +860,7 @@ end
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     # println("individual penalty update")
-    p = length(results.C[1])
-    pI = solver.obj.pI
+    p,pI,pE = get_num_constraints(solver)
     n = solver.model.n
 
     τ = solver.opts.τ
