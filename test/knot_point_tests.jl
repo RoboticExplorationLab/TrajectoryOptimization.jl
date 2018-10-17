@@ -10,9 +10,9 @@ opts.verbose = true
 opts.cache = false
 opts.c1 = 1e-8
 opts.c2 = 10.0
-opts.cost_intermediate_tolerance = 1e-5
-opts.constraint_tolerance = 1e-5
-opts.cost_tolerance = 1e-5
+opts.cost_intermediate_tolerance = 1e-4
+opts.constraint_tolerance = 1e-4
+opts.cost_tolerance = 1e-4
 opts.iterations_outerloop = 50
 opts.iterations = 250
 opts.iterations_linesearch = 25
@@ -23,7 +23,7 @@ opts.outer_loop_update = :default
 opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
-opts.regularization_type = :state
+opts.regularization_type = :control
 ######################
 
 ### Set up model, objective, solver ###
@@ -31,6 +31,7 @@ opts.regularization_type = :state
 model_pendulum, obj_uncon_pendulum = TrajectoryOptimization.Dynamics.pendulum!
 model_dubins, obj_uncon_dubins = TrajectoryOptimization.Dynamics.dubinscar!
 model_cartpole, obj_uncon_cartpole = TrajectoryOptimization.Dynamics.cartpole_udp
+model_quadrotor, obj_uncon_quadrotor = TrajectoryOptimization.Dynamics.quadrotor
 
 ## Constraints
 
@@ -52,10 +53,20 @@ u_max_cartpole = 40
 x_min_cartpole = [-10; -1000; -1000; -1000]
 x_max_cartpole = [10; 1000; 1000; 1000]
 
+# quadrotor
+u_min = -100.0
+u_max = 100.0
+# -constraint that quaternion should be unit
+function cE(c,x,u)
+    c[1] = x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2 - 1.0
+    return nothing
+end
+
 # -Constrained objective
 obj_con_pendulum = ConstrainedObjective(obj_uncon_pendulum, u_min=u_min_pendulum, u_max=u_max_pendulum, x_min=x_min_pendulum, x_max=x_max_pendulum)
 obj_con_dubins = ConstrainedObjective(obj_uncon_dubins, u_min=u_min_dubins, u_max=u_max_dubins, x_min=x_min_dubins, x_max=x_max_dubins)
 obj_con_cartpole = ConstrainedObjective(obj_uncon_cartpole, u_min=u_min_cartpole, u_max=u_max_cartpole, x_min=x_min_cartpole, x_max=x_max_cartpole)
+obj_con_quadrotor = TrajectoryOptimization.ConstrainedObjective(obj_uncon_quadrotor, u_min=u_min, u_max=u_max)#, cE=cE)
 
 # System selection
 model = model_pendulum
@@ -65,7 +76,7 @@ obj = obj_con_pendulum
 intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
-dt = 0.25
+dt = 0.05
 solver_zoh = Solver(model,obj,integration=intergrator_zoh,dt=dt,opts=opts)
 solver_foh = Solver(model,obj,integration=intergrator_foh,dt=dt,opts=opts)
 
@@ -107,7 +118,7 @@ for i = 1:solver_zoh.model.n
     p_zoh = plot!(range(0,length=convert(Int64,floor(solver_zoh.obj.tf/dt_sim))+1,stop=solver_zoh.N),X_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 end
 display(p_zoh)
-savefig("knotpointtest_zoh.png")
+# savefig("knotpointtest_zoh.png")
 
 
 # foh case
@@ -116,4 +127,4 @@ for i = 1:solver_foh.model.n
     p_foh = plot!(range(0,length=convert(Int64,floor(solver_foh.obj.tf/dt_sim))+1,stop=solver_foh.N),X_foh_sim[i,:],color="purple",label="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 end
 display(p_foh)
-savefig("knotpointtest_foh.png")
+# savefig("knotpointtest_foh.png")

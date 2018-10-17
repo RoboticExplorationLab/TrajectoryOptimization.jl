@@ -191,3 +191,28 @@ function rpydot2angularvelMatrix(rpy)
           cos_p*sin_y cos_y 0;
     	   -sin_p 0 1];
 end
+
+# Model
+n = 12
+m = 4
+
+model = Model(quadrotor_dynamics_euler!,n,m)
+
+# Objective and constraints
+Qf = 100.0*Diagonal(I,n)
+Q = (0.1)*Diagonal(I,n)
+R = (0.01)*Diagonal(I,m)
+tf = 5.0
+dt = 0.05
+
+# -initial state
+x0 = zeros(n)
+
+# -final state
+xf = zeros(n)
+xf[1:3] = [10.0;10.0;5.0] # xyz position
+
+obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+
+# Model + objective
+quadrotor_euler = [model, obj_uncon]

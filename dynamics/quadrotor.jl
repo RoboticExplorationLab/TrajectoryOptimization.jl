@@ -128,3 +128,34 @@ end
 #
 # hamilton_product(w,[omega;0])
 # hamilton_product([omega;0],w)
+
+# Model
+n = 13
+m = 4
+
+model = Model(quadrotor_dynamics!,n,m)
+
+# Objective and constraints
+Qf = 100.0*Diagonal(I,n)
+Q = (0.1)*Diagonal(I,n)
+R = (0.01)*Diagonal(I,m)
+tf = 5.0
+dt = 0.05
+
+# -initial state
+x0 = zeros(n)
+quat0 = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
+x0[4:7] = quat0
+x0
+
+# -final state
+xf = zeros(n)
+xf[1:3] = [10.0;10.0;5.0] # xyz position
+quatf = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
+xf[4:7] = quatf
+xf
+
+obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+
+# Model + objective
+quadrotor = [model, obj_uncon]

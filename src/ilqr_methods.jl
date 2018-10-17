@@ -87,11 +87,11 @@ gains `res.K` and `res.d` to the difference between states
 Will return a flag indicating if the values are finite for all time steps.
 """
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
-    infeasible = solver.model.m != length(res.U[1])
+    infeasible = (solver.model.m != length(res.U[1]))
     N = solver.N; m = solver.model.m; n = solver.model.n
 
+    m0 = m
     if infeasible
-        m0 = m
         m += n
     end
 
@@ -113,11 +113,11 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         if solver.control_integration == :foh
             dv .= K[k]*delta + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
-            solver.fd(X_[k], X_[k-1], U_[k-1], U_[k])
+            solver.fd(X_[k], X_[k-1], U_[k-1][1:m0], U_[k][1:m0])
             du = dv
         else
             U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
-            solver.fd(X_[k], X_[k-1], U_[k-1])
+            solver.fd(X_[k], X_[k-1], U_[k-1][1:m0])
         end
 
         if infeasible

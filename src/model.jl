@@ -68,14 +68,14 @@ struct Model
         m = num_joints # Default to number of joints
 
         function fc(xdot,x,u)
-            state = MechanismState{eltype(u)}(mech)
+            state = MechanismState{eltype(x)}(mech)
             # set the state variables:
             q = x[1:num_joints]
             qd = x[1+num_joints:num_joints+num_joints]
             set_configuration!(state, q)
             set_velocity!(state, qd)
             xdot[1:num_joints] = qd
-            xdot[num_joints+1:num_joints+num_joints] = Array(mass_matrix(state))\(torques.*u) - Array(mass_matrix(state))\Array(dynamics_bias(state))
+            xdot[num_joints+1:num_joints+num_joints] = Array(mass_matrix(state))\(torques.*u - Array(dynamics_bias(state)))
             return nothing
         end
 

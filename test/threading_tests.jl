@@ -180,12 +180,12 @@ println("Cost (constraints)")
 @btime cost_constraints(solver,r1)
 @btime cost_constraints_thread(solver,r1)
 
-# # profiler
-# using Profile
-# using Juno
-# @profile results_pendulum, stats_pendulum = solve(solver_pendulum,U_pendulum)
-# #
-# Juno.profiletree()
-# Juno.profiler()
+# profiler
+using Profile
+using Juno
+@profiler results_pendulum, stats_pendulum = solve(solver_pendulum,U_pendulum)
 #
+Juno.profiletree()
+Juno.profiler()
+
 # @time results_pendulum, stats_pendulum = solve(solver_pendulum,U_pendulum)

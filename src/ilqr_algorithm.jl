@@ -36,9 +36,6 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
     S[N] = Qf
     s[N] = Qf*(X[N] - xf)
 
-    # Initialize expected change in cost-to-go
-    Δv = [0.0 0.0]
-
     # Terminal constraints
     if res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
@@ -50,8 +47,9 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
 
     # Backward pass
     k = N-1
+    Δv = [0. 0.] # Initialize expected change in cost-to-go
     while k >= 1
-
+        # compute stage cost expansions
         lx = dt*Q*vec(X[k] - xf)
         lu = dt*R*vec(U[k])
         lxx = dt*Q
@@ -67,15 +65,6 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         Quu = luu + fu'*S[k+1]*fu
         Qux = fu'*S[k+1]*fx
 
-        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
-        if solver.opts.regularization_type == :state
-            Quu_reg = luu + fu'*(S[k+1] + res.ρ[1]*I)*fu
-            Qux_reg = fu'*(S[k+1] + res.ρ[1]*I)*fx
-        elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
-            Qux_reg = Qux
-        end
-
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
@@ -84,13 +73,19 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
-
-            # again, separate regularized Quu, Qux
-            Quu_reg += Cu'*Iμ[k]*Cu
-            Qux_reg += Cu'*Iμ[k]*Cx
         end
 
         # Regularization
+        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + res.ρ[1]*fu'*fu
+            Qux_reg = Qux + res.ρ[1]*fu'*fx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # check that Quu_reg is positive definite
         if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose
                 println("regularized (normal bp)")
@@ -243,9 +238,6 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     X = res.X
     U = res.U
 
-    # Initialization of expected change in cost-to-go
-    Δv = [0. 0.]
-
     # Boundary conditions
     S = zeros(n+m,n+m)
     s = zeros(n+m)
@@ -261,11 +253,12 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     end
 
     # create a copy of BC in case of regularization
-    SN = copy(S)
-    sN = copy(s)
+    # SN = copy(S)
+    # sN = copy(s)
 
     # Backward pass
     k = N-1
+    Δv = [0. 0.] # Initialization of expected change in cost-to-go
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
         # Unpack Jacobians, ̇x
@@ -274,7 +267,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         Ad, Bd, Cd = res.fx[k], res.fu[k], res.fv[k]
 
         xm = res.xmid[k]
-        um = (U[k] + U[k+1])/2.0
+        um = (U[k] + U[k+1])/2.
 
         # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
         Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
@@ -323,43 +316,46 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd + Ad'*Syy*Cd + Ad'*Syv
         Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd + Bd'*Syy*Cd + Bd'*Syv
 
-        # regularized terms
-        if solver.opts.regularization_type == :state
-            Qvv_reg = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + Cd'*(Syy + res.ρ[1]*I)*Cd + Cd'*Syv + Syv'*Cd + Svv
-            Qxv_reg = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd + Ad'*(Syy + res.ρ[1]*I)*Cd + Ad'*Syv
-            Quv_reg = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd + Bd'*(Syy + res.ρ[1]*I)*Cd + Bd'*Syv
-        elseif solver.opts.regularization_type == :control
+        # Regularization
+        #TODO double check state regularization
+        # if solver.opts.regularization_type == :state
+        #     Qvv_reg = Qvv + Cd'*(res.ρ[1]*I)*Cd
+        #     Qxv_reg = Qxv + Ad'*(res.ρ[1]*I)*Cd
+        #     Quv_reg = Quv + Bd'*(res.ρ[1]*I)*Cd
+        # elseif solver.opts.regularization_type == :control
             Qvv_reg = Qvv + res.ρ[1]*I
             Qxv_reg = Qxv
             Quv_reg = Quv
-        end
+        # end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
             if solver.opts.verbose
                 println("regularized (foh bp)\n not implemented properly")
+                println("-condition number: $(cond(Array(Qvv_reg)))")
+                println("Qvv_reg: $Qvv_reg")
+                println("iteration: $k")
             end
 
             regularization_update!(res,solver,:increase)
 
+            # Reset BCs
+            S = zeros(n+m,n+m)
+            s = zeros(n+m)
+            S[1:n,1:n] = Qf
+            s[1:n] = Qf*(X[N]-xf)
+
+            # Terminal constraints
+            if res isa ConstrainedIterResults
+                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                CxN = res.Cx_N
+                S[1:n,1:n] += CxN'*res.IμN*CxN
+                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            end
+            # S = SN
+            # s = sN
+            ############
             k = N-1
             Δv = [0. 0.]
-
-            # Reset BCs
-            # S = zeros(n+m,n+m)
-            # s = zeros(n+m)
-            # S[1:n,1:n] = Qf
-            # s[1:n] = Qf*(X[N]-xf)
-            #
-            # # Terminal constraints
-            # if res isa ConstrainedIterResults
-            #     C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-            #     CxN = res.Cx_N
-            #     S[1:n,1:n] += CxN'*res.IμN*CxN
-            #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-            # end
-            S = SN
-            s = sN
-            ############
             continue
         end
 
@@ -404,28 +400,30 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
                 if solver.opts.verbose
                     println("regularized (foh bp)")
                     println("part 2")
+                    println("-condition number: $(cond(Array(Quu__reg)))")
+                    println("Quu__reg: $Quu__reg")
                 end
 
                 regularization_update!(res,solver,:increase)
-                k = N-1
-                Δv = [0. 0.]
 
                 ## Reset BCs ##
-                # S = zeros(n+m,n+m)
-                # s = zeros(n+m)
-                # S[1:n,1:n] = Qf
-                # s[1:n] = Qf*(X[N]-xf)
-                #
-                # # Terminal constraints
-                # if res isa ConstrainedIterResults
-                #     C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
-                #     CxN = res.Cx_N
-                #     S[1:n,1:n] += CxN'*res.IμN*CxN
-                #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-                # end
-                S = SN
-                s = sN
+                S = zeros(n+m,n+m)
+                s = zeros(n+m)
+                S[1:n,1:n] = Qf
+                s[1:n] = Qf*(X[N]-xf)
+
+                # Terminal constraints
+                if res isa ConstrainedIterResults
+                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    CxN = res.Cx_N
+                    S[1:n,1:n] += CxN'*res.IμN*CxN
+                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                end
+                # S = SN
+                # s = sN
                 ################
+                k = N-1
+                Δv = [0. 0.]
                 continue
             end
 
@@ -433,7 +431,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             b[1] = zeros(m,m)
             d[1] = -Quu__reg\vec(Qu_)
 
-            res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1])
+            res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1]) # calculate for gradient check in solve
 
             Δv += [vec(Qu_)'*vec(d[1]) 0.5*vec(d[1])'*Quu_*vec(d[1])]
 
