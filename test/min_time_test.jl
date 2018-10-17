@@ -14,7 +14,7 @@ obj.Q = 1e-3*Diagonal(I,2)
 obj.R = 1e-2*Diagonal(I,1)
 obj.tf = 3.
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
-obj_min = update_objective(obj_c,tf=:min,c=1.)
+obj_min = update_objective(obj_c,tf=:min,c=100., Q = obj.Q*0., R = obj.R*1, Qf = obj.Qf*1.)
 dt = 0.1
 n,m = model.n, model.m
 
@@ -29,8 +29,8 @@ U = ones(m,solver_min.N)
 solver_min.opts.verbose = true
 solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.2
-solver_min.opts.constraint_tolerance = 0.02
-solver_min.opts.min_time_regularization = 1000
+solver_min.opts.constraint_tolerance = 0.01
+solver_min.opts.min_time_regularization = 100
 results_min,stats_min = solve(solver_min,U)
 plot(to_array(results_min.X)[1:2,:]')
 plot(to_array(results_min.U)[1:2,:]')
@@ -48,6 +48,9 @@ norm.(violations,Inf)
 norm(to_array(violations),Inf)
 max_violation(results_min)
 argmax(abs.(to_array(violations)))
+
+
+
 
 # Test dynamics change with dt
 solver = Solver(model,obj_c,dt=dt)
@@ -99,8 +102,6 @@ fx0,fu0 = solver.Fd(x,u)
 @test xdot ≉ xdot0
 @test fx ≉ fx0
 @test fu[:,1] ≉ fu0
-
-
 
 # Run through parts of the iLQR algorithm
 solver = Solver(model,obj_c,dt=dt)
@@ -154,8 +155,12 @@ res_min.Cu[1]
 @test res_min.Cu[N-1] == [Matrix(I,2,2); -Matrix(I,2,2); 0 0]
 
 
+solver_min.obj
+_cost(solver_min,res_min)
+total_time(solver_min,res_min)
+
 # Test cost is the same (when c=0 and R[m̄,m̄] = 0)
-obj_min_c0 = update_objective(obj_min,c=0.)
+obj_min_c0 = update_objective(obj_min,c=0.,Q = obj_c.Q, R = obj_c.R, Qf = obj.Qf)
 solver_min = Solver(model,obj_min_c0,N=solver.N)
 solver_min.opts.min_time_regularization = 0
 Xrand = rand(n,N)
@@ -170,6 +175,7 @@ J_min = _cost(solver_min,res_min)
 J_reg = cost(solver,res_reg)
 J_min = cost(solver_min,res_min)
 @test abs(J_reg-J_min) > 1e-2
+
 
 # Test rollout with gains is the same
 update_constraints!(res_reg,solver)
@@ -204,12 +210,16 @@ logger = TrajectoryOptimization.SolverLogger(TrajectoryOptimization.InnerIters)
 TrajectoryOptimization.add_level!(logger,TrajectoryOptimization.InnerLoop,[],[],print_color=:green)
 TrajectoryOptimization.add_level!(logger,TrajectoryOptimization.InnerIters,[],[],print_color=:blue)
 
-solver = Solver(model,obj_c,dt=dt)
-solver_min = Solver(model,obj_min,N=solver.N)
+opts = SolverOptions()
+opts.verbose = true
+solver = Solver(model,obj_c,dt=dt,opts=opts)
+solver_min = Solver(model,obj_min,N=solver.N,opts=opts)
 n,m,N = get_sizes(solver)
 p,pI,pE = TrajectoryOptimization.get_num_constraints(solver)
 res_reg = ConstrainedVectorResults(n,m,p,N)
 res_min = ConstrainedVectorResults(n,m+1,p+3,N)
+res_reg.ρ[1] = 0
+res_min.ρ[1] = 0
 
 update_constraints!(res_reg,solver)
 update_constraints!(res_min,solver_min)
@@ -230,9 +240,12 @@ calculate_jacobians!(res_min,solver_min)
 
 # Test that the fwp rollouts are the same given the same bwp gains
 v_reg = backwardpass!(res_reg,solver)
-# v_min = backwardpass_mintime!(res_reg,solver)
+v_min = backwardpass_mintime!(res_reg,solver)
+v_reg == v_min
 
 v_min = backwardpass_mintime!(res_min,solver_min)
+# v_min = backwardpass_mintime!(res_min,solver_min)
+
 
 with_logger(logger) do
 
@@ -240,7 +253,6 @@ with_logger(logger) do
     J_min = forwardpass!(res_min,solver_min,v_min)
 
 end
-
 
 print_header(logger,TrajectoryOptimization.InnerLoop)
 print_row(logger,TrajectoryOptimization.InnerLoop)
@@ -251,6 +263,7 @@ res_reg.U .= deepcopy(res_reg.U_)
 res_min.X .= deepcopy(res_min.X_)
 res_min.U .= deepcopy(res_min.U_)
 
+
 display(plot(to_array(res_min.U)'))
 
 outer_loop_update(res_reg,solver)
@@ -260,7 +273,7 @@ res_reg.K[1]
 
 res_min.K[1]
 
-
+total_time(solver_min, res_min)
 
 ##################
 #    CARTPOLE    #
@@ -274,21 +287,26 @@ obj = copy(obj0)
 obj.x0 = [0;0;0;0.]
 obj.xf = [0.5;pi;0;0]
 obj.tf = 2.
-u_bnd = 50
+u_bnd = 15
 x_bnd = [0.6,Inf,Inf,Inf]
-obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
-obj_min = update_objective(obj_con,tf=:min,c=1.)
+obj_c = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
+obj_min = update_objective(obj_c,tf=:min,c=1.,Q = Diagonal(I,4)*0.)
 dt = 0.1
 
-solver = Solver(model,obj_con,dt=dt)
+solver = Solver(model,obj_c,dt=dt)
 U0 = ones(1,solver.N)
 res0,stat0 = solve(solver,U0)
 plot(to_array(res0.X)[1:2,:]')
+plot(to_array(res0.U)[1:1,:]')
+
 
 solver_min = Solver(model,obj_min,N=solver.N)
 solver_min.opts.use_static = false
+solver_min.opts.max_dt = 0.2
 solver_min.opts.verbose = true
-solver_min.opts.cost_intermediate_tolerance = 1e-2
+solver_min.opts.cost_tolerance = 1e-4
+solver_min.opts.cost_intermediate_tolerance = 1e-4
+solver_min.opts.constraint_tolerance = 0.07
 solver_min.opts.outer_loop_update = :uniform
 U0 = ones(1,solver_min.N)
 U0[:,solver.N÷2:end] *= -1

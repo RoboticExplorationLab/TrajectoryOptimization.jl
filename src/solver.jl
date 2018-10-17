@@ -202,7 +202,7 @@ function getR(solver::Solver)::Array{Float64,2}
         R = zeros(mm,mm)
         R[1:m,1:m] = solver.obj.R
         if is_min_time(solver)
-            R[m̄,m̄] = solver.opts.min_time_regularization
+            R[m̄,m̄] = solver.opts.min_time_regularization*0
         end
         if solver.opts.infeasible
             R[m̄+1:end,m̄+1:end] = I*solver.opts.infeasible_regularization*tr(solver.obj.R)

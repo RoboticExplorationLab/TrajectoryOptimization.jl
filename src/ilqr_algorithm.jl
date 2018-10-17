@@ -93,11 +93,12 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
 
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
-            if solver.opts.verbose
-                println("regularized (normal bp)")
-                println("-condition number: $(cond(Array(Quu_reg)))")
-                println("Quu_reg: $Quu_reg")
-            end
+            @logmsg InnerLoop "Regularized"
+            # if solver.opts.verbose
+            #     println("regularized (normal bp)")
+            #     println("-condition number: $(cond(Array(Quu_reg)))")
+            #     println("Quu_reg: $Quu_reg")
+            # end
 
             # increase regularization
             regularization_update!(res,solver,:increase)

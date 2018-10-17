@@ -181,7 +181,7 @@ function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},
 end
 
 function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
-    0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u
+    0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
 end
 
 """
@@ -218,6 +218,7 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             J += dt/6*(stage_cost(X[k],U[k],Q,R,xf,c) + 4*stage_cost(Xm,Um,Q,R,xf,c) + stage_cost(X[k+1],U[k+1],Q,R,xf,c)) # Simpson quadrature (integral approximation) for foh stage cost
         else
             J += dt*stage_cost(X[k],U[k],Q,R,xf,c)
+
         end
     end
 
@@ -685,7 +686,7 @@ end
 function total_time(solver::Solver, results::SolverVectorResults)
     if is_min_time(solver)
         m̄,mm = get_num_controls(solver)
-        T = sum([u[m̄]^2 for u in results.U])
+        T = sum([u[m̄]^2 for u in results.U[1:solver.N-1]])
     else
         T = solver.dt*(solver.N-1)
     end
