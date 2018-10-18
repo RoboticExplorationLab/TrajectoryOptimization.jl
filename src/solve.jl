@@ -269,6 +269,15 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
+            @logmsg InnerLoop :j value=j
+
+            if iter > 1
+                c_diff = abs(c_max-c_max_hist[end-1])
+            else
+                c_diff = 0.
+            end
+            @logmsg InnerLoop :c_diff value=c_diff
+
             if ii % 10 == 1
                 print_header(logger,InnerLoop)
             end
@@ -295,6 +304,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             # Check for cost and constraint tolerance convergence
             elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
+                break
+            elseif is_constrained && dJ < solver.opts.cost_tolerance && c_diff < 1e-6 && j == solver.opts.iterations_outerloop
+                @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization
             elseif results.ρ[1] > solver.opts.ρ_max
