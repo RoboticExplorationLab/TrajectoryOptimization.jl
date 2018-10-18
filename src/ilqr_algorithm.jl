@@ -179,8 +179,6 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         Quu = luu + fu'*S[k+1]*fu
         Qux = fu'*S[k+1]*fx
 
-
-
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
@@ -223,6 +221,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
                 println("regularized (normal bp)")
                 println("-condition number: $(cond(Array(Quu_reg)))")
                 println("Quu_reg: $(eigvals(Quu_reg))")
+                @show Quu_reg
             end
 
             # increase regularization
@@ -660,7 +659,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         if ~flag
             # Reduce step size if rollout returns non-finite values (NaN or Inf)
             if solver.opts.verbose
-                @debug "Non-finite values in rollout"
+                @logmsg InnerIters "Non-finite values in rollout"
             end
             iter += 1
             alpha /= 2.0
@@ -694,7 +693,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     end
     @logmsg InnerLoop :cost value=J
     @logmsg InnerLoop :dJ value=J_prev-J
-    @logmsg InnerLoop :expected value=Δv[1]+Δv[2]
+    @logmsg InnerLoop :expected value=-(Δv[1]+Δv[2])
     @logmsg InnerLoop :actual value=J_prev-J
     @logmsg InnerLoop :z value=z
     @logmsg InnerLoop :α value=2*alpha
