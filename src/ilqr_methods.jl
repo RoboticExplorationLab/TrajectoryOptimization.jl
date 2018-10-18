@@ -541,9 +541,10 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     # Append on min time bounds
     u_max = obj.u_max
     u_min = obj.u_min
+    min_dt = 1e-2
     if min_time
         u_max = [u_max; max_dt]
-        u_min = [u_min; 0]
+        u_min = [u_min; min_dt]
     end
 
     # Mask for active (state|control) constraints
@@ -556,7 +557,6 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     pI_u_max = count(u_max_active)
     pI_u_min = count(u_min_active)
     pI_u = pI_u_max + pI_u_min
-
     function c_control!(c,x,u)
         c[1:pI_u_max] = (u - u_max)[u_max_active]
         c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u)[u_min_active]
