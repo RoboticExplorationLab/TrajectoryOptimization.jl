@@ -41,19 +41,20 @@ else
 end
 
 if is_constrained
-    res = ConstrainedResults(n,m,p,N) # preallocate memory for results
+    # res = ConstrainedResults(n,m,p,N) # preallocate memory for results
     reS = TrajectoryOptimization.ConstrainedStaticResults(n,m,p,N)
     reV = TrajectoryOptimization.ConstrainedVectorResults(n,m,p,N)
 else
-    res = TrajectoryOptimization.UnconstrainedResults(n,m,N)
+    # res = TrajectoryOptimization.UnconstrainedResults(n,m,N)
     reS = TrajectoryOptimization.UnconstrainedStaticResults(n,m,N)
     reV = TrajectoryOptimization.UnconstrainedVectorResults(n,m,n)
 end
 length(reS.U[1])
-reS = reV
+res = reV
+# reS = reV
 
 
-res.X[:,1] = solver.obj.x0
+res.X[1] = solver.obj.x0
 reS.X[1] = solver.obj.x0
 
 res.MU .*= solver.opts.μ1 # set initial penalty term values
@@ -91,6 +92,7 @@ if !flag
     results.U .= rand(solver.model.m,solver.N)
     rollout!(results,solver)
 end
+plot(to_array(res.X)')
 
 J_prev = cost(solver, res, res.X, res.U)
 J_prev = cost(solver, reS, reS.X, reS.U)
@@ -99,9 +101,10 @@ getR(solver)
 
 TrajectoryOptimization.calculate_jacobians!(res, solver)
 TrajectoryOptimization.calculate_jacobians!(reS, solver)
-to_array(reS.fx) ≈ res.fx
-to_array(reS.fu) ≈ res.fu
+to_array(reS.fx) ≈ to_array(res.fx)
+to_array(reS.fu) ≈ to_array(res.fu)
 
+backwardpass_mintime!(res, solver)
 Δv = backwardpass!(res, solver)
 Δv = backwardpass!(reS, solver)
 to_array(reS.K) ≈ res.K

@@ -36,10 +36,51 @@ struct Solver{O<:Objective}
     integration::Symbol
     control_integration::Symbol
 
-    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt=0.01, opts::SolverOptions=SolverOptions(), infeasible=false) where {O}
-        N, dt = calc_N(obj.tf, dt)
+    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
+        # Check for minimum time
+        if obj.tf == 0
+            min_time = true
+            dt = 0.
+            if N==-1
+                throw(ArgumentError("N must be specified for a minimum-time problem"))
+            end
+        else
+            min_time = false
+
+            # Handle combination of N and dt
+            if isnan(dt) && N>0
+                dt = obj.tf / N
+            elseif ~isnan(dt) && N==-1
+                N, dt = calc_N(obj.tf, dt)
+            elseif isnan(dt) && N==-1
+                @warn "Neither dt or N were specified. Setting N = 50"
+                N = 50
+                dt = obj.tf/N
+            elseif ~isnan(dt) && N>0
+                if dt !== obj.tf/N
+                    throw(ArgumentError("Specified time step, number of knot points, and final time do not agree ($dt ≢ $(obj.tf)/$N)"))
+                end
+            end
+            if dt == 0
+                throw(ArgumentError("dt must be non-zero for non-minimum time problems"))
+            end
+        end
+
+        # Check for valid entries
+        if N < 0
+            err = ArgumentError("$N is not a valid entry for N. Number of knot points must be a positive integer.")
+            throw(err)
+        elseif dt < 0
+            err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
+            throw(err)
+        end
         n, m = model.n, model.m
         f! = model.f # checked in model now
+        m̄ = m
+
+        if min_time
+            m̄ += 1
+        end
 
         # Get integration scheme
         if isdefined(TrajectoryOptimization,integration)
@@ -79,7 +120,7 @@ struct Solver{O<:Objective}
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
         function Jacobians_Discrete!(x,u,v=zeros(size(u)))
-            infeasible = length(u) != m
+            infeasible = length(u) != m̄
 
             Sd[1:n] = x
             Sd[n+1:n+m] = u[1:m]
@@ -88,7 +129,8 @@ struct Solver{O<:Objective}
                 Sd[n+m+1:n+m+m] = v[1:m]
             end
 
-            Sd[end] = dt
+            min_time ? h = u[m̄] : h = √dt
+            Sd[end] = h
 
             Fd!(Jd,Sdotd,Sd)
 
@@ -100,9 +142,9 @@ struct Solver{O<:Objective}
                 end
             else
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I] # fx, [fu I]
+                    return Jd[1:model.n,1:model.n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
                 else
-                    return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m] # fx, fu
+                    return Jd[1:model.n,1:model.n],  Jd[1:n,n.+(1:m̄)] # fx, fu
                 end
             end
         end
@@ -126,7 +168,7 @@ struct Solver{O<:Objective}
         end
 
         # Generate constraint functions
-        c_fun, c_jacob = generate_constraint_functions(obj)
+        c_fun, c_jacob = generate_constraint_functions(obj, max_dt = opts.max_dt)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
@@ -153,11 +195,19 @@ Return the quadratic control stage cost R
 If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
-    if solver.opts.infeasible
-        R = solver.opts.infeasible_regularization*tr(solver.obj.R)*Diagonal(I,solver.model.m+solver.model.n)
-        R[1:solver.model.m,1:solver.model.m] = solver.obj.R
-        return R
-    else
+    if !solver.opts.infeasible && !is_min_time(solver)
         return solver.obj.R
+    else
+        m = solver.model.m
+        m̄,mm = get_num_controls(solver)
+        R = zeros(mm,mm)
+        R[1:m,1:m] = solver.obj.R
+        if is_min_time(solver)
+            R[m̄,m̄] = solver.opts.min_time_regularization
+        end
+        if solver.opts.infeasible
+            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.infeasible_regularization*tr(solver.obj.R))
+        end
+        return R
     end
-end
+end # TODO: make this type stable (maybe make it a type so it only calculates once)

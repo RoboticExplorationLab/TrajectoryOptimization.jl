@@ -57,13 +57,14 @@ end
 $(SIGNATURES)
     Solve constrained optimization problem specified by `solver`
 """
-function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
+function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states
     m = solver.model.m # number of control inputs
+    m̄,mm = get_num_controls(solver)
 
     # Use infeasible start if an initial trajectory was passed in
     if isempty(X0)
@@ -72,12 +73,18 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         infeasible = true
     end
 
+    # Determine if the problem in constrained
+    is_constrained = false
+    if infeasible || is_min_time(solver) || Obj <: ConstrainedObjective
+        is_constrained = true
+    end
+
     use_static = solver.opts.use_static
 
     #****************************#
     #       INITIALIZATION       #
     #****************************#
-    if solver.obj isa UnconstrainedObjective
+    if !is_constrained
         @info "Solving Unconstrained Problem..."
 
         iterations_outerloop_original = solver.opts.iterations_outerloop
@@ -88,33 +95,37 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             results = UnconstrainedVectorResults(n,m,N)
         end
         copyto!(results.U, U0)
-        is_constrained = false
 
-        # Set initial regularization
-        results.ρ[1] *= solver.opts.ρ_initial
+    elseif is_constrained
+        p,pI,pE = get_num_constraints(solver)
 
-    elseif solver.obj isa ConstrainedObjective
-        p = solver.obj.p # number of inequality and equality constraints
-        pI = solver.obj.pI # number of inequality constraints
-        is_constrained = true
-
+        if is_min_time(solver)
+            infeasible ? sep = " and " : sep = " with "
+            solve_string = sep * "minimum time..."
+            U_init = [U0; ones(1,size(U0,2))*sqrt(solver.opts.max_dt/2)]
+        else
+            solve_string = "..."
+            X_init = zeros(n,N)
+            U_init = U0
+        end
         if infeasible
-            @info "Solving Constrained Problem with Infeasible Start..."
-
-            ui = infeasible_controls(solver,X0,U0) # generates n additional control input sequences that produce the desired infeasible state trajectory
-            m += n # augment the number of control input sequences by the number of states
-            p += n # increase the number of constraints by the number of additional control input sequences
+            solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
+            ui = infeasible_controls(solver,X0,U0)  # generates n additional control input sequences that produce the desired infeasible state trajectory
+            X_init = X0            # initialize state trajectory with infeasible trajectory input
+            U_init = [U_init; ui]  # augment control with additional control inputs that produce infeasible state trajectory
             solver.opts.infeasible = true
         else
-            @info "Solving Constrained Problem..."
+            solve_string = "Solving Constrained Problem" * solve_string
             solver.opts.infeasible = false
         end
 
+        @info solve_string
+
         ## Initialize results
         if use_static
-            results = ConstrainedStaticResults(n,m,p,N)
+            results = ConstrainedStaticResults(n,mm,p,N)
         else
-            results = ConstrainedVectorResults(n,m,p,N)
+            results = ConstrainedVectorResults(n,mm,p,N)
         end
 
         # Set initial penalty term values
@@ -123,23 +134,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
         # Set initial regularization
         results.ρ[1] *= solver.opts.ρ_initial
 
-        if infeasible
-            copyto!(results.X, X0)  # initialize state trajectory with infeasible trajectory input
-            copyto!(results.U, [U0; ui])  # augment control with additional control inputs that produce infeasible state trajectory
-            calculate_derivatives!(results,solver,results.X,results.U)
-            calculate_midpoints!(results,solver,results.X,results.U)
-        else
-            copyto!(results.U, U0) # initialize control to control input sequence
-
-            # bootstrap previous constrained solution
-            if !isempty(prevResults)
-                results.ρ[1] = prevResults.ρ[1] #TODO consider if this is necessary
-                for k = 1:solver.N
-                    results.LAMBDA[k] = prevResults.LAMBDA[k][1:solver.obj.p]
-                end
-                results.λN .= prevResults.λN
-            end
-        end
+        copyto!(results.X, X0)
+        copyto!(results.U, U_init)
 
         # Diagonal indicies for the Iμ matrix (fast)
         diag_inds = CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2))
@@ -233,6 +229,8 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
                 Δv = backwardpass_foh!(results,solver)
             elseif solver.opts.square_root
                 Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+            elseif is_min_time(solver)
+                Δv = backwardpass_mintime!(results, solver)
             else
                 Δv = backwardpass!(results, solver)
             end
@@ -250,8 +248,6 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
 
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
-
-            iter += 1
 
             if is_constrained
                 c_max = max_violation(results,diag_inds)
@@ -273,6 +269,15 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
+            @logmsg InnerLoop :j value=j
+
+            if iter > 1
+                c_diff = abs(c_max-c_max_hist[end-1])
+            else
+                c_diff = 0.
+            end
+            @logmsg InnerLoop :c_diff value=c_diff
+
             if ii % 10 == 1
                 print_header(logger,InnerLoop)
             end
@@ -299,6 +304,9 @@ function _solve(solver::Solver, U0::Array{Float64,2}, X0::Array{Float64,2}=Array
             # Check for cost and constraint tolerance convergence
             elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
+                break
+            elseif is_constrained && dJ < solver.opts.cost_tolerance && c_diff < 1e-6 && j == solver.opts.iterations_outerloop
+                @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization
             elseif results.ρ[1] > solver.opts.ρ_max
@@ -459,7 +467,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
     Lagrange multiplier updates
         -zoh sequential (1st and 2nd order)
         -zoh nonsequential (1st and 2nd order)
@@ -493,8 +501,8 @@ end
 
 """@(SIGNATURES) 1st order multiplier update for zoh (sequential)"""
 function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
+    p,pI,pE = get_num_constraints(solver)
     if k != solver.N
-        pI = solver.obj.pI
         results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
         results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
     else
@@ -506,16 +514,14 @@ end
 """@(SIGNATURES) 1st order multiplier update for zoh (nonsequential)"""
 function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -567,16 +573,14 @@ end
 """@(SIGNATURES) 2nd order multiplier update for zoh (sequential)"""
 function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -642,16 +646,14 @@ end
 """@(SIGNATURES) 2nd order multiplier update for zoh (nonsequential)"""
 function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver)
     # Build the Hessian of the Lagrangian and stack: constraints, Jacobians, multipliers
-    n = solver.model.n
-    m = solver.model.m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])  # should do mm instead of adding to m
         m += n
     end
 
@@ -725,7 +727,7 @@ end
 
 """@(SIGNATURES) 1st order multiplier update for foh (sequential)"""
 function λ_update_1_foh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
-    pI = solver.obj.pI
+    p,pI,pE = get_num_constraints(solver)
     results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
     results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
 
@@ -737,17 +739,15 @@ end
 
 """@(SIGNATURES) 2nd order multiplier update for foh (nonsequential)"""
 function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
-    n = solver.model.n
-    m = solver.model.m
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
     q = n+m
-    p = length(results.C[1])
-    pI = solver.obj.pI
-    N = solver.N
     Q = solver.obj.Q
     R = getR(solver)
     Qf = solver.obj.Qf
     dt = solver.dt
-    if solver.model.m != length(results.U[1])
+    if m̄ != length(results.U[1])
         m += n
     end
 
@@ -872,8 +872,7 @@ end
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     # println("individual penalty update")
-    p = length(results.C[1])
-    pI = solver.obj.pI
+    p,pI,pE = get_num_constraints(solver)
     n = solver.model.n
 
     τ = solver.opts.τ

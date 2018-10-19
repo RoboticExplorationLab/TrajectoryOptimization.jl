@@ -24,7 +24,7 @@ of a continuous dynamics function.
 
 """
 function midpoint(f!::Function, dt::Float64)
-    fd!(xdot,x,u) = begin
+    fd!(xdot,x,u,dt=dt) = begin
         f!(xdot,x,u)
         xdot .*= dt/2.
         f!(xdot, x + xdot, u)
@@ -34,7 +34,7 @@ end
 
 function midpoint(f_aug!::Function)
     fd_aug!(dS, S) = begin
-        dt = S[end]
+        dt = S[end]^2
         f_aug!(dS, S)
         dS .*= dt/2.
         f_aug!(dS, S + dS)
@@ -55,8 +55,8 @@ of a continuous dynamics function.
 """
 function rk4(f!::Function, dt::Float64)
     # Runge-Kutta 4
-    fd!(xdot,x,u) = begin
-        k1 = k2 = k3 = k4 = zero(x)
+    fd!(xdot,x,u,dt=dt) = begin
+        k1 = k2 = k3 = k4 = zero(xdot)
         f!(k1, x, u);         k1 *= dt;
         f!(k2, x + k1/2, u); k2 *= dt;
         f!(k3, x + k2/2, u); k3 *= dt;
@@ -69,7 +69,7 @@ end
 function rk4(f_aug!::Function)
     # Runge-Kutta 4
     fd!(dS,S::Array) = begin
-        dt = S[end]
+        dt = S[end]^2
         k1 = k2 = k3 = k4 = zero(S)
         f_aug!(k1,S);         k1 *= dt;
         f_aug!(k2,S + k1/2); k2 *= dt;
@@ -92,7 +92,7 @@ of a continuous dynamics function.
 """
 function rk3(f!::Function, dt::Float64) #TODO - test that this is correct
     # Runge-Kutta 3 (zero order hold)
-    fd!(xdot,x,u) = begin
+    fd!(xdot,x,u,dt=dt) = begin
         k1 = k2 = k3 = zero(x)
         f!(k1, x, u);               k1 *= dt;
         f!(k2, x + k1/2, u);       k2 *= dt;
@@ -104,7 +104,7 @@ end
 function rk3(f_aug!::Function)
     # Runge-Kutta 3 augmented (zero order hold)
     fd!(dS,S::Array) = begin
-        dt = S[end]
+        dt = S[end]^2
         k1 = k2 = k3 = zero(S)
         f_aug!(k1,S);              k1 *= dt;
         f_aug!(k2,S + k1/2);      k2 *= dt;
@@ -115,7 +115,7 @@ end
 
 function rk3_foh(f!::Function, dt::Float64)
     # Runge-Kutta 3 (first order hold on controls)
-    fd!(xdot,x,u1,u2) = begin
+    fd!(xdot,x,u1,u2,dt=dt) = begin
         k1 = k2 = k3 = zero(x)
         f!(k1, x, u1);                   k1 *= dt;
         f!(k2, x + k1/2, (u1 + u2)./2); k2 *= dt;
@@ -127,7 +127,7 @@ end
 function rk3_foh(f_aug!::Function)
     # Runge-Kutta 3 with first order hold on controls
     fd!(dS,S::Array) = begin
-        dt = S[end]
+        dt = S[end]^2
         k1 = k2 = k3 = zero(S)
         f_aug!(k1,S);              k1 *= dt;
         f_aug!(k2,S + k1/2);      k2 *= dt;

@@ -87,10 +87,135 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
 
         # check that Quu_reg is positive definite
         if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+            @logmsg InnerLoop "Regularized"
+            # if solver.opts.verbose
+            #     println("regularized (normal bp)")
+            #     println("-condition number: $(cond(Array(Quu_reg)))")
+            #     println("Quu_reg: $Quu_reg")
+            # end
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after successful backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
+function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+    R = getR(solver)
+    dt = solver.dt
+
+    min_time = is_min_time(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        min_time ? dt = U[k][m̄]^2 : nothing
+
+        lx = dt*Q*vec(X[k] - xf)
+        lu = dt*R*vec(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fx, fu = res.fx[k], res.fu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fx'*vec(s[k+1])
+        Qu = lu + fu'*vec(s[k+1])
+        Qxx = lxx + fx'*S[k+1]*fx
+
+        Quu = luu + fu'*S[k+1]*fu
+        Qux = fu'*S[k+1]*fx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+
+            if min_time
+                h = U[k][m̄]
+                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
+                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
+                tmp = zero(Quu)
+                tmp[:,m̄] = R*U[k]
+                Quu += 2h*(tmp+tmp')
+                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
+
+                if k > 1
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - LAMBDA[k-1][end]
+                    Quu[m̄,m̄] += Iμ[k-1][end,end]
+                end
+
+            end
+
+        end
+
+        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + fu'*(res.ρ[1]*I)*fu
+            Qux_reg = Qux + fu'*(res.ρ[1]*I)*fx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if rank(Quu) != mm  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose
                 println("regularized (normal bp)")
                 println("-condition number: $(cond(Array(Quu_reg)))")
-                println("Quu_reg: $Quu_reg")
+                println("Quu_reg: $(eigvals(Quu_reg))")
+                @show Quu_reg
             end
 
             # increase regularization
@@ -471,6 +596,8 @@ $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
 function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
+    status = :progress_made
+
     # Pull out values from results
     X = res.X
     U = res.U
@@ -482,30 +609,51 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     # Compute original cost
     update_constraints!(res,solver,X,U)
 
-    J_prev = cost(solver, res, X, U)
+    Ju_prev = _cost(solver, res, X, U)   # Unconstrained cost
+    Jc_prev = cost_constraints(solver, res)  # constraint cost
+    J_prev = Ju_prev + Jc_prev
+
 
     J = Inf
     alpha = 1.0
     iter = 0
     z = 0.
 
+    logger = current_logger()
+    print_header(logger,InnerIters)
+    @logmsg InnerIters :iter value=0
+    @logmsg InnerIters :cost value=J_prev
+    print_row(logger,InnerIters)
     while z ≤ solver.opts.c1 || z > solver.opts.c2
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
+            Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+            Jc = cost_constraints(solver, res)  # constraint cost
+
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
+
+            zu = (Ju_prev - Ju)/(alpha*(Δv[1] + alpha*Δv[2]))
+            zc = (Jc_prev - Jc)/(alpha*(Δv[1] + alpha*Δv[2]))
+
+            status = :no_progress_made
+            if solver.opts.c1 <= zu <= solver.opts.c2
+                status = :uncon_progress_made
+            end
+            if solver.opts.c1 <= zc <= solver.opts.c2
+                status = :constraint_progress_made
+            end
 
             update_constraints!(res,solver,X_,U_)
             J = copy(J_prev)
             z = 0.
 
-            if solver.opts.verbose
-                @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
-            end
+            @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             alpha = 0.0
             regularization_update!(res,solver,:increase) # increase regularization
+            res.ρ[1] += 1
             break
         end
 
@@ -515,9 +663,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         # Check if rollout completed
         if ~flag
             # Reduce step size if rollout returns non-finite values (NaN or Inf)
-            if solver.opts.verbose
-                @debug "Non-finite values in rollout"
-            end
+            @logmsg InnerIters "Non-finite values in rollout"
             iter += 1
             alpha /= 2.0
             continue
@@ -525,25 +671,42 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
         # Calcuate cost
         update_constraints!(res,solver,X_,U_)
-        J = cost(solver, res, X_, U_)
-        z = (J_prev - J)/(-alpha*(Δv[1] + alpha*Δv[2]))
 
-        alpha /= 2.0
+        Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+        Jc = cost_constraints(solver, res)  # constraint cost
+        J = Ju + Jc
+        J = cost(solver, res, X_, U_)
+        expected = -alpha*(Δv[1] + alpha*Δv[2])
+        if expected > 0
+            z  = (J_prev - J)/expected
+        else
+            @logmsg InnerIters "Non-positive expected decrease"
+            z = -1
+        end
 
         iter += 1
+
+        # Log messages
+        @logmsg InnerIters :iter value=iter
+        @logmsg InnerIters :α value=alpha
+        @logmsg InnerIters :cost value=J
+        @logmsg InnerIters :z value=z
+        print_row(logger,InnerIters)
+
+        alpha /= 2.0
     end
 
-    if solver.opts.verbose
-        alpha *= 2.0 # we decremented since the last implemenation of alpha so we need to return to previous value
-        if res isa ConstrainedIterResults
-            # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
-            @logmsg InnerLoop :c_max value=max_violation(res)
-        end
-        @logmsg InnerLoop :expected value=-(alpha)*(Δv[1] + (alpha)*Δv[2])
-        @logmsg InnerLoop :actual value=J_prev-J
-        @logmsg InnerLoop :z value=z
-        @logmsg InnerLoop :α value=alpha
+    if res isa ConstrainedIterResults
+        # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
+        @logmsg InnerLoop :c_max value=max_violation(res)
     end
+    @logmsg InnerLoop :cost value=J
+    @logmsg InnerLoop :dJ value=J_prev-J
+    @logmsg InnerLoop :expected value=-(Δv[1]+Δv[2])
+    @logmsg InnerLoop :actual value=J_prev-J
+    @logmsg InnerLoop :z value=z
+    @logmsg InnerLoop :α value=2*alpha
+    @logmsg InnerLoop :ρ value=res.ρ[1]
 
     return J
 end
