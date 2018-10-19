@@ -210,8 +210,8 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         end
 
         # Regularization
-        if rank(Quu) != mm  # need to wrap Array since isposdef doesn't work for static arrays
-            if solver.opts.verbose
+        if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
+            if solver.opts.verbose # TODO: switch to logger
                 println("regularized (normal bp)")
                 println("-condition number: $(cond(Array(Quu_reg)))")
                 println("Quu_reg: $(eigvals(Quu_reg))")
@@ -242,7 +242,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         k = k - 1;
     end
 
-    # decrease regularization after successful backward pass
+    # decrease regularization after backward pass
     regularization_update!(res,solver,:decrease)
 
     return Δv
@@ -358,8 +358,6 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     b = res.b
     d = res.d
 
-    dt = solver.dt
-
     X = res.X
     U = res.U
 
@@ -454,7 +452,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            if solver.opts.verbose
+            if solver.opts.verbose  # TODO move to logger
                 println("regularized (foh bp)\n not implemented properly")
                 println("-condition number: $(cond(Array(Qvv_reg)))")
                 println("Qvv_reg: $Qvv_reg")
@@ -522,7 +520,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             Quu__reg = Quu_ + res.ρ[1]*I
 
             if !isposdef(Array(Hermitian(Quu__reg)))
-                if solver.opts.verbose
+                if solver.opts.verbose  # TODO: Move to logger
                     println("regularized (foh bp)")
                     println("part 2")
                     println("-condition number: $(cond(Array(Quu__reg)))")
@@ -617,7 +615,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     J = Inf
     alpha = 1.0
     iter = 0
-    z = 0.
+    z = -1.
+    expected = 0.
 
     logger = current_logger()
     print_header(logger,InnerIters)
@@ -635,23 +634,30 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             X_ .= X
             U_ .= U
 
-            zu = (Ju_prev - Ju)/(alpha*(Δv[1] + alpha*Δv[2]))
-            zc = (Jc_prev - Jc)/(alpha*(Δv[1] + alpha*Δv[2]))
+            # Examine components
+            zu = (Ju_prev - Ju)
+            zc = (Jc_prev - Jc)
 
             status = :no_progress_made
-            if solver.opts.c1 <= zu <= solver.opts.c2
+            if zu > 0
                 status = :uncon_progress_made
             end
-            if solver.opts.c1 <= zc <= solver.opts.c2
+            if zc > 0
                 status = :constraint_progress_made
+            end
+
+            if solver.control_integration == :foh
+                calculate_derivatives!(res, solver, X_, U_)
+                calculate_midpoints!(res, solver, X_, U_)
             end
 
             update_constraints!(res,solver,X_,U_)
             J = copy(J_prev)
             z = 0.
+            alpha = 0.0
+            expected = 0.
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
-            alpha = 0.0
             regularization_update!(res,solver,:increase) # increase regularization
             res.ρ[1] += 1
             break
@@ -675,7 +681,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
         Jc = cost_constraints(solver, res)  # constraint cost
         J = Ju + Jc
-        J = cost(solver, res, X_, U_)
         expected = -alpha*(Δv[1] + alpha*Δv[2])
         if expected > 0
             z  = (J_prev - J)/expected
@@ -685,16 +690,16 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         end
 
         iter += 1
+        alpha /= 2.0
 
         # Log messages
         @logmsg InnerIters :iter value=iter
-        @logmsg InnerIters :α value=alpha
+        @logmsg InnerIters :α value=2*alpha
         @logmsg InnerIters :cost value=J
         @logmsg InnerIters :z value=z
         print_row(logger,InnerIters)
 
-        alpha /= 2.0
-    end
+    end  # forward pass loop
 
     if res isa ConstrainedIterResults
         # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
@@ -702,8 +707,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     end
     @logmsg InnerLoop :cost value=J
     @logmsg InnerLoop :dJ value=J_prev-J
-    @logmsg InnerLoop :expected value=-(Δv[1]+Δv[2])
-    @logmsg InnerLoop :actual value=J_prev-J
+    @logmsg InnerLoop :expected value=expected
     @logmsg InnerLoop :z value=z
     @logmsg InnerLoop :α value=2*alpha
     @logmsg InnerLoop :ρ value=res.ρ[1]

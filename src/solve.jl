@@ -64,7 +64,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     N = solver.N # number of iterations for the solver (ie, knotpoints)
     n = solver.model.n # number of states
     m = solver.model.m # number of control inputs
-    m̄,mm = get_num_controls(solver)
 
     # Use infeasible start if an initial trajectory was passed in
     if isempty(X0)
@@ -102,12 +101,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         if is_min_time(solver)
             infeasible ? sep = " and " : sep = " with "
             solve_string = sep * "minimum time..."
-            U_init = [U0; ones(1,size(U0,2))*sqrt(solver.opts.max_dt/2)]
+            U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
         else
             solve_string = "..."
-            X_init = zeros(n,N)
             U_init = U0
         end
+        X_init = zeros(n,N)
+
         if infeasible
             solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
             ui = infeasible_controls(solver,X0,U0)  # generates n additional control input sequences that produce the desired infeasible state trajectory
@@ -132,17 +132,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         results.MU .*= solver.opts.μ1
 
         # Set initial regularization
-        results.ρ[1] *= solver.opts.ρ_initial
+        results.ρ[1] = solver.opts.ρ_initial
 
-        copyto!(results.X, X0)
+        copyto!(results.X, X_init)
         copyto!(results.U, U_init)
-
-        # Diagonal indicies for the Iμ matrix (fast)
-        diag_inds = CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2))
 
         # Generate constraint function and jacobian functions from the objective
         update_constraints!(results,solver,results.X,results.U)
     end
+
+    # Get modified number of controls (account for infeasible and min time)
+    m̄,mm = get_num_controls(solver)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -175,9 +175,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
         if !flag
             if solver.opts.verbose
-                println("Bad initial control sequence, setting initial control to random")
+                println("Bad initial control sequence, setting initial control to zero")
             end
-            results.U .= rand(solver.model.m,solver.N)
+            results.U .= zeros(mm,N)
             rollout!(results,solver)
         end
     end
@@ -197,7 +197,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
     dJ = Inf
     gradient = Inf
-    Δv = Inf
+    Δv = [Inf, Inf]
     sqrt_tolerance = false
 
     with_logger(logger) do
@@ -206,7 +206,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @info "Outer loop $j (begin)"
 
         if is_constrained
-            update_constraints!(results,solver,results.X,results.U)
             if j == 1
                 results.C_prev .= deepcopy(results.C)
                 results.CN_prev .= deepcopy(results.CN)
@@ -382,10 +381,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
     ## Return dynamically feasible trajectory
     if infeasible #&& solver.opts.solve_feasible
-        if solver.opts.verbose
-            # println("Infeasible -> Feasible ")
-            @info "Infeasible solve complete"
-        end
+        @info "Infeasible solve complete"
 
         # run single backward pass/forward pass to get dynamically feasible solution
         results_feasible = get_feasible_trajectory(results,solver)
@@ -393,8 +389,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         # resolve feasible solution if necessary (should be fast)
         if solver.opts.resolve_feasible
             @info "Resolving feasible"
-            if solver.opts.verbose
-            end
+
             # create unconstrained solver from infeasible solver if problem is unconstrained
             if solver.opts.unconstrained
                 obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
@@ -423,9 +418,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
     # if feasible solve, return results
     else
-        if solver.opts.verbose
-            @info "***Solve Complete***"
-        end
+        @info "***Solve Complete***"
 
         return results, stats
     end

@@ -73,11 +73,12 @@ function get_initial_dt(solver::Solver)
     if is_min_time(solver)
         if solver.opts.min_time_init > 0
             dt = solver.opts.min_time_init / (solver.N - 1)
+            if dt > solver.opts.max_dt
+                dt = solver.opts.max_dt
+                @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
+            end
         else
             dt  = solver.opts.max_dt / 2
-        end
-        if dt > solver.opts.max_dt
-            dt = solver.opts.max_dt
         end
     else
         dt = solver.dt
@@ -114,7 +115,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         end
 
         # Check that rollout has not diverged
-        if ~(norm(X[k],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
+        if ~(norm(X[k+1],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
             return false
         end
     end
@@ -149,23 +150,22 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
     if solver.control_integration == :foh
         b = res.b
-        du = zeros(m)
-        dv = zeros(m)
+        dv = zeros(mm)
         du = alpha*d[1]
         U_[1] = U[1] + du
     end
 
     for k = 2:N
-        delta = X_[k-1] - X[k-1]
+        δx = X_[k-1] - X[k-1]
 
         if solver.control_integration == :foh
-            dv = K[k]*delta + b[k]*du + alpha*d[k]
+            dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
             min_time ? dt = U_[k][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
             du = dv
         else
-            U_[k-1] = U[k-1] + K[k-1]*delta + alpha*d[k-1]
+            U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             min_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
@@ -344,7 +344,7 @@ $(SIGNATURES)
 Calculate Jacobians prior to the backwards pass
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
-function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing #TODO change to inplace '!' notation throughout the code
+function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     N = solver.N
     dt = solver.dt
     min_time = is_min_time(solver)
@@ -372,7 +372,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     return nothing
 end
 
-function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver, infeasible=false)::Nothing
+function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
     N = solver.N
     for k = 1:N-1
         if solver.control_integration == :foh
@@ -434,7 +434,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
     # Terminal constraint
     c(res.CN,X[N])
-    res.IμN .= Diagonal(res.μN)
+    res.IμN .= Diagonal(res.μN)  # NOTE: Assuming all terminal constraints are equality constraints
     return nothing # TODO allow for more general terminal constraint
 end
 
@@ -683,9 +683,9 @@ Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
 precomputed and passed in.
 """
-function max_violation(results::ConstrainedIterResults,inds=CartesianIndex.(axes(results.Iμ,1),axes(results.Iμ,2)))
+function max_violation(results::ConstrainedIterResults)
     if size(results.CN,1) != 0
-        return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), maximum(abs.(results.CN)))
+        return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), norm(results.CN,Inf))
     else
         return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
     end
@@ -775,6 +775,9 @@ function regularization_update!(results::SolverResults,solver::Solver,status::Sy
         @logmsg InnerLoop "Regularization Increased"
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
+        if res.ρ[1] > solver.opts.ρ_max
+            MethodError("Max regularization exceeded")
+        end
     elseif status == :decrease # decrease regularization
         # @info "Regularzation Decreased"
         results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
