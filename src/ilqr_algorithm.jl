@@ -198,8 +198,8 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
                 Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
 
                 if k > 1
-                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][m̄,m̄] - LAMBDA[k-1][m̄]
-                    Quu[m̄,m̄] += Iμ[k-1][m̄,m̄]
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - LAMBDA[k-1][end]
+                    Quu[m̄,m̄] += Iμ[k-1][end,end]
                 end
 
             end
@@ -216,7 +216,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         end
 
         # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+        if rank(Quu) != mm  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose
                 println("regularized (normal bp)")
                 println("-condition number: $(cond(Array(Quu_reg)))")
