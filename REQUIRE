@@ -8,3 +8,4 @@ Interpolations
 Ipopt
 StaticArrays
 Formatting
+Plots

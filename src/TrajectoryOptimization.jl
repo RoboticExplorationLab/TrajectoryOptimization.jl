@@ -20,6 +20,7 @@ using SparseArrays
 using StaticArrays
 using Logging
 using Formatting
+using Plots
 
 
 const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
@@ -27,7 +28,6 @@ const debug_level = :critical  # (:verbose, :debug, :info, :critical, :none)
 
 export
     Dynamics
-
 
 # Primary types
 export
@@ -62,7 +62,9 @@ export
     quat2rot,
     eul2rot,
     sphere_constraints,
-    circle_constraints
+    circle_constraints,
+    generate_controller,
+    lqr
 
 include("model.jl")
 include("integration.jl")
@@ -74,6 +76,7 @@ include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
+include("controller.jl")
 
 using Ipopt
 

@@ -72,7 +72,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res,solver, X, U)
+        calculate_midpoints!(res,solver,X, U)
     end
 
     return true
@@ -133,7 +133,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X_,U_)
-        calculate_midpoints!(res,solver, X_, U_)
+        calculate_midpoints!(res,solver,X_,U_)
     end
 
     return true
