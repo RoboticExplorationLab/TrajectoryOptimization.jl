@@ -31,7 +31,7 @@ solver_min.opts.verbose = true
 solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.2
 solver_min.opts.constraint_tolerance = 0.2
-solver_min.opts.min_time_regularization =
+solver_min.opts.min_time_regularization = 1000
 solver_min.opts.ρ_initial = 0
 results_min,stats_min = solve(solver_min,U)
 total_time(solver_min,results_min)
@@ -207,6 +207,114 @@ J_min = cost(solver_min, res_min, res_min.X_, res_min.U_)
 @test to_array(res_reg.X_) ≈ to_array(res_min.X_)
 
 
+# Test infeasible
+solver = Solver(model,obj_c,dt=dt,opts=opts); solver.opts.infeasible = true;
+solver_min = Solver(model,obj_min,N=21,opts=opts); solver_min.opts.infeasible = true;
+m̄,mm = get_num_controls(solver)
+@test (m̄,mm) == (1,3)
+@test get_num_controls(solver_min) == (2,4)
+p,pI,pE = get_num_constraints(solver)
+@test get_num_constraints(solver_min) == (7,4,3)
+
+res_reg = ConstrainedVectorResults(n,m+n,p,N)
+res_min = ConstrainedVectorResults(n,m+1+n,p+3,solver_min.N)
+res_reg.ρ[1] = 0
+res_min.ρ[1] = 0
+
+X0 = line_trajectory(solver)
+U0 = ones(m,N)
+U0_min = [U0; ones(m,solver_min.N)*sqrt(dt)]
+ui = infeasible_controls(solver, X0, U0)
+ui_min = infeasible_controls(solver_min, X0, U0_min)
+@test ui == ui_min
+copyto!(res_reg.X, X0)
+copyto!(res_min.X, X0)
+copyto!(res_reg.U, [ones(m,N); ui])
+copyto!(res_min.U, [ones(m,solver_min.N); ones(m,solver_min.N)*sqrt(dt); ui_min])
+
+update_constraints!(res_reg,solver)
+update_constraints!(res_min,solver_min)
+@test res_reg.C[1][1:2] == res_min.C[1][[1,3]]
+@test res_min.C[1][2] == sqrt(dt) - solver_min.opts.max_dt
+@test res_reg.C[1][3:4] == res_min.C[1][5:6]
+
+rollout!(res_reg, solver)
+rollout!(res_min, solver_min)
+@test to_array(res_reg.X) == to_array(res_min.X)
+@test to_array(res_min.X) == X0
+@test to_array(res_reg.X) == X0
+
+J = cost(solver, res_reg)
+J = cost(solver_min, res_min)
+
+calculate_jacobians!(res_reg,solver)
+calculate_jacobians!(res_min,solver_min)
+@test res_reg.fx[1] == res_min.fx[1]
+@test res_reg.fu[N-1] == res_min.fu[N-1][:,[1,3,4]]
+
+
+function init_solve(solver)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
+    res = ConstrainedVectorResults(n,mm,p,N)
+    dt = get_initial_dt(solver)
+
+    U0 = ones(m,N)
+    if is_min_time(solver)
+        U0 = [U0; ones(m,solver.N)*sqrt(dt)]
+    end
+    if solver.opts.infeasible
+        X0 = line_trajectory(solver)
+        copyto!(res.X, X0)
+
+        ui = infeasible_controls(solver, X0, U0)
+        U0 = [U0; ui]
+    end
+    copyto!(res.U, U0)
+
+    update_constraints!(res,solver)
+    rollout!(res, solver)
+    res
+end
+
+function inner_loop(res, solver)
+    calculate_jacobians!(res,solver)
+    v = backwardpass_mintime!(res,solver)
+    with_logger(logger) do
+        J = forwardpass!(res,solver,v)
+    end
+
+    res.X .= deepcopy(res.X_)
+    res.U .= deepcopy(res.U_)
+
+    print_header(logger,TrajectoryOptimization.InnerLoop)
+    print_row(logger,TrajectoryOptimization.InnerLoop)
+
+    display(plot(to_array(res_min.U)'))
+    total_time(solver_min, res_min)
+end
+
+obj_min = update_objective(obj_c,tf=:min,c=10., Q = obj.Q*0, R = obj.R, Qf = obj.Qf*1)
+solver_min = Solver(model,obj_min,N=21,opts=opts)
+solver_min.opts.infeasible = true;
+solver_min.opts.min_time_regularization = 100
+solver_min.opts.infeasible_regularization = 10
+solver_min.opts.iterations_linesearch = 20
+solver_min.opts.max_dt = 0.2
+res_min = init_solve(solver_min)
+[mu[4] = 100 for mu in res_min.MU]
+[mu[5] = 1000 for mu in res_min.MU]
+inner_loop(res_min, solver_min)
+outer_loop_update(res_min,solver_min)
+
+outer_loop_update(res_reg,solver)
+
+res_min.U[1]
+
+display(plot(to_array(res_min.X)'))
+display(plot(to_array(res_min.U)'))
+
 
 
 # Test inner loop
@@ -228,13 +336,15 @@ res_min = ConstrainedVectorResults(n,m+1,p+3,solver_min.N)
 res_reg.ρ[1] = 0
 res_min.ρ[1] = 0
 
-[mu[end] = 100 for mu in res_min.MU]
-update_constraints!(res_reg,solver)
-update_constraints!(res_min,solver_min)
 
 copyto!(res_reg.U, ones(m,N))
 copyto!(res_min.U, [ones(m,solver_min.N); ones(m,solver_min.N)*sqrt(dt)])
 # copyto!(res_min.U, U_guess)
+
+[mu[end] = 100 for mu in res_min.MU]
+update_constraints!(res_reg,solver)
+update_constraints!(res_min,solver_min)
+
 
 rollout!(res_reg, solver)
 rollout!(res_min, solver_min)
@@ -305,10 +415,10 @@ obj = copy(obj0)
 obj.x0 = [0;0;0;0.]
 obj.xf = [0.5;pi;0;0]
 obj.tf = 2.0
-u_bnd = 15
+u_bnd = 20
 x_bnd = [0.6,Inf,Inf,Inf]
 obj_c = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
-obj_min = update_objective(obj_c,tf=:min,c=10.,Q = obj.Q*0., Qf = obj.Qf*1)
+obj_min = update_objective(obj_c,tf=:min,c=1.,Q = obj.Q*0., Qf = obj.Qf*1)
 dt = 0.1
 
 solver = Solver(model,obj_c,dt=dt)
@@ -323,12 +433,16 @@ solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.25
 solver_min.opts.verbose = true
 solver_min.opts.cost_tolerance = 1e-4
-solver_min.opts.cost_intermediate_tolerance = 1e-4
-solver_min.opts.constraint_tolerance = 0.005
+solver_min.opts.cost_intermediate_tolerance = 1e-2
+solver_min.opts.constraint_tolerance = 0.05
 solver_min.opts.outer_loop_update = :default
-solver_min.opts.min_time_regularization = 8000
+solver_min.opts.min_time_regularization = 100
+solver_min.opts.μ1 = 1
 U0 = ones(1,solver_min.N)
 U0[:,solver.N÷2:end] *= -1
 res,stats = solve(solver_min,U0)
 plot(to_array(res.X)[1:2,:]')
 plot(to_array(res.U)[1:2,:]',ylim=[0,0.5],markershape=:auto)
+
+X0 = line_trajectory(solver_min)
+res,stats = solve(solver_min,X0,U0)

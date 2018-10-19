@@ -142,9 +142,9 @@ struct Solver{O<:Objective}
                 end
             else
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I] # fx, [fu I]
+                    return Jd[1:model.n,1:model.n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
                 else
-                    return Jd[1:model.n,1:model.n], Jd[1:n,n.+(1:m̄)] # fx, fu
+                    return Jd[1:model.n,1:model.n],  Jd[1:n,n.+(1:m̄)] # fx, fu
                 end
             end
         end
@@ -168,7 +168,7 @@ struct Solver{O<:Objective}
         end
 
         # Generate constraint functions
-        c_fun, c_jacob = generate_constraint_functions(obj)
+        c_fun, c_jacob = generate_constraint_functions(obj, max_dt = opts.max_dt)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
@@ -206,7 +206,7 @@ function getR(solver::Solver)::Array{Float64,2}
             R[m̄,m̄] = solver.opts.min_time_regularization
         end
         if solver.opts.infeasible
-            R[m̄+1:end,m̄+1:end] = I*solver.opts.infeasible_regularization*tr(solver.obj.R)
+            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.infeasible_regularization*tr(solver.obj.R))
         end
         return R
     end

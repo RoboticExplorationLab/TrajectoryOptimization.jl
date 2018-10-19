@@ -69,6 +69,22 @@ function get_num_constraints(solver::Solver)
     return p, pI, pE
 end
 
+function get_initial_dt(solver::Solver)
+    if is_min_time(solver)
+        if solver.opts.min_time_init > 0
+            dt = solver.opts.min_time_init / (solver.N - 1)
+        else
+            dt  = solver.opts.max_dt / 2
+        end
+        if dt > solver.opts.max_dt
+            dt = solver.opts.max_dt
+        end
+    else
+        dt = solver.dt
+    end
+    return dt
+end
+
 """
 $(SIGNATURES)
 Roll out the dynamics for a given control sequence (initial)
@@ -94,7 +110,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         end
 
         if infeasible
-            X[k+1] += U[k][m+1:m+n]
+            X[k+1] += U[k][m̄+1:m̄+n]
         end
 
         # Check that rollout has not diverged
@@ -520,7 +536,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64=1.0)
+function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -543,8 +559,8 @@ function generate_constraint_functions(obj::ConstrainedObjective;max_dt::Float64
     u_min = obj.u_min
     min_dt = 1e-2
     if min_time
-        u_max = [u_max; max_dt]
-        u_min = [u_min; min_dt]
+        u_max = [u_max; sqrt(max_dt)]
+        u_min = [u_min; sqrt(min_dt)]
     end
 
     # Mask for active (state|control) constraints
@@ -706,11 +722,16 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     m = solver.model.m
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
+
+    m̄,mm = get_num_controls(solver)
+    min_time = is_min_time(solver)
+    dt = solver.dt
     for k = 1:solver.N-1
+        min_time ? dt = u[m̄,k]^2 : nothing
         if solver.control_integration == :foh
-            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1])
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1], dt)
         else
-            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k])
+            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
         end
         ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] .+= ui[:,k]
@@ -720,6 +741,11 @@ end
 
 function infeasible_controls(solver::Solver,X0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N)
+    if is_min_time(solver)
+        dt = get_initial_dt(solver)
+        u_dt = ones(1,solver.N)
+        u = [u; u_dt]
+    end
     infeasible_controls(solver,X0,u)
 end
 
@@ -749,9 +775,11 @@ $(SIGNATURES)
 """
 function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
     if status == :increase # increase regularization
+        @logmsg InnerLoop "Regularization Increased"
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
     elseif status == :decrease # decrease regularization
+        # @info "Regularzation Decreased"
         results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
         results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.ρ_min)
     end
