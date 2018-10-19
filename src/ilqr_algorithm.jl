@@ -644,11 +644,10 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             J = copy(J_prev)
             z = 0.
 
-            if solver.opts.verbose
-                @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
-            end
+            @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             alpha = 0.0
             regularization_update!(res,solver,:increase) # increase regularization
+            res.ρ[1] += 1
             break
         end
 
@@ -658,9 +657,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         # Check if rollout completed
         if ~flag
             # Reduce step size if rollout returns non-finite values (NaN or Inf)
-            if solver.opts.verbose
-                @logmsg InnerIters "Non-finite values in rollout"
-            end
+            @logmsg InnerIters "Non-finite values in rollout"
             iter += 1
             alpha /= 2.0
             continue
@@ -673,7 +670,13 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         Jc = cost_constraints(solver, res)  # constraint cost
         J = Ju + Jc
         J = cost(solver, res, X_, U_)
-        z = (J_prev - J)/(-alpha*(Δv[1] + alpha*Δv[2]))
+        expected = -alpha*(Δv[1] + alpha*Δv[2])
+        if expected > 0
+            z  = (J_prev - J)/expected
+        else
+            @logmsg InnerIters "Non-positive expected decrease"
+            z = -1
+        end
 
         iter += 1
 
@@ -697,6 +700,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     @logmsg InnerLoop :actual value=J_prev-J
     @logmsg InnerLoop :z value=z
     @logmsg InnerLoop :α value=2*alpha
+    @logmsg InnerLoop :ρ value=res.ρ[1]
 
     # if alpha > 0.0
     #     regularization_update!(res,solver,false)
