@@ -73,7 +73,7 @@ u_min = u_min_pendulum
 intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
-dt = 0.2
+dt = 0.25
 solver_zoh = Solver(model,obj,integration=intergrator_zoh,dt=dt,opts=opts)
 solver_foh = Solver(model,obj,integration=intergrator_foh,dt=dt,opts=opts)
 
@@ -119,25 +119,32 @@ for i = 1:n
     p_zoh = plot!(t_sim,X_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 end
 display(p_zoh)
+savefig("knotpointtest_zoh.png")
 
 p_zoh = plot(t_solve,to_array(results_zoh.U)',color="black",title="zoh (N = $(solver_zoh.N),dt=$dt,tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 for i = 1:m
     p_zoh = plot!(t_sim,U_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 end
 display(p_zoh)
+savefig("knotpointtest_zoh_control.png")
+
 
 # FOH plotting
 p_foh = plot(t_solve,to_array(results_foh.X)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 for i = 1:n
-    p_foh = plot!(t_sim,X_foh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
+    p_foh = plot!(t_sim,X_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 end
 display(p_foh)
+savefig("knotpointtest_foh.png")
+
 
 p_foh = plot(t_solve,to_array(results_foh.U)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 for i = 1:m
-    p_foh = plot!(t_sim,U_foh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
+    p_foh = plot!(t_sim,U_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 end
 display(p_foh)
+savefig("knotpointtest_foh_control.png")
+
 
 
 # ODE45 simulation

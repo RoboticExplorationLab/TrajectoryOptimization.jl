@@ -675,7 +675,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_fun!, constraint_jacobian!
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0) = (x,u)->nothing, (x,u)->nothing
 
 """
 $(SIGNATURES)
@@ -775,7 +775,7 @@ function regularization_update!(results::SolverResults,solver::Solver,status::Sy
         @logmsg InnerLoop "Regularization Increased"
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
-        if res.ρ[1] > solver.opts.ρ_max
+        if results.ρ[1] > solver.opts.ρ_max
             MethodError("Max regularization exceeded")
         end
     elseif status == :decrease # decrease regularization

@@ -1,4 +1,3 @@
-#TODO cleanup and document each test
 # Set up models and objective
 using Test
 u_bound = 3.
@@ -24,19 +23,18 @@ solver.opts.square_root = true
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
-
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
 results, =TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
 #  with square root
-solver.opts.square_root = true
-results_sr, = TrajectoryOptimization.solve(solver,U)
-@test norm(results_sr.X[end]-obj.xf) < 1e-3
-# @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
-# @test norm(results_sr.X - results.X) < 1e-12 # breaks macOS test??
-@test all(isapprox.(results_sr.X,results.X))
+# solver.opts.square_root = true
+# results_sr, = TrajectoryOptimization.solve(solver,U)
+# @test norm(results_sr.X[end]-obj.xf) < 1e-3
+# # @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
+# # @test norm(results_sr.X - results.X) < 1e-12 # breaks macOS test??
+# @test all(isapprox.(results_sr.X,results.X))
 
 ### CONSTRAINED ###
 # rk4
@@ -47,15 +45,12 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test max_c < 1e-2
 
 # with Square Root
-solver.opts.square_root = true
-solver.opts.verbose = false
-results_c, = TrajectoryOptimization.solve(solver, U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
-
-results_c.d
-
+# solver.opts.square_root = true
+# solver.opts.verbose = false
+# results_c, = TrajectoryOptimization.solve(solver, U)
+# max_c = TrajectoryOptimization.max_violation(results_c)
+# @test norm(results_c.X[end]-obj.xf) < 1e-3
+# @test max_c < 1e-2
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
@@ -65,12 +60,12 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test max_c < 1e-2
 
 # with Square Root
-solver.opts.square_root = true
-solver.opts.verbose = false
-results_c, = TrajectoryOptimization.solve(solver, U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+# solver.opts.square_root = true
+# solver.opts.verbose = false
+# results_c, = TrajectoryOptimization.solve(solver, U)
+# max_c = TrajectoryOptimization.max_violation(results_c)
+# @test norm(results_c.X[end]-obj.xf) < 1e-3
+# @test max_c < 1e-2
 
 
 ### In-place dynamics ###
@@ -98,13 +93,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cache=false
-# opts.c1=1e-4
-# opts.c2=2.0
-# opts.constraint_tolerance = 1e-3
-# opts.cost_tolerance = 1e-5
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
 
 u_min = -3
 u_max = 3

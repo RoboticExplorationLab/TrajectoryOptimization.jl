@@ -619,10 +619,10 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     expected = 0.
 
     logger = current_logger()
-    print_header(logger,InnerIters)
+    # print_header(logger,InnerIters) #TODO: fix, this errored out
     @logmsg InnerIters :iter value=0
     @logmsg InnerIters :cost value=J_prev
-    print_row(logger,InnerIters)
+    # print_row(logger,InnerIters) #TODO: fix, same issue
     while z ≤ solver.opts.c1 || z > solver.opts.c2
 
         # Check that maximum number of line search decrements has not occured
@@ -697,7 +697,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         @logmsg InnerIters :α value=2*alpha
         @logmsg InnerIters :cost value=J
         @logmsg InnerIters :z value=z
-        print_row(logger,InnerIters)
+        # print_row(logger,InnerIters)
 
     end  # forward pass loop
 

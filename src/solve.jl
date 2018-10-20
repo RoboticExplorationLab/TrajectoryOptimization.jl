@@ -96,8 +96,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         copyto!(results.U, U0)
 
     elseif is_constrained
-        p,pI,pE = get_num_constraints(solver)
-
         if is_min_time(solver)
             infeasible ? sep = " and " : sep = " with "
             solve_string = sep * "minimum time..."
@@ -121,6 +119,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
         @info solve_string
 
+        # get counts
+        p,pI,pE = get_num_constraints(solver)
+        m̄,mm = get_num_controls(solver)
+
+
         ## Initialize results
         if use_static
             results = ConstrainedStaticResults(n,mm,p,N)
@@ -140,9 +143,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         # Generate constraint function and jacobian functions from the objective
         update_constraints!(results,solver,results.X,results.U)
     end
-
-    # Get modified number of controls (account for infeasible and min time)
-    m̄,mm = get_num_controls(solver)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -249,7 +249,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             J_prev = copy(J)
 
             if is_constrained
-                c_max = max_violation(results,diag_inds)
+                c_max = max_violation(results)
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
             end
@@ -270,17 +270,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :j value=j
 
-            if iter > 1
-                c_diff = abs(c_max-c_max_hist[end-1])
-            else
-                c_diff = 0.
-            end
-            @logmsg InnerLoop :c_diff value=c_diff
+            # if iter > 1
+            #     c_diff = abs(c_max-c_max_hist[end-1])
+            # else
+            #     c_diff = 0.
+            # end
+            # @logmsg InnerLoop :c_diff value=c_diff
 
             if ii % 10 == 1
                 print_header(logger,InnerLoop)
             end
-            print_row(logger,InnerLoop)
+            # print_row(logger,InnerLoop)
 
             if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
@@ -334,14 +334,14 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @logmsg OuterLoop :iter value=iter
         @logmsg OuterLoop :iterations value=iter_inner
         print_header(logger,OuterLoop)
-        print_row(logger,OuterLoop)
+        # print_row(logger,OuterLoop)
 
         #****************************#
         #    TERMINATION CRITERIA    #
         #****************************#
         # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
         if is_constrained
-            max_c = max_violation(results, diag_inds)
+            max_c = max_violation(results)
             if max_c < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
                 if solver.opts.verbose
                     println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")

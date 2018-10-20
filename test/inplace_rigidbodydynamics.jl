@@ -22,32 +22,13 @@ function fc(xdot,x,u)
     return nothing
 end
 
-function fc1(xdot,x,u)
-    state = MechanismState{eltype(x)}(mech)
-    result = DynamicsResult{eltype(x)}(mech)
 
-    # # set the state variables:
-    # q = x[1:num_joints]
-    # qd = x[1+num_joints:num_joints+num_joints]
-    # set_configuration!(state, q)
-    # set_velocity!(state, qd)
-    # xdot[1:num_joints] = qd
-    # xdot[num_joints+1:num_joints+num_joints] = Array(mass_matrix(state))\(torques.*u) - Array(mass_matrix(state))\Array(dynamics_bias(state))
-    dynamics!(xdot, result, state, x, torques.*u)
+function fc1(xdot,x,u)
+    state1 = MechanismState{eltype(x)}(mech)
+    result1 = DynamicsResult(mech)
+    dynamics!(xdot, result1, state1, x, torques.*u)
     return nothing
 end
-
-result = DynamicsResult{Float64}(mech)
-state = MechanismState(mech)
-dynamics!(result, state)
-
-xdot = ones(n)
-typeof(result.v̇)
-
-xdot
-dynamics!(xdot,result,state,xdot,[1.0;0.0]*10)
-
-xdot
 
 xdot1 = zeros(4)
 x1 = ones(4)
@@ -56,15 +37,47 @@ u1 = ones(2)
 xdot2 = zeros(4)
 x2 = ones(4)
 u2 = ones(2)
+using BenchmarkTools
+using ForwardDiff
 
-fc(xdot1,x1,u1)
+@time for i = 1:1000
+    fc(xdot1,x1,u1)
+    x1[:] = xdot1*0.1
+end
 
-set_configuration!(state, ones(2))
-set_velocity!(state, ones(2))
-dynamics!(xdot2,result,state,xdot2,torques.*u2)
+@time for i = 1:1000
+    fc1(xdot2,x2,u2)
+    x2[:] = xdot2*0.1
+end
 
 xdot1
 
+
+
+
 xdot2
 
-state.q
+f_aug! = f_augmented!(fc1, 4, 2)
+
+Jd = zeros(6, 6)
+Sd = zeros(6)
+Sdotd = zero(Sd)
+Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,f_aug!,Sdotd,Sd)
+
+Fd!(Jd,Sdotd,Sd)
+
+state1 = MechanismState(mech)
+result1 = DynamicsResult(mech)
+f!(xdot,x,u) = dynamics!(xdot, result1, state1, x, u)
+
+f!(xdot1,x1,u1)
+
+f_ip! = f_augmented!(fc1,4,2)
+
+ForwardDiff.jacobian(f_ip!,ones(6),ones(6))
+
+nq = length(result1.q̇)
+nv = length(result1.v̇)
+ns = length(result1.ṡ)
+
+result1

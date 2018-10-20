@@ -1,7 +1,5 @@
 using TrajectoryOptimization: generate_general_constraint_jacobian
 
-
-
 """ Simple Pendulum """
 pendulum = Dynamics.pendulum[1]
 n = pendulum.n
@@ -56,41 +54,32 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test obj.p_N == 2
 
 # Use scalar control constraints
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    u_min=-1,u_max=1)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-1,u_max=1)
 @test obj.p == 2
 @test obj.p_N == 2
 
 # Single-sided
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    u_max=1)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_max=1)
 @test obj.p == 1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    u_min=1, u_max=Inf)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=1, u_max=Inf)
 @test obj.p == 1
 
 # Error testing
-@test_throws ArgumentError ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    u_min=1, u_max=-1)
-@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    u_min=[1], u_max=[1,2])
+@test_throws ArgumentError ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=1, u_max=-1)
+@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=[1], u_max=[1,2])
 
 # State constraints
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    x_min=-[1,2], x_max=[1,2])
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
 @test obj.p == 4
 @test obj.pI == 4
 
-@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    x_min=-[Inf,4], x_max=[3,Inf])
+@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
 @test obj.p == 2
 @test obj.pI == 2
 
 # Scalar to array constraint
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    x_min=-4, x_max=4)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-4, x_max=4)
 @test obj.p == 4
 @test obj.x_max == [4,4]
 
@@ -98,12 +87,10 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
 function cI(cdot,x,u)
     cdot[1] = x[2]+u[1]-2
 end
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    cI=cI)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cI=cI)
 @test obj.p == 1
 @test obj.pI == 1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,
-    cE=cI)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cE=cI)
 @test obj.p == 1
 @test obj.pI == 0
 
@@ -170,18 +157,22 @@ c(cres,x,u)
 # test with minimum time
 obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
 @test obj.p == 9
-c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
-cres = zeros(12)
+c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
+cres = zeros(11)
 u_dt = [u; 0.1]
-cans = [0,-0.9, -3,-0.1  ,-3,1,-4,-8,  6,8,1,0]
+cans = [0,-0.9,-3,0,-3,1,-4,-8,6,8,1]
 c(cres,x,u_dt)
+cres
+x
+u_dt
 @test cres == cans
 
 # Change upper bound on dt
 c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.)
 cres = zeros(12)
-cans = [0,-9.9, -3,-0.1  ,-3,1,-4,-8,  6,8,1,0]
+cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1,0]
 c(cres,x,u_dt)
+cres
 @test cres == cans
 
 # use infeasible start
@@ -262,7 +253,3 @@ B1 = zeros(3,2)
 jac_cE(A1,B1,x,u)
 @test A1 == jac_x(x,u)
 @test B1 == jac_u(x,u)
-
-# cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
-# pI = 2
-# pI_N = 0

@@ -198,6 +198,7 @@ function getR(solver::Solver)::Array{Float64,2}
     if !solver.opts.infeasible && !is_min_time(solver)
         return solver.obj.R
     else
+        n = solver.model.n
         m = solver.model.m
         m̄,mm = get_num_controls(solver)
         R = zeros(mm,mm)

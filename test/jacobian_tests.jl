@@ -109,8 +109,8 @@ xf[4:7] = quatf
 xf
 
 # -control limits
-u_min = -20.0
-u_max = 20.0
+u_min = -50.0
+u_max = 50.0
 
 # -constraint that quaternion should be unit
 function cE(cdot,x,u)
