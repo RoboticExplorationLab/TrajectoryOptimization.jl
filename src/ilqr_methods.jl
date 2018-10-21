@@ -352,10 +352,10 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     for k = 1:N-1
         min_time ? dt = res.U[m̄] : nothing
         if solver.control_integration == :foh
-            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1], dt)
+            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
             res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
         else
-            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k], dt)
+            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
         end
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
         if min_time && k < N-1

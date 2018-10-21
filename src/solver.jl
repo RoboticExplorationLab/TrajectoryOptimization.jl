@@ -119,7 +119,7 @@ struct Solver{O<:Objective}
         Scdot = zero(Sc)
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
-        function Jacobians_Discrete!(x,u,v=zeros(size(u)))
+        function jacobians_discrete!(x,u,v=zero(u))
             infeasible = length(u) != m̄
 
             Sd[1:n] = x
@@ -136,33 +136,33 @@ struct Solver{O<:Objective}
 
             if control_integration == :foh
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:model.n,model.n+1:model.n+model.m] I], [Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] I] # fx, [fu I], [fv I]
+                    return Jd[1:n,1:n], [Jd[1:n,n+1:n+m] I], [Jd[1:n,n+m+1:n+m+m] I] # fx, [fu I], [fv I]
                 else
-                    return Jd[1:model.n,1:model.n], Jd[1:model.n,model.n+1:model.n+model.m], Jd[1:model.n,model.n+model.m+1:model.n+model.m+model.m] # fx, fu, fv
+                    return Jd[1:n,1:n], Jd[1:n,n+1:n+m], Jd[1:n,n+m+1:n+m+m] # fx, fu, fv
                 end
             else
                 if infeasible
-                    return Jd[1:model.n,1:model.n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
+                    return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
                 else
-                    return Jd[1:model.n,1:model.n],  Jd[1:n,n.+(1:m̄)] # fx, fu
+                    return Jd[1:n,1:n],  Jd[1:n,n.+(1:m̄)] # fx, fu
                 end
             end
         end
 
-        function Jacobians_Continuous!(x,u)
-            infeasible = size(u,1) != model.m
-            Sc[1:model.n] = x
-            Sc[model.n+1:model.n+model.m] = u[1:model.m]
+        function jacobians_continuous!(x,u)
+            infeasible = size(u,1) != m
+            Sc[1:n] = x
+            Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)
 
             if infeasible
-                return Jc[1:model.n,1:model.n], [Jc[1:model.n,model.n+1:model.n+model.m] zeros(model.n,model.n)] # fx, [fu 0]
+                return Jc[1:n,1:n], [Jc[1:n,n+1:n+m] zeros(n,n)] # fx, [fu 0]
             else
-                return Jc[1:model.n,1:model.n], Jc[1:model.n,model.n+1:model.n+model.m] # fx, fu
+                return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
             end
         end
 
-        function Jacobians_Continuous!(z)
+        function jacobians_continuous!(z)
             Fc!(Jc,Scdot,z)
             return Jc[1:n,:]
         end
@@ -173,12 +173,11 @@ struct Solver{O<:Objective}
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, Jacobians_Discrete!, model.f, Jacobians_Continuous!, c_fun, c_jacob, N, integration, control_integration)
+        new{O}(model, obj, options, dt, fd!, jacobians_discrete!, model.f, jacobians_continuous!, c_fun, c_jacob, N, integration, control_integration)
     end
 end
 
-function Solver(solver::Solver; model=solver.model, obj=solver.obj,
-        integration=solver.integration, dt=solver.dt, opts=solver.opts)
+function Solver(solver::Solver; model=solver.model, obj=solver.obj,integration=solver.integration, dt=solver.dt, opts=solver.opts)
      Solver(model, obj, integration=integration, dt=dt, opts=opts)
  end
 
