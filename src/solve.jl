@@ -132,7 +132,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         end
 
         # Set initial penalty term values
-        results.MU .*= solver.opts.μ1
+        results.μ .*= solver.opts.μ1
 
         # Set initial regularization
         results.ρ[1] = solver.opts.ρ_initial
@@ -451,7 +451,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained
-        results_feasible = new_constrained_results(results_feasible,solver,results.LAMBDA,results.λN,results.ρ)
+        results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end
@@ -496,8 +496,8 @@ end
 function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
     p,pI,pE = get_num_constraints(solver)
     if k != solver.N
-        results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
-        results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
+        results.λ[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k] + results.μ[k].*results.C[k]))
+        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
     else
         results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.μN.*results.CN))
     end
@@ -538,7 +538,7 @@ function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
         cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
 
         # assemble lagrange multipliers
-        λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
+        λ[(k-1)*p+1:(k-1)*p+p] = results.λ[k]
 
         # assemble penalty matrix
         μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
@@ -556,7 +556,7 @@ function λ_update_1_zoh!(results::ConstrainedIterResults,solver::Solver)
 
         # update results
         for k = 1:N-1
-            results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+            results.λ[k] = λ[(k-1)*p+1:(k-1)*p+p]
         end
         results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
         return nothing
@@ -586,7 +586,7 @@ function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver,k::Int6
         cz = [results.Cx[k] results.Cu[k]]
 
         # assemble lagrange multipliers
-        λ = results.LAMBDA[k]
+        λ = results.λ[k]
 
         # assemble penalty matrix
         μ = results.Iμ[k]
@@ -670,7 +670,7 @@ function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver)
         cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
 
         # assemble lagrange multipliers
-        λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
+        λ[(k-1)*p+1:(k-1)*p+p] = results.λ[k]
 
         # assemble penalty matrix
         μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
@@ -711,7 +711,7 @@ function λ_update_2_zoh!(results::ConstrainedIterResults,solver::Solver)
 
     # update results
     for k = 1:N-1
-        results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+        results.λ[k] = λ[(k-1)*p+1:(k-1)*p+p]
     end
     results.λN .= λ[(N-1)*p+1:(N-1)*p+n]
 
@@ -721,8 +721,8 @@ end
 """@(SIGNATURES) 1st order multiplier update for foh (sequential)"""
 function λ_update_1_foh!(results::ConstrainedIterResults,solver::Solver,k::Int64)
     p,pI,pE = get_num_constraints(solver)
-    results.LAMBDA[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.LAMBDA[k] + results.MU[k].*results.C[k]))
-    results.LAMBDA[k][1:pI] = max.(0.0,results.LAMBDA[k][1:pI])
+    results.λ[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k] + results.μ[k].*results.C[k]))
+    results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
 
     if k == solver.N
         results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.μN.*results.CN))
@@ -764,7 +764,7 @@ function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
         cz[(k-1)*p+1:(k-1)*p+p,(k-1)*(n+m)+1:(k-1)*(n+m)+(n+m)] = [results.Cx[k] results.Cu[k]]
 
         # assemble lagrange multipliers
-        λ[(k-1)*p+1:(k-1)*p+p] = results.LAMBDA[k]
+        λ[(k-1)*p+1:(k-1)*p+p] = results.λ[k]
 
         # assemble penalty matrix
         μ[(k-1)*p+1:(k-1)*p+p,(k-1)*p+1:(k-1)*p+p] = results.Iμ[k]
@@ -827,7 +827,7 @@ function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
 
     # update results
     for k = 1:N
-        results.LAMBDA[k] = λ[(k-1)*p+1:(k-1)*p+p]
+        results.λ[k] = λ[(k-1)*p+1:(k-1)*p+p]
     end
     results.λN .= λ[N*p+1:N*p+n]
 
@@ -854,7 +854,7 @@ function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
     end
 
     for k = 1:final_index
-        results.MU[k] = min.(solver.opts.μ_max, solver.opts.γ*results.MU[k])
+        results.μ[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μ[k])
     end
 
     results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
@@ -884,15 +884,15 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
         for i = 1:p
             if p <= pI
                 if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
-                    results.MU[k][i] = min(μ_max, γ_no*results.MU[k][i])
+                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
                 else
-                    results.MU[k][i] = min(μ_max, γ*results.MU[k][i])
+                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
                 end
             else
                 if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
-                    results.MU[k][i] = min(μ_max, γ_no*results.MU[k][i])
+                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
                 else
-                    results.MU[k][i] = min(μ_max, γ*results.MU[k][i])
+                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
                 end
             end
         end

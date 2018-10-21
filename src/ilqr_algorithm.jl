@@ -38,7 +38,7 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
 
     # Terminal constraints
     if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        C = res.C; Iμ = res.Iμ; λ = res.λ
         CxN = res.Cx_N
         S[N] += CxN'*res.IμN*CxN
         s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
@@ -68,8 +68,8 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
-            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
@@ -145,7 +145,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
 
     # Terminal constraints
     if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        C = res.C; Iμ = res.Iμ; λ = res.λ
         CxN = res.Cx_N
         S[N] += CxN'*res.IμN*CxN
         s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
@@ -176,8 +176,8 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
-            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
@@ -192,7 +192,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
                 Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
 
                 if k > 1
-                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - LAMBDA[k-1][end]
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
                     Quu[m̄,m̄] += Iμ[k-1][end,end]
                 end
 
@@ -308,11 +308,11 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
         # Constraints
         if isa(solver.obj, ConstrainedObjective)
-            Iμ = res.Iμ; C = res.C; LAMBDA = res.LAMBDA;
+            Iμ = res.Iμ; C = res.C; λ = res.λ;
             Cx, Cu = res.Cx[k], res.Cu[k]
             Iμ2 = sqrt.(Iμ[k])
-            Qx += (Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k])
-            Qu += (Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k])
+            Qx += (Cx'*Iμ[k]*C[k] + Cx'*λ[k])
+            Qu += (Cu'*Iμ[k]*C[k] + Cu'*λ[k])
             Qxu += Cx'*Iμ[k]*Cu
 
             Wxx = chol_plus(Wxx.R, Iμ2*Cx)
@@ -369,7 +369,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
     # Terminal constraints
     if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        C = res.C; Iμ = res.Iμ; λ = res.λ
         CxN = res.Cx_N
         S[1:n,1:n] += CxN'*res.IμN*CxN
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
@@ -413,8 +413,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             Cy, Cv = res.Cx[k+1], res.Cu[k+1]
-            Ly += Cy'*Iμ[k+1]*C[k+1] + Cy'*LAMBDA[k+1]
-            Lv += Cv'*Iμ[k+1]*C[k+1] + Cv'*LAMBDA[k+1]
+            Ly += Cy'*Iμ[k+1]*C[k+1] + Cy'*λ[k+1]
+            Lv += Cv'*Iμ[k+1]*C[k+1] + Cv'*λ[k+1]
             Lyy += Cy'*Iμ[k+1]*Cy
             Lvv += Cv'*Iμ[k+1]*Cv
             Lyv += Cy'*Iμ[k+1]*Cv
@@ -469,7 +469,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
             # Terminal constraints
             if res isa ConstrainedIterResults
-                C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                C = res.C; Iμ = res.Iμ; λ = res.λ
                 CxN = res.Cx_N
                 S[1:n,1:n] += CxN'*res.IμN*CxN
                 s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
@@ -509,8 +509,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         if k == 1
             if res isa ConstrainedIterResults
                 Cx, Cu = res.Cx[k], res.Cu[k]
-                Qx_ += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
-                Qu_ += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+                Qx_ += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+                Qu_ += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
                 Qxx_ += Cx'*Iμ[k]*Cx
                 Quu_ += Cu'*Iμ[k]*Cu
                 Qxu_ += Cx'*Iμ[k]*Cu
@@ -537,7 +537,7 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
                 # Terminal constraints
                 if res isa ConstrainedIterResults
-                    C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+                    C = res.C; Iμ = res.Iμ; λ = res.λ
                     CxN = res.Cx_N
                     S[1:n,1:n] += CxN'*res.IμN*CxN
                     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN

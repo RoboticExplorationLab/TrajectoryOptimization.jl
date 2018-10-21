@@ -30,7 +30,7 @@ struct Solver{O<:Objective}
     Fd::Function         # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
     fc::Function         # Continuous dynamics function (inplace)
     Fc::Function         # Jacobian of continuous dynamics
-    c_fun::Function
+    c::Function
     c_jacobian::Function
     N::Int64             # Number of time steps
     integration::Symbol
@@ -74,10 +74,10 @@ struct Solver{O<:Objective}
             err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
             throw(err)
         end
+
         n, m = model.n, model.m
         f! = model.f # checked in model now
         m̄ = m
-
         if min_time
             m̄ += 1
         end
@@ -98,14 +98,14 @@ struct Solver{O<:Objective}
 
         # Generate discrete dynamics equations
         fd! = discretizer(f!, dt)
-        f_aug! = f_augmented!(f!, model.n, model.m)
+        f_aug! = f_augmented!(f!, n, m)
 
         if control_integration == :foh
-            fd_aug! = f_augmented_foh!(fd!,model.n,model.m)
-            nm1 = model.n + model.m + model.m + 1
+            fd_aug! = f_augmented_foh!(fd!,n,m)
+            nm1 = n + m + m + 1
         else
             fd_aug! = discretizer(f_aug!)
-            nm1 = model.n + model.m + 1
+            nm1 = n + m + 1
         end
 
         # Initialize discrete and continuous dynamics Jacobians
@@ -114,12 +114,12 @@ struct Solver{O<:Objective}
         Sdotd = zero(Sd)
         Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
 
-        Jc = zeros(model.n+model.m,model.n+model.m)
-        Sc = zeros(model.n+model.m)
+        Jc = zeros(n+m,n+m)
+        Sc = zeros(n+m)
         Scdot = zero(Sc)
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
-        function jacobians_discrete!(x,u,v=zero(u))
+        function fd_jacobians!(x,u,v=zero(u))
             infeasible = length(u) != m̄
 
             Sd[1:n] = x
@@ -149,7 +149,7 @@ struct Solver{O<:Objective}
             end
         end
 
-        function jacobians_continuous!(x,u)
+        function fc_jacobians!(x,u)
             infeasible = size(u,1) != m
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
@@ -162,18 +162,18 @@ struct Solver{O<:Objective}
             end
         end
 
-        function jacobians_continuous!(z)
+        function fc_jacobians!(z)
             Fc!(Jc,Scdot,z)
             return Jc[1:n,:]
         end
 
         # Generate constraint functions
-        c_fun, c_jacob = generate_constraint_functions(obj, max_dt = opts.max_dt)
+        c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, jacobians_discrete!, model.f, jacobians_continuous!, c_fun, c_jacob, N, integration, control_integration)
+        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, c!, c_jacobian!, N, integration, control_integration)
     end
 end
 

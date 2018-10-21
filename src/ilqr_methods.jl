@@ -245,11 +245,11 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
-        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.LAMBDA[k]'*res.C[k]
+        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
     end
 
     if solver.control_integration == :foh
-        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.LAMBDA[N]'*res.C[N]
+        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.λ[N]'*res.C[N]
     end
 
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
@@ -402,7 +402,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
     min_time = is_min_time(solver)
-    c = solver.c_fun
+    c = solver.c
 
     if solver.control_integration == :foh
         final_index = N
@@ -419,8 +419,8 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
         # Inequality constraints [see equation ref]
         for j = 1:pI
-            if res.C[k][j] >= 0.0 || res.LAMBDA[k][j] > 0.0
-                res.Iμ[k][j,j] = res.MU[k][j] # active (or previously active) inequality constraints are penalized
+            if res.C[k][j] >= 0.0 || res.λ[k][j] > 0.0
+                res.Iμ[k][j,j] = res.μ[k][j] # active (or previously active) inequality constraints are penalized
             else
                 res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
             end
@@ -428,7 +428,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
         # Equality constraints
         for j = pI+1:p
-            res.Iμ[k][j,j] = res.MU[k][j] # equality constraints are penalized
+            res.Iμ[k][j,j] = res.μ[k][j] # equality constraints are penalized
         end
     end
 
@@ -597,7 +597,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     end
 
     # Augment functions together
-    function c_fun!(c,x,u)::Nothing
+    function c_function!(c,x,u)::Nothing
         infeasible = length(u) != m̄
         cI!(view(c,1:pI),x,u[1:m̄])
         if pE_c > 0
@@ -612,7 +612,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     # Terminal Constraint
     # TODO make this more general
-    function c_fun!(c,x)
+    function c_function!(c,x)
         c[1:n] = x - obj.xf
     end
 
@@ -644,7 +644,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     fx_N = In  # Jacobian of final state
 
-    function constraint_jacobian!(fx::AbstractMatrix, fu::AbstractMatrix, x::AbstractArray,u::AbstractArray)
+    function c_jacobian!(fx::AbstractMatrix, fu::AbstractMatrix, x::AbstractArray,u::AbstractArray)
         infeasible = length(u) != m̄
         let m = m̄
             fx[1:pI_u, 1:n] = fx_control
@@ -668,11 +668,11 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         end
     end
 
-    function constraint_jacobian!(j::AbstractArray,x::AbstractArray)
+    function c_jacobian!(j::AbstractArray,x::AbstractArray)
         j .= fx_N
     end
 
-    return c_fun!, constraint_jacobian!
+    return c_function!, c_jacobian!
 end
 
 generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0) = (x,u)->nothing, (x,u)->nothing
