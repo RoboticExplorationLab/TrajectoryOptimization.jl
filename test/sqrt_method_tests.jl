@@ -14,8 +14,8 @@ TrajectoryOptimization.rollout!(results_sqrt,solver)
 TrajectoryOptimization.calculate_jacobians!(results,solver)
 TrajectoryOptimization.calculate_jacobians!(results_sqrt,solver)
 
-TrajectoryOptimization.backwardpass!(results,solver)
-TrajectoryOptimization.backwardpass_sqrt!(results_sqrt,solver)
+TrajectoryOptimization._backwardpass!(results,solver)
+TrajectoryOptimization._backwardpass_sqrt!(results_sqrt,solver)
 
 # test that results from square root backward pass are the same as backward pass
 @test all(isapprox.(results.K,results_sqrt.K))
@@ -42,8 +42,8 @@ results_con = TrajectoryOptimization.ConstrainedVectorResults(model.n,model.m,p[
 results_con_sqrt = TrajectoryOptimization.ConstrainedVectorResults(model.n,model.m,p[1],solver.N)
 TrajectoryOptimization.calculate_jacobians!(results_con, solver_con)
 TrajectoryOptimization.calculate_jacobians!(results_con_sqrt, solver_con_sqrt)
-TrajectoryOptimization.backwardpass!(results_con, solver_con)
-TrajectoryOptimization.backwardpass_sqrt!(results_con_sqrt, solver_con_sqrt)
+TrajectoryOptimization._backwardpass!(results_con, solver_con)
+TrajectoryOptimization._backwardpass_sqrt!(results_con_sqrt, solver_con_sqrt)
 results_con.S
 results_con_sqrt.S
 

@@ -157,10 +157,10 @@ c(cres,x,u)
 # test with minimum time
 obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
 @test obj.p == 9
-c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
+c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=1.0,min_dt=1e-3)
 cres = zeros(11)
 u_dt = [u; 0.1]
-cans = [0,-0.9,-3,0,-3,1,-4,-8,6,8,1]
+cans = [0,-0.9,-3,sqrt(1e-3)-u_dt[2],-3,1,-4,-8,6,8,1]
 c(cres,x,u_dt)
 cres
 x
@@ -168,9 +168,9 @@ u_dt
 @test cres == cans
 
 # Change upper bound on dt
-c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.)
+c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.,min_dt=1e-2)
 cres = zeros(12)
-cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1,0]
+cans = [0,u_dt[2]-sqrt(10),-3,sqrt(1e-2)-u_dt[2],-3,1,-4,-8,  6,8,1,0]
 c(cres,x,u_dt)
 cres
 @test cres == cans

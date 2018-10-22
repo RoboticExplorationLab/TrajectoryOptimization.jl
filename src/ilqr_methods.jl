@@ -266,11 +266,13 @@ function cost(solver::Solver, res::SolverIterResults, X::Vector=res.X, U::Vector
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
+
+#TODO THIS FUNCTION NEEDS TO BE MODIFIED SUBSTANTIALLY FOR DIRCOL
 """
 $(SIGNATURES)
 Compute the unconstrained cost
 """
-function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2}) #TODO THIS FUNCTION NEEDS TO GO
+function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
     # pull out solver/objective values
     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
     obj = solver.obj
@@ -533,7 +535,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0)
+function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-3)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -554,7 +556,6 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Append on min time bounds
     u_max = obj.u_max
     u_min = obj.u_min
-    min_dt = 1e-2
     if min_time
         u_max = [u_max; sqrt(max_dt)]
         u_min = [u_min; sqrt(min_dt)]
@@ -675,7 +676,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_function!, c_jacobian!
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-3) = (x,u)->nothing, (x,u)->nothing
 
 """
 $(SIGNATURES)

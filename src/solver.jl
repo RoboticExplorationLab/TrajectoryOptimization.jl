@@ -76,7 +76,7 @@ struct Solver{O<:Objective}
         end
 
         n, m = model.n, model.m
-        f! = model.f # checked in model now
+        f! = model.f
         m̄ = m
         if min_time
             m̄ += 1
@@ -168,7 +168,7 @@ struct Solver{O<:Objective}
         end
 
         # Generate constraint functions
-        c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt)
+        c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)

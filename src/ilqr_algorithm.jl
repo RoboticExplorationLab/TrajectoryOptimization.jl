@@ -2,146 +2,52 @@
 # FILE CONTENTS:
 #     SUMMARY: Forward and Backward passes for iLQR algorithm
 #
-#     backwardpass!: iLQR backward pass
-#     backwardpass_sqrt: iLQR backward pass with Cholesky Factorization of
+#     _backwardpass!: iLQR backward pass
+#     _backwardpass_sqrt: iLQR backward pass with Cholesky Factorization of
 #        Cost-to-Go
-#     backwardpass_foh!: iLQR backward pass for first order hold on controls
+#     _backwardpass_foh!: iLQR backward pass for first order hold on controls
 #     chol_minus: Calculate sqrt(A-B)
 #     forwardpass!: iLQR forward pass
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
 $(SIGNATURES)
-Solve the dynamic programming problem, starting from the terminal time step
-Computes the gain matrices K and d by applying the principle of optimality at
-each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
-function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
-Online Trajectory Optimization)
+    Solve the dynamic programming problem, starting from the terminal time step.
+    Computes the gain matrices K and d by applying the principle of optimality at
+    each time step, solving for the gradient (s) and Hessian (S) of the approximated quadratic cost-to-go
+    function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
+    Online Trajectory Optimization)
 """
-function backwardpass!(res::SolverVectorResults,solver::Solver)
-    N = solver.N; n = solver.model.n; m = solver.model.m;
-    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
-    R = getR(solver)
-    dt = solver.dt
-
-    # check if infeasible start solve
-    if solver.model.m != length(res.U[1])
-        m += n
+function backwardpass!(results::SolverVectorResults,solver::Solver)
+    if solver.control_integration == :foh
+        Δv = _backwardpass_foh!(results,solver)
+    elseif solver.opts.square_root
+        Δv = _backwardpass_sqrt!(results, solver)
+    else
+        Δv = _backwardpass!(results, solver)
     end
-
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
-
-    # Boundary Conditions
-    S[N] = Qf
-    s[N] = Qf*(X[N] - xf)
-
-    # Terminal constraints
-    if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
-    end
-
-
-    # Backward pass
-    k = N-1
-    Δv = [0. 0.] # Initialize expected change in cost-to-go
-    while k >= 1
-        # compute stage cost expansions
-        lx = dt*Q*vec(X[k] - xf)
-        lu = dt*R*vec(U[k])
-        lxx = dt*Q
-        luu = dt*R
-
-        # Compute gradients of the dynamics
-        fx, fu = res.fx[k], res.fu[k]
-
-        # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*vec(s[k+1])
-        Qu = lu + fu'*vec(s[k+1])
-        Qxx = lxx + fx'*S[k+1]*fx
-        Quu = luu + fu'*S[k+1]*fu
-        Qux = fu'*S[k+1]*fx
-
-        # Constraints
-        if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
-            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
-            Qxx += Cx'*Iμ[k]*Cx
-            Quu += Cu'*Iμ[k]*Cu
-            Qux += Cu'*Iμ[k]*Cx
-        end
-
-        # Regularization
-        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
-        if solver.opts.regularization_type == :state
-            Quu_reg = Quu + res.ρ[1]*fu'*fu
-            Qux_reg = Qux + res.ρ[1]*fu'*fx
-        elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
-            Qux_reg = Qux
-        end
-
-        # check that Quu_reg is positive definite
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
-            @logmsg InnerLoop "Regularized"
-            # if solver.opts.verbose
-            #     println("regularized (normal bp)")
-            #     println("-condition number: $(cond(Array(Quu_reg)))")
-            #     println("Quu_reg: $Quu_reg")
-            # end
-
-            # increase regularization
-            regularization_update!(res,solver,:increase)
-
-            # reset backward pass
-            k = N-1
-            Δv = [0.0 0.0]
-            continue
-        end
-
-        # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu
-
-        # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
-        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
-        S[k] = 0.5*(S[k] + S[k]')
-
-        # calculated change is cost-to-go over entire trajectory
-        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
-
-        k = k - 1;
-    end
-
-    # decrease regularization after successful backward pass
-    regularization_update!(res,solver,:decrease)
-
     return Δv
 end
 
-function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
+    # Problem dimensions
     n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # Objective parameters
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
     R = getR(solver)
     dt = solver.dt
 
+    # Check for minimum time solve
     min_time = is_min_time(solver)
-    m̄,mm = get_num_controls(solver)
 
-    # pull out values from results
+    # Pull out results
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
 
     # Boundary Conditions
     S[N] = Qf
     s[N] = Qf*(X[N] - xf)
-
-    # Initialize expected change in cost-to-go
-    Δv = [0.0 0.0]
 
     # Terminal constraints
     if res isa ConstrainedIterResults
@@ -151,21 +57,23 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
     end
 
-
     # Backward pass
+    Δv = [0.0 0.0]
     k = N-1
     while k >= 1
+        # Check for minimum time solve
         min_time ? dt = U[k][m̄]^2 : nothing
 
+        # Calculate stage costs
         lx = dt*Q*vec(X[k] - xf)
         lu = dt*R*vec(U[k])
         lxx = dt*Q
         luu = dt*R
 
-        # Compute gradients of the dynamics
+        # get discrete dynamics Jacobians
         fx, fu = res.fx[k], res.fu[k]
 
-        # Gradients and Hessians of Taylor Series Expansion of Q
+        # Form gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*vec(s[k+1])
         Qu = lu + fu'*vec(s[k+1])
         Qxx = lxx + fx'*S[k+1]*fx
@@ -192,36 +100,35 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
                 Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
 
                 if k > 1
-                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
+                    Qu[m̄] -= C[k-1][end]*Iμ[k-1][end,end] + λ[k-1][end]
                     Quu[m̄,m̄] += Iμ[k-1][end,end]
                 end
-
             end
-
         end
 
-        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
+        # Regularization
+            # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
         if solver.opts.regularization_type == :state
-            Quu_reg = Quu + fu'*(res.ρ[1]*I)*fu
-            Qux_reg = Qux + fu'*(res.ρ[1]*I)*fx
+            Quu_reg = Quu + res.ρ[1]*fu'*fu
+            Qux_reg = Qux + res.ρ[1]*fu'*fx
         elseif solver.opts.regularization_type == :control
             Quu_reg = Quu + res.ρ[1]*I
             Qux_reg = Qux
         end
 
-        # Regularization
-        if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
-            if solver.opts.verbose # TODO: switch to logger
-                println("regularized (normal bp)")
-                println("-condition number: $(cond(Array(Quu_reg)))")
-                println("Quu_reg: $(eigvals(Quu_reg))")
-                @show Quu_reg
-            end
+        if rank(Quu_reg) != mm  # TODO determine if rank or PD is best check
+            @logmsg InnerLoop "Regularized"
+            # if solver.opts.verbose # TODO: switch to logger
+            #     println("regularized (normal bp)")
+            #     println("-condition number: $(cond(Array(Quu_reg)))")
+            #     println("Quu_reg: $(eigvals(Quu_reg))")
+            #     @show Quu_reg
+            # end
 
-            # increase regularization
+            # Increase regularization
             regularization_update!(res,solver,:increase)
 
-            # reset backward pass
+            # Reset backward pass
             k = N-1
             Δv = [0.0 0.0]
             continue
@@ -231,18 +138,18 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         K[k] = -Quu_reg\Qux_reg
         d[k] = -Quu_reg\Qu
 
-        # Calculate cost-to-go (using unregularized Quu and Qux)
+        # Calculate cost-to-go
         s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
         S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
         S[k] = 0.5*(S[k] + S[k]')
 
-        # calculated change is cost-to-go over entire trajectory
+        # Calculated change is cost-to-go over entire trajectory
         Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
 
         k = k - 1;
     end
 
-    # decrease regularization after backward pass
+    # Decrease regularization after backward pass
     regularization_update!(res,solver,:decrease)
 
     return Δv
@@ -253,7 +160,7 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -339,7 +246,7 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     n, m, N = get_sizes(solver)
 
     # Check for infeasible start
@@ -376,8 +283,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     end
 
     # create a copy of BC in case of regularization
-    # SN = copy(S)
-    # sN = copy(s)
+    SN = copy(S)
+    sN = copy(s)
 
     # Backward pass
     k = N-1
@@ -442,9 +349,9 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # Regularization
         #TODO double check state regularization
         # if solver.opts.regularization_type == :state
-        #     Qvv_reg = Qvv + Cd'*(res.ρ[1]*I)*Cd
-        #     Qxv_reg = Qxv + Ad'*(res.ρ[1]*I)*Cd
-        #     Quv_reg = Quv + Bd'*(res.ρ[1]*I)*Cd
+        #     Qvv_reg = Qvv + res.ρ[1]*Cd'*Cd
+        #     Qxv_reg = Qxv + res.ρ[1]*Ad'*Cd
+        #     Quv_reg = Quv + res.ρ[1]*Bd'*Cd
         # elseif solver.opts.regularization_type == :control
             Qvv_reg = Qvv + res.ρ[1]*I
             Qxv_reg = Qxv
@@ -452,30 +359,31 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            if solver.opts.verbose  # TODO move to logger
-                println("regularized (foh bp)\n not implemented properly")
-                println("-condition number: $(cond(Array(Qvv_reg)))")
-                println("Qvv_reg: $Qvv_reg")
-                println("iteration: $k")
-            end
+            @logmsg InnerLoop "Regularized"
+            # if solver.opts.verbose  # TODO move to logger
+            #     println("regularized (foh bp)\n not implemented properly")
+            #     println("-condition number: $(cond(Array(Qvv_reg)))")
+            #     println("Qvv_reg: $Qvv_reg")
+            #     println("iteration: $k")
+            # end
 
             regularization_update!(res,solver,:increase)
 
             # Reset BCs
-            S = zeros(n+m,n+m)
-            s = zeros(n+m)
-            S[1:n,1:n] = Qf
-            s[1:n] = Qf*(X[N]-xf)
-
-            # Terminal constraints
-            if res isa ConstrainedIterResults
-                C = res.C; Iμ = res.Iμ; λ = res.λ
-                CxN = res.Cx_N
-                S[1:n,1:n] += CxN'*res.IμN*CxN
-                s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-            end
-            # S = SN
-            # s = sN
+            # S = zeros(n+m,n+m)
+            # s = zeros(n+m)
+            # S[1:n,1:n] = Qf
+            # s[1:n] = Qf*(X[N]-xf)
+            #
+            # # Terminal constraints
+            # if res isa ConstrainedIterResults
+            #     C = res.C; Iμ = res.Iμ; λ = res.λ
+            #     CxN = res.Cx_N
+            #     S[1:n,1:n] += CxN'*res.IμN*CxN
+            #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+            # end
+            S = SN
+            s = sN
             ############
             k = N-1
             Δv = [0. 0.]
@@ -520,30 +428,31 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             Quu__reg = Quu_ + res.ρ[1]*I
 
             if !isposdef(Array(Hermitian(Quu__reg)))
-                if solver.opts.verbose  # TODO: Move to logger
-                    println("regularized (foh bp)")
-                    println("part 2")
-                    println("-condition number: $(cond(Array(Quu__reg)))")
-                    println("Quu__reg: $Quu__reg")
-                end
+                @logmsg InnerLoop "Regularized"
+                # if solver.opts.verbose  # TODO: Move to logger
+                #     println("regularized (foh bp)")
+                #     println("part 2")
+                #     println("-condition number: $(cond(Array(Quu__reg)))")
+                #     println("Quu__reg: $Quu__reg")
+                # end
 
                 regularization_update!(res,solver,:increase)
 
                 ## Reset BCs ##
-                S = zeros(n+m,n+m)
-                s = zeros(n+m)
-                S[1:n,1:n] = Qf
-                s[1:n] = Qf*(X[N]-xf)
-
-                # Terminal constraints
-                if res isa ConstrainedIterResults
-                    C = res.C; Iμ = res.Iμ; λ = res.λ
-                    CxN = res.Cx_N
-                    S[1:n,1:n] += CxN'*res.IμN*CxN
-                    s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
-                end
-                # S = SN
-                # s = sN
+                # S = zeros(n+m,n+m)
+                # s = zeros(n+m)
+                # S[1:n,1:n] = Qf
+                # s[1:n] = Qf*(X[N]-xf)
+                #
+                # # Terminal constraints
+                # if res isa ConstrainedIterResults
+                #     C = res.C; Iμ = res.Iμ; λ = res.λ
+                #     CxN = res.Cx_N
+                #     S[1:n,1:n] += CxN'*res.IμN*CxN
+                #     s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+                # end
+                S = SN
+                s = sN
                 ################
                 k = N-1
                 Δv = [0. 0.]
@@ -615,7 +524,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     J = Inf
     alpha = 1.0
     iter = 0
-    z = -1.
+    z = 0.
     expected = 0.
 
     logger = current_logger()
@@ -659,7 +568,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] += 1
+            res.ρ[1] *= solver.opts.ρ_forwardpass
             break
         end
 

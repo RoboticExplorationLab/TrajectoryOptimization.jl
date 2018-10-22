@@ -224,15 +224,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
-            if solver.control_integration == :foh
-                Δv = backwardpass_foh!(results,solver)
-            elseif solver.opts.square_root
-                Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
-            elseif is_min_time(solver)
-                Δv = backwardpass_mintime!(results, solver)
-            else
-                Δv = backwardpass!(results, solver)
-            end
+            Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv)
@@ -435,16 +427,10 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # remove infeasible components
     results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
 
-    # backward pass (ie, time varying lqr)
-    if solver.control_integration == :foh
-        Δv = backwardpass_foh!(results_feasible,solver)
-    elseif solver.opts.square_root
-        Δv = backwardpass_sqrt!(results_feasible, solver)
-    else
-        Δv = backwardpass!(results_feasible, solver)
-    end
+    # backward pass - project infeasible trajectory into feasible space using time varying lqr
+    Δv = backwardpass!(results_feasible, solver)
 
-    # rollout
+    # forward pass 
     forwardpass!(results_feasible,solver,Δv)
     results_feasible.X .= results_feasible.X_
     results_feasible.U .= results_feasible.U_

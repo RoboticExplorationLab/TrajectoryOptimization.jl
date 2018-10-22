@@ -8,7 +8,6 @@ dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cache = false
 ######################
 
 ### Simple Pendulum ###
