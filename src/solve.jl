@@ -272,7 +272,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             if ii % 10 == 1
                 print_header(logger,InnerLoop)
             end
-            # print_row(logger,InnerLoop)
+            print_row(logger,InnerLoop)
 
             if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
@@ -310,15 +310,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
-
-        # # check sqrt convergence criteria for second order lagrange multiplier update
-        # if solver.opts.λ_second_order_update
-        #     if c_max <= sqrt(solver.opts.constraint_tolerance) && (dJ <= sqrt(solver.opts.cost_tolerance) || gradient <= sqrt(solver.opts.gradient_tolerance))
-        #         sqrt_tolerance = true
-        #     end
-        # end
-
-        # update multiplier and penalty terms
         outer_loop_update(results,solver,false)
 
         # Logger output
@@ -326,7 +317,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @logmsg OuterLoop :iter value=iter
         @logmsg OuterLoop :iterations value=iter_inner
         print_header(logger,OuterLoop)
-        # print_row(logger,OuterLoop)
+        print_row(logger,OuterLoop)
 
         #****************************#
         #    TERMINATION CRITERIA    #
@@ -406,12 +397,12 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         end
 
         # return feasible results
+        @info "***Solve Complete***"
         return results_feasible, stats
 
     # if feasible solve, return results
     else
         @info "***Solve Complete***"
-
         return results, stats
     end
 end
@@ -430,7 +421,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results_feasible, solver)
 
-    # forward pass 
+    # forward pass
     forwardpass!(results_feasible,solver,Δv)
     results_feasible.X .= results_feasible.X_
     results_feasible.U .= results_feasible.U_

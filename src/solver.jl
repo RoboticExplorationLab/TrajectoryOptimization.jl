@@ -101,8 +101,8 @@ struct Solver{O<:Objective}
         f_aug! = f_augmented!(f!, n, m)
 
         if control_integration == :foh
-            fd_aug! = f_augmented_foh!(fd!,n,m)
-            nm1 = n + m + m + 1
+            fd_aug! = fd_augmented_foh!(fd!,n,m)
+            nm1 = n + m + 1 + m + 1
         else
             fd_aug! = discretizer(f_aug!)
             nm1 = n + m + 1
@@ -119,38 +119,53 @@ struct Solver{O<:Objective}
         Scdot = zero(Sc)
         Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
 
-        function fd_jacobians!(x,u,v=zero(u))
-            infeasible = length(u) != m̄
+        # Discrete dynamics Jacobians
+        if control_integration == :foh
+            function fd_jacobians_foh!(x,u,v)
+                # Check for infeasible solve
+                infeasible = length(u) != m̄
 
-            Sd[1:n] = x
-            Sd[n+1:n+m] = u[1:m]
+                # Assign state, control (and dt) to augmented vector
+                Sd[1:n] = x
+                Sd[n+1:n+m] = u[1:m]
+                min_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
+                Sd[n+m+1+1:n+m+1+m] = v[1:m]
+                min_time ? Sd[end] = v[m̄] : Sd[end] = √dt
 
-            if control_integration == :foh
-                Sd[n+m+1:n+m+m] = v[1:m]
-            end
+                # Calculate Jacobian
+                Fd!(Jd,Sdotd,Sd)
 
-            min_time ? h = u[m̄] : h = √dt
-            Sd[end] = h
-
-            Fd!(Jd,Sdotd,Sd)
-
-            if control_integration == :foh
                 if infeasible
-                    return Jd[1:n,1:n], [Jd[1:n,n+1:n+m] I], [Jd[1:n,n+m+1:n+m+m] I] # fx, [fu I], [fv I]
+                    return Jd[1:n,1:n], [Jd[1:n,n+1:n+m̄] I], [Jd[1:n,n+m+1+1:n+m+1+m̄] I] # fx, [fu I], [fv I]
                 else
-                    return Jd[1:n,1:n], Jd[1:n,n+1:n+m], Jd[1:n,n+m+1:n+m+m] # fx, fu, fv
+                    return Jd[1:n,1:n], Jd[1:n,n+1:n+m̄], Jd[1:n,n+m+1+1:n+m+1+m̄] # fx, fu, fv
                 end
-            else
+            end
+            fd_jacobians! = fd_jacobians_foh!
+        else
+            function fd_jacobians_zoh!(x,u)
+                # Check for infeasible solve
+                infeasible = length(u) != m̄
+
+                # Assign state, control (and dt) to augmented vector
+                Sd[1:n] = x
+                Sd[n+1:n+m] = u[1:m]
+                min_time ? Sd[end] = u[m̄] : Sd[end] = √dt
+
+                # Calculate Jacobian
+                Fd!(Jd,Sdotd,Sd)
+
                 if infeasible
                     return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
                 else
-                    return Jd[1:n,1:n],  Jd[1:n,n.+(1:m̄)] # fx, fu
+                    return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fu
                 end
             end
+            fd_jacobians! = fd_jacobians_zoh!
         end
 
         function fc_jacobians!(x,u)
-            infeasible = size(u,1) != m
+            infeasible = size(u,1) != m̄
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)

@@ -359,7 +359,7 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            @logmsg InnerLoop "Regularized"
+            # @logmsg InnerLoop "Regularized"
             # if solver.opts.verbose  # TODO move to logger
             #     println("regularized (foh bp)\n not implemented properly")
             #     println("-condition number: $(cond(Array(Qvv_reg)))")
@@ -428,7 +428,7 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             Quu__reg = Quu_ + res.ρ[1]*I
 
             if !isposdef(Array(Hermitian(Quu__reg)))
-                @logmsg InnerLoop "Regularized"
+                # @logmsg InnerLoop "Regularized"
                 # if solver.opts.verbose  # TODO: Move to logger
                 #     println("regularized (foh bp)")
                 #     println("part 2")

@@ -1,3 +1,4 @@
+using Test
 ### foh augmented dynamics
 # Set up Dubins car system
 dt = 0.1
@@ -10,14 +11,14 @@ obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
 fc! = model_dc.f
 fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
 fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
-fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n_dc,m_dc)
+fd_aug! = TrajectoryOptimization.fd_augmented_foh!(fd!,n_dc,m_dc)
 
 x = ones(n_dc)
 u1 = ones(m_dc)
 u2 = ones(m_dc)
 
 # test that normal dynamics and augmented dynamics outputs match
-@test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
+@test norm(fd!(zeros(n_dc),x,u1,u2,dt) - fd_aug!(zeros(n_dc+m_dc+1+m_dc+1),[x;u1;sqrt(dt);u2;sqrt(dt)])[1:n_dc,1]) < 1e-5
 ###
 
 ### Continuous dynamics Jacobians match known analytical solutions
@@ -69,44 +70,18 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 
 ### Custom equality constraint on quadrotor quaternion state: sqrt(q1^2 + q2^2 + q3^2 + q4^2) == 1
 opts = TrajectoryOptimization.SolverOptions()
-opts.square_root = false
-opts.verbose = false
-# opts.c1=1e-4
-# opts.c2=3.0
+opts.verbose = true
 opts.constraint_tolerance = 1e-3
-opts.cost_intermediate_tolerance = 1e-3
+opts.cost_intermediate_tolerance = 1e-2
 opts.cost_tolerance = 1e-3
-opts.outer_loop_update = :default
-# opts.τ = 0.1
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
 ######################
 
 ### Set up model, objective, solver ###
 # Model
 n = 13 # states (quadrotor w/ quaternions)
 m = 4 # controls
-model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.quadrotor_dynamics!,n,m)
-
-# Objective and constraints
-Qf = 100.0*Diagonal(I,n)
-Q = (0.01)*Diagonal(I,n)
-R = (0.01)*Diagonal(I,m)
-tf = 5.0
 dt = 0.05
-
-# -initial state
-x0 = zeros(n)
-quat0 = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
-x0[4:7] = quat0
-x0
-
-# -final state
-xf = zeros(n)
-xf[1:3] = [10.0;10.0;1.0] # xyz position
-quatf = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
-xf[4:7] = quatf
-xf
+model, obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
 
 # -control limits
 u_min = -50.0
@@ -114,21 +89,19 @@ u_max = 50.0
 
 # -constraint that quaternion should be unit
 function cE(cdot,x,u)
-    cdot[1] = x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2 - 1.0
+    cdot[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 end
 
-obj_uncon = TrajectoryOptimization.UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
 
 # Solver
-solver = TrajectoryOptimization.Solver(model!,obj_con,integration=:rk4,dt=dt,opts=opts)
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
 
 # - Initial control and state trajectories
 U = ones(solver.model.m, solver.N)
-X_interp = TrajectoryOptimization.line_trajectory(solver)
 ##################
 
 ### Solve ###
-results,stats = TrajectoryOptimization.solve(solver,U)
+results, stats = TrajectoryOptimization.solve(solver,U)
 #############
 @test stats["c_max"][end] < opts.constraint_tolerance

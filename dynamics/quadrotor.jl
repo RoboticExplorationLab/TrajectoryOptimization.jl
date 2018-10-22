@@ -108,7 +108,6 @@ function quaternion_conjugate(q)
       q_[2] = -1*q[2]
       q_[3] = -1*q[3]
       q_[4] = 1*q[4]
-
       q_
 end
 
