@@ -71,7 +71,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         luu = dt*R
 
         # get discrete dynamics Jacobians
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         # Form gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*vec(s[k+1])
@@ -203,7 +203,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         lxx = dt*Q
         luu = dt*R
 
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         Qx = lx + fx'*s[k+1]
         Qu = lu + fu'*s[k+1]
@@ -292,11 +292,11 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
         # Unpack Jacobians, ̇x
-        Ac1, Bc1 = res.Ac[k], res.Bc[k]
-        Ac2, Bc2 = res.Ac[k+1], res.Bc[k+1]
-        Ad, Bd, Cd = res.fx[k], res.fu[k], res.fv[k]
+        Ac1, Bc1 = res.fcx[k], res.fcu[k]
+        Ac2, Bc2 = res.fcx[k+1], res.fcu[k+1]
+        Ad, Bd, Cd = res.fdx[k], res.fdu[k], res.fdv[k]
 
-        xm = res.xmid[k]
+        xm = res.xm[k]
         um = (U[k] + U[k+1])/2.
 
         # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
