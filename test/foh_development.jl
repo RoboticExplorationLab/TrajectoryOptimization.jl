@@ -174,3 +174,79 @@ end
 @test isapprox(ForwardDiff.jacobian(Lu_func,s)[1:m,n+m+1:n+m+n],Luy)
 @test isapprox(ForwardDiff.jacobian(Lu_func,s)[1:m,n+m+n+1:n+m+n+m],Luv_)
 @test isapprox(ForwardDiff.jacobian(Ly_func,s)[1:n,n+m+n+1:n+m+n+m],Lyv)
+
+# Derivatives for minimum time
+dx = results.dx[k]
+dy = results.dx[k+1]
+
+dxm = 2*h/8*dx - 2*h/8*dy
+
+l_h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
+l_hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + el(xm,um)))
+
+lx_h = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*Ac1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*Ac1'*Q*xf
+lu_h = 1/12*Bc1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*Bc1'*Q*xf + 4/6*h*R*um
+ly_h = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*Ac2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*Ac2'*Q*xf
+lv_h = -1/12*Bc2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*Bc2'*Q*xf + 4/6*h*R*um
+
+function l_(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    4/6*(h^2)*el(xm,um)
+end
+
+function lx_(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    4*(h^2)/6*(I/2 + (h^2)/8*Ac1)'*Q*(xm - xf)
+end
+
+function lu_(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    4*(h^2)/6*(((h^2)/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+end
+
+function ly_(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    4*(h^2)/6*(I/2 - (h^2)/8*Ac2)'*Q*(xm - xf)
+end
+
+function lv_(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    4*(h^2)/6*(-((h^2)/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+end
+
+@test isapprox(ForwardDiff.gradient(l_,s)[end],l_h)
+@test isapprox(ForwardDiff.hessian(l_,s)[end,end],l_hh)
+@test isapprox(ForwardDiff.jacobian(lx_,s)[:,end],lx_h)
+@test isapprox(ForwardDiff.jacobian(lu_,s)[:,end],lu_h)
+@test isapprox(ForwardDiff.jacobian(ly_,s)[:,end],ly_h)
+@test isapprox(ForwardDiff.jacobian(lv_,s)[:,end],lv_h)
