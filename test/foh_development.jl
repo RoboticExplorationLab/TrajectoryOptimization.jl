@@ -20,6 +20,7 @@ Ac1, Bc1 = results.fcx[k], results.fcu[k]
 Ac2, Bc2 = results.fcx[k+1], results.fcu[k+1]
 Q = obj.Q
 R = getR(solver)
+c = .0075
 xf = obj.xf
 X = results.X
 U = results.U
@@ -77,7 +78,7 @@ end
 function stage_cost(x,y,u,v,h)
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    (h^2)/6*(el(x,u) + 4*el(xm,um) + el(y,v))
+    (h^2)/6*(el(x,u) + 4*el(xm,um) + el(y,v)) + c*h^2
 end
 
 function stage_cost(s)
@@ -349,12 +350,12 @@ Lyv = dt/6*ℓ1yv + 4*dt/6*ℓ2yv + dt/6*ℓ3yv
 
 # Augmented expansions for minimum time
 _Lx = Lx
-_Lu = [Lu;2*h/6*ℓ1 + L2h + 2*h/6*ℓ3]
+_Lu = [Lu;2*h/6*ℓ1 + L2h + 2*h/6*ℓ3 + 2*c*h]
 _Ly = Ly
 _Lv = [Lv;0]
 
 _Lxx = Lxx
-_Luu = [Luu (2/6*h*ℓ1u + L2uh);(2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3)]
+_Luu = [Luu (2/6*h*ℓ1u + L2uh);(2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3 + 2*c)]
 _Lyy = Lyy
 _Lvv = [Lvv zeros(m); zeros(m)' 0]
 
@@ -397,7 +398,7 @@ function Lu_func_alt(s)
     um = u_midpoint(u,v)
     dxm = 2*h/8*fc_(x,u) - 2*h/8*fc_(y,v)
     L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
-    [Lu_func(x,u,y,v,h); 2*h/6*el(x,u) + L2h + 2*h/6*el(y,v)]
+    [Lu_func(x,u,y,v,h); 2*h/6*el(x,u) + L2h + 2*h/6*el(y,v) + 2*c*h]
 end
 
 function Ly_func_alt(s)
@@ -431,7 +432,7 @@ function Lh_func_alt(s)
     um = u_midpoint(u,v)
     dxm = 2*h/8*fc_(x,u) - 2*h/8*fc_(y,v)
     L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
-    2/6*h*el(x,u) + L2h + 2/6*h*el(y,v)
+    2/6*h*el(x,u) + L2h + 2/6*h*el(y,v) + 2*c*h
 end
 
 s_alt = [x;u;h;y;v;0]
@@ -454,3 +455,21 @@ L_gradient_alt = ForwardDiff.gradient(stage_cost_alt,s_alt)
 @test isapprox(ForwardDiff.jacobian(Lu_func_alt,s_alt)[1:m+1,n+m+1+1:n+m+1+n],_Luy)
 @test isapprox(ForwardDiff.jacobian(Lu_func_alt,s_alt)[1:m+1,n+m+1+n+1:n+m+1+n+m+1],_Luv)
 @test isapprox(ForwardDiff.jacobian(Ly_func_alt,s_alt)[1:n,n+m+1+n+1:n+m+1+n+m+1],_Lyv)
+
+# Final component check
+@test _Lx == (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
+@test _Lu == [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*c*h)]
+@test _Ly == 4/6*(h^2)*ℓ2y + (h^2)/6*ℓ3y
+@test _Lv == [4/6*(h^2)*ℓ2v + (h^2)/6*ℓ3v; 0]
+
+@test _Lxx == (h^2)/6*ℓ1xx + 4/6*(h^2)*ℓ2xx
+@test _Luu == [((h^2)/6*ℓ1uu + 4/6*(h^2)*ℓ2uu) (2/6*h*ℓ1u + L2uh); (2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3 + 2*c)]
+@test _Lyy ==  4/6*(h^2)*ℓ2yy + (h^2)/6*ℓ3yy
+@test _Lvv == [(4/6*(h^2)*ℓ2vv + (h^2)/6*ℓ3vv) zeros(m); zeros(m)' 0]
+
+@test _Lxu == [((h^2)/6*ℓ1xu + 4/6*(h^2)*ℓ2xu) (2/6*h*ℓ1x + L2xh)]
+@test _Lxy == 4/6*(h^2)*ℓ2xy
+@test _Lxv == [4/6*(h^2)*ℓ2xv zeros(n)]
+@test _Luy == [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
+@test _Luv == [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
+@test _Lyv == [(4/6*(h^2)*ℓ2yv + (h^2)/6*ℓ3yv) zeros(n)]
