@@ -191,15 +191,15 @@ end
 
 """
 $(SIGNATURES)
-Quadratic stage cost (with goal state)
+    Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64},c::Float64=0)::Union{Float64,ForwardDiff.Dual}
+function stage_cost(x,u,Q,R,xf=zero(x),c=0.0)
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u + c
 end
 
-function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
-    0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
-end
+# function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
+#     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
+# end
 
 """
 $(SIGNATURES)
@@ -667,6 +667,10 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
                 fu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m+1:m+n] = fu_infeasible
             end
         end
+        # if min time, gradient of (sqrt) timestep equality constraint (h_k - h_{k+1} = 0) gets updated in update_constraints
+        # fx[p,:] = zeros(n)
+        # fu[p,:] = zeros(m̄)
+        # fu[p,m̄] = 1
     end
 
     function c_jacobian!(j::AbstractArray,x::AbstractArray)

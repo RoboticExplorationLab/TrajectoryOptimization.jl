@@ -296,7 +296,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
                 break
-            elseif is_constrained && dJ < solver.opts.cost_tolerance && c_diff < 1e-6 && j == solver.opts.iterations_outerloop
+            elseif is_constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
                 @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization

@@ -20,7 +20,7 @@ $(SIGNATURES)
 """
 function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh!(results,solver)
+        Δv = _backwardpass_foh_min_time!(results,solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
@@ -461,6 +461,257 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
             K[1] = -Quu__reg\Qxu_'
             b[1] = zeros(m,m)
+            d[1] = -Quu__reg\vec(Qu_)
+
+            res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1]) # calculate for gradient check in solve
+
+            Δv += [vec(Qu_)'*vec(d[1]) 0.5*vec(d[1])'*Quu_*vec(d[1])]
+
+        end
+
+        k = k - 1;
+    end
+
+    # if successful backward pass, reduce regularization
+    regularization_update!(res,solver,:decrease)
+    return Δv
+end
+
+function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
+    # Problem dimensions
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # Objective parameters
+    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+    R = getR(solver)
+    dt = solver.dt
+
+    # Check for minimum time solve
+    min_time = is_min_time(solver)
+
+    # Pull out results
+    X = res.X; U = res.U; K = res.K; b = res.b; d = res.d; S = res.S; s = res.s
+
+    # Boundary conditions
+    S = zeros(n+m̄,n+m̄)
+    s = zeros(n+m̄)
+    S[1:n,1:n] = Qf
+    s[1:n] = Qf*(X[N]-xf)
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ
+        CxN = res.Cx_N
+        S[1:n,1:n] += CxN'*res.IμN*CxN
+        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+    # create a copy of BC in case of regularization
+    SN = copy(S)
+    sN = copy(s)
+
+    # Backward pass
+    k = N-1
+    Δv = [0. 0.] # Initialization of expected change in cost-to-go
+    while k >= 1
+        # Check for minimum time solve
+        min_time ? dt = U[k][m̄]^2 : nothing
+
+        # Unpack results
+        Ac1, Bc1 = res.fcx[k], res.fcu[k]
+        Ac2, Bc2 = res.fcx[k+1], res.fcu[k+1]
+        Ad, Bd, Cd = res.fdx[k], res.fdu[k], res.fdv[k]
+
+        x = res.X[k]
+        y = res.X[k+1]
+        u = res.U[k]
+        v = res.U[k+1]
+        xm = res.xm[k]
+        um = (U[k] + U[k+1])/2.
+        dx = res.dx[k]
+        dy = res.dx[k+1]
+
+        ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
+        # Assembling ℓ(x,u) expansion
+        ℓ1 = stage_cost(x,u,Q,R,xf)
+        ℓ1x = Q*(x - xf)
+        ℓ1u = R*u
+
+        ℓ1xx = Q
+        ℓ1uu = R
+
+        # Assembling ℓ(xm,um) expansion
+        ℓ2 = stage_cost(xm,um,Q,R,xf)
+        ℓ2x = (I/2 + dt/8*Ac1)'*Q*(xm - xf)
+        ℓ2u = ((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+        ℓ2y = (I/2 - dt/8*Ac2)'*Q*(xm - xf)
+        ℓ2v = ((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+
+        ℓ2xx = (I/2.0 + dt/8.0*Ac1)'*Q*(I/2.0 + dt/8.0*Ac1)
+        ℓ2uu = ((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
+        ℓ2yy = (I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)
+        ℓ2vv = ((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+
+        ℓ2xu = (I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
+        ℓ2xy = (I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
+        ℓ2xv = (I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
+        ℓ2uy = (dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
+        ℓ2uv = ((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)  # note the name change; workspace conflict
+        ℓ2yv = (I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+
+        # Assembling ℓ(y,v) expansion
+        ℓ3 = stage_cost(y,v,Q,R)
+
+        ℓ3y = Q*(y - xf)
+        ℓ3v = R*v
+
+        ℓ3yy = Q
+        ℓ3vv = R
+
+        # Assemble results to form δL
+
+        if min_time
+            println("Minimum time foh")
+        else
+            Lx = dt/6*ℓ1x + 4*dt/6*ℓ2x
+            Lu = dt/6*ℓ1u + 4*dt/6*ℓ2u
+            Ly = 4*dt/6*ℓ2y + dt/6*ℓ3y
+            Lv = 4*dt/6*ℓ2v + dt/6*ℓ3v
+
+            Lxx = dt/6*ℓ1xx + 4*dt/6*ℓ2xx
+            Luu = dt/6*ℓ1uu + 4*dt/6*ℓ2uu
+            Lyy = 4*dt/6*ℓ2yy + dt/6*ℓ3yy
+            Lvv = 4*dt/6*ℓ2vv + dt/6*ℓ3vv
+
+            Lxu = 4*dt/6*ℓ2xu
+            Lxy = 4*dt/6*ℓ2xy
+            Lxv = 4*dt/6*ℓ2xv
+            Luy = 4*dt/6*ℓ2uy
+            Luv = 4*dt/6*ℓ2uv
+            Lyv = 4*dt/6*ℓ2yv
+        end
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cy, Cv = res.Cx[k+1], res.Cu[k+1]
+            Ly += Cy'*Iμ[k+1]*C[k+1] + Cy'*λ[k+1]
+            Lv += Cv'*Iμ[k+1]*C[k+1] + Cv'*λ[k+1]
+            Lyy += Cy'*Iμ[k+1]*Cy
+            Lvv += Cv'*Iμ[k+1]*Cv
+            Lyv += Cy'*Iμ[k+1]*Cv
+        end
+
+        # Unpack cost-to-go P
+        Sy = s[1:n]
+        Sv = s[n+1:n+m̄]
+        Syy = S[1:n,1:n]
+        Svv = S[n+1:n+m̄,n+1:n+m̄]
+        Syv = S[1:n,n+1:n+m̄]
+
+        # Substitute in discrete dynamics (second order approximation)
+        Qx = vec(Lx) + Ad'*vec(Ly) + Ad'*vec(Sy)
+        Qu = vec(Lu) + Bd'*vec(Ly) + Bd'*vec(Sy)
+        Qv = vec(Lv) + Cd'*vec(Ly) + Cd'*vec(Sy) + Sv
+
+        Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad + Ad'*Syy*Ad
+        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + Bd'*Syy*Bd
+        Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + Cd'*Syy*Cd + Cd'*Syv + Syv'*Cd + Svv
+        Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd + Ad'*Syy*Bd
+        Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd + Ad'*Syy*Cd + Ad'*Syv
+        Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd + Bd'*Syy*Cd + Bd'*Syv
+
+        # Regularization
+        #TODO double check state regularization
+        # if solver.opts.regularization_type == :state
+        #     Qvv_reg = Qvv + res.ρ[1]*Cd'*Cd
+        #     Qxv_reg = Qxv + res.ρ[1]*Ad'*Cd
+        #     Quv_reg = Quv + res.ρ[1]*Bd'*Cd
+        # elseif solver.opts.regularization_type == :control
+            Qvv_reg = Qvv + res.ρ[1]*I
+            Qxv_reg = Qxv
+            Quv_reg = Quv
+        # end
+
+        if !isposdef(Hermitian(Array(Qvv_reg)))
+            # @logmsg InnerLoop "Regularized"
+            # if solver.opts.verbose  # TODO move to logger
+            #     println("regularized (foh bp)\n not implemented properly")
+            #     println("-condition number: $(cond(Array(Qvv_reg)))")
+            #     println("Qvv_reg: $Qvv_reg")
+            #     println("iteration: $k")
+            # end
+
+            regularization_update!(res,solver,:increase)
+
+            # Reset BCs
+            S = SN
+            s = sN
+            ############
+            k = N-1
+            Δv = [0. 0.]
+            continue
+        end
+
+        # calculate gains
+        K[k+1] = -Qvv_reg\Qxv_reg'
+        b[k+1] = -Qvv_reg\Quv_reg'
+        d[k+1] = -Qvv_reg\vec(Qv)
+
+        # calculate optimized values
+        Qx_ = vec(Qx) + K[k+1]'*vec(Qv) + Qxv*vec(d[k+1]) + K[k+1]'Qvv*d[k+1]
+        Qu_ = vec(Qu) + b[k+1]'*vec(Qv) + Quv*vec(d[k+1]) + b[k+1]'*Qvv*d[k+1]
+        Qxx_ = Qxx + Qxv*K[k+1] + K[k+1]'*Qxv' + K[k+1]'*Qvv*K[k+1]
+        Quu_ = Quu + Quv*b[k+1] + b[k+1]'*Quv' + b[k+1]'*Qvv*b[k+1]
+        Qxu_ = Qxu + K[k+1]'*Quv' + Qxv*b[k+1] + K[k+1]'*Qvv*b[k+1]
+
+        # cache (approximate) cost-to-go at timestep k
+        s[1:n] = Qx_
+        s[n+1:n+m̄] = Qu_
+        S[1:n,1:n] = Qxx_
+        S[n+1:n+m̄,n+1:n+m̄] = Quu_
+        S[1:n,n+1:n+m̄] = Qxu_
+        S[n+1:n+m̄,1:n] = Qxu_'
+
+        # line search terms
+        Δv += [vec(Qv)'*vec(d[k+1]) 0.5*vec(d[k+1])'*Qvv*vec(d[k+1])]
+
+        # at last time step, optimize over final control
+        if k == 1
+            if res isa ConstrainedIterResults
+                Cx, Cu = res.Cx[k], res.Cu[k]
+                Qx_ += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+                Qu_ += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
+                Qxx_ += Cx'*Iμ[k]*Cx
+                Quu_ += Cu'*Iμ[k]*Cu
+                Qxu_ += Cx'*Iμ[k]*Cu
+            end
+
+            # regularize Quu_
+            Quu__reg = Quu_ + res.ρ[1]*I
+
+            if !isposdef(Array(Hermitian(Quu__reg)))
+                # @logmsg InnerLoop "Regularized"
+                # if solver.opts.verbose  # TODO: Move to logger
+                #     println("regularized (foh bp)")
+                #     println("part 2")
+                #     println("-condition number: $(cond(Array(Quu__reg)))")
+                #     println("Quu__reg: $Quu__reg")
+                # end
+
+                regularization_update!(res,solver,:increase)
+
+                ## Reset BCs ##
+                S = SN
+                s = sN
+                ################
+                k = N-1
+                Δv = [0. 0.]
+                continue
+            end
+
+            K[1] = -Quu__reg\Qxu_'
+            b[1] = zeros(m̄,m̄)
             d[1] = -Quu__reg\vec(Qu_)
 
             res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1]) # calculate for gradient check in solve
