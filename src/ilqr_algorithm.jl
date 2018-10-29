@@ -20,7 +20,7 @@ $(SIGNATURES)
 """
 function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh_min_time!(results,solver)
+        Δv = _backwardpass_foh]!(results,solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
@@ -334,7 +334,6 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
             # Lyy += Cy'*Iμ[k+1]*Cy
             # Lvv += Cv'*Iμ[k+1]*Cv
             # Lyv += Cy'*Iμ[k+1]*Cv
-            println("uh what?")
             Cx, Cu = res.Cx[k], res.Cu[k]
             Lx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
             Lu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
