@@ -20,7 +20,7 @@ $(SIGNATURES)
 """
 function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh]!(results,solver)
+        Δv = _backwardpass_foh!(results,solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
