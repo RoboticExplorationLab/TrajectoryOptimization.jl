@@ -240,6 +240,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
+            plt = plot(to_array(U)')
+            display(plt)
+
             if is_constrained
                 c_max = max_violation(results)
                 push!(c_max_hist, c_max)

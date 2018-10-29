@@ -526,11 +526,11 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
         # Include the the k = N expansions here for a cleaner backward pass
         Cy, Cv = res.Cx[N], res.Cu[N]
         s[1:n] += Cy'*Iμ[N]*C[N] + Cy'*λ[N]
-        s[n+1:n+m] += Cv'*Iμ[N]*C[N] + Cv'*λ[N]
+        s[n+1:n+mm] += Cv'*Iμ[N]*C[N] + Cv'*λ[N]
         S[1:n,1:n] += Cy'*Iμ[N]*Cy
-        S[n+1:n+m,n+1:n+m] += Cv'*Iμ[N]*Cv
-        S[1:n,n+1:n+m] += Cy'*Iμ[N]*Cv
-        S[n+1:n+m,1:n] += Cv'*Iμ[N]*Cy
+        S[n+1:n+mm,n+1:n+mm] += Cv'*Iμ[N]*Cv
+        S[1:n,n+1:n+mm] += Cy'*Iμ[N]*Cv
+        S[n+1:n+mm,1:n] += Cv'*Iμ[N]*Cy
     end
 
     # create a copy of BC in case of regularization
@@ -560,44 +560,43 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
         ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
         # ℓ(x,u) expansion
-        ℓ1 = stage_cost(x,u,Q,R,xf)
+        ℓ1 = stage_cost(x,u[1:m],Q,R[1:m,1:m],xf)
         ℓ1x = Q*(x - xf)
-        ℓ1u = R*u
+        ℓ1u = R[1:m,1:m]*u[1:m]
 
         ℓ1xx = Q
-        ℓ1uu = R
+        ℓ1uu = R[1:m,1:m]
 
         # ℓ(xm,um) expansion
-        ℓ2 = stage_cost(xm,um,Q,R,xf)
+        ℓ2 = stage_cost(xm,um[1:m],Q,R[1:m,1:m],xf)
         ℓ2x = (I/2 + dt/8*fcx)'*Q*(xm - xf)
-        ℓ2u = ((dt/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
+        ℓ2u = ((dt/8*fcu[:,1:m])'*Q*(xm - xf) + 0.5*R[1:m,1:m]*um[1:m])
         ℓ2y = (I/2 - dt/8*fcy)'*Q*(xm - xf)
-        ℓ2v = ((-dt/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
+        ℓ2v = ((-dt/8*fcv[:,1:m])'*Q*(xm - xf) + 0.5*R[1:m,1:m]*um[1:m])
 
         ℓ2xx = (I/2.0 + dt/8.0*fcx)'*Q*(I/2.0 + dt/8.0*fcx)
-        ℓ2uu = ((dt/8*fcu)'*Q*(dt/8*fcu) + 0.5*R*0.5)
+        ℓ2uu = ((dt/8*fcu[:,1:m])'*Q*(dt/8*fcu[:,1:m]) + 0.5*R[1:m,1:m]*0.5)
         ℓ2yy = (I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
-        ℓ2vv = ((-dt/8*fcv)'*Q*(-dt/8*fcv) + 0.5*R*0.5)
+        ℓ2vv = ((-dt/8*fcv[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R[1:m,1:m]*0.5)
 
-        ℓ2xu = (I/2 + dt/8*fcx)'*Q*(dt/8*fcu)
+        ℓ2xu = (I/2 + dt/8*fcx)'*Q*(dt/8*fcu[:,1:m])
         ℓ2xy = (I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
-        ℓ2xv = (I/2 + dt/8*fcx)'*Q*(-dt/8*fcv)
-        ℓ2uy = (dt/8*fcu)'*Q*(I/2 - dt/8*fcy)
-        ℓ2uv = ((dt/8*fcu)'*Q*(-dt/8*fcv) + 0.5*R*0.5)  # note the name change; workspace conflict
-        ℓ2yv = (I/2 - dt/8*fcy)'*Q*(-dt/8*fcv)
+        ℓ2xv = (I/2 + dt/8*fcx)'*Q*(-dt/8*fcv[:,1:m])
+        ℓ2uy = (dt/8*fcu[:,1:m])'*Q*(I/2 - dt/8*fcy)
+        ℓ2uv = ((dt/8*fcu[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R[1:m,1:m]*0.5)  # note the name change; workspace conflict
+        ℓ2yv = (I/2 - dt/8*fcy)'*Q*(-dt/8*fcv[:,1:m])
 
         # ℓ(y,v) expansion
-        ℓ3 = stage_cost(y,v,Q,R,xf)
+        ℓ3 = stage_cost(y,v[1:m],Q,R[1:m,1:m],xf)
 
         ℓ3y = Q*(y - xf)
-        ℓ3v = R*v
+        ℓ3v = R[1:m,1:m]*v[1:m]
 
         ℓ3yy = Q
-        ℓ3vv = R
+        ℓ3vv = R[1:m,1:m]
 
         # Assemble δL expansion
         if min_time
-            println("Minimum time foh")
             h = u[m̄]
 
             # Additional expansion terms
@@ -605,12 +604,12 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
             L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*ℓ2)
             L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + ℓ2))
-            L2hu = 4*(h^2)/6*(2*(h^3)/8*(Bc1'*Q*xm + (h^2)/8*Bc1'*Q*dx) - 2*(h^3)/8*Bc1'*Q*xf - 2*(h^5)/64*Bc1'*Q*dy + 2*h*ℓ2u)
+            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu'*Q*xm + (h^2)/8*fcu'*Q*dx) - 2*(h^3)/8*fcu'*Q*xf - 2*(h^5)/64*fcu'*Q*dy + 2*h*ℓ2u)
 
-            L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*Ac1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*Ac1'*Q*xf
-            L2uh = 1/12*Bc1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*Bc1'*Q*xf + 4/6*h*R*um
-            L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*Ac2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*Ac2'*Q*xf
-            L2vh = -1/12*Bc2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*Bc2'*Q*xf + 4/6*h*R*um
+            L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
+            L2uh = 1/12*fcu'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
+            L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
+            L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
 
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
@@ -623,12 +622,12 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Lyy =  4/6*(h^2)*ℓ2yy + (h^2)/6*ℓ3yy
             Lvv = [(4/6*(h^2)*ℓ2vv + (h^2)/6*ℓ3vv) zeros(m); zeros(m)' 0]
 
-            Lxu = [((h^2)/6*ℓ1xu + 4/6*(h^2)*ℓ2xu) (2/6*h*ℓ1x + L2xh)]
+            Lxu = [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
             Lxy = 4/6*(h^2)*ℓ2xy
             Lxv = [4/6*(h^2)*ℓ2xv zeros(n)]
             Luy = [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
             Luv = [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
-            Lyv = [(4/6*(h^2)*ℓ2yv + (h^2)/6*ℓ3yv) zeros(n)]
+            Lyv = [4/6*(h^2)*ℓ2yv zeros(n)]
         else
             Lx = dt/6*ℓ1x + 4*dt/6*ℓ2x
             Lu = dt/6*ℓ1u + 4*dt/6*ℓ2u
