@@ -63,11 +63,17 @@ mutable struct SolverOptions
     λ_min::Float64 # minimum Lagrange multiplier
     λ_max::Float64 # maximum Lagrange multiplier
     μ_max::Float64 # maximum penalty term
-    μ1::Float64 # initial penalty term
+    μ_initial::Float64 # initial penalty term
+    μ_initial_infeasible::Float64 # initial penalty term for infeasible controls
+    μ_initial_minimum_time_inequality::Float64 # initial penalty term for minimum time bounds constraints
+    μ_initial_minimum_time_equality::Float64 # initial penalty term for minimum time equality constraints
     γ::Float64 # penalty update multiplier; γ > 0
+    γ_infeasible::Float64 # penalty update rate for infeasible controls
+    γ_minimum_time_inequality::Float64 # penalty update rate for minimum time bounds constraints
+    γ_minimum_time_equality::Float64 # penalty update rate for minimum time equality constraints
     γ_no::Float64 # penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)
     τ::Float64 # update term; 0 < τ < 1
-    outer_loop_update::Symbol # type of outer loop update (default, uniform, uniform_time_step, individual)
+    outer_loop_update::Symbol # type of outer loop update (default, individual)
     λ_second_order_update::Bool # second order update for Lagrange multipliers once sqrt(cost tolerance | gradient) < desired tolerance
 
     "Regularization parameters"
@@ -82,15 +88,15 @@ mutable struct SolverOptions
     function SolverOptions(;square_root=false,verbose=false,
         c1=1.0e-8,c2=10.0,max_state_value=1.0e16,max_control_value=1.0e16,max_dt=1.0,min_dt=1e-2,min_time_init=0,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-5,cost_intermediate_tolerance=1.0e-2,
         constraint_tolerance=1e-3,iterations=300,iterations_outerloop=50,
-        iterations_linesearch=10,infeasible_regularization=1e6,min_time_regularization=1e2,
-        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ1=1.0,γ=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
+        iterations_linesearch=10,infeasible_regularization=1e6,min_time_regularization=0.0,
+        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e16,λ_max=1.0e16,μ_max=1.0e16,μ_initial=1.0,μ_initial_infeasible=10.0,μ_initial_minimum_time_inequality=10.0,μ_initial_minimum_time_equality=10.0,γ=10.0,γ_infeasible=10.0,γ_minimum_time_inequality=10.0,γ_minimum_time_equality=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
         ρ_initial=0.0,ρ_factor=1.6,ρ_max=1.0e10,ρ_min=1e-6,regularization_type=:state,ρ_forwardpass=2.0,use_static=true)
 
         new(square_root,verbose,c1,c2,max_state_value,max_control_value,max_dt,min_dt,min_time_init,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
         constraint_tolerance,iterations,iterations_outerloop,
         iterations_linesearch,infeasible_regularization,min_time_regularization,
         benchmark,solve_feasible,infeasible,unconstrained,resolve_feasible,
-        λ_min,λ_max,μ_max,μ1,γ,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,regularization_type,ρ_forwardpass,
+        λ_min,λ_max,μ_max,μ_initial,μ_initial_infeasible,μ_initial_minimum_time_inequality,μ_initial_minimum_time_equality,γ,γ_infeasible,γ_minimum_time_inequality,γ_minimum_time_equality,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,regularization_type,ρ_forwardpass,
         use_static)
     end
 end

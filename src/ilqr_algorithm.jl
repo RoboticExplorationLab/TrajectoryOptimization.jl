@@ -20,7 +20,7 @@ $(SIGNATURES)
 """
 function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh]!(results,solver)
+        Δv = _backwardpass_foh_min_time!(results,solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
@@ -116,7 +116,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
             Qux_reg = Qux
         end
 
-        if rank(Quu_reg) != mm  # TODO determine if rank or PD is best check
+        if !isposdef(Quu_reg)
+        # if rank(Quu_reg) != mm  # TODO determine if rank or PD is best check
             @logmsg InnerLoop "Regularized"
             # if solver.opts.verbose # TODO: switch to logger
             #     println("regularized (normal bp)")
@@ -523,13 +524,13 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
         s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
 
         # Include the the k = N expansions here for a cleaner backward pass
-        Cy, Cv = res.Cx[N], res.Cu[N]
-        s[1:n] += Cy'*Iμ[N]*C[N] + Cy'*λ[N]
-        s[n+1:n+mm] += Cv'*Iμ[N]*C[N] + Cv'*λ[N]
-        S[1:n,1:n] += Cy'*Iμ[N]*Cy
-        S[n+1:n+mm,n+1:n+mm] += Cv'*Iμ[N]*Cv
-        S[1:n,n+1:n+mm] += Cy'*Iμ[N]*Cv
-        S[n+1:n+mm,1:n] += Cv'*Iμ[N]*Cy
+        Cx, Cu = res.Cx[N], res.Cu[N]
+        s[1:n] += Cx'*Iμ[N]*C[N] + Cx'*λ[N]
+        s[n+1:n+mm] += Cu'*Iμ[N]*C[N] + Cu'*λ[N]
+        S[1:n,1:n] += Cx'*Iμ[N]*Cx
+        S[n+1:n+mm,n+1:n+mm] += Cu'*Iμ[N]*Cu
+        S[1:n,n+1:n+mm] += Cx'*Iμ[N]*Cu
+        S[n+1:n+mm,1:n] += Cu'*Iμ[N]*Cx
     end
 
     # create a copy of BC in case of regularization
@@ -603,12 +604,12 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
             L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*ℓ2)
             L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + ℓ2))
-            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu'*Q*xm + (h^2)/8*fcu'*Q*dx) - 2*(h^3)/8*fcu'*Q*xf - 2*(h^5)/64*fcu'*Q*dy + 2*h*ℓ2u)
+            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu[:,1:m]'*Q*xm + (h^2)/8*fcu[:,1:m]'*Q*dx) - 2*(h^3)/8*fcu[:,1:m]'*Q*xf - 2*(h^5)/64*fcu[:,1:m]'*Q*dy + 2*h*ℓ2u)
 
             L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
-            L2uh = 1/12*fcu'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
+            L2uh = 1/12*fcu[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
             L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
-            L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
+            L2vh = -1/12*fcv[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
 
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
@@ -687,17 +688,18 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
         # Regularization
         #TODO double check state regularization
-        # if solver.opts.regularization_type == :state
-        #     Qvv_reg = Qvv + res.ρ[1]*fdv'*fdv
-        #     Qxv_reg = Qxv + res.ρ[1]*fdx'*fdv
-        #     Quv_reg = Quv + res.ρ[1]*fdu'*fdv
-        # elseif solver.opts.regularization_type == :control
+        if solver.opts.regularization_type == :state
+            Qvv_reg = Qvv + res.ρ[1]*fdv'*fdv
+            Qxv_reg = Qxv + res.ρ[1]*fdx'*fdv
+            Quv_reg = Quv + res.ρ[1]*fdu'*fdv
+        elseif solver.opts.regularization_type == :control
             Qvv_reg = Qvv + res.ρ[1]*I
             Qxv_reg = Qxv
             Quv_reg = Quv
-        # end
+        end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
+        # if rank(Qvv_reg) != mm
             # @logmsg InnerLoop "Regularized"
             # if solver.opts.verbose  # TODO move to logger
             #     println("regularized (foh bp)\n not implemented properly")
@@ -746,6 +748,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Quu__reg = Quu_ + res.ρ[1]*I
 
             if !isposdef(Array(Hermitian(Quu__reg)))
+            # if rank(Quu__reg) != mm
                 # @logmsg InnerLoop "Regularized"
                 # if solver.opts.verbose  # TODO: Move to logger
                 #     println("regularized (foh bp)")
@@ -808,8 +811,6 @@ $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
 function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
-    status = :progress_made
-
     # Pull out values from results
     X = res.X
     U = res.U
@@ -820,11 +821,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
     # Compute original cost
     update_constraints!(res,solver,X,U)
-
-    Ju_prev = _cost(solver, res, X, U)   # Unconstrained cost
-    Jc_prev = cost_constraints(solver, res)  # constraint cost
-    J_prev = Ju_prev + Jc_prev
-
+    J_prev = cost(solver, res, X, U)
 
     J = Inf
     alpha = 1.0
@@ -841,24 +838,10 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
-            Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
-            Jc = cost_constraints(solver, res)  # constraint cost
 
             # set trajectories to original trajectory
             X_ .= X
             U_ .= U
-
-            # Examine components
-            zu = (Ju_prev - Ju)
-            zc = (Jc_prev - Jc)
-
-            status = :no_progress_made
-            if zu > 0
-                status = :uncon_progress_made
-            end
-            if zc > 0
-                status = :constraint_progress_made
-            end
 
             if solver.control_integration == :foh
                 calculate_derivatives!(res, solver, X_, U_)
@@ -872,7 +855,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             expected = 0.
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
-            regularization_update!(res,solver,:increase) # increase regularization
+            # regularization_update!(res,solver,:increase) # increase regularization
             res.ρ[1] *= solver.opts.ρ_forwardpass
             break
         end
@@ -891,10 +874,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
         # Calcuate cost
         update_constraints!(res,solver,X_,U_)
+        J =cost(solver, res, X_, U_)
 
-        Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
-        Jc = cost_constraints(solver, res)  # constraint cost
-        J = Ju + Jc
         expected = -alpha*(Δv[1] + alpha*Δv[2])
         if expected > 0
             z  = (J_prev - J)/expected

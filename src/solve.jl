@@ -132,7 +132,14 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         end
 
         # Set initial penalty term values
-        results.μ .*= solver.opts.μ1
+        results.μ .*= solver.opts.μ_initial
+        if is_min_time(solver)
+            for k = 1:solver.N
+                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
+                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
+            end
+        end
 
         # Set initial regularization
         results.ρ[1] = solver.opts.ρ_initial
@@ -240,7 +247,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-            plt = plot(to_array(U)')
+            plt = plot(to_array(U)[:,1:solver.N-1]',label="")
             display(plt)
 
             if is_constrained
@@ -434,6 +441,10 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
+    end
+    if solver.control_integration == :foh
+        calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
+        calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
     end
 
     return results_feasible

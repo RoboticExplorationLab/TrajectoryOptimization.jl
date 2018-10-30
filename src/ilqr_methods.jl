@@ -71,15 +71,7 @@ end
 
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
-        if solver.opts.min_time_init > 0
-            dt = solver.opts.min_time_init / (solver.N - 1)
-            if dt > solver.opts.max_dt
-                dt = solver.opts.max_dt
-                @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
-            end
-        else
-            dt  = solver.opts.max_dt / 2
-        end
+        dt  = solver.opts.max_dt / 2
     else
         dt = solver.dt
     end
@@ -123,7 +115,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res,solver,X, U)
+        calculate_midpoints!(res,solver,X,U)
     end
 
     return true
@@ -163,7 +155,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             U_[k] = U[k] + dv
             min_time ? dt = U_[k][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = dv
+            du .= dv
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             min_time ? dt = U_[k-1][m̄]^2 : nothing
@@ -171,7 +163,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         end
 
         if infeasible
-            X_[k] .+= U_[k-1][m̄.+(1:n)]
+            X_[k] += U_[k-1][m̄.+(1:n)]
         end
 
         # Check that rollout has not diverged
@@ -183,7 +175,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
         calculate_derivatives!(res, solver, X_, U_)
-        calculate_midpoints!(res, solver, X_, U_)
+        calculate_midpoints!(res, solver, X_,U_)
     end
 
     return true
@@ -323,10 +315,13 @@ end
 $(SIGNATURES)
     Calculate state midpoints (xmid)
 """
-function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
-    n,m,N = get_sizes(solver)
-    for k = 1:N-1
-        results.xm[k] = cubic_midpoint(results.X[k],results.dx[k],results.X[k+1],results.dx[k+1],solver.dt)
+function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X, U)
+    m̄,mm = get_num_controls(solver)
+    dt = solver.dt
+
+    for k = 1:solver.N-1
+        is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
+        results.xm[k] = cubic_midpoint(X[k],results.dx[k],X[k+1],results.dx[k+1],dt)
     end
 end
 
@@ -334,7 +329,7 @@ end
 $(SIGNATURES)
     Calculate state derivatives (xdot)
 """
-function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X, U)
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.fc(results.dx[k],X[k],U[k][1:m])
@@ -348,11 +343,11 @@ Updates both dyanmics and constraint jacobians, depending on the results type.
 """
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     N = solver.N
-    dt = solver.dt
+    # dt = solver.dt
     min_time = is_min_time(solver)
     m̄,mm = get_num_controls(solver)
     for k = 1:N-1
-        min_time ? dt = res.U[m̄] : nothing
+        # min_time ? dt = res.U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
             res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
             res.fcx[k], res.fcu[k] = solver.Fc(res.X[k], res.U[k])
@@ -360,6 +355,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
             res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+
         if min_time && k < N-1
             res.Cu[k][end,m̄] = 1
         end
@@ -481,7 +477,6 @@ function count_constraints(obj::ConstrainedObjective)
     end
 
     return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
-
 end
 
 """
@@ -559,6 +554,8 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     if min_time
         u_max = [u_max; sqrt(max_dt)]
         u_min = [u_min; sqrt(min_dt)]
+        # u_max = [u_max; max_dt]
+        # u_min = [u_min; min_dt]
     end
 
     # Mask for active (state|control) constraints
@@ -574,6 +571,10 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     function c_control!(c,x,u)
         c[1:pI_u_max] = (u - u_max)[u_max_active]
         c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u)[u_min_active]
+        # if min_time
+        #     c[m̄] = u[m̄]^2 - max_dt
+        #     c[m̄+m̄] = min_dt - u[m̄]^2
+        # end
     end
 
     # Inequality on state
@@ -633,6 +634,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     fu_state = zeros(pI_x,m̄)
     fu = zeros(p,m̄)
 
+
     if pI_c > 0
         cI_custom_jacobian! = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
     end
@@ -667,10 +669,8 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
                 fu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m+1:m+n] = fu_infeasible
             end
         end
-        # if min time, gradient of (sqrt) timestep equality constraint (h_k - h_{k+1} = 0) gets updated in update_constraints
-        # fx[p,:] = zeros(n)
-        # fu[p,:] = zeros(m̄)
-        # fu[p,m̄] = 1
+
+        # if min time, gradient of timestep equality constraint (h_k - h_{k+1} = 0) and bounds dt > dtmin, dt < dtmax, gets updated in update_constraints
     end
 
     function c_jacobian!(j::AbstractArray,x::AbstractArray)
@@ -736,7 +736,7 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
             solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
         end
         ui[:,k] = X0[:,k+1] - x[:,k+1]
-        x[:,k+1] .+= ui[:,k]
+        x[:,k+1] += ui[:,k]
     end
     ui
 end
