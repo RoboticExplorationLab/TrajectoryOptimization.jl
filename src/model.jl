@@ -272,7 +272,7 @@ Define a quadratic objective for a constrained optimization problem.
 
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
+* Inequality constraints: `f(x,u) ⩽ 0`
 
 """
 mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:AbstractArray} <: Objective
@@ -385,7 +385,7 @@ will be set to their default, constrained values.
 
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
+* Inequality constraints: `f(x,u) ≤ 0`
 
 # Arguments
 * u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or

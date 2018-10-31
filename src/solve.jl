@@ -123,7 +123,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         p,pI,pE = get_num_constraints(solver)
         m̄,mm = get_num_controls(solver)
 
-
         ## Initialize results
         if use_static
             results = ConstrainedStaticResults(n,mm,p,N)
@@ -181,6 +180,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
+            # error('Initial rollout failed')
             if solver.opts.verbose
                 println("Bad initial control sequence, setting initial control to zero")
             end
@@ -212,13 +212,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         iter_outer = j
         @info "Outer loop $j (begin)"
 
-        if is_constrained
+        if is_constrained # TODO: replace with single if statement
             if j == 1
                 results.C_prev .= deepcopy(results.C)
                 results.CN_prev .= deepcopy(results.CN)
             end
         end
-        c_max = 0.  # Init max constraint violation to increase scope
+        c_max = 0.  # Initialize max constraint violation to increase scope
         J_prev = cost(solver, results, X, U)
         j == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
 
@@ -244,9 +244,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             X .= deepcopy(X_)
             U .= deepcopy(U_)
 
-            dJ = copy(abs(J-J_prev)) # change in cost
+            dJ = copy(abs(J_prev-J)) # change in cost
             J_prev = copy(J)
 
+            # live plotting for debugging
             plt = plot(to_array(U)[:,1:solver.N-1]',label="")
             display(plt)
 
@@ -433,12 +434,14 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # forward pass
     forwardpass!(results_feasible,solver,Δv)
-    results_feasible.X .= results_feasible.X_
-    results_feasible.U .= results_feasible.U_
+
+    # update trajectories
+    results_feasible.X .= deepcopy(results_feasible.X_)
+    results_feasible.U .= deepcopy(results_feasible.U_)
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained
-        results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
+        results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end

@@ -699,7 +699,6 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
         end
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-        # if rank(Qvv_reg) != mm
             # @logmsg InnerLoop "Regularized"
             # if solver.opts.verbose  # TODO move to logger
             #     println("regularized (foh bp)\n not implemented properly")
@@ -814,8 +813,6 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     # Pull out values from results
     X = res.X
     U = res.U
-    K = res.K
-    d = res.d
     X_ = res.X_
     U_ = res.U_
 
@@ -856,7 +853,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             # regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] *= solver.opts.ρ_forwardpass
+            # res.ρ[1] *= solver.opts.ρ_forwardpass
             break
         end
 

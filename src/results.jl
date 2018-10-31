@@ -584,13 +584,13 @@ function no_infeasible_controls_unconstrained_results(r::SolverIterResults,solve
     copyto!(results.X,r.X)
     copyto!(results.dx,r.dx)
     copyto!(results.xm,r.xm)
+    copyto!(results.fcx,r.fcx)
+    copyto!(results.fdx,r.fdx)
     for k = 1:N
         results.U[k] = r.U[k][1:m]
-        results.fcx[k] = r.fcx[k][1:n,1:n]
         results.fcu[k] = r.fcu[k][1:n,1:m]
         k == N ? continue : nothing
         results.um[k] = r.um[k][1:m]
-        results.fdx[k] = r.fdx[k][1:n,1:n]
         results.fdu[k] = r.fdu[k][1:n,1:m]
     end
     results
@@ -600,7 +600,7 @@ end
 $(SIGNATURES)
     For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
 """
-function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ)::ConstrainedIterResults
+function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
     n,m,N = get_sizes(solver)
     p = solver.obj.p
     p_N = solver.obj.p_N
@@ -612,14 +612,14 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ):
     copyto!(results.X,r.X)
     copyto!(results.dx,r.dx)
     copyto!(results.xm,r.xm)
-    copyto!(results.um,r.um)
+    copyto!(results.fcx,r.fcx)
+    copyto!(results.fdx,r.fdx)
     for k = 1:N
         results.U[k] = r.U[k][1:m]
-        results.fcx[k] = r.fcx[k][1:n,1:n]
         results.fcu[k] = r.fcu[k][1:n,1:m]
         results.λ[k] = λ[k][1:p]
         k == N ? continue : nothing
-        results.fdx[k] = r.fdx[k][1:n,1:n]
+        results.um[k] = r.um[k][1:m]
         results.fdu[k] = r.fdu[k][1:n,1:m]
         results.fdv[k] = r.fdv[k][1:n,1:m]
     end
