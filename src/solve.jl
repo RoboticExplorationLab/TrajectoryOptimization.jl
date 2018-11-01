@@ -910,6 +910,23 @@ $(SIGNATURES)
 """
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
 
+    if is_min_time(solver)
+        n,m,N = get_sizes(solver)
+        m̄,mm = get_num_controls(solver)
+        p,pI,pE = get_num_constraints(solver)
+
+        val,idx = findmax(to_array(results.C))
+        if idx[1] == m̄
+            println("max_dt violated!: $val at k=$(idx[2])")
+        elseif idx[1] == m̄ + m̄
+            println("min_dt violated: $val at k=$(idx[2])")
+        elseif idx[1] == p
+            println("h_k - h_{k+1} violated: $val at k=$(idx[2])")
+        else
+            println("other: $val")
+        end
+    end
+
     ## Lagrange multiplier updates
     λ_update!(results,solver,false)
 

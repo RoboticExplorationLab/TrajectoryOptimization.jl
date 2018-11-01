@@ -659,6 +659,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
                 if k < N-1
                     Cv = zeros(p,mm)
                     Cv[p,m̄] = -1
+                    # Cv[p,m̄] = -2*v[m̄]
                     Lv += Cv'*Iμ[k]*C[k] + Cv'*λ[k]
                     Lvv += Cv'*Iμ[k]*Cv
                     Lxv += Cx'*Iμ[k]*Cv
@@ -853,7 +854,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             # regularization_update!(res,solver,:increase) # increase regularization
-            # res.ρ[1] *= solver.opts.ρ_forwardpass
+            res.ρ[1] = max(res.ρ[1],1.0)*solver.opts.ρ_forwardpass
             break
         end
 

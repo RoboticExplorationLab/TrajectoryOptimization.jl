@@ -359,6 +359,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
 
         if min_time && k < N-1
             res.Cu[k][end,m̄] = 1
+            # res.Cu[k][end,m̄] = 2*res.U[k][m̄]
         end
     end
 
@@ -416,6 +417,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
         # Minimum time has coupling across time steps
         if min_time && k < N-1
             res.C[k][end] = res.U[k][m̄] - res.U[k+1][m̄]
+            # res.C[k][end] = res.U[k][m̄]^2 - res.U[k+1][m̄]^2
         end
 
         # Inequality constraints [see equation ref]
@@ -685,7 +687,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_function!, c_jacobian!
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-3) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-5) = (x,u)->nothing, (x,u)->nothing
 
 """
 $(SIGNATURES)
