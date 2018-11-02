@@ -134,9 +134,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         results.μ .*= solver.opts.μ_initial
         if is_min_time(solver)
             for k = 1:solver.N
-                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
-                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][p] *= solver.opts.μ_initial_minimum_time_equality
+                results.μ[k][m̄] *= solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] *= solver.opts.μ_initial_minimum_time_inequality
             end
         end
 
@@ -285,29 +285,29 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             end
             print_row(logger,InnerLoop)
 
-            if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
+            if ((~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop))
                 @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
                 break
 
             # Check for gradient and constraint tolerance convergence
-            elseif (is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance)
+        elseif ((is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance))
                 @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
                 break
             end
             #####################
 
             ## Check for cost convergence ##
-            if (~is_constrained && dJ < solver.opts.cost_tolerance) || (is_constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
+            if ((~is_constrained && dJ < solver.opts.cost_tolerance) || (is_constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop))
                 @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
                 if ~is_constrained
                     @info "Unconstrained solve complete"
                 end
                 break
             # Check for cost and constraint tolerance convergence
-            elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
+        elseif ((is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance))
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
                 break
-            elseif is_constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
+            elseif (is_constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization
@@ -927,6 +927,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
         end
     end
 
+    println("REGULARIZATION: $(results.ρ[1])")
     ## Lagrange multiplier updates
     λ_update!(results,solver,false)
 

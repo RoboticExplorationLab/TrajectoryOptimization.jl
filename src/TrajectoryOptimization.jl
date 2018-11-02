@@ -78,35 +78,35 @@ include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
 
-using Ipopt
-
-# DIRCOL methods
-export
-solve_dircol,
-gen_usrfun,
-DircolResults,
-DircolVars,
-collocation_constraints,
-collocation_constraints!,
-cost_gradient,
-cost_gradient!,
-constraint_jacobian,
-constraint_jacobian!,
-get_weights,
-get_initial_state
-
-export
-packZ,
-unpackZ
-
-include("dircol.jl")
-include("dircol_ipopt.jl")
-write_ipopt_options()
+# using Ipopt
 #
-# if check_snopt_installation()
-#     # using Snopt # not safe for precompilation
-#     include("dircol_snopt.jl")
-# end
+# # DIRCOL methods
+# export
+# solve_dircol,
+# gen_usrfun,
+# DircolResults,
+# DircolVars,
+# collocation_constraints,
+# collocation_constraints!,
+# cost_gradient,
+# cost_gradient!,
+# constraint_jacobian,
+# constraint_jacobian!,
+# get_weights,
+# get_initial_state
+#
+# export
+# packZ,
+# unpackZ
+#
+# include("dircol.jl")
+# include("dircol_ipopt.jl")
+# write_ipopt_options()
+# #
+# # if check_snopt_installation()
+# #     # using Snopt # not safe for precompilation
+# #     include("dircol_snopt.jl")
+# # end
 
 function set_debug_level(level::Symbol)
     global debug_level
