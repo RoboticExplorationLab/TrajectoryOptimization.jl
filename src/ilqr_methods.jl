@@ -26,7 +26,7 @@
 ########################################
 
 "$(SIGNATURES) determine if the solver is solving a minimum time problem"
-function is_min_time(solver::Solver)
+function is_minimum_time(solver::Solver)
     if solver.dt == 0 && solver.N > 0
         return true
     end
@@ -43,7 +43,7 @@ Get number of controls, accounting for minimum time and infeasible start
 function get_num_controls(solver::Solver)
     n,m = get_sizes(solver)
     m̄ = m
-    is_min_time(solver) ? m̄ += 1 : nothing
+    solver.opts.minimum_time ? m̄ += 1 : nothing
     solver.opts.infeasible ? mm = m̄ + n : mm = m̄
     return m̄, mm
 end
@@ -56,7 +56,7 @@ function get_num_constraints(solver::Solver)
     p = solver.obj.p
     pI = solver.obj.pI
     pE = p - pI
-    if is_min_time(solver)
+    if solver.opts.minimum_time
         pI += 2
         pE += 1
     end
@@ -68,7 +68,7 @@ function get_num_constraints(solver::Solver)
 end
 
 function get_initial_dt(solver::Solver)
-    if is_min_time(solver)
+    if solver.opts.minimum_time
         dt  = 0.5*solver.opts.max_dt + 0.5*solver.opts.min_dt
     else
         dt = solver.dt
@@ -88,15 +88,15 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
 
-    # Check minimum time
-    min_time = is_min_time(solver)
-
-    # Check infeasible
-    infeasible = m̄ != size(U[1],1)
+    # # Check minimum time
+    # min_time = is_min_time(solver)
+    #
+    # # Check infeasible
+    # infeasible = m̄ != size(U[1],1)
 
     X[1] = solver.obj.x0
     for k = 1:N-1
-        min_time ? dt = U[k][m̄]^2 : nothing
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         if solver.control_integration == :foh
             solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m], dt) # get new state
@@ -104,7 +104,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
             solver.fd(X[k+1], X[k], U[k][1:m], dt)
         end
 
-        if infeasible
+        if solver.opts.infeasible
             X[k+1] += U[k][m̄+1:m̄+n]
         end
 
@@ -134,8 +134,8 @@ Will return a flag indicating if the values are finite for all time steps.
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
-    infeasible = m̄ != size(res.U[1],1)
-    min_time = is_min_time(solver)
+    # infeasible = m̄ != size(res.U[1],1)
+    # min_time = is_min_time(solver)
     dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
@@ -152,7 +152,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     for k = 2:N
         δx = X_[k-1] - X[k-1]
 
-        min_time ? dt = U_[k-1][m̄]^2 : nothing
+        solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 
         if solver.control_integration == :foh
             dv = K[k]*δx + b[k]*du + alpha*d[k]
@@ -164,7 +164,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
 
-        if infeasible
+        if solver.opts.infeasible
             X_[k] += U_[k-1][m̄.+(1:n)]
         end
 
@@ -191,10 +191,6 @@ function stage_cost(x,u,Q,R,xf=zero(x))
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
-# function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
-#     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
-# end
-
 """
 $(SIGNATURES)
 Compute the unconstrained cost
@@ -208,27 +204,28 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     obj = solver.obj
-    Q = obj.Q; xf::Vector{Float64} = obj.xf; Qf::Matrix{Float64} = obj.Qf; c = obj.c;
-    R = getR(solver)
-
+    Q = obj.Q; R = obj.R; xf::Vector{Float64} = obj.xf; Qf::Matrix{Float64} = obj.Qf;
     dt = solver.dt
 
-    min_time = is_min_time(solver)
-
     J = 0.0
+
+    # Stage costs
     for k = 1:N-1
-        min_time ? dt = U[k][m̄]^2 : nothing
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
             Xm = res.xm[k]
             Um = (U[k] + U[k+1])/2
-            J += dt*(1/6*stage_cost(X[k],U[k],Q,R,xf) + 4/6*stage_cost(Xm,Um,Q,R,xf) + 1/6*stage_cost(X[k+1],U[k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            J += dt*(1/6*stage_cost(X[k],U[k][1:m],Q,R,xf) + 4/6*stage_cost(Xm,Um[1:m],Q,R,xf) + 1/6*stage_cost(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
         else
-            J += dt*stage_cost(X[k],U[k],Q,R,xf)
+            J += dt*stage_cost(X[k],U[k][1:m],Q,R,xf)
         end
-        min_time ? J += c*dt : nothing
+
+        solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+        solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
     end
 
-    J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
+    # Terminal cost
+    J += stage_cost(X[N],zeros(m),Qf,zeros(m,m),xf)
 
     return J
 end
@@ -259,51 +256,6 @@ function cost(solver::Solver, res::SolverIterResults, X=res.X, U=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
-
-#TODO THIS FUNCTION NEEDS TO BE MODIFIED SUBSTANTIALLY FOR DIRCOL
-# """
-# $(SIGNATURES)
-# Compute the unconstrained cost
-# """
-# function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2})
-#     # pull out solver/objective values
-#     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-#     obj = solver.obj
-#     dt = solver.dt
-#
-#     if size(U,1) != m
-#         m += n
-#     end
-#
-#     R = getR(solver)
-#
-#     J = 0.0
-#     for k = 1:N-1
-#         if solver.control_integration == :foh
-#
-#             xdot1 = zeros(n)
-#             xdot2 = zeros(n)
-#             solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
-#             solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
-#             #
-#             # # # #TODO use calculate_derivatives!
-#             # xdot1 = res.xdot[:,k]
-#             # xdot2 = res.xdot[:,k+1]
-#
-#             Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
-#             Um = (U[:,k] + U[:,k+1])/2
-#
-#             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
-#         else
-#             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
-#         end
-#     end
-#
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#
-#     return J
-# end
-
 """
 $(SIGNATURES)
     Calculate state midpoint using cubic spline
@@ -321,7 +273,7 @@ function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X, U
     dt = solver.dt
 
     for k = 1:solver.N-1
-        is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
         results.xm[k] = cubic_midpoint(X[k],results.dx[k],X[k+1],results.dx[k+1],dt)
         results.um[k] = 0.5*results.U[k] + 0.5*results.U[k+1]
     end
@@ -346,18 +298,17 @@ $(SIGNATURES)
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
-    min_time = is_min_time(solver)
 
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.fcx[k], res.fcu[k] = solver.Fc(res.X[k], res.U[k])
+            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k])
         else
             res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
 
-        if min_time
+        if solver.opts.minimum_time
             if k != N
                 res.Cu[k][m̄,m̄] = 1.0
                 res.Cu[k][m̄+m̄,m̄] = -1.0
@@ -371,10 +322,10 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     end
 
     if solver.control_integration == :foh
-        res.fcx[N], res.fcu[N] = solver.Fc(res.X[N], res.U[N])
+        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N])
         solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
 
-        if min_time
+        if solver.opts.minimum_time
             res.Cu[N][m̄,:] .= 0.0
             res.Cu[N][m̄+m̄,:] .= 0.0
             res.Cu[N][end,:] .= 0.0
@@ -386,17 +337,18 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
 end
 
 function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.fcx[k], res.fcu[k] = solver.Fc(res.X[k], res.U[k])
+            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k])
         else
             res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
     end
     if solver.control_integration == :foh
-        res.fcx[N], res.fcu[N] = solver.Fc(res.X[N], res.U[N])
+        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N])
     end
 
     return nothing
@@ -414,7 +366,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
-    min_time = is_min_time(solver)
     c = solver.c
 
     if solver.control_integration == :foh
@@ -428,7 +379,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
         c(res.C[k], X[k], U[k])
 
         # Minimum time has coupling across time steps
-        if min_time
+        if solver.opts.minimum_time
             if k < N-1
                 res.C[k][end] = res.U[k][m̄] - res.U[k+1][m̄]
             else
@@ -517,21 +468,21 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
     cdot = zeros(p)
     F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
 
-    function c_jacobian(fx,fu,x,u)
+    function c_jacobian(cx,cu,x,u)
         S[1:n] = x
         S[n+1:n+m] = u
         F(J,cdot,S)
-        fx .= J[1:p,1:n]
-        fu .= J[1:p,n+1:n+m]
+        cx .= J[1:p,1:n]
+        cu .= J[1:p,n+1:n+m]
     end
 
     if p_N > 0
         J_N = zeros(p_N,n)
         xdot = zeros(p_N)
         F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
-        function c_jacobian(fx,x)
+        function c_jacobian(cx,x)
             F_N(J_N,xdot,x)
-            fx .= J_N
+            cx .= J_N
         end
     end
 
@@ -744,14 +695,13 @@ Additional controls for producing an infeasible state trajectory
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N) # initialize
     m = solver.model.m
+    m̄,mm = get_num_controls(solver)
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
 
-    m̄,mm = get_num_controls(solver)
-    min_time = is_min_time(solver)
     dt = solver.dt
     for k = 1:solver.N-1
-        min_time ? dt = u[m̄,k]^2 : nothing
+        solver.opts.minimum_time ? dt = u[m̄,k]^2 : nothing
         if solver.control_integration == :foh
             solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1], dt)
         else
@@ -765,7 +715,7 @@ end
 
 function infeasible_controls(solver::Solver,X0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N)
-    if is_min_time(solver)
+    if solver.opts.minimum_time
         dt = get_initial_dt(solver)
         u_dt = ones(1,solver.N)
         u = [u; u_dt]

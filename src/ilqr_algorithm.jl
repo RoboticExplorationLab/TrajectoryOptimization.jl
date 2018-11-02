@@ -35,12 +35,10 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     m̄,mm = get_num_controls(solver)
 
     # Objective parameters
-    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
-    R = getR(solver)
+    Q = solver.obj.Q; R = solver.obj.R; Qf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
-
-    # Check for minimum time solve
-    min_time = is_min_time(solver)
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
@@ -61,14 +59,16 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     Δv = [0.0 0.0]
     k = N-1
     while k >= 1
-        # Check for minimum time solve
-        # min_time ? dt = U[k][m̄]^2 : nothing
-
         # Calculate stage costs
         lx = dt*Q*vec(X[k] - xf)
-        lu = dt*R*vec(U[k])
+        lu = dt*R*vec(U[k][1:m])
         lxx = dt*Q
         luu = dt*R
+
+        if solver.opts.infeasible
+            lu = [lu; R_infeasible*U[k][m+1:m+n]]
+            luu = [luu zeros(m,n); zeros(n,n) R_infeasible]
+        end
 
         # get discrete dynamics Jacobians
         fx, fu = res.fdx[k], res.fdu[k]
@@ -78,6 +78,12 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         Qu = lu + fu'*vec(s[k+1])
         Qxx = lxx + fx'*S[k+1]*fx
 
+        # println(R)
+        # println(dt*R)
+        # println(fu)
+        # println(luu)
+        # println(S[k+1])
+        # println(s[k+1])
         Quu = luu + fu'*S[k+1]*fu
         Qux = fu'*S[k+1]*fx
 
@@ -89,21 +95,6 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
-
-            # if min_time
-            #     h = U[k][m̄]
-            #     Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
-            #     Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
-            #     tmp = zero(Quu)
-            #     tmp[:,m̄] = R*U[k]
-            #     Quu += 2h*(tmp+tmp')
-            #     Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
-            #
-            #     if k > 1
-            #         Qu[m̄] -= C[k-1][end]*Iμ[k-1][end,end] + λ[k-1][end]
-            #         Quu[m̄,m̄] += Iμ[k-1][end,end]
-            #     end
-            # end
         end
 
         # Regularization
@@ -117,14 +108,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         end
 
         if !isposdef(Hermitian(Array(Quu_reg)))
-        # if rank(Quu_reg) != mm  # TODO determine if rank or PD is best check
             @logmsg InnerLoop "Regularized"
-            # if solver.opts.verbose # TODO: switch to logger
-            #     println("regularized (normal bp)")
-            #     println("-condition number: $(cond(Array(Quu_reg)))")
-            #     println("Quu_reg: $(eigvals(Quu_reg))")
-            #     @show Quu_reg
-            # end
 
             # Increase regularization
             regularization_update!(res,solver,:increase)
@@ -499,12 +483,10 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
     m̄,mm = get_num_controls(solver)
 
     # Objective parameters
-    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
-    R = getR(solver)
+    Q = solver.obj.Q; R = solver.obj.R; Qf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
-
-    # Check for minimum time solve
-    min_time = is_min_time(solver)
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
     X = res.X; U = res.U; K = res.K; b = res.b; d = res.d; S = res.S; s = res.s
@@ -541,7 +523,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
     Δv = [0. 0.] # Initialization of expected change in cost-to-go
     while k >= 1
         # Check for minimum time solve
-        min_time ? dt = U[k][m̄]^2 : nothing
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Unpack results
         fcx, fcu = res.fcx[k], res.fcu[k]
@@ -559,43 +541,43 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
         ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
         # ℓ(x,u) expansion
-        ℓ1 = stage_cost(x,u[1:m],Q,R[1:m,1:m],xf)
+        ℓ1 = stage_cost(x,u[1:m],Q,R,xf)
         ℓ1x = Q*(x - xf)
-        ℓ1u = R[1:m,1:m]*u[1:m]
+        ℓ1u = R*u[1:m]
 
         ℓ1xx = Q
-        ℓ1uu = R[1:m,1:m]
+        ℓ1uu = R
 
         # ℓ(xm,um) expansion
-        ℓ2 = stage_cost(xm,um[1:m],Q,R[1:m,1:m],xf)
+        ℓ2 = stage_cost(xm,um[1:m],Q,R,xf)
         ℓ2x = (I/2 + dt/8*fcx)'*Q*(xm - xf)
-        ℓ2u = ((dt/8*fcu[:,1:m])'*Q*(xm - xf) + 0.5*R[1:m,1:m]*um[1:m])
+        ℓ2u = ((dt/8*fcu[:,1:m])'*Q*(xm - xf) + 0.5*R*um[1:m])
         ℓ2y = (I/2 - dt/8*fcy)'*Q*(xm - xf)
-        ℓ2v = ((-dt/8*fcv[:,1:m])'*Q*(xm - xf) + 0.5*R[1:m,1:m]*um[1:m])
+        ℓ2v = ((-dt/8*fcv[:,1:m])'*Q*(xm - xf) + 0.5*R*um[1:m])
 
         ℓ2xx = (I/2.0 + dt/8.0*fcx)'*Q*(I/2.0 + dt/8.0*fcx)
-        ℓ2uu = ((dt/8*fcu[:,1:m])'*Q*(dt/8*fcu[:,1:m]) + 0.5*R[1:m,1:m]*0.5)
+        ℓ2uu = ((dt/8*fcu[:,1:m])'*Q*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
         ℓ2yy = (I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
-        ℓ2vv = ((-dt/8*fcv[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R[1:m,1:m]*0.5)
+        ℓ2vv = ((-dt/8*fcv[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
 
         ℓ2xu = (I/2 + dt/8*fcx)'*Q*(dt/8*fcu[:,1:m])
         ℓ2xy = (I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
         ℓ2xv = (I/2 + dt/8*fcx)'*Q*(-dt/8*fcv[:,1:m])
         ℓ2uy = (dt/8*fcu[:,1:m])'*Q*(I/2 - dt/8*fcy)
-        ℓ2uv = ((dt/8*fcu[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R[1:m,1:m]*0.5)  # note the name change; workspace conflict
+        ℓ2uv = ((dt/8*fcu[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)  # note the name change; workspace conflict
         ℓ2yv = (I/2 - dt/8*fcy)'*Q*(-dt/8*fcv[:,1:m])
 
         # ℓ(y,v) expansion
-        ℓ3 = stage_cost(y,v[1:m],Q,R[1:m,1:m],xf)
+        ℓ3 = stage_cost(y,v[1:m],Q,R,xf)
 
         ℓ3y = Q*(y - xf)
-        ℓ3v = R[1:m,1:m]*v[1:m]
+        ℓ3v = R*v[1:m]
 
         ℓ3yy = Q
-        ℓ3vv = R[1:m,1:m]
+        ℓ3vv = R
 
         # Assemble δL expansion
-        if min_time
+        if solver.opts.minimum_time
             h = u[m̄]
 
             # Additional expansion terms
@@ -606,18 +588,18 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu[:,1:m]'*Q*xm + (h^2)/8*fcu[:,1:m]'*Q*dx) - 2*(h^3)/8*fcu[:,1:m]'*Q*xf - 2*(h^5)/64*fcu[:,1:m]'*Q*dy + 2*h*ℓ2u)
 
             L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
-            L2uh = 1/12*fcu[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
+            L2uh = 1/12*fcu[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*Q*xf + 4/6*h*R*um[1:m]
             L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
-            L2vh = -1/12*fcv[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*Q*xf + 4/6*h*R[1:m,1:m]*um[1:m]
+            L2vh = -1/12*fcv[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*Q*xf + 4/6*h*R*um[1:m]
 
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
-            Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*c*h)]
+            Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*R_minimum_time*h)]
             Ly = 4/6*(h^2)*ℓ2y + (h^2)/6*ℓ3y
             Lv = [4/6*(h^2)*ℓ2v + (h^2)/6*ℓ3v; 0]
 
             Lxx = (h^2)/6*ℓ1xx + 4/6*(h^2)*ℓ2xx
-            Luu = [((h^2)/6*ℓ1uu + 4/6*(h^2)*ℓ2uu) (2/6*h*ℓ1u + L2uh); (2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3 + 2*c)]
+            Luu = [((h^2)/6*ℓ1uu + 4/6*(h^2)*ℓ2uu) (2/6*h*ℓ1u + L2uh); (2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3 + 2*R_minimum_time)]
             Lyy =  4/6*(h^2)*ℓ2yy + (h^2)/6*ℓ3yy
             Lvv = [(4/6*(h^2)*ℓ2vv + (h^2)/6*ℓ3vv) zeros(m); zeros(m)' 0]
 
@@ -645,6 +627,20 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Lyv = 4*dt/6*ℓ2yv
         end
 
+        if solver.opts.infeasible
+            Lu = [Lu; R_infeasible*u[m̄+1:m̄+n]]
+            Lv = [Lv; zeros(n)]
+
+            Luu = [Luu zeros(m̄,n); zeros(n,m̄) R_infeasible]
+            Lvv = [Lvv zeros(m̄,n); zeros(n,m̄) zeros(n,n)]
+
+            Lxu = [Lxu zeros(n,n)]
+            Lxv = [Lxv zeros(n,n)]
+            Luy = [Luy; zeros(n,n)']
+            Luv = [Luv zeros(m̄,n); zeros(n,m̄) zeros(n,n)]
+            Lyv = [Lyv zeros(n,n)]
+        end
+
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
@@ -654,7 +650,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Luu += Cu'*Iμ[k]*Cu
             Lxu += Cx'*Iμ[k]*Cu
 
-            if min_time
+            if solver.opts.minimum_time
                 p,pI,pE = get_num_constraints(solver)
                 if k < N-1
                     Cv = zeros(p,mm)
@@ -700,12 +696,6 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
             # @logmsg InnerLoop "Regularized"
-            # if solver.opts.verbose  # TODO move to logger
-            #     println("regularized (foh bp)\n not implemented properly")
-            #     println("-condition number: $(cond(Array(Qvv_reg)))")
-            #     println("Qvv_reg: $Qvv_reg")
-            #     println("iteration: $k")
-            # end
 
             regularization_update!(res,solver,:increase)
 
@@ -747,15 +737,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Quu__reg = Quu_ + res.ρ[1]*I
 
             if !isposdef(Array(Hermitian(Quu__reg)))
-            # if rank(Quu__reg) != mm
                 # @logmsg InnerLoop "Regularized"
-                # if solver.opts.verbose  # TODO: Move to logger
-                #     println("regularized (foh bp)")
-                #     println("part 2")
-                #     println("-condition number: $(cond(Array(Quu__reg)))")
-                #     println("Quu__reg: $Quu__reg")
-                # end
-
                 regularization_update!(res,solver,:increase)
 
                 ## Reset BCs ##

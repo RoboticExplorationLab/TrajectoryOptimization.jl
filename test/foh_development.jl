@@ -558,6 +558,11 @@ function Lz_func_inf(s)
     w = v_bar_[m_bar]
     vi = v_bar_[m_bar+1:mm]
 
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    dxm = 2*h/8*fc_(x,u) - 2*h/8*fc_(y,v)
+    L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
+
     [Lx_func(x,u,y,v,h);
      Lu_func(x,u,y,v,h);
      2*h/6*el(x,u) + L2h + 2*h/6*el(y,v) + 2*c*h;
@@ -573,15 +578,14 @@ Lz_func_inf(si)
 @test isapprox(Gz,Lz_func_inf(si))
 
 Hz = ForwardDiff.jacobian(Lz_func_inf,si)
-
 @test isapprox(Hz[1:n,1:n],_Lxx)
-@test isapprox(Hz[n+1:n+m_bar,n+1:n+m_bar],_Luu)
-@test isapprox(Hz[n+m_bar+1:n+m_bar+n,n+m_bar+1:n+m_bar+n],Ri)
+@test isapprox(Hz[n+1:n+m_bar+n,n+1:n+m_bar+n],[_Luu zeros(m_bar,n); zeros(n,m_bar) Ri])
 @test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+1:n+m_bar+n+n],_Lyy)
-@test isapprox(Hz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar,n+m_bar+n+n+1:n+m_bar+n+n+m_bar],_Lvv)
-@test isapprox(Hz[n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n,n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n],zeros(n,n))
+@test isapprox(Hz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lvv zeros(m_bar,n); zeros(n,m_bar) zeros(n,n)])
 
-
-
-
-Hz[4:8,4:8]
+@test isapprox(Hz[1:n,n+1:n+m_bar+n],[_Lxu zeros(n,n)])
+@test isapprox(Hz[1:n,n+m_bar+n+1:n+m_bar+n+n],_Lxy)
+@test isapprox(Hz[1:n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lxv zeros(n,n)])
+@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+1:n+m_bar+n+n],[_Luy; zeros(n,n)'])
+@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Luv zeros(m_bar,n); zeros(n,m_bar)' zeros(n,n)])
+@test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lyv zeros(n,n)])

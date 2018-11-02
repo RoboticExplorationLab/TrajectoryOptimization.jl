@@ -5,9 +5,13 @@ $(TYPEDEF)
 Specifies options for Solver.
 """
 mutable struct SolverOptions
-    "Use cholesky decomposition of S, the Hessian of the cost-to-go"
+    constrained::Bool
+    minimum_time::Bool
+    infeasible::Bool
+
+    "Use cholesky decomposition of the cost-to-go Hessian"
     square_root::Bool
-    "Display statistics at each iteration TODO: make this a symbol specifying level of output"
+    "Display statistics at each iteration"
     verbose::Bool
 
     "lower bound for forward pass line search, 0 < c1 < c2"
@@ -46,17 +50,15 @@ mutable struct SolverOptions
     iterations_linesearch::Int64
 
     "regularization term for augmented controls during infeasible start"
-    infeasible_regularization::Float64
+    R_infeasible::Float64
     "regularization term in R matrix for dt"
-    min_time_regularization::Float64
+    R_minimum_time::Float64
 
     "Run benchmarks on forward and backward passes"
     benchmark::Bool
 
     "Pass infeasible trajectory solution to original problem"
-    solve_feasible::Bool
-    infeasible::Bool
-    unconstrained::Bool
+    unconstrained_original_problem::Bool
     resolve_feasible::Bool # resolve feasible problem post infeasible solve
 
     "Augmented Lagrangian Method parameters" # terms defined in Practical Augmented Lagrangian Methods for Constrained Optimization
@@ -85,17 +87,17 @@ mutable struct SolverOptions
     ρ_forwardpass::Float64 # multiplicative regularization scaling when forward pass reaches max iterations
     use_static::Bool
 
-    function SolverOptions(;square_root=false,verbose=false,
+    function SolverOptions(;constrained=false,minimum_time=false,infeasible=false,square_root=false,verbose=false,
         c1=1.0e-8,c2=10.0,max_state_value=1.0e16,max_control_value=1.0e16,max_dt=1.0,min_dt=1e-4,min_time_init=0,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-4,cost_intermediate_tolerance=1.0e-4,
         constraint_tolerance=1e-3,iterations=250,iterations_outerloop=50,
-        iterations_linesearch=15,infeasible_regularization=1e6,min_time_regularization=0.0,
-        benchmark=false,solve_feasible=true,infeasible=false,unconstrained=false,resolve_feasible=true,λ_min=-1.0e64,λ_max=1.0e64,μ_max=1.0e64,μ_initial=1.0,μ_initial_infeasible=1.0,μ_initial_minimum_time_inequality=1.0,μ_initial_minimum_time_equality=1.0,γ=10.0,γ_infeasible=10.0,γ_minimum_time_inequality=10.0,γ_minimum_time_equality=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
+        iterations_linesearch=15,R_infeasible=1e3,R_minimum_time=1.0,
+        benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,λ_min=-1.0e64,λ_max=1.0e64,μ_max=1.0e64,μ_initial=1.0,μ_initial_infeasible=1.0,μ_initial_minimum_time_inequality=1.0,μ_initial_minimum_time_equality=1.0,γ=10.0,γ_infeasible=10.0,γ_minimum_time_inequality=10.0,γ_minimum_time_equality=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
         ρ_initial=0.0,ρ_factor=1.6,ρ_max=1.0e64,ρ_min=1e-6,regularization_type=:control,ρ_forwardpass=1.0,use_static=true)
 
-        new(square_root,verbose,c1,c2,max_state_value,max_control_value,max_dt,min_dt,min_time_init,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
+        new(constrained,minimum_time,infeasible,square_root,verbose,c1,c2,max_state_value,max_control_value,max_dt,min_dt,min_time_init,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
         constraint_tolerance,iterations,iterations_outerloop,
-        iterations_linesearch,infeasible_regularization,min_time_regularization,
-        benchmark,solve_feasible,infeasible,unconstrained,resolve_feasible,
+        iterations_linesearch,R_infeasible,R_minimum_time,
+        benchmark,unconstrained_original_problem,resolve_feasible,
         λ_min,λ_max,μ_max,μ_initial,μ_initial_infeasible,μ_initial_minimum_time_inequality,μ_initial_minimum_time_equality,γ,γ_infeasible,γ_minimum_time_inequality,γ_minimum_time_equality,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,regularization_type,ρ_forwardpass,
         use_static)
     end
