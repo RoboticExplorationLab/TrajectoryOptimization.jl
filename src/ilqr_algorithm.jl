@@ -116,7 +116,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
             Qux_reg = Qux
         end
 
-        if !isposdef(Quu_reg)
+        if !isposdef(Hermitian(Array(Quu_reg)))
         # if rank(Quu_reg) != mm  # TODO determine if rank or PD is best check
             @logmsg InnerLoop "Regularized"
             # if solver.opts.verbose # TODO: switch to logger
@@ -497,7 +497,6 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
-    p,pI,pE = get_num_constraints(solver)
 
     # Objective parameters
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
@@ -656,6 +655,7 @@ function _backwardpass_foh_min_time!(res::SolverVectorResults,solver::Solver)
             Lxu += Cx'*Iμ[k]*Cu
 
             if min_time
+                p,pI,pE = get_num_constraints(solver)
                 if k < N-1
                     Cv = zeros(p,mm)
                     Cv[p,m̄] = -1
