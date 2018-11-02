@@ -485,3 +485,103 @@ u2 = rand(model.m)
 
 solver.fd(x1,x01,u1,u2,dt) == solver.fd(x2,x02,u1,u2,dt)
 solver.fd(x1,x01,u1,u2,dt) != solver.fd(x2,x02,u1,u2,2*dt)
+
+
+# Infeasible
+Ri = .77*Matrix(I,n,n)
+ui = rand(n)
+vi = rand(n)
+
+u_bar = [u; h; ui]
+v_bar = [v; w; vi]
+m_bar = m+1
+mm = m_bar + n
+
+si = [x;u_bar;y;v_bar]
+
+function stage_cost_infeasible(x,y,u,v,h,w,ui,vi)
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    (h^2)/6*(el(x,u) + 4*el(xm,um) + el(y,v)) + c*h^2 + 0.5*ui'*Ri*ui
+end
+
+function stage_cost_infeasible(s)
+    x_ = s[1:n]
+    u_bar_ = s[n+1:n+mm]
+    y_ = s[n+mm+1:n+mm+n]
+    v_bar_ = s[n+mm+n+1:n+mm+n+mm]
+
+    u_ = u_bar_[1:m]
+    h_ = u_bar_[m_bar]
+    ui_ = u_bar_[m_bar+1:mm]
+
+    v_ = v_bar_[1:m]
+    w_ = v_bar_[m_bar]
+    vi_ = v_bar_[m_bar+1:mm]
+
+    @test x_ == x
+    @test u_bar_ == u_bar
+    @test y_ == y
+    @test v_bar_ == v_bar
+    @test u_ == u
+    @test h_ == h
+    @test ui_ == ui
+    @test v_ == v
+    @test w_ == w
+    @test vi_ == vi
+
+    stage_cost_infeasible(x_,y_,u_,v_,h_,w_,ui_,vi_)
+end
+
+# Gradients
+Gz = ForwardDiff.gradient(stage_cost_infeasible,si)
+
+@test isapprox(Gz[1:n], _Lx)
+@test isapprox(Gz[n+1:n+m_bar], _Lu)
+@test isapprox(Gz[n+m_bar+1:n+m_bar+n], Ri*ui)
+@test isapprox(Gz[n+m_bar+n+1:n+m_bar+n+n], _Ly)
+@test isapprox(Gz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar],_Lv)
+@test isapprox(Gz[n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n],zeros(n))
+
+# Hessians
+function Lz_func_inf(s)
+    x = s[1:n]
+    u_bar_ = s[n+1:n+mm]
+    y = s[n+mm+1:n+mm+n]
+    v_bar_ = s[n+mm+n+1:n+mm+n+mm]
+
+    u = u_bar_[1:m]
+    h = u_bar_[m_bar]
+    ui = u_bar_[m_bar+1:mm]
+
+    v = v_bar_[1:m]
+    w = v_bar_[m_bar]
+    vi = v_bar_[m_bar+1:mm]
+
+    [Lx_func(x,u,y,v,h);
+     Lu_func(x,u,y,v,h);
+     2*h/6*el(x,u) + L2h + 2*h/6*el(y,v) + 2*c*h;
+     Ri*ui;
+     Ly_func(x,u,y,v,h);
+     Lv_func(x,u,y,v,h);
+     0;
+     zeros(n)]
+end
+
+Lz_func_inf(si)
+
+@test isapprox(Gz,Lz_func_inf(si))
+
+Hz = ForwardDiff.jacobian(Lz_func_inf,si)
+
+@test isapprox(Hz[1:n,1:n],_Lxx)
+@test isapprox(Hz[n+1:n+m_bar,n+1:n+m_bar],_Luu)
+@test isapprox(Hz[n+m_bar+1:n+m_bar+n,n+m_bar+1:n+m_bar+n],Ri)
+@test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+1:n+m_bar+n+n],_Lyy)
+@test isapprox(Hz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar,n+m_bar+n+n+1:n+m_bar+n+n+m_bar],_Lvv)
+@test isapprox(Hz[n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n,n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n],zeros(n,n))
+
+
+
+
+Hz[4:8,4:8]
