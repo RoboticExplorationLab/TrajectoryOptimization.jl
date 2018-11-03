@@ -17,27 +17,11 @@ obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 @test obj_uncon.c == 0
 @test obj_uncon.tf == tf
 
-# Test full constructor
-obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, tf, x0, xf)
-@test obj_uncon.c == 0.1
-
-# Test minimum time constructors
-obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, :min, x0, xf)
-@test obj_uncon.c == 0.1
-@test obj_uncon.tf == 0
-obj_uncon = UnconstrainedObjective(Q, R, Qf, :min, x0, xf)
-@test obj_uncon.c == 1.
-@test obj_uncon.tf == 0
-
 # Try invalid inputs
 tf = -1.
 @test_throws ArgumentError UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 tf = 1.; R_ = Diagonal(I,m)*-1
 @test_throws ArgumentError("R must be positive definite") UnconstrainedObjective(Q, R_, Qf, tf, x0, xf)
-c = -1.
-@test_throws ArgumentError("$c is invalid input for constant stage cost. Must be positive") UnconstrainedObjective(Q,R,Qf,c,tf,x0,xf)
-@test_throws ArgumentError(":min is the only recognized Symbol for the final time") obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, :max, x0, xf)
-
 
 ### Constraints ###
 # Test defaults
@@ -114,26 +98,19 @@ obj = update_objective(obj, u_max=2, x_max = 4, cE=cI)
 @test obj.p == 5
 
 # Minimum time
-c = 0.1
-obj = ConstrainedObjective(Q,R,Qf,c,tf,x0,xf, x_max=2)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf, x_max=2)
 @test obj.p == 2
-@test obj.c == 0.1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,c=0.2,u_min=-2)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2)
 @test obj.p == 1
-@test obj.c == 0.2
 @test obj.tf == tf
 tf_ = :min
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,c=0.2,u_min=-2)
-@test obj.tf == 0
-@test obj.p == 1
-@test obj.c == 0.2
 obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
-@test obj.c == 1
-obj = ConstrainedObjective(Q,R,Qf,c,tf_,x0,xf,u_min=-2)
+@test obj.p == 1
+obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
-@test obj.c == c
-
+obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
+@test obj.tf == 0
 
 # Test constraint function
 function cI(cres,x,u)
@@ -160,27 +137,36 @@ obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, 
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=1.0,min_dt=1e-3)
 cres = zeros(11)
 u_dt = [u; 0.1]
-cans = [0,-0.9,-3,sqrt(1e-3)-u_dt[2],-3,1,-4,-8,6,8,1]
+cans = [0,-0.9,-3,sqrt(1e-3)-u_dt[2],-3,1,-4,-8,6,8,.1]
 c(cres,x,u_dt)
-cres
-x
-u_dt
 @test cres == cans
+
+v_dt = [u; .01]
+cans2 = [0,-0.9,-3,sqrt(1e-3)-u_dt[2],-3,1,-4,-8,6,8,.09]
+cres2 = zeros(11)
+c(cres2,x,u_dt,x,v_dt)
+@test isapprox(cres2,cans2)
 
 # Change upper bound on dt
 c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.,min_dt=1e-2)
 cres = zeros(12)
-cans = [0,u_dt[2]-sqrt(10),-3,sqrt(1e-2)-u_dt[2],-3,1,-4,-8,  6,8,1,0]
+cans = [0,u_dt[2]-sqrt(10),-3,sqrt(1e-2)-u_dt[2],-3,1,-4,-8,  6,8,1,.1]
 c(cres,x,u_dt)
 cres
 @test cres == cans
 
 # use infeasible start
 u_inf = [u_dt; -1; -1]
-cans = [0,-9.9, -3,-0.1  ,-3,1,-4,-8,  6,8,1, -1,-1, 0]
+cans = [0,.1-sqrt(10), -3,0.1-sqrt(1e-2)  ,-3,1,-4,-8,  6,8,1, -1,-1, .1]
 cres = zeros(14)
 c(cres,x,u_inf)
-cres == cans
+@test cres == cans
+
+v_inf = [v_dt;-1;-1]
+cans2 = [0,.1-sqrt(10), -3,0.1-sqrt(1e-2)  ,-3,1,-4,-8,  6,8,1, -1,-1, .09]
+cres2 = zeros(14)
+c(cres2,x,u_inf,x,v_inf)
+@test isapprox(cres2,cans2)
 
 # Verify jacobians
 ∇x_cI(x,u) = [x[2] x[1]; 3 u[1]]
@@ -201,9 +187,13 @@ cu = [Matrix(I,m+1,m+1)     zeros(m+1,n);
       ∇u_cE(x,u) zeros(1,1) zeros(1,n);
       zeros(n,m+1)       Matrix(I,n,n);
       zeros(1,m+1)         zeros(1,n)]
+ cu[14,m+1] = 1
 cx_res,cu_res = zero(cx),zero(cu)
 c_jacob(cx_res,cu_res,x,u_inf)
 @test cx_res == cx
+@test cu_res == cu
+
+c_jacob(cx_res,cu_res,x,u_inf,x,v_inf)
 @test cu_res == cu
 
 ### GENERAL CONSTRAINTS JACOBIAN ###

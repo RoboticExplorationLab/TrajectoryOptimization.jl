@@ -2,22 +2,22 @@
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.c1 = 1e-8
-opts.c2 = 10.0
-opts.cost_intermediate_tolerance = 1e-4
-opts.constraint_tolerance = 1e-4
-opts.cost_tolerance = 1e-4
+opts.z_min = 1e-8
+opts.z_max = 10.0
+opts.cost_intermediate_tolerance = 1e-3
+opts.constraint_tolerance = 1e-3
+opts.cost_tolerance = 1e-3
 opts.iterations_outerloop = 50
 opts.iterations = 250
-opts.iterations_linesearch = 25
+opts.iterations_linesearch = 10
 opts.τ = 0.25
 opts.γ = 10.0
-opts.ρ_initial = 1.0
+opts.ρ_initial = 0.0
 opts.outer_loop_update = :default
 opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
-opts.regularization_type = :state
+opts.regularization_type = :control
 ######################
 
 ### Set up model, objective, solver ###
@@ -72,7 +72,7 @@ u_min = u_min_pendulum
 intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
-dt = 0.25
+dt = 0.2
 solver_zoh = Solver(model,obj,integration=intergrator_zoh,dt=dt,opts=opts)
 solver_foh = Solver(model,obj,integration=intergrator_foh,dt=dt,opts=opts)
 

@@ -491,7 +491,7 @@ solver.fd(x1,x01,u1,u2,dt) != solver.fd(x2,x02,u1,u2,2*dt)
 Ri = .77*Matrix(I,n,n)
 ui = rand(n)
 vi = rand(n)
-
+w = 0.4
 u_bar = [u; h; ui]
 v_bar = [v; w; vi]
 m_bar = m+1
@@ -537,11 +537,9 @@ end
 Gz = ForwardDiff.gradient(stage_cost_infeasible,si)
 
 @test isapprox(Gz[1:n], _Lx)
-@test isapprox(Gz[n+1:n+m_bar], _Lu)
-@test isapprox(Gz[n+m_bar+1:n+m_bar+n], Ri*ui)
+@test isapprox(Gz[n+1:n+m_bar+n], [_Lu; Ri*ui])
 @test isapprox(Gz[n+m_bar+n+1:n+m_bar+n+n], _Ly)
-@test isapprox(Gz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar],_Lv)
-@test isapprox(Gz[n+m_bar+n+n+m_bar+1:n+m_bar+n+n+m_bar+n],zeros(n))
+@test isapprox(Gz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lv; zeros(n)])
 
 # Hessians
 function Lz_func_inf(s)
@@ -587,5 +585,5 @@ Hz = ForwardDiff.jacobian(Lz_func_inf,si)
 @test isapprox(Hz[1:n,n+m_bar+n+1:n+m_bar+n+n],_Lxy)
 @test isapprox(Hz[1:n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lxv zeros(n,n)])
 @test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+1:n+m_bar+n+n],[_Luy; zeros(n,n)'])
-@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Luv zeros(m_bar,n); zeros(n,m_bar)' zeros(n,n)])
+@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Luv zeros(m_bar,n); zeros(n,m_bar) zeros(n,n)])
 @test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lyv zeros(n,n)])

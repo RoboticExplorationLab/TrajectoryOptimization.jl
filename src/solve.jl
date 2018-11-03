@@ -244,8 +244,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             iter += 1
 
             # live plotting for debugging
-            plt = plot(to_array(U)[:,1:solver.N-1]',label="")
-            display(plt)
+            if solver.opts.live_plotting
+                plt = plot(to_array(U)[:,1:solver.N-1]',label="",xlabel="time step (k)",ylabel="control u(t)",title="Control")
+                display(plt)
+            end
 
             push!(J_hist,J)
 

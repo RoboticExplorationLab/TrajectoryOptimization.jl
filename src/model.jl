@@ -269,11 +269,9 @@ end
 """
 $(TYPEDEF)
 Define a quadratic objective for a constrained optimization problem.
-
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ⩽ 0`
-
+* Inequality constraints: `f(x,u) ≥ 0`
 """
 mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:AbstractArray} <: Objective
     Q::TQ                 # Quadratic stage cost for states (n,n)
@@ -377,16 +375,12 @@ end
 
 """
 $(SIGNATURES)
-
 Construct a ConstrainedObjective with defaults.
-
 Create a ConstrainedObjective, specifying only the needed fields. All others
 will be set to their default, constrained values.
-
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≤ 0`
-
+* Inequality constraints: `f(x,u) ≥ 0`
 # Arguments
 * u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
 a vector of size (m,). A scalar will be copied to all states or controls. Values
@@ -444,7 +438,6 @@ end
 """
 $(SIGNATURES)
 Updates constrained objective values and returns a new objective.
-
 Only updates the specified fields, all others are copied from the previous
 Objective.
 """
@@ -465,10 +458,8 @@ end
 """
 $(SIGNATURES)
 Check max/min bounds for state and control.
-
 Converts scalar bounds to vectors of appropriate size and checks that lengths
 are equal and bounds do not result in an empty set (i.e. max > min).
-
 # Arguments
 * n: number of elements in the vector (n for states and m for controls)
 """
@@ -491,7 +482,6 @@ function _validate_bounds(max,min,n::Int)
     end
     return max, min
 end
-
 
 function to_static(obj::ConstrainedObjective)
     n = size(obj.Q,1)

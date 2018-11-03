@@ -14,10 +14,10 @@ mutable struct SolverOptions
     "Display statistics at each iteration"
     verbose::Bool
 
-    "lower bound for forward pass line search, 0 < c1 < c2"
-    c1::Float64
-    "upper bound for forward pass line search, 0 < c1 < c2 < Inf"
-    c2::Float64
+    "lower bound for forward pass line search, 0 < z_min < z_max"
+    z_min::Float64
+    "upper bound for forward pass line search, 0 < z_min < z_max < Inf"
+    z_max::Float64
 
     "max state value"
     max_state_value::Float64
@@ -87,19 +87,21 @@ mutable struct SolverOptions
     ρ_forwardpass::Float64 # multiplicative regularization scaling when forward pass reaches max iterations
     use_static::Bool
 
+    live_plotting::Bool
+
     function SolverOptions(;constrained=false,minimum_time=false,infeasible=false,square_root=false,verbose=false,
-        c1=1.0e-8,c2=10.0,max_state_value=1.0e16,max_control_value=1.0e16,max_dt=1.0,min_dt=1e-4,min_time_init=0,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-4,cost_intermediate_tolerance=1.0e-4,
+        z_min=1.0e-8,z_max=10.0,max_state_value=1.0e16,max_control_value=1.0e16,max_dt=1.0,min_dt=1e-4,min_time_init=0,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-4,cost_intermediate_tolerance=1.0e-4,
         constraint_tolerance=1e-3,iterations=250,iterations_outerloop=50,
         iterations_linesearch=15,R_infeasible=1e3,R_minimum_time=1.0,
         benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,λ_min=-1.0e64,λ_max=1.0e64,μ_max=1.0e64,μ_initial=1.0,μ_initial_infeasible=1.0,μ_initial_minimum_time_inequality=1.0,μ_initial_minimum_time_equality=1.0,γ=10.0,γ_infeasible=10.0,γ_minimum_time_inequality=10.0,γ_minimum_time_equality=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
-        ρ_initial=0.0,ρ_factor=1.6,ρ_max=1.0e64,ρ_min=1e-6,regularization_type=:control,ρ_forwardpass=1.0,use_static=true)
+        ρ_initial=0.0,ρ_factor=1.6,ρ_max=1.0e64,ρ_min=1e-6,regularization_type=:control,ρ_forwardpass=1.0,use_static=true,live_plotting=false)
 
-        new(constrained,minimum_time,infeasible,square_root,verbose,c1,c2,max_state_value,max_control_value,max_dt,min_dt,min_time_init,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
+        new(constrained,minimum_time,infeasible,square_root,verbose,z_min,z_max,max_state_value,max_control_value,max_dt,min_dt,min_time_init,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
         constraint_tolerance,iterations,iterations_outerloop,
         iterations_linesearch,R_infeasible,R_minimum_time,
         benchmark,unconstrained_original_problem,resolve_feasible,
         λ_min,λ_max,μ_max,μ_initial,μ_initial_infeasible,μ_initial_minimum_time_inequality,μ_initial_minimum_time_equality,γ,γ_infeasible,γ_minimum_time_inequality,γ_minimum_time_equality,γ_no,τ,outer_loop_update,λ_second_order_update,ρ_initial,ρ_factor,ρ_max,ρ_min,regularization_type,ρ_forwardpass,
-        use_static)
+        use_static,live_plotting)
     end
 end
 

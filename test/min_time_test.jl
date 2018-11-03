@@ -25,7 +25,7 @@ plot(to_array(results.X)')
 plot(to_array(results.U)')
 
 
-solver_min = Solver(model,obj_min,N=41)
+solver_min = Solver(model,integration=:rk3_foh,obj_min,N=41)
 U = ones(m,solver_min.N)
 solver_min.opts.verbose = true
 solver_min.opts.use_static = false
