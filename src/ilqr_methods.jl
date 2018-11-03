@@ -88,12 +88,6 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
 
-    # # Check minimum time
-    # min_time = is_min_time(solver)
-    #
-    # # Check infeasible
-    # infeasible = m̄ != size(U[1],1)
-
     X[1] = solver.obj.x0
     for k = 1:N-1
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
@@ -134,8 +128,6 @@ Will return a flag indicating if the values are finite for all time steps.
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
-    # infeasible = m̄ != size(res.U[1],1)
-    # min_time = is_min_time(solver)
     dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
@@ -158,7 +150,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = dv
+            du .= dv
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
@@ -187,7 +179,7 @@ end
 $(SIGNATURES)
     Quadratic stage cost (with goal state)
 """
-function stage_cost(x,u,Q,R,xf=zero(x))
+function ℓ(x,u,Q,R,xf=zero(x))
     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
 end
 
@@ -215,9 +207,9 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
         if solver.control_integration == :foh
             Xm = res.xm[k]
             Um = (U[k] + U[k+1])/2
-            J += dt*(1/6*stage_cost(X[k],U[k][1:m],Q,R,xf) + 4/6*stage_cost(Xm,Um[1:m],Q,R,xf) + 1/6*stage_cost(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(Xm,Um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
         else
-            J += dt*stage_cost(X[k],U[k][1:m],Q,R,xf)
+            J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
         end
 
         solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
@@ -225,7 +217,7 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     end
 
     # Terminal cost
-    J += stage_cost(X[N],zeros(m),Qf,zeros(m,m),xf)
+    J += ℓ(X[N],zeros(m),Qf,zeros(m,m),xf)
 
     return J
 end

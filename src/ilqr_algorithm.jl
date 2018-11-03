@@ -29,30 +29,30 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver)
+function _backwardpass!(results::SolverVectorResults,solver::Solver)
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
     # Objective parameters
-    Q = solver.obj.Q; R = solver.obj.R; Qf = solver.obj.Qf; xf = solver.obj.xf
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
-    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+    X = results.X; U = results.U; K = results.K; d = results.d; S = results.S; s = results.s
 
     # Boundary Conditions
-    S[N] = Qf
-    s[N] = Qf*(X[N] - xf)
+    S[N] = Wf
+    s[N] = Wf*(X[N] - xf)
 
     # Terminal constraints
-    if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    if results isa ConstrainedIterResults
+        C = results.C; Iμ = results.Iμ; λ = results.λ
+        CxN = results.Cx_N
+        S[N] += CxN'*results.IμN*CxN
+        s[N] += CxN'*results.IμN*results.CN + CxN'*results.λN
     end
 
     # Backward pass
@@ -60,9 +60,9 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     k = N-1
     while k >= 1
         # Calculate stage costs
-        lx = dt*Q*vec(X[k] - xf)
+        lx = dt*W*vec(X[k] - xf)
         lu = dt*R*vec(U[k][1:m])
-        lxx = dt*Q
+        lxx = dt*W
         luu = dt*R
 
         if solver.opts.infeasible
@@ -71,25 +71,18 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         end
 
         # get discrete dynamics Jacobians
-        fx, fu = res.fdx[k], res.fdu[k]
+        fdx, fdu = results.fdx[k], results.fdu[k]
 
         # Form gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fx'*vec(s[k+1])
-        Qu = lu + fu'*vec(s[k+1])
-        Qxx = lxx + fx'*S[k+1]*fx
-
-        # println(R)
-        # println(dt*R)
-        # println(fu)
-        # println(luu)
-        # println(S[k+1])
-        # println(s[k+1])
-        Quu = luu + fu'*S[k+1]*fu
-        Qux = fu'*S[k+1]*fx
+        Qx = lx + fdx'*vec(s[k+1])
+        Qu = lu + fdu'*vec(s[k+1])
+        Qxx = lxx + fdx'*S[k+1]*fdx
+        Quu = luu + fdu'*S[k+1]*fdu
+        Qux = fdu'*S[k+1]*fdx
 
         # Constraints
-        if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
+        if results isa ConstrainedIterResults
+            Cx, Cu = results.Cx[k], results.Cu[k]
             Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
             Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
             Qxx += Cx'*Iμ[k]*Cx
@@ -100,10 +93,10 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         # Regularization
             # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
         if solver.opts.regularization_type == :state
-            Quu_reg = Quu + res.ρ[1]*fu'*fu
-            Qux_reg = Qux + res.ρ[1]*fu'*fx
+            Quu_reg = Quu + results.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + results.ρ[1]*fdu'*fdx
         elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
+            Quu_reg = Quu + results.ρ[1]*I
             Qux_reg = Qux
         end
 
@@ -111,7 +104,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
             @logmsg InnerLoop "Regularized"
 
             # Increase regularization
-            regularization_update!(res,solver,:increase)
+            regularization_update!(results,solver,:increase)
 
             # Reset backward pass
             k = N-1
@@ -134,8 +127,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         k = k - 1;
     end
 
-    # Decrease regularization after backward pass
-    regularization_update!(res,solver,:decrease)
+    # Decrease regularization
+    regularization_update!(results,solver,:decrease)
 
     return Δv
 end
@@ -145,12 +138,12 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_sqrt!(results::SolverVectorResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
 
-    if solver.model.m != length(res.U[1])
+    if solver.model.m != length(results.U[1])
         m += n
     end
 
@@ -164,13 +157,13 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     Ur = cholesky(R).U
 
     # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
+    X = results.X; U = results.U; K = results.K; d = results.d; Su = results.S; s = results.s
 
     # Terminal Cost-to-go
     if isa(solver.obj, ConstrainedObjective)
-        Cx = res.Cx_N
-        Su[N] = cholesky(Qf + Cx'*res.IμN*Cx).U
-        s[N] = Qf*(X[N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+        Cx = results.Cx_N
+        Su[N] = cholesky(Qf + Cx'*results.IμN*Cx).U
+        s[N] = Qf*(X[N] - xf) + Cx'*results.IμN*results.CN + Cx'*results.λN
     else
         Su[N] = cholesky(Qf).U
         s[N] = Qf*(X[N] - xf)
@@ -188,7 +181,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         lxx = dt*Q
         luu = dt*R
 
-        fx, fu = res.fdx[k], res.fdu[k]
+        fx, fu = results.fdx[k], results.fdu[k]
 
         Qx = lx + fx'*s[k+1]
         Qu = lu + fu'*s[k+1]
@@ -200,8 +193,8 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
         # Constraints
         if isa(solver.obj, ConstrainedObjective)
-            Iμ = res.Iμ; C = res.C; λ = res.λ;
-            Cx, Cu = res.Cx[k], res.Cu[k]
+            Iμ = results.Iμ; C = results.C; λ = results.λ;
+            Cx, Cu = results.Cx[k], results.Cu[k]
             Iμ2 = sqrt.(Iμ[k])
             Qx += (Cx'*Iμ[k]*C[k] + Cx'*λ[k])
             Qu += (Cu'*Iμ[k]*C[k] + Cu'*λ[k])
@@ -231,35 +224,35 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
     # Objective parameters
-    Q = solver.obj.Q; R = solver.obj.R; Qf = solver.obj.Qf; xf = solver.obj.xf
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
-    X = res.X; U = res.U; K = res.K; b = res.b; d = res.d; S = res.S; s = res.s
+    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; S = results.S; s = results.s
 
     # Boundary conditions
     S = zeros(n+mm,n+mm)
     s = zeros(n+mm)
-    S[1:n,1:n] = Qf
-    s[1:n] = Qf*(X[N]-xf)
+    S[1:n,1:n] = Wf
+    s[1:n] = Wf*(X[N]-xf)
 
     # Terminal constraints
-    if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[1:n,1:n] += CxN'*res.IμN*CxN
-        s[1:n] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    if results isa ConstrainedIterResults
+        C = results.C; Iμ = results.Iμ; λ = results.λ
+        CxN = results.Cx_N
+        S[1:n,1:n] += CxN'*results.IμN*CxN
+        s[1:n] += CxN'*results.IμN*results.CN + CxN'*results.λN
 
         # Include the the k = N expansions here for a cleaner backward pass
-        Cx, Cu = res.Cx[N], res.Cu[N]
+        Cx, Cu = results.Cx[N], results.Cu[N]
         s[1:n] += Cx'*Iμ[N]*C[N] + Cx'*λ[N]
         s[n+1:n+mm] += Cu'*Iμ[N]*C[N] + Cu'*λ[N]
         S[1:n,1:n] += Cx'*Iμ[N]*Cx
@@ -268,7 +261,7 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         S[n+1:n+mm,1:n] += Cu'*Iμ[N]*Cx
     end
 
-    # create a copy of BC in case of regularization
+    # Create a copy of boundary conditions in case of regularization
     SN = copy(S)
     sN = copy(s)
 
@@ -280,54 +273,54 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Unpack results
-        fcx, fcu = res.fcx[k], res.fcu[k]
-        fcy, fcv = res.fcx[k+1], res.fcu[k+1]
-        fdx, fdu, fdv = res.fdx[k], res.fdu[k], res.fdv[k]
+        fcx, fcu = results.fcx[k], results.fcu[k]
+        fcy, fcv = results.fcx[k+1], results.fcu[k+1]
+        fdx, fdu, fdv = results.fdx[k], results.fdu[k], results.fdv[k]
 
-        x = res.X[k]
-        y = res.X[k+1]
-        u = res.U[k]
-        v = res.U[k+1]
-        xm = res.xm[k]
+        x = results.X[k]
+        y = results.X[k+1]
+        u = results.U[k]
+        v = results.U[k+1]
+        xm = results.xm[k]
         um = (U[k] + U[k+1])/2.
-        dx = res.dx[k]
-        dy = res.dx[k+1]
+        dx = results.dx[k]
+        dy = results.dx[k+1]
 
         ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
         # ℓ(x,u) expansion
-        ℓ1 = stage_cost(x,u[1:m],Q,R,xf)
-        ℓ1x = Q*(x - xf)
+        ℓ1 = ℓ(x,u[1:m],W,R,xf)
+        ℓ1x = W*(x - xf)
         ℓ1u = R*u[1:m]
 
-        ℓ1xx = Q
+        ℓ1xx = W
         ℓ1uu = R
 
         # ℓ(xm,um) expansion
-        ℓ2 = stage_cost(xm,um[1:m],Q,R,xf)
-        ℓ2x = (I/2 + dt/8*fcx)'*Q*(xm - xf)
-        ℓ2u = ((dt/8*fcu[:,1:m])'*Q*(xm - xf) + 0.5*R*um[1:m])
-        ℓ2y = (I/2 - dt/8*fcy)'*Q*(xm - xf)
-        ℓ2v = ((-dt/8*fcv[:,1:m])'*Q*(xm - xf) + 0.5*R*um[1:m])
+        ℓ2 = ℓ(xm,um[1:m],W,R,xf)
+        ℓ2x = (I/2 + dt/8*fcx)'*W*(xm - xf)
+        ℓ2u = ((dt/8*fcu[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
+        ℓ2y = (I/2 - dt/8*fcy)'*W*(xm - xf)
+        ℓ2v = ((-dt/8*fcv[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
 
-        ℓ2xx = (I/2.0 + dt/8.0*fcx)'*Q*(I/2.0 + dt/8.0*fcx)
-        ℓ2uu = ((dt/8*fcu[:,1:m])'*Q*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
-        ℓ2yy = (I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
-        ℓ2vv = ((-dt/8*fcv[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
+        ℓ2xx = (I/2.0 + dt/8.0*fcx)'*W*(I/2.0 + dt/8.0*fcx)
+        ℓ2uu = ((dt/8*fcu[:,1:m])'*W*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
+        ℓ2yy = (I/2 - dt/8*fcy)'*W*(I/2 - dt/8*fcy)
+        ℓ2vv = ((-dt/8*fcv[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
 
-        ℓ2xu = (I/2 + dt/8*fcx)'*Q*(dt/8*fcu[:,1:m])
-        ℓ2xy = (I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
-        ℓ2xv = (I/2 + dt/8*fcx)'*Q*(-dt/8*fcv[:,1:m])
-        ℓ2uy = (dt/8*fcu[:,1:m])'*Q*(I/2 - dt/8*fcy)
-        ℓ2uv = ((dt/8*fcu[:,1:m])'*Q*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)  # note the name change; workspace conflict
-        ℓ2yv = (I/2 - dt/8*fcy)'*Q*(-dt/8*fcv[:,1:m])
+        ℓ2xu = (I/2 + dt/8*fcx)'*W*(dt/8*fcu[:,1:m])
+        ℓ2xy = (I/2 + dt/8*fcx)'*W*(I/2 - dt/8*fcy)
+        ℓ2xv = (I/2 + dt/8*fcx)'*W*(-dt/8*fcv[:,1:m])
+        ℓ2uy = (dt/8*fcu[:,1:m])'*W*(I/2 - dt/8*fcy)
+        ℓ2uv = ((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)  # note the name change; workspace conflict
+        ℓ2yv = (I/2 - dt/8*fcy)'*W*(-dt/8*fcv[:,1:m])
 
         # ℓ(y,v) expansion
-        ℓ3 = stage_cost(y,v[1:m],Q,R,xf)
+        ℓ3 = ℓ(y,v[1:m],W,R,xf)
 
-        ℓ3y = Q*(y - xf)
+        ℓ3y = W*(y - xf)
         ℓ3v = R*v[1:m]
 
-        ℓ3yy = Q
+        ℓ3yy = W
         ℓ3vv = R
 
         # Assemble δL expansion
@@ -336,15 +329,16 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
             # Additional expansion terms
             dxm = 2*h/8*dx - 2*h/8*dy
+            #TODO: simplify expressions
 
-            L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*ℓ2)
-            L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + ℓ2))
-            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu[:,1:m]'*Q*xm + (h^2)/8*fcu[:,1:m]'*Q*dx) - 2*(h^3)/8*fcu[:,1:m]'*Q*xf - 2*(h^5)/64*fcu[:,1:m]'*Q*dy + 2*h*ℓ2u)
+            L2h = 4/6*((h^2)*dxm'*W*(xm - xf) + 2*h*ℓ2)
+            L2hh = 4/6*(2/8*((h^3)*dxm'*W*dx + 3*(h^2)*dx'*W*xm) - 2/8*((h^3)*dxm'*W*dy + 3*(h^2)*dy'*W*xm) - 6*(h^2)/8*dx'*W*xf + 6*(h^2)/8*dy'*W*xf + 2*(h*dxm'*W*(xm - xf) + ℓ2))
+            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu[:,1:m]'*W*xm + (h^2)/8*fcu[:,1:m]'*W*dx) - 2*(h^3)/8*fcu[:,1:m]'*W*xf - 2*(h^5)/64*fcu[:,1:m]'*W*dy + 2*h*ℓ2u)
 
-            L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
-            L2uh = 1/12*fcu[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*Q*xf + 4/6*h*R*um[1:m]
-            L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
-            L2vh = -1/12*fcv[:,1:m]'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*Q*xf + 4/6*h*R*um[1:m]
+            L2xh = 2/6*W*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*W*xf + 1/12*fcx'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*W*xf
+            L2uh = 1/12*fcu[:,1:m]'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*W*xf + 4/6*h*R*um[1:m]
+            L2yh = 2/6*W*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*W*xf - 1/12*fcy'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*W*xf
+            L2vh = -1/12*fcv[:,1:m]'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*W*xf + 4/6*h*R*um[1:m]
 
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
@@ -396,8 +390,8 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         end
 
         # Constraints
-        if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
+        if results isa ConstrainedIterResults
+            Cx, Cu = results.Cx[k], results.Cu[k]
             Lx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
             Lu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
             Lxx += Cx'*Iμ[k]*Cx
@@ -406,6 +400,7 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
 
             if solver.opts.minimum_time
                 p,pI,pE = get_num_constraints(solver)
+                #TODO Simplify
                 if k < N-1
                     Cv = zeros(p,mm)
                     Cv[p,m̄] = -1
@@ -437,21 +432,14 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         Quv = Luv + Luy*fdv + fdu'*Lyv + fdu'*Lyy*fdv + fdu'*Syy*fdv + fdu'*Syv
 
         # Regularization
-        #TODO double check state regularization
-        if solver.opts.regularization_type == :state
-            Qvv_reg = Qvv + res.ρ[1]*fdv'*fdv
-            Qxv_reg = Qxv + res.ρ[1]*fdx'*fdv
-            Quv_reg = Quv + res.ρ[1]*fdu'*fdv
-        elseif solver.opts.regularization_type == :control
-            Qvv_reg = Qvv + res.ρ[1]*I
-            Qxv_reg = Qxv
-            Quv_reg = Quv
-        end
+        Qvv_reg = Qvv + results.ρ[1]*I
+        Qxv_reg = Qxv
+        Quv_reg = Quv
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            # @logmsg InnerLoop "Regularized"
+            @logmsg InnerLoop "Regularized"
 
-            regularization_update!(res,solver,:increase)
+            regularization_update!(results,solver,:increase)
 
             # Reset BCs
             S = copy(SN)
@@ -468,19 +456,19 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         d[k+1] = -Qvv_reg\vec(Qv)
 
         # calculate optimized values
-        Qx_ = vec(Qx) + K[k+1]'*vec(Qv) + Qxv*vec(d[k+1]) + K[k+1]'Qvv*d[k+1]
-        Qu_ = vec(Qu) + b[k+1]'*vec(Qv) + Quv*vec(d[k+1]) + b[k+1]'*Qvv*d[k+1]
-        Qxx_ = Qxx + Qxv*K[k+1] + K[k+1]'*Qxv' + K[k+1]'*Qvv*K[k+1]
-        Quu_ = Quu + Quv*b[k+1] + b[k+1]'*Quv' + b[k+1]'*Qvv*b[k+1]
-        Qxu_ = Qxu + K[k+1]'*Quv' + Qxv*b[k+1] + K[k+1]'*Qvv*b[k+1]
+        Q̄x = vec(Qx) + K[k+1]'*vec(Qv) + Qxv*vec(d[k+1]) + K[k+1]'Qvv*d[k+1]
+        Q̄u = vec(Qu) + b[k+1]'*vec(Qv) + Quv*vec(d[k+1]) + b[k+1]'*Qvv*d[k+1]
+        Q̄xx = Qxx + Qxv*K[k+1] + K[k+1]'*Qxv' + K[k+1]'*Qvv*K[k+1]
+        Q̄uu = Quu + Quv*b[k+1] + b[k+1]'*Quv' + b[k+1]'*Qvv*b[k+1]
+        Q̄xu = Qxu + K[k+1]'*Quv' + Qxv*b[k+1] + K[k+1]'*Qvv*b[k+1]
 
         # cache (approximate) cost-to-go at timestep k
-        s[1:n] = Qx_
-        s[n+1:n+mm] = Qu_
-        S[1:n,1:n] = Qxx_
-        S[n+1:n+mm,n+1:n+mm] = Quu_
-        S[1:n,n+1:n+mm] = Qxu_
-        S[n+1:n+mm,1:n] = Qxu_'
+        s[1:n] = Q̄x
+        s[n+1:n+mm] = Q̄u
+        S[1:n,1:n] = Q̄xx
+        S[n+1:n+mm,n+1:n+mm] = Q̄uu
+        S[1:n,n+1:n+mm] = Q̄xu
+        S[n+1:n+mm,1:n] = Q̄xu'
 
         # line search terms
         Δv += [vec(Qv)'*vec(d[k+1]) 0.5*vec(d[k+1])'*Qvv*vec(d[k+1])]
@@ -488,11 +476,11 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         # at last time step, optimize over final control
         if k == 1
             # regularize Quu_
-            Quu__reg = Quu_ + res.ρ[1]*I
+            Q̄uu_reg = Q̄uu + results.ρ[1]*I
 
-            if !isposdef(Array(Hermitian(Quu__reg)))
+            if !isposdef(Array(Hermitian(Q̄uu_reg)))
                 # @logmsg InnerLoop "Regularized"
-                regularization_update!(res,solver,:increase)
+                regularization_update!(results,solver,:increase)
 
                 ## Reset BCs ##
                 S = copy(SN)
@@ -503,20 +491,20 @@ function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
                 continue
             end
 
-            K[1] = -Quu__reg\Qxu_'
+            K[1] = -Q̄uu_reg\Q̄xu'
             b[1] = zeros(mm,mm)
-            d[1] = -Quu__reg\vec(Qu_)
+            d[1] = -Q̄uu_reg\vec(Q̄u)
 
-            res.s[1] = vec(Qx_) + K[1]'*Quu_*vec(d[1]) + K[1]'*vec(Qu_) + Qxu_*vec(d[1]) # calculate for gradient check in solve
+            results.s[1] = vec(Q̄x) + K[1]'*Q̄uu*vec(d[1]) + K[1]'*vec(Q̄u) + Q̄xu*vec(d[1]) # calculate for gradient check in solve
 
-            Δv += [vec(Qu_)'*vec(d[1]) 0.5*vec(d[1])'*Quu_*vec(d[1])]
+            Δv += [vec(Q̄u)'*vec(d[1]) 0.5*vec(d[1])'*Q̄uu*vec(d[1])]
         end
 
         k = k - 1;
     end
 
     # if successful backward pass, reduce regularization
-    regularization_update!(res,solver,:decrease)
+    regularization_update!(results,solver,:decrease)
     return Δv
 end
 
@@ -545,16 +533,16 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
+function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
     # Pull out values from results
-    X = res.X
-    U = res.U
-    X_ = res.X_
-    U_ = res.U_
+    X = results.X
+    U = results.U
+    X_ = results.X_
+    U_ = results.U_
 
     # Compute original cost
-    update_constraints!(res,solver,X,U)
-    J_prev = cost(solver, res, X, U)
+    update_constraints!(results,solver,X,U)
+    J_prev = cost(solver, results, X, U)
 
     J = Inf
     alpha = 1.0
@@ -577,24 +565,24 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             U_ .= U
 
             if solver.control_integration == :foh
-                calculate_derivatives!(res, solver, X_, U_)
-                calculate_midpoints!(res, solver, X_, U_)
+                calculate_derivatives!(results, solver, X_, U_)
+                calculate_midpoints!(results, solver, X_, U_)
             end
 
-            update_constraints!(res,solver,X_,U_)
+            update_constraints!(results,solver,X_,U_)
             J = copy(J_prev)
             z = 0.
             alpha = 0.0
             expected = 0.
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
-            regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] *= solver.opts.ρ_forwardpass
+            regularization_update!(results,solver,:increase) # increase regularization
+            results.ρ[1] *= solver.opts.ρ_forwardpass
             break
         end
 
         # Otherwise, rollout a new trajectory for current alpha
-        flag = rollout!(res,solver,alpha)
+        flag = rollout!(results,solver,alpha)
 
         # Check if rollout completed
         if ~flag
@@ -606,8 +594,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         end
 
         # Calcuate cost
-        update_constraints!(res,solver,X_,U_)
-        J =cost(solver, res, X_, U_)
+        update_constraints!(results,solver,X_,U_)
+        J =cost(solver, results, X_, U_)
 
         expected = -alpha*(Δv[1] + alpha*Δv[2])
         if expected > 0
@@ -629,8 +617,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
     end  # forward pass loop
 
-    if res isa ConstrainedIterResults
-        # @logmsg :scost value=cost(solver,res,res.X,res.U,true)
+    if results isa ConstrainedIterResults
+        # @logmsg :scost value=cost(solver,res,results.X,results.U,true)
         @logmsg InnerLoop :c_max value=max_violation(res)
     end
     @logmsg InnerLoop :cost value=J
@@ -638,7 +626,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     @logmsg InnerLoop :expected value=expected
     @logmsg InnerLoop :z value=z
     @logmsg InnerLoop :α value=2*alpha
-    @logmsg InnerLoop :ρ value=res.ρ[1]
+    @logmsg InnerLoop :ρ value=results.ρ[1]
 
     return J
 end

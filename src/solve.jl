@@ -304,33 +304,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #    TERMINATION CRITERIA    #
         #****************************#
         evaluate_convergence(solver,:outer,dJ,c_max,gradient,0) ? break : nothing
-
-        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        # if solver.opts.constrained
-        #     max_c = max_violation(results)
-        #     if max_c < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
-        #         if solver.opts.verbose
-        #             println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")
-        #             println("Constrained solve complete")
-        #             if dJ < solver.opts.cost_tolerance
-        #                 println("--Cost tolerance met")
-        #             else
-        #                 println("--Gradient tolerance met")
-        #             end
-        #         end
-        #         break
-        #     end
-        # end
-
-        end
+    end
     end
     ### END OUTER LOOP ###
 
-    if solver.opts.constrained
-        nothing
-    else
-        solver.opts.iterations_outerloop = iterations_outerloop_original
-    end
+    solver.opts.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
 
     # Run Stats
     stats = Dict("iterations"=>iter,
@@ -395,7 +373,7 @@ $(SIGNATURES)
     -return true is convergence criteria is met, else return false
 """
 
-function evalutate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iteration::Int64)
+function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iteration::Int64)
     if loop == :inner
         # Check for gradient convergence
         if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop))
