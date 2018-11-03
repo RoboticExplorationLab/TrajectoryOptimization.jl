@@ -298,28 +298,18 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
         else
             res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
-        solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
-
-        if solver.opts.minimum_time
-            if k != N
-                res.Cu[k][m̄,m̄] = 1.0
-                res.Cu[k][m̄+m̄,m̄] = -1.0
-            end
-            if k < N-1
-                res.Cu[k][end,m̄] = 1.0
-            else
-                res.Cu[k][end,:] .= 0.0
-            end
-        end
+        solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k]) # NOTE: in the foh case, c(x,u,y,u) but the jacobian is not dependent on values from y or v
     end
 
     if solver.control_integration == :foh
         res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N])
         solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
 
+        # Zero out minimum time constraints that are not present at N-1, N timesteps
         if solver.opts.minimum_time
             res.Cu[N][m̄,:] .= 0.0
             res.Cu[N][m̄+m̄,:] .= 0.0
+            res.Cu[N-1][end,:] .= 0.0
             res.Cu[N][end,:] .= 0.0
         end
     end
@@ -368,16 +358,18 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
     for k = 1:final_index
         # Evaluate constraint
-        c(res.C[k], X[k], U[k])
+        if solver.control_integration == :foh && k <= N-1
+            c(res.C[k], X[k], U[k], X[k+1], U[k+1])
+        else
+            c(res.C[k], X[k], U[k])
+        end
 
-        # Minimum time has coupling across time steps
+        # Zero out minimum time constraints that are not present at N-1, N timesteps
         if solver.opts.minimum_time
-            if k < N-1
-                res.C[k][end] = res.U[k][m̄] - res.U[k+1][m̄]
-            else
+            if k > N-2
                 res.C[k][end] = 0.0
             end
-            if k > N-1
+            if k == N
                 res.C[k][m̄] = 0.0
                 res.C[k][m̄+m̄] = 0.0
             end
