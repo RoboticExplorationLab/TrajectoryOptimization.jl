@@ -21,7 +21,7 @@ Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
 function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
-
+    solver = Solver(solver)
     # Initialize zero controls if none are passed in
     if isempty(U0)
         U0 = zeros(solver.m,solver.N)

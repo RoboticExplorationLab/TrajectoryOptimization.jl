@@ -233,10 +233,10 @@ function getR(solver::Solver)::Array{Float64,2}
         R = zeros(mm,mm)
         R[1:m,1:m] = solver.obj.R
         if solver.opts.minimum_time
-            R[m̄,m̄] = solver.opts.min_time_regularization
+            R[m̄,m̄] = solver.opts.R_minimum_time
         end
         if solver.opts.infeasible
-            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.infeasible_regularization*tr(solver.obj.R))
+            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.R_infeasible*tr(solver.obj.R))
         end
         return R
     end

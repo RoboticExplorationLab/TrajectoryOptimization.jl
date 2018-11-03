@@ -67,7 +67,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
 
         if solver.opts.infeasible
             lu = [lu; R_infeasible*U[k][m+1:m+n]]
-            luu = [luu zeros(m,n); zeros(n,n) R_infeasible]
+            luu = [luu zeros(m,n); zeros(n,m) R_infeasible]
         end
 
         # get discrete dynamics Jacobians

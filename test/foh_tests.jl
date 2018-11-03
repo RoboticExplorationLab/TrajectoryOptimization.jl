@@ -102,11 +102,10 @@ obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
 model_dc = Dynamics.dubinscar![1]
 
 ## Unconstrained Dubins car (foh) ##
-solver_foh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh, opts=opts)
-solver_zoh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3, opts=opts)
+solver_foh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3_foh,opts=opts)
+solver_zoh = TrajectoryOptimization.Solver(model_dc, obj_uncon_dc, dt=dt,integration=:rk3,opts=opts)
 
 U = rand(solver_foh.model.m, solver_foh.N)
-
 sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
 sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
