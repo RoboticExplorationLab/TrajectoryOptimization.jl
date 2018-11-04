@@ -7,10 +7,10 @@ A package for solving constrained and unconstrained trajectory optimization prob
 
 The package currently has the following solvers:
 * iLQR
--general, nonlinear equality and inequality constraints for states and controls
--infeasible start
--minimum time
--square root backward pass
+  -general, nonlinear equality and inequality constraints for states and controls
+  -infeasible start
+  -minimum time
+  -square root backward pass
 * LQR
 * Direct Collocation
 
