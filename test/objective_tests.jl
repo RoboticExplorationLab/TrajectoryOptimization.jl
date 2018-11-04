@@ -14,14 +14,14 @@ tf = 5.
 
 @test_nowarn UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-@test obj_uncon.c == 0
 @test obj_uncon.tf == tf
 
-# Try invalid inputs
-tf = -1.
-@test_throws ArgumentError UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-tf = 1.; R_ = Diagonal(I,m)*-1
-@test_throws ArgumentError("R must be positive definite") UnconstrainedObjective(Q, R_, Qf, tf, x0, xf)
+# TODO: reimplement
+# # Try invalid inputs
+# tf = -1.
+# @test_throws ArgumentError UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+# tf = 1.; R_ = Diagonal(I,m)*-1
+# @test_throws ArgumentError("R must be positive definite") UnconstrainedObjective(Q, R_, Qf, tf, x0, xf)
 
 ### Constraints ###
 # Test defaults
@@ -97,20 +97,21 @@ obj = ConstrainedObjective(obj_uncon, u_min=-1)
 obj = update_objective(obj, u_max=2, x_max = 4, cE=cI)
 @test obj.p == 5
 
-# Minimum time
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf, x_max=2)
-@test obj.p == 2
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2)
-@test obj.p == 1
-@test obj.tf == tf
-tf_ = :min
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
-@test obj.tf == 0
-@test obj.p == 1
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
-@test obj.tf == 0
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
-@test obj.tf == 0
+# TODO: not sure its necessary to have tf also be a symbol...
+# # Minimum time
+# obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf, x_max=2)
+# @test obj.p == 2
+# obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2)
+# @test obj.p == 1
+# @test obj.tf == tf
+# tf_ = :min
+# obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
+# @test obj.tf == 0
+# @test obj.p == 1
+# obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
+# @test obj.tf == 0
+# obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
+# @test obj.tf == 0
 
 # Test constraint function
 function cI(cres,x,u)
@@ -132,7 +133,8 @@ c(cres,x,u)
 @test cres == cans
 
 # test with minimum time
-obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
+tf = 0.0 # minimum time
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
 @test obj.p == 9
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=1.0,min_dt=1e-3)
 cres = zeros(11)

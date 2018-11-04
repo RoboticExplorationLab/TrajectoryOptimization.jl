@@ -376,26 +376,26 @@ $(SIGNATURES)
 function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iteration::Int64)
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop))
-            @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
+        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
+            # @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
             return true
         elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance))
-            @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
+            # @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
             return true
         end
 
         # Check for cost convergence
         if ((~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
-            @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
-            if ~solver.opts.constrained
-                @info "Unconstrained solve complete"
-            end
+            # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
+            # if ~solver.opts.constrained
+                # @info "Unconstrained solve complete"
+            # end
             return true
         elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance))
-            @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
+            # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
             return true
-        elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop)
-            @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
+        elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance && iteration == solver.opts.iterations_outerloop)
+            # @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
             return true
         end
     end
@@ -403,15 +403,15 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
     if loop == :outer
         if solver.opts.constrained
             if c_max < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
-                if solver.opts.verbose
-                    println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")
-                    println("Constrained solve complete")
-                    if dJ < solver.opts.cost_tolerance
-                        println("--Cost tolerance met")
-                    else
-                        println("--Gradient tolerance met")
-                    end
-                end
+                # if solver.opts.verbose
+                #     # println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")
+                #     # println("Constrained solve complete")
+                #     if dJ < solver.opts.cost_tolerance
+                #         println("--Cost tolerance met")
+                #     else
+                #         println("--Gradient tolerance met")
+                #     end
+                # end
                 return true
             end
         end

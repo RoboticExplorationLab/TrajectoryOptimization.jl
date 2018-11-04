@@ -619,7 +619,7 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
 
     if results isa ConstrainedIterResults
         # @logmsg :scost value=cost(solver,res,results.X,results.U,true)
-        @logmsg InnerLoop :c_max value=max_violation(res)
+        @logmsg InnerLoop :c_max value=max_violation(results)
     end
     @logmsg InnerLoop :cost value=J
     @logmsg InnerLoop :dJ value=J_prev-J

@@ -69,7 +69,15 @@ end
 
 function get_initial_dt(solver::Solver)
     if solver.opts.minimum_time
-        dt  = 0.5*solver.opts.max_dt + 0.5*solver.opts.min_dt
+        if solver.opts.minimum_time_tf_estimate > 0
+            dt = solver.opts.minimum_time_tf_estimate / (solver.N - 1)
+            if dt > solver.opts.max_dt
+                dt = solver.opts.max_dt
+                @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
+            end
+        else
+            dt  = solver.opts.max_dt / 2
+        end
     else
         dt = solver.dt
     end
@@ -150,7 +158,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du .= dv
+            du = dv
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
