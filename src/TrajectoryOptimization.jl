@@ -45,7 +45,6 @@ export
 # Primary methods
 export
     solve,
-    solve_al,
     rollout!,
     forwardpass!,
     backwardpass!,
