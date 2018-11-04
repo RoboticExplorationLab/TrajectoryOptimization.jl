@@ -202,6 +202,9 @@ end
 #*********************************#
 #        OBJECTIVE CLASS          #
 #*********************************#
+#*********************************#
+#        OBJECTIVE CLASS          #
+#*********************************#
 
 """
 $(TYPEDEF)
@@ -211,76 +214,33 @@ abstract type Objective end
 
 """
 $(TYPEDEF)
-Defines a quadratic objective for an unconstrained optimization problem of the
-    following form:
-    J = (xₙ-xf)'Q(xₙ-xf) + Σ (xₖ-xf)'Q(xₖ-xf) + uₖ'Ruₖ + c
+Defines a quadratic objective for an unconstrained optimization problem
 """
 mutable struct UnconstrainedObjective{TQ,TR,TQf} <: Objective
     Q::TQ                 # Quadratic stage cost for states (n,n)
     R::TR                 # Quadratic stage cost for controls (m,m)
     Qf::TQf               # Quadratic final cost for terminal state (n,n)
-    c::Float64            # Constant stage cost (weight for minimum time problems)
-    tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
+    tf::Float64           # Final time (sec)
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
-    function UnconstrainedObjective(Q::TQ,R::TR,Qf::TQf,c::Float64,tf::Float64,x0,xf) where {TQ,TR,TQf}
-        if !isposdef(R)
-            err = ArgumentError("R must be positive definite")
-            throw(err)
-        end
-        if tf < 0.
-            err = ArgumentError("$tf is invalid input for final time. tf must be positive or zero (minimum time)")
-            throw(err)
-        end
-        if c < 0.
-            err = ArgumentError("$c is invalid input for constant stage cost. Must be positive")
-            throw(err)
-        end
-        new{TQ,TR,TQf}(Q,R,Qf,c,tf,x0,xf)
-    end
 end
-
-# Minimum time constructor (specified c)
-function UnconstrainedObjective(Q,R,Qf,c::Float64,tf::Symbol,x0::Vector{Float64},xf::Vector{Float64})
-    if tf == :min
-        tf = 0.
-        UnconstrainedObjective(Q,R,Qf,c,tf,x0,xf)
-    else
-        err = ArgumentError(":min is the only recognized Symbol for the final time")
-        throw(err)
-    end
-end
-
-# Minimum time constructor (set c to default)
-function UnconstrainedObjective(Q,R,Qf,tf::Symbol,x0::Vector{Float64},xf::Vector{Float64})
-    UnconstrainedObjective(Q,R,Qf,1.0,tf,x0,xf)
-end
-
-# No minimum time
-function UnconstrainedObjective(Q,R,Qf,tf::Float64,x0::Vector{Float64},xf::Vector{Float64})
-    UnconstrainedObjective(Q,R,Qf,0.0,tf,x0,xf)
-end
-
 
 function copy(obj::UnconstrainedObjective)
-    UnconstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.c),copy(obj.tf),copy(obj.x0),copy(obj.xf))
+    UnconstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf))
 end
 
 """
 $(TYPEDEF)
 Define a quadratic objective for a constrained optimization problem.
-
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
 * Inequality constraints: `f(x,u) ≥ 0`
-
 """
 mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:AbstractArray} <: Objective
     Q::TQ                 # Quadratic stage cost for states (n,n)
     R::TR                 # Quadratic stage cost for controls (m,m)
     Qf::TQf               # Quadratic final cost for terminal state (n,n)
-    c::Float64            # Constant stage cost (weight for minimum time problems)
-    tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
+    tf::Float64           # Final time (sec)
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
 
@@ -297,16 +257,16 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
     cE::Function  # equality constraint function (inplace)
 
     # Terminal Constraints
-    use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
+    use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false)
     # Overload cI and cE with a single argument for terminal constraints
 
-    # Constants (these do not count infeasible or minimum time constraints)
+    # Constants
     p::Int   # Total number of stage constraints
     pI::Int  # Number of inequality constraints
     p_N::Int  # Number of terminal constraints
     pI_N::Int  # Number of terminal inequality constraints
 
-    function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,c::Float64,tf::Float64,x0,xf,
+    function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
@@ -371,22 +331,18 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
         end
         p_N = pI_N + pE_N
 
-        new{TQ,TR,TQf}(Q,R,Qf,c,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
+        new{TQ,TR,TQf}(Q,R,Qf,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
     end
 end
 
 """
 $(SIGNATURES)
-
 Construct a ConstrainedObjective with defaults.
-
 Create a ConstrainedObjective, specifying only the needed fields. All others
 will be set to their default, constrained values.
-
 # Constraint formulation
 * Equality constraints: `f(x,u) = 0`
 * Inequality constraints: `f(x,u) ≥ 0`
-
 # Arguments
 * u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
 a vector of size (m,). A scalar will be copied to all states or controls. Values
@@ -396,41 +352,21 @@ can be ±Inf.
 * cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
 where `c` is of size (pI_c_N,) or (pE_c_N,).
 """
-function ConstrainedObjective(Q,R,Qf,tf,x0,xf; c::Float64=0.0,
+function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
     cI=(c,x,u)->nothing, cE=(c,x,u)->nothing,
     use_terminal_constraint=true)
 
-    ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
+    ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         use_terminal_constraint)
 end
 
-# Positional arguments match unconstrained
-function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Float64,x0,xf; kwargs...)
-    ConstrainedObjective(Q,R,Qf,tf,x0,xf,c=c; kwargs...)
-end
-
-# Minimum time constructor (c not specified)
-function ConstrainedObjective(Q,R,Qf,tf::Symbol,x0,xf; kwargs...)
-    ConstrainedObjective(Q,R,Qf,1.0,tf,x0,xf; kwargs...)
-end
-
-# Minimum time constructor (c specified)
-function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Symbol,x0,xf; kwargs...)
-    if tf == :min
-        ConstrainedObjective(Q,R,Qf,c,0.,x0,xf; kwargs...)
-    else
-        throw(ArgumentError())
-    end
-end
-
-
 function copy(obj::ConstrainedObjective)
-    ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.c),copy(obj.tf),copy(obj.x0),copy(obj.xf),
+    ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
         use_terminal_constraint=obj.use_terminal_constraint)
@@ -444,31 +380,27 @@ end
 """
 $(SIGNATURES)
 Updates constrained objective values and returns a new objective.
-
 Only updates the specified fields, all others are copied from the previous
 Objective.
 """
 function update_objective(obj::ConstrainedObjective;
-    Q=obj.Q, R=obj.R, Qf=obj.Qf, c=obj.c, tf=obj.tf, x0=obj.x0, xf = obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE,
     use_terminal_constraint=obj.use_terminal_constraint)
 
-    ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
-        u_min=u_min, u_max=u_max,
-        x_min=x_min, x_max=x_max,
-        cI=cI, cE=cE,
-        use_terminal_constraint=use_terminal_constraint)
+    ConstrainedObjective(obj.Q,obj.R,obj.Qf,obj.tf,obj.x0,obj.xf,
+        u_min, u_max,
+        x_min, x_max,
+        cI, cE,
+        use_terminal_constraint)
 
 end
 
 """
 $(SIGNATURES)
 Check max/min bounds for state and control.
-
 Converts scalar bounds to vectors of appropriate size and checks that lengths
 are equal and bounds do not result in an empty set (i.e. max > min).
-
 # Arguments
 * n: number of elements in the vector (n for states and m for controls)
 """

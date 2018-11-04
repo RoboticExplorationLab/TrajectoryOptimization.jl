@@ -39,13 +39,13 @@ struct Solver{O<:Objective}
     function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
         # Check for minimum time
         if obj.tf == 0
-            min_time = true
+            minimum_time = true
             dt = 0.
             if N==-1
                 throw(ArgumentError("N must be specified for a minimum-time problem"))
             end
         else
-            min_time = false
+            minimum_time = false
 
             # Handle combination of N and dt
             if isnan(dt) && N>0
@@ -66,7 +66,7 @@ struct Solver{O<:Objective}
             end
         end
 
-        # Check for valid entries
+        # Check N, dt for valid entries
         if N < 0
             err = ArgumentError("$N is not a valid entry for N. Number of knot points must be a positive integer.")
             throw(err)
@@ -78,7 +78,7 @@ struct Solver{O<:Objective}
         n, m = model.n, model.m
         f! = model.f
         m̄ = m
-        if min_time
+        if minimum_time
             m̄ += 1
         end
 
@@ -101,9 +101,24 @@ struct Solver{O<:Objective}
         f_aug! = f_augmented!(f!, n, m)
 
         if control_integration == :foh
+            """
+            s = [x;u;h;v;w]
+            x ∈ R^n
+            u ∈ R^m
+            h ∈ R, h = sqrt(dt_k)
+            v ∈ R^m
+            w ∈ R, w = sqrt(dt_{k+1})
+            -note that infeasible controls are handled in the Jacobian calculation separately
+            """
             fd_aug! = fd_augmented_foh!(fd!,n,m)
             nm1 = n + m + 1 + m + 1
         else
+            """
+            s = [x;u;h]
+            x ∈ R^n
+            u ∈ R^m
+            h ∈ R, h = sqrt(dt_k)
+            """
             fd_aug! = discretizer(f_aug!)
             nm1 = n + m + 1
         end
@@ -125,20 +140,20 @@ struct Solver{O<:Objective}
                 # Check for infeasible solve
                 infeasible = length(u) != m̄
 
-                # Assign state, control (and dt) to augmented vector
+                # Assign state, control (and h = sqrt(dt)) to augmented vector
                 Sd[1:n] = x
                 Sd[n+1:n+m] = u[1:m]
-                min_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
+                minimum_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
                 Sd[n+m+1+1:n+m+1+m] = v[1:m]
-                min_time ? Sd[end] = v[m̄] : Sd[end] = √dt
+                minimum_time ? Sd[n+m+1+m+1] = v[m̄] : Sd[n+m+1+m+1] = √dt
 
                 # Calculate Jacobian
                 Fd!(Jd,Sdotd,Sd)
 
                 if infeasible
-                    return Jd[1:n,1:n], [Jd[1:n,n+1:n+m̄] I], [Jd[1:n,n+m+1+1:n+m+1+m̄] I] # fx, [fu I], [fv I]
+                    return Jd[1:n,1:n], [Jd[1:n,n+1:n+m̄] I], [Jd[1:n,n+m+1+1:n+m+1+m̄] I] # fx, [fū I], [fv̄ I]
                 else
-                    return Jd[1:n,1:n], Jd[1:n,n+1:n+m̄], Jd[1:n,n+m+1+1:n+m+1+m̄] # fx, fu, fv
+                    return Jd[1:n,1:n], Jd[1:n,n+1:n+m̄], Jd[1:n,n+m+1+1:n+m+1+m̄] # fx, fū, fv̄
                 end
             end
             fd_jacobians! = fd_jacobians_foh!
@@ -150,15 +165,15 @@ struct Solver{O<:Objective}
                 # Assign state, control (and dt) to augmented vector
                 Sd[1:n] = x
                 Sd[n+1:n+m] = u[1:m]
-                min_time ? Sd[end] = u[m̄] : Sd[end] = √dt
+                minimum_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
 
                 # Calculate Jacobian
                 Fd!(Jd,Sdotd,Sd)
 
                 if infeasible
-                    return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fu I]
+                    return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fū I]
                 else
-                    return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fu
+                    return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fū
                 end
             end
             fd_jacobians! = fd_jacobians_zoh!
@@ -170,17 +185,17 @@ struct Solver{O<:Objective}
             Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)
 
-            if infeasible
-                return Jc[1:n,1:n], [Jc[1:n,n+1:n+m] zeros(n,n)] # fx, [fu 0]
-            else
-                return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
-            end
+            # if infeasible
+            #     return Jc[1:n,1:n], [Jc[1:n,n+1:n+m] zeros(n,n)] # fx, [fu 0]
+            # else
+            return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
+            # end
         end
 
-        function fc_jacobians!(z)
-            Fc!(Jc,Scdot,z)
-            return Jc[1:n,:]
-        end
+        # function fc_jacobians!(z)
+        #     Fc!(Jc,Scdot,z)
+        #     return Jc[1:n,:]
+        # end
 
         # Generate constraint functions
         c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
@@ -209,7 +224,7 @@ Return the quadratic control stage cost R
 If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
-    if !solver.opts.infeasible && !is_min_time(solver)
+    if !solver.opts.infeasible && !solver.opts.minimum_time
         return solver.obj.R
     else
         n = solver.model.n
@@ -217,11 +232,11 @@ function getR(solver::Solver)::Array{Float64,2}
         m̄,mm = get_num_controls(solver)
         R = zeros(mm,mm)
         R[1:m,1:m] = solver.obj.R
-        if is_min_time(solver)
-            R[m̄,m̄] = solver.opts.min_time_regularization
+        if solver.opts.minimum_time
+            R[m̄,m̄] = solver.opts.R_minimum_time
         end
         if solver.opts.infeasible
-            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.infeasible_regularization*tr(solver.obj.R))
+            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.R_infeasible*tr(solver.obj.R))
         end
         return R
     end

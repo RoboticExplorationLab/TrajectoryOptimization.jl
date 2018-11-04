@@ -18,8 +18,8 @@ TrajectoryOptimization._backwardpass!(results,solver)
 TrajectoryOptimization._backwardpass_sqrt!(results_sqrt,solver)
 
 # test that results from square root backward pass are the same as backward pass
-@test all(isapprox.(results.K,results_sqrt.K))
-@test all(isapprox.(results.s,results_sqrt.s))
+@test isapprox(results.K,results_sqrt.K)
+@test isapprox(results.s,results_sqrt.s)
 tmp = zero.(results_sqrt.S)
 for i = 1:solver.N
     tmp[i] = results_sqrt.S[i]'*results_sqrt.S[i]

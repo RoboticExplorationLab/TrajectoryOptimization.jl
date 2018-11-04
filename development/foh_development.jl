@@ -16,8 +16,8 @@ calculate_jacobians!(results,solver)
 
 # Results from backward pass
 k = 2
-Ac1, Bc1 = results.fcx[k], results.fcu[k]
-Ac2, Bc2 = results.fcx[k+1], results.fcu[k+1]
+fcx, fcu = results.fcx[k], results.fcu[k]
+fcy, fcv = results.fcx[k+1], results.fcu[k+1]
 Q = obj.Q
 R = getR(solver)
 c = .0075
@@ -27,22 +27,22 @@ U = results.U
 xm = results.xm[k]
 um = (results.U[k] + results.U[k+1])/2.
 
-Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
-Lu = dt/6*R*U[k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
-Ly = dt/6*Q*(X[k+1] - xf) + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(xm - xf)
-Lv = dt/6*R*U[k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*fcx)'*Q*(xm - xf)
+Lu = dt/6*R*U[k] + 4*dt/6*((dt/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
+Ly = dt/6*Q*(X[k+1] - xf) + 4*dt/6*(I/2 - dt/8*fcy)'*Q*(xm - xf)
+Lv = dt/6*R*U[k+1] + 4*dt/6*((-dt/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 
-Lxx = dt/6.0*Q + 4.0*dt/6.0*(I/2.0 + dt/8.0*Ac1)'*Q*(I/2.0 + dt/8.0*Ac1)
-Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
-Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)
-Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+Lxx = dt/6.0*Q + 4.0*dt/6.0*(I/2.0 + dt/8.0*fcx)'*Q*(I/2.0 + dt/8.0*fcx)
+Luu = dt/6*R + 4*dt/6*((dt/8*fcu)'*Q*(dt/8*fcu) + 0.5*R*0.5)
+Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
+Lvv = dt/6*R + 4*dt/6*((-dt/8*fcv)'*Q*(-dt/8*fcv) + 0.5*R*0.5)
 
-Lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
-Lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
-Lxv = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
-Luy = 4*dt/6*(dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
-Luv_ = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)  # note the name change; workspace conflict
-Lyv = 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+Lxu = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(dt/8*fcu)
+Lxy = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
+Lxv = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(-dt/8*fcv)
+Luy = 4*dt/6*(dt/8*fcu)'*Q*(I/2 - dt/8*fcy)
+Luv_ = 4*dt/6*((dt/8*fcu)'*Q*(-dt/8*fcv) + 0.5*R*0.5)  # note the name change; workspace conflict
+Lyv = 4*dt/6*(I/2 - dt/8*fcy)'*Q*(-dt/8*fcv)
 
 # test functions
 function el(x,u)
@@ -107,11 +107,11 @@ L_gradient = ForwardDiff.gradient(stage_cost,s)
 @test isapprox(L_gradient[n+m+1:n+m+n],Ly)
 @test isapprox(L_gradient[n+m+n+1:n+m+n+m],Lv)
 
-# NOTE: Because we neglect second-orer derivatives of the dynamics (continous or discrete) we can't simply call ForwardDiff's Hessian and get results that match the equations we use in backwardpass_foh, we need to make functions that match the gradients first, then take the jacobians of the gradients
+# NOTE: Because we neglect second-order derivatives of the dynamics (continous or discrete) we can't simply call ForwardDiff's Hessian and get results that match the equations we use in backwardpass_foh, we need to make functions that match the gradients first, then take the jacobians of the gradients without getting second order dynamics derivatives
 function Lx_func(x,u,y,v,h)
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    (h^2)/6*Q*(x - xf) + 4*(h^2)/6*(I/2 + (h^2)/8*Ac1)'*Q*(xm - xf)
+    (h^2)/6*Q*(x - xf) + 4*(h^2)/6*(I/2 + (h^2)/8*fcx)'*Q*(xm - xf)
 end
 function Lx_func(s)
     x = s[1:n]
@@ -125,7 +125,7 @@ end
 function Lu_func(x,u,y,v,h)
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    (h^2)/6*R*u + 4*(h^2)/6*(((h^2)/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+    (h^2)/6*R*u + 4*(h^2)/6*(((h^2)/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
 end
 function Lu_func(s)
     x = s[1:n]
@@ -139,7 +139,7 @@ end
 function Ly_func(x,u,y,v,h)
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    Ly = (h^2)/6*Q*(y - xf) + 4*(h^2)/6*(I/2 - (h^2)/8*Ac2)'*Q*(xm - xf)
+    Ly = (h^2)/6*Q*(y - xf) + 4*(h^2)/6*(I/2 - (h^2)/8*fcy)'*Q*(xm - xf)
 end
 function Ly_func(s)
     x = s[1:n]
@@ -153,7 +153,7 @@ end
 function Lv_func(x,u,y,v,h)
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    Lv = (h^2)/6*R*v + 4*(h^2)/6*((-(h^2)/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+    Lv = (h^2)/6*R*v + 4*(h^2)/6*((-(h^2)/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 end
 function Lv_func(s)
     x = s[1:n]
@@ -177,20 +177,6 @@ end
 @test isapprox(ForwardDiff.jacobian(Lu_func,s)[1:m,n+m+n+1:n+m+n+m],Luv_)
 @test isapprox(ForwardDiff.jacobian(Ly_func,s)[1:n,n+m+n+1:n+m+n+m],Lyv)
 
-# Gradients/Jacobians/Hessians for minimum time
-dx = results.dx[k]
-dy = results.dx[k+1]
-dxm = 2*h/8*dx - 2*h/8*dy
-
-L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
-L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + el(xm,um)))
-L2hu = 4*(h^2)/6*(2*(h^3)/8*(Bc1'*Q*xm + (h^2)/8*Bc1'*Q*dx) - 2*(h^3)/8*Bc1'*Q*xf - 2*(h^5)/64*Bc1'*Q*dy + 2*h*ℓ2u)
-
-L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*Ac1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*Ac1'*Q*xf
-L2uh = 1/12*Bc1'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*Bc1'*Q*xf + 4/6*h*R*um
-L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*Ac2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*Ac2'*Q*xf
-L2vh = -1/12*Bc2'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*Bc2'*Q*xf + 4/6*h*R*um
-
 function L2_func(s)
     x = s[1:n]
     u = s[n+1:n+m]
@@ -210,7 +196,7 @@ function L2x_func(s)
     h = s[n+m+n+m+1]
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    4*(h^2)/6*(I/2 + (h^2)/8*Ac1)'*Q*(xm - xf)
+    4*(h^2)/6*(I/2 + (h^2)/8*fcx)'*Q*(xm - xf)
 end
 
 function L2u_func(s)
@@ -221,7 +207,7 @@ function L2u_func(s)
     h = s[n+m+n+m+1]
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    4*(h^2)/6*(((h^2)/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
+    4*(h^2)/6*(((h^2)/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
 end
 
 function L2y_func(s)
@@ -232,7 +218,7 @@ function L2y_func(s)
     h = s[n+m+n+m+1]
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    4*(h^2)/6*(I/2 - (h^2)/8*Ac2)'*Q*(xm - xf)
+    4*(h^2)/6*(I/2 - (h^2)/8*fcy)'*Q*(xm - xf)
 end
 
 function L2v_func(s)
@@ -243,16 +229,8 @@ function L2v_func(s)
     h = s[n+m+n+m+1]
     xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
     um = u_midpoint(u,v)
-    4*(h^2)/6*(-((h^2)/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+    4*(h^2)/6*(-((h^2)/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 end
-
-# Confirm that new partials match ForwardDiff
-@test isapprox(ForwardDiff.gradient(L2_func,s)[end],L2h)
-@test isapprox(ForwardDiff.hessian(L2_func,s)[end,end],L2hh)
-@test isapprox(ForwardDiff.jacobian(L2x_func,s)[:,end],L2xh)
-@test isapprox(ForwardDiff.jacobian(L2u_func,s)[:,end],L2uh)
-@test isapprox(ForwardDiff.jacobian(L2y_func,s)[:,end],L2yh)
-@test isapprox(ForwardDiff.jacobian(L2v_func,s)[:,end],L2vh)
 
 ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
 # Assembling ℓ(x,u) expansion
@@ -276,22 +254,22 @@ end
 
 # Assembling ℓ(xm,um) expansion
 ℓ2 = el(xm,um)
-ℓ2x = (I/2 + dt/8*Ac1)'*Q*(xm - xf)
-ℓ2u = ((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
-ℓ2y = (I/2 - dt/8*Ac2)'*Q*(xm - xf)
-ℓ2v = ((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+ℓ2x = (I/2 + dt/8*fcx)'*Q*(xm - xf)
+ℓ2u = ((dt/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
+ℓ2y = (I/2 - dt/8*fcy)'*Q*(xm - xf)
+ℓ2v = ((-dt/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 
-ℓ2xx = (I/2.0 + dt/8.0*Ac1)'*Q*(I/2.0 + dt/8.0*Ac1)
-ℓ2uu = ((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
-ℓ2yy = (I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)
-ℓ2vv = ((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+ℓ2xx = (I/2.0 + dt/8.0*fcx)'*Q*(I/2.0 + dt/8.0*fcx)
+ℓ2uu = ((dt/8*fcu)'*Q*(dt/8*fcu) + 0.5*R*0.5)
+ℓ2yy = (I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
+ℓ2vv = ((-dt/8*fcv)'*Q*(-dt/8*fcv) + 0.5*R*0.5)
 
-ℓ2xu = (I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
-ℓ2xy = (I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
-ℓ2xv = (I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
-ℓ2uy = (dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
-ℓ2uv = ((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)  # note the name change; workspace conflict
-ℓ2yv = (I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+ℓ2xu = (I/2 + dt/8*fcx)'*Q*(dt/8*fcu)
+ℓ2xy = (I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
+ℓ2xv = (I/2 + dt/8*fcx)'*Q*(-dt/8*fcv)
+ℓ2uy = (dt/8*fcu)'*Q*(I/2 - dt/8*fcy)
+ℓ2uv = ((dt/8*fcu)'*Q*(-dt/8*fcv) + 0.5*R*0.5)  # note the name change; workspace conflict
+ℓ2yv = (I/2 - dt/8*fcy)'*Q*(-dt/8*fcv)
 
 # Confirm that partials of L2 still match ForwardDiff
 @test isapprox(ForwardDiff.gradient(L2_func,s)[1:n],4*(h^2)/6*ℓ2x)
@@ -347,6 +325,28 @@ Lxv = dt/6*ℓ1xv + 4*dt/6*ℓ2xv + dt/6*ℓ3xv
 Luy = dt/6*ℓ1uy + 4*dt/6*ℓ2uy + dt/6*ℓ3uy
 Luv_ = dt/6*ℓ1uv + 4*dt/6*ℓ2uv + dt/6*ℓ3uv
 Lyv = dt/6*ℓ1yv + 4*dt/6*ℓ2yv + dt/6*ℓ3yv
+
+# Gradients/Jacobians/Hessians for minimum time
+dx = results.dx[k]
+dy = results.dx[k+1]
+dxm = 2*h/8*dx - 2*h/8*dy
+
+L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
+L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + el(xm,um)))
+L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu'*Q*xm + (h^2)/8*fcu'*Q*dx) - 2*(h^3)/8*fcu'*Q*xf - 2*(h^5)/64*fcu'*Q*dy + 2*h*ℓ2u)
+
+L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
+L2uh = 1/12*fcu'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu'*Q*xf + 4/6*h*R*um
+L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
+L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv'*Q*xf + 4/6*h*R*um
+
+# Confirm that new partials match ForwardDiff
+@test isapprox(ForwardDiff.gradient(L2_func,s)[end],L2h)
+@test isapprox(ForwardDiff.hessian(L2_func,s)[end,end],L2hh)
+@test isapprox(ForwardDiff.jacobian(L2x_func,s)[:,end],L2xh)
+@test isapprox(ForwardDiff.jacobian(L2u_func,s)[:,end],L2uh)
+@test isapprox(ForwardDiff.jacobian(L2y_func,s)[:,end],L2yh)
+@test isapprox(ForwardDiff.jacobian(L2v_func,s)[:,end],L2vh)
 
 # Augmented expansions for minimum time
 _Lx = Lx
@@ -467,9 +467,123 @@ L_gradient_alt = ForwardDiff.gradient(stage_cost_alt,s_alt)
 @test _Lyy ==  4/6*(h^2)*ℓ2yy + (h^2)/6*ℓ3yy
 @test _Lvv == [(4/6*(h^2)*ℓ2vv + (h^2)/6*ℓ3vv) zeros(m); zeros(m)' 0]
 
-@test _Lxu == [((h^2)/6*ℓ1xu + 4/6*(h^2)*ℓ2xu) (2/6*h*ℓ1x + L2xh)]
+@test _Lxu == [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
 @test _Lxy == 4/6*(h^2)*ℓ2xy
 @test _Lxv == [4/6*(h^2)*ℓ2xv zeros(n)]
 @test _Luy == [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
 @test _Luv == [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
-@test _Lyv == [(4/6*(h^2)*ℓ2yv + (h^2)/6*ℓ3yv) zeros(n)]
+@test _Lyv == [4/6*(h^2)*ℓ2yv zeros(n)]
+
+
+# Confirm that changing dt in discrete dynamics works
+x01 = zeros(model.n)
+x02 = zeros(model.n)
+x1 = zeros(model.n)
+x2 = zeros(model.n)
+u1 = rand(model.m)
+u2 = rand(model.m)
+
+solver.fd(x1,x01,u1,u2,dt) == solver.fd(x2,x02,u1,u2,dt)
+solver.fd(x1,x01,u1,u2,dt) != solver.fd(x2,x02,u1,u2,2*dt)
+
+
+# Infeasible
+Ri = .77*Matrix(I,n,n)
+ui = rand(n)
+vi = rand(n)
+w = 0.4
+u_bar = [u; h; ui]
+v_bar = [v; w; vi]
+m_bar = m+1
+mm = m_bar + n
+
+si = [x;u_bar;y;v_bar]
+
+function stage_cost_infeasible(x,y,u,v,h,w,ui,vi)
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    (h^2)/6*(el(x,u) + 4*el(xm,um) + el(y,v)) + c*h^2 + 0.5*ui'*Ri*ui
+end
+
+function stage_cost_infeasible(s)
+    x_ = s[1:n]
+    u_bar_ = s[n+1:n+mm]
+    y_ = s[n+mm+1:n+mm+n]
+    v_bar_ = s[n+mm+n+1:n+mm+n+mm]
+
+    u_ = u_bar_[1:m]
+    h_ = u_bar_[m_bar]
+    ui_ = u_bar_[m_bar+1:mm]
+
+    v_ = v_bar_[1:m]
+    w_ = v_bar_[m_bar]
+    vi_ = v_bar_[m_bar+1:mm]
+
+    @test x_ == x
+    @test u_bar_ == u_bar
+    @test y_ == y
+    @test v_bar_ == v_bar
+    @test u_ == u
+    @test h_ == h
+    @test ui_ == ui
+    @test v_ == v
+    @test w_ == w
+    @test vi_ == vi
+
+    stage_cost_infeasible(x_,y_,u_,v_,h_,w_,ui_,vi_)
+end
+
+# Gradients
+Gz = ForwardDiff.gradient(stage_cost_infeasible,si)
+
+@test isapprox(Gz[1:n], _Lx)
+@test isapprox(Gz[n+1:n+m_bar+n], [_Lu; Ri*ui])
+@test isapprox(Gz[n+m_bar+n+1:n+m_bar+n+n], _Ly)
+@test isapprox(Gz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lv; zeros(n)])
+
+# Hessians
+function Lz_func_inf(s)
+    x = s[1:n]
+    u_bar_ = s[n+1:n+mm]
+    y = s[n+mm+1:n+mm+n]
+    v_bar_ = s[n+mm+n+1:n+mm+n+mm]
+
+    u = u_bar_[1:m]
+    h = u_bar_[m_bar]
+    ui = u_bar_[m_bar+1:mm]
+
+    v = v_bar_[1:m]
+    w = v_bar_[m_bar]
+    vi = v_bar_[m_bar+1:mm]
+
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    dxm = 2*h/8*fc_(x,u) - 2*h/8*fc_(y,v)
+    L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
+
+    [Lx_func(x,u,y,v,h);
+     Lu_func(x,u,y,v,h);
+     2*h/6*el(x,u) + L2h + 2*h/6*el(y,v) + 2*c*h;
+     Ri*ui;
+     Ly_func(x,u,y,v,h);
+     Lv_func(x,u,y,v,h);
+     0;
+     zeros(n)]
+end
+
+Lz_func_inf(si)
+
+@test isapprox(Gz,Lz_func_inf(si))
+
+Hz = ForwardDiff.jacobian(Lz_func_inf,si)
+@test isapprox(Hz[1:n,1:n],_Lxx)
+@test isapprox(Hz[n+1:n+m_bar+n,n+1:n+m_bar+n],[_Luu zeros(m_bar,n); zeros(n,m_bar) Ri])
+@test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+1:n+m_bar+n+n],_Lyy)
+@test isapprox(Hz[n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lvv zeros(m_bar,n); zeros(n,m_bar) zeros(n,n)])
+
+@test isapprox(Hz[1:n,n+1:n+m_bar+n],[_Lxu zeros(n,n)])
+@test isapprox(Hz[1:n,n+m_bar+n+1:n+m_bar+n+n],_Lxy)
+@test isapprox(Hz[1:n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lxv zeros(n,n)])
+@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+1:n+m_bar+n+n],[_Luy; zeros(n,n)'])
+@test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Luv zeros(m_bar,n); zeros(n,m_bar) zeros(n,n)])
+@test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lyv zeros(n,n)])
