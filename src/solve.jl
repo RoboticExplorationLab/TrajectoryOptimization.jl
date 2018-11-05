@@ -95,7 +95,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             solve_string = sep * "minimum time..."
 
             # Initialize controls with sqrt(dt)
-            # ū = [u; h], h = sqrt(dt)
             U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
         else
             solve_string = "..."
@@ -106,7 +105,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
 
             # Generate infeasible controls
-            ui = infeasible_controls(solver,X0,U0)  # generates n additional control input sequences that produce the desired infeasible state trajectory
+            ui = infeasible_controls(solver,X0,U_init)  # generates n additional control input sequences that produce the desired infeasible state trajectory
             U_init = [U_init; ui]  # augment control with additional control inputs that produce infeasible state trajectory
 
             # Assign state trajectory
@@ -245,7 +244,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             # live plotting for debugging
             if solver.opts.live_plotting
-                plt = plot(to_array(U)[:,1:solver.N-1]',label="",xlabel="time step (k)",ylabel="control u(t)",title="Control")
+                plt = plot(to_array(U)[:,1:solver.N-1]',label="",xlabel="time step (k)",ylabel="control u",title="Control")
                 display(plt)
             end
 

@@ -29,6 +29,8 @@ opts.μ_max = 1e64
 opts.λ_max = 1e64
 opts.λ_min = -1e64
 opts.ρ_max = 1e64
+opts.R_minimum_time = 5.0
+opts.live_plotting = true
 ######################
 
 ### Set up model, objective, solver ###
@@ -74,18 +76,23 @@ dt = 0.2
 solver = Solver(model,obj,integration=:rk3_foh,dt=dt,opts=opts)
 
 N_mintime = solver.N
-obj_mintime = ConstrainedObjective(0.0*obj.Q,(0.0)*Matrix(I,m,m),0.0*obj.Qf,0.0,obj.x0,obj.xf,c=1e-4,u_min=obj.u_min,u_max=obj.u_max)
+obj_mintime = ConstrainedObjective(0.0*obj.Q,(0.0)obj.R,0.0*obj.Qf,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
 solver_mintime = Solver(model,obj_mintime,integration=:rk3_foh,N=N_mintime,dt=0.0,opts=opts)
 
 
 U = zeros(m,solver.N)
 U_mintime = zeros(m,N_mintime)
+X_interp = line_trajectory(solver_mintime)
+# Um = [U_mintime; ones(1,size(U_mintime,2))*sqrt(get_initial_dt(solver_mintime))]
+# solver_mintime.opts.minimum_time = true
+# Ui = infeasible_controls(solver_mintime,X_interp,Um)
+#
+# U_ = [Um; Ui]
 # U_mintime[1,:] = [val for (i,val) in enumerate(range(u_min,length=solver.N,stop=u_max))]
 # U_mintime[1,:] = [u_max*cos(val) for (i,val) in enumerate(range(0,length=solver.N,stop=2*pi))]
 
-
 # results,stats = solve(solver,U)
-results_mintime,stats_mintime = solve(solver_mintime,U_mintime)#to_array(results_mintime.U)[1:m,:])#U_mintime)
+results_mintime,stats_mintime = solve(solver_mintime,X_interp,U_mintime)#to_array(results_mintime.U)[1:m,:])#U_mintime)
 
 # println("Final state (    reg)-> res: $(results.X[end]), goal: $(solver.obj.xf)\n Iterations: $(stats["iterations"])\n Outer loop iterations: $(stats["major iterations"])\n Max violation: $(stats["c_max"][end])\n Max μ: $(maximum([to_array(results.μ)[:]; results.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results.λ)[:]; results.λN[:]])))\n")
 println("Final state (mintime)-> res: $(results_mintime.X[end]), goal: $(solver_mintime.obj.xf)\n Iterations: $(stats_mintime["iterations"])\n Outer loop iterations: $(stats_mintime["major iterations"])\n Max violation: $(stats_mintime["c_max"][end])\n Max μ: $(maximum([to_array(results_mintime.μ)[:]; results_mintime.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_mintime.λ)[:]; results_mintime.λN[:]])))\n")

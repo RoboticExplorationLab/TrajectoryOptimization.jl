@@ -207,8 +207,8 @@ struct Solver{O<:Objective}
     end
 end
 
-function Solver(solver::Solver; model=solver.model, obj=solver.obj,integration=solver.integration, dt=solver.dt, opts=solver.opts)
-     Solver(model, obj, integration=integration, dt=dt, opts=opts)
+function Solver(solver::Solver; model=solver.model, obj=solver.obj,integration=solver.integration, dt=solver.dt, N=solver.N, opts=solver.opts)
+     Solver(model, obj, integration=integration, dt=dt, N=N, opts=opts)
  end
 
 function calc_N(tf::Float64, dt::Float64)::Tuple
