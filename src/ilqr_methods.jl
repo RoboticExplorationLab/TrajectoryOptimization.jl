@@ -690,7 +690,7 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     m̄,mm = get_num_controls(solver)
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
-
+    println("m̄: $m̄")
     dt = solver.dt
     for k = 1:solver.N-1
         solver.opts.minimum_time ? dt = u[m̄,k]^2 : nothing

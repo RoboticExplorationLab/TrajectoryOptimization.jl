@@ -184,18 +184,8 @@ struct Solver{O<:Objective}
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)
-
-            # if infeasible
-            #     return Jc[1:n,1:n], [Jc[1:n,n+1:n+m] zeros(n,n)] # fx, [fu 0]
-            # else
             return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
-            # end
         end
-
-        # function fc_jacobians!(z)
-        #     Fc!(Jc,Scdot,z)
-        #     return Jc[1:n,:]
-        # end
 
         # Generate constraint functions
         c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)

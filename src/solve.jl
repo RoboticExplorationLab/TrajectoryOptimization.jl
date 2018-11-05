@@ -427,14 +427,13 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     solver.opts.infeasible = false
 
     # remove infeasible components
-    results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
+    results_feasible = remove_infeasible_controls_unconstrained_results(results,solver)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results_feasible, solver)
 
     # forward pass
     forwardpass!(results_feasible,solver,Δv)
-
     # update trajectories
     results_feasible.X .= deepcopy(results_feasible.X_)
     results_feasible.U .= deepcopy(results_feasible.U_)
@@ -442,7 +441,9 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
         results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN)
+        println("got here?")
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
+        println("got here?")
         calculate_jacobians!(results_feasible,solver)
     end
     if solver.control_integration == :foh
