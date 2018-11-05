@@ -244,7 +244,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             # live plotting for debugging
             if solver.opts.live_plotting
-                plt = plot(to_array(U)[:,1:solver.N-1]',label="",xlabel="time step (k)",ylabel="control u",title="Control")
+                p1 = plot(to_array(results.X)',label="",ylabel="state")
+                p2 = plot(to_array(results.U)[:,1:solver.N-1]',label="",ylabel="control")
+                plt = plot(p1,p2,layout=(2,1))
+                # plt = plot(to_array(U)[:,1:solver.N-1]',label="",xlabel="time step (k)",ylabel="control u",title="Control")
                 display(plt)
             end
 
@@ -322,7 +325,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     ### Infeasible -> feasible trajectory
-    if solver.opts.infeasible #&& solver.opts.solve_feasible
+    if solver.opts.infeasible
         @info "Infeasible solve complete"
 
         # run single backward pass/forward pass to get dynamically feasible solution (ie, remove infeasible controls)
@@ -425,25 +428,36 @@ $(SIGNATURES)
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
     # turn off infeasible solve
     solver.opts.infeasible = false
+    println("pre removal: Xf - $(results.X[end])")
 
     # remove infeasible components
-    results_feasible = remove_infeasible_controls_unconstrained_results(results,solver)
+    results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
+    println("post removal: Xf - $(results_feasible.X[end])")
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results_feasible, solver)
 
     # forward pass
     forwardpass!(results_feasible,solver,Δv)
+    println("post fp: Xf - $(results_feasible.X[end])")
+    println("post fp: Xf_ - $(results_feasible.X_[end])")
+
     # update trajectories
     results_feasible.X .= deepcopy(results_feasible.X_)
     results_feasible.U .= deepcopy(results_feasible.U_)
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
-        results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN)
-        println("got here?")
+        # println("pre new constrained results")
+        # println("size U: $(size(to_array(results_feasible.U)))")
+        # println("size fcu: $(size(to_array(results_feasible.fcu)))")
+        # println("size C: $(size(to_array(results.C)))")
+        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
+        # println("post new constrained results")
+        # println("size U: $(size(to_array(results_feasible.U)))")
+        # println("size fcu: $(size(to_array(results_feasible.fcu)))")
+        # println("size C: $(size(to_array(results_feasible.C)))")
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
-        println("got here?")
         calculate_jacobians!(results_feasible,solver)
     end
     if solver.control_integration == :foh
@@ -586,22 +600,22 @@ $(SIGNATURES)
 """
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
 
-    # if is_min_time(solver)
-    #     n,m,N = get_sizes(solver)
-    #     m̄,mm = get_num_controls(solver)
-    #     p,pI,pE = get_num_constraints(solver)
-    #
-    #     val,idx = findmax(to_array(results.C))
-    #     if idx[1] == m̄
-    #         println("max_dt violated!: $val at k=$(idx[2])")
-    #     elseif idx[1] == m̄ + m̄
-    #         println("min_dt violated: $val at k=$(idx[2])")
-    #     elseif idx[1] == p
-    #         println("h_k - h_{k+1} violated: $val at k=$(idx[2])")
-    #     else
-    #         println("other: $val")
-    #     end
-    # end
+    if solver.opts.minimum_time
+        n,m,N = get_sizes(solver)
+        m̄,mm = get_num_controls(solver)
+        p,pI,pE = get_num_constraints(solver)
+
+        val,idx = findmax(to_array(results.C))
+        if idx[1] == m̄
+            println("max_dt violated!: $val at k=$(idx[2])")
+        elseif idx[1] == m̄ + m̄
+            println("min_dt violated: $val at k=$(idx[2])")
+        elseif idx[1] == p
+            println("h_k - h_{k+1} violated: $val at k=$(idx[2])")
+        else
+            println("other: $val")
+        end
+    end
 
     ## Lagrange multiplier updates
     λ_update!(results,solver,false)

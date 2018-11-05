@@ -453,7 +453,7 @@ $(SIGNATURES)
         -removes infeasible controls and infeasible components in Jacobians
         -additionally, we need an unconstrained problem (temporarily) to project into the feasible space
 """
-function remove_infeasible_controls_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
+function remove_infeasible_controls_to_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -463,16 +463,19 @@ function remove_infeasible_controls_unconstrained_results(r::SolverIterResults,s
         results = UnconstrainedVectorResults(n,m̄,N)
     end
     copyto!(results.X,r.X)
+    copyto!(results.X_,r.X_)
     copyto!(results.dx,r.dx)
     copyto!(results.xm,r.xm)
     copyto!(results.fcx,r.fcx)
     copyto!(results.fdx,r.fdx)
     for k = 1:N
         results.U[k] = r.U[k][1:m̄]
+        results.U_[k] = r.U_[k][1:m̄]
         results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
         k == N ? continue : nothing
         results.um[k] = r.um[k][1:m̄]
-        results.fdu[k] = r.fdu[k][1:n,1:m̄]
+        results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
+        results.fdv[k][1:n,1:m̄] = r.fdv[k][1:n,1:m̄]
     end
     results
 end
@@ -481,11 +484,11 @@ end
 $(SIGNATURES)
     For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
 """
-function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
+function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    p = solver.obj.p
+    p,pI,pE = get_num_constraints(solver)
     p_N = solver.obj.p_N
     if solver.opts.use_static
         results = ConstrainedStaticResults(n,m̄,p,N,p_N)
@@ -493,21 +496,23 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::Co
         results = ConstrainedVectorResults(n,m̄,p,N,p_N)
     end
     copyto!(results.X,r.X)
+    copyto!(results.X_,r.X_)
     copyto!(results.dx,r.dx)
     copyto!(results.xm,r.xm)
     copyto!(results.fcx,r.fcx)
     copyto!(results.fdx,r.fdx)
     for k = 1:N
         results.U[k] = r.U[k][1:m̄]
+        results.U_[k] = r.U_[k][1:m̄]
         results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
-        results.λ[k][1:p-n-solver.opts.minimum_time] = λ[k][1:p-n-solver.opts.minimum_time] # retain multipliers from all but infeasible and minimum time equality
+        results.λ[k][1:end-solver.opts.minimum_time] = λ[k][1:end-n-solver.opts.minimum_time] # retain multipliers from all but infeasible and minimum time equality
         if solver.opts.minimum_time
             results.λ[k][end] = λ[k][end]
         end
         k == N ? continue : nothing
-        results.um[k] = r.um[k][1:m̄]
-        results.fdu[k] = r.fdu[k][1:n,1:m̄]
-        results.fdv[k] = r.fdv[k][1:n,1:m̄]
+        results.um[k][1:m̄] = r.um[k][1:m̄]
+        results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
+        results.fdv[k][1:n,1:m̄] = r.fdv[k][1:n,1:m̄]
     end
     results.λN .= λN
 

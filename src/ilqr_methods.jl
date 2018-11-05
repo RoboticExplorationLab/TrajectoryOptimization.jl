@@ -69,14 +69,14 @@ end
 
 function get_initial_dt(solver::Solver)
     if solver.opts.minimum_time
-        if solver.opts.minimum_time_tf_estimate > 0
+        if solver.opts.minimum_time_tf_estimate > 0.0
             dt = solver.opts.minimum_time_tf_estimate / (solver.N - 1)
             if dt > solver.opts.max_dt
                 dt = solver.opts.max_dt
                 @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
             end
         else
-            dt  = solver.opts.max_dt / 2
+            dt  = 0.5*solver.opts.max_dt + 0.5*solver.opts.min_dt
         end
     else
         dt = solver.dt
@@ -213,13 +213,12 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     for k = 1:N-1
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
-            Xm = res.xm[k]
-            Um = (U[k] + U[k+1])/2
-            J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(Xm,Um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            xm = res.xm[k]
+            um = res.um[k]
+            J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(xm,um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
         else
             J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
         end
-
         solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
         solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
     end
@@ -357,7 +356,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
     c = solver.c
-
     if solver.control_integration == :foh
         final_index = N
     else
@@ -371,7 +369,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
         else
             c(res.C[k], X[k], U[k])
         end
-
         # Zero out minimum time constraints that are not present at N-1, N timesteps
         if solver.opts.minimum_time
             if k > N-2
@@ -391,13 +388,11 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
                 res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
             end
         end
-
         # Equality constraints
         for j = pI+1:p
             res.Iμ[k][j,j] = res.μ[k][j] # equality constraints are penalized
         end
     end
-
     # Terminal constraint
     c(res.CN,X[N])
     res.IμN .= Diagonal(res.μN)  # NOTE: Assuming all terminal constraints are equality constraints
@@ -690,7 +685,6 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     m̄,mm = get_num_controls(solver)
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
-    println("m̄: $m̄")
     dt = solver.dt
     for k = 1:solver.N-1
         solver.opts.minimum_time ? dt = u[m̄,k]^2 : nothing

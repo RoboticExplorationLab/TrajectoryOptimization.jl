@@ -30,6 +30,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
 end
 
 function _backwardpass!(results::SolverVectorResults,solver::Solver)
+    regularization_flag = false
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -95,26 +96,45 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
         if solver.opts.regularization_type == :state
             Quu_reg = Quu + results.ρ[1]*fdu'*fdu
             Qux_reg = Qux + results.ρ[1]*fdu'*fdx
-        elseif solver.opts.regularization_type == :control
+        elseif solver.opts.regularization_type == :control || solver.opts.regularization_type == :eigen
             Quu_reg = Quu + results.ρ[1]*I
             Qux_reg = Qux
         end
 
-        if !isposdef(Hermitian(Array(Quu_reg)))
+        if solver.opts.regularization_type == :eigen
+            nothing
+            # E = eigen(Quu_reg)
+            # if any(E.values .< 0.0)
+            #     regularization_flag = true
+            # end
+        elseif !isposdef(Hermitian(Array(Quu_reg)))
+            regularization_flag = true
+        end
+        if regularization_flag
             @logmsg InnerLoop "Regularized"
 
             # Increase regularization
-            regularization_update!(results,solver,:increase)
+            if solver.opts.regularization_type == :eigen
+                results.ρ[1] = -1.5*minimum(E.values)
+            else
+                regularization_update!(results,solver,:increase)
+            end
 
             # Reset backward pass
             k = N-1
             Δv = [0.0 0.0]
+            regularization_flag = false
             continue
         end
 
         # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu
+        if solver.opts.regularization_type == :eigen
+            K[k] = -Quu_reg\Qux_reg # TODO use eigendecomp pieces
+            d[k] = -Quu_reg\Qu
+        else
+            K[k] = -Quu_reg\Qux_reg
+            d[k] = -Quu_reg\Qu
+        end
 
         # Calculate cost-to-go
         s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
@@ -437,7 +457,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         Quv_reg = Quv
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            @logmsg InnerLoop "Regularized"
+            # @logmsg InnerLoop "Regularized"
 
             regularization_update!(results,solver,:increase)
 
@@ -575,9 +595,10 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
             alpha = 0.0
             expected = 0.
 
-            @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             regularization_update!(results,solver,:increase) # increase regularization
             results.ρ[1] *= solver.opts.ρ_forwardpass
+            @logmsg InnerLoop "Max iterations (forward pass)"
+
             break
         end
 

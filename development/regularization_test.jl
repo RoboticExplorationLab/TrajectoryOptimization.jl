@@ -5,13 +5,10 @@ using Plots
 opts = SolverOptions()
 opts.square_root = false
 opts.verbose = true
-opts.cache=true
-# opts.c1=1e-4
-opts.c2=2.0
 opts.constraint_tolerance = 1e-3
 opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
-opts.outer_loop_update = :uniform
+opts.outer_loop_update = :default
 opts.τ = 0.1
 # opts.iterations_outerloop = 250
 # opts.iterations = 1000
@@ -26,14 +23,14 @@ model_euler = Model(Dynamics.quadrotor_dynamics_euler!,12,m)
 
 
 # Objective and constraints
-Qf = 100.0*eye(n)
-Q = (0.01)*eye(n)
-R = (0.01)*eye(m)
+Qf = 100.0*Matrix(I,n,n)
+Q = (0.01)*Matrix(I,n,n)
+R = (0.01)*Matrix(I,m,m)
 tf = 5.0
 dt = 0.05
 
-Qf_euler = 100.0*eye(12)
-Q_euler = (0.1)*eye(12)
+Qf_euler = 100.0*Matrix(I,12,12)
+Q_euler = (0.1)*Matrix(I,12,12)
 
 # -initial state
 x0 = zeros(n)
