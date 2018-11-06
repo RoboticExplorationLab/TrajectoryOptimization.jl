@@ -102,16 +102,10 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
         end
 
         if solver.opts.regularization_type == :eigen
-            nothing
-            # E = eigen(Quu_reg)
-            # if any(E.values .< 0.0)
-            #     regularization_flag = true
-            # end
+            E = eigen(Quu)
+            E.values += solver.opts*eigenvalue_scaling*(E.values .< solver.opts.eigenvalue_threshold).*abs.(E.values)
         elseif !isposdef(Hermitian(Array(Quu_reg)))
-            regularization_flag = true
-        end
-        if regularization_flag
-            @logmsg InnerLoop "Regularized"
+            # @logmsg InnerLoop "Regularized"
 
             # Increase regularization
             if solver.opts.regularization_type == :eigen
@@ -127,10 +121,10 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
             continue
         end
 
-        # Compute gains
         if solver.opts.regularization_type == :eigen
-            K[k] = -Quu_reg\Qux_reg # TODO use eigendecomp pieces
-            d[k] = -Quu_reg\Qu
+            Quu_inv = E.vectors*Diagonal(1 ./E.values)inv(E.vectors) # TODO FIX to backslash, transpose = inv?
+            K[k] = -Quu_inv*Qux_reg
+            d[k] = -Quu_inv*Qu
         else
             K[k] = -Quu_reg\Qux_reg
             d[k] = -Quu_reg\Qu
@@ -352,15 +346,15 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
             xmu = (h^2)/8*fcu[:,1:m]
             xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
             xmv = -(h^2)/8*fcv[:,1:m]
-            ℓ2h = xmh'*Q*(xm-xf)
-            _L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
+            ℓ2h = xmh'*W*(xm-xf)
+            L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
             ℓ2hh = 2/8*((dx - dy)'*W*(xm - xf) + h*(dx - dy)'*W*xmh)
             L2hh = 4/6*(2*h*ℓ2h + 2*ℓ2 + (h^2)*ℓ2hh + 2*h*ℓ2h)
             L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*W*xmh + 2/8*h*fcx'*W*(xm - xf))
             L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu[:,1:m])'*W*xmh + 2/8*h*fcu[:,1:m]'*W*(xm - xf))
             L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu[:,1:m]'*W*(xm - xf) + xmu'*W*(dx - dy)))
             L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*W*(xm - xf) + xmy'*W*(dx - dy)))
-            L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*W*(xm - xf) + xmv'*W*(dx - dy)))
+            L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv[:,1:m]'*W*(xm - xf) + xmv'*W*(dx - dy)))
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
             Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*R_minimum_time*h)]
