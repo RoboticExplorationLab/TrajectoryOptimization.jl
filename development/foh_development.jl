@@ -232,6 +232,22 @@ function L2v_func(s)
     4*(h^2)/6*(-((h^2)/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 end
 
+function L2h_func(s)
+    x = s[1:n]
+    u = s[n+1:n+m]
+    y = s[n+m+1:n+m+n]
+    v = s[n+m+n+1:n+m+n+m]
+    h = s[n+m+n+m+1]
+    xm = x_midpoint(x,y,fc_(x,u),fc_(y,v),h)
+    um = u_midpoint(u,v)
+    xmh = 2/8*h*(fc_(x,u) - fc_(y,v))
+    xmu = (h^2)/8*fcu
+    xmy = -(h^2)/8*fcy
+    xmv = -(h^2)/8*fcv
+    ℓ2h = xmh'*Q*(xm-xf)
+    return 4/6*(2*h*el(xm,um) + (h^2)*ℓ2h)
+end
+
 ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
 # Assembling ℓ(x,u) expansion
 ℓ1 = el(x,u)
@@ -326,19 +342,34 @@ Luy = dt/6*ℓ1uy + 4*dt/6*ℓ2uy + dt/6*ℓ3uy
 Luv_ = dt/6*ℓ1uv + 4*dt/6*ℓ2uv + dt/6*ℓ3uv
 Lyv = dt/6*ℓ1yv + 4*dt/6*ℓ2yv + dt/6*ℓ3yv
 
-# Gradients/Jacobians/Hessians for minimum time
 dx = results.dx[k]
 dy = results.dx[k+1]
 dxm = 2*h/8*dx - 2*h/8*dy
 
-L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
-L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + el(xm,um)))
-L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu'*Q*xm + (h^2)/8*fcu'*Q*dx) - 2*(h^3)/8*fcu'*Q*xf - 2*(h^5)/64*fcu'*Q*dy + 2*h*ℓ2u)
+# Simplified
+xmh = 2/8*h*(dx - dy)
+xmu = (h^2)/8*fcu
+xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
+xmv = -(h^2)/8*fcv
+ℓ2h = xmh'*Q*(xm-xf)
+_L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
+ℓ2hh = 2/8*((dx - dy)'*Q*(xm - xf) + h*(dx - dy)'*Q*xmh)
+L2hh = 4/6*(2*h*ℓ2h + 2*ℓ2 + (h^2)*ℓ2hh + 2*h*ℓ2h)
+L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*Q*xmh + 2/8*h*fcx'*Q*(xm - xf))
+L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu)'*Q*xmh + 2/8*h*fcu'*Q*(xm - xf))
+L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu'*Q*(xm - xf) + xmu'*Q*(dx - dy)))
+L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*Q*(xm - xf) + xmy'*Q*(dx - dy)))
+L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*Q*(xm - xf) + xmv'*Q*(dx - dy)))
+# Gradients/Jacobians/Hessians for minimum time
 
-L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
-L2uh = 1/12*fcu'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu'*Q*xf + 4/6*h*R*um
-L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
-L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv'*Q*xf + 4/6*h*R*um
+# L2h = 4/6*((h^2)*dxm'*Q*(xm - xf) + 2*h*el(xm,um))
+# L2hh = 4/6*(2/8*((h^3)*dxm'*Q*dx + 3*(h^2)*dx'*Q*xm) - 2/8*((h^3)*dxm'*Q*dy + 3*(h^2)*dy'*Q*xm) - 6*(h^2)/8*dx'*Q*xf + 6*(h^2)/8*dy'*Q*xf + 2*(h*dxm'*Q*(xm - xf) + el(xm,um)))
+# L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu'*Q*xm + (h^2)/8*fcu'*Q*dx) - 2*(h^3)/8*fcu'*Q*xf - 2*(h^5)/64*fcu'*Q*dy + 2*h*ℓ2u)
+
+# L2xh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf + 1/12*fcx'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*Q*xf
+# L2uh = 1/12*fcu'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu'*Q*xf + 4/6*h*R*um
+# L2yh = 2/6*Q*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*Q*xf - 1/12*fcy'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*Q*xf
+# L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv'*Q*xf + 4/6*h*R*um
 
 # Confirm that new partials match ForwardDiff
 @test isapprox(ForwardDiff.gradient(L2_func,s)[end],L2h)
@@ -347,6 +378,10 @@ L2vh = -1/12*fcv'*Q*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*
 @test isapprox(ForwardDiff.jacobian(L2u_func,s)[:,end],L2uh)
 @test isapprox(ForwardDiff.jacobian(L2y_func,s)[:,end],L2yh)
 @test isapprox(ForwardDiff.jacobian(L2v_func,s)[:,end],L2vh)
+
+@test isapprox(L2h_func(s),_L2h)
+@test isapprox(ForwardDiff.gradient(L2h_func,s)[n+m+1:n+m+n],_L2hy)
+ForwardDiff.gradient(L2h_func,s)[n+m+1:n+m+n]
 
 # Augmented expansions for minimum time
 _Lx = Lx
@@ -362,8 +397,8 @@ _Lvv = [Lvv zeros(m); zeros(m)' 0]
 _Lxu = [Lxu (2/6*h*ℓ1x + L2xh)]
 _Lxy = Lxy
 _Lxv = [Lxv zeros(n)]
-_Luy = [Luy' (L2yh + 2*h/6*ℓ3y)]'
-_Luv = [Luv_' (L2vh + 2*h/6*ℓ3v); zeros(m)' 0]'
+_Luy = [Luy; (L2hy + 2*h/6*ℓ3y)']
+_Luv = [Luv_ zeros(m); (L2hv + 2*h/6*ℓ3v)' 0]
 _Lyv = [Lyv zeros(n)]
 
 ###
@@ -470,8 +505,8 @@ L_gradient_alt = ForwardDiff.gradient(stage_cost_alt,s_alt)
 @test _Lxu == [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
 @test _Lxy == 4/6*(h^2)*ℓ2xy
 @test _Lxv == [4/6*(h^2)*ℓ2xv zeros(n)]
-@test _Luy == [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
-@test _Luv == [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
+@test _Luy == [4/6*(h^2)*ℓ2uy; (L2hy + 2/6*h*ℓ3y)']
+@test _Luv == [4/6*(h^2)*ℓ2uv zeros(m); (L2hv + 2/6*h*ℓ3v)' 0]
 @test _Lyv == [4/6*(h^2)*ℓ2yv zeros(n)]
 
 
@@ -587,3 +622,18 @@ Hz = ForwardDiff.jacobian(Lz_func_inf,si)
 @test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+1:n+m_bar+n+n],[_Luy; zeros(n,n)'])
 @test isapprox(Hz[n+1:n+m_bar+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Luv zeros(m_bar,n); zeros(n,m_bar) zeros(n,n)])
 @test isapprox(Hz[n+m_bar+n+1:n+m_bar+n+n,n+m_bar+n+n+1:n+m_bar+n+n+m_bar+n],[_Lyv zeros(n,n)])
+
+
+# Simplified notation
+xmh = 2/8*h*(dx - dy)
+xmu = (h^2)/8*fcu
+xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
+xmv = -(h^2)/8*fcv
+_ℓ2h = xmh'*Q*(xm-xf)
+_ℓ2hh = 2/8*((dx - dy)'*Q*(xm - xf) + h*(dx - dy)'*Q*xmh)
+_L2hh = 4/6*(2*h*_ℓ2h + 2*ℓ2 + (h^2)*_ℓ2hh + 2*h*_ℓ2h)
+_L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*Q*xmh + 2/8*h*fcx'*Q*(xm - xf))
+_L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu)'*Q*xmh + 2/8*h*fcu'*Q*(xm - xf))
+_L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu'*Q*(xm - xf) + xmu'*Q*(dx - dy)))
+_L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*Q*(xm - xf) + xmy'*Q*(dx - dy)))
+_L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*Q*(xm - xf) + xmv'*Q*(dx - dy)))

@@ -348,18 +348,19 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
             h = u[m̄]
 
             # Additional expansion terms
-            dxm = 2*h/8*dx - 2*h/8*dy
-            #TODO: simplify expressions
-
-            L2h = 4/6*((h^2)*dxm'*W*(xm - xf) + 2*h*ℓ2)
-            L2hh = 4/6*(2/8*((h^3)*dxm'*W*dx + 3*(h^2)*dx'*W*xm) - 2/8*((h^3)*dxm'*W*dy + 3*(h^2)*dy'*W*xm) - 6*(h^2)/8*dx'*W*xf + 6*(h^2)/8*dy'*W*xf + 2*(h*dxm'*W*(xm - xf) + ℓ2))
-            L2hu = 4*(h^2)/6*(2*(h^3)/8*(fcu[:,1:m]'*W*xm + (h^2)/8*fcu[:,1:m]'*W*dx) - 2*(h^3)/8*fcu[:,1:m]'*W*xf - 2*(h^5)/64*fcu[:,1:m]'*W*dy + 2*h*ℓ2u)
-
-            L2xh = 2/6*W*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*W*xf + 1/12*fcx'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) - (h^3)/3*fcx'*W*xf
-            L2uh = 1/12*fcu[:,1:m]'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) - 1/3*(h^3)*fcu[:,1:m]'*W*xf + 4/6*h*R*um[1:m]
-            L2yh = 2/6*W*(h*x + h*y + (h^3)/2*dx - (h^3)/2*dy) - 4/6*h*W*xf - 1/12*fcy'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx -6/8*(h^5)*dy) + (h^3)/3*fcy'*W*xf
-            L2vh = -1/12*fcv[:,1:m]'*W*(2*(h^3)*x + 2*(h^3)*y + 6/8*(h^5)*dx - 6/8*(h^5)*dy) + 1/3*(h^3)*fcv[:,1:m]'*W*xf + 4/6*h*R*um[1:m]
-
+            xmh = 2/8*h*(dx - dy)
+            xmu = (h^2)/8*fcu[:,1:m]
+            xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
+            xmv = -(h^2)/8*fcv[:,1:m]
+            ℓ2h = xmh'*Q*(xm-xf)
+            _L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
+            ℓ2hh = 2/8*((dx - dy)'*W*(xm - xf) + h*(dx - dy)'*W*xmh)
+            L2hh = 4/6*(2*h*ℓ2h + 2*ℓ2 + (h^2)*ℓ2hh + 2*h*ℓ2h)
+            L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*W*xmh + 2/8*h*fcx'*W*(xm - xf))
+            L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu[:,1:m])'*W*xmh + 2/8*h*fcu[:,1:m]'*W*(xm - xf))
+            L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu[:,1:m]'*W*(xm - xf) + xmu'*W*(dx - dy)))
+            L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*W*(xm - xf) + xmy'*W*(dx - dy)))
+            L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*W*(xm - xf) + xmv'*W*(dx - dy)))
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
             Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*R_minimum_time*h)]
@@ -374,8 +375,10 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
             Lxu = [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
             Lxy = 4/6*(h^2)*ℓ2xy
             Lxv = [4/6*(h^2)*ℓ2xv zeros(n)]
-            Luy = [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
-            Luv = [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
+            # Luy = [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
+            Luy = [4/6*(h^2)*ℓ2uy; (L2hy + 2*h/6*ℓ3y)']
+            # Luv = [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
+            Luv = [4/6*(h^2)*ℓ2uv zeros(m); (L2hv + 2*h/6*ℓ3v)' 0]
             Lyv = [4/6*(h^2)*ℓ2yv zeros(n)]
         else
             Lx = dt/6*ℓ1x + 4*dt/6*ℓ2x

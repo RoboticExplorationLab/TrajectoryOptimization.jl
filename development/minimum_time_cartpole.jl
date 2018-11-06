@@ -32,7 +32,7 @@ opts.ρ_max = 1e64
 opts.R_minimum_time = 1e-3
 opts.R_infeasible = 1e-3
 opts.resolve_feasible = false
-opts.live_plotting = false
+opts.live_plotting = true
 opts.minimum_time_tf_estimate = 5.0
 ######################
 

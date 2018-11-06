@@ -18,8 +18,8 @@ opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
 opts.regularization_type = :control
-opts.max_dt = 0.2
-opts.min_dt = 0.1
+opts.max_dt = 0.225
+opts.min_dt = 0.075
 opts.μ_initial_minimum_time_inequality = 1.0
 opts.μ_initial_minimum_time_equality = 1.0
 opts.ρ_forwardpass = 100.0
@@ -29,10 +29,11 @@ opts.μ_max = 1e64
 opts.λ_max = 1e64
 opts.λ_min = -1e64
 opts.ρ_max = 1e64
-opts.R_minimum_time = 1e-3
+opts.R_minimum_time = 1e-
 opts.R_infeasible = 1e-3
 opts.resolve_feasible = false
 opts.live_plotting = false
+
 ######################
 
 ### Set up model, objective, solver ###
@@ -78,6 +79,7 @@ dt = 0.2
 solver = Solver(model,obj,integration=:rk3_foh,dt=dt,opts=opts)
 
 N_mintime = solver.N
+opts.minimum_time_tf_estimate = solver.obj.tf
 obj_mintime = ConstrainedObjective(0.0*obj.Q,(0.0)obj.R,0.0*obj.Qf,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
 solver_mintime = Solver(model,obj_mintime,integration=:rk3_foh,N=N_mintime,opts=opts)
 opts.max_dt
@@ -99,5 +101,3 @@ println("Final state (mintime)->: $(results_mintime.X[end]), goal: $(solver_mint
 p1 = plot(to_array(results_mintime.X)',ylabel="state",label="")
 p2 = plot(to_array(results_mintime.U)[:,1:solver_mintime.N-1]',ylabel="control",xlabel="time step (k)",label="")
 plot(p1,p2,layout=(2,1))
-
-results_mintime.U[end]
