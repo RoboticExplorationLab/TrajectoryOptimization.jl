@@ -662,7 +662,7 @@ end
 
 
 function total_time(solver::Solver, results::SolverVectorResults)
-    if is_min_time(solver)
+    if is_minimum_time(solver)
         m̄,mm = get_num_controls(solver)
         T = sum([u[m̄]^2 for u in results.U[1:solver.N-1]])
     else
