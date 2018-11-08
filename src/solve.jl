@@ -173,7 +173,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     # Initial rollout
     if !solver.opts.infeasible
-        X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
@@ -417,9 +416,6 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
         elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance && c_max < solver.opts.constraint_tolerance))
             # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
             return true
-        elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance && iteration == solver.opts.iterations_outerloop)
-            # @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
-            return true
         end
     end
 
@@ -469,15 +465,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
-        # println("pre new constrained results")
-        # println("size U: $(size(to_array(results_feasible.U)))")
-        # println("size fcu: $(size(to_array(results_feasible.fcu)))")
-        # println("size C: $(size(to_array(results.C)))")
         results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
-        # println("post new constrained results")
-        # println("size U: $(size(to_array(results_feasible.U)))")
-        # println("size fcu: $(size(to_array(results_feasible.fcu)))")
-        # println("size C: $(size(to_array(results_feasible.C)))")
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end
@@ -637,6 +625,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
             println("other: $val")
         end
     end
+
     p,pI,pE = get_num_constraints(solver)
     n = solver.model.n
 
@@ -651,10 +640,10 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
     for k = 1:final_index
         for i = 1:p
             if p <= pI
+                # multiplier update
+                results.λ[k][i] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
+                results.λ[k][i] = max(0.0,results.λ[k][i])
                 if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
-                    # multiplier update
-                    results.λ[k][i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
-                    results.λ[k][i] = max.(0.0,results.λ[k][i])
                     # no penalty update
                     results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
                 else
@@ -662,9 +651,9 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
                     results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
                 end
             else
+                # multiplier update
+                results.λ[k][i] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
                 if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
-                    # multiplier update
-                    results.λ[k][i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
                     # no penalty update
                     results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
                 else
@@ -677,8 +666,8 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
 
     # Terminal constraints
     for i = 1:n
+        results.λN[i] = max(solver.opts.λ_min, min(solver.opts.λ_max, results.λN[i] + results.μN[i]*results.CN[i]))
         if abs(results.CN[i]) <= τ*abs(results.CN_prev[i])
-            results.λN[i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN[i] + results.μN[i]*results.CN[i]))
             results.μN[i] = min(μ_max, γ_no*results.μN[i])
         else
             results.μN[i] = min(μ_max, γ*results.μN[i])

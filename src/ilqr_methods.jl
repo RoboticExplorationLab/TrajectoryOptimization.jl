@@ -76,7 +76,7 @@ function get_initial_dt(solver::Solver)
                 @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
             end
         else
-            dt  = 0.5*solver.opts.max_dt + 0.5*solver.opts.min_dt
+            dt  = 0.5*solver.opts.max_dt
         end
     else
         dt = solver.dt
@@ -158,7 +158,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = dv
+            du = copy(dv)
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
@@ -181,6 +181,13 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     end
 
     return true
+end
+"""
+$(SIGNATURES)
+Quadratic stage cost (with goal state)
+"""
+function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64},c::Float64=0)::Union{Float64,ForwardDiff.Dual}
+    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u + c
 end
 
 """
@@ -364,15 +371,12 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
     for k = 1:final_index
         # Evaluate constraint
-        if solver.control_integration == :foh && k <= N-1
-            c(res.C[k], X[k], U[k], X[k+1], U[k+1])
-        else
-            c(res.C[k], X[k], U[k])
-        end
+        c(res.C[k], X[k], U[k])
+
         # Zero out minimum time constraints that are not present at N-1, N timesteps
         if solver.opts.minimum_time
-            if k > N-2
-                res.C[k][end] = 0.0
+            if k < N-1
+                res.C[k][end] = U[k][m̄] - U[k+1][m̄]
             end
             if k == N
                 res.C[k][m̄] = 0.0
@@ -459,8 +463,8 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
         S[1:n] = x
         S[n+1:n+m] = u
         F(J,cdot,S)
-        cx .= J[1:p,1:n]
-        cu .= J[1:p,n+1:n+m]
+        cx[1:p,1:n] = J[1:p,1:n]
+        cu[1:p,1:m] = J[1:p,n+1:n+m]
     end
 
     if p_N > 0
@@ -469,7 +473,7 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
         F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
         function c_jacobian(cx,x)
             F_N(J_N,xdot,x)
-            cx .= J_N
+            cx[1:n,1:n] = J_N
         end
     end
 
@@ -514,10 +518,6 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Append on min time bounds
     u_max = obj.u_max
     u_min = obj.u_min
-    # if min_time
-    #     u_max = [u_max; sqrt(max_dt)]
-    #     u_min = [u_min; sqrt(min_dt)]
-    # end
 
     # Mask for active (state|control) constraints
     u_min_active = isfinite.(u_min)

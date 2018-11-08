@@ -147,6 +147,130 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
     return Δv
 end
 
+function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+    R = getR(solver)
+    dt = solver.dt
+
+    min_time = is_min_time(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        min_time ? dt = U[k][m̄]^2 : nothing
+
+        lx = dt*Q*vec(X[k] - xf)
+        lu = dt*R*vec(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fx, fu = res.fx[k], res.fu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fx'*vec(s[k+1])
+        Qu = lu + fu'*vec(s[k+1])
+        Qxx = lxx + fx'*S[k+1]*fx
+
+        Quu = luu + fu'*S[k+1]*fu
+        Qux = fu'*S[k+1]*fx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+
+            if min_time
+                h = U[k][m̄]
+                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
+                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
+                tmp = zero(Quu)
+                tmp[:,m̄] = R*U[k]
+                Quu += 2h*(tmp+tmp')
+                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
+
+                if k > 1
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - LAMBDA[k-1][end]
+                    Quu[m̄,m̄] += Iμ[k-1][end,end]
+                end
+
+            end
+
+        end
+
+        # Note: it is critical to have a separate, regularized Quu, Qux for the gains and unregularized versions for S,s to propagate backward
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + fu'*(res.ρ[1]*I)*fu
+            Qux_reg = Qux + fu'*(res.ρ[1]*I)*fx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
+            if solver.opts.verbose # TODO: switch to logger
+                println("regularized (normal bp)")
+                println("-condition number: $(cond(Array(Quu_reg)))")
+                println("Quu_reg: $(eigvals(Quu_reg))")
+                @show Quu_reg
+            end
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
 """
 $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
