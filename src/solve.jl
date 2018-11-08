@@ -195,6 +195,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     c_max_hist = Vector{Float64}()
     t_solve_start = time_ns()
 
+    ## Relative cost analysis
+    cost_minimum_time = 0.0
+    cost_infeasible = 0.0
+    cost_con = cost_constraints(solver,results)
+    for k = 1:solver.N-1
+        solver.opts.minimum_time ? cost_minimum_time += solver.opts.R_minimum_time*U[k][m̄]^2 : nothing
+        solver.opts.infeasible ? cost_infeasible += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+    end
+    @info "Cost (minimum time): $cost_minimum_time | Cost (constraints): $cost_con \n"
+
+    # error("stop here for now")
     #****************************#
     #         OUTER LOOP         #
     #****************************#
@@ -209,7 +220,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         iter_outer = j
         @info "Outer loop $j (begin)"
 
-        if solver.opts.constrained && j == 1# TODO: replace with single if statement
+        if solver.opts.constrained && j == 1
             results.C_prev .= deepcopy(results.C)
             results.CN_prev .= deepcopy(results.CN)
         end
@@ -286,6 +297,18 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             end
             print_row(logger,InnerLoop)
 
+            cost_minimum_time = 0.0
+            cost_infeasible = 0.0
+            cost_con = cost_constraints(solver,results)
+            cost_controls = 0.0
+            for k = 1:solver.N-1
+                solver.opts.minimum_time ? cost_minimum_time += solver.opts.R_minimum_time*U[k][m̄]^2 : nothing
+                solver.opts.infeasible ? cost_infeasible += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+            end
+            @info "Cost (minimum time): $cost_minimum_time| Cost (constraints): $cost_con"
+            @info ""
+            @info ""
+
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
         end
         ### END INNER LOOP ###
@@ -299,8 +322,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @logmsg OuterLoop :outeriter value=j
         @logmsg OuterLoop :iter value=iter
         @logmsg OuterLoop :iterations value=iter_inner
-        print_header(logger,OuterLoop)
-        print_row(logger,OuterLoop)
+        # print_header(logger,OuterLoop)
+        # print_row(logger,OuterLoop)
 
         #****************************#
         #    TERMINATION CRITERIA    #
@@ -381,7 +404,7 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
         if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
             # @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
             return true
-        elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance))
+        elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
             # @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
             return true
         end
@@ -389,11 +412,9 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
         # Check for cost convergence
         if ((~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
             # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
-            # if ~solver.opts.constrained
-                # @info "Unconstrained solve complete"
-            # end
+            # ~solver.opts.constrained ? @info "Unconstrained solve complete": nothing
             return true
-        elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance))
+        elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance && c_max < solver.opts.constraint_tolerance))
             # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
             return true
         elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance && iteration == solver.opts.iterations_outerloop)
@@ -616,12 +637,59 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
             println("other: $val")
         end
     end
+    p,pI,pE = get_num_constraints(solver)
+    n = solver.model.n
 
-    ## Lagrange multiplier updates
-    λ_update!(results,solver,false)
+    τ = solver.opts.τ
+    μ_max = solver.opts.μ_max
+    γ_no  = solver.opts.γ_no
+    γ = solver.opts.γ
 
-    ## Penalty updates
-    μ_update!(results,solver)
+    solver.control_integration == :foh ? final_index = solver.N : final_index = solver.N-1
+
+    # Stage constraints
+    for k = 1:final_index
+        for i = 1:p
+            if p <= pI
+                if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
+                    # multiplier update
+                    results.λ[k][i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
+                    results.λ[k][i] = max.(0.0,results.λ[k][i])
+                    # no penalty update
+                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
+                else
+                    #penalty update
+                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
+                end
+            else
+                if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
+                    # multiplier update
+                    results.λ[k][i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
+                    # no penalty update
+                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
+                else
+                    # penalty update
+                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
+                end
+            end
+        end
+    end
+
+    # Terminal constraints
+    for i = 1:n
+        if abs(results.CN[i]) <= τ*abs(results.CN_prev[i])
+            results.λN[i] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN[i] + results.μN[i]*results.CN[i]))
+            results.μN[i] = min(μ_max, γ_no*results.μN[i])
+        else
+            results.μN[i] = min(μ_max, γ*results.μN[i])
+        end
+    end
+
+    # ## Lagrange multiplier updates
+    # λ_update!(results,solver,false)
+    #
+    # ## Penalty updates
+    # μ_update!(results,solver)
 
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= deepcopy(results.C)

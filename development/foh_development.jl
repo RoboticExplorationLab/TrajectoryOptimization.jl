@@ -352,7 +352,7 @@ xmu = (h^2)/8*fcu
 xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
 xmv = -(h^2)/8*fcv
 ℓ2h = xmh'*Q*(xm-xf)
-_L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
+L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
 ℓ2hh = 2/8*((dx - dy)'*Q*(xm - xf) + h*(dx - dy)'*Q*xmh)
 L2hh = 4/6*(2*h*ℓ2h + 2*ℓ2 + (h^2)*ℓ2hh + 2*h*ℓ2h)
 L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*Q*xmh + 2/8*h*fcx'*Q*(xm - xf))
@@ -376,12 +376,9 @@ L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*Q*(xm - xf) + xmv'*Q*(dx - dy)))
 @test isapprox(ForwardDiff.hessian(L2_func,s)[end,end],L2hh)
 @test isapprox(ForwardDiff.jacobian(L2x_func,s)[:,end],L2xh)
 @test isapprox(ForwardDiff.jacobian(L2u_func,s)[:,end],L2uh)
-@test isapprox(ForwardDiff.jacobian(L2y_func,s)[:,end],L2yh)
-@test isapprox(ForwardDiff.jacobian(L2v_func,s)[:,end],L2vh)
-
-@test isapprox(L2h_func(s),_L2h)
-@test isapprox(ForwardDiff.gradient(L2h_func,s)[n+m+1:n+m+n],_L2hy)
-ForwardDiff.gradient(L2h_func,s)[n+m+1:n+m+n]
+@test isapprox(ForwardDiff.gradient(L2h_func,s)[n+m+1:n+m+n],L2hy)
+@test isapprox(ForwardDiff.gradient(L2h_func,s)[n+m+n+1:n+m+n+m],L2hv)
+@test isapprox(L2h_func(s),L2h)
 
 # Augmented expansions for minimum time
 _Lx = Lx
@@ -637,3 +634,13 @@ _L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu)'*Q*xmh + 2/8*h*fcu'*Q*(xm - xf))
 _L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu'*Q*(xm - xf) + xmu'*Q*(dx - dy)))
 _L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*Q*(xm - xf) + xmy'*Q*(dx - dy)))
 _L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv'*Q*(xm - xf) + xmv'*Q*(dx - dy)))
+
+
+_ℓ2h == ℓ2h
+_ℓ2hh == ℓ2hh
+_L2hh == L2hh
+_L2xh == L2xh
+_L2uh == L2uh
+_L2hu == L2hu
+_L2hy == L2hy
+_L2hv == L2hv

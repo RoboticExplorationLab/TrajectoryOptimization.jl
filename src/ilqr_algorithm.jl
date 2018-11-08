@@ -250,7 +250,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
-    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; S = results.S; s = results.s
+    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; s = results.s; # S = results.S
 
     # Boundary conditions
     S = zeros(n+mm,n+mm)
@@ -325,7 +325,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         ℓ2xy = (I/2 + dt/8*fcx)'*W*(I/2 - dt/8*fcy)
         ℓ2xv = (I/2 + dt/8*fcx)'*W*(-dt/8*fcv[:,1:m])
         ℓ2uy = (dt/8*fcu[:,1:m])'*W*(I/2 - dt/8*fcy)
-        ℓ2uv = ((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)  # note the name change; workspace conflict
+        ℓ2uv = ((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
         ℓ2yv = (I/2 - dt/8*fcy)'*W*(-dt/8*fcv[:,1:m])
 
         # ℓ(y,v) expansion
@@ -369,9 +369,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
             Lxu = [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
             Lxy = 4/6*(h^2)*ℓ2xy
             Lxv = [4/6*(h^2)*ℓ2xv zeros(n)]
-            # Luy = [4/6*(h^2)*ℓ2uy' (L2yh + 2/6*h*ℓ3y)]'
             Luy = [4/6*(h^2)*ℓ2uy; (L2hy + 2*h/6*ℓ3y)']
-            # Luv = [4/6*(h^2)*ℓ2uv' (L2vh + 2/6*h*ℓ3v); zeros(m)' 0]'
             Luv = [4/6*(h^2)*ℓ2uv zeros(m); (L2hv + 2*h/6*ℓ3v)' 0]
             Lyv = [4/6*(h^2)*ℓ2yv zeros(n)]
         else
@@ -453,6 +451,8 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         Qxv_reg = Qxv
         Quv_reg = Quv
 
+        # @info "Qvv condition: $(cond(Qvv_reg))"
+
         if !isposdef(Hermitian(Array(Qvv_reg)))
             # @logmsg InnerLoop "Regularized"
 
@@ -494,6 +494,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         if k == 1
             # regularize Quu_
             Q̄uu_reg = Q̄uu + results.ρ[1]*I
+            # @info "Q̄uu_reg condition: $(cond(Q̄uu_reg))"
 
             if !isposdef(Array(Hermitian(Q̄uu_reg)))
                 # @logmsg InnerLoop "Regularized"
@@ -594,7 +595,7 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
 
             regularization_update!(results,solver,:increase) # increase regularization
             results.ρ[1] *= solver.opts.ρ_forwardpass
-            @logmsg InnerLoop "Max iterations (forward pass)"
+            @logmsg InnerLoop "fp fail"
 
             break
         end

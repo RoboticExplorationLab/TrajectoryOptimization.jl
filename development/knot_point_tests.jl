@@ -1,7 +1,7 @@
 ### Solver options ###
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
-opts.verbose = false
+opts.verbose = true
 opts.z_min = 1e-8
 opts.z_max = 10.0
 opts.cost_intermediate_tolerance = 1e-3
