@@ -25,14 +25,16 @@ plot(to_array(results.X)')
 plot(to_array(results.U)')
 
 
-solver_min = Solver(model,integration=:rk3_foh,obj_min,N=41)
+solver_min = Solver(model,obj_min,N=41)
 U = ones(m,solver_min.N)
 solver_min.opts.verbose = true
 solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.2
 solver_min.opts.constraint_tolerance = 0.2
-solver_min.opts.min_time_regularization = 1000
+solver_min.opts.R_minimum_time = 1000
 solver_min.opts.ρ_initial = 0
+solver_min.opts.τ = .25
+solver_min.opts.γ = 10.0
 results_min,stats_min = solve(solver_min,U)
 total_time(solver_min,results_min)
 plot(to_array(results_min.X)[1:2,:]')

@@ -72,8 +72,11 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
 opts.constraint_tolerance = 1e-3
-opts.cost_intermediate_tolerance = 1e-2
+opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
+opts.τ = .75
+opts.γ = 2
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
 ######################
 
 ### Set up model, objective, solver ###
@@ -95,10 +98,8 @@ end
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
 
 # Solver
-solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
-
 # - Initial control and state trajectories
-U = ones(solver.model.m, solver.N)
+U = 10.0*ones(solver.model.m, solver.N)
 ##################
 
 ### Solve ###

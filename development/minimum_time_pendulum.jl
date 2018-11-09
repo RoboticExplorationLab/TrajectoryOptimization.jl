@@ -10,7 +10,7 @@ opts.cost_tolerance = 1e-3
 opts.iterations_outerloop = 50
 opts.iterations = 250
 opts.iterations_linesearch = 25
-opts.τ = 0.75
+opts.τ = 0.25
 opts.γ = 2.0
 opts.ρ_initial = 0.0
 opts.outer_loop_update = :default
@@ -18,22 +18,22 @@ opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
 opts.regularization_type = :control
-opts.max_dt = 0.25
-opts.min_dt = 0.01
-opts.μ_initial_minimum_time_inequality = 100.0
-opts.μ_initial_minimum_time_equality = 100.0
+opts.max_dt = 0.1
+opts.min_dt = 0.1
+opts.μ_initial_minimum_time_inequality = 1.0
+opts.μ_initial_minimum_time_equality = 1.0
 opts.ρ_forwardpass = 5.0
 opts.gradient_tolerance=1e-4
 opts.gradient_intermediate_tolerance=1e-4
-opts.μ_max = 10000.0
+opts.μ_max = 1e8
 opts.μ_initial = 1.0
 opts.λ_max = 1e8
 opts.λ_min = -1e8
 opts.ρ_max = 1e8
-opts.R_minimum_time = 10.0
+opts.R_minimum_time = 0.0
 opts.R_infeasible = 1e-3
 opts.resolve_feasible = false
-opts.live_plotting = false
+opts.live_plotting = true
 
 ######################
 
@@ -46,8 +46,8 @@ model_cartpole, obj_uncon_cartpole = TrajectoryOptimization.Dynamics.cartpole_ud
 ## Constraints
 
 # pendulum
-u_min_pendulum = -2
-u_max_pendulum = 2
+u_min_pendulum = -5
+u_max_pendulum = 5
 x_min_pendulum = [-20;-20]
 x_max_pendulum = [20; 20]
 
@@ -76,17 +76,20 @@ obj = obj_con_pendulum
 u_max = u_max_pendulum
 u_min = u_min_pendulum
 
-dt = 0.2
+dt = 0.1
 solver = Solver(model,obj,integration=:rk3_foh,dt=dt,opts=opts)
 
 N_mintime = solver.N
-opts.minimum_time_tf_estimate = solver.obj.tf
-obj_mintime = ConstrainedObjective(0.0*obj.Q,(1e-5)*Matrix(I,m,m),obj.Qf,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
+opts.minimum_time_tf_estimate = 0.0#solver.obj.tf
+R = obj.R
+Q = obj.Q
+Qf = obj.Qf
+obj_mintime = ConstrainedObjective(Q,R,Qf,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
 solver_mintime = Solver(model,obj_mintime,integration=:rk3_foh,N=N_mintime,opts=opts)
 opts.max_dt
 opts.min_dt
-U = zeros(m,solver.N)
-U_mintime = zeros(m,N_mintime)
+U = ones(m,solver.N)
+U_mintime = ones(m,N_mintime)
 X_interp = line_trajectory(solver_mintime)
 
 # U_dt = [U; ones(1,size(U,2))*sqrt(get_initial_dt(solver_mintime))]
@@ -94,7 +97,7 @@ X_interp = line_trajectory(solver_mintime)
 # maximum(ui)
 # minimum(ui)
 # U_ = [Um; Ui]
-U_mintime[1,:] = [val for (i,val) in enumerate(range(u_min,length=solver.N,stop=u_max))]
+# U_mintime[1,:] = [val for (i,val) in enumerate(range(u_min,length=solver_mintime.N,stop=u_max))]
 # U_mintime[1,:] = [u_max*cos(val) for (i,val) in enumerate(range(0,length=solver.N,stop=2*pi))]
 
 # results,stats = solve(solver,U)

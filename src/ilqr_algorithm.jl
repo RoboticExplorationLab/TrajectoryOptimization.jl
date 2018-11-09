@@ -147,13 +147,13 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
     n,m,N = get_sizes(solver)
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
     R = getR(solver)
     dt = solver.dt
 
-    min_time = is_min_time(solver)
+    min_time = solver.opts.minimum_time
     m̄,mm = get_num_controls(solver)
 
     # pull out values from results
@@ -168,7 +168,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
 
     # Terminal constraints
     if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; LAMBDA = res.LAMBDA
+        C = res.C; Iμ = res.Iμ; λ = res.λ
         CxN = res.Cx_N
         S[N] += CxN'*res.IμN*CxN
         s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
@@ -186,7 +186,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         luu = dt*R
 
         # Compute gradients of the dynamics
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*vec(s[k+1])
@@ -199,8 +199,8 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += Cx'*Iμ[k]*C[k] + Cx'*LAMBDA[k]
-            Qu += Cu'*Iμ[k]*C[k] + Cu'*LAMBDA[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
             Qxx += Cx'*Iμ[k]*Cx
             Quu += Cu'*Iμ[k]*Cu
             Qux += Cu'*Iμ[k]*Cx
@@ -215,7 +215,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
                 Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
 
                 if k > 1
-                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - LAMBDA[k-1][end]
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
                     Quu[m̄,m̄] += Iμ[k-1][end,end]
                 end
 
@@ -234,6 +234,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
 
         # Regularization
         if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
+        # if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
             if solver.opts.verbose # TODO: switch to logger
                 println("regularized (normal bp)")
                 println("-condition number: $(cond(Array(Quu_reg)))")
@@ -542,7 +543,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
                 #TODO Simplify
                 if k < N-1
                     Cv = zeros(p,mm)
-                    Cv[p,m̄] = -1
+                    Cv[p,m̄] = -1/(0.5*sqrt(solver.opts.max_dt) + 0.5*sqrt(solver.opts.min_dt))
                     Lv += Cv'*Iμ[k]*C[k] + Cv'*λ[k]
                     Lvv += Cv'*Iμ[k]*Cv
                     Lxv += Cx'*Iμ[k]*Cv
@@ -718,7 +719,7 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
             expected = 0.
 
             regularization_update!(results,solver,:increase) # increase regularization
-            results.ρ[1] *= solver.opts.ρ_forwardpass
+            results.ρ[1] += 1#solver.opts.ρ_forwardpass
             @logmsg InnerLoop "fp fail"
 
             break

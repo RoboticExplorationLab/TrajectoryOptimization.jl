@@ -139,6 +139,7 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=1.0,min_dt=1e-3)
 cres = zeros(11)
 u_dt = [u; 0.1]
+
 cans = [0,-0.9,-3,sqrt(1e-3)-u_dt[2],-3,1,-4,-8,6,8,.1]
 c(cres,x,u_dt)
 @test cres == cans
