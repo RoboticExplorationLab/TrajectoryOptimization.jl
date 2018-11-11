@@ -58,9 +58,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters
-    N = solver.N # number of iterations for the solver (ie, knotpoints)
-    n = solver.model.n # number of states
-    m = solver.model.m # number of control inputs
+    n,m,N = get_sizes(solver)
 
     # Check for minimum time solve
     is_minimum_time(solver) ? solver.opts.minimum_time = true : solver.opts.minimum_time = false
@@ -440,15 +438,6 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
     if loop == :outer
         if solver.opts.constrained
             if c_max < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
-                # if solver.opts.verbose
-                #     # println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")
-                #     # println("Constrained solve complete")
-                #     if dJ < solver.opts.cost_tolerance
-                #         println("--Cost tolerance met")
-                #     else
-                #         println("--Gradient tolerance met")
-                #     end
-                # end
                 return true
             end
         end
@@ -463,19 +452,15 @@ $(SIGNATURES)
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
     # turn off infeasible solve
     solver.opts.infeasible = false
-    println("pre removal: Xf - $(results.X[end])")
 
     # remove infeasible components
     results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
-    println("post removal: Xf - $(results_feasible.X[end])")
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results_feasible, solver)
 
     # forward pass
     forwardpass!(results_feasible,solver,Δv)
-    println("post fp: Xf - $(results_feasible.X[end])")
-    println("post fp: Xf_ - $(results_feasible.X_[end])")
 
     # update trajectories
     results_feasible.X .= deepcopy(results_feasible.X_)

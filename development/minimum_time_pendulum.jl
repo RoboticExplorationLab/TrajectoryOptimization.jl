@@ -33,7 +33,7 @@ opts.ρ_max = 1e8
 opts.R_minimum_time = 0.0
 opts.R_infeasible = 1e-3
 opts.resolve_feasible = false
-opts.live_plotting = true
+opts.live_plotting = false
 
 ######################
 
@@ -84,7 +84,7 @@ opts.minimum_time_tf_estimate = 0.0#solver.obj.tf
 R = obj.R
 Q = obj.Q
 Qf = obj.Qf
-obj_mintime = ConstrainedObjective(Q,R,Qf,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
+obj_mintime = ConstrainedObjective(Q,R,Qf*0.0,0.0,obj.x0,obj.xf,u_min=obj.u_min,u_max=obj.u_max)
 solver_mintime = Solver(model,obj_mintime,integration=:rk3_foh,N=N_mintime,opts=opts)
 opts.max_dt
 opts.min_dt

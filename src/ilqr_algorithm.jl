@@ -21,8 +21,11 @@ $(SIGNATURES)
 function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.control_integration == :foh
         Δv = _backwardpass_foh!(results,solver)
-    elseif solver.opts.square_root
-        Δv = _backwardpass_sqrt!(results, solver)
+    # elseif solver.opts.square_root
+    #     Δv = _backwardpass_sqrt!(results, solver)
+    # elseif solver.opts.minimum_time
+    #     Δv = _backwardpass_mintime!(results, solver)
+
     else
         Δv = _backwardpass!(results, solver)
     end
@@ -38,7 +41,6 @@ function _backwardpass!(results::SolverVectorResults,solver::Solver)
     # Objective parameters
     W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
-    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
@@ -234,13 +236,6 @@ function _backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
 
         # Regularization
         if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
-        # if rank(Quu_reg) != mm  # need to wrap Array since isposdef doesn't work for static arrays
-            if solver.opts.verbose # TODO: switch to logger
-                println("regularized (normal bp)")
-                println("-condition number: $(cond(Array(Quu_reg)))")
-                println("Quu_reg: $(eigvals(Quu_reg))")
-                @show Quu_reg
-            end
 
             # increase regularization
             regularization_update!(res,solver,:increase)
@@ -421,7 +416,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         u = results.U[k]
         v = results.U[k+1]
         xm = results.xm[k]
-        um = (U[k] + U[k+1])/2.
+        um = results.um[k]
         dx = results.dx[k]
         dy = results.dx[k+1]
 
@@ -480,6 +475,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
             L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu[:,1:m]'*W*(xm - xf) + xmu'*W*(dx - dy)))
             L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*W*(xm - xf) + xmy'*W*(dx - dy)))
             L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv[:,1:m]'*W*(xm - xf) + xmv'*W*(dx - dy)))
+
             # Assemble expansion
             Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
             Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*R_minimum_time*h)]
@@ -543,7 +539,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
                 #TODO Simplify
                 if k < N-1
                     Cv = zeros(p,mm)
-                    Cv[p,m̄] = -1/(0.5*sqrt(solver.opts.max_dt) + 0.5*sqrt(solver.opts.min_dt))
+                    Cv[p,m̄] = -1
                     Lv += Cv'*Iμ[k]*C[k] + Cv'*λ[k]
                     Lvv += Cv'*Iμ[k]*Cv
                     Lxv += Cx'*Iμ[k]*Cv
@@ -579,7 +575,6 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
         # @info "Qvv condition: $(cond(Qvv_reg))"
 
         if !isposdef(Hermitian(Array(Qvv_reg)))
-            # @logmsg InnerLoop "Regularized"
 
             regularization_update!(results,solver,:increase)
 
@@ -704,8 +699,8 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
         if iter > solver.opts.iterations_linesearch
 
             # set trajectories to original trajectory
-            X_ .= X
-            U_ .= U
+            X_ .= deepcopy(X)
+            U_ .= deepcopy(U)
 
             if solver.control_integration == :foh
                 calculate_derivatives!(results, solver, X_, U_)
@@ -739,7 +734,7 @@ function forwardpass!(results::SolverIterResults, solver::Solver, Δv::Array{Flo
 
         # Calcuate cost
         update_constraints!(results,solver,X_,U_)
-        J =cost(solver, results, X_, U_)
+        J = cost(solver, results, X_, U_)
 
         expected = -alpha*(Δv[1] + alpha*Δv[2])
         if expected > 0

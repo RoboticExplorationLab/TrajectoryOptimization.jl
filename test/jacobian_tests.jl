@@ -76,7 +76,6 @@ opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
 opts.τ = .75
 opts.γ = 2
-solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
 ######################
 
 ### Set up model, objective, solver ###
@@ -99,7 +98,9 @@ obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_
 
 # Solver
 # - Initial control and state trajectories
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
 U = 10.0*ones(solver.model.m, solver.N)
+
 ##################
 
 ### Solve ###

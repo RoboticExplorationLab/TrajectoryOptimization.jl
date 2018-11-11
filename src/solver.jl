@@ -180,7 +180,7 @@ struct Solver{O<:Objective}
         end
 
         function fc_jacobians!(x,u)
-            infeasible = size(u,1) != m̄
+            # infeasible = size(u,1) != m̄
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)
