@@ -45,7 +45,7 @@ Get number of controls, accounting for minimum time and infeasible start
 function get_num_controls(solver::Solver)
     n,m = get_sizes(solver)
     m̄ = m
-    is_min_time(solver) ? m̄ += 1 : nothing
+    solver.opts.minimum_time ? m̄ += 1 : nothing
     solver.opts.infeasible ? mm = m̄ + n : mm = m̄
     return m̄, mm
 end
