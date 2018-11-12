@@ -155,3 +155,7 @@ Converts a separated dynamics function into an augmented dynamics function (foh 
 function f_augmented_foh!(fd!::Function, n::Int, m::Int)
     f_aug_foh!(dS::AbstractArray, S::Array) = fd!(dS, S[1:n], S[n+1:n+m], S[n+m+1:n+m+m])
 end
+
+function fd_augmented_foh!(fd!::Function, n::Int, m::Int)
+    f_aug_foh!(dS::AbstractArray, S::Array) = fd!(dS, S[1:n], S[n+1:n+m], S[n+m+1+1:n+m+1+m], S[n+m+1]^2)
+end
