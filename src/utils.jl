@@ -185,11 +185,6 @@ end
 print_info(msg) = println(:info,msg)
 print_debug(msg) = println(:debug,msg)
 
-#TODO finish
-function plot_cost(results::ResultsCache)
-    index_outerloop = find(x -> x == 1, results.iter_type)
-end
-
 """
 $(SIGNATURES)
 
@@ -215,27 +210,6 @@ function eul2quat(eul)
 
     quat
 end
-
-# """
-# $(SIGNATURES)
-#
-# Plot a 3D trajectory (static)
-# """
-# function plot_3D_trajectory(results::ResultsCache, solver::Solver;xlim=[-10.0;10.0],ylim=[-10.0;10.0],zlim=[-10.0;10.0],title::String="3D Trajectory")::Nothing
-#     # initialize a 3D plot with 1 empty series
-#     plt = path3d(1, xlim=(xlim[1],xlim[2]), ylim=(ylim[1],ylim[2]), zlim=(zlim[1],zlim[2]),
-#                     xlab = "", ylab = "", zlab = "",
-#                     title=title,legend=nothing,color="blue",width=2)
-#
-#     # build 3D plot
-#     for i=1:solver.N
-#         push!(plt, results.X[1,i], results.X[2,i], results.X[3,i])
-#     end
-#     plot!((solver.obj.x0[1],solver.obj.x0[2],solver.obj.x0[3]),marker=(:circle,"red"))
-#     plot!((solver.obj.xf[1],solver.obj.xf[2],solver.obj.xf[3]),marker=(:circle,"green"))
-#     display(plt)
-#     return nothing
-# end
 
 function print_solver(solver::Solver,name::String,io::IO=STDOUT)
     println(io,"###  $name  ###")

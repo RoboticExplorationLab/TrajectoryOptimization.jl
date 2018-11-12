@@ -230,7 +230,7 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     for k = 1:N-1
         min_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
-            xm = res.xmid[k]
+            xm = res.xm[k]
             um = (U[k] + U[k+1])/2
             J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,obj.R,xf) + 4/6*ℓ(xm,um[1:m],Q,obj.R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,obj.R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
             is_min_time(solver) ? J += solver.opts.R_minimum_time*dt : nothing
@@ -291,16 +291,16 @@ function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float6
     for k = 1:N-1
         if solver.control_integration == :foh
 
-            xdot1 = zeros(n)
-            xdot2 = zeros(n)
-            solver.fc(xdot1,X[:,k],U[1:solver.model.m,k])
-            solver.fc(xdot2,X[:,k+1],U[1:solver.model.m,k+1])
+            dx1 = zeros(n)
+            dx2 = zeros(n)
+            solver.fc(dx1,X[:,k],U[1:solver.model.m,k])
+            solver.fc(dx2,X[:,k+1],U[1:solver.model.m,k+1])
             #
             # # # #TODO use calculate_derivatives!
-            # xdot1 = res.xdot[:,k]
-            # xdot2 = res.xdot[:,k+1]
+            # dx1 = res.dx[:,k]
+            # dx2 = res.dx[:,k+1]
 
-            Xm = 0.5*X[:,k] + dt/8*xdot1 + 0.5*X[:,k+1] - dt/8*xdot2
+            Xm = 0.5*X[:,k] + dt/8*dx1 + 0.5*X[:,k+1] - dt/8*dx2
             Um = (U[:,k] + U[:,k+1])/2
 
             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
@@ -318,13 +318,13 @@ end
 $(SIGNATURES)
     Calculate state midpoint using cubic spline
 """
-function cubic_midpoint(x1::AbstractVector,xdot1::AbstractVector,x2::AbstractVector,xdot2::AbstractVector,dt::Float64)
-    0.5*x1 + dt/8.0*xdot1 + 0.5*x2 - dt/8.0*xdot2
+function cubic_midpoint(x1::AbstractVector,dx1::AbstractVector,x2::AbstractVector,dx2::AbstractVector,dt::Float64)
+    0.5*x1 + dt/8.0*dx1 + 0.5*x2 - dt/8.0*dx2
 end
 
 """
 $(SIGNATURES)
-    Calculate state midpoints (xmid)
+    Calculate state midpoints (xm)
 """
 function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
     n,m,N = get_sizes(solver)
@@ -333,18 +333,19 @@ function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::V
     dt = solver.dt
     for k = 1:N-1
         is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
-        results.xmid[k] = cubic_midpoint(results.X[k],results.xdot[k],results.X[k+1],results.xdot[k+1],dt)
+        results.xm[k] = cubic_midpoint(results.X[k],results.dx[k],results.X[k+1],results.dx[k+1],dt)
+        results.um[k] = 0.5*U[k] + 0.5*U[k+1]
     end
 end
 
 """
 $(SIGNATURES)
-    Calculate state derivatives (xdot)
+    Calculate state derivatives (dx)
 """
 function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
     n,m,N = get_sizes(solver)
     for k = 1:N
-        solver.fc(results.xdot[k],X[k],U[k][1:m])
+        solver.fc(results.dx[k],X[k],U[k][1:m])
     end
 end
 
@@ -360,10 +361,10 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     m̄,mm = get_num_controls(solver)
     for k = 1:N-1
         if solver.control_integration == :foh
-            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.Ac[k], res.Bc[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
+            res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
+            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
         else
-            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
+            res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
         if min_time && k < N-1
@@ -372,7 +373,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     end
 
     if solver.control_integration == :foh
-        res.Ac[N], res.Bc[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
+        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
         solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
         if is_min_time(solver)
             res.Cu[N][m̄,:] .= 0.0
@@ -392,14 +393,14 @@ function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::No
 
     for k = 1:N-1
         if solver.control_integration == :foh
-            res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.Ac[k], res.Bc[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
+            res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
+            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
         else
-            res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
+            res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
     end
     if solver.control_integration == :foh
-        res.Ac[N], res.Bc[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
+        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
     end
 
     return nothing
@@ -511,26 +512,54 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
     cdot = zeros(p)
     F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
 
-    function c_jacobian(fx,fu,x,u)
+    function c_jacobian(cx,cu,x,u)
         S[1:n] = x
         S[n+1:n+m] = u
         F(J,cdot,S)
-        fx .= J[1:p,1:n]
-        fu .= J[1:p,n+1:n+m]
+        cx[1:p,1:n] = J[1:p,1:n]
+        cu[1:p,1:m] = J[1:p,n+1:n+m]
     end
 
     if p_N > 0
         J_N = zeros(p_N,n)
         xdot = zeros(p_N)
-        F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x)
-        function c_jacobian(fx,x)
+        F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
+        function c_jacobian(cx,x)
             F_N(J_N,xdot,x)
-            fx .= J_N
+            cx .= J_N
         end
     end
 
     return c_jacobian
 end
+
+# function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int64,m::Int64)::Function
+#     c_aug! = f_augmented!(c,n,m)
+#     J = zeros(p,n+m)
+#     S = zeros(n+m)
+#     cdot = zeros(p)
+#     F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
+#
+#     function c_jacobian(fx,fu,x,u)
+#         S[1:n] = x
+#         S[n+1:n+m] = u
+#         F(J,cdot,S)
+#         fx .= J[1:p,1:n]
+#         fu .= J[1:p,n+1:n+m]
+#     end
+#
+#     if p_N > 0
+#         J_N = zeros(p_N,n)
+#         dx = zeros(p_N)
+#         F_N(J_N,dx,x) = ForwardDiff.jacobian!(J_N,c,dx,x)
+#         function c_jacobian(fx,x)
+#             F_N(J_N,dx,x)
+#             fx .= J_N
+#         end
+#     end
+#
+#     return c_jacobian
+# end
 
 """
 $(SIGNATURES)

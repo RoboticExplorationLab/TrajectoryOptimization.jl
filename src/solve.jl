@@ -21,20 +21,15 @@ Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
 function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
+    # solver = Solver(solver)
+    # Initialize zero controls if none are passed in
+    isempty(U0) ? U0 = zeros(solver.m,solver.N) : nothing
 
-    # If initialize zero controls if none are passed in
-    if isempty(U0)
-        U0 = zeros(solver.m,solver.N-1)
-    end
-
-    # Convert to a constrained problem
+    # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
     if isa(solver.obj, UnconstrainedObjective)
-        if solver.opts.solve_feasible == false
-            solver.opts.infeasible = true
-        end
-
+        solver.opts.unconstrained_original_problem = true
+        solver.opts.infeasible = true
         obj_c = ConstrainedObjective(solver.obj)
-        solver.opts.unconstrained = true
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
 
@@ -61,86 +56,93 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters
-    N = solver.N # number of iterations for the solver (ie, knotpoints)
-    n = solver.model.n # number of states
-    m = solver.model.m # number of control inputs
+    n,m,N = get_sizes(solver)
 
-    # Use infeasible start if an initial trajectory was passed in
-    if isempty(X0)
-        infeasible = false
+    # Check for minimum time solve
+    is_min_time(solver) ? solver.opts.minimum_time = true : solver.opts.minimum_time = false
+
+    # Check for infeasible start
+    isempty(X0) ? solver.opts.infeasible = false : solver.opts.infeasible = true
+
+    # Check for constrained solve
+    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjective
+        solver.opts.constrained = true
     else
-        infeasible = true
+        solver.opts.constrained = false
     end
-
-    # Determine if the problem in constrained
-    is_constrained = false
-    if infeasible || is_min_time(solver) || Obj <: ConstrainedObjective
-        is_constrained = true
-    end
-
-    use_static = solver.opts.use_static
 
     #****************************#
     #       INITIALIZATION       #
     #****************************#
-    if !is_constrained
+    if !solver.opts.constrained
         @info "Solving Unconstrained Problem..."
 
         iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
-        if use_static
+        if solver.opts.use_static
             results = UnconstrainedStaticResults(n,m,N)
         else
             results = UnconstrainedVectorResults(n,m,N)
         end
         copyto!(results.U, U0)
-
-    elseif is_constrained
-        if is_min_time(solver)
-            infeasible ? sep = " and " : sep = " with "
+    else
+        if solver.opts.minimum_time
+            solver.opts.infeasible ? sep = " and " : sep = " with "
             solve_string = sep * "minimum time..."
+
+            # Initialize controls with sqrt(dt)
             U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
         else
             solve_string = "..."
             U_init = U0
         end
-        X_init = zeros(n,N)
 
-        if infeasible
+        if solver.opts.infeasible
             solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
-            ui = infeasible_controls(solver,X0,U0)  # generates n additional control input sequences that produce the desired infeasible state trajectory
-            X_init = X0            # initialize state trajectory with infeasible trajectory input
+
+            # Generate infeasible controls
+            ui = infeasible_controls(solver,X0,U_init)  # generates n additional control input sequences that produce the desired infeasible state trajectory
             U_init = [U_init; ui]  # augment control with additional control inputs that produce infeasible state trajectory
-            solver.opts.infeasible = true
+
+            # Assign state trajectory
+            X_init = X0
         else
             solve_string = "Solving Constrained Problem" * solve_string
-            solver.opts.infeasible = false
+            X_init = zeros(n,N)
         end
 
         @info solve_string
 
-        # get counts
+        # Get system and constraint counts
         p,pI,pE = get_num_constraints(solver)
         m̄,mm = get_num_controls(solver)
 
-
         ## Initialize results
-        if use_static
-            results = ConstrainedStaticResults(n,mm,p,N)
-        else
-            results = ConstrainedVectorResults(n,mm,p,N)
-        end
+        solver.opts.use_static ? results = ConstrainedStaticResults(n,mm,p,N) : results = ConstrainedVectorResults(n,mm,p,N)
 
         # Set initial penalty term values
         results.μ .*= solver.opts.μ_initial
 
+        # Special penalty initializations
+        if solver.opts.minimum_time
+            for k = 1:solver.N
+                results.μ[k][p] *= solver.opts.μ_initial_minimum_time_equality
+                results.μ[k][m̄] *= solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] *= solver.opts.μ_initial_minimum_time_inequality
+            end
+        end
+        if solver.opts.infeasible
+            nothing #TODO
+        end
+
         # Set initial regularization
         results.ρ[1] = solver.opts.ρ_initial
 
+        # Assign initial trajectories to results
         copyto!(results.X, X_init)
         copyto!(results.U, U_init)
 
-        # Generate constraint function and jacobian functions from the objective
+        # Initial evaluation of constraints
         update_constraints!(results,solver,results.X,results.U)
     end
 
@@ -150,13 +152,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     X_ = results.X_ # updated state trajectory
     U_ = results.U_ # updated control trajectory
 
-
     # Set up logger
-    if solver.opts.verbose == false
-        min_level = Logging.Warn
-    else
-        min_level = InnerLoop
-    end
+    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
+
     logger = SolverLogger(min_level)
     inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
     inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
@@ -169,13 +167,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #           SOLVER           #
     #****************************#
     # Initial rollout
-    if !infeasible
+    if !solver.opts.infeasible
         X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
             if solver.opts.verbose
-                println("Bad initial control sequence, setting initial control to zero")
+                @info "Bad initial control sequence, setting initial control to zero"
             end
             results.U .= zeros(mm,N)
             rollout!(results,solver)
@@ -205,11 +203,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         iter_outer = j
         @info "Outer loop $j (begin)"
 
-        if is_constrained
-            if j == 1
-                results.C_prev .= deepcopy(results.C)
-                results.CN_prev .= deepcopy(results.CN)
-            end
+        if solver.opts.constrained && j == 1
+            results.C_prev .= deepcopy(results.C)
+            results.CN_prev .= deepcopy(results.CN)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         J_prev = cost(solver, results, X, U)
@@ -224,15 +220,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
-            if solver.control_integration == :foh
-                Δv = _backwardpass_foh_mintime!(results,solver)
-            elseif solver.opts.square_root
-                Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
-            elseif is_min_time(solver)
-                Δv = backwardpass_mintime!(results, solver)
-            else
-                Δv = backwardpass!(results, solver)
-            end
+            Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv)
@@ -248,7 +236,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
 
-            if is_constrained
+            if solver.opts.constrained
                 c_max = max_violation(results)
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
@@ -277,34 +265,32 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             # end
             # @logmsg InnerLoop :c_diff value=c_diff
 
-            if ii % 10 == 1
-                print_header(logger,InnerLoop)
-            end
+            ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
 
-            if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
+            if (~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
                 break
 
             # Check for gradient and constraint tolerance convergence
-            elseif (is_constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance)
+            elseif (solver.opts.constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
                 break
             end
             #####################
 
             ## Check for cost convergence ##
-            if (~is_constrained && dJ < solver.opts.cost_tolerance) || (is_constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
+            if (~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
-                if ~is_constrained
+                if ~solver.opts.constrained
                     @info "Unconstrained solve complete"
                 end
                 break
             # Check for cost and constraint tolerance convergence
-            elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
+            elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
                 break
-            elseif is_constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
+            elseif solver.opts.constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
                 @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization
@@ -340,7 +326,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #    TERMINATION CRITERIA    #
         #****************************#
         # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        if is_constrained
+        if solver.opts.constrained
             max_c = max_violation(results)
             if max_c < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
                 if solver.opts.verbose
@@ -360,12 +346,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
     ### END OUTER LOOP ###
 
-    if is_constrained
-        # use_static ? results = ConstrainedResults(results) : nothing
-    else
-        # use_static ? results = UnconstrainedResults(results) : nothing
-        solver.opts.iterations_outerloop = iterations_outerloop_original
-    end
+    solver.opts.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
 
     # Run Stats
     stats = Dict("iterations"=>iter,
@@ -380,7 +361,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     ## Return dynamically feasible trajectory
-    if infeasible #&& solver.opts.solve_feasible
+    if solver.opts.infeasible #&& solver.opts.solve_feasible
         @info "Infeasible solve complete"
 
         # run single backward pass/forward pass to get dynamically feasible solution
@@ -426,6 +407,44 @@ end
 
 """
 $(SIGNATURES)
+    Check convergence
+    -return true is convergence criteria is met, else return false
+"""
+
+function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iteration::Int64)
+    if loop == :inner
+        # Check for gradient convergence
+        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
+            # @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
+            return true
+        elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
+            # @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
+            return true
+        end
+
+        # Check for cost convergence
+        if ((~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
+            # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
+            # ~solver.opts.constrained ? @info "Unconstrained solve complete": nothing
+            return true
+        elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance && c_max < solver.opts.constraint_tolerance))
+            # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
+            return true
+        end
+    end
+
+    if loop == :outer
+        if solver.opts.constrained
+            if c_max < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+"""
+$(SIGNATURES)
     Infeasible start solution is run through time varying LQR to track state and control trajectories
 """
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
@@ -433,31 +452,66 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     solver.opts.infeasible = false
 
     # remove infeasible components
-    results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
+    results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
 
-    # backward pass (ie, time varying lqr)
-    if solver.control_integration == :foh
-        Δv = backwardpass_foh!(results_feasible,solver)
-    elseif solver.opts.square_root
-        Δv = backwardpass_sqrt!(results_feasible, solver)
-    else
-        Δv = backwardpass!(results_feasible, solver)
-    end
+    # backward pass - project infeasible trajectory into feasible space using time varying lqr
+    Δv = backwardpass!(results_feasible, solver)
 
-    # rollout
+    # forward pass
     forwardpass!(results_feasible,solver,Δv)
-    results_feasible.X .= results_feasible.X_
-    results_feasible.U .= results_feasible.U_
+
+    # update trajectories
+    results_feasible.X .= deepcopy(results_feasible.X_)
+    results_feasible.U .= deepcopy(results_feasible.U_)
 
     # return constrained results if input was constrained
-    if !solver.opts.unconstrained
-        results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
+    if !solver.opts.unconstrained_original_problem
+        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
+    end
+    if solver.control_integration == :foh
+        calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
+        calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
     end
 
     return results_feasible
 end
+
+# """
+# $(SIGNATURES)
+#     Infeasible start solution is run through time varying LQR to track state and control trajectories
+# """
+# function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
+#     # turn off infeasible solve
+#     solver.opts.infeasible = false
+#
+#     # remove infeasible components
+#     results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
+#
+#     # backward pass (ie, time varying lqr)
+#     if solver.control_integration == :foh
+#         Δv = backwardpass_foh!(results_feasible,solver)
+#     elseif solver.opts.square_root
+#         Δv = backwardpass_sqrt!(results_feasible, solver)
+#     else
+#         Δv = backwardpass!(results_feasible, solver)
+#     end
+#
+#     # rollout
+#     forwardpass!(results_feasible,solver,Δv)
+#     results_feasible.X .= results_feasible.X_
+#     results_feasible.U .= results_feasible.U_
+#
+#     # return constrained results if input was constrained
+#     if !solver.opts.unconstrained
+#         results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
+#         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
+#         calculate_jacobians!(results_feasible,solver)
+#     end
+#
+#     return results_feasible
+# end
 
 """
 $(SIGNATURES)
@@ -796,7 +850,7 @@ function λ_update_2_foh!(results::ConstrainedIterResults,solver::Solver)
         Ac2, Bc2 = results.Ac[k+1], results.Bc[k+1]
         Ad, Bd, Cd = results.fx[k], results.fu[k], results.fv[k]
 
-        xm = results.xmid[k]
+        xm = results.xm[k]
         um = (U[k] + U[k+1])/2.0
 
         lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1)

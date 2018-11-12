@@ -18,7 +18,19 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
 Online Trajectory Optimization)
 """
-function backwardpass!(res::SolverVectorResults,solver::Solver)
+function backwardpass!(results::SolverVectorResults,solver::Solver)
+    if solver.control_integration == :foh
+        Δv = _backwardpass_foh_mintime!(results,solver)
+    elseif solver.opts.square_root
+        Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+    elseif is_min_time(solver)
+        Δv = _backwardpass_mintime!(results, solver)
+    else
+        Δv = _backwardpass!(results, solver)
+    end
+    return Δv
+end
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
     N = solver.N; n = solver.model.n; m = solver.model.m;
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf;
     R = getR(solver)
@@ -56,7 +68,7 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
         luu = dt*R
 
         # Compute gradients of the dynamics
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*vec(s[k+1])
@@ -124,7 +136,7 @@ function backwardpass!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
     n,m,N = get_sizes(solver)
     Q = solver.obj.Q; Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
     R = getR(solver)
@@ -163,7 +175,7 @@ function backwardpass_mintime!(res::SolverVectorResults,solver::Solver)
         luu = dt*R
 
         # Compute gradients of the dynamics
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = lx + fx'*vec(s[k+1])
@@ -253,7 +265,7 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
@@ -296,7 +308,7 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         lxx = dt*Q
         luu = dt*R
 
-        fx, fu = res.fx[k], res.fu[k]
+        fx, fu = res.fdx[k], res.fdu[k]
 
         Qx = lx + fx'*s[k+1]
         Qu = lu + fu'*s[k+1]
@@ -339,7 +351,7 @@ function backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     n, m, N = get_sizes(solver)
 
     # Check for infeasible start
@@ -385,30 +397,30 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
         # Unpack Jacobians, ̇x
-        Ac1, Bc1 = res.Ac[k], res.Bc[k][:,1:m]
-        Ac2, Bc2 = res.Ac[k+1], res.Bc[k+1][:,1:m]
-        Ad, Bd, Cd = res.fx[k], res.fu[k], res.fv[k]
+        fcx, fcu = res.fcx[k], res.fcu[k][:,1:m]
+        fcy, fcv = res.fcx[k+1], res.fcu[k+1][:,1:m]
+        fdx, fdu, fdv = res.fdx[k], res.fdu[k], res.fv[k]
 
-        xm = res.xmid[k]
+        xm = res.xm[k]
         um = (U[k] + U[k+1])/2.
 
         # Expansion of stage cost L(x,u,y,v) -> dL(dx,du,dy,dv)
-        Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(xm - xf)
-        Lu = dt/6*R*U[k] + 4*dt/6*((dt/8*Bc1)'*Q*(xm - xf) + 0.5*R*um)
-        Ly = dt/6*Q*(X[k+1] - xf) + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(xm - xf)
-        Lv = dt/6*R*U[k+1] + 4*dt/6*((-dt/8*Bc2)'*Q*(xm - xf) + 0.5*R*um)
+        Lx = dt/6*Q*(X[k] - xf) + 4*dt/6*(I/2 + dt/8*fcx)'*Q*(xm - xf)
+        Lu = dt/6*R*U[k] + 4*dt/6*((dt/8*fcu)'*Q*(xm - xf) + 0.5*R*um)
+        Ly = dt/6*Q*(X[k+1] - xf) + 4*dt/6*(I/2 - dt/8*fcy)'*Q*(xm - xf)
+        Lv = dt/6*R*U[k+1] + 4*dt/6*((-dt/8*fcv)'*Q*(xm - xf) + 0.5*R*um)
 
-        Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 + dt/8*Ac1)
-        Luu = dt/6*R + 4*dt/6*((dt/8*Bc1)'*Q*(dt/8*Bc1) + 0.5*R*0.5)
-        Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(I/2 - dt/8*Ac2)
-        Lvv = dt/6*R + 4*dt/6*((-dt/8*Bc2)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
+        Lxx = dt/6*Q + 4*dt/6*(I/2 + dt/8*fcx)'*Q*(I/2 + dt/8*fcx)
+        Luu = dt/6*R + 4*dt/6*((dt/8*fcu)'*Q*(dt/8*fcu) + 0.5*R*0.5)
+        Lyy = dt/6*Q + 4*dt/6*(I/2 - dt/8*fcy)'*Q*(I/2 - dt/8*fcy)
+        Lvv = dt/6*R + 4*dt/6*((-dt/8*fcv)'*Q*(-dt/8*fcv) + 0.5*R*0.5)
 
-        Lxu = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(dt/8*Bc1)
-        Lxy = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(I/2 - dt/8*Ac2)
-        Lxv = 4*dt/6*(I/2 + dt/8*Ac1)'*Q*(-dt/8*Bc2)
-        Luy = 4*dt/6*(dt/8*Bc1)'*Q*(I/2 - dt/8*Ac2)
-        Luv = 4*dt/6*((dt/8*Bc1)'*Q*(-dt/8*Bc2) + 0.5*R*0.5)
-        Lyv = 4*dt/6*(I/2 - dt/8*Ac2)'*Q*(-dt/8*Bc2)
+        Lxu = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(dt/8*fcu)
+        Lxy = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(I/2 - dt/8*fcy)
+        Lxv = 4*dt/6*(I/2 + dt/8*fcx)'*Q*(-dt/8*fcv)
+        Luy = 4*dt/6*(dt/8*fcu)'*Q*(I/2 - dt/8*fcy)
+        Luv = 4*dt/6*((dt/8*fcu)'*Q*(-dt/8*fcv) + 0.5*R*0.5)
+        Lyv = 4*dt/6*(I/2 - dt/8*fcy)'*Q*(-dt/8*fcv)
 
         # Constraints
         if res isa ConstrainedIterResults
@@ -428,23 +440,23 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
         Syv = S[1:n,n+1:n+m]
 
         # Substitute in discrete dynamics (second order approximation)
-        Qx = vec(Lx) + Ad'*vec(Ly) + Ad'*vec(Sy)
-        Qu = vec(Lu) + Bd'*vec(Ly) + Bd'*vec(Sy)
-        Qv = vec(Lv) + Cd'*vec(Ly) + Cd'*vec(Sy) + Sv
+        Qx = vec(Lx) + fdx'*vec(Ly) + fdx'*vec(Sy)
+        Qu = vec(Lu) + fdu'*vec(Ly) + fdu'*vec(Sy)
+        Qv = vec(Lv) + fdv'*vec(Ly) + fdv'*vec(Sy) + Sv
 
-        Qxx = Lxx + Lxy*Ad + Ad'*Lxy' + Ad'*Lyy*Ad + Ad'*Syy*Ad
-        Quu = Luu + Luy*Bd + Bd'*Luy' + Bd'*Lyy*Bd + Bd'*Syy*Bd
-        Qvv = Lvv + Lyv'*Cd + Cd'*Lyv + Cd'*Lyy*Cd + Cd'*Syy*Cd + Cd'*Syv + Syv'*Cd + Svv
-        Qxu = Lxu + Lxy*Bd + Ad'*Luy' + Ad'*Lyy*Bd + Ad'*Syy*Bd
-        Qxv = Lxv + Lxy*Cd + Ad'*Lyv + Ad'*Lyy*Cd + Ad'*Syy*Cd + Ad'*Syv
-        Quv = Luv + Luy*Cd + Bd'*Lyv + Bd'*Lyy*Cd + Bd'*Syy*Cd + Bd'*Syv
+        Qxx = Lxx + Lxy*fdx + fdx'*Lxy' + fdx'*Lyy*fdx + fdx'*Syy*fdx
+        Quu = Luu + Luy*fdu + fdu'*Luy' + fdu'*Lyy*fdu + fdu'*Syy*fdu
+        Qvv = Lvv + Lyv'*fdv + fdv'*Lyv + fdv'*Lyy*fdv + fdv'*Syy*fdv + fdv'*Syv + Syv'*fdv + Svv
+        Qxu = Lxu + Lxy*fdu + fdx'*Luy' + fdx'*Lyy*fdu + fdx'*Syy*fdu
+        Qxv = Lxv + Lxy*fdv + fdx'*Lyv + fdx'*Lyy*fdv + fdx'*Syy*fdv + fdx'*Syv
+        Quv = Luv + Luy*fdv + fdu'*Lyv + fdu'*Lyy*fdv + fdu'*Syy*fdv + fdu'*Syv
 
         # Regularization
         #TODO double check state regularization
         # if solver.opts.regularization_type == :state
-        #     Qvv_reg = Qvv + Cd'*(res.ρ[1]*I)*Cd
-        #     Qxv_reg = Qxv + Ad'*(res.ρ[1]*I)*Cd
-        #     Quv_reg = Quv + Bd'*(res.ρ[1]*I)*Cd
+        #     Qvv_reg = Qvv + fdv'*(res.ρ[1]*I)*fdv
+        #     Qxv_reg = Qxv + fdx'*(res.ρ[1]*I)*fdv
+        #     Quv_reg = Quv + fdu'*(res.ρ[1]*I)*fdv
         # elseif solver.opts.regularization_type == :control
             Qvv_reg = Qvv + res.ρ[1]*I
             Qxv_reg = Qxv
@@ -616,18 +628,18 @@ function _backwardpass_foh_mintime!(results::SolverVectorResults,solver::Solver)
         is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
 
         # Unpack results
-        fcx, fcu = results.Ac[k], results.Bc[k][:,1:m]
-        fcy, fcv = results.Ac[k+1], results.Bc[k+1][:,1:m]
-        fdx, fdu, fdv = results.fx[k], results.fu[k], results.fv[k]
+        fcx, fcu = results.fcx[k], results.fcu[k][:,1:m]
+        fcy, fcv = results.fcx[k+1], results.fcu[k+1][:,1:m]
+        fdx, fdu, fdv = results.fdx[k], results.fdu[k], results.fdv[k]
 
         x = results.X[k]
         y = results.X[k+1]
         u = results.U[k]
         v = results.U[k+1]
-        xm = results.xmid[k]
+        xm = results.xm[k]
         um = 0.5*u + 0.5*v
-        dx = results.xdot[k]
-        dy = results.xdot[k+1]
+        dx = results.dx[k]
+        dy = results.dx[k+1]
 
         ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
         # ℓ(x,u) expansion
@@ -670,7 +682,7 @@ function _backwardpass_foh_mintime!(results::SolverVectorResults,solver::Solver)
         if is_min_time(solver)
             h = u[m̄]
 
-            # Additional expansion terms
+            # fdxditional expansion terms
             xmh = 2/8*h*(dx - dy)
             xmu = (h^2)/8*fcu[:,1:m]
             xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
