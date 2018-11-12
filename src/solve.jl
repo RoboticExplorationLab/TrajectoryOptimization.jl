@@ -21,8 +21,7 @@ Solve the trajectory optimization problem defined by `solver`, with `U0` as the
 initial guess for the controls
 """
 function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat; prevResults::SolverResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict}
-    # solver = Solver(solver)
-    # Initialize zero controls if none are passed in
+    # If infeasible without control initialization, initialize controls to zero
     isempty(U0) ? U0 = zeros(solver.m,solver.N) : nothing
 
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
@@ -121,14 +120,14 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         solver.opts.use_static ? results = ConstrainedStaticResults(n,mm,p,N) : results = ConstrainedVectorResults(n,mm,p,N)
 
         # Set initial penalty term values
-        results.μ .*= solver.opts.μ_initial
+        results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
         if solver.opts.minimum_time
             for k = 1:solver.N
-                results.μ[k][p] *= solver.opts.μ_initial_minimum_time_equality
-                results.μ[k][m̄] *= solver.opts.μ_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] *= solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
+                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
             end
         end
         if solver.opts.infeasible
@@ -172,9 +171,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         flag = rollout!(results,solver) # rollout new state trajectoy
 
         if !flag
-            if solver.opts.verbose
-                @info "Bad initial control sequence, setting initial control to zero"
-            end
+            @info "Bad initial control sequence, setting initial control to zero"
             results.U .= zeros(mm,N)
             rollout!(results,solver)
         end
@@ -268,35 +265,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
 
-            if (~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
-                break
+            evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
 
-            # Check for gradient and constraint tolerance convergence
-            elseif (solver.opts.constrained && gradient < solver.opts.gradient_tolerance  && c_max < solver.opts.constraint_tolerance)
-                @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
-                break
-            end
-            #####################
-
-            ## Check for cost convergence ##
-            if (~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && j != solver.opts.iterations_outerloop)
-                @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
-                if ~solver.opts.constrained
-                    @info "Unconstrained solve complete"
-                end
-                break
-            # Check for cost and constraint tolerance convergence
-            elseif (solver.opts.constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
-                @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
-                break
-            elseif solver.opts.constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
-                @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
-                break
-            # Check for maxed regularization
-            elseif results.ρ[1] > solver.opts.ρ_max
-                error("*Regularization maxed out*\n - terminating solve - ")
-            end
             ################################
         end
         ### END INNER LOOP ###
@@ -304,13 +274,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
-
-        # # check sqrt convergence criteria for second order lagrange multiplier update
-        # if solver.opts.λ_second_order_update
-        #     if c_max <= sqrt(solver.opts.constraint_tolerance) && (dJ <= sqrt(solver.opts.cost_tolerance) || gradient <= sqrt(solver.opts.gradient_tolerance))
-        #         sqrt_tolerance = true
-        #     end
-        # end
 
         # update multiplier and penalty terms
         outer_loop_update(results,solver,false)
@@ -326,21 +289,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #    TERMINATION CRITERIA    #
         #****************************#
         # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        if solver.opts.constrained
-            max_c = max_violation(results)
-            if max_c < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
-                if solver.opts.verbose
-                    println("-Outer loop cost and constraint eps criteria met at outer iteration: $j\n")
-                    println("Constrained solve complete")
-                    if dJ < solver.opts.cost_tolerance
-                        println("--Cost tolerance met")
-                    else
-                        println("--Gradient tolerance met")
-                    end
-                end
-                break
-            end
-        end
+        evaluate_convergence(solver,:outer,dJ,c_max,gradient,0) ? break : nothing
 
     end
     end
@@ -360,11 +309,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @warn "*Solve reached max iterations*"
     end
 
-    ## Return dynamically feasible trajectory
-    if solver.opts.infeasible #&& solver.opts.solve_feasible
+    ### Infeasible -> feasible trajectory
+    if solver.opts.infeasible
         @info "Infeasible solve complete"
 
-        # run single backward pass/forward pass to get dynamically feasible solution
+        # run single backward pass/forward pass to get dynamically feasible solution (ie, remove infeasible controls)
         results_feasible = get_feasible_trajectory(results,solver)
 
         # resolve feasible solution if necessary (should be fast)
@@ -372,17 +321,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @info "Resolving feasible"
 
             # create unconstrained solver from infeasible solver if problem is unconstrained
-            if solver.opts.unconstrained
+            if solver.opts.unconstrained_original_problem
                 obj_uncon = UnconstrainedObjective(solver.obj.Q,solver.obj.R,solver.obj.Qf,solver.obj.tf,solver.obj.x0,solver.obj.xf)
                 solver_feasible = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
             else
                 solver_feasible = solver
             end
 
-            # resolve feasible problem with warm start
+            # Resolve feasible problem with warm start
             results_feasible, stats_feasible = solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
 
-            # merge stats
+            # Merge stats
             for key in keys(stats_feasible)
                 stats[key * " (infeasible)"] = stats[key]
             end
@@ -395,12 +344,12 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         end
 
         # return feasible results
+        @info "***Solve Complete***"
         return results_feasible, stats
 
     # if feasible solve, return results
     else
         @info "***Solve Complete***"
-
         return results, stats
     end
 end

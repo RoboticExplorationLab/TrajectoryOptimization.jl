@@ -1,3 +1,4 @@
+using Test
 ### foh augmented dynamics
 # Set up Dubins car system
 dt = 0.1
@@ -10,14 +11,14 @@ obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
 fc! = model_dc.f
 fc_aug! = TrajectoryOptimization.f_augmented!(fc!,m_dc,n_dc)
 fd! = TrajectoryOptimization.rk3_foh(fc!,dt)
-fd_aug! = TrajectoryOptimization.f_augmented_foh!(fd!,n_dc,m_dc)
+fd_aug! = TrajectoryOptimization.fd_augmented_foh!(fd!,n_dc,m_dc)
 
 x = ones(n_dc)
 u1 = ones(m_dc)
 u2 = ones(m_dc)
 
 # test that normal dynamics and augmented dynamics outputs match
-@test norm(fd!(zeros(n_dc),x,u1,u2) - fd_aug!(zeros(n_dc+m_dc+m_dc+1),[x;u1;u2;dt])[1:n_dc,1]) < 1e-5
+@test norm(fd!(zeros(n_dc),x,u1,u2,dt) - fd_aug!(zeros(n_dc+m_dc+1+m_dc+1),[x;u1;sqrt(dt);u2;sqrt(dt)])[1:n_dc,1]) < 1e-5
 ###
 
 ### Continuous dynamics Jacobians match known analytical solutions
@@ -69,17 +70,12 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 
 ### Custom equality constraint on quadrotor quaternion state: sqrt(q1^2 + q2^2 + q3^2 + q4^2) == 1
 opts = TrajectoryOptimization.SolverOptions()
-opts.square_root = false
 opts.verbose = false
-# opts.c1=1e-4
-# opts.c2=3.0
 opts.constraint_tolerance = 1e-3
 opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
-opts.outer_loop_update = :default
-# opts.τ = 0.1
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
+opts.τ = .75
+opts.γ = 2
 ######################
 
 ### Set up model, objective, solver ###
