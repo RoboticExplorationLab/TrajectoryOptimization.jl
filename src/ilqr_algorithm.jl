@@ -385,8 +385,8 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     while k >= 1
         ## Calculate the L(x,u,y,v) second order expansion
         # Unpack Jacobians, ̇x
-        Ac1, Bc1 = res.Ac[k], res.Bc[k]
-        Ac2, Bc2 = res.Ac[k+1], res.Bc[k+1]
+        Ac1, Bc1 = res.Ac[k], res.Bc[k][:,1:m]
+        Ac2, Bc2 = res.Ac[k+1], res.Bc[k+1][:,1:m]
         Ad, Bd, Cd = res.fx[k], res.fu[k], res.fv[k]
 
         xm = res.xmid[k]
@@ -568,6 +568,293 @@ function backwardpass_foh!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
+function _backwardpass_foh_mintime!(results::SolverVectorResults,solver::Solver)
+    # Problem dimensions
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # Objective parameters
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    dt = solver.dt
+    is_min_time(solver) ? R_minimum_time = solver.opts.min_time_regularization : nothing
+
+    # Pull out results
+    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; s = results.s; # S = results.S
+
+    # Boundary conditions
+    S = zeros(n+mm,n+mm)
+    s = zeros(n+mm)
+    S[1:n,1:n] = Wf
+    s[1:n] = Wf*(X[N]-xf)
+
+    # Terminal constraints
+    if results isa ConstrainedIterResults
+        C = results.C; Iμ = results.Iμ; λ = results.LAMBDA
+        CxN = results.Cx_N
+        S[1:n,1:n] += CxN'*results.IμN*CxN
+        s[1:n] += CxN'*results.IμN*results.CN + CxN'*results.λN
+
+        # Include the the k = N expansions here for a cleaner backward pass
+        Cx, Cu = results.Cx[N], results.Cu[N]
+        s[1:n] += Cx'*Iμ[N]*C[N] + Cx'*λ[N]
+        s[n+1:n+mm] += Cu'*Iμ[N]*C[N] + Cu'*λ[N]
+        S[1:n,1:n] += Cx'*Iμ[N]*Cx
+        S[n+1:n+mm,n+1:n+mm] += Cu'*Iμ[N]*Cu
+        S[1:n,n+1:n+mm] += Cx'*Iμ[N]*Cu
+        S[n+1:n+mm,1:n] += Cu'*Iμ[N]*Cx
+    end
+
+    # Create a copy of boundary conditions in case of regularization
+    SN = copy(S)
+    sN = copy(s)
+
+    # Backward pass
+    k = N-1
+    Δv = [0. 0.] # Initialization of expected change in cost-to-go
+    while k >= 1
+        # Check for minimum time solve
+        is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
+
+        # Unpack results
+        fcx, fcu = results.Ac[k], results.Bc[k][:,1:m]
+        fcy, fcv = results.Ac[k+1], results.Bc[k+1][:,1:m]
+        fdx, fdu, fdv = results.fx[k], results.fu[k], results.fv[k]
+
+        x = results.X[k]
+        y = results.X[k+1]
+        u = results.U[k]
+        v = results.U[k+1]
+        xm = results.xmid[k]
+        um = 0.5*u + 0.5*v
+        dx = results.xdot[k]
+        dy = results.xdot[k+1]
+
+        ## L(x,u,y,v) = L(x,u) + L(xm,um) + L(y,v) = L1 + L2 + L3
+        # ℓ(x,u) expansion
+        ℓ1 = ℓ(x,u[1:m],W,R,xf)
+        ℓ1x = W*(x - xf)
+        ℓ1u = R*u[1:m]
+
+        ℓ1xx = W
+        ℓ1uu = R
+
+        # ℓ(xm,um) expansion
+        ℓ2 = ℓ(xm,um[1:m],W,R,xf)
+        ℓ2x = (I/2 + dt/8*fcx)'*W*(xm - xf)
+        ℓ2u = ((dt/8*fcu[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
+        ℓ2y = (I/2 - dt/8*fcy)'*W*(xm - xf)
+        ℓ2v = ((-dt/8*fcv[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
+
+        ℓ2xx = (I/2.0 + dt/8.0*fcx)'*W*(I/2.0 + dt/8.0*fcx)
+        ℓ2uu = ((dt/8*fcu[:,1:m])'*W*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
+        ℓ2yy = (I/2 - dt/8*fcy)'*W*(I/2 - dt/8*fcy)
+        ℓ2vv = ((-dt/8*fcv[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
+
+        ℓ2xu = (I/2 + dt/8*fcx)'*W*(dt/8*fcu[:,1:m])
+        ℓ2xy = (I/2 + dt/8*fcx)'*W*(I/2 - dt/8*fcy)
+        ℓ2xv = (I/2 + dt/8*fcx)'*W*(-dt/8*fcv[:,1:m])
+        ℓ2uy = (dt/8*fcu[:,1:m])'*W*(I/2 - dt/8*fcy)
+        ℓ2uv = ((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
+        ℓ2yv = (I/2 - dt/8*fcy)'*W*(-dt/8*fcv[:,1:m])
+
+        # ℓ(y,v) expansion
+        ℓ3 = ℓ(y,v[1:m],W,R,xf)
+
+        ℓ3y = W*(y - xf)
+        ℓ3v = R*v[1:m]
+
+        ℓ3yy = W
+        ℓ3vv = R
+
+        # Assemble δL expansion
+        if is_min_time(solver)
+            h = u[m̄]
+
+            # Additional expansion terms
+            xmh = 2/8*h*(dx - dy)
+            xmu = (h^2)/8*fcu[:,1:m]
+            xmy = 0.5*Matrix(I,n,n) - (h^2)/8*fcy
+            xmv = -(h^2)/8*fcv[:,1:m]
+            ℓ2h = xmh'*W*(xm-xf)
+            L2h = 4/6*(2*h*ℓ2 + (h^2)*ℓ2h)
+            ℓ2hh = 2/8*((dx - dy)'*W*(xm - xf) + h*(dx - dy)'*W*xmh)
+            L2hh = 4/6*(2*h*ℓ2h + 2*ℓ2 + (h^2)*ℓ2hh + 2*h*ℓ2h)
+            L2xh = 4/6*(2*h*ℓ2x + (h^2)*(0.5*Matrix(I,n,n) + (h^2)/8*fcx)'*W*xmh + 2/8*h*fcx'*W*(xm - xf))
+            L2uh = 4/6*(2*h*ℓ2u + (h^2)*((h^2)/8*fcu[:,1:m])'*W*xmh + 2/8*h*fcu[:,1:m]'*W*(xm - xf))
+            L2hu = 4/6*(2*h*ℓ2u + 2/8*(h^3)*(fcu[:,1:m]'*W*(xm - xf) + xmu'*W*(dx - dy)))
+            L2hy = 4/6*(2*h*ℓ2y + 2/8*(h^3)*(-fcy'*W*(xm - xf) + xmy'*W*(dx - dy)))
+            L2hv = 4/6*(2*h*ℓ2v + 2/8*(h^3)*(-fcv[:,1:m]'*W*(xm - xf) + xmv'*W*(dx - dy)))
+
+            # Assemble expansion
+            Lx = (h^2)/6*ℓ1x + 4/6*(h^2)*ℓ2x
+            Lu = [(h^2)/6*ℓ1u + 4/6*(h^2)*ℓ2u; (2/6*h*ℓ1 + L2h + 2/6*ℓ3 + 2*R_minimum_time*h)]
+            Ly = 4/6*(h^2)*ℓ2y + (h^2)/6*ℓ3y
+            Lv = [4/6*(h^2)*ℓ2v + (h^2)/6*ℓ3v; 0]
+
+            Lxx = (h^2)/6*ℓ1xx + 4/6*(h^2)*ℓ2xx
+            Luu = [((h^2)/6*ℓ1uu + 4/6*(h^2)*ℓ2uu) (2/6*h*ℓ1u + L2uh); (2/6*h*ℓ1u + L2hu)' (2/6*ℓ1 + L2hh + 2/6*ℓ3 + 2*R_minimum_time)]
+            Lyy =  4/6*(h^2)*ℓ2yy + (h^2)/6*ℓ3yy
+            Lvv = [(4/6*(h^2)*ℓ2vv + (h^2)/6*ℓ3vv) zeros(m); zeros(m)' 0]
+
+            Lxu = [4/6*(h^2)*ℓ2xu (2/6*h*ℓ1x + L2xh)]
+            Lxy = 4/6*(h^2)*ℓ2xy
+            Lxv = [4/6*(h^2)*ℓ2xv zeros(n)]
+            Luy = [4/6*(h^2)*ℓ2uy; (L2hy + 2*h/6*ℓ3y)']
+            Luv = [4/6*(h^2)*ℓ2uv zeros(m); (L2hv + 2*h/6*ℓ3v)' 0]
+            Lyv = [4/6*(h^2)*ℓ2yv zeros(n)]
+        else
+            Lx = dt/6*ℓ1x + 4*dt/6*ℓ2x
+            Lu = dt/6*ℓ1u + 4*dt/6*ℓ2u
+            Ly = 4*dt/6*ℓ2y + dt/6*ℓ3y
+            Lv = 4*dt/6*ℓ2v + dt/6*ℓ3v
+            Lxx = dt/6*ℓ1xx + 4*dt/6*ℓ2xx
+            Luu = dt/6*ℓ1uu + 4*dt/6*ℓ2uu
+            Lyy = 4*dt/6*ℓ2yy + dt/6*ℓ3yy
+            Lvv = 4*dt/6*ℓ2vv + dt/6*ℓ3vv
+
+            Lxu = 4*dt/6*ℓ2xu
+            Lxy = 4*dt/6*ℓ2xy
+            Lxv = 4*dt/6*ℓ2xv
+            Luy = 4*dt/6*ℓ2uy
+            Luv = 4*dt/6*ℓ2uv
+            Lyv = 4*dt/6*ℓ2yv
+        end
+
+        if solver.opts.infeasible
+            Lu = [Lu; R_infeasible*u[m̄+1:m̄+n]]
+            Lv = [Lv; zeros(n)]
+
+            Luu = [Luu zeros(m̄,n); zeros(n,m̄) R_infeasible]
+            Lvv = [Lvv zeros(m̄,n); zeros(n,m̄) zeros(n,n)]
+
+            Lxu = [Lxu zeros(n,n)]
+            Lxv = [Lxv zeros(n,n)]
+            Luy = [Luy; zeros(n,n)']
+            Luv = [Luv zeros(m̄,n); zeros(n,m̄) zeros(n,n)]
+            Lyv = [Lyv zeros(n,n)]
+        end
+
+        # Constraints
+        if results isa ConstrainedIterResults
+            Cx, Cu = results.Cx[k], results.Cu[k]
+            Lx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Lu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
+            Lxx += Cx'*Iμ[k]*Cx
+            Luu += Cu'*Iμ[k]*Cu
+            Lxu += Cx'*Iμ[k]*Cu
+
+            if is_min_time(solver)
+                p,pI,pE = get_num_constraints(solver)
+                #TODO Simplify
+                if k < N-1
+                    Cv = zeros(p,mm)
+                    Cv[p,m̄] = -1
+                    Lv += Cv'*Iμ[k]*C[k] + Cv'*λ[k]
+                    Lvv += Cv'*Iμ[k]*Cv
+                    Lxv += Cx'*Iμ[k]*Cv
+                    Luv += Cu'*Iμ[k]*Cv
+                end
+            end
+        end
+
+        # Unpack cost-to-go P
+        Sy = s[1:n]
+        Sv = s[n+1:n+mm]
+        Syy = S[1:n,1:n]
+        Svv = S[n+1:n+mm,n+1:n+mm]
+        Syv = S[1:n,n+1:n+mm]
+
+        # Substitute in discrete dynamics (second order approximation)
+        Qx = vec(Lx) + fdx'*vec(Ly) + fdx'*vec(Sy)
+        Qu = vec(Lu) + fdu'*vec(Ly) + fdu'*vec(Sy)
+        Qv = vec(Lv) + fdv'*vec(Ly) + fdv'*vec(Sy) + Sv
+
+        Qxx = Lxx + Lxy*fdx + fdx'*Lxy' + fdx'*Lyy*fdx + fdx'*Syy*fdx
+        Quu = Luu + Luy*fdu + fdu'*Luy' + fdu'*Lyy*fdu + fdu'*Syy*fdu
+        Qvv = Lvv + Lyv'*fdv + fdv'*Lyv + fdv'*Lyy*fdv + fdv'*Syy*fdv + fdv'*Syv + Syv'*fdv + Svv
+        Qxu = Lxu + Lxy*fdu + fdx'*Luy' + fdx'*Lyy*fdu + fdx'*Syy*fdu
+        Qxv = Lxv + Lxy*fdv + fdx'*Lyv + fdx'*Lyy*fdv + fdx'*Syy*fdv + fdx'*Syv
+        Quv = Luv + Luy*fdv + fdu'*Lyv + fdu'*Lyy*fdv + fdu'*Syy*fdv + fdu'*Syv
+
+        # Regularization
+        Qvv_reg = Qvv + results.ρ[1]*I
+        Qxv_reg = Qxv
+        Quv_reg = Quv
+
+        # @info "Qvv condition: $(cond(Qvv_reg))"
+
+        if !isposdef(Hermitian(Array(Qvv_reg)))
+
+            regularization_update!(results,solver,:increase)
+
+            # Reset BCs
+            S = copy(SN)
+            s = copy(sN)
+            ############
+            k = N-1
+            Δv = [0. 0.]
+            continue
+        end
+
+        # calculate gains
+        K[k+1] = -Qvv_reg\Qxv_reg'
+        b[k+1] = -Qvv_reg\Quv_reg'
+        d[k+1] = -Qvv_reg\vec(Qv)
+
+        # calculate optimized values
+        Q̄x = vec(Qx) + K[k+1]'*vec(Qv) + Qxv*vec(d[k+1]) + K[k+1]'Qvv*d[k+1]
+        Q̄u = vec(Qu) + b[k+1]'*vec(Qv) + Quv*vec(d[k+1]) + b[k+1]'*Qvv*d[k+1]
+        Q̄xx = Qxx + Qxv*K[k+1] + K[k+1]'*Qxv' + K[k+1]'*Qvv*K[k+1]
+        Q̄uu = Quu + Quv*b[k+1] + b[k+1]'*Quv' + b[k+1]'*Qvv*b[k+1]
+        Q̄xu = Qxu + K[k+1]'*Quv' + Qxv*b[k+1] + K[k+1]'*Qvv*b[k+1]
+
+        # cache (approximate) cost-to-go at timestep k
+        s[1:n] = Q̄x
+        s[n+1:n+mm] = Q̄u
+        S[1:n,1:n] = Q̄xx
+        S[n+1:n+mm,n+1:n+mm] = Q̄uu
+        S[1:n,n+1:n+mm] = Q̄xu
+        S[n+1:n+mm,1:n] = Q̄xu'
+
+        # line search terms
+        Δv += [vec(Qv)'*vec(d[k+1]) 0.5*vec(d[k+1])'*Qvv*vec(d[k+1])]
+
+        # at last time step, optimize over final control
+        if k == 1
+            # regularize Quu_
+            Q̄uu_reg = Q̄uu + results.ρ[1]*I
+            # @info "Q̄uu_reg condition: $(cond(Q̄uu_reg))"
+
+            if !isposdef(Array(Hermitian(Q̄uu_reg)))
+                # @logmsg InnerLoop "Regularized"
+                regularization_update!(results,solver,:increase)
+
+                ## Reset BCs ##
+                S = copy(SN)
+                s = copy(sN)
+                ################
+                k = N-1
+                Δv = [0. 0.]
+                continue
+            end
+
+            K[1] = -Q̄uu_reg\Q̄xu'
+            b[1] = zeros(mm,mm)
+            d[1] = -Q̄uu_reg\vec(Q̄u)
+
+            results.s[1] = vec(Q̄x) + K[1]'*Q̄uu*vec(d[1]) + K[1]'*vec(Q̄u) + Q̄xu*vec(d[1]) # calculate for gradient check in solve
+
+            Δv += [vec(Q̄u)'*vec(d[1]) 0.5*vec(d[1])'*Q̄uu*vec(d[1])]
+        end
+
+        k = k - 1;
+    end
+
+    # if successful backward pass, reduce regularization
+    regularization_update!(results,solver,:decrease)
+    return Δv
+end
+
 """
 $(SIGNATURES)
 Perform the operation sqrt(A-B), where A and B are Symmetric Matrices
@@ -594,22 +881,24 @@ $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
 function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
-    status = :progress_made
+    # status = :progress_made
 
     # Pull out values from results
     X = res.X
     U = res.U
-    K = res.K
-    d = res.d
+    # K = res.K
+    # d = res.d
     X_ = res.X_
     U_ = res.U_
 
     # Compute original cost
     update_constraints!(res,solver,X,U)
 
-    Ju_prev = _cost(solver, res, X, U)   # Unconstrained cost
-    Jc_prev = cost_constraints(solver, res)  # constraint cost
-    J_prev = Ju_prev + Jc_prev
+    # Ju_prev = _cost(solver, res, X, U)   # Unconstrained cost
+    # Jc_prev = cost_constraints(solver, res)  # constraint cost
+    # J_prev = Ju_prev + Jc_prev
+
+    J_prev = cost(solver, res, X, U)
 
 
     J = Inf
@@ -627,24 +916,24 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
-            Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
-            Jc = cost_constraints(solver, res)  # constraint cost
+            # Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+            # Jc = cost_constraints(solver, res)  # constraint cost
 
             # set trajectories to original trajectory
-            X_ .= X
-            U_ .= U
+            X_ .= deepcopy(X)
+            U_ .= deepcopy(U)
 
-            # Examine components
-            zu = (Ju_prev - Ju)
-            zc = (Jc_prev - Jc)
-
-            status = :no_progress_made
-            if zu > 0
-                status = :uncon_progress_made
-            end
-            if zc > 0
-                status = :constraint_progress_made
-            end
+            # # Examine components
+            # zu = (Ju_prev - Ju)
+            # zc = (Jc_prev - Jc)
+            #
+            # status = :no_progress_made
+            # if zu > 0
+            #     status = :uncon_progress_made
+            # end
+            # if zc > 0
+            #     status = :constraint_progress_made
+            # end
 
             if solver.control_integration == :foh
                 calculate_derivatives!(res, solver, X_, U_)
@@ -659,7 +948,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
 
             @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
             regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] += 1
+            res.ρ[1] += 1.0
             break
         end
 
@@ -678,9 +967,11 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         # Calcuate cost
         update_constraints!(res,solver,X_,U_)
 
-        Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
-        Jc = cost_constraints(solver, res)  # constraint cost
-        J = Ju + Jc
+        # Ju = _cost(solver, res, X_, U_)   # Unconstrained cost
+        # Jc = cost_constraints(solver, res)  # constraint cost
+        # J = Ju + Jc
+        J = cost(solver, res, X_, U_)   # Unconstrained cost
+
         expected = -alpha*(Δv[1] + alpha*Δv[2])
         if expected > 0
             z  = (J_prev - J)/expected

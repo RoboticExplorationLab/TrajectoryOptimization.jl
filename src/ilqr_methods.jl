@@ -161,7 +161,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         if solver.control_integration == :foh
             dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
-            min_time ? dt = U_[k][m̄]^2 : nothing
+            min_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
             du = dv
         else
@@ -201,6 +201,11 @@ function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
 end
 
+function ℓ(x,u,Q,R,xf=zero(x))
+    0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
+end
+
+
 """
 $(SIGNATURES)
 Compute the unconstrained cost
@@ -225,10 +230,10 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     for k = 1:N-1
         min_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
-            Xm = res.xmid[k]
-            Um = (U[k] + U[k+1])/2
-
-            J += dt/6*(stage_cost(X[k],U[k],Q,R,xf,c) + 4*stage_cost(Xm,Um,Q,R,xf,c) + stage_cost(X[k+1],U[k+1],Q,R,xf,c)) # Simpson quadrature (integral approximation) for foh stage cost
+            xm = res.xmid[k]
+            um = (U[k] + U[k+1])/2
+            J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,obj.R,xf) + 4/6*ℓ(xm,um[1:m],Q,obj.R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,obj.R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            is_min_time(solver) ? J += solver.opts.min_time_regularization*dt : nothing
         else
             J += dt*stage_cost(X[k],U[k],Q,R,xf,c)
 
@@ -323,8 +328,12 @@ $(SIGNATURES)
 """
 function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
     n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    dt = solver.dt
     for k = 1:N-1
-        results.xmid[k] = cubic_midpoint(results.X[k],results.xdot[k],results.X[k+1],results.xdot[k+1],solver.dt)
+        is_min_time(solver) ? dt = U[k][m̄]^2 : nothing
+        results.xmid[k] = cubic_midpoint(results.X[k],results.xdot[k],results.X[k+1],results.xdot[k+1],dt)
     end
 end
 
@@ -350,7 +359,6 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     min_time = is_min_time(solver)
     m̄,mm = get_num_controls(solver)
     for k = 1:N-1
-        min_time ? dt = res.U[m̄] : nothing
         if solver.control_integration == :foh
             res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
             res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
@@ -366,6 +374,12 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     if solver.control_integration == :foh
         res.Ac[N], res.Bc[N] = solver.Fc(res.X[N], res.U[N])
         solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
+        if is_min_time(solver)
+            res.Cu[N][m̄,:] .= 0.0
+            res.Cu[N][m̄+m̄,:] .= 0.0
+            res.Cu[N-1][end,:] .= 0.0
+            res.Cu[N][end,:] .= 0.0
+        end
     end
 
     solver.c_jacobian(res.Cx_N, res.X[N])
@@ -533,7 +547,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0)
+function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -554,7 +568,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Append on min time bounds
     u_max = obj.u_max
     u_min = obj.u_min
-    min_dt = 1e-2
+    # min_dt = 1e-2
     if min_time
         u_max = [u_max; sqrt(max_dt)]
         u_min = [u_min; sqrt(min_dt)]
@@ -675,7 +689,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_fun!, constraint_jacobian!
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing
 
 """
 $(SIGNATURES)

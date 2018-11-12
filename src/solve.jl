@@ -225,7 +225,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
             if solver.control_integration == :foh
-                Δv = backwardpass_foh!(results,solver)
+                Δv = _backwardpass_foh_mintime!(results,solver)
             elseif solver.opts.square_root
                 Δv = backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
             elseif is_min_time(solver)
@@ -280,7 +280,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             if ii % 10 == 1
                 print_header(logger,InnerLoop)
             end
-            # print_row(logger,InnerLoop)
+            print_row(logger,InnerLoop)
 
             if (~is_constrained && gradient < solver.opts.gradient_tolerance) || (is_constrained && gradient < solver.opts.gradient_intermediate_tolerance && j != solver.opts.iterations_outerloop)
                 @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
@@ -304,7 +304,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             elseif (is_constrained && dJ < solver.opts.cost_tolerance  && c_max < solver.opts.constraint_tolerance)
                 @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
                 break
-            elseif is_constrained && dJ < solver.opts.cost_tolerance && c_diff < 1e-6 && j == solver.opts.iterations_outerloop
+            elseif is_constrained && dJ < solver.opts.cost_tolerance && j == solver.opts.iterations_outerloop
                 @logmsg OuterLoop "Terminated on last outerloop. No progress being made"
                 break
             # Check for maxed regularization
@@ -334,7 +334,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @logmsg OuterLoop :iter value=iter
         @logmsg OuterLoop :iterations value=iter_inner
         print_header(logger,OuterLoop)
-        # print_row(logger,OuterLoop)
+        print_row(logger,OuterLoop)
 
         #****************************#
         #    TERMINATION CRITERIA    #
