@@ -86,27 +86,8 @@ opts.outer_loop_update = :default
 # Model
 n = 13 # states (quadrotor w/ quaternions)
 m = 4 # controls
-model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.quadrotor_dynamics!,n,m)
-
-# Objective and constraints
-Qf = 100.0*Diagonal(I,n)
-Q = (0.01)*Diagonal(I,n)
-R = (0.01)*Diagonal(I,m)
-tf = 5.0
 dt = 0.05
-
-# -initial state
-x0 = zeros(n)
-quat0 = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
-x0[4:7] = quat0
-x0
-
-# -final state
-xf = zeros(n)
-xf[1:3] = [10.0;10.0;1.0] # xyz position
-quatf = TrajectoryOptimization.eul2quat([0.0; 0.0; 0.0]) # ZYX Euler angles
-xf[4:7] = quatf
-xf
+model, obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
 
 # -control limits
 u_min = -50.0
@@ -114,21 +95,19 @@ u_max = 50.0
 
 # -constraint that quaternion should be unit
 function cE(cdot,x,u)
-    cdot[1] = x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2 - 1.0
+    cdot[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 end
 
-obj_uncon = TrajectoryOptimization.UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
 
 # Solver
-solver = TrajectoryOptimization.Solver(model!,obj_con,integration=:rk4,dt=dt,opts=opts)
-
 # - Initial control and state trajectories
-U = ones(solver.model.m, solver.N)
-X_interp = TrajectoryOptimization.line_trajectory(solver)
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
+U = 10.0*ones(solver.model.m, solver.N)
+
 ##################
 
 ### Solve ###
-results,stats = TrajectoryOptimization.solve(solver,U)
+results, stats = TrajectoryOptimization.solve(solver,U)
 #############
 @test stats["c_max"][end] < opts.constraint_tolerance

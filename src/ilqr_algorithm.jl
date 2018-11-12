@@ -577,7 +577,7 @@ function _backwardpass_foh_mintime!(results::SolverVectorResults,solver::Solver)
     W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
     dt = solver.dt
     is_min_time(solver) ? R_minimum_time = solver.opts.min_time_regularization : nothing
-
+    solver.infeasible ? R_infeasible = solver.opts.infeasible_regularization*Matrix(I,n,n) : nothing
     # Pull out results
     X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; s = results.s; # S = results.S
 

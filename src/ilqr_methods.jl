@@ -354,14 +354,14 @@ Calculate Jacobians prior to the backwards pass
 Updates both dyanmics and constraint jacobians, depending on the results type.
 """
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
-    N = solver.N
+    n,m,N = get_sizes(solver)
     dt = solver.dt
     min_time = is_min_time(solver)
     m̄,mm = get_num_controls(solver)
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
+            res.Ac[k], res.Bc[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
         else
             res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
         end
@@ -372,7 +372,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     end
 
     if solver.control_integration == :foh
-        res.Ac[N], res.Bc[N] = solver.Fc(res.X[N], res.U[N])
+        res.Ac[N], res.Bc[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
         solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
         if is_min_time(solver)
             res.Cu[N][m̄,:] .= 0.0
@@ -387,17 +387,19 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
 end
 
 function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
-    N = solver.N
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
     for k = 1:N-1
         if solver.control_integration == :foh
             res.fx[k], res.fu[k], res.fv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.Ac[k], res.Bc[k] = solver.Fc(res.X[k], res.U[k])
+            res.Ac[k], res.Bc[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
         else
             res.fx[k], res.fu[k] = solver.Fd(res.X[k], res.U[k])
         end
     end
     if solver.control_integration == :foh
-        res.Ac[N], res.Bc[N] = solver.Fc(res.X[N], res.U[N])
+        res.Ac[N], res.Bc[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
     end
 
     return nothing
