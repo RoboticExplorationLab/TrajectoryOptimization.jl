@@ -201,8 +201,8 @@ struct ConstrainedStaticResults{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN} <: Constrain
     C::Vector{MVector{P,Float64}}      # Constraint values (p,N)
     C_prev::Vector{MVector{P,Float64}} # Previous constraint values (p,N)
     Iμ::Vector{MMatrix{P,P,Float64,PP}}# Active constraint penalty matrix (p,p,N)
-    LAMBDA::Vector{MVector{P,Float64}} # Lagrange multipliers (p,N)
-    MU::Vector{MVector{P,Float64}}     # Penalty terms (p,N)
+    λ::Vector{MVector{P,Float64}} # Lagrange multipliers (p,N)
+    μ::Vector{MVector{P,Float64}}     # Penalty terms (p,N)
 
     CN::MVector{PN,Float64}       # Final constraint values (p_N,)
     CN_prev::MVector{PN,Float64}  # Previous final constraint values (p_N,)
@@ -222,13 +222,13 @@ struct ConstrainedStaticResults{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN} <: Constrain
 
     function ConstrainedStaticResults(X::Vector{MVector{N,Float64}},U::Vector{MVector{M,Float64}},
             K::Vector{MMatrix{M,N,Float64,NM}},b::Vector{MMatrix{M,M,Float64,MM}},d,X_,U_,S::Vector{MMatrix{N,N,Float64,NN}},s,fx,fu,fv,Ac,Bc,xdot,xmid,
-            C::Vector{MVector{P,Float64}},C_prev,Iμ::Vector{MMatrix{P,P,Float64,PP}},LAMBDA,MU,
+            C::Vector{MVector{P,Float64}},C_prev,Iμ::Vector{MMatrix{P,P,Float64,PP}},λ,μ,
             CN::MVector{PN,Float64},CN_prev,IμN::MMatrix{PN,PN,Float64,PPN},λN,μN,
             cx::Vector{MMatrix{P,N,Float64,NP}},cu::Vector{MMatrix{P,M,Float64,MP}},cxn::MMatrix{PN,N,Float64,NPN},ρ,dρ,V_al_prev,V_al_current) where {N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}
         # @show P
         # @show PN
         # @show typeof(cxn)
-        new{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+        new{N,M,P,PN,NM,NN,MM,PP,PPN,NP,MP,NPN}(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -253,8 +253,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     C::Vector{Vector{Float64}}      # Constraint values (p,N)
     C_prev::Vector{Vector{Float64}} # Previous constraint values (p,N)
     Iμ::Vector{Diagonal{Float64,Vector{Float64}}}        # Active constraint penalty matrix (p,p,N)
-    LAMBDA::Vector{Vector{Float64}} # Lagrange multipliers (p,N)
-    MU::Vector{Vector{Float64}}     # Penalty terms (p,N)
+    λ::Vector{Vector{Float64}} # Lagrange multipliers (p,N)
+    μ::Vector{Vector{Float64}}     # Penalty terms (p,N)
 
     CN::Vector{Float64}       # Final constraint values (p_N,)
     CN_prev::Vector{Float64}  # Previous final constraint values (p_N,)
@@ -275,11 +275,11 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
             K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
-            C::Vector{Vector{Float64}},C_prev,Iμ,LAMBDA,MU,
+            C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
             CN::Vector{Float64},CN_prev,IμN,λN,μN,
             cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
-        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+        new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -321,8 +321,8 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     C      = [zeros(p)  for i = 1:N]
     C_prev = [zeros(p)  for i = 1:N]
     Iμ     = [Diagonal(zeros(p)) for i = 1:N]
-    LAMBDA = [zeros(p)  for i = 1:N]
-    MU     = [ones(p)   for i = 1:N]
+    λ = [zeros(p)  for i = 1:N]
+    μ     = [ones(p)   for i = 1:N]
 
     # Terminal Constraints (make 2D so it works well with stage values)
     C_N      = zeros(p_N)
@@ -342,7 +342,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     V_al_current = zeros(p,N)
 
     ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
-        C,C_prev,Iμ,LAMBDA,MU,
+        C,C_prev,Iμ,λ,μ,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
 end
@@ -369,8 +369,8 @@ function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     C      = [@MVector zeros(p)  for i = 1:N]
     C_prev = [@MVector zeros(p)  for i = 1:N]
     Iμ     = [@MMatrix zeros(p,p) for i = 1:N]
-    LAMBDA = [@MVector zeros(p)  for i = 1:N]
-    MU     = [@MVector ones(p)   for i = 1:N]
+    λ = [@MVector zeros(p)  for i = 1:N]
+    μ     = [@MVector ones(p)   for i = 1:N]
 
     # Terminal Constraints (make 2D so it works well with stage values)
     C_N      = @MVector zeros(p_N)
@@ -390,19 +390,19 @@ function ConstrainedStaticResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     V_al_current = zeros(p,N)
 
     ConstrainedStaticResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,xmid,
-        C,C_prev,Iμ,LAMBDA,MU,
+        C,C_prev,Iμ,λ,μ,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
 end
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),
-        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
+        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
 function copy(r::ConstrainedStaticResults)
     ConstrainedStaticResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fx),copy(r.fu),copy(r.fv),copy(r.Ac),copy(r.Bc),copy(r.xdot),copy(r.xmid),
-        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.LAMBDA),copy(r.MU),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
+        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
 
@@ -576,7 +576,7 @@ function new_constrained_results(r::SolverIterResults,solver::Solver,λ,λN,ρ):
         results.U[k] = r.U[k][1:m]
         results.Ac[k] = r.Ac[k][1:n,1:n]
         results.Bc[k] = r.Bc[k][1:n,1:m]
-        results.LAMBDA[k] = λ[k][1:p]
+        results.λ[k] = λ[k][1:p]
         k == N ? continue : nothing
         results.fx[k] = r.fx[k][1:n,1:n]
         results.fu[k] = r.fu[k][1:n,1:m]
@@ -755,8 +755,8 @@ end
 #     C::Array{Float64,2}      # Constraint values (p,N)
 #     C_prev::Array{Float64,2} # Previous constraint values (p,N)
 #     Iμ::Array{Float64,3}     # Active constraint penalty matrix (p,p,N)
-#     LAMBDA::Array{Float64,2} # Lagrange multipliers (p,N)
-#     MU::Array{Float64,2}     # Penalty terms (p,N)
+#     λ::Array{Float64,2} # Lagrange multipliers (p,N)
+#     μ::Array{Float64,2}     # Penalty terms (p,N)
 #
 #     CN::Array{Float64,1}      # Final constraint values (p_N,)
 #     CN_prev::Array{Float64,1} # Previous final constraint values (p_N,)
@@ -775,8 +775,8 @@ end
 #     V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
 #     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
 #
-#     function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-#         new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,LAMBDA,MU,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+#     function ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+#         new(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 #     end
 # end
 #
@@ -808,8 +808,8 @@ end
 #     C = zeros(p,N)
 #     C_prev = zeros(p,N)
 #     Iμ = zeros(p,p,N)
-#     LAMBDA = zeros(p,N)
-#     MU = ones(p,N)
+#     λ = zeros(p,N)
+#     μ = ones(p,N)
 #
 #     # Terminal Constraints (make 2D so it works well with stage values)
 #     C_N = zeros(p_N)
@@ -829,7 +829,7 @@ end
 #     V_al_current = zeros(p,N)
 #
 #     ConstrainedResults(X,U,K,b,d,X_,U_,S,s,fx,fu,fv,Ac,Bc,xdot,
-#         C,C_prev,Iμ,LAMBDA,MU,
+#         C,C_prev,Iμ,λ,μ,
 #         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 #
 # end

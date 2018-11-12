@@ -71,15 +71,15 @@ end
 
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
-        if solver.opts.min_time_init > 0
-            dt = solver.opts.min_time_init / (solver.N - 1)
-            if dt > solver.opts.max_dt
-                dt = solver.opts.max_dt
-                @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
-            end
-        else
+        # if solver.opts.min_time_init > 0
+        #     dt = solver.opts.min_time_init / (solver.N - 1)
+        #     if dt > solver.opts.max_dt
+        #         dt = solver.opts.max_dt
+        #         @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
+        #     end
+        # else
             dt  = solver.opts.max_dt / 2
-        end
+        # end
     else
         dt = solver.dt
     end
@@ -233,7 +233,7 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             xm = res.xmid[k]
             um = (U[k] + U[k+1])/2
             J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,obj.R,xf) + 4/6*ℓ(xm,um[1:m],Q,obj.R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,obj.R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
-            is_min_time(solver) ? J += solver.opts.min_time_regularization*dt : nothing
+            is_min_time(solver) ? J += solver.opts.R_minimum_time*dt : nothing
         else
             J += dt*stage_cost(X[k],U[k],Q,R,xf,c)
 
@@ -250,11 +250,11 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
-        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.LAMBDA[k]'*res.C[k]
+        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
     end
 
     if solver.control_integration == :foh
-        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.LAMBDA[N]'*res.C[N]
+        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.λ[N]'*res.C[N]
     end
 
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
@@ -435,8 +435,8 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
         # Inequality constraints [see equation ref]
         for j = 1:pI
-            if res.C[k][j] >= 0.0 || res.LAMBDA[k][j] > 0.0
-                res.Iμ[k][j,j] = res.MU[k][j] # active (or previously active) inequality constraints are penalized
+            if res.C[k][j] >= 0.0 || res.λ[k][j] > 0.0
+                res.Iμ[k][j,j] = res.μ[k][j] # active (or previously active) inequality constraints are penalized
             else
                 res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
             end
@@ -444,7 +444,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
 
         # Equality constraints
         for j = pI+1:p
-            res.Iμ[k][j,j] = res.MU[k][j] # equality constraints are penalized
+            res.Iμ[k][j,j] = res.μ[k][j] # equality constraints are penalized
         end
     end
 
@@ -539,9 +539,9 @@ Cx, Cu = Jc(x,u) from a `ConstrainedObjective` type. Automatically stacks inequa
 and equality constraints and takes jacobians of custom functions with `ForwardDiff`.
 Stacks the constraints as follows:
 [upper control inequalities
- (dt upper bound)
+ (√dt upper bound)
  lower control inequalities
- (dt > 0)
+ (√dt lower bound)
  upper state inequalities
  lower state inequalities
  general inequalities
@@ -549,7 +549,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2)
+function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-2)
     m = size(obj.R,1) # number of control inputs
     n = length(obj.x0) # number of states
 
@@ -570,7 +570,6 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Append on min time bounds
     u_max = obj.u_max
     u_min = obj.u_min
-    # min_dt = 1e-2
     if min_time
         u_max = [u_max; sqrt(max_dt)]
         u_min = [u_min; sqrt(min_dt)]
@@ -586,7 +585,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     pI_u_max = count(u_max_active)
     pI_u_min = count(u_min_active)
     pI_u = pI_u_max + pI_u_min
-    function c_control!(c,x,u)
+    function c_control_limits!(c,x,u)
         c[1:pI_u_max] = (u - u_max)[u_max_active]
         c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u)[u_min_active]
     end
@@ -595,7 +594,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     pI_x_max = count(x_max_active)
     pI_x_min = count(x_min_active)
     pI_x = pI_x_max + pI_x_min
-    function c_state!(c,x,u)
+    function c_state_limits!(c,x,u)
         c[1:pI_x_max] = (x - obj.x_max )[x_max_active]
         c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x)[x_min_active]
     end
@@ -605,15 +604,15 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     # Form inequality constraint
     function cI!(c,x,u)
-        c_control!(view(c,1:pI_u),x,u)
-        c_state!(view(c,(1:pI_x).+pI_u),x,u)
+        c_control_limits!(view(c,1:pI_u),x,u)
+        c_state_limits!(view(c,(1:pI_x).+pI_u),x,u)
         if pI_c > 0
             obj.cI(view(c,(1:pI_c).+pI_u.+pI_x),x,u)
         end
     end
 
     # Augment functions together
-    function c_fun!(c,x,u)::Nothing
+    function c_function!(c,x,u,y=zero(x),v=zero(u))::Nothing
         infeasible = length(u) != m̄
         cI!(view(c,1:pI),x,u[1:m̄])
         if pE_c > 0
@@ -623,30 +622,27 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
             c[pI.+pE_c.+(1:n)] = u[m̄.+(1:n)]
         end
         return nothing
-        # min time equality constraint gets updated in update_constraints (needs access to next time step)
     end
 
     # Terminal Constraint
     # TODO make this more general
-    function c_fun!(c,x)
+    function c_function!(c,x)
         c[1:n] = x - obj.xf
     end
 
     ### Jacobians ###
-    # Explicitely declare known jacobians
+    # Declare known Jacobians
     In = Matrix(I,n,n)
-    fx_control = zeros(pI_u,n)
-    fx_state = zeros(pI_x,n)
-    fx_state[1:pI_x_max, :] = In[x_max_active,:]
-    fx_state[pI_x_max+1:end,:] = -In[x_min_active,:]
-    fx = zeros(p,n)
+    cx_control_limits = zeros(pI_u,n)
+    cx_state_limits = zeros(pI_x,n)
+    cx_state_limits[1:pI_x_max, :] = In[x_max_active,:]
+    cx_state_limits[pI_x_max+1:end,:] = -In[x_min_active,:]
 
     Im = Matrix(I,m̄,m̄)
-    fu_control = zeros(pI_u,m̄)
-    fu_control[1:pI_u_max,:] = Im[u_max_active,:]
-    fu_control[pI_u_max+1:end,:] = -Im[u_min_active,:]
-    fu_state = zeros(pI_x,m̄)
-    fu = zeros(p,m̄)
+    cu_control_limits = zeros(pI_u,m̄)
+    cu_control_limits[1:pI_u_max,:] = Im[u_max_active,:]
+    cu_control_limits[pI_u_max+1:end,:] = -Im[u_min_active,:]
+    cu_state_limits = zeros(pI_x,m̄)
 
     if pI_c > 0
         cI_custom_jacobian! = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
@@ -655,40 +651,38 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         cE_custom_jacobian! = generate_general_constraint_jacobian(obj.cE, pE_c, 0, n, m)  # QUESTION: Why is pE_N_c = 0?
     end
 
-    fx_infeasible = zeros(n,n)
-    fu_infeasible = In
+    cx_infeasible = zeros(n,n)
+    cu_infeasible = In
 
-    fx_N = In  # Jacobian of final state
-
-    function constraint_jacobian!(fx::AbstractMatrix, fu::AbstractMatrix, x::AbstractArray,u::AbstractArray)
+    function c_jacobian!(cx::AbstractMatrix, cu::AbstractMatrix, x::AbstractArray,u::AbstractArray,y=zero(x),v=zero(u))
         infeasible = length(u) != m̄
         let m = m̄
-            fx[1:pI_u, 1:n] = fx_control
-            fu[1:pI_u, 1:m] = fu_control
-            fx[(1:pI_x).+pI_u, 1:n] = fx_state
-            fu[(1:pI_x).+pI_u, 1:m] = fu_state
+            cx[1:pI_u, 1:n] = cx_control_limits
+            cx[(1:pI_x).+pI_u, 1:n] = cx_state_limits
+
+            cu[1:pI_u, 1:m] = cu_control_limits
+            cu[(1:pI_x).+pI_u, 1:m] = cu_state_limits
         end
 
         if pI_c > 0
-            cI_custom_jacobian!(view(fx,pI_x+pI_u+1:pI_x+pI_u+pI_c,1:n), view(fu,pI_x+pI_u+1:pI_x+pI_u+pI_c,1:m), x, u[1:m])
+            cI_custom_jacobian!(view(cx,pI_x+pI_u+1:pI_x+pI_u+pI_c,1:n), view(cu,pI_x+pI_u+1:pI_x+pI_u+pI_c,1:m), x, u[1:m])
         end
         if pE_c > 0
-            cE_custom_jacobian!(view(fx,pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,1:n), view(fu,pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,1:m), x, u[1:m])
+            cE_custom_jacobian!(view(cx,pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,1:n), view(cu,pI_x+pI_u+pI_c+1:pI_x+pI_u+pI_c+pE_c,1:m), x, u[1:m])
         end
 
         if infeasible
-            let m = m̄
-                fx[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,1:n] = fx_infeasible
-                fu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m+1:m+n] = fu_infeasible
-            end
+            cx[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,1:n] = cx_infeasible
+            cu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m̄+1:m̄+n] = cu_infeasible
         end
     end
 
-    function constraint_jacobian!(j::AbstractArray,x::AbstractArray)
-        j .= fx_N
+    cx_N = In  # Jacobian of final state
+    function c_jacobian!(j::AbstractArray,x::AbstractArray)
+        j .= cx_N
     end
 
-    return c_fun!, constraint_jacobian!
+    return c_function!, c_jacobian!
 end
 
 generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing
