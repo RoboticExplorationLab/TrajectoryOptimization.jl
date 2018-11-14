@@ -22,8 +22,9 @@ N = solver.N
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
 sol,stats = solve_dircol(solver,X0,U0)
+@test norm(sol.X[:,end] - obj.xf) < 1e-6
 
-
+include("../development/dircol_old.jl")
 function check_grads(solver,method)
     n,m = get_sizes(solver)
     N,N_ = get_N(solver, method)
@@ -48,7 +49,7 @@ function check_grads(solver,method)
     end
 
     function eval_f(Z)
-        X,U =TrajectoryOptimization. unpackZ(Z,(n,m,N))
+        X,U =TrajectoryOptimization.unpackZ(Z,(n,m,N))
         J = cost(solver,X,U,weights,method)
         return J
     end
@@ -88,6 +89,71 @@ check_grads(solver,:midpoint)
 check_grads(solver,:trapezoid)
 check_grads(solver,:hermite_simpson)
 check_grads(solver,:hermite_simpson_separated)
+
+
+# Minimum time
+method = :hermite_simpson
+# Set up problem
+obj_mintime = update_objective(obj_con,tf=:min)
+solver = Solver(model,obj_con,N=51,integration=:rk3_foh)
+N,N_ = TrajectoryOptimization.get_N(solver,method)
+m̄, = get_num_controls(solver)
+NN = N*(n+m̄)
+nG = TrajectoryOptimization.get_nG(solver,method)
+U0 = ones(1,N)*1
+if is_min_time(solver)
+    U0 = [U0; ones(1,N)*0.1]
+end
+X0 = line_trajectory(obj.x0, obj.xf, N)
+Z = TrajectoryOptimization.packZ(X0,U0)
+
+# Init vars
+g = zeros((N-1)n)
+grad_f = zeros(NN)
+rows = zeros(nG)
+cols = zeros(nG)
+vals = zeros(nG)
+
+# SNOPT stuff
+res = DircolResults(n,m,solver.N,method)
+res.X .= X0
+res.U .= U0
+Z = res.Z
+
+# weights = get_weights(method,N)*dt
+TrajectoryOptimization.update_derivatives!(solver,res,method)
+TrajectoryOptimization.get_traj_points!(solver,res,method)
+TrajectoryOptimization.get_traj_points_derivatives!(solver,res,method)
+TrajectoryOptimization.update_jacobians!(solver,res,method)
+
+# Get functions and evaluate
+eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
+
+function eval_f2(Z)
+    X,U = unpackZ(Z,(n,m̄,N))
+    weights = get_weights(method,N_)
+    fVal = zeros(eltype(Z),n,N)
+    update_derivatives!(solver,X,U,fVal)
+    X_ = zeros(eltype(Z),n,N_)
+    U_ = zeros(eltype(Z),m̄,N_)
+    X_,U_ = get_traj_points(solver::Solver,X,U,fVal,X_,U_,method::Symbol)
+    J = cost(solver,X_,U_,weights)
+    return J
+end
+
+eval_f(Z)
+eval_f2(Z)
+
+
+eval_grad_f(Z,grad_f)
+grad_f_check = ForwardDiff.gradient(eval_f2,Z)
+grad_f_res = cost_gradient(solver,res,method)
+grad_f
+
+grad_f_check .≈ grad_f_res
+grad_f_res == grad_f
+findall(.!(ForwardDiff.gradient(eval_f2,Z) .≈ grad_f))
+
 
 
 # Solver integration scheme should set the dircol scheme
