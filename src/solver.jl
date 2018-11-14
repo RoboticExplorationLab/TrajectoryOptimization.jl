@@ -60,6 +60,7 @@ struct Solver{O<:Objective}
         m̄ = m
         if minimum_time
             m̄ += 1
+            opts.minimum_time = true
         end
 
         # Get integration scheme

@@ -58,7 +58,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     n,m,N = get_sizes(solver)
 
     # Check for minimum time solve
-    is_min_time(solver) ? solver.opts.minimum_time = true : solver.opts.minimum_time = false
+    # is_min_time(solver) ? solver.opts.minimum_time = true : solver.opts.minimum_time = false
 
     # Check for infeasible start
     isempty(X0) ? solver.opts.infeasible = false : solver.opts.infeasible = true
