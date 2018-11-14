@@ -521,10 +521,10 @@ end
 #                                                                              #
 ################################################################################
 
-struct DircolVars
-    Z::Vector{Float64}
-    X::SubArray{Float64}
-    U::SubArray{Float64}
+struct DircolVars{T}
+    Z::Vector{T}
+    X::SubArray{T}
+    U::SubArray{T}
 end
 
 function DircolVars(Z::Vector,n::Int,m::Int,N::Int)

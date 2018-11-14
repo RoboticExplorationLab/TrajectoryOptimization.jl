@@ -283,7 +283,9 @@ function cost(solver::Solver,res::DircolResults)
 end
 
 function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{Float64})
-    n,m,N = get_sizes(X,U)
+    n,m = get_sizes(solver)
+    N_ = size(X,2)
+    m̄, = get_num_controls(solver)
     Qf = solver.obj.Qf; Q = solver.obj.Q;
     xf = solver.obj.xf; R = solver.obj.R;
     J = zeros(eltype(X),N)
@@ -295,55 +297,6 @@ function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{F
     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
 end
 
-function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
-    obj = solver.obj
-    f = solver.fc
-    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
-    n,m,N = get_sizes(X,U)
-    dt = solver.dt
-
-    if method == :hermite_simpson
-        # pull out solver/objective values
-        J = zeros(eltype(X),N-1)
-        f1 = zeros(eltype(X),n)
-        f2 = zeros(eltype(X),n)
-        for k = 1:N-1
-            f(f1,X[:,k], U[:,k])
-            f(f2,X[:,k+1], U[:,k+1])
-            x1 = X[:,k]
-            x2 = X[:,k+1]
-
-            Xm = (x1+x2)/2 + dt/8*(f1-f2)
-            Um = (U[:,k] + U[:,k+1])/2
-
-            J[k] = dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
-        end
-        J = sum(J)
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-        return J
-    elseif method == :midpoint
-        Xm = zeros(eltype(X),n,N-1)
-        for k = 1:N-1
-            Xm[:,k] = (X[:,k] + X[:,k+1])/2
-        end
-        J = zeros(eltype(Xm),N)
-        for k = 1:N-1
-            J[k] = stage_cost(Xm[:,k],U[:,k],Q,R,xf)
-        end
-        J = weights'J
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-        return J
-
-    else
-        J = zeros(eltype(X),N)
-        for k = 1:N
-            J[k] = stage_cost(X[:,k],U[:,k],Q,R,xf)
-        end
-        J = weights'J
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-        return J
-    end
-end
 
 """
 Gradient of Objective
@@ -356,35 +309,16 @@ function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
     return grad_f
 end
 
-function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float64}, vals::Vector{Float64}, method::Symbol)::Nothing
-    # println("simple")
-    n,m = get_sizes(X,U)
-    N,N_ = get_N(solver,method)
-    dt = solver.dt
-
-    obj = solver.obj
-    Q = obj.Q; xf = obj.xf; R = obj.R; Qf = obj.Qf;
-    # X,U = res.X_, res.U_
-    grad_f = reshape(vals, n+m, N)
-
-    for k = 1:N
-        grad_f[1:n,k] = weights[k]*Q*(X[:,k] - xf)*dt
-        grad_f[n+1:end,k] = weights[k]*R*U[:,k]*dt
-    end
-    grad_f[1:n,N] += Qf*(X[:,N] - xf)
-    return nothing
-end
-
 function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method::Symbol)
-    n,m = get_sizes(X,U)
+    n,m = get_sizes(solver)
+    m̄, = get_num_controls(solver)
     N,N_ = get_N(solver,method)
     dt = solver.dt
 
     obj = solver.obj
     Q = obj.Q; xf = obj.xf; R = obj.R; Qf = obj.Qf;
     # X,U = res.X_, res.U_
-    grad_f = reshape(vals, n+m, N)
-
+    grad_f = reshape(vals, n+m̄, N)
 
     if method == :hermite_simpson
         I_n = Matrix(I,n,n)
@@ -432,10 +366,15 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
     return nothing
 end
 
+"""
+$(SIGNATURES)
+Return placeholders for trajectories
+"""
 function init_traj_points(solver::Solver,fVal::Matrix,method::Symbol)
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
-    X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
+    m̄, = get_num_controls(solver)
+    X_,U_,fVal_ = zeros(n,N_),zeros(m̄,N_),zeros(n,N_)
     if method == :trapezoid || method == :hermite_simpson_separated
         fVal_ = fVal
     end
@@ -447,10 +386,6 @@ end
 $(SIGNATURES)
 Return all the trajectory points used to evaluate integrals
 """
-function get_traj_points!(solver::Solver,res::DircolResults,method::Symbol)
-    get_traj_points!(solver,res.X,res.U,res.X_,res.U_,res.fVal,method)
-end
-
 function get_traj_points!(solver::Solver,X,U,X_,U_,method::Symbol)
     fVal = zeros(X)
     fVal_ = zeros(X_)
@@ -460,7 +395,7 @@ end
 
 function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
     n,N = size(X)
-    m,N_ = size(U_)
+    m̄,N_ = size(U_)
     dt = solver.dt
     if method == :hermite_simpson
         X_[:,1:2:end] = X
@@ -473,6 +408,7 @@ function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
         Um .= (U[:,1:end-1] + U[:,2:end])/2
         # fValm = view(fVal_,:,2:2:N_-1)
         for k = 1:N-1
+            solver.opts.minimum_time ? dt = U[m̄,k] : nothing
             x1,x2 = X[:,k], X[:,k+1]
             Xm[:,k] = (x1+x2)/2 + dt/8*(fVal[:,k]-fVal[:,k+1])
             # solver.fc(view(fValm,:,k),Xm[:,k],Um[:,k])
@@ -499,7 +435,7 @@ function get_traj_points(solver,X,U,gfVal,gX_,gU_,method::Symbol,cost_only::Bool
     if method == :trapezoid || method == :hermite_simpson_separated
         X_,U_ = X,U
     else
-        if cost_only
+        if cost_only && method == :hermite_simpson
             update_derivatives!(solver,X,U,gfVal)
         end
         get_traj_points!(solver,X,U,gX_,gU_,gfVal,method)
@@ -509,10 +445,6 @@ function get_traj_points(solver,X,U,gfVal,gX_,gU_,method::Symbol,cost_only::Bool
         end
     end
     return X_, U_
-end
-
-function get_traj_points_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
-    get_traj_points_derivatives!(solver::Solver,res.X_,res.U_,res.fVal_,res.fVal,method::Symbol)
 end
 
 function get_traj_points_derivatives!(solver::Solver,X_,U_,fVal_,fVal,method::Symbol)
@@ -528,22 +460,12 @@ function get_traj_points_derivatives!(solver::Solver,X_,U_,fVal_,fVal,method::Sy
     end
 end
 
-function update_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
-    # Calculate derivative
-    if method != :midpoint
-        update_derivatives!(solver,res.X,res.U,res.fVal)
-    end
-end
-
 function update_derivatives!(solver::Solver,X::AbstractArray,U::AbstractArray,fVal::AbstractArray)
+    n,m = get_sizes(solver)
     N = size(X,2)
     for k = 1:N
-        solver.fc(view(fVal,:,k),X[:,k],U[:,k])
+        solver.fc(view(fVal,:,k),X[:,k],U[1:m,k])
     end
-end
-
-function update_jacobians!(solver::Solver,res::DircolResults,method::Symbol,cost_only::Bool=false)
-    update_jacobians!(solver,res.X_,res.U_,res.A,res.B,method,cost_only) # TODO: pass in DircolVar
 end
 
 function update_jacobians!(solver::Solver,X,U,A,B,method::Symbol,cost_only::Bool=false)
@@ -553,13 +475,14 @@ function update_jacobians!(solver::Solver,X,U,A,B,method::Symbol,cost_only::Bool
         if method == :hermite_simpson || method == :midpoint
             inds = cost_only ? (1:2:N_) : (1:N_)  # HS only needs jacobians at knot points for cost gradient
             for k = inds
-                A[:,:,k], B[:,:,k] = solver.Fc(X[:,k],U[:,k])
+                A[:,:,k], B[:,:,k] = solver.Fc(X[:,k],U[1:m,k])
             end
         else
-            Z = packZ(X,U)
-            z = reshape(Z,n+m,N)
+            # Z = packZ(X,U)
+            # z = reshape(Z,n+m,N)
             for k = 1:N_
-                A[:,:,k] = solver.Fc(z[:,k])
+                tA,tB = solver.Fc(X[:,k],U[:,k])
+                A[:,:,k] = [tA tB]
             end
         end
     end

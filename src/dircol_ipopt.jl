@@ -2,8 +2,9 @@
 function init_jacobians(solver,method)
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
+    m̄, = get_num_controls(solver)
     if method == :trapezoid || method == :hermite_simpson_separated
-        A = zeros(n,n+m,N_)
+        A = zeros(n,n+m̄,N_)
         B = zeros(0,0,N_)
     else
         A = zeros(n,n,N_)
@@ -15,19 +16,21 @@ end
 function get_nG(solver::Solver,method::Symbol)
     n,m = get_sizes(solver)
     N,N_ = get_N(solver,method)
+    m̄, = get_num_controls(solver)
     if method == :trapezoid || method == :hermite_simpson
-        return 2(n+m)*(N-1)n
+        return 2(n+m̄)*(N-1)n
     elseif method == :hermite_simpson_separated
-        return 3(n+m)*(N-1)n
+        return 3(n+m̄)*(N-1)n
     elseif method == :midpoint
-        return (2n+m)*(N-1)n
+        return (2n+m̄)*(N-1)n
     end
 end
 
 function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     N,N_ = TrajectoryOptimization.get_N(solver,method)
     n,m = get_sizes(solver)
-    NN = N*(n+m)
+    m̄,mm = get_num_controls(solver)
+    NN = N*(n+m̄)
 
     # Initialize Variables
     fVal = zeros(n,N)
@@ -39,8 +42,9 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     # COST FUNCTION #
     #################
     function eval_f(Z)
-        vars = DircolVars(Z,n,m,N)
-        X,U = vars.X, vars.U
+        # vars = DircolVars(Z,n,m̄,N)
+        # X,U = vars.X, vars.U
+        X,U = TrajectoryOptimization.unpackZ(Z,(n,m̄,N))
         X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method,true)
         J = cost(solver,X_,U_,weights)
         return J
@@ -63,7 +67,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     # COST GRADIENT #
     #################
     function eval_grad_f(Z, grad_f)
-        vars = DircolVars(Z,n,m,N)
+        vars = DircolVars(Z,n,m̄,N)
         X,U = vars.X, vars.U
         X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
