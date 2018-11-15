@@ -679,8 +679,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
     # # Compute original cost
-    update_constraints!(res,solver,X,U)
-    J_prev = cost(solver, res, X, U)
+    # update_constraints!(res,solver,X,U)
+    # J_prev = cost(solver, res, X, U)
 
     J = Inf
     alpha = 1.0
@@ -693,7 +693,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     @logmsg InnerIters :iter value=0
     @logmsg InnerIters :cost value=J_prev
     # print_row(logger,InnerIters) #TODO: fix, same issue
-    while z ≤ solver.opts.z_min || z > solver.opts.z_max
+    while (z ≤ solver.opts.z_min || z > solver.opts.z_max) && J >= J_prev
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
@@ -707,7 +707,12 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             end
 
             update_constraints!(res,solver,X_,U_)
-            J = copy(J_prev)
+            J = cost(solver, res, X_, U_)
+
+            # if !(J<=J_prev)
+            #     error("fp costs don't match up")
+            # end
+
             z = 0.
             alpha = 0.0
             expected = 0.
@@ -731,7 +736,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
         end
 
         # Calcuate cost
-        update_constraints!(res,solver,X_,U_)
+        # update_constraints!(res,solver,X_,U_)
         J = cost(solver, res, X_, U_)   # Unconstrained cost
 
         expected = -alpha*(Δv[1] + alpha*Δv[2])

@@ -180,7 +180,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     if solver.opts.infeasible
         if solver.control_integration == :foh
             calculate_derivatives!(results, solver, results.X, results.U)
-            calculate_midpoints!(res, solver, results.X, results.U)
+            calculate_midpoints!(results, solver, results.X, results.U)
         end
         update_constraints!(results,solver,results.X,results.U)
     end
@@ -231,9 +231,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
+            println("J: $J")
             push!(J_hist,J)
 
-            if J > J_prev
+            if J > J_prev && ii != 1
                 error("cost error")
             end
             # increment iLQR inner loop counter
