@@ -165,7 +165,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #           SOLVER           #
     #****************************#
-    # Initial rollout
+    ## Initial rollout
     if !solver.opts.infeasible
         X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
@@ -176,6 +176,15 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             rollout!(results,solver)
         end
     end
+
+    if solver.opts.infeasible
+        if solver.control_integration == :foh
+            calculate_derivatives!(results, solver, results.X, results.U)
+            calculate_midpoints!(res, solver, results.X, results.U)
+        end
+        update_constraints!(results,solver,results.X,results.U)
+    end
+    ##
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -205,6 +214,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             results.CN_prev .= deepcopy(results.CN)
         end
         c_max = 0.  # Init max constraint violation to increase scope
+
         J_prev = cost(solver, results, X, U)
         j == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
 
@@ -220,9 +230,12 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)
+            J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
+            if J > J_prev
+                error("cost error")
+            end
             # increment iLQR inner loop counter
             iter += 1
 
@@ -277,6 +290,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
         # update multiplier and penalty terms
         outer_loop_update(results,solver,false)
+        J_prev = cost(solver, results, results.X, results.U)
 
         # Logger output
         @logmsg OuterLoop :outeriter value=j

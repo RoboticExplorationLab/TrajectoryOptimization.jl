@@ -674,11 +674,11 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2},J_prev::Float64)
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
-    # Compute original cost
+    # # Compute original cost
     update_constraints!(res,solver,X,U)
     J_prev = cost(solver, res, X, U)
 

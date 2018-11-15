@@ -120,6 +120,8 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         calculate_midpoints!(res,solver,X, U)
     end
 
+    update_constraints!(res,solver,X,U)
+
     return true
 end
 
@@ -175,6 +177,8 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         calculate_derivatives!(res, solver, X_, U_)
         calculate_midpoints!(res, solver, X_, U_)
     end
+
+    update_constraints!(res,solver,X_,U_)
 
     return true
 end
