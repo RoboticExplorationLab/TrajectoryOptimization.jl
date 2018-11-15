@@ -26,6 +26,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     else
         Δv = _backwardpass!(results, solver)
     end
+
     return Δv
 end
 
@@ -101,6 +102,134 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
 
             end
 
+        end
+
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
+function _backwardpass_alt!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
+    dt = solver.dt
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Wf
+    s[N] = Wf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        x = X[k]
+        u = U[k]
+
+        ℓ1 = ℓ(x,u[1:m],W,R,xf)
+        ℓx = W*vec(x - xf)
+        ℓu = R*vec(u[1:m])
+        ℓxx = W
+        ℓuu = R
+
+        if solver.opts.minimum_time
+            h = u[m̄]
+            Lx = dt*ℓx
+            Lu = [dt*ℓu; 2*h*ℓ1 + 2*R_minimum_time*h]
+            Lxx = dt*ℓxx
+            Luu = [dt*ℓuu 2*h*ℓu; 2*h*ℓu' (2*ℓ1 + 2*R_minimum_time)]
+            Lux = [zeros(m,n); 2*h*ℓx']
+        else
+            Lx = dt*ℓx
+            Lu = dt*ℓu
+            Lxx = dt*ℓxx
+            Luu = dt*ℓuu
+            Lux = zeros(m̄,n)
+        end
+
+        if solver.opts.infeasible
+            Lu = [Lu; R_infeasible*u[m̄+1:m̄+n]]
+            Lux = [Lux; zeros(n,n)]
+            Luu = [Luu zeros(m̄,n); zeros(n,m̄) R_infeasible]
+        end
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = Lx + fdx'*vec(s[k+1])
+        Qu = Lu + fdu'*vec(s[k+1])
+        Qxx = Lxx + fdx'*S[k+1]*fdx
+
+        Quu = Luu + fdu'*S[k+1]*fdu
+        # println("Lux: $(size(Lux))")
+        # println("fdu: $(size(fdu))")
+        # println("fdx: $(size(fdx))")
+        Qux = Lux + fdu'*S[k+1]*fdx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
         end
 
         if solver.opts.regularization_type == :state

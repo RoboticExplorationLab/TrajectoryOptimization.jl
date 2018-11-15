@@ -217,12 +217,15 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
         if solver.control_integration == :foh
             xm = res.xm[k]
-            um = (U[k] + U[k+1])/2
+            um = res.um[k]
             J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(xm,um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
             solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
             J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            # J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
+            # solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            # solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
     end
 

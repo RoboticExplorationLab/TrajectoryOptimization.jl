@@ -74,8 +74,6 @@ opts.verbose = false
 opts.constraint_tolerance = 1e-3
 opts.cost_intermediate_tolerance = 1e-3
 opts.cost_tolerance = 1e-3
-opts.τ = .75
-opts.γ = 2
 ######################
 
 ### Set up model, objective, solver ###
@@ -95,7 +93,6 @@ function cE(cdot,x,u)
 end
 
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
-
 # Solver
 # - Initial control and state trajectories
 solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
