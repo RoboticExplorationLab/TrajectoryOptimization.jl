@@ -6,14 +6,13 @@ dt = 0.1
 
 
 function test_ipopt_funcs(method)
-    method = :trapezoid
     # Set up problem
     solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
     N,N_ = TrajectoryOptimization.get_N(solver,method)
     NN = N*(n+m)
     nG = TrajectoryOptimization.get_nG(solver,method)
-    U0 = ones(1,N_)*1
-    X0 = line_trajectory(obj.x0, obj.xf, N_)
+    U0 = ones(1,N)*1
+    X0 = line_trajectory(obj.x0, obj.xf, N)
     Z = TrajectoryOptimization.packZ(X0,U0)
 
     # Init vars

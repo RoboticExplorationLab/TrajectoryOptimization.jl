@@ -75,7 +75,7 @@ function check_grads(solver,method)
     @test jacob_g_auto ≈ jacob_g
 
     # Check cost
-    cost(solver,res) ≈ eval_f(Z)
+    @test cost(solver,res) ≈ eval_f(Z)
 
     N,N_ = get_N(solver,method)
     # Check cost gradient
@@ -95,16 +95,17 @@ check_grads(solver,:hermite_simpson_separated)
 method = :hermite_simpson
 # Set up problem
 obj_mintime = update_objective(obj_con,tf=:min)
-solver = Solver(model,obj_con,N=51,integration=:rk3_foh)
+solver = Solver(model,obj_mintime,N=51,integration=:rk3_foh)
 N,N_ = TrajectoryOptimization.get_N(solver,method)
 m̄, = get_num_controls(solver)
 NN = N*(n+m̄)
 nG = TrajectoryOptimization.get_nG(solver,method)
-U0 = ones(1,N)*1
+U0 = rand(1,N)*1
 if is_min_time(solver)
     U0 = [U0; ones(1,N)*0.1]
 end
-X0 = line_trajectory(obj.x0, obj.xf, N)
+# X0 = line_trajectory(obj.x0, obj.xf, N)
+X0 = rand(n,N)
 Z = TrajectoryOptimization.packZ(X0,U0)
 
 # Init vars
@@ -113,18 +114,7 @@ grad_f = zeros(NN)
 rows = zeros(nG)
 cols = zeros(nG)
 vals = zeros(nG)
-
-# SNOPT stuff
-res = DircolResults(n,m,solver.N,method)
-res.X .= X0
-res.U .= U0
-Z = res.Z
-
-# weights = get_weights(method,N)*dt
-TrajectoryOptimization.update_derivatives!(solver,res,method)
-TrajectoryOptimization.get_traj_points!(solver,res,method)
-TrajectoryOptimization.get_traj_points_derivatives!(solver,res,method)
-TrajectoryOptimization.update_jacobians!(solver,res,method)
+weights = get_weights(method,N_)
 
 # Get functions and evaluate
 eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
@@ -141,18 +131,72 @@ function eval_f2(Z)
     return J
 end
 
+function eval_f3(Z)
+    X,U = unpackZ(Z,(n,m̄,N))
+    weights = get_weights(method,N_)
+    J = cost(solver,X,U,weights,method)
+end
+
+X,U = unpackZ(Z,(n,m̄,N))
+weights = get_weights(method,N_)
+fVal = zeros(eltype(Z),n,N)
+update_derivatives!(solver,X,U,fVal)
+X_ = zeros(eltype(Z),n,N_)
+U_ = zeros(eltype(Z),m̄,N_)
+X_,U_ = get_traj_points(solver::Solver,X,U,fVal,X_,U_,method::Symbol)
+
 eval_f(Z)
 eval_f2(Z)
+eval_f3(Z)
+J,Xm2,Um2,fVal2 = cost(solver::Solver,X0,U0,weights::Vector,method::Symbol)
 
+
+function L1(z)
+    X,U = unpackZ(z,(n,m̄,2))
+    f1 = zeros(eltype(X),n)
+    f2 = zeros(eltype(X),n)
+    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
+    k = 1
+    model.f(f1,X[:,k], U[1:m,k])
+    model.f(f2,X[:,k+1], U[1:m,k+1])
+    x1 = X[:,k]
+    x2 = X[:,k+1]
+    dtk = U[end,k]
+
+    Xm = (x1+x2)/2 + dtk/8*(f1-f2)
+    Um = (U[1:m,k] + U[1:m,k+1])/2
+
+    dtk/6*(ℓ(x1,U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf)*0 + ℓ(x2,U[1:m,k+1],Q,R,xf))
+end
+
+function L1_grad(z)
+    X,U = unpackZ(z,(n,m̄,2))
+    f1 = zeros(eltype(X),n)
+    f2 = zeros(eltype(X),n)
+    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
+    k = 1
+    model.f(f1,X[:,k], U[1:m,k])
+    model.f(f2,X[:,k+1], U[1:m,k+1])
+    x1 = X[:,k]
+    x2 = X[:,k+1]
+    dtk = U[end,k]
+
+    Xm = (x1+x2)/2 + dtk/8*(f1-f2)
+    Um = (U[1:m,k] + U[1:m,k+1])/2
+
+    1/6*(ℓ(x1,U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf)*0 + ℓ(x2,U[1:m,k+1],Q,R,xf))
+end
+
+Ztest = Z[1:2(n+m̄)]
+L1(Ztest)
+ForwardDiff.gradient(L1,Ztest)[6]
 
 eval_grad_f(Z,grad_f)
-grad_f_check = ForwardDiff.gradient(eval_f2,Z)
-grad_f_res = cost_gradient(solver,res,method)
-grad_f
+grad_f_check = ForwardDiff.gradient(eval_f3,Z)
+count(grad_f_check .≈ ForwardDiff.gradient(eval_f2,Z))
+grad_f[6]
 
-grad_f_check .≈ grad_f_res
-grad_f_res == grad_f
-findall(.!(ForwardDiff.gradient(eval_f2,Z) .≈ grad_f))
+grad_f_check .≈ grad_f
 
 
 
