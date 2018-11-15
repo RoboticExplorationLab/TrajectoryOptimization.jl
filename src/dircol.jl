@@ -288,13 +288,15 @@ function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{F
     m̄, = get_num_controls(solver)
     Qf = solver.obj.Qf; Q = solver.obj.Q;
     xf = solver.obj.xf; R = solver.obj.R;
-    J = zeros(eltype(X),N)
-    for k = 1:N
-        J[k] = stage_cost(X[:,k],U[:,k],Q,R,xf)
+    # solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+
+    J = zeros(eltype(X),N_)
+    for k = 1:N_
+        J[k] = ℓ(X[:,k],U[1:m,k],Q,R,xf)#*dt[k]
     end
 
     J = weights'J*solver.dt
-    J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+    J += 0.5*(X[:,N_] - xf)'*Qf*(X[:,N_] - xf)
 end
 
 
@@ -329,32 +331,43 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
         Um = view(U,:,2:2:N_-1)
         Ak = view(A,:,:,1:2:N_)
         Bk = view(B,:,:,1:2:N_)
+        fk = fVal
 
-        grad_f[1:n,1] =     Q*(Xk[:,1]-xf) + 4*(I_n/2 + dt/8*Ak[:,:,1])'Q*(Xm[:,1] - xf)
-        grad_f[n+1:end,1] = R*Uk[:,1] + 4(dt/8*Bk[:,:,1]'Q*(Xm[:,1] - xf) + R*Um[:,1]/2)
+        solver.opts.minimum_time ? dt = Uk[m̄,:] : dt = ones(N)*solver.dt
+
+        grad_f[1:n,1] =     (Q*(Xk[:,1]-xf) + 4*(I_n/2 + dt[1]/8*Ak[:,:,1])'Q*(Xm[:,1] - xf))*dt[1]/6
+        grad_f[n.+(1:m),1] = (R*Uk[1:m,1] + 4(dt[1]/8*Bk[:,:,1]'Q*(Xm[:,1] - xf) + R*Um[1:m,1]/2))*dt[1]/6
+        solver.opts.minimum_time ? grad_f[m̄,1] = (ℓ(X[:,1],U[1:m,1],Q,R,xf) + 4ℓ(Xm[:,1],Um[1:m,1],Q,R,xf) + ℓ(X[:,2],U[1:m,2],Q,R,xf))/6 +
+                                                 (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/2 : nothing
         for k = 2:N-1
-            grad_f[1:n,k] = Q*(Xk[:,k]-xf) + 4*(I_n/2 + dt/8*Ak[:,:,k])'Q*(Xm[:,k] - xf) +
-                            Q*(Xk[:,k]-xf) + 4(I_n/2 - dt/8*Ak[:,:,k])'Q*(Xm[:,k-1] - xf)
-            grad_f[n+1:end,k] = R*Uk[:,k] + 4(dt/8*Bk[:,:,k]'Q*(Xm[:,k] - xf)   + R*Um[:,k]/2) +
-                                R*Uk[:,k] - 4(dt/8*Bk[:,:,k]'Q*(Xm[:,k-1] - xf) - R*Um[:,k-1]/2)
+            grad_f[1:n,k] = (Q*(Xk[:,k]-xf) + 4(I_n/2 + dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k] - xf))*dt[k]/6 +
+                            (Q*(Xk[:,k]-xf) + 4(I_n/2 - dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k-1] - xf))*dt[k-1]/6
+            grad_f[n.+(1:m),k] = (R*Uk[1:m,k] + 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k] - xf)   + R*Um[1:m,k]/2))*dt[k]/6 +
+                                 (R*Uk[1:m,k] - 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k-1] - xf) - R*Um[1:m,k-1]/2))*dt[k-1]/6
+            solver.opts.minimum_time ? grad_f[m̄,k] = (ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf))/6 +
+                                                     (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/2 : nothing
         end
-        grad_f[1:n,N] = Q*(Xk[:,N]-xf) + 4(I_n/2 - dt/8*Ak[:,:,N])'Q*(Xm[:,N-1] - xf)
-        grad_f[n+1:end,N] = R*Uk[:,N] - 4(dt/8*Bk[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[:,N-1]/2)
-        grad_f .*= dt/6
+        grad_f[1:n,N] = (Q*(Xk[:,N]-xf) + 4(I_n/2 - dt[N-1]/8*Ak[:,:,N])'Q*(Xm[:,N-1] - xf))*dt[N-1]/6
+        grad_f[n.+(1:m),N] = (R*Uk[1:m,N] - 4(dt[N-1]/8*Bk[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[1:m,N-1]/2))*dt[N-1]/6
+        solver.opts.minimum_time ? grad_f[m̄,N] = 0 : nothing
         grad_f[1:n,N] += Qf*(Xk[:,N] - xf)
     elseif method == :midpoint
         I_n = Matrix(I,n,n)
         Xm = X
 
-        grad_f[1:n,1] = Q*(Xm[:,1] - xf)/2
-        grad_f[n+1:end,1] = R*U[:,1]
+        # Get dt
+        solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
+
+        grad_f[1:n,1] = Q*(Xm[:,1] - xf)*dt[1]/2
+        grad_f[n.+(1:m),1] = R*U[1:m,1]*dt[1]
+        solver.opts.minimum_time ? grad_f[n+m̄,1] = ℓ(Xm[:,1],U[1:m,1],Q,R,xf) : nothing
         for k = 2:N-1
-            grad_f[1:n,k] = Q*(Xm[:,k] - xf)/2 + Q*(Xm[:,k-1] - xf)/2 # weight includes dt
-            grad_f[n+1:end,k] = R*U[:,k]
+            grad_f[1:n,k] = Q*(Xm[:,k] - xf)*dt[k]/2 + Q*(Xm[:,k-1] - xf)*dt[k-1]/2
+            grad_f[n.+(1:m),k] = R*U[1:m,k]*dt[k]
+            solver.opts.minimum_time ? grad_f[n+m̄,k] = ℓ(Xm[:,k],U[1:m,k],Q,R,xf) : nothing
         end
-        grad_f[1:n,N] = Q*(Xm[:,N-1] - xf)/2
-        grad_f[n+1:end,N] = zeros(m)
-        grad_f .*= dt
+        grad_f[1:n,N] = Q*(Xm[:,N-1] - xf)*dt[N-1]/2
+        grad_f[n+1:end,N] = zeros(m̄)
         grad_f[1:n,N] += Qf*(X[:,N] - xf)
     else
         for k = 1:N

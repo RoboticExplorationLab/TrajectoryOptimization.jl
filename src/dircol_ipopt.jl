@@ -45,7 +45,10 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         # vars = DircolVars(Z,n,m̄,N)
         # X,U = vars.X, vars.U
         X,U = TrajectoryOptimization.unpackZ(Z,(n,m̄,N))
-        X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method,true)
+        fVal = zeros(eltype(Z),n,N)
+        X_ = zeros(eltype(Z),n,N_)
+        U_ = zeros(eltype(Z),m,N_)
+        X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method,true)
         J = cost(solver,X_,U_,weights)
         return J
     end
