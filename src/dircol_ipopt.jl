@@ -47,7 +47,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         X,U = TrajectoryOptimization.unpackZ(Z,(n,m̄,N))
         fVal = zeros(eltype(Z),n,N)
         X_ = zeros(eltype(Z),n,N_)
-        U_ = zeros(eltype(Z),m,N_)
+        U_ = zeros(eltype(Z),m̄,N_)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method,true)
         J = cost(solver,X_,U_,weights)
         return J

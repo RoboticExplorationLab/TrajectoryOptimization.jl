@@ -288,14 +288,14 @@ function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{F
     m̄, = get_num_controls(solver)
     Qf = solver.obj.Qf; Q = solver.obj.Q;
     xf = solver.obj.xf; R = solver.obj.R;
-    # solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+    solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
 
     J = zeros(eltype(X),N_)
     for k = 1:N_
-        J[k] = ℓ(X[:,k],U[1:m,k],Q,R,xf)#*dt[k]
+        J[k] = ℓ(X[:,k],U[1:m,k],Q,R,xf)*dt[k]
     end
 
-    J = weights'J*solver.dt
+    J = weights'J
     J += 0.5*(X[:,N_] - xf)'*Qf*(X[:,N_] - xf)
 end
 
