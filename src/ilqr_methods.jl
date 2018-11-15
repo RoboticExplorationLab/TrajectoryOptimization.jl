@@ -120,6 +120,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         calculate_midpoints!(res,solver,X, U)
     end
 
+    # Update constraints
     update_constraints!(res,solver,X,U)
 
     return true
@@ -157,7 +158,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             U_[k] = U[k] + dv
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = dv
+            du[1:mm] = dv
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
@@ -178,6 +179,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         calculate_midpoints!(res, solver, X_, U_)
     end
 
+    # Update constraints
     update_constraints!(res,solver,X_,U_)
 
     return true
@@ -208,7 +210,7 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
-function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
+function _cost(solver::Solver,res::SolverVectorResults,X,U)
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -233,7 +235,7 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
         end
     end
 
-    J += ℓ(X[N],zeros(m),Qf,zeros(m,m),xf)
+    J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
 
     return J
 end
@@ -260,7 +262,7 @@ function cost_constraints(solver::Solver, res::UnconstrainedIterResults)
 end
 
 
-function cost(solver::Solver, res::SolverIterResults, X::Vector=res.X, U::Vector=res.U)
+function cost(solver::Solver, res::SolverIterResults, X, U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
@@ -319,13 +321,13 @@ end
 $(SIGNATURES)
     Calculate state midpoints (xm)
 """
-function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X, U)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
     for k = 1:N-1
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-        results.xm[k] = cubic_midpoint(results.X[k],results.dx[k],results.X[k+1],results.dx[k+1],dt)
+        results.xm[k] = cubic_midpoint(X[k],results.dx[k],X[k+1],results.dx[k+1],dt)
         results.um[k] = 0.5*(U[k] + U[k+1])
     end
 end
@@ -334,7 +336,7 @@ end
 $(SIGNATURES)
     Calculate state derivatives (dx)
 """
-function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X, U)
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.fc(results.dx[k],X[k],U[k][1:m])
@@ -406,7 +408,7 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
+function update_constraints!(res::ConstrainedIterResults, solver::Solver, X, U)::Nothing
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
@@ -422,7 +424,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
         c(res.C[k], X[k], U[k]) # update results with constraint evaluations
 
         if solver.opts.minimum_time && k < N-1
-            res.C[k][end] = res.U[k][m̄] - res.U[k+1][m̄]
+            res.C[k][end] = U[k][m̄] - U[k+1][m̄]
         end
         if solver.control_integration == :foh && k == N
             res.C[k][m̄] = 0.0
@@ -450,7 +452,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X::Arr
     return nothing # TODO allow for more general terminal constraint
 end
 
-function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X::Array=res.X, U::Array=res.U)::Nothing
+function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X, U)::Nothing
     return nothing
 end
 

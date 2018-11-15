@@ -111,6 +111,7 @@ sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 
 # Test final state from foh solve
 @test norm(sol_foh.X[end] - solver_foh.obj.xf) < 1e-3
+
 #####################################
 
 ## State and control constraints Dubins car (foh) ##

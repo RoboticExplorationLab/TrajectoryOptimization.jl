@@ -769,5 +769,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     @logmsg InnerLoop :α value=2*alpha
     @logmsg InnerLoop :ρ value=res.ρ[1]
 
+    if J > J_prev
+        error("cost error")
+    end
     return J
 end

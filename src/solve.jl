@@ -234,9 +234,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             println("J: $J")
             push!(J_hist,J)
 
-            if J > J_prev && ii != 1
-                error("cost error")
-            end
             # increment iLQR inner loop counter
             iter += 1
 
