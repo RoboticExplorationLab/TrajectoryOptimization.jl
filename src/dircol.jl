@@ -337,19 +337,19 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
 
         grad_f[1:n,1] =     (Q*(Xk[:,1]-xf) + 4*(I_n/2 + dt[1]/8*Ak[:,:,1])'Q*(Xm[:,1] - xf))*dt[1]/6
         grad_f[n.+(1:m),1] = (R*Uk[1:m,1] + 4(dt[1]/8*Bk[:,:,1]'Q*(Xm[:,1] - xf) + R*Um[1:m,1]/2))*dt[1]/6
-        solver.opts.minimum_time ? grad_f[m̄,1] = (ℓ(X[:,1],U[1:m,1],Q,R,xf) + 4ℓ(Xm[:,1],Um[1:m,1],Q,R,xf) + ℓ(X[:,2],U[1:m,2],Q,R,xf))/6 +
-                                                 (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/2 : nothing
+        solver.opts.minimum_time ? grad_f[n+m̄,1] = (ℓ(X[:,1],U[1:m,1],Q,R,xf) + 4ℓ(Xm[:,1],Um[1:m,1],Q,R,xf) + ℓ(X[:,2],U[1:m,2],Q,R,xf))/6 +
+                                                 (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/12 : nothing
         for k = 2:N-1
             grad_f[1:n,k] = (Q*(Xk[:,k]-xf) + 4(I_n/2 + dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k] - xf))*dt[k]/6 +
                             (Q*(Xk[:,k]-xf) + 4(I_n/2 - dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k-1] - xf))*dt[k-1]/6
             grad_f[n.+(1:m),k] = (R*Uk[1:m,k] + 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k] - xf)   + R*Um[1:m,k]/2))*dt[k]/6 +
                                  (R*Uk[1:m,k] - 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k-1] - xf) - R*Um[1:m,k-1]/2))*dt[k-1]/6
-            solver.opts.minimum_time ? grad_f[m̄,k] = (ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf))/6 +
-                                                     (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/2 : nothing
+            solver.opts.minimum_time ? grad_f[n+m̄,k] = (ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf))/6 +
+                                                     (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/12 : nothing
         end
         grad_f[1:n,N] = (Q*(Xk[:,N]-xf) + 4(I_n/2 - dt[N-1]/8*Ak[:,:,N])'Q*(Xm[:,N-1] - xf))*dt[N-1]/6
         grad_f[n.+(1:m),N] = (R*Uk[1:m,N] - 4(dt[N-1]/8*Bk[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[1:m,N-1]/2))*dt[N-1]/6
-        solver.opts.minimum_time ? grad_f[m̄,N] = 0 : nothing
+        solver.opts.minimum_time ? grad_f[n+m̄,N] = 0 : nothing
         grad_f[1:n,N] += Qf*(Xk[:,N] - xf)
     elseif method == :midpoint
         I_n = Matrix(I,n,n)
@@ -418,13 +418,18 @@ function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
         # Midpoints
         Xm = view(X_,:,2:2:N_-1)
         Um = view(U_,:,2:2:N_-1)
-        Um .= (U[:,1:end-1] + U[:,2:end])/2
+        Um .= (U[1:m,1:end-1] + U[1:m,2:end])/2
         # fValm = view(fVal_,:,2:2:N_-1)
         for k = 1:N-1
             solver.opts.minimum_time ? dt = U[m̄,k] : nothing
             x1,x2 = X[:,k], X[:,k+1]
             Xm[:,k] = (x1+x2)/2 + dt/8*(fVal[:,k]-fVal[:,k+1])
             # solver.fc(view(fValm,:,k),Xm[:,k],Um[:,k])
+        end
+        if solver.opts.minimum_time
+            U_[m̄,2:2:N_-1] = U[m̄,1:N-1]
+            U_[m̄,3:2:N_-2] = (U[m̄,1:N-2] + U[m̄,2:N-1])/2
+            U_[m̄,N_] = U[m̄,N-1]
         end
     elseif method == :midpoint
         Xm = (X[:,1:end-1] + X[:,2:end])/2
