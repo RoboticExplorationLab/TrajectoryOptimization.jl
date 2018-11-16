@@ -145,26 +145,37 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
     if solver.control_integration == :foh
         b = res.b
-        dv = zeros(mm)
         du = alpha*d[1]
         U_[1] = U[1] + du
+        dv = zero(du)
     end
 
     for k = 2:N
         δx = X_[k-1] - X[k-1]
 
         if solver.control_integration == :foh
+            # println("   pre")
+            # println("du: $du")
+            # println("dv: $dv")
             dv = K[k]*δx + b[k]*du + alpha*d[k]
+            # println("   dv update")
+            # println("du: $du")
+            # println("dv: $dv")
             U_[k] = U[k] + dv
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = copy(dv)
+            du = dv
+            # println("   du update")
+            # println("du: $du")
+            # println("dv: $dv")
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
-
+        # if k == 3
+        #     error("stop")
+        # end
         solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
