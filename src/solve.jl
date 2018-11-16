@@ -230,7 +230,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv, J_prev)
+            J = forwardpass!(results, solver, Δv)#, J_prev)
             println("J: $J")
             push!(J_hist,J)
 

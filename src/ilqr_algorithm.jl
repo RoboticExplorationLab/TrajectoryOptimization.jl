@@ -674,13 +674,17 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2},J_prev::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64,2})
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
     # # Compute original cost
-    # update_constraints!(res,solver,X,U)
-    # J_prev = cost(solver, res, X, U)
+    if solver.control_integration == :foh
+        calculate_derivatives!(res, solver, X, U)
+        calculate_midpoints!(res, solver, X, U)
+    end
+    update_constraints!(res,solver,X,U)
+    J_prev = cost(solver, res, X, U)
 
     J = Inf
     alpha = 1.0
@@ -770,6 +774,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
     @logmsg InnerLoop :ρ value=res.ρ[1]
 
     if J > J_prev
+        # println("***J>J_prev***")
         error("cost error")
     end
     return J

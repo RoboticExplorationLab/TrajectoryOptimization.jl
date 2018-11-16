@@ -158,7 +158,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             U_[k] = U[k] + dv
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du[1:mm] = dv
+            du = copy(dv)
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
