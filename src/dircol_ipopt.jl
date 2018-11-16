@@ -49,7 +49,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         X_ = zeros(eltype(Z),n,N_)
         U_ = zeros(eltype(Z),m̄,N_)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method,true)
-        J = cost(solver,X_,U_,weights)
+        J = cost(solver,X_,U_,method)
         return J
     end
 
@@ -57,9 +57,14 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     # COLLOCATION CONSTRAINTS #
     ###########################
     function eval_g(Z, g)
-        vars = DircolVars(Z,n,m,N)
-        X,U = vars.X,vars.U
-        X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+        # vars = DircolVars(Z,n,m,N)
+        # X,U = vars.X,vars.U
+        X,U = unpackZ(Z,(n,m̄,N))
+        fVal = zeros(eltype(Z),n,N)
+        X_ = zeros(eltype(Z),n,N_)
+        U_ = zeros(eltype(Z),m̄,N_)
+        fVal_ = zeros(eltype(Z),n,N_)
+        X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
         collocation_constraints!(solver::Solver, X_, U_, fVal_, g, method::Symbol)
         # reshape(g,n*(N-1),1)
@@ -88,12 +93,12 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
             rows .= r
             cols .= c
         else
-            vars = DircolVars(Z,n,m,N)
+            vars = DircolVars(Z,n,m̄,N)
             X,U, = vars.X,vars.U
             X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
             get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
             update_jacobians!(solver,X_,U_,A,B,method)
-            constraint_jacobian!(solver,X_,U_,A,B,vals,method)
+            constraint_jacobian!(solver,X_,U_,fVal_,A,B,vals,method)
         end
         return nothing
     end
