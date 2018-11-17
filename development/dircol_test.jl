@@ -99,7 +99,8 @@ solver = Solver(model,obj_mintime,N=51,integration=:rk3_foh)
 N,N_ = TrajectoryOptimization.get_N(solver,method)
 m̄, = get_num_controls(solver)
 NN = N*(n+m̄)
-nG = TrajectoryOptimization.get_nG(solver,method)
+nG,Gpart = TrajectoryOptimization.get_nG(solver,method)
+nG = Gpart.collocation
 U0 = rand(1,N)*1
 if is_min_time(solver)
     U0 = [U0; ones(1,N)*0.1]
@@ -116,87 +117,68 @@ cols = zeros(nG)
 vals = zeros(nG)
 weights = get_weights(method,N_)
 
+# Generate Variables
+X,U = unpackZ(Z,(n,m̄,N))
+X_ = zeros(n,N_)
+U_ = zeros(m̄,N_)
+fVal = copy(X)
+fVal_ = copy(X_)
+A,B = init_jacobians(solver,method)
+X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
+get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+update_jacobians!(solver,X_,U_,A,B,method)
+
+
 # Get functions and evaluate
 eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
 
-function eval_f2(Z)
-    X,U = unpackZ(Z,(n,m̄,N))
-    weights = get_weights(method,N_)
-    fVal = zeros(eltype(Z),n,N)
-    update_derivatives!(solver,X,U,fVal)
-    X_ = zeros(eltype(Z),n,N_)
-    U_ = zeros(eltype(Z),m̄,N_)
-    X_,U_ = get_traj_points(solver::Solver,X,U,fVal,X_,U_,method::Symbol)
-    J = cost(solver,X_,U_,weights)
-    return J
-end
-
-function eval_f3(Z)
-    X,U = unpackZ(Z,(n,m̄,N))
-    weights = get_weights(method,N_)
-    J = cost(solver,X,U,weights,method)
-end
-
-X,U = unpackZ(Z,(n,m̄,N))
-weights = get_weights(method,N_)
-fVal = zeros(eltype(Z),n,N)
-update_derivatives!(solver,X,U,fVal)
-X_ = zeros(eltype(Z),n,N_)
-U_ = zeros(eltype(Z),m̄,N_)
-X_,U_ = get_traj_points(solver::Solver,X,U,fVal,X_,U_,method::Symbol)
-
+# Test Cost
 eval_f(Z)
-eval_f2(Z)
-eval_f3(Z)
-J,Xm2,Um2,fVal2 = cost(solver::Solver,X0,U0,weights::Vector,method::Symbol)
+J = cost(solver::Solver,X0,U0,weights::Vector,method::Symbol)
 
-
-function L1(z)
-    X,U = unpackZ(z,(n,m̄,2))
-    f1 = zeros(eltype(X),n)
-    f2 = zeros(eltype(X),n)
-    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
-    k = 1
-    model.f(f1,X[:,k], U[1:m,k])
-    model.f(f2,X[:,k+1], U[1:m,k+1])
-    x1 = X[:,k]
-    x2 = X[:,k+1]
-    dtk = U[end,k]
-
-    Xm = (x1+x2)/2 + dtk/8*(f1-f2)
-    Um = (U[1:m,k] + U[1:m,k+1])/2
-
-    dtk/6*(ℓ(x1,U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf)*0 + ℓ(x2,U[1:m,k+1],Q,R,xf))
-end
-
-function L1_grad(z)
-    X,U = unpackZ(z,(n,m̄,2))
-    f1 = zeros(eltype(X),n)
-    f2 = zeros(eltype(X),n)
-    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
-    k = 1
-    model.f(f1,X[:,k], U[1:m,k])
-    model.f(f2,X[:,k+1], U[1:m,k+1])
-    x1 = X[:,k]
-    x2 = X[:,k+1]
-    dtk = U[end,k]
-
-    Xm = (x1+x2)/2 + dtk/8*(f1-f2)
-    Um = (U[1:m,k] + U[1:m,k+1])/2
-
-    1/6*(ℓ(x1,U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf)*0 + ℓ(x2,U[1:m,k+1],Q,R,xf))
-end
-
-Ztest = Z[1:2(n+m̄)]
-L1(Ztest)
-ForwardDiff.gradient(L1,Ztest)[6]
-
+# Cost Gradient
 eval_grad_f(Z,grad_f)
-grad_f_check = ForwardDiff.gradient(eval_f3,Z)
-count(grad_f_check .≈ ForwardDiff.gradient(eval_f2,Z))
-grad_f[6]
+grad_f_check = ForwardDiff.gradient(eval_f,Z)
+grad_f_check ≈ grad_f
 
-grad_f_check .≈ grad_f
+# Constraint Jacobian
+eval_g(Z,g)
+eval_jac_g(Z, :Structure, rows, cols, vals)
+eval_jac_g(Z, :vals, rows, cols, vals)
+function eval_g_wrapper(Z)
+    gin = zeros(eltype(Z),size(g))
+    eval_g(Z,gin)
+    return gin
+end
+eval_g_wrapper(Z)
+jac_g_check = ForwardDiff.jacobian(eval_g_wrapper,Z)
+jac_g = Array(sparse(rows,cols,vals))
+Int.(jac_g ≈ jac_g_check)
+
+
+
+
+function colloc_const(z)
+    X,U = unpackZ(z,(n,m̄,3))
+    g = zeros(eltype(z),n,2)
+    for k = 1:2
+        x1,x2 = X[:,k],X[:,k+1]
+        u1,u2 = U[1:m,k],U[1:m,k+1]
+        dt = U[m̄,k]
+
+        f1,fm,f2 = zeros(eltype(z),n), zeros(eltype(z),n),zeros(eltype(z),n)
+        model.f(f1,x1,u1),model.f(f2,x2,u2)
+        xm = 1/2*(x1+x2) + dt/8*(f1-f2)
+        um = (u1+u2)/2
+        model.f(fm,xm,um)
+        g[:,k] = dt/6*(f1+4fm+f2) - x2 + x1
+    end
+    vec(g)
+end
+
+Ztest = Z[1:18]
+colloc_const(Ztest) ≈ g[1:8]
+ForwardDiff.jacobian(colloc_const,Ztest)[:,6]
 
 
 
