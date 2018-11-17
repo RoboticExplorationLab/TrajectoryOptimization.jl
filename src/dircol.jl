@@ -619,6 +619,13 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
     end
 end
 
+function dt_constraints!(solver, g_dt, dt)
+    N = length(dt)
+    for k = 1:N-2
+        g_dt[k] = dt[k] - dt[k+1]
+    end
+end
+
 
 """
 Constraint Jacobian
@@ -744,6 +751,15 @@ function constraint_jacobian!(solver::Solver, X, U, fVal, A, B, vals, method::Sy
         end
     end
 
+    if solver.opts.minimum_time
+        nG,Gpart = get_nG(solver,method)
+        nC = Gpart.collocation
+        jacob_dt = view(vals,nC+1:length(vals))
+        jacob_dt[1:2:2(N-2)] .= 1
+        jacob_dt[2:2:2(N-2)+1] .= -1
+    end
+
+
     return nothing
 end
 
@@ -794,6 +810,13 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
         end
     end
 
+    if solver.opts.minimum_time
+        jacob_dt = spzeros(Int,N-2,N*(n+m̄))
+        dts = n+m̄:n+m̄:NN-2(n+m̄)
+        jacob_dt[CartesianIndex.(1:N-2,dts)] = (1:2:2(N-2)) .+ i
+        jacob_dt[CartesianIndex.(1:N-2,dts.+n.+m̄)] = (2:2:2(N-2)+1) .+ i
+        jacob_g = [jacob_g; jacob_dt]
+    end
     rows,cols,inds = findnz(jacob_g)
     v = sortperm(inds)
     rows = rows[v]

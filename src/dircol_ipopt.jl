@@ -18,12 +18,14 @@ function get_nG(solver::Solver,method::Symbol)
     N,N_ = get_N(solver,method)
     m̄, = get_num_controls(solver)
     if method == :trapezoid || method == :hermite_simpson
-        return 2(n+m̄)*(N-1)n
+        nC = 2(n+m̄)*(N-1)n
     elseif method == :hermite_simpson_separated
-        return 3(n+m̄)*(N-1)n
+        nC = 3(n+m̄)*(N-1)n
     elseif method == :midpoint
-        return (2n+m̄)*(N-1)n
+        nC = (2n+m̄)*(N-1)n
     end
+    solver.opts.minimum_time ? nE = 2(N-2) : nE = 0
+    return nC+nE, (collocation=nC, dt=nE)
 end
 
 function gen_usrfun_ipopt(solver::Solver,method::Symbol)
@@ -37,6 +39,14 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     gX_,gU_,fVal_ = init_traj_points(solver,fVal,method)
     weights = get_weights(method,N_)
     A,B = init_jacobians(solver,method)
+
+    n_colloc = (N-1)n  # Number of collocation constraints
+    g_colloc = 1:n_colloc
+    g_dt = n_colloc.+(1:N-2)
+
+    nG,Gpart = get_nG(solver,method)
+    jac_g_colloc = 1:Gpart.collocation
+    jac_g_dt = Gpart.collocation+1:nG
 
     #################
     # COST FUNCTION #
@@ -66,7 +76,10 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         fVal_ = zeros(eltype(Z),n,N_)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
-        collocation_constraints!(solver::Solver, X_, U_, fVal_, g, method::Symbol)
+        collocation_constraints!(solver::Solver, X_, U_, fVal_, view(g,g_colloc), method::Symbol)
+        if solver.opts.minimum_time
+            dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
+        end
         # reshape(g,n*(N-1),1)
         return nothing
     end
@@ -113,7 +126,7 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     N,N_ = TrajectoryOptimization.get_N(solver,method)  # N=>Number of time steps for decision variables (may differ from solver.N)
     n,m = get_sizes(solver)                             # N_=>Number of time steps for "trajectory" or integration points
     NN = N*(n+m)                                        # Total number of decision variables
-    nG = TrajectoryOptimization.get_nG(solver,method)   # Number of nonzero entries in Constraint Jacobian
+    nG, = TrajectoryOptimization.get_nG(solver,method)   # Number of nonzero entries in Constraint Jacobian
     nH = 0                                              # Number of nonzeros entries in Hessian
 
     # Pack the variables
