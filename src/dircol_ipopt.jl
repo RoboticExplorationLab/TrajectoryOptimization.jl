@@ -54,7 +54,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     function eval_f(Z)
         # vars = DircolVars(Z,n,m̄,N)
         # X,U = vars.X, vars.U
-        X,U = TrajectoryOptimization.unpackZ(Z,(n,m̄,N))
+        X,U = unpackZ(Z,(n,m̄,N))
         fVal = zeros(eltype(Z),n,N)
         X_ = zeros(eltype(Z),n,N_)
         U_ = zeros(eltype(Z),m̄,N_)
@@ -75,13 +75,13 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         U_ = zeros(eltype(Z),m̄,N_)
         fVal_ = zeros(eltype(Z),n,N_)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
-        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal, method)
         collocation_constraints!(solver::Solver, X_, U_, fVal_, view(g,g_colloc), method::Symbol)
         if solver.opts.minimum_time
             dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
         end
         # reshape(g,n*(N-1),1)
-        return nothing
+        return X_,U_,fVal_
     end
 
     #################

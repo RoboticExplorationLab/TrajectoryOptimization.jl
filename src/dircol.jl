@@ -292,20 +292,28 @@ function cost(solver::Solver,X::Matrix,U::Matrix,method::Symbol)
     dt = solver.dt
 
     J = 0.0
-    if method == :hermite_simpson
+    if method == :hermite_simpson || method == :hermite_simpson_separated
+        nSeg = (N_-1)÷2
         Xk = view(X,:,1:2:N_)
         Uk = view(U,:,1:2:N_)
         Xm = view(X,:,2:2:N_-1)
         Um = view(U,:,2:2:N_-1)
-        dt = view(U,m̄,1:2:N_)
+        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
 
-        for k = 1:N-1
-            J += dt[k]/6*(ℓ(Xk[:,k],Uk[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(Xk[:,k+1],Uk[1:m,k+1],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+        for k = 1:nSeg
+             # Simpson quadrature (integral approximation) for foh stage cost
+            J += dt[k]/6*(ℓ(Xk[:,k],Uk[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(Xk[:,k+1],Uk[1:m,k+1],Q,R,xf))
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt[k] : nothing
         end
-    else
-        dt = view(U,m̄,1:N_)
+    elseif method == :midpoint
+        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
         for k = 1:N-1
-            J += dt[k]*stage_cost(X[:,k],U[1:m,k],Q,getR(solver),xf,obj.c)
+            J += dt[k]*stage_cost(X[:,k],U[1:m,k],Q,R,xf,obj.c)
+        end
+    elseif method == :trapezoid
+        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
+        for k = 1:N-1
+            J += dt[k]*(stage_cost(X[:,k],U[1:m,k],Q,R,xf,obj.c) + stage_cost(X[:,k+1],U[1:m,k+1],Q,R,xf,obj.c))/2
         end
     end
 
@@ -336,14 +344,6 @@ end
 """
 Gradient of Objective
 """
-function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
-    n,m = get_sizes(solver)
-    N,N_ = get_N(solver,method)
-    grad_f = zeros((n+m)N)
-    cost_gradient!(solver,res.X_,res.U_,res.fVal_,res.A,res.B,res.weights,grad_f,method)
-    return grad_f
-end
-
 function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method::Symbol)
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)
@@ -366,19 +366,24 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
         Bk = view(B,:,:,1:2:N_)
         fk = fVal
 
-        solver.opts.minimum_time ? dt = Uk[m̄,:] : dt = ones(N)*solver.dt
+        if solver.opts.minimum_time
+            dt = Uk[m̄,:]
+            c_dt = solver.opts.R_minimum_time
+        else
+            dt = ones(N)*solver.dt
+        end
 
         grad_f[1:n,1] =     (Q*(Xk[:,1]-xf) + 4*(I_n/2 + dt[1]/8*Ak[:,:,1])'Q*(Xm[:,1] - xf))*dt[1]/6
         grad_f[n.+(1:m),1] = (R*Uk[1:m,1] + 4(dt[1]/8*Bk[:,:,1]'Q*(Xm[:,1] - xf) + R*Um[1:m,1]/2))*dt[1]/6
         solver.opts.minimum_time ? grad_f[n+m̄,1] = (ℓ(Xk[:,1],Uk[1:m,1],Q,R,xf) + 4ℓ(Xm[:,1],Um[1:m,1],Q,R,xf) + ℓ(Xk[:,2],Uk[1:m,2],Q,R,xf))/6 +
-                                                 (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/12 : nothing
+                                                 (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/12 + c_dt : nothing
         for k = 2:N-1
             grad_f[1:n,k] = (Q*(Xk[:,k]-xf) + 4(I_n/2 + dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k] - xf))*dt[k]/6 +
                             (Q*(Xk[:,k]-xf) + 4(I_n/2 - dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k-1] - xf))*dt[k-1]/6
             grad_f[n.+(1:m),k] = (R*Uk[1:m,k] + 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k] - xf)   + R*Um[1:m,k]/2))*dt[k]/6 +
                                  (R*Uk[1:m,k] - 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k-1] - xf) - R*Um[1:m,k-1]/2))*dt[k-1]/6
             solver.opts.minimum_time ? grad_f[n+m̄,k] = (ℓ(Xk[:,k],Uk[1:m,k],Q,R,xf) + 4ℓ(Xm[:,k],Um[1:m,k],Q,R,xf) + ℓ(Xk[:,k+1],Uk[1:m,k+1],Q,R,xf))/6 +
-                                                     (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/12 : nothing
+                                                     (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/12 + c_dt : nothing
         end
         grad_f[1:n,N] = (Q*(Xk[:,N]-xf) + 4(I_n/2 - dt[N-1]/8*Ak[:,:,N])'Q*(Xm[:,N-1] - xf))*dt[N-1]/6
         grad_f[n.+(1:m),N] = (R*Uk[1:m,N] - 4(dt[N-1]/8*Bk[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[1:m,N-1]/2))*dt[N-1]/6
@@ -506,8 +511,8 @@ function get_traj_points_derivatives!(solver::Solver,X_,U_,fVal_,fVal,method::Sy
         update_derivatives!(solver,Xm,Um,fm)
     elseif method == :midpoint
         update_derivatives!(solver,X_,U_,fVal_)
-    # else
-    #     fVal_ = fVal
+    else
+        fVal_ .= fVal
     end
 end
 
@@ -562,47 +567,42 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
     dt = solver.dt
 
     if method == :trapezoid
-        solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+        # solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
         for k = 1:N-1
             # Collocation Constraints
-            g[:,k] = dt[k]*( fVal[:,k+1] + fVal[:,k] )/2 - X[:,k+1] + X[:,k]
+            g[:,k] = dt*( fVal[:,k+1] + fVal[:,k] )/2 - X[:,k+1] + X[:,k]
         end
     elseif method == :hermite_simpson_separated || method == :hermite_simpson
-        # iLow = 1:2:N_-1
-        # iMid = iLow .+ 1
-        # iUpp = iMid .+ 1
-        # solver.opts.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
-        #
-        # collocation = - X[:,iUpp] + X[:,iLow] + dt[:,iLow].*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
-        #
-        # if method == :hermite_simpson
-        #     g .= collocation
-        # else
-        #     midpoints =  - X[:,iMid] + (X[:,iLow]+X[:,iUpp])/2 + dt[iLow].*(fVal[:,iLow] - fVal[:,iUpp])/8
-        #     g[:,iLow] = collocation
-        #     g[:,iMid] = midpoints
-        # end
-        Xk = view(X,:,1:2:N_)
-        Uk = view(U,:,1:2:N_)
-        Xm = view(X,:,2:2:N_-1)
-        Um = view(U,:,2:2:N_-1)
-        Fk = view(fVal,:,1:2:N_)
-        Fm = view(fVal,:,2:2:N_-1)
+        iLow = 1:2:N_-1
+        iMid = iLow .+ 1
+        iUpp = iMid .+ 1
+        solver.opts.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
 
-        for k = 1:N-1
-            x1,x2 = Xk[:,k],Xk[:,k+1]
-            u1,u2 = Uk[1:m,k],Uk[1:m,k+1]
-            dt = Uk[m̄,k]
-            # f1,fm,f2 = zeros(eltype(z),n), zeros(eltype(z),n),zeros(eltype(z),n)
-            # model.f(f1,x1,u1),model.f(f2,x2,u2)
-            # xm = 1/2*(x1+x2) + dt/8*(f1-f2)
-            # um = (u1+u2)/2
-            # model.f(fm,xm,um)
-            f1 = Fk[:,k]
-            f2 = Fk[:,k+1]
-            fm = Fm[:,k]
-            g[:,k] = dt/6*(f1+4fm+f2) - x2 + x1
+        collocation = - X[:,iUpp] + X[:,iLow] + dt[:,iLow].*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
+
+        if method == :hermite_simpson
+            g .= collocation
+        else
+            midpoints =  - X[:,iMid] + (X[:,iLow]+X[:,iUpp])/2 + dt[:,iLow].*(fVal[:,iLow] - fVal[:,iUpp])/8
+            g[:,iLow] = collocation
+            g[:,iMid] = midpoints
         end
+        # Xk = view(X,:,1:2:N_)
+        # Uk = view(U,:,1:2:N_)
+        # Xm = view(X,:,2:2:N_-1)
+        # Um = view(U,:,2:2:N_-1)
+        # Fk = view(fVal,:,1:2:N_)
+        # Fm = view(fVal,:,2:2:N_-1)
+        #
+        # for k = 1:N-1
+        #     x1,x2 = Xk[:,k],Xk[:,k+1]
+        #     u1,u2 = Uk[1:m,k],Uk[1:m,k+1]
+        #     solver.opts.minimum_time ? dt = Uk[m̄,k] : dt = solver.dt
+        #     f1 = Fk[:,k]
+        #     f2 = Fk[:,k+1]
+        #     fm = Fm[:,k]
+        #     g[:,k] = dt/6*(f1+4fm+f2) - x2 + x1
+        # end
 
     elseif method == :midpoint
         Xm = X
@@ -634,7 +634,7 @@ function constraint_jacobian!(solver::Solver, X, U, fVal, A, B, vals, method::Sy
     # X and U are X_, U_ trajectory points
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
-    m̄, get_num_controls(solver)
+    m̄, = get_num_controls(solver)
     dt = solver.dt
     Inm = Matrix(I,n,n+m)
 
