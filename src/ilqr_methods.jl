@@ -716,6 +716,14 @@ function total_time(solver::Solver, results::SolverVectorResults)
     return T::Float64
 end
 
+function total_time(solver::Solver, results::DircolVars)
+    if is_min_time(solver)
+        m̄, = get_num_controls(solver)
+        T = sum(results.U[m̄,:])
+    else
+        T = solver.dt*(solver.N-1)
+    end
+end
 ####################################
 ### METHODS FOR INFEASIBLE START ###
 ####################################
