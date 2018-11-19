@@ -119,10 +119,11 @@ results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
-ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,1,solver.N,1)
-copyto!(results_infeasible.U, [U_infeasible;ui])
 solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
+p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
+ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
+results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,solver.model.n)
+copyto!(results_infeasible.U, [U_infeasible;ui])
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 
 @test all(ui[1,1:end-1] .== ui[1,1]) # special case for state trajectory of all ones, control 1 should all be same
