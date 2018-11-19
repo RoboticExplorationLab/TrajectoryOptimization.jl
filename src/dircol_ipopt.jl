@@ -81,15 +81,16 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
             dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
         end
         # reshape(g,n*(N-1),1)
-        return X_,U_,fVal_
+        return nothing
     end
 
     #################
     # COST GRADIENT #
     #################
     function eval_grad_f(Z, grad_f)
-        vars = DircolVars(Z,n,m̄,N)
-        X,U = vars.X, vars.U
+        # vars = DircolVars(Z,n,m,N)
+        # X,U = vars.X,vars.U
+        X,U = unpackZ(Z,(n,m̄,N))
         X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
         update_jacobians!(solver,X_,U_,A,B,method,true)
@@ -106,8 +107,9 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
             rows .= r
             cols .= c
         else
-            vars = DircolVars(Z,n,m̄,N)
-            X,U, = vars.X,vars.U
+            # vars = DircolVars(Z,n,m,N)
+            # X,U = vars.X,vars.U
+            X,U = unpackZ(Z,(n,m̄,N))
             X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
             get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
             update_jacobians!(solver,X_,U_,A,B,method)
@@ -121,17 +123,21 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
 end
 
 function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, method::Symbol)
+    X0 = copy(X0)
+    U0 = copy(U0)
+
 
     # Get Constants
     N,N_ = TrajectoryOptimization.get_N(solver,method)  # N=>Number of time steps for decision variables (may differ from solver.N)
     n,m = get_sizes(solver)                             # N_=>Number of time steps for "trajectory" or integration points
-    NN = N*(n+m)                                        # Total number of decision variables
+    m̄, = get_num_controls(solver)
+    NN = N*(n+m̄)                                        # Total number of decision variables
     nG, = TrajectoryOptimization.get_nG(solver,method)   # Number of nonzero entries in Constraint Jacobian
     nH = 0                                              # Number of nonzeros entries in Hessian
 
     # Pack the variables
-    vars0 = DircolVars(X0,U0)
-    Z0 = vars0.Z
+    Z0 = packZ(X0,U0)
+    @assert length(Z0) == NN
 
     # Generate functions
     eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
@@ -159,7 +165,8 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     stats = parse_ipopt_summary()
     stats["info"] = Ipopt.ApplicationReturnStatus[status]
     stats["runtime"] = t_eval
-    vars = DircolVars(prob.x,n,m,N)
+    vars = DircolVars(prob.x,n,m̄,N)
+
     return vars, stats, prob
 end
 

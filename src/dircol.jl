@@ -47,12 +47,17 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
 
     # Constants
     n,m,N = get_sizes(solver)
+    m̄, = get_num_controls(solver)
     dt = solver.dt
     N = convert_N(N,method)
 
     if N != size(X0,2)
         solver.opts.verbose ? println("Interpolating initial guess") : nothing
         X0,U0 = interp_traj(N,obj.tf,X0,U0)
+    end
+
+    if size(U0,1) < m̄
+        U0 = [U0; ones(1,size(U0,2))*get_initial_dt(solver)]
     end
 
     if nlp == :ipopt
@@ -196,17 +201,27 @@ function gen_custom_constraint_fun(solver::Solver,method)
 end
 
 function get_bounds(solver::Solver,method::Symbol)
-    n,m,N = get_sizes(solver)
-    N,N_ = get_N(N,method)
+    n,m = get_sizes(solver)
+    m̄, = get_num_controls(solver)
+    N,N_ = get_N(solver,method)
     obj = solver.obj
-    x_L = zeros((n+m),N)
-    x_U = zeros((n+m),N)
+    x_L = zeros((n+m̄),N)
+    x_U = zeros((n+m̄),N)
 
     ## STATE CONSTRAINTS ##
     x_L[1:n,:] .= obj.x_min
     x_U[1:n,:] .= obj.x_max
     x_L[n.+(1:m),:] .= obj.u_min
     x_U[n.+(1:m),:] .= obj.u_max
+
+    # Minimum time bounds
+    if solver.opts.minimum_time
+        x_L[n+m̄,:] .= solver.opts.min_dt
+        x_U[n+m̄,:] .= solver.opts.max_dt
+        p_dt = N-2
+    else
+        p_dt = 0
+    end
 
     # Initial Condition
     x_L[1:n,1] .= obj.x0
@@ -223,9 +238,9 @@ function get_bounds(solver::Solver,method::Symbol)
     pI_N_c, pE_N_c = pI_obj[4], pE_obj[4]  # Number of custom terminal constraints
     PE_c = (N-1)pE_c + pE_N_c  # Total number of custom equality constraints
     PI_c = (N-1)pI_c + pI_N_c  # Total number of custom inequality constraints
-    PE = PE_c + p_colloc  # Total equality constraints
-    PI = PI_c             # Total inequality constraints
-    P = PI+PE             # Total constraints
+    PE = PE_c + p_colloc + p_dt  # Total equality constraints
+    PI = PI_c                    # Total inequality constraints
+    P = PI+PE                    # Total constraints
 
     # Get bounds
     g_L = zeros(P)
@@ -282,7 +297,7 @@ function cost(solver::Solver,res::DircolResults)
     cost(solver,res.X_,res.U_,res.weights)
 end
 
-function cost(solver::Solver,X::Matrix,U::Matrix,method::Symbol)
+function cost(solver::Solver,X::AbstractMatrix,U::AbstractMatrix,method::Symbol)
     # pull out solver/objective
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
@@ -811,6 +826,7 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
     end
 
     if solver.opts.minimum_time
+        NN = (n+m̄)N
         jacob_dt = spzeros(Int,N-2,N*(n+m̄))
         dts = n+m̄:n+m̄:NN-2(n+m̄)
         jacob_dt[CartesianIndex.(1:N-2,dts)] = (1:2:2(N-2)) .+ i
