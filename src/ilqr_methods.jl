@@ -95,7 +95,24 @@ Updates `res.X` by propagating the dynamics, using the controls specified in
 `res.U`.
 """
 function rollout!(res::SolverVectorResults, solver::Solver)
-    X, U = res.X, res.U
+    status = rollout!(res.X, res.U, solver)
+
+    # Calculate state derivatives and midpoints
+    if solver.control_integration == :foh
+        calculate_derivatives!(res, solver)
+        calculate_midpoints!(res, solver)
+    end
+    return status
+end
+
+function rollout!(X::Matrix, U::Matrix, solver::Solver)
+    X_vecs = to_dvecs(X)
+    status = rollout!(X_vecs, to_dvecs(U), solver)
+    X .= to_array(X_vecs)
+    return status
+end
+
+function rollout!(X::Vector, U::Vector, solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
@@ -116,12 +133,6 @@ function rollout!(res::SolverVectorResults, solver::Solver)
         if ~(norm(X[k+1],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
             return false
         end
-    end
-
-    # Calculate state derivatives and midpoints
-    if solver.control_integration == :foh
-        calculate_derivatives!(res,solver,X,U)
-        calculate_midpoints!(res,solver,X, U)
     end
 
     return true
