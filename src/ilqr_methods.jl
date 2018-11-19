@@ -55,16 +55,20 @@ $(SIGNATURES)
 Get true number of constraints, accounting for minimum time and infeasible start constraints
 """
 function get_num_constraints(solver::Solver)
-    p = solver.obj.p
-    pI = solver.obj.pI
-    pE = p - pI
-    if is_min_time(solver)
-        pI += 2
-        pE += 1
+    if solver.opts.constrained
+        p = solver.obj.p
+        pI = solver.obj.pI
+        pE = p - pI
+        if is_min_time(solver)
+            pI += 2
+            pE += 1
+        end
+        solver.opts.infeasible ? pE += solver.model.n : nothing
+        p = pI + pE
+        return p, pI, pE
+    else
+        return 0,0,0
     end
-    solver.opts.infeasible ? pE += solver.model.n : nothing
-    p = pI + pE
-    return p, pI, pE
 end
 
 function get_initial_dt(solver::Solver)
