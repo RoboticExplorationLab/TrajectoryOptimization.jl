@@ -706,6 +706,18 @@ function max_violation(results::UnconstrainedIterResults)
 end
 
 
+function evaluate_trajectory(solver::Solver, X, U)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
+    results = init_results(solver,X,U)
+    calculate_midpoints!(results, solver)
+    calculate_derivatives!(results, solver)
+    calculate_jacobians!(results, solver)
+    update_constraints!(results, solver)
+    return results
+end
+
 function total_time(solver::Solver, results::SolverVectorResults)
     if is_min_time(solver)
         m̄,mm = get_num_controls(solver)
