@@ -327,7 +327,7 @@ end
 $(SIGNATURES)
     Calculate state midpoints (xm)
 """
-function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X::Vector=results.X, U::Vector=results.U)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
@@ -342,7 +342,7 @@ end
 $(SIGNATURES)
     Calculate state derivatives (dx)
 """
-function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector, U::Vector)
+function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X::Vector=results.X, U::Vector=results.U)
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.fc(results.dx[k],X[k],U[k][1:m])
