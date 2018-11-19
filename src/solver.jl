@@ -60,8 +60,8 @@ struct Solver{O<:Objective}
         m̄ = m
         if minimum_time
             m̄ += 1
-            opts.minimum_time = true
         end
+        opts.minimum_time = minimum_time
 
         # Get integration scheme
         if isdefined(TrajectoryOptimization,integration)
