@@ -104,7 +104,7 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     end
 
     # Update constraints
-    update_constraints!(res,solver,X,U)
+    update_constraints!(res,solver)
     return status
 end
 
@@ -236,7 +236,7 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
-function _cost(solver::Solver,res::SolverVectorResults,X,U)
+function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -288,7 +288,7 @@ function cost_constraints(solver::Solver, res::UnconstrainedIterResults)
 end
 
 
-function cost(solver::Solver, res::SolverIterResults, X, U)
+function cost(solver::Solver, res::SolverIterResults, X=res.X, U=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
 
@@ -434,7 +434,7 @@ end
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
 """
-function update_constraints!(res::ConstrainedIterResults, solver::Solver, X, U)::Nothing
+function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
@@ -478,7 +478,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X, U):
     return nothing # TODO allow for more general terminal constraint
 end
 
-function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X, U)::Nothing
+function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
     return nothing
 end
 
