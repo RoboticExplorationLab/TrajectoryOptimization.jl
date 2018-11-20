@@ -39,6 +39,28 @@ abstract type SolverVectorResults <: SolverIterResults end
 abstract type UnconstrainedIterResults <: SolverVectorResults end
 abstract type ConstrainedIterResults <: SolverVectorResults end
 
+function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
+    n,m,N = get_sizes(solver)
+    if solver.opts.constrained
+        p,pI,pE = get_num_constraints(solver)
+        m̄,mm = get_num_controls(solver)
+        if solver.opts.use_static
+            results = ConstrainedStaticResults(n,mm,p,N)
+        else
+            results = ConstrainedVectorResults(n,mm,p,N)
+        end
+    else
+        if solver.opts.use_static
+            results = UnconstrainedStaticResults(n,m,N)
+        else
+            results = UnconstrainedVectorResults(n,m,N)
+        end
+    end
+    copyto!(results.X, X)
+    copyto!(results.U, U)
+    return results
+end
+
 ################################################################################
 #                                                                              #
 #                   UNCONSTRAINED RESULTS STRUCTURE                            #
