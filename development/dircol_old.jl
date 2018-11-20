@@ -6,9 +6,6 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
     m̄, = get_num_controls(solver)
     N,N_ = get_N(solver,method)
     dt = solver.dt
-    XM = zeros(eltype(X),n,N-1)
-    UM = zeros(eltype(X),m̄,N-1)
-    fVal = zeros(eltype(X),n,N)
 
     if method == :hermite_simpson
         # pull out solver/objective values
@@ -27,16 +24,8 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
             Um = (U[1:m,k] + U[1:m,k+1])/2
 
 
-            XM[:,k] = Xm
-            UM[:,k] = [Um;dt]
-            fVal[:,k+1] = f2
-            if k > 1 && fVal[:,k] != f1
-                error("Something happened")
-            end
-            fVal[:,k] = f1
-
-
-            J[k] = dt/6*(ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
+            J[k] = dt/6*(ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation
+            solver.opts.minimum_time ? J[k] += solver.opts.R_minimum_time*dt : nothing
         end
         J = sum(J)
         J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
@@ -64,6 +53,15 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
         return J
     end
 end
+
+function cost_gradient(solver::Solver, res::DircolResults, method::Symbol)
+    n,m = get_sizes(solver)
+    N,N_ = get_N(solver,method)
+    grad_f = zeros((n+m)N)
+    cost_gradient!(solver,res.X_,res.U_,res.fVal_,res.A,res.B,res.weights,grad_f,method)
+    return grad_f
+end
+
 
 function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float64}, vals::Vector{Float64}, method::Symbol)::Nothing
     # println("simple")
@@ -174,6 +172,7 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
     n,m = get_sizes(solver)
     jacob_g = spzeros((N-1)*n,N*(n+m))
     Inm = Matrix(I,n,n+m)
+    dt = solver.dt
 
     if method == :trapezoid
         Z = packZ(X,U)
@@ -197,7 +196,7 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
 
         # Last time step
         fz = A[:,:,N]  # F(z[:,N])
-        jacob_g[end-n+1:end,end-n-m+1:end] = dt*fz/2-Inm
+        jacob_g[end-n+1:end,end-n-m+1:end] = dt[N-1]*fz/2-Inm
 
     elseif method == :hermite_simpson_separated
         nSeg = Int((N-1)/2)

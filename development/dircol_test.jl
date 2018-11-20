@@ -13,18 +13,72 @@ u_bnd = 50
 x_bnd = [0.6,Inf,Inf,Inf]
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_max=x_bnd)
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
+obj_mintime = update_objective(obj_con,tf=:min,Q=obj.Q*0,Qf=obj.Qf,R=obj.R*0.001)
 dt = 0.05
 
 
 # Check Jacobians
+method = :hermite_simpson
 solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
 N = solver.N
+NN = (n+m)N
+nG, = get_nG(solver,method)
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
-sol,stats = solve_dircol(solver,X0,U0)
+solver.opts.verbose = true
+sol,stats = solve_dircol(solver,X0,U0, method=method)
 @test norm(sol.X[:,end] - obj.xf) < 1e-6
+plot(sol.X')
+plot(sol.U')
+
+# Solve minimum time
+method = :hermite_simpson
+solver = Solver(model,obj_mintime,N=41,integration=:rk3_foh)
+n,m,N = get_sizes(solver)
+m̄, = get_num_controls(solver)
+nG, = get_nG(solver,method)
+NN = (n+m̄)N
+U0 = ones(1,N)*1
+X0 = line_trajectory(obj.x0, obj.xf, N)
+# U0 = Matrix(sol.U)
+# X0 = Matrix(sol.X)
+U0_dt = [U0;ones(1,N)*0.05]
+solver.opts.verbose = true
+solver.opts.R_minimum_time = 100
+
+sol, = solve_ipopt(solver, X0, U0_dt, method)
+@test norm(sol.X[:,end] - obj.xf) < 1e-6
+plot(sol.X')
+# sol,stats = solve_dircol(solver,X0,U0_dt)
+
+
+
+Z0 = packZ(X0,U0_dt)
+# Generate functions
+eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
+
+# Get Bounds
+x_L, x_U, g_L, g_U = get_bounds(solver,method)
+P = length(g_L)  # Total number of constraints
+
+all(Z0 .>= x_L)
+all(Z0 .<= x_U)
+
+# Test functions
+g = zeros(P)
+grad_f = zeros(NN)
+jac_g = zeros(nG)
+rows = zeros(nG)
+cols = zeros(nG)
+eval_f(Z0)
+eval_g(Z0,g)
+eval_grad_f(Z0,grad_f)
+eval_jac_g(Z0,:Structure,rows,cols,nG)
+eval_jac_g(Z0,:vals,rows,cols,jac_g)
+
 
 include("../development/dircol_old.jl")
+method = :hermite_simpson
 function check_grads(solver,method)
     n,m = get_sizes(solver)
     N,N_ = get_N(solver, method)
@@ -45,19 +99,19 @@ function check_grads(solver,method)
 
     function eval_ceq(Z)
         X,U = TrajectoryOptimization.unpackZ(Z,(n,m,N))
-        TrajectoryOptimization.collocation_constraints(X,U,method,dt,solver.fc)
+        TrajectoryOptimization.collocation_constraints(X,U,method,solver.dt,solver.fc)
     end
 
     function eval_f(Z)
         X,U =TrajectoryOptimization.unpackZ(Z,(n,m,N))
-        J = cost(solver,X,U,weights,method)
-        return J
+        cost(solver,X,U,weights,method)
     end
 
     # Check constraints
     g = eval_ceq(Z)
     g_colloc = collocation_constraints(solver, res, method)
     @test g_colloc ≈ g
+
 
     Xm = res.X_
     X = res.X
@@ -94,13 +148,12 @@ check_grads(solver,:hermite_simpson_separated)
 # Minimum time
 method = :hermite_simpson
 # Set up problem
-obj_mintime = update_objective(obj_con,tf=:min)
 solver = Solver(model,obj_mintime,N=51,integration=:rk3_foh)
 N,N_ = TrajectoryOptimization.get_N(solver,method)
 m̄, = get_num_controls(solver)
 NN = N*(n+m̄)
 nG,Gpart = TrajectoryOptimization.get_nG(solver,method)
-nG = Gpart.collocation
+# nG = Gpart.collocation
 U0 = rand(1,N)*1
 if is_min_time(solver)
     U0 = [U0; ones(1,N)*0.1]
@@ -110,24 +163,12 @@ X0 = rand(n,N)
 Z = TrajectoryOptimization.packZ(X0,U0)
 
 # Init vars
-g = zeros((N-1)n)
+g = zeros((N-1)n + N-2)
 grad_f = zeros(NN)
 rows = zeros(nG)
 cols = zeros(nG)
 vals = zeros(nG)
 weights = get_weights(method,N_)
-
-# Generate Variables
-X,U = unpackZ(Z,(n,m̄,N))
-X_ = zeros(n,N_)
-U_ = zeros(m̄,N_)
-fVal = copy(X)
-fVal_ = copy(X_)
-A,B = init_jacobians(solver,method)
-X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
-get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
-update_jacobians!(solver,X_,U_,A,B,method)
-
 
 # Get functions and evaluate
 eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
@@ -135,11 +176,12 @@ eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
 # Test Cost
 eval_f(Z)
 J = cost(solver::Solver,X0,U0,weights::Vector,method::Symbol)
+@test eval_f(Z) ≈ J
 
 # Cost Gradient
 eval_grad_f(Z,grad_f)
 grad_f_check = ForwardDiff.gradient(eval_f,Z)
-grad_f_check ≈ grad_f
+@test grad_f_check ≈ grad_f
 
 # Constraint Jacobian
 eval_g(Z,g)
@@ -153,32 +195,10 @@ end
 eval_g_wrapper(Z)
 jac_g_check = ForwardDiff.jacobian(eval_g_wrapper,Z)
 jac_g = Array(sparse(rows,cols,vals))
-Int.(jac_g ≈ jac_g_check)
+@test jac_g ≈ jac_g_check
 
 
 
-
-function colloc_const(z)
-    X,U = unpackZ(z,(n,m̄,3))
-    g = zeros(eltype(z),n,2)
-    for k = 1:2
-        x1,x2 = X[:,k],X[:,k+1]
-        u1,u2 = U[1:m,k],U[1:m,k+1]
-        dt = U[m̄,k]
-
-        f1,fm,f2 = zeros(eltype(z),n), zeros(eltype(z),n),zeros(eltype(z),n)
-        model.f(f1,x1,u1),model.f(f2,x2,u2)
-        xm = 1/2*(x1+x2) + dt/8*(f1-f2)
-        um = (u1+u2)/2
-        model.f(fm,xm,um)
-        g[:,k] = dt/6*(f1+4fm+f2) - x2 + x1
-    end
-    vec(g)
-end
-
-Ztest = Z[1:18]
-colloc_const(Ztest) ≈ g[1:8]
-ForwardDiff.jacobian(colloc_const,Ztest)[:,6]
 
 
 

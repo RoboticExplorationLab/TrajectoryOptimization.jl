@@ -4,13 +4,12 @@ obj = copy(obj0)
 n,m = model.n, model.m
 dt = 0.1
 
-
 function test_ipopt_funcs(method)
     # Set up problem
     solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
     N,N_ = TrajectoryOptimization.get_N(solver,method)
     NN = N*(n+m)
-    nG = TrajectoryOptimization.get_nG(solver,method)
+    nG, = TrajectoryOptimization.get_nG(solver,method)
     U0 = ones(1,N)*1
     X0 = line_trajectory(obj.x0, obj.xf, N)
     Z = TrajectoryOptimization.packZ(X0,U0)
@@ -25,12 +24,11 @@ function test_ipopt_funcs(method)
     # Get functions and evaluate
     eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
     J = eval_f(Z)
-    eval_g(Z,g)
+    X_,U_,fVal_ = eval_g(Z,g)
     eval_grad_f(Z,grad_f)
     eval_jac_g(Z,:Structure,rows,cols,vals)
     eval_jac_g(Z,:vals,rows,cols,vals)
     jac_g = sparse(rows,cols,vals)
-
 
     function eval_all(Z)
         eval_f(Z)
@@ -71,7 +69,7 @@ function test_ipopt_funcs(method)
     # @time eval_all(Z)
     # @time eval_all_snopt(Z)
 
-    @test J_snopt == J
+    @test J_snopt ≈ J
     @test g_snopt == g
     @test grad_f_snopt == grad_f
 
