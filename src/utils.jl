@@ -136,6 +136,12 @@ function to_array(A::Vector{D} where {D<:Diagonal})
     return B
 end
 
+function to_dvecs(X::Array)
+    N = size(X)[end]
+    ax = axes(X)[1:end-1]
+    [X[ax...,i] for i = 1:N]
+end
+
 function to_svecs(X::Array)
     N = size(X)[end]
     s = size(X)[1:end-1]
@@ -143,7 +149,7 @@ function to_svecs(X::Array)
     [MArray{Tuple{s...}}(X[ax...,1]) for i = 1:N]
 end
 
-function copyto!(A::Vector{T}, B::Array{Float64}) where {T<:Union{MArray,VecOrMat}}
+function copyto!(A::Vector{T}, B::AbstractArray{Float64}) where {T<:Union{MArray,VecOrMat}}
     N = size(B)[end]
     ax = axes(B)[1:end-1]
     for i = 1:N
