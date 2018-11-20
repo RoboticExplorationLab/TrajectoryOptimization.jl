@@ -198,7 +198,7 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
     function store_itervals(ln::String)
         if iter_lines
             vals = split(ln)
-            if length(vals) == 10 && vals[1] != "iter" && vals[1] != "Restoration"
+            if length(vals) == 10 && vals[1] != "iter" && vals[1] != "Restoration" && vals[2] != "iteration"
                 push!(obj, parse(Float64,vals[2]))
                 push!(c_max, parse(Float64,vals[3]))
             end
