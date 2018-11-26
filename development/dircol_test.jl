@@ -232,6 +232,8 @@ mesh = [0.2]
 t1 = @elapsed sol,stats = solve_dircol(solver)
 @test norm(sol.X[:,end]-obj.xf) < 1e-5
 
+
+
 # Test dircol constraint stuff
 n,m = 3,2
 cE(x,u) = [2x[1:2]+u;
@@ -246,6 +248,10 @@ pI_N = 0
 model, obj = Dynamics.dubinscar
 obj.tf = 3
 obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
+@test obj_con.p == pE + pI
+@test obj_con.pI == pI
+@test obj_con.pI_N == pI_N
+@test obj_con.p_N == n + pE_N + pI_N
 
 method = :trapezoid
 solver = Solver(model,obj_con,dt=1.)
@@ -254,9 +260,14 @@ X = [1. 2 3 4; 1 2 3 4; 1 2 3 4]
 U = [0. 1 0 0; -1 0 -1 0]
 # U = ones(m,N)
 # X = line_trajectory(obj.x0,obj.xf,N)
+x,u = X[:,1],U[:,1]
+c = zeros(3)
+cE! = wrap_inplace(cE)
+@test !is_inplace_constraints(cE,n,m)
+@test is_inplace_constraints(cE!,n,m)
+@test (n,m) == count_inplace_output(cE!,n,m)
 
 
-obj_con.p_N
 pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
 @test pI_obj == (pI, pI, 0, 0)
 @test pE_obj == (pE, pE, pE_N+n, pE_N)

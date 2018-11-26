@@ -143,25 +143,25 @@ function gen_custom_constraint_fun(solver::Solver,method)
 
         # Equality Constraints
         for k = 1:N-1
-            cE[:,k] = obj.cE(X[:,k],U[:,k])
+            obj.cE(view(cE,:,k),X[:,k],U[:,k])
         end
         if pE_N_c > 0
-            CE[(N-1)pE_c+1:end] = obj.cE(X[:,N])
+            obj.cE(view(CE,(N-1)pE_c+1:PE),X[:,N])
         end
 
         # Inequality Constraints
         for k = 1:N-1
-            cI[:,k] = obj.cI(X[:,k],U[:,k])
+            cI[:,k] = obj.cI(view(cI,:,k),X[:,k],U[:,k])
         end
         if pI_N_c > 0
-            CI[(N-1)pI_c+1:end] = obj.cI(X[:,N])
+            obj.cI(view(CI,(N-1)pI_c+1:PI),X[:,N])
         end
         return nothing
     end
 
     # Jacobian
-    jac_cI = generate_general_constraint_jacobian(obj.cI,pI_c,pI_N_c,n,m)
-    jac_cE = generate_general_constraint_jacobian(obj.cE,pE_c,pE_N_c,n,m)
+    jac_cI = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
+    jac_cE = generate_general_constraint_jacobian(obj.cE, pE_c, pE_N_c, n, m)
     J = spzeros(P,NN)
     JE = view(J,1:PE,:)
     JI = view(J,PE+1:P,:)
@@ -171,28 +171,28 @@ function gen_custom_constraint_fun(solver::Solver,method)
         for k = 1:N-1
             off_1 = (k-1)pE_c
             off_2 = (k-1)*(n+m)
-            Ac,Bc = jac_cE(X[:,k],U[:,k])
-            JE[off_1.+(1:pE_c),off_2  .+ (1:n)] = Ac
-            JE[off_1.+(1:pE_c),off_2.+n.+(1:m)] = Bc
+            Ac = view(JE,off_1.+(1:pE_c),off_2  .+ (1:n))
+            Bc = view(JE,off_1.+(1:pE_c),off_2.+n.+(1:m))
+            Ac,Bc = jac_cE(Ac,Bc,X[:,k],U[:,k])
         end
         if pE_N_c > 0
             off = (N-1)*(n+m)
-            Ac = jac_cE(X[:,N])
-            JE[(N-1)pE_c.+1:end,off.+(1:n)] = Ac
+            Ac = view(JE,(N-1)pE_c.+1:PE,off.+(1:n))
+            jac_cE(Ac,X[:,N])
         end
 
         # Inequality Constraints
         for k = 1:N-1
             off_1 = (k-1)pI_c
             off_2 = (k-1)*(n+m)
-            Ac,Bc = jac_cI(X[:,k],U[:,k])
-            JI[off_1.+(1:pI_c),off_2  .+ (1:n)] = Ac
-            JI[off_1.+(1:pI_c),off_2.+n.+(1:m)] = Bc
+            Ac = view(JI,off_1.+(1:pI_c),off_2  .+ (1:n))
+            Bc = view(JI,off_1.+(1:pI_c),off_2.+n.+(1:m))
+            jac_cI(Ac,Bc,X[:,k],U[:,k])
         end
         if pI_N_c > 0
             off = (N-1)*(n+m)
-            Ac = jac_cI(X[:,N])
-            JI[pI_c.+1:end,off.+(1:n)] = Ac
+            Ac = view(JI,(N-1)pI_c.+1:PI,off.+(1:n))
+            jac_cI(Ac,X[:,N])
         end
         return J
     end
