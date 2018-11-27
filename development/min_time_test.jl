@@ -14,24 +14,24 @@ obj.Q = 1e-3*Diagonal(I,2)
 obj.R = 1e-2*Diagonal(I,1)
 obj.tf = 2.
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
-obj_min = update_objective(obj_c,tf=:min,c=0.0, Q = obj.Q*1, R = obj.R, Qf = obj.Qf*0.)
+obj_min = update_objective(obj_c,tf=:min,c=0.0, Q = obj.Q, R = obj.R, Qf = obj.Qf*0.)
 dt = 0.1
 n,m = model.n, model.m
 
-solver = Solver(model,obj_c,integration=:rk4,dt=dt)
+solver = Solver(model,obj_c,integration=:rk3,dt=dt)
 X_interp = line_trajectory(solver)
 U = ones(m,solver.N)
 results,stats = solve(solver,U)
 plot(to_array(results.X)')
 plot(to_array(results.U)')
 
-solver_min = Solver(model,obj_min,integration=:rk3_foh,N=41)
+solver_min = Solver(model,obj_min,integration=:rk4,N=41)
 U = ones(m,solver_min.N)
-solver_min.opts.verbose = false
+solver_min.opts.verbose = true
 solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.2
-solver_min.opts.constraint_tolerance = 1e-2
-solver_min.opts.R_minimum_time = 10
+solver_min.opts.constraint_tolerance = 0.5e-3
+solver_min.opts.R_minimum_time = 1000.0
 solver_min.opts.ρ_initial = 0
 solver_min.opts.τ = .25
 solver_min.opts.γ = 10.0

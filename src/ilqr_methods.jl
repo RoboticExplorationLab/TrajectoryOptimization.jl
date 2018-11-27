@@ -188,9 +188,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
-        # if k == 3
-        #     error("stop")
-        # end
+
         solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
