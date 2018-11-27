@@ -106,55 +106,79 @@ function is_inplace_constraints(c::Function,n::Int64,m::Int64)
     x = rand(n)
     u = rand(m)
     q = 100
-    xdot = NaN*ones(q)
     iter = 1
 
-    while iter < 5
-        try
-            c(xdot,x,u)
-        catch x
-            if x isa MethodError
-                return false, 0
-            end
-        end
-
-        p = count(isfinite.(xdot))
-        if p > 0
-            return true, p
-        else
-            q *= 10
-            iter += 1
+    vals = NaN*(ones(q))
+    try
+        c(vals,x,u)
+    catch e
+        if e isa MethodError
+            return false
         end
     end
-    #println("Constraint function is inplace but does not modify output")
-    return true, 0
+
+    return true
 end
 
-function is_inplace_constraints(c::Function,n::Int64)
+function count_inplace_output(c::Function, n::Int, m::Int)
+    x = rand(n)
+    u = rand(m)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x,u)
+            break
+        catch e
+            q *= 10
+            iter += 1
+            vals = NaN*(ones(q))
+        end
+    end
+    p = count(isfinite.(vals))
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x)
+            break
+        catch e
+            if e isa MethodError
+                p_N = 0
+                break
+            else
+                q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
+            end
+        end
+    end
+    p_N = count(isfinite.(vals))
+
+    return p, p_N
+end
+
+function count_inplace_output(c::Function, n::Int)
     x = rand(n)
     q = 100
-    xdot = NaN*ones(q)
     iter = 1
+    vals = NaN*(ones(q))
 
     while iter < 5
         try
-            c(xdot,x)
-        catch x
-            if x isa MethodError
-                return false, 0
-            end
-        end
-
-        p = count(isfinite.(xdot))
-        if p > 0
-            return true, p
-        else
+            c(vals,x,u)
+            break
+        catch e
             q *= 10
             iter += 1
+            vals = NaN*(ones(q))
         end
     end
-    #println("Constraint function is inplace but does not modify output")
-    return true, 0
+    return count(isfinite.(vals))
 end
 
 """
@@ -197,6 +221,7 @@ form `f!(xdot,x,u)`.
 """
 function wrap_inplace(f::Function)
     f!(xdot,x,u) = copyto!(xdot, f(x,u))
+    f!(xdot,x) = copyto!(xdot, f(x))
 end
 
 #*********************************#
@@ -316,17 +341,19 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
         m = size(R,1)
 
         # Make general inequality/equality constraints inplace
-        flag_cI, pI_c = is_inplace_constraints(cI,n,m)
+        flag_cI = is_inplace_constraints(cI,n,m)
         if !flag_cI
             cI = wrap_inplace(cI)
             println("Custom inequality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
         end
+        pI_c, pI_N_c = count_inplace_output(cI,n,m)
 
-        flag_cE, pE_c = is_inplace_constraints(cE,n,m)
+        flag_cE = is_inplace_constraints(cE,n,m)
         if !flag_cE
             cE = wrap_inplace(cE)
             println("Custom equality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
         end
+        pE_c, pE_N_c = count_inplace_output(cE,n,m)
 
         # Validity Tests
         u_max, u_min = _validate_bounds(u_max,u_min,m)
@@ -354,7 +381,8 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
 
         #TODO custom terminal constraints
         # Terminal Constraints
-        pI_N = pE_N = 0
+        pI_N = pI_N_c
+        pE_N = pE_N_c
 
         # try cI(x0)
         #     pI_N = size(cI(x0),1)
