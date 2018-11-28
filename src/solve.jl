@@ -278,8 +278,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
 
-            if J > 1e7
-                error("cost too high")
+            if J > solver.opts.max_cost
+                error("Cost exceded maximum allowable cost")
             end
             ################################
         end
