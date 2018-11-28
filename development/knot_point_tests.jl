@@ -79,14 +79,13 @@ U = zeros(solver_zoh.model.m,solver_zoh.N)
 
 ### Solve ###
 @time results_zoh, stats_zoh = solve(solver_zoh,U)
-using BenchmarkTools
-@btime results_foh, stats_foh = solve(solver_foh,U)
+@time results_foh, stats_foh = solve(solver_foh,U)
 
 ### Results ###
 println("Final state (zoh)-> res: $(results_zoh.X[end]), goal: $(solver_zoh.obj.xf)\n Iterations: $(stats_zoh["iterations"])\n Outer loop iterations: $(stats_zoh["major iterations"])\n Max violation: $(stats_zoh["c_max"][end])\n Max μ: $(maximum([to_array(results_zoh.μ)[:]; results_zoh.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_zoh.λ)[:]; results_zoh.λN[:]])))\n")
 println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.xf)\n Iterations: $(stats_foh["iterations"])\n Outer loop iterations: $(stats_foh["major iterations"])\n Max violation: $(stats_foh["c_max"][end])\n Max μ: $(maximum([to_array(results_foh.μ)[:]; results_foh.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_foh.λ)[:]; results_foh.λN[:]])))\n")
 
-# # Controllers
+# # # Controllers
 # controller_zoh = generate_controller(to_array(results_zoh.X),to_array(results_zoh.U),to_array(results_zoh.K),solver_zoh.N,solver_zoh.dt,:zoh,u_min,u_max)
 # controller_foh = generate_controller(to_array(results_foh.X),to_array(results_foh.U),to_array(results_foh.K),solver_foh.N,solver_foh.dt,:foh,u_min,u_max)
 #
@@ -115,7 +114,7 @@ println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.
 #     p_zoh = plot!(t_sim,X_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 # end
 # display(p_zoh)
-# savefig("knotpointtest_zoh.png")
+# # savefig("knotpointtest_zoh.png")
 #
 # p_zoh = plot(t_solve,to_array(results_zoh.U)',color="black",title="zoh (N = $(solver_zoh.N),dt=$dt,tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 # for i = 1:m
@@ -123,8 +122,8 @@ println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.
 # end
 # display(p_zoh)
 # savefig("knotpointtest_zoh_control.png")
-#
-#
+
+
 # # FOH plotting
 # p_foh = plot(t_solve,to_array(results_foh.X)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 # for i = 1:n

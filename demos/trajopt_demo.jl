@@ -21,11 +21,11 @@ dt = 0.01
 
 obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
-solver = TrajectoryOptimization.Solver(model,obj,dt=dt)
+solver = TrajectoryOptimization.Solver(model,obj,dt=dt,integration=:rk3)
 U = zeros(m,solver.N)
 
 results, stats = solve(solver,U)
 
 plot(to_array(results.X)')
-
+plot(to_array(results.X)[1,:],to_array(results.X)[2,:],label="",title="Parallel Park",xlabel="x",ylabel="y")
 results.X[end]

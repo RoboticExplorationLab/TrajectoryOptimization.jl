@@ -1059,15 +1059,11 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array{Float64
             update_constraints!(res,solver,X_,U_)
             J = cost(solver, res, X_, U_)
 
-            # if !(J<=J_prev)
-            #     error("fp costs don't match up")
-            # end
-
             z = 0.
             alpha = 0.0
             expected = 0.
 
-            @logmsg InnerLoop "Max iterations (forward pass) -No improvement made"
+            @logmsg InnerLoop "Max iterations (forward pass)"
             regularization_update!(res,solver,:increase) # increase regularization
             res.ρ[1] += solver.opts.ρ_forwardpass
             break

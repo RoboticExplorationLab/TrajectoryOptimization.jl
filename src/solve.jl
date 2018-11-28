@@ -278,7 +278,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
 
-            if J > 1e6
+            if J > 1e7
                 error("cost too high")
             end
             ################################
@@ -400,7 +400,7 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
 
     if loop == :outer
         if solver.opts.constrained
-            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
                 return true
             end
         end
