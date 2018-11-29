@@ -28,7 +28,7 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
         # zero-order hold interpolation on gains, and trajectories, NOTE: cubic on states
         K_interp = interpolate(K_zoh,BSpline(Constant()))
         # X_interp = interpolate(X_zoh,BSpline(Constant()))
-        function X_interp(j)
+        function X_interp_zoh(j)
             x = zeros(n)
             for i = 1:n
                 x[i] = interpolate(X_zoh[i],BSpline(Cubic(Line(OnGrid()))))(j)
@@ -39,7 +39,7 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
 
         function controller_zoh(x,t)
             j = t/dt + 1
-            return max.(min.(K_interp(floor(Int64,j))*(x - X_interp(j)) + U_interp(floor(Int64,j)),u_max),u_min)
+            return max.(min.(K_interp(floor(Int64,j))*(x - X_interp_zoh(j)) + U_interp(floor(Int64,j)),u_max),u_min)
         end
         return controller_zoh
 
@@ -55,7 +55,7 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
 
         # Linear interpolation on gains and control trajectory, cubic interpolation for state trajectory
         K_interp = interpolate(K_foh,BSpline(Linear()))
-        function X_interp(j)
+        function X_interp_foh(j)
             x = zeros(n)
             for i = 1:n
                 x[i] = interpolate(X_foh[i],BSpline(Cubic(Line(OnGrid()))))(j)
@@ -66,7 +66,7 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
 
         function controller_foh(x,t)
             j = t/dt + 1
-            return max.(min.(K_interp(j)*(x - X_interp(j)) + U_interp(j),u_max),u_min)
+            return max.(min.(K_interp(j)*(x - X_interp_foh(j)) + U_interp(j),u_max),u_min)
         end
 
         return controller_foh

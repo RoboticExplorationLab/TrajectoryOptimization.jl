@@ -68,9 +68,10 @@ u_min = u_min_pendulum
 intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
-dt = 0.2
-solver_zoh = Solver(model,obj,integration=intergrator_zoh,dt=dt,opts=opts)
-solver_foh = Solver(model,obj,integration=intergrator_foh,dt=dt,opts=opts)
+# dt = 0.1
+N = 25
+solver_zoh = Solver(model,obj,integration=intergrator_zoh,N=N,opts=opts)
+solver_foh = Solver(model,obj,integration=intergrator_foh,N=N,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = line_trajectory(solver_zoh.obj.x0,solver_zoh.obj.xf,solver_zoh.N)
@@ -84,7 +85,7 @@ U = zeros(solver_zoh.model.m,solver_zoh.N)
 ### Results ###
 println("Final state (zoh)-> res: $(results_zoh.X[end]), goal: $(solver_zoh.obj.xf)\n Iterations: $(stats_zoh["iterations"])\n Outer loop iterations: $(stats_zoh["major iterations"])\n Max violation: $(stats_zoh["c_max"][end])\n Max μ: $(maximum([to_array(results_zoh.μ)[:]; results_zoh.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_zoh.λ)[:]; results_zoh.λN[:]])))\n")
 println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.xf)\n Iterations: $(stats_foh["iterations"])\n Outer loop iterations: $(stats_foh["major iterations"])\n Max violation: $(stats_foh["c_max"][end])\n Max μ: $(maximum([to_array(results_foh.μ)[:]; results_foh.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_foh.λ)[:]; results_foh.λN[:]])))\n")
-
+#
 # # # Controllers
 # controller_zoh = generate_controller(to_array(results_zoh.X),to_array(results_zoh.U),to_array(results_zoh.K),solver_zoh.N,solver_zoh.dt,:zoh,u_min,u_max)
 # controller_foh = generate_controller(to_array(results_foh.X),to_array(results_foh.U),to_array(results_foh.K),solver_foh.N,solver_foh.dt,:foh,u_min,u_max)
@@ -121,16 +122,16 @@ println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.
 #     p_zoh = plot!(t_sim,U_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
 # end
 # display(p_zoh)
-# savefig("knotpointtest_zoh_control.png")
-
-
+# # savefig("knotpointtest_zoh_control.png")
+#
+#
 # # FOH plotting
 # p_foh = plot(t_solve,to_array(results_foh.X)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
 # for i = 1:n
 #     p_foh = plot!(t_sim,X_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 # end
 # display(p_foh)
-# savefig("knotpointtest_foh.png")
+# # savefig("knotpointtest_foh.png")
 #
 #
 # p_foh = plot(t_solve,to_array(results_foh.U)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
@@ -138,7 +139,7 @@ println("Final state (foh)-> res: $(results_foh.X[end]), goal: $(solver_foh.obj.
 #     p_foh = plot!(t_sim,U_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
 # end
 # display(p_foh)
-# savefig("knotpointtest_foh_control.png")
+# # savefig("knotpointtest_foh_control.png")
 #
 #
 #

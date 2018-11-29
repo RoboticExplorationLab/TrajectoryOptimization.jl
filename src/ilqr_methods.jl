@@ -823,7 +823,7 @@ $(SIGNATURES)
 """
 function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
     if status == :increase # increase regularization
-        @logmsg InnerLoop "Regularization Increased"
+        # @logmsg InnerLoop "Regularization Increased"
         results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
         results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
         if results.ρ[1] > solver.opts.ρ_max
