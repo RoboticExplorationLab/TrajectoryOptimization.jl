@@ -283,6 +283,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
 
+            if J > solver.opts.max_cost
+                error("Cost exceded maximum allowable cost")
+            end
             ################################
         end
         ### END INNER LOOP ###
@@ -389,11 +392,12 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
         end
 
         # Check for cost convergence
-        if ((~solver.opts.constrained && dJ < solver.opts.cost_tolerance) || (solver.opts.constrained && dJ < solver.opts.cost_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
+            # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
+        if ((~solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.opts.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iteration != solver.opts.iterations_outerloop))
             # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
             # ~solver.opts.constrained ? @info "Unconstrained solve complete": nothing
             return true
-        elseif ((solver.opts.constrained && dJ < solver.opts.cost_tolerance && c_max < solver.opts.constraint_tolerance))
+        elseif ((solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance) && c_max < solver.opts.constraint_tolerance))
             # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
             return true
         end
@@ -401,7 +405,7 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
 
     if loop == :outer
         if solver.opts.constrained
-            if c_max < solver.opts.constraint_tolerance && (dJ < solver.opts.cost_tolerance || gradient < solver.opts.gradient_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
                 return true
             end
         end

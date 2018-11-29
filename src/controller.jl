@@ -25,14 +25,21 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
         push!(X_zoh,X[:,N-1])
         push!(U_zoh,U[:,N-1])
 
-        # zero-order hold interpolation on gains, and trajectories
+        # zero-order hold interpolation on gains, and trajectories, NOTE: cubic on states
         K_interp = interpolate(K_zoh,BSpline(Constant()))
-        X_interp = interpolate(X_zoh,BSpline(Constant()))
+        # X_interp = interpolate(X_zoh,BSpline(Constant()))
+        function X_interp(j)
+            x = zeros(n)
+            for i = 1:n
+                x[i] = interpolate(X_zoh[i],BSpline(Cubic(Line(OnGrid()))))(j)
+            end
+            return x
+        end
         U_interp = interpolate(U_zoh,BSpline(Constant()))
 
         function controller_zoh(x,t)
             j = t/dt + 1
-            return max.(min.(K_interp(floor(Int64,j))*(x - X_interp(floor(Int64,j))) + U_interp(floor(Int64,j)),u_max),u_min)
+            return max.(min.(K_interp(floor(Int64,j))*(x - X_interp(j)) + U_interp(floor(Int64,j)),u_max),u_min)
         end
         return controller_zoh
 
