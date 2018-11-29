@@ -447,13 +447,16 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     for k = 1:final_index
         c(res.C[k], X[k], U[k]) # update results with constraint evaluations
 
-        if solver.opts.minimum_time && k < N-1
-            res.C[k][end] = U[k][m̄] - U[k+1][m̄]
+        if solver.opts.minimum_time
+            if k < N-1
+                res.C[k][end] = U[k][m̄] - U[k+1][m̄]
+            end
+            if solver.control_integration == :foh && k == N
+                res.C[k][m̄] = 0.0
+                res.C[k][m̄+m̄] = 0.0
+            end
         end
-        if solver.control_integration == :foh && k == N
-            res.C[k][m̄] = 0.0
-            res.C[k][m̄+m̄] = 0.0
-        end
+
 
         # Inequality constraints [see equation ref]
         for j = 1:pI

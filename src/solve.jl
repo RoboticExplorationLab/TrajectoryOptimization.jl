@@ -73,9 +73,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
-    if N != size(X0,2)
+    if (N != size(X0,2) && !isempty(X0)) || N != size(U0,2) #TODO fix this, it was getting called on every solve...
         @info "Interpolating initial guess"
-        X0,U0 = interp_traj(N,obj.tf,X0,U0)
+        X0,U0 = interp_traj(N,solver.obj.tf,X0,U0) # TODO move this function somewhere better
     end
 
     if !solver.opts.constrained
@@ -235,8 +235,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)#, J_prev)
-            # println("J: $J")
+            J = forwardpass!(results, solver, Δv)
             push!(J_hist,J)
 
             # increment iLQR inner loop counter
@@ -405,7 +404,7 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
 
     if loop == :outer
         if solver.opts.constrained
-            if c_max < solver.opts.constraint_tolerance && ((dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
                 return true
             end
         end
