@@ -73,8 +73,72 @@ function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt
     end
 end
 
+function interpolate_trajectory(solver::Solver, X, U, t)
+    X = copy(X)
+    U = copy(U)
+    integration = solver.integration
+    n,m,N = get_sizes(solver)
+    dt = solver.dt
+    time = collect(get_time(solver))
+    if integration == :midpoint
+        interp_X = interpolate_rows(time, X, :midpoint)
+    else  # :rk3, rk4
+        interp_X = interpolate_rows(time, X, :cubic)
+    end
+
+    if solver.control_integration == :zoh
+        interp_U = interpolate_rows(time, U, :zoh)
+    else  # :zoh
+        interp_U = interpolate_rows(time, U, :linear)
+    end
+    Xnew = interp_X(t)
+    Unew = interp_U(t)
+    return Xnew, Unew
+end
+
+
 """
-@(SIGNATURES)
+$(SIGNATURES)
+Generates a function that interpolates the rows of a matrix
+# Arguments
+* interpolation: interpolation scheme. Options are [:zoh, :midpoint, :linear, :cubic]
+"""
+function interpolate_rows(t::Vector{T}, X::Matrix{T}, interpolation=:cubic) where T
+    n,N = size(X)
+    if interpolation == :zoh
+        bc = Constant()
+    elseif interpolation == :midpoint
+        bc = Constant()
+        Xm = copy(X)
+        for k = 1:N-1
+            Xm[:,k] = (Xm[:,k] + Xm[:,k+1])/2
+        end
+        Xm[:,end] = X[:,end-1]
+        X = Xm
+    elseif interpolation == :linear
+        bc = Linear()
+    elseif interpolation == :cubic
+        bc = Cubic(Line(OnGrid()))
+    end
+    # Use zero order hold for :zoh and :midpoint
+    interpolation in [:linear, :cubic] ? zoh = false : zoh = true
+
+    # Create interpolator
+    itr = interpolate(X, (NoInterp(), BSpline(bc) ))
+    dt = t[2] - t[1]
+
+    # Interpolation function
+    function interp(t_)
+        i = t_./dt .+ 1
+        if zoh
+            i = floor.(i)
+        end
+        itr(1:n,i)
+    end
+end
+
+"""
+$(SIGNATURES)
     Time Varying Discrete Linear Quadratic Regulator (TVLQR)
 """
 function lqr(A::Array{Float64,3}, B::Array{Float64,3}, Q::AbstractArray{Float64,2}, R::AbstractArray{Float64,2}, Qf::AbstractArray{Float64,2})::Array{Float64,3}

@@ -29,7 +29,7 @@ struct Solver{O<:Objective}
 
             # Handle combination of N and dt
             if isnan(dt) && N>0
-                dt = obj.tf / N
+                dt = obj.tf / (N-1)
             elseif ~isnan(dt) && N==-1
                 N, dt = calc_N(obj.tf, dt)
             elseif isnan(dt) && N==-1
@@ -37,8 +37,8 @@ struct Solver{O<:Objective}
                 N = 50
                 dt = obj.tf/N
             elseif ~isnan(dt) && N>0
-                if dt !== obj.tf/N
-                    throw(ArgumentError("Specified time step, number of knot points, and final time do not agree ($dt ≢ $(obj.tf)/$N)"))
+                if dt !== obj.tf/(N-1)
+                    throw(ArgumentError("Specified time step, number of knot points, and final time do not agree ($dt ≢ $(obj.tf)/$(N-1))"))
                 end
             end
             if dt == 0

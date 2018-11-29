@@ -255,15 +255,12 @@ function generate_random_circle_obstacle_field(n_circles::Int64,x_rand::Float64=
     y0 = y_rand*rand(n_circles)
     r = r_rand*ones(n_circles)
 
-    function constraints(x,u)::Array
-        c = zeros(typeof(x[1]),n_circles)
-
+    function constraints!(c,x,u)
         for i = 1:n_circles
             c[i] = circle_constraint(x,x0[i],y0[i],r[i])
         end
-        c
     end
-    constraints, (x0, y0, r)
+    return constraints!, zip(x0, y0, r)
 end
 
 """
@@ -285,6 +282,18 @@ function generate_random_sphere_obstacle_field(n_spheres::Int64,x_rand::Float64=
         c
     end
     constraints, (x0, y0, z0, r)
+end
+
+"""
+$(SIGNATURES)
+Plots a circle given a center and radius
+"""
+function plot_circle!(center,radius;kwargs...)
+    pts = Plots.partialcircle(0,2π,100,radius)
+    x,y = Plots.unzip(pts)
+    x .+= center[1]
+    y .+= center[2]
+    plot!(Shape(x,y);kwargs...)
 end
 
 """

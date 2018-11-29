@@ -834,3 +834,8 @@ function regularization_update!(results::SolverResults,solver::Solver,status::Sy
         results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.ρ_min)
     end
 end
+
+
+function get_time(solver::Solver)
+    range(0,stop=solver.obj.tf,length=solver.N)
+end
