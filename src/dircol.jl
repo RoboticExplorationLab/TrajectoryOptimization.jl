@@ -848,7 +848,11 @@ $(SIGNATURES)
 Interpolate a trajectory using cubic interpolation
 """
 function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
-    X2 = interp_rows(N,tf,X)
+    if isempty(X)
+        X2 = X
+    else
+        X2 = interp_rows(N,tf,X)
+    end
     U2 = interp_rows(N,tf,U)
     return X2, U2
 end
@@ -860,7 +864,7 @@ Interpolate the rows of a matrix using cubic interpolation
 function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
     n,N1 = size(X)
     t1 = range(0,stop=tf,length=N1)
-    t2 = range(0,stop=tf,length=N)
+    t2 = collect(range(0,stop=tf,length=N))
     X2 = zeros(n,N)
     for i = 1:n
         interp_cubic = CubicSplineInterpolation(t1, X[i,:])

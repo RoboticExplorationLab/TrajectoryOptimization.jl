@@ -73,6 +73,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
+    if N != size(X0,2)
+        @info "Interpolating initial guess"
+        X0,U0 = interp_traj(N,obj.tf,X0,U0)
+    end
+
     if !solver.opts.constrained
         @info "Solving Unconstrained Problem..."
 
