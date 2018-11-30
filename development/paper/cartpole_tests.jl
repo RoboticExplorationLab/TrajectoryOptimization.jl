@@ -267,21 +267,18 @@ plot!(dt_d)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # High-Accuracy DIRCOL
-function run_dircol_truth(model, obj, dt, group::String)
+function run_dircol_truth(model, obj, dt, X0, U0, group::String)
     println("Solving DIRCOL \"truth\"")
-    solver_truth = Solver(model,obj,dt=dt_truth,opts=opts,integration=:rk3_foh)
-    res_truth, stat_truth = solve_dircol(solver_truth, Array(res_d.X), Array(res_d.U), method=:hermite_simpson)
+    solver_truth = Solver(model,obj,dt=dt_truth,integration=:rk3_foh)
+    res_truth, stat_truth = solve_dircol(solver_truth, X0, U0, method=:hermite_simpson)
 
     println("Writing results to file")
     h5open("data.h5","cw") do file
         group *= "/dircol_truth"
         if exists(file, group)
-            g_truth = file[group]
-            o_delete(g_truth,"X")
-            o_delete(g_truth,"U")
-        else
-            g_truth = g_create(file, group)
+            o_delete(file, group)
         end
+        g_truth = g_create(file, group)
         g_truth["X"] = res_truth.X
         g_truth["U"] = res_truth.U
         attrs(g_truth)["dt"] = dt
@@ -291,7 +288,7 @@ function run_dircol_truth(model, obj, dt, group::String)
     return solver_truth, res_truth, stat_truth
 end
 
-function run_Ns(model, obj, Ns, integration, dt_truth=1e-3)
+function run_Ns(model, obj, Ns, integration, dt_truth=1e-3; infeasible=false)
     num_N = length(Ns)
 
     err = zeros(num_N)
@@ -301,7 +298,11 @@ function run_Ns(model, obj, Ns, integration, dt_truth=1e-3)
     for (i,N) in enumerate(Ns)
         println("Solving with $N knot points")
         solver = Solver(model,obj,N=N,opts=opts,integration=integration)
-        res,stat = solve(solver,U0)
+        if infeasible
+            res,stat = solve(solver,X0,U0)
+        else
+            res,stat = solve(solver,U0)
+        end
         t = get_time(solver)
         Xi,Ui = interpolate_trajectory(solver_truth, res_truth.X, res_truth.U, t)
         err[i] = norm(Xi-to_array(res.X))/N
@@ -311,53 +312,41 @@ function run_Ns(model, obj, Ns, integration, dt_truth=1e-3)
     return err, err_final, stats
 end
 
-function plot_error()
-    plot(Ns,err_mid,yscale=:log10, label="midpoint", marker=:circle, ylabel="Normed Error", xlabel="Number of Knot Points")
-    plot!(Ns,err_rk3,label="rk3", marker=:circle)
-    plot!(Ns,err_foh,label="rk3_foh", marker=:circle)
-    plot!(Ns,err_rk4,label="rk4", marker=:circle)
+function plot_stat(stat::String, group, names=["midpoint", "rk3", "rk3_foh", "rk4"]; kwargs...)
+    Ns, data = load_data(stat, names, group)
+    plot_vals(Ns, data, names, stat; kwargs...)
 end
 
-function plot_error_final()
-    plot(Ns,eterm_mid,yscale=:log10, label="midpoint", marker=:circle, ylabel="Normed Error", xlabel="Number of Knot Points")
-    plot!(Ns,eterm_rk3,label="rk3", marker=:circle)
-    plot!(Ns,eterm_foh,label="rk3_foh", marker=:circle)
-    plot!(Ns,eterm_rk4,label="rk4", marker=:circle)
+function plot_vals(Ns,vals,labels,name::String; kwargs...)
+    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points"; kwargs...)
+    for (val,label) in zip(vals[2:end],labels[2:end])
+        plot!(Ns,val,label=label,marker=:circle)
+    end
+    p
 end
 
-function plot_stat(name::String; kwargs...)
-    val_mid = [stat[name] for stat in stats_mid]
-    val_rk3 = [stat[name] for stat in stats_rk3]
-    val_foh = [stat[name] for stat in stats_foh]
-    val_rk4 = [stat[name] for stat in stats_rk4]
-    plot(Ns,val_mid, label="midpoint", marker=:circle, ylabel=name, xlabel="Number of Knot Points")
-    plot!(Ns,val_rk3,label="rk3", marker=:circle)
-    plot!(Ns,val_foh,label="rk3_foh", marker=:circle)
-    plot!(Ns,val_rk4,label="rk4", marker=:circle; kwargs...)
-end
-
-function plot_last_stat(name::String; kwargs...)
-    val_mid = [stat[name][end] for stat in stats_mid]
-    val_rk3 = [stat[name][end] for stat in stats_rk3]
-    val_foh = [stat[name][end] for stat in stats_foh]
-    val_rk4 = [stat[name][end] for stat in stats_rk4]
-    plot(Ns,val_mid, label="midpoint", marker=:circle, ylabel=name, xlabel="Number of Knot Points")
-    plot!(Ns,val_rk3,label="rk3", marker=:circle)
-    plot!(Ns,val_foh,label="rk3_foh", marker=:circle)
-    plot!(Ns,val_rk4,label="rk4", marker=:circle; kwargs...)
-end
 
 function save_data(group)
     all_err = [err_mid, err_rk3, err_foh, err_rk4]
+    all_eterm = [eterm_mid, eterm_rk3, eterm_foh, eterm_rk4]
     all_stats = [stats_mid, stats_rk3, stats_foh, stats_rk4]
     all_names = ["midpoint", "rk3", "rk3_foh", "rk4"]
     h5open("data.h5","cw") do file
+
+        # Create "N_plots" group
         group *= "/N_plots"
         if exists(file, group)
             g_parent = file[group]
         else
             g_parent = g_create(file, group)
         end
+
+        # Store Ns
+        if has(g_parent, "Ns")
+            o_delete(g_parent, "Ns")
+        end
+        g_parent["Ns"] = Ns
+
         for name in all_names
             if has(g_parent,name)
                 o_delete(g_parent, name)
@@ -370,11 +359,27 @@ function save_data(group)
             g = gs[i]
             g["runtime"] = [stat["runtime"] for stat in all_stats[i]]
             g["error"] = all_err[i]
+            g["error_final"] = all_eterm[i]
             g["iterations"] = [stat["iterations"] for stat in all_stats[i]]
             if ~isempty(all_stats[i][1]["c_max"])
                 g["c_max"] = [stat["c_max"][end] for stat in all_stats[i]]
             end
         end
+    end
+end
+
+function load_data(stat::String, names::Vector{String}, group)
+    data = [load_data(stat, name, group)[2] for name in names]
+    Ns = load_data(stat,names[1], group)[1]
+    return Ns,data
+end
+
+function load_data(stat::String, name::String, group)
+    h5open("data.h5","r") do file
+        g_parent = file[group * "/N_plots"]
+        Ns = read(g_parent, "Ns")
+        data = read(g_parent[name], stat)
+        return vec(Ns), data
     end
 end
 
@@ -393,11 +398,6 @@ err_rk3, eterm_rk3, stats_rk3 = run_Ns(model, obj, Ns, :rk3)
 err_foh, eterm_foh, stats_foh = run_Ns(model, obj, Ns, :rk3_foh)
 err_rk4, eterm_rk4, stats_rk4 = run_Ns(model, obj, Ns, :rk4)
 
-plot_error()
-plot_error_final()
-plot_stat("runtime",legend=:topleft)
-plot_stat("iterations",legend=:bottomright)
-
 save_data("cartpole/unconstrained")
 
 
@@ -413,12 +413,19 @@ err_rk3, eterm_rk3, stats_rk3 = run_Ns(model, obj_c, Ns, :rk3)
 err_foh, eterm_foh, stats_foh = run_Ns(model, obj_c, Ns, :rk3_foh)
 err_rk4, eterm_rk4, stats_rk4 = run_Ns(model, obj_c, Ns, :rk4)
 
-plot_error()
-plot_error_final()
-plot_stat("runtime",legend=:topleft)
-plot_stat("iterations",legend=:bottomright)
-plot_last_stat("c_max")
-
 save_data("cartpole/constrained")
 
-[stat["c_max"][end] for stat in stats_rk3]
+
+#####################################
+#            INFEASIBLE             #
+#####################################
+solver_truth, res_truth,  = run_dircol_truth(model, obj_c, 1e-3, X0, U0, "cartpole/infeasible")
+time_truth = get_time(solver_truth)
+plot(res_truth.U')
+
+err_mid, eterm_mid, stats_mid = run_Ns(model, obj_c, Ns, :midpoint, infeasible=true)
+err_rk3, eterm_rk3, stats_rk3 = run_Ns(model, obj_c, Ns, :rk3, infeasible=true)
+err_foh, eterm_foh, stats_foh = run_Ns(model, obj_c, Ns, :rk3_foh, infeasible=true)
+err_rk4, eterm_rk4, stats_rk4 = run_Ns(model, obj_c, Ns, :rk4, infeasible=true)
+
+save_data("cartpole/infeasible")
