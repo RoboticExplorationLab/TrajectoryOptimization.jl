@@ -270,6 +270,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :j value=j
 
+            if solver.opts.live_plotting
+                display(plot(to_array(results.X)'))
+            end
+
             # if iter > 1
             #     c_diff = abs(c_max-c_max_hist[end-1])
             # else
