@@ -460,7 +460,7 @@ function get_traj_points!(solver::Solver,X,U,X_,U_,method::Symbol)
 end
 
 function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
-    n,N = size(X)
+    n,m,N = get_sizes(solver)
     m̄,N_ = size(U_)
     dt = solver.dt
     if method == :hermite_simpson
