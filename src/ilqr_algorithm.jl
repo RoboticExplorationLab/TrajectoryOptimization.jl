@@ -663,7 +663,7 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     # Pull out results
-    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; s = results.s; # S = results.S
+    X = results.X; U = results.U; K = results.K; b = results.b; d = results.d; s = results.s; #S = results.S
 
     # Useful linear indices
     idx = Array(1:n+mm)
@@ -872,6 +872,11 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
         Syy = view(S,1:n,1:n)
         Svv = view(S,n+1:n+mm,n+1:n+mm)
         Syv = view(S,1:n,n+1:n+mm)
+        # Sy = s[k+1][1:n]
+        # Sv = s[k+1][n+1:n+mm]
+        # Syy = S[k+1][1:n,1:n]
+        # Svv = S[k+1][n+1:n+mm,n+1:n+mm]
+        # Syv = S[k+1][1:n,n+1:n+mm]
 
         # Substitute in discrete dynamics (second order approximation)
         tmp0 = Ly + Sy

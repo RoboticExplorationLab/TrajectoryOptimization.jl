@@ -89,22 +89,22 @@ println("\n")
 # now 2.14x slower
 
 
-model, obj = Dynamics.cartpole_analytical
-n,m = model.n, model.m
-N = 51
-dt = 0.1
-
-obj.x0 = [0;0;0;0]
-obj.xf = [0.5;pi;0;0]
-obj.tf = 2.0
-U0 = ones(m,N)
-solver = Solver(model,obj,N=N,opts=opts,integration=:rk3_foh)
-res_i, stat_i = solve(solver,U0)
-
-k = 10
-time_per_iter = zeros(k)
-for i = 1:k
-  res_i, stat_i = solve(solver,U0)
-  time_per_iter[i] = stat_i["runtime"]/stat_i["iterations"]
-end
-println(mean(time_per_iter))
+# model, obj = Dynamics.cartpole_analytical
+# n,m = model.n, model.m
+# N = 51
+# dt = 0.1
+#
+# obj.x0 = [0;0;0;0]
+# obj.xf = [0.5;pi;0;0]
+# obj.tf = 2.0
+# U0 = ones(m,N)
+# solver = Solver(model,obj,N=N,opts=opts,integration=:rk3_foh)
+# res_i, stat_i = solve(solver,U0)
+#
+# k = 10
+# time_per_iter = zeros(k)
+# for i = 1:k
+#   res_i, stat_i = solve(solver,U0)
+#   time_per_iter[i] = stat_i["runtime"]/stat_i["iterations"]
+# end
+# println(mean(time_per_iter))
