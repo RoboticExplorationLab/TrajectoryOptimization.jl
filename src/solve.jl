@@ -227,7 +227,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #         INNER LOOP         #
         #****************************#
 
-        for ii = 1:solver.opts.iterations
+        for ii = 1:solver.opts.iterations_innerloop
             iter_inner = ii
 
             ### BACKWARD PASS ###
@@ -284,7 +284,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
 
-            evaluate_convergence(solver,:inner,dJ,c_max,gradient,j) ? break : nothing
+            evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j) ? break : nothing
 
             if J > solver.opts.max_cost
                 error("Cost exceded maximum allowable cost")
@@ -312,7 +312,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #    TERMINATION CRITERIA    #
         #****************************#
         # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        evaluate_convergence(solver,:outer,dJ,c_max,gradient,0) ? break : nothing
+        evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0) ? break : nothing
 
     end
     end
@@ -383,10 +383,14 @@ $(SIGNATURES)
     -return true is convergence criteria is met, else return false
 """
 
-function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iteration::Int64)
+function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Float64,gradient::Float64,iter_total::Int64,iter_outerloop::Int64)
+    # Check total iterations
+    if iter_total >= solver.opts.iterations
+        return true
+    end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iteration != solver.opts.iterations_outerloop))
+        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iter_outerloop != solver.opts.iterations_outerloop))
             # @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
             return true
         elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
@@ -396,7 +400,7 @@ function evaluate_convergence(solver::Solver,loop::Symbol,dJ::Float64,c_max::Flo
 
         # Check for cost convergence
             # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
-        if ((~solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.opts.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iteration != solver.opts.iterations_outerloop))
+        if ((~solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.opts.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iter_outerloop != solver.opts.iterations_outerloop))
             # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
             # ~solver.opts.constrained ? @info "Unconstrained solve complete": nothing
             return true

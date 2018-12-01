@@ -2,12 +2,9 @@
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cost_intermediate_tolerance = 1e-4
-opts.constraint_tolerance = 1e-3
-opts.cost_tolerance = 1e-4
-opts.iterations_outerloop = 50
-opts.iterations = 250
-opts.iterations_linesearch = 25
+opts.cost_intermediate_tolerance = 1e-5
+opts.constraint_tolerance = 1e-5
+opts.cost_tolerance = 1e-5
 opts.τ = 0.25
 opts.γ = 10.0
 opts.ρ_initial = 0.0
@@ -69,13 +66,13 @@ intergrator_zoh = :rk3
 intergrator_foh = :rk3_foh
 
 # dt = 0.1
-N = 15
+N = 100
 solver_zoh = Solver(model,obj,integration=intergrator_zoh,N=N,opts=opts)
 solver_foh = Solver(model,obj,integration=intergrator_foh,N=N,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = line_trajectory(solver_zoh.obj.x0,solver_zoh.obj.xf,solver_zoh.N)
-U = zeros(solver_zoh.model.m,solver_zoh.N)
+U = zeros(solver_foh.model.m,solver_foh.N)
 #######################################
 
 ### Solve ###
@@ -93,13 +90,15 @@ controller_foh = generate_controller(to_array(results_foh.X),to_array(results_fo
 # Simulate
 dt_sim = 0.001
 tf = obj.tf
-t_solve = get_time(solver_foh)
-t_sim = 0:dt_sim:tf
+t_solve = collect(get_time(solver_foh))
+t_sim = collect(0:dt_sim:tf)
 x0 = obj.x0
 f = model.f
 n = model.n
 m = model.m
-integrator_sim = :rk3 # note that ode45 can be used with 'simulate_controller' but the time indicies must be altered when plotting
+
+using ODE
+integrator_sim = :ode45 # note that ode45 can be used with 'simulate_controller' but the time indicies must be altered when plotting
 
 X_zoh_sim, U_zoh_sim = simulate_controller(f,integrator_sim,controller_zoh,n,m,dt_sim,x0,tf,u_min,u_max)
 X_foh_sim, U_foh_sim = simulate_controller(f,integrator_sim,controller_foh,n,m,dt_sim,x0,tf,u_min,u_max)
@@ -108,48 +107,30 @@ X_foh_sim, U_foh_sim = simulate_controller(f,integrator_sim,controller_foh,n,m,d
 xf_rms_zoh = sqrt(mean((results_zoh.X[end] - X_zoh_sim[:,end]).^2))
 xf_rms_foh = sqrt(mean((results_foh.X[end] - X_foh_sim[:,end]).^2))
 
+plot(range(0,stop=solver_zoh.obj.tf,length=size(X_zoh_sim,2)),X_zoh_sim')
+plot!(range(0,stop=solver_foh.obj.tf,length=size(X_foh_sim,2)),X_foh_sim')
 length(t_sim)
-# # ZOH plotting
-# p_zoh = plot(t_solve,to_array(results_zoh.X)',color="black",title="zoh (N = $(solver_zoh.N),dt=$dt,tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
-# for i = 1:n
-#     p_zoh = plot!(t_sim,X_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
-# end
-# display(p_zoh)
-# # savefig("knotpointtest_zoh.png")
-#
-# p_zoh = plot(t_solve,to_array(results_zoh.U)',color="black",title="zoh (N = $(solver_zoh.N),dt=$dt,tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
-# for i = 1:m
-#     p_zoh = plot!(t_sim,U_zoh_sim[i,:],color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
-# end
-# display(p_zoh)
-# # savefig("knotpointtest_zoh_control.png")
-#
-#
-# # FOH plotting
-# p_foh = plot(t_solve,to_array(results_foh.X)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
-# for i = 1:n
-#     p_foh = plot!(t_sim,X_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
-# end
-# display(p_foh)
-# # savefig("knotpointtest_foh.png")
-#
-#
-# p_foh = plot(t_solve,to_array(results_foh.U)',color="black",title="foh (N = $(solver_foh.N),dt=$dt,tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
-# for i = 1:m
-#     p_foh = plot!(t_sim,U_foh_sim[i,:],color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
-# end
-# display(p_foh)
-# # savefig("knotpointtest_foh_control.png")
-#
-#
-#
-# # ODE45 simulation
-# # using ODE
-# # function closed_loop_dynamics(t,x)
-# #     xdot = zeros(n)
-# #     f(xdot,x,controller_foh(x,t))
-# #     xdot
-# # end
-# #
-# # t_sim, X_sim = ode45(closed_loop_dynamics, x0, 0:dt_sim:tf)
-# # plot(t_sim,to_array(X_sim)')
+
+# ZOH plotting
+X_zoh_interp, U_zoh_interp = interpolate_trajectory(solver_zoh, to_array(results_zoh.X), to_array(results_zoh.U), t_sim)
+p_zoh = plot(t_sim,X_zoh_interp',color="black",title="zoh (N = $(solver_zoh.N),tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
+p_zoh = plot!(range(0,stop=solver_zoh.obj.tf,length=size(X_zoh_sim,2)),X_zoh_sim',color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
+display(p_zoh)
+# savefig("knotpointtest_zoh.png")
+
+p_zoh = plot(t_sim,U_zoh_interp',color="black",title="zoh (N = $(solver_zoh.N),tf=$(solver_zoh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
+p_zoh = plot!(range(0,stop=solver_zoh.obj.tf,length=size(U_zoh_sim,2)),U_zoh_sim',color="green",labels="",xlabel="xf RMS error: $(round(xf_rms_zoh,digits=5))")
+display(p_zoh)
+# savefig("knotpointtest_zoh_control.png")
+
+# FOH plotting
+X_foh_interp, U_foh_interp = interpolate_trajectory(solver_foh, to_array(results_foh.X), to_array(results_foh.U), t_sim)
+p_foh = plot(t_sim,X_foh_interp',color="black",title="foh (N = $(solver_foh.N),tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
+p_foh = plot!(range(0,stop=solver_foh.obj.tf,length=size(X_foh_sim,2)),X_foh_sim',color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
+display(p_foh)
+# savefig("knotpointtest_foh.png")
+
+p_foh = plot(t_sim, U_foh_interp',color="black",title="foh (N = $(solver_foh.N),tf=$(solver_foh.obj.tf)) sim @ $(convert(Int64,1/dt_sim))Hz",labels="")
+p_foh = plot!(range(0,stop=solver_foh.obj.tf,length=size(U_foh_sim,2)),U_foh_sim',color="purple",labels="",xlabel="xf RMS error: $(round(xf_rms_foh,digits=5))")
+display(p_foh)
+# savefig("knotpointtest_foh_control.png")
