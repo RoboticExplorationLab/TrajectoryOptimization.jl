@@ -2,9 +2,9 @@
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cost_intermediate_tolerance = 1e-5
-opts.constraint_tolerance = 1e-5
-opts.cost_tolerance = 1e-5
+opts.cost_intermediate_tolerance = 1e-6
+opts.constraint_tolerance = 1e-6
+opts.cost_tolerance = 1e-6
 opts.τ = 0.25
 opts.γ = 10.0
 opts.ρ_initial = 0.0

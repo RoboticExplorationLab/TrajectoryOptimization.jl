@@ -169,20 +169,11 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         δx = X_[k-1] - X[k-1]
 
         if solver.control_integration == :foh
-            # println("   pre")
-            # println("du: $du")
-            # println("dv: $dv")
             dv = K[k]*δx + b[k]*du + alpha*d[k]
-            # println("   dv update")
-            # println("du: $du")
-            # println("dv: $dv")
             U_[k] = U[k] + dv
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
             du = dv
-            # println("   du update")
-            # println("du: $du")
-            # println("dv: $dv")
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
@@ -252,10 +243,10 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
-            J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
-            # J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
-            # solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            # solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+            # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
     end
 
@@ -289,49 +280,6 @@ end
 function cost(solver::Solver, res::SolverIterResults, X=res.X, U=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
 end
-
-# """
-# $(SIGNATURES)
-# Compute the unconstrained cost
-# """
-# function cost(solver::Solver,X::AbstractArray{Float64,2},U::AbstractArray{Float64,2}) #TODO THIS FUNCTION NEEDS TO GO
-#     # pull out solver/objective values
-#     N = solver.N; Q = solver.obj.Q; xf = solver.obj.xf; Qf = solver.obj.Qf; m = solver.model.m; n = solver.model.n
-#     obj = solver.obj
-#     dt = solver.dt
-#
-#     if size(U,1) != m
-#         m += n
-#     end
-#
-#     R = getR(solver)
-#
-#     J = 0.0
-#     for k = 1:N-1
-#         if solver.control_integration == :foh
-#
-#             dx1 = zeros(n)
-#             dx2 = zeros(n)
-#             solver.fc(dx1,X[:,k],U[1:solver.model.m,k])
-#             solver.fc(dx2,X[:,k+1],U[1:solver.model.m,k+1])
-#             #
-#             # # # #TODO use calculate_derivatives!
-#             # dx1 = res.dx[:,k]
-#             # dx2 = res.dx[:,k+1]
-#
-#             Xm = 0.5*X[:,k] + dt/8*dx1 + 0.5*X[:,k+1] - dt/8*dx2
-#             Um = (U[:,k] + U[:,k+1])/2
-#
-#             J += solver.dt/6*(stage_cost(X[:,k],U[:,k],Q,R,xf) + 4*stage_cost(Xm,Um,Q,R,xf) + stage_cost(X[:,k+1],U[:,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation)
-#         else
-#             J += solver.dt*stage_cost(X[:,k],U[:,k],Q,R,xf)
-#         end
-#     end
-#
-#     J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
-#
-#     return J
-# end
 
 """
 $(SIGNATURES)
@@ -697,8 +645,8 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         end
 
         if infeasible
-            cx[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,1:n] = cx_infeasible
-            cu[pI_x+pI_u+pI_c+pE_c+1:pI_x+pI_u+pI_c+pE_c+n,m̄+1:m̄+n] = cu_infeasible
+            cx[pI+pE_c+1:pI+pE_c+n,1:n] = cx_infeasible
+            cu[pI+pE_c+1:pI+pE_c+n,m̄+1:m̄+n] = cu_infeasible
         end
     end
 

@@ -6,7 +6,6 @@ Random.seed!(7)
 ### Solver Options ###
 dt = 0.1
 opts = TrajectoryOptimization.SolverOptions()
-opts.square_root = false
 opts.verbose = false
 ######################
 
@@ -76,20 +75,24 @@ results_inf, = solve(solver_uncon_inf,X_interp,U)
 ####################################################
 
 ## Infeasible start with constraints pendulum (foh) ##
-u_min = -10
-u_max = 10
+u_min = -3
+u_max = 3
 x_min = [-10;-10]
 x_max = [10; 10]
 
 obj_con_p = ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
-
+opts.verbose = true
 solver_con2 = Solver(model_p,obj_con_p,integration=:rk3_foh,dt=dt,opts=opts)
 
 # -Linear interpolation for state trajectory
 X_interp = line_trajectory(solver_con2.obj.x0,solver_con2.obj.xf,solver_con2.N)
 U = ones(solver_con2.model.m,solver_con2.N)
 
-results_inf2, = solve(solver_con2,X_interp,U)
+results_inf2, stats_inf2 = solve(solver_con2,X_interp,U)
+
+# plot(to_array(results_inf2.X)')
+# plot(stats_inf2["cost"][1:15])
+# stats_inf2["cost"][end]
 
 # Test final state from foh solve
 @test norm(results_inf2.X[end] - solver_con2.obj.xf) < 1e-3
