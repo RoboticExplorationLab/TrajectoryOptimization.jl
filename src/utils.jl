@@ -296,6 +296,17 @@ function plot_circle!(center,radius;kwargs...)
     plot!(Shape(x,y);kwargs...)
 end
 
+function plot_obstacles(circles,clr=:red)
+    for circle in circles
+        x,y,r = circle
+        plot_circle!((x,y),r,color=:red,border=:red,label="")
+    end
+end
+
+function plot_trajectory!(X;kwargs...)
+    plot!(X[1,:],X[2,:];kwargs...)
+end
+
 """
 $(SIGNATURES)
     Convert quaternion to Euler angles
