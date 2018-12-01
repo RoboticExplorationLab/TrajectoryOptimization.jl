@@ -18,7 +18,7 @@ U = zeros(solver.model.m, solver.N)
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
-#  with square root
+# with square root
 solver.opts.square_root = true
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3

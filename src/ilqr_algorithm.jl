@@ -682,6 +682,10 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
     s = zeros(n+mm)
     S[xx_idx] = Wf
     s[x_idx] = Wf*(X[N] - xf)
+    # S = results.S
+    # S[N][xx_idx] = Wf
+    # s[N][x_idx] = Wf*(X[N] - xf)
+
 
     # Terminal constraints
     if results isa ConstrainedIterResults
@@ -690,6 +694,8 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
 
         S[xx_idx] += CxN'*results.IμN*CxN
         s[x_idx] += CxN'*results.IμN*results.CN + CxN'*results.λN
+        # S[N][xx_idx] += CxN'*results.IμN*CxN
+        # s[N][x_idx] += CxN'*results.IμN*results.CN + CxN'*results.λN
 
         # Include the the k = N expansions here for a cleaner backward pass
         Cx, Cu = results.Cx[N], results.Cu[N]
@@ -702,11 +708,19 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
         tmp = Cx'*Iμ[N]*Cu
         S[xū_idx] += tmp
         S[ūx_idx] += tmp'
+        # s[N][x_idx] += Cx'*Iμ[N]*C[N] + Cx'*λ[N]
+        # s[N][ū_idx] += Cu'*Iμ[N]*C[N] + Cu'*λ[N]
+        #
+        # S[N][xx_idx] += Cx'*Iμ[N]*Cx
+        # S[N][ūū_idx] += Cu'*Iμ[N]*Cu
+        # tmp = Cx'*Iμ[N]*Cu
+        # S[N][xū_idx] += tmp
+        # S[N][ūx_idx] += tmp'
     end
 
     # Create a copy of boundary conditions in case of regularization
-    SN = copy(S)
-    sN = copy(s)
+    # SN = copy(S)
+    # sN = copy(s)
 
     # Backward pass
     k = N-1
@@ -872,11 +886,12 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
         Syy = view(S,1:n,1:n)
         Svv = view(S,n+1:n+mm,n+1:n+mm)
         Syv = view(S,1:n,n+1:n+mm)
-        # Sy = s[k+1][1:n]
-        # Sv = s[k+1][n+1:n+mm]
-        # Syy = S[k+1][1:n,1:n]
-        # Svv = S[k+1][n+1:n+mm,n+1:n+mm]
-        # Syv = S[k+1][1:n,n+1:n+mm]
+
+        # Sy = view(s[k+1],1:n)
+        # Sv = view(s[k+1],n+1:n+mm)
+        # Syy = view(S[k+1],1:n,1:n)
+        # Svv = view(S[k+1],n+1:n+mm,n+1:n+mm)
+        # Syv = view(S[k+1],1:n,n+1:n+mm)
 
         # Substitute in discrete dynamics (second order approximation)
         tmp0 = Ly + Sy
@@ -937,6 +952,12 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
         S[ūū_idx] = Q̄uu
         S[xū_idx] = Q̄xu
         S[ūx_idx] = Q̄xu'
+        # s[k][x_idx] = Q̄x
+        # s[k][ū_idx] = Q̄u
+        # S[k][xx_idx] = Q̄xx
+        # S[k][ūū_idx] = Q̄uu
+        # S[k][xū_idx] = Q̄xu
+        # S[k][ūx_idx] = Q̄xu'
 
         # line search terms
         Δv[1] += Qv'*d[k+1]
@@ -963,7 +984,7 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
             # b[1] = zeros(mm,mm)
             d[1] = -Q̄uu_reg\Q̄u
 
-            results.s[1] = Q̄x + K[1]'*Q̄uu*d[1] + K[1]'*Q̄u + Q̄xu*d[1] # calculate for gradient check in solve
+            # results.s[1] = Q̄x + K[1]'*Q̄uu*d[1] + K[1]'*Q̄u + Q̄xu*d[1] # calculate for gradient check in solve
 
             Δv[1] += Q̄u'*d[1]
             Δv[2] += 0.5*d[1]'*Q̄uu*d[1]

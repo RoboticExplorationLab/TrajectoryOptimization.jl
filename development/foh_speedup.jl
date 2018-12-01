@@ -10,13 +10,23 @@ u_max_pendulum = 2
 x_min_pendulum = [-20;-20]
 x_max_pendulum = [20; 20]
 
+model_dubins, obj_uncon_dubins = TrajectoryOptimization.Dynamics.dubinscar!
+
+# dubins car
+u_min_dubins = [-1; -1]
+u_max_dubins = [1; 1]
+x_min_dubins = [0; -100; -100]
+x_max_dubins = [1.0; 100; 100]
+obj_con_dubins = ConstrainedObjective(obj_uncon_dubins, u_min=u_min_dubins, u_max=u_max_dubins, x_min=x_min_dubins, x_max=x_max_dubins)
+
+
 # -Constrained objective
 obj_con_pendulum = ConstrainedObjective(obj_uncon_pendulum, u_min=u_min_pendulum, u_max=u_max_pendulum, x_min=x_min_pendulum, x_max=x_max_pendulum)
 
-model = model_pendulum
-obj = obj_con_pendulum
-u_max = u_max_pendulum
-u_min = u_min_pendulum
+model = model_dubins
+obj = obj_con_dubins
+u_max = u_max_dubins
+u_min = u_min_dubins
 
 # Solver
 intergrator_foh = :rk3_foh

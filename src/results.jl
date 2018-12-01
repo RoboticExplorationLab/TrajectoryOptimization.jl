@@ -280,7 +280,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
-    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
         C,C_prev,Iμ,λ,μ,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
 
@@ -296,6 +296,7 @@ end
 ##################
 # STATIC RESULTS #
 ##################
+
 
 """
 $(TYPEDEF)
