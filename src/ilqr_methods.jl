@@ -99,12 +99,12 @@ function rollout!(res::SolverVectorResults, solver::Solver)
 
     # Calculate state derivatives and midpoints
     if solver.control_integration == :foh
-        calculate_derivatives!(res, solver)
-        calculate_midpoints!(res, solver)
+        calculate_derivatives!(res, solver, res.X, res.U)
+        calculate_midpoints!(res, solver, res.X, res.U)
     end
 
     # Update constraints
-    update_constraints!(res,solver)
+    update_constraints!(res,solver,res.X,res.U)
     return status
 end
 
@@ -243,10 +243,10 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
-            # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
-            J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+            J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            # J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
+            # solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            # solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
     end
 

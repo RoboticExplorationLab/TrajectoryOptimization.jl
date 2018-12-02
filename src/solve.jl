@@ -73,7 +73,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
-    if (N != size(X0,2) && !isempty(X0)) || N != size(U0,2) #TODO fix this, it was getting called on every solve...
+    if (N != size(X0,2) && !isempty(X0)) || N != size(U0,2)
         @info "Interpolating initial guess"
         X0,U0 = interp_traj(N,solver.obj.tf,X0,U0) # TODO move this function somewhere better
     end
@@ -235,7 +235,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             Δv = backwardpass!(results, solver)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)
+            J = forwardpass!(results, solver, Δv)#, J_prev)
             push!(J_hist,J)
 
             # increment iLQR inner loop counter
@@ -435,7 +435,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     Δv = backwardpass!(results_feasible, solver)
 
     # forward pass
-    forwardpass!(results_feasible,solver,Δv)
+    forwardpass!(results_feasible,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
 
     # update trajectories
     results_feasible.X .= deepcopy(results_feasible.X_)

@@ -299,7 +299,7 @@ end
 function plot_obstacles(circles,clr=:red)
     for circle in circles
         x,y,r = circle
-        plot_circle!((x,y),r,color=:red,border=:red,label="")
+        plot_circle!((x,y),r,color=clr,linecolor=clr,label="")
     end
 end
 

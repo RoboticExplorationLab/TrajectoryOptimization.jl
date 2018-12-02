@@ -1,4 +1,4 @@
-function quadrotor_dynamics!(xdot,X,u)
+function quadrotor_dynamics!(ẋ,X,u)
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -13,7 +13,7 @@ function quadrotor_dynamics!(xdot,X,u)
       # q2
       # q3
       # q4
-      # xdot
+      # ẋ
       # ydot
       # zdot
       # omega1
@@ -27,8 +27,8 @@ function quadrotor_dynamics!(xdot,X,u)
 
       # Parameters
       m = .5 # mass
-      I = Matrix(Diagonal([0.0023,0.0023,0.004])) # inertia matrix
-      invI = Matrix(Diagonal(1 ./[0.0023,0.0023,0.004])) # inverted inertia matrix
+      IM = Matrix(Diagonal([0.0023,0.0023,0.004])) # inertia matrix
+      invIM = Matrix(Diagonal(1 ./[0.0023,0.0023,0.004])) # inverted inertia matrix
       g = 9.81 # gravity
       L = 0.1750 # distance between motors
 
@@ -50,7 +50,7 @@ function quadrotor_dynamics!(xdot,X,u)
       M2 = km*w2;
       M3 = km*w3;
       M4 = km*w4;
-      tmp = hamilton_product(unit_quat(q),hamilton_product([0;0;F1+F2+F3+F4;0],quaternion_conjugate(unit_quat(q))))#TODO does the quaternion need to be unit when we do this rotation? or is unit quaternion only required when we convert quaterion to rotation matrix
+      tmp = hamilton_product(q,hamilton_product([0;0;F1+F2+F3+F4;0],quaternion_conjugate(q)))#TODO does the quaternion need to be unit when we do this rotation? or is unit quaternion only required when we convert quaterion to rotation matrix
       a = (1/m)*([0;0;-m*g] + tmp[1:3]);
 
       # if !all(isapprox.(quat2rot(q)*[0;0;F1+F2+F3+F4],tmp[1:3]))
@@ -61,16 +61,16 @@ function quadrotor_dynamics!(xdot,X,u)
 
       # a = (1/m)*([0;0;-m*g] + quat2rot(q)*[0;0;F1+F2+F3+F4]);
 
-      xdot[1:3] = v # velocity
-      xdot[4:7] = 0.5*hamilton_product(unit_quat(q),[omega;0]) # TODO should q be unit?
-      xdot[8:10] = a # acceleration
-      xdot[11:13] = invI*([L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] - cross(omega,I*omega)) # ̇ω; Euler's equation: I(̇ω) + ω x Iω = τ
+      ẋ[1:3] = v # velocity
+      ẋ[4:7] = 0.5*hamilton_product(q,[omega;0]) # TODO should q be unit?
+      ẋ[8:10] = a # acceleration
+      ẋ[11:13] = invIM*([L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] - cross(omega,IM*omega)) # ̇ω; Euler's equation: I(̇ω) + ω x Iω = τ
 end
 
 function quadrotor_dynamics(X,u)
-      xdot = zero(13,1)
-      quadrotor_dynamics!(xdot,X,u)
-      xdot
+      ẋ = zero(13,1)
+      quadrotor_dynamics!(ẋ,X,u)
+      ẋ
 end
 
 

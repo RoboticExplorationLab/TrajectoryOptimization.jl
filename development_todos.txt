@@ -13,3 +13,4 @@ Analytical Jacobians
 Trajectory type
 Model/solver tests
 DIRCOL/iLQR intergration
+General cost functions | full quadratic expansion of cost

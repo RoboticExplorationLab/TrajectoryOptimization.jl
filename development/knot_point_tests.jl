@@ -57,7 +57,7 @@ obj_con_quadrotor = TrajectoryOptimization.ConstrainedObjective(obj_uncon_quadro
 
 # System selection
 model = model_pendulum
-obj = obj_con_pendulum
+obj = obj_uncon_pendulum
 u_max = u_max_pendulum
 u_min = u_min_pendulum
 
@@ -78,6 +78,9 @@ U = zeros(solver_foh.model.m,solver_foh.N)
 ### Solve ###
 @time results_zoh, stats_zoh = solve(solver_zoh,U)
 @time results_foh, stats_foh = solve(solver_foh,U)
+
+# plot(log.(stats_foh["cost"]),title="Unconstrained Pendulum",ylabel="log(cost)",xlabel="iteration",label=["foh","zoh"])
+# plot!(log.(stats_zoh["cost"]))
 
 ### Results ###
 println("Final state (zoh)-> res: $(results_zoh.X[end]), goal: $(solver_zoh.obj.xf)\n Iterations: $(stats_zoh["iterations"])\n Outer loop iterations: $(stats_zoh["major iterations"])\n Max violation: $(stats_zoh["c_max"][end])\n Max μ: $(maximum([to_array(results_zoh.μ)[:]; results_zoh.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_zoh.λ)[:]; results_zoh.λN[:]])))\n")

@@ -24,7 +24,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass_alt!(results, solver)
+        Δv = _backwardpass!(results, solver)
     end
 
     return Δv
@@ -217,9 +217,6 @@ function _backwardpass_alt!(res::SolverVectorResults,solver::Solver)
         Qxx = Lxx + fdx'*S[k+1]*fdx
 
         Quu = Luu + fdu'*S[k+1]*fdu
-        # println("Lux: $(size(Lux))")
-        # println("fdu: $(size(fdu))")
-        # println("fdx: $(size(fdx))")
         Qux = Lux + fdu'*S[k+1]*fdx
 
         # Constraints
@@ -719,8 +716,8 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
     end
 
     # Create a copy of boundary conditions in case of regularization
-    # SN = copy(S)
-    # sN = copy(s)
+    SN = copy(S)
+    sN = copy(s)
 
     # Backward pass
     k = N-1
@@ -1023,11 +1020,11 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_prev::Float64)
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
-    # # Compute original cost
+    # Compute original cost
     if solver.control_integration == :foh
         calculate_derivatives!(res, solver, X, U)
         calculate_midpoints!(res, solver, X, U)

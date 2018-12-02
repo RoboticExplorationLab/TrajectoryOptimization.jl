@@ -14,11 +14,11 @@ function quadrotor_dynamics_euler!(xdot,x,u)
     # psidot
 
     #Parameters
-    m = .5;
-    I = diagm([0.0023;0.0023;0.004]);
-    invI = diagm(1/[0.0023;0.0023;0.004]);
-    g = 9.81;
-    L = 0.1750;
+    m = .5 # mass
+    IM = Matrix(Diagonal([0.0023,0.0023,0.004])) # inertia matrix
+    invI = Matrix(Diagonal(1 ./[0.0023,0.0023,0.004])) # inverted inertia matrix
+    g = 9.81 # gravity
+    L = 0.1750 # distance between motors
 
     # states
     phi = x[4];
@@ -57,7 +57,7 @@ function quadrotor_dynamics_euler!(xdot,x,u)
     pqr = rpydot2angularvel([phi;theta;psi],[phidot;thetadot;psidot]);
     pqr = R'*pqr;
 
-    pqr_dot = invI*([L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] - cross(pqr,I*pqr));
+    pqr_dot = invI*([L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] - cross(pqr,IM*pqr));
 
     # Now, convert pqr_dot to rpy_ddot
     Phi, dPhi = angularvel2rpydotMatrix([phi;theta;psi]);
@@ -80,6 +80,7 @@ function quadrotor_dynamics_euler!(xdot,x,u)
     xdot[1:6] = x[7:12]
     xdot[7:9] = xyz_ddot
     xdot[10:12] = rpy_ddot
+    xdot
 end
 
 # Utilities
