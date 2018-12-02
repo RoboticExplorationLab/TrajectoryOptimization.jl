@@ -1,6 +1,3 @@
-
-
-
 """
 $(SIGNATURES)
 Solve a trajectory optimization problem with direct collocation
@@ -122,7 +119,8 @@ end
 function gen_custom_constraint_fun(solver::Solver,method)
     N, = get_N(solver,method)
     n,m = get_sizes(solver)
-    NN = (n+m)N
+    m̄, = get_num_controls(solver)
+    NN = (n+m̄)N
     obj = solver.obj
     pI_obj, pE_obj = count_constraints(solver.obj)
     pI_c,   pE_c   = pI_obj[2], pE_obj[2]  # Number of custom stage constraints
@@ -135,23 +133,27 @@ function gen_custom_constraint_fun(solver::Solver,method)
     P = PI+PE
 
 
-    function c_fun!(C_vec::Vector,X::Matrix,U::Matrix)
+    function c_fun!(C_vec,X,U)
         CE = view(C_vec,1:PE)
         CI = view(C_vec,PE.+(1:PI))
         cE = reshape(view(CE,1:(N-1)pE_c),pE_c,N-1)
         cI = reshape(view(CI,1:(N-1)pI_c),pI_c,N-1)
 
         # Equality Constraints
-        for k = 1:N-1
-            obj.cE(view(cE,:,k),X[:,k],U[:,k])
+        if pE_c > 0
+            for k = 1:N-1
+                obj.cE(view(cE,1:pE_c,k),X[:,k],U[:,k])
+            end
         end
         if pE_N_c > 0
             obj.cE(view(CE,(N-1)pE_c+1:PE),X[:,N])
         end
 
         # Inequality Constraints
-        for k = 1:N-1
-            cI[:,k] = obj.cI(view(cI,:,k),X[:,k],U[:,k])
+        if pI_c > 0
+            for k = 1:N-1
+                obj.cI(view(cI,1:pI_c,k),X[:,k],U[:,k])
+            end
         end
         if pI_N_c > 0
             obj.cI(view(CI,(N-1)pI_c+1:PI),X[:,N])
@@ -162,42 +164,94 @@ function gen_custom_constraint_fun(solver::Solver,method)
     # Jacobian
     jac_cI = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
     jac_cE = generate_general_constraint_jacobian(obj.cE, pE_c, pE_N_c, n, m)
-    J = spzeros(P,NN)
-    JE = view(J,1:PE,:)
-    JI = view(J,PE+1:P,:)
 
-    function jac_c(X,U)
+    function jacobian_block!(vals, jac::Function, x, u, p::Int)
+        blk = reshape(vals,p,n+m̄)
+        Ac = view(blk,1:p,1:n)
+        Bc = view(blk,1:p,n.+(1:m))
+        jac(Ac,Bc,x,u)
+    end
+
+    function jac_c!(vals,X::Matrix{Float64},U::Matrix{Float64})
         # Equality Constraints
+        n_blk = (n+m̄)pE_c
+        nG_PE = (N-1)n_blk  # number of nonzero entries in custom equality constraint jacobian
         for k = 1:N-1
-            off_1 = (k-1)pE_c
-            off_2 = (k-1)*(n+m)
-            Ac = view(JE,off_1.+(1:pE_c),off_2  .+ (1:n))
-            Bc = view(JE,off_1.+(1:pE_c),off_2.+n.+(1:m))
-            Ac,Bc = jac_cE(Ac,Bc,X[:,k],U[:,k])
+            off = (k-1)*n_blk
+            block = view(vals,off.+(1:n_blk))
+            jacobian_block!(block, jac_cE, X[:,k], U[1:m,k], pE_c)
         end
         if pE_N_c > 0
-            off = (N-1)*(n+m)
-            Ac = view(JE,(N-1)pE_c.+1:PE,off.+(1:n))
+            n_blk = n*pE_N_c
+            block = view(vals,nG_PE.+(1:n_blk))
+            nG_PE += n_blk
+            Ac = reshape(block,pE_N_c,n)
             jac_cE(Ac,X[:,N])
         end
 
         # Inequality Constraints
+        n_blk = (n+m̄)pI_c
+        nG_PI = (N-1)n_blk  # number of nonzero entries in custom equality constraint jacobian
         for k = 1:N-1
-            off_1 = (k-1)pI_c
-            off_2 = (k-1)*(n+m)
-            Ac = view(JI,off_1.+(1:pI_c),off_2  .+ (1:n))
-            Bc = view(JI,off_1.+(1:pI_c),off_2.+n.+(1:m))
-            jac_cI(Ac,Bc,X[:,k],U[:,k])
+            off = (k-1)*n_blk + nG_PE
+            block = view(vals,off.+(1:n_blk))
+            jacobian_block!(block, jac_cI, X[:,k], U[1:m,k], pI_c)
         end
         if pI_N_c > 0
-            off = (N-1)*(n+m)
-            Ac = view(JI,(N-1)pI_c.+1:PI,off.+(1:n))
-            jac_cI(Ac,X[:,N])
+            n_blk = n*pI_N_c
+            block = view(vals,(nG_PE+nG_PI).+(1:n_blk))
+            Ac = reshape(block,pE_N_c,n)
+            jac_cE(Ac,X[:,N])
+        end
+    end
+
+    J = spzeros(P,NN)
+    JE = view(J,1:PE,:)
+    JI = view(J,PE+1:P,:)
+
+    function jacobian_sparsity(start::Int=0)
+        i = start
+        # Equality Constraints
+        n_blk = (n+m)pE_c
+        num_block = reshape(1:n_blk,pE_c,n+m̄)
+        if pE_c > 0
+            for k = 1:N-1
+                off_1 = (k-1)pE_c
+                off_2 = (k-1)*(n+m̄)
+                JE[off_1.+(1:pE_c),off_2.+(1:n+m)] = num_block .+ i
+                i += n_blk
+            end
+        end
+        if pE_N_c > 0
+            n_blk = n*pE_N_c
+            num_block = reshape(1:n_blk,pE_N_c,n)
+            off = (N-1)*(n+m̄)
+            JE[(N-1)pE_c.+1:PE,off.+(1:n)] = num_block .+ i
+            i += n_blk
+        end
+
+        # Inequality Constraints
+        n_blk = (n+m)pI_c
+        num_block = reshape(1:n_blk,pI_c,n+m̄)
+        if pI_c > 0
+            for k = 1:N-1
+                off_1 = (k-1)pI_c
+                off_2 = (k-1)*(n+m̄)
+                JI[off_1.+(1:pI_c),off_2.+(1:n+m)] = num_block .+ i
+                i += n_blk
+            end
+        end
+        if pE_N_c > 0
+            n_blk = n*pI_N_c
+            num_block = reshape(1:n_blk,pI_N_c,n)
+            off = (N-1)*(n+m̄)
+            JI[(N-1)pI_c.+1:PI,off.+(1:n)] = num_block .+ i
+            i += n_blk
         end
         return J
     end
 
-    return c_fun!, jac_c
+    return c_fun!, jac_c!, jacobian_sparsity
 end
 
 function get_bounds(solver::Solver,method::Symbol)
@@ -247,7 +301,7 @@ function get_bounds(solver::Solver,method::Symbol)
     g_U = zeros(P)
     g_L[1:PE] .= 0
     g_U[1:PE] .= 0
-    g_L[PE+1:end] .= Inf
+    g_L[PE+1:end] .= -Inf
     g_U[PE+1:end] .= 0
 
     # Convert Infinite bounds
@@ -645,7 +699,7 @@ end
 """
 Constraint Jacobian
 """
-function constraint_jacobian!(solver::Solver, X, U, fVal, A, B, vals, method::Symbol)
+function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{Float64,3}, B::Array{Float64,3}, vals, method::Symbol)
     # X and U are X_, U_ trajectory points
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
@@ -659,7 +713,7 @@ function constraint_jacobian!(solver::Solver, X, U, fVal, A, B, vals, method::Sy
         n_blk = 2(n+m̄)n
         solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
 
-        function calc_block_trap(k,blk)
+        function calc_block_trap(k,blk::SubArray{Float64})
             blk = reshape(blk,n,2(n+m̄))
             blk[:,1:n+m] =         dt[k]*A[:,:,k  ]/2+Inm
             blk[:,n.+m̄.+(1:n+m)] = dt[k]*A[:,:,k+1]/2-Inm
@@ -765,27 +819,24 @@ function constraint_jacobian!(solver::Solver, X, U, fVal, A, B, vals, method::Sy
             calc_jacob_block_midpoint!(k,block)
         end
     end
-
-    if solver.opts.minimum_time
-        nG,Gpart = get_nG(solver,method)
-        nC = Gpart.collocation
-        jacob_dt = view(vals,nC+1:length(vals))
-        jacob_dt[1:2:2(N-2)] .= 1
-        jacob_dt[2:2:2(N-2)+1] .= -1
-    end
-
-
     return nothing
 end
 
+function time_step_constraint_jacobian!(vals, solver::Solver)
+    if solver.opts.minimum_time
+        vals[1:2:2(N-2)] .= 1
+        vals[2:2:2(N-2)+1] .= -1
+    end
+end
 
-function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
+
+function collocation_constraint_jacobian_sparsity(solver::Solver, method::Symbol, start::Int=0)
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)
     jacob_g = spzeros(Int,(N-1)*n,N*(n+m̄))
     dt = solver.dt
-    i = 0
+    i = start
 
     if method == :trapezoid || method == :hermite_simpson
 
@@ -825,23 +876,29 @@ function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
         end
     end
 
-    if solver.opts.minimum_time
-        NN = (n+m̄)N
-        jacob_dt = spzeros(Int,N-2,N*(n+m̄))
-        dts = n+m̄:n+m̄:NN-2(n+m̄)
-        jacob_dt[CartesianIndex.(1:N-2,dts)] = (1:2:2(N-2)) .+ i
-        jacob_dt[CartesianIndex.(1:N-2,dts.+n.+m̄)] = (2:2:2(N-2)+1) .+ i
-        jacob_g = [jacob_g; jacob_dt]
-    end
-    rows,cols,inds = findnz(jacob_g)
-    v = sortperm(inds)
-    rows = rows[v]
-    cols = cols[v]
 
-    # return jacob_g
-    return rows,cols
+    # rows,cols,inds = findnz(jacob_g)
+    # v = sortperm(inds)
+    # rows = rows[v]
+    # cols = cols[v]
+
+    return jacob_g
 end
 
+function time_step_constraint_jacobian_sparsity(solver::Solver, start::Int=0)
+    n,m,N = get_sizes(solver)
+    m̄, = get_num_controls(solver)
+    NN = (n+m̄)N
+    if solver.opts.minimum_time
+        jacob_dt = spzeros(Int,N-2,NN)
+        dts = n+m̄:n+m̄:NN-2(n+m̄)
+        jacob_dt[CartesianIndex.(1:N-2,dts)] = (1:2:2(N-2)) .+ start
+        jacob_dt[CartesianIndex.(1:N-2,dts.+n.+m̄)] = (2:2:2(N-2)+1) .+ start
+        return jacob_dt
+    else
+        return sparse([],[],Float64[],0,NN)
+    end
+end
 
 """
 $(SIGNATURES)

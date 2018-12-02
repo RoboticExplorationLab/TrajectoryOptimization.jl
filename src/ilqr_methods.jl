@@ -435,7 +435,7 @@ end
 $(SIGNATURES)
     Count the number of constraints of each type from an objective
 """
-function count_constraints(obj::ConstrainedObjective)
+function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
     n = size(obj.Q,1)
     p = obj.p # number of constraints
     pI = obj.pI # number of inequality and equality constraints
@@ -466,8 +466,13 @@ function count_constraints(obj::ConstrainedObjective)
     else
         pE_N_c = pE_N
     end
-
-    return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
+    if constraints == :all
+        return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
+    elseif constraints == :custom
+        return (pI_c, pI_N_c), (pE_c, pE_N_c)
+    elseif constraints == :total
+        return (pI, pI_N), (pE, pE_N)
+    end
 
 end
 
