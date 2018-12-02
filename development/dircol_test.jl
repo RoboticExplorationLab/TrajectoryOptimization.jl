@@ -31,52 +31,6 @@ sol,stats = solve_dircol(solver,X0,U0, method=method)
 plot(sol.X')
 plot(sol.U')
 
-# Solve minimum time
-method = :hermite_simpson
-solver = Solver(model,obj_mintime,N=41,integration=:rk3_foh)
-n,m,N = get_sizes(solver)
-m̄, = get_num_controls(solver)
-nG, = get_nG(solver,method)
-NN = (n+m̄)N
-U0 = ones(1,N)*1
-X0 = line_trajectory(obj.x0, obj.xf, N)
-# U0 = Matrix(sol.U)
-# X0 = Matrix(sol.X)
-U0_dt = [U0;ones(1,N)*0.05]
-solver.opts.verbose = true
-solver.opts.R_minimum_time = 100
-
-sol, = solve_ipopt(solver, X0, U0_dt, method)
-@test norm(sol.X[:,end] - obj.xf) < 1e-6
-plot(sol.X')
-# sol,stats = solve_dircol(solver,X0,U0_dt)
-
-
-
-Z0 = packZ(X0,U0_dt)
-# Generate functions
-eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
-
-# Get Bounds
-x_L, x_U, g_L, g_U = get_bounds(solver,method)
-P = length(g_L)  # Total number of constraints
-
-all(Z0 .>= x_L)
-all(Z0 .<= x_U)
-
-# Test functions
-g = zeros(P)
-grad_f = zeros(NN)
-jac_g = zeros(nG)
-rows = zeros(nG)
-cols = zeros(nG)
-eval_f(Z0)
-eval_g(Z0,g)
-eval_grad_f(Z0,grad_f)
-eval_jac_g(Z0,:Structure,rows,cols,nG)
-eval_jac_g(Z0,:vals,rows,cols,jac_g)
-
-
 include("../development/dircol_old.jl")
 method = :hermite_simpson
 function check_grads(solver,method)
@@ -203,6 +157,7 @@ jac_g = Array(sparse(rows,cols,vals))
 
 
 # Solver integration scheme should set the dircol scheme
+U0 = ones(1,N)
 solver = Solver(model,obj,dt=dt,integration=:midpoint)
 sol,stats = solve_dircol(solver,X0,U0)
 @test norm(sol.X[:,end]-obj.xf) < 1e-5
@@ -234,6 +189,7 @@ t1 = @elapsed sol,stats = solve_dircol(solver)
 
 
 
+
 # Test dircol constraint stuff
 n,m = 3,2
 cE(x,u) = [2x[1:2]+u;
@@ -256,6 +212,7 @@ obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
 method = :trapezoid
 solver = Solver(model,obj_con,dt=1.)
 N, = TrajectoryOptimization.get_N(solver,method)
+NN = (n+m)*N
 X = [1. 2 3 4; 1 2 3 4; 1 2 3 4]
 U = [0. 1 0 0; -1 0 -1 0]
 # U = ones(m,N)
@@ -267,11 +224,12 @@ cE! = wrap_inplace(cE)
 @test is_inplace_constraints(cE!,n,m)
 @test (n,m) == count_inplace_output(cE!,n,m)
 
-
+# Constraint function
 pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
 @test pI_obj == (pI, pI, 0, 0)
 @test pE_obj == (pE, pE, pE_N+n, pE_N)
 p_total = (pE + pI)*(N-1) + pE_N + pI_N
+p_colloc = (N-1)n
 
 c_fun!, jac_c = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
 C = zeros(p_total)
@@ -286,9 +244,22 @@ C_expected = [cE(X[:,1],U[:,1]);
               cI(X[:,3],U[:,3])]
 @test C_expected == C
 
+x_L,x_U, g_L,g_U = get_bounds(solver,method)
+
 # Jacobian
-c_fun!, jac_c = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
-J = jac_c(X,U)
+c_fun!, jac_c!, jac_sparsity = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+nG,Gpart = get_nG(solver,method)
+nP = Gpart.custom
+
+J_struct = jac_sparsity()
+rows,cols,inds = findnz(J_struct)
+v = sortperm(inds)
+rows = rows[v]
+cols = cols[v]
+
+J = zeros(nP)
+jac_c!(J,X,U)
+J1 = Array(sparse(rows,cols,J,p_total,NN))
 Z = packZ(X,U)
 
 function c_funZ!(C,Z)
@@ -298,13 +269,56 @@ end
 C2 = zeros(p_total)
 c_funZ!(C2,Z)
 
-J2 = zeros(size(J))
-jac_c!(J,Z) = ForwardDiff.jacobian!(J,c_funZ!,C2,Z)
-jac_c!(J2,Z)
-@test J2 == J
+J2 = zeros(p_total,NN)
+jac_cZ!(J,Z) = ForwardDiff.jacobian!(J,c_funZ!,C2,Z)
+jac_cZ!(J2,Z)
+@test J2 == J1
 
-@time jac_c(X,U)
-@time jac_c!(J2,Z)
+vals = zeros(nG)
+jac_c(vals,X,U)
+vals
+
+
+eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
+g = zeros(p_total + p_colloc)
+eval_g(Z,g)
+@test g[p_colloc+1:end] == C
+
+collocation_constraint_jacobian_sparsity(solver,method)
+vals = zeros(nG)
+rows = zeros(nG)
+cols = zeros(nG)
+eval_jac_g(Z,:Structure,rows,cols,vals)
+eval_jac_g(Z,:vals,rows,cols,vals)
+J_all = Array(sparse(rows,cols,vals))
+J3 = J_all[p_colloc.+1:end,:]
+@test J3 == J1
+
+
+function eval_g_wrapper(Z)
+    gin = zeros(eltype(Z),size(g))
+    eval_g(Z,gin)
+    return gin
+end
+
+auto_diff(Z) = ForwardDiff.jacobian(eval_g_wrapper,Z)
+jac_g_check = auto_diff(Z)
+@test jac_g_check == sparse(rows,cols,vals)
+
+using BenchmarkTools
+using Juno
+using Profile
+Profile.init(delay=1e-6)
+Profile.clear()
+@profile eval_jac_g(Z,:vals,rows,cols,vals)
+Juno.profiler()
+@btime eval_jac_g(Z,:vals,rows,cols,vals)
+@btime auto_diff(Z)
+
+@time jac_c(J,X,U)
+@time jac_cZ!(J2,Z)
+
+
 
 # DircolResults
 n,m,N = (4,2,51)
