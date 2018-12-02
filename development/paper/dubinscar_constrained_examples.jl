@@ -153,7 +153,7 @@ solver_uncon_obstacles = Solver(model, obj, integration=integration, dt=dt, opts
 solver_con_obstacles = Solver(model, obj_con_obstacles, integration=integration, dt=dt, opts=opts)
 solver_con_obstacles.opts.R_infeasible = 1.0
 # -Initial state and control trajectories
-X_guess = [2.5 2.5 0.;3.75 5. .785;5. 6.25 0.;7.5 6.25 -.261;8.75 5. -1.57;7.5 2.5 0.]
+X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
 X0 = interp_rows(solver_uncon.N,tf,Array(X_guess'))
 # X0 = line_trajectory(solver_uncon)
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
