@@ -10,6 +10,12 @@ function plot_trajectory!(X;kwargs...)
     plot!(X[1,:],X[2,:];kwargs...)
 end
 
+function plot_solution(X;kwargs...)
+    p = plot(aspect_ratio=:equal,xlim=[0,12],ylim=[0,12])
+    plot_obstacles(circles)
+    plot_trajectory!(X; kwargs...)
+end
+
 ### Solver Options ###
 dt = 0.01
 opts = TrajectoryOptimization.SolverOptions()
@@ -36,7 +42,7 @@ n,m = model.n,model.m
 # -Circle obstacles, state, and control constraints
 obj_uncon_obs = copy(obj_uncon)
 obj_uncon_obs.x0[:] = [0;0;0]
-obj_uncon_obs.xf[:] = [11;11;pi/2]
+obj_uncon_obs.xf[:] = [12;12;pi/2]
 obj_uncon_obs.tf = 2.5
 obj_uncon_obs.Qf[:,:] = 100.0*Diagonal(I,n)
 obj_uncon_obs.R[:,:] = (1e-2)*Diagonal(I,m)
@@ -46,39 +52,37 @@ u_max = [100; 100]
 x_min = [-20; -20; -100]
 x_max = [20; 20; 100]
 
-# n_circles = 3
-# circles = ([1.0;2.6;3.5],[1.25;5.0;7.5],[.25;.25;.25])
-# function cI(x,u)
-#     [circle_constraint(x,circles[1][1],circles[2][1],circles[3][1]);
-#      circle_constraint(x,circles[1][2],circles[2][2],circles[3][2]);
-#      circle_constraint(x,circles[1][3],circles[2][3],circles[3][3])]
-# end
-
 n_circles = 15
 c = zeros(n_circles)
-cI, circles = generate_random_circle_obstacle_field(n_circles)
+cI_obstacles, circles = generate_random_circle_obstacle_field(n_circles)
 
 p = plot(aspect_ratio=:equal,xlim=[0,10],ylim=[0,10])
 plot_obstacles(circles)
 display(p)
 
-obj_con_obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon_obs,cI=cI)# u_min=u_min, u_max=u_max,x_min=x_min, x_max=x_max,cI=cI) # constrained objective
+# Solve with iLQR
+obj_con_obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon_obs,cI=cI_obstacles)# u_min=u_min, u_max=u_max,x_min=x_min, x_max=x_max,cI=cI) # constrained objective
 solver = Solver(model, obj_con_obs, integration=:rk3, dt=dt, opts=opts)
+solver.opts.verbose = false
+solver.opts.resolve_feasible = false
+n,m,N = get_sizes(solver)
+X0 = line_trajectory(solver)
+U = ones(m,N)
+sol, stats = TrajectoryOptimization.solve(solver,X0,U)
 
-# -Initial state and control trajectories
-X0 = line_trajectory(solver_zoh_con_obs)
-U = ones(solver_zoh_con_obs.model.m,solver_zoh_con_obs.N)
-# U = 5*rand(solver_zoh_con_obs.model.m,solver_zoh_con_obs.N)
-#############################################
+plot_solution(to_array(sol.X),width=2,color=:black,label="iLQR")
 
-### Solve ###
-sol, stats = TrajectoryOptimization.solve(solver,X_interp,U)
-#############
+# Solve with DIRCOL
+res_d, stat_d = solve_dircol(solver,X0,U)
 
-p = plot(aspect_ratio=:equal,xlim=[0,10],ylim=[0,10])
-plot_obstacles(circles)
-plot_trajectory!(to_array(sol.X),width=2,color=:black,label="")
+plot_trajectory!(res_d.X,width=2,color=:blue,linestyle=:dash,label="DIRCOL")
 
+solver_uncon = Solver(model,obj_uncon_obs,dt=dt)
+solver_uncon.opts.verbose = true
+res_d, stat_d = solve_dircol(solver_uncon,X0,U)
+plot(res_d.X[1,:],res_d.X[2,:])
+
+plot_trajectory!
 
 ### Results ###
 if opts.verbose
