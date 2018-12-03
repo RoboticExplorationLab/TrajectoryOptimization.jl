@@ -170,8 +170,6 @@ println("Final state (constrained)-> pos: $(results_con_obstacles.X[end][1:3]), 
 @time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
 println("Final state (infeasible + constrained)-> pos: $(results_con_obstacles_inf.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles_inf["cost"][end])\n Iterations: $(stats_con_obstacles_inf["iterations"])\n Outer loop iterations: $(stats_con_obstacles_inf["major iterations"])\n Max violation: $(stats_con_obstacles_inf["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles_inf.μ)[:]; results_con_obstacles_inf.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles_inf.λ)[:]; results_con_obstacles_inf.λN[:]])))\n")
 
-
-
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)
 plot_obstacles(circles)
