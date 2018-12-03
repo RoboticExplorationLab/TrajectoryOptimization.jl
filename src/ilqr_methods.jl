@@ -73,11 +73,13 @@ end
 
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
-        if solver.opts.minimum_time_tf_estimate > 0
+        if solver.opts.minimum_time_dt_estimate > 0.0
+            dt = opts.minimum_time_dt_estimate
+        elseif solver.opts.minimum_time_tf_estimate > 0.0
             dt = solver.opts.minimum_time_tf_estimate / (solver.N - 1)
             if dt > solver.opts.max_dt
                 dt = solver.opts.max_dt
-                @warn "Specified min_time_init is greater than max_dt. Capping at max_dt"
+                @warn "Specified minimum_time_tf_estimate is greater than max_dt. Capping at max_dt"
             end
         else
             dt  = solver.opts.max_dt / 2

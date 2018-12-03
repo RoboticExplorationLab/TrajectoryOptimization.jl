@@ -33,12 +33,11 @@ solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts
 
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
 
-results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
-results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
+@time results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
+println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Cost: $(stats_uncon["cost"][end])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
 
-# plt = plot(title="Parallel Park")
-# plot_trajectory!(to_array(results_uncon.X),width=2,color=:blue,label="",aspect_ratio=:equal,xlim=[-0.5,0.5],ylim=[-.25,1.25])
-# display(plt)
+@time results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
+println("Final state (constrained)-> pos: $(results_con_box.X[end][1:3]), goal: $(solver_con_box.obj.xf[1:3])\n Cost: $(stats_con_box["cost"][end])\n Iterations: $(stats_con_box["iterations"])\n Outer loop iterations: $(stats_con_box["major iterations"])\n Max violation: $(stats_con_box["c_max"][end])\n Max μ: $(maximum([to_array(results_con_box.μ)[:]; results_con_box.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_box.λ)[:]; results_con_box.λN[:]])))\n")
 
 # Parallel Park (boxed)
 plt = plot(title="Parallel Park")#,aspect_ratio=:equal)
@@ -89,8 +88,12 @@ solver_con_obstacles_control = Solver(model, obj_con_obstacles_control, integrat
 # -Initial state and control trajectories
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
 
-results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
-results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
+@time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
+println("Final state (unconstrained)-> pos: $(results_uncon_obstacles.X[end][1:3]), goal: $(solver_uncon_obstacles.obj.xf[1:3])\n Cost: $(stats_uncon_obstacles["cost"][end])\n Iterations: $(stats_uncon_obstacles["iterations"])\n Outer loop iterations: $(stats_uncon_obstacles["major iterations"])\n ")
+
+@time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
+println("Final state (constrained)-> pos: $(results_con_obstacles.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles["cost"][end])\n Iterations: $(stats_con_obstacles["iterations"])\n Outer loop iterations: $(stats_con_obstacles["major iterations"])\n Max violation: $(stats_con_obstacles["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles.μ)[:]; results_con_obstacles.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles.λ)[:]; results_con_obstacles.λN[:]])))\n")
+
 
 # Obstacle Avoidance
 plt = plot(title="Obstacle Avoidance")
@@ -136,9 +139,9 @@ end
 
 n_circles = 3*s1 + s2 + 2*s3
 
-plt = plot(title="Escape",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
-plot_obstacles(circles,:red)
-display(plt)
+# plt = plot(title="Escape",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+# plot_obstacles(circles,:red)
+# display(plt)
 
 function cI(c,x,u)
     for i = 1:n_circles
@@ -158,9 +161,16 @@ X0 = interp_rows(solver_uncon.N,tf,Array(X_guess'))
 # X0 = line_trajectory(solver_uncon)
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
 
-results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
-results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
-results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
+@time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
+println("Final state (unconstrained)-> pos: $(results_uncon_obstacles.X[end][1:3]), goal: $(solver_uncon_obstacles.obj.xf[1:3])\n Cost: $(stats_uncon_obstacles["cost"][end])\n Iterations: $(stats_uncon_obstacles["iterations"])\n Outer loop iterations: $(stats_uncon_obstacles["major iterations"])\n ")
+
+@time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
+println("Final state (constrained)-> pos: $(results_con_obstacles.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles["cost"][end])\n Iterations: $(stats_con_obstacles["iterations"])\n Outer loop iterations: $(stats_con_obstacles["major iterations"])\n Max violation: $(stats_con_obstacles["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles.μ)[:]; results_con_obstacles.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles.λ)[:]; results_con_obstacles.λN[:]])))\n")
+
+@time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
+println("Final state (infeasible + constrained)-> pos: $(results_con_obstacles_inf.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles_inf["cost"][end])\n Iterations: $(stats_con_obstacles_inf["iterations"])\n Outer loop iterations: $(stats_con_obstacles_inf["major iterations"])\n Max violation: $(stats_con_obstacles_inf["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles_inf.μ)[:]; results_con_obstacles_inf.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles_inf.λ)[:]; results_con_obstacles_inf.λN[:]])))\n")
+
+
 
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)

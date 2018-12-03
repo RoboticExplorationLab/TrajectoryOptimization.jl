@@ -1,9 +1,9 @@
 using Plots
-using MeshCat
-using GeometryTypes
-using CoordinateTransformations
-using FileIO
-using MeshIO
+# using MeshCat
+# using GeometryTypes
+# using CoordinateTransformations
+# using FileIO
+# using MeshIO
 
 # Solver options
 dt = 0.1
@@ -19,16 +19,17 @@ opts.R_infeasible = 1.0
 opts_mintime = SolverOptions()
 opts_mintime.verbose = true
 opts_mintime.max_dt = 0.2
+opts_mintime.minimum_time_dt_estimate = 0.1
 opts_mintime.min_dt = 1e-3
-opts_mintime.constraint_tolerance = 0.01 # 0.005
-opts_mintime.R_minimum_time = 100.0#13.5 # 12.0
+opts_mintime.constraint_tolerance = 1e-2
+opts_mintime.R_minimum_time = 1.0
 opts_mintime.ρ_initial = 0
-opts_mintime.τ = .25
+opts_mintime.τ = .5
 opts_mintime.γ = 2.0
 opts_mintime.outer_loop_update = :individual
-opts_mintime.iterations_innerloop = 500
-opts_mintime.iterations_outerloop = 25
-opts_mintime.iterations = 1000
+opts_mintime.iterations_innerloop = 750
+opts_mintime.iterations_outerloop = 100
+opts_mintime.iterations = 5000
 
 # Set up model, objective, solver
 model, = TrajectoryOptimization.Dynamics.quadrotor_euler
@@ -54,8 +55,8 @@ xf[1:3] = [20.0;20.0;0.0] # xyz position
 # xf[4:7] = quatf
 
 # -control limits
-u_min = 0.0
-u_max = 2.0
+u_min = -10.0
+u_max = 10.0
 
 # -obstacles
 r_quad = 3.0
@@ -76,16 +77,19 @@ end
 # end
 
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon_min = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max)
+obj_uncon_min = TrajectoryOptimization.update_objective(obj_uncon_min, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cI=cI)
-obj_min = TrajectoryOptimization.update_objective(obj_con, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
+obj_con_min = TrajectoryOptimization.update_objective(obj_con, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
 
 # Solver
 solver_uncon = Solver(model,obj_uncon,integration=integration,dt=dt,opts=opts)
+solver_uncon_mintime = TrajectoryOptimization.Solver(model,obj_uncon_min,integration=integration,N=solver_uncon.N,opts=opts_mintime)
 solver_con = Solver(model,obj_con,integration=integration,dt=dt,opts=opts)
-solver_mintime = TrajectoryOptimization.Solver(model,obj_min,integration=integration,N=solver_uncon.N,opts=opts_mintime)
+solver_con_mintime = TrajectoryOptimization.Solver(model,obj_con_min,integration=integration,N=solver_uncon.N,opts=opts_mintime)
 
 # - Initial control and state trajectories
-U0 = zeros(solver_uncon.model.m, solver_uncon.N)
+U0 = rand(solver_uncon.model.m, solver_uncon.N)
 X0 = line_trajectory(solver_uncon)
 # X0[4:7,:] .= quat0
 
@@ -128,21 +132,25 @@ X0 = line_trajectory(solver_uncon)
 # println("Final state (foh)-> res: $(results_uncon_f.X[end][1:3]), goal: $(solver_uncon_f.obj.xf[1:3])\n Iterations: $(stats_uncon_f["iterations"])\n Outer loop iterations: $(stats_uncon_f["major iterations"])\n ")
 # println("Final state (zoh)-> res: $(results_uncon_z.X[end][1:3]), goal: $(solver_uncon_z.obj.xf[1:3])\n Iterations: $(stats_uncon_z["iterations"])\n Outer loop iterations: $(stats_uncon_z["major iterations"])\n ")
 
-@time results_uncon, stats_uncon = solve(solver_uncon,U0)
-@time results_con, stats_con = solve(solver_con,U0)
-# @time results_mintime, stats_mintime = solve(solver_mintime,U0)
+# @time results_uncon, stats_uncon = solve(solver_uncon,U0)
+@time results_uncon_mintime, stats_uncon_mintime = solve(solver_uncon_mintime,U0)
+
+# @time results_con, stats_con = solve(solver_con,U0)
+# @time results_con_mintime, stats_con_mintime = solve(solver_con_mintime,X0,U0)
+
+results_mintime
 
 println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
 println("Final state (constrained)-> pos: $(results_con.X[end][1:3]), goal: $(solver_con.obj.xf[1:3])\n Iterations: $(stats_con["iterations"])\n Outer loop iterations: $(stats_con["major iterations"])\n Max violation: $(stats_con["c_max"][end])\n Max μ: $(maximum([to_array(results_con.μ)[:]; results_con.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con.λ)[:]; results_con.λN[:]])))\n")
 
-## Results
-# Position
-plot(to_array(results_uncon.X)[1:3,:]',title="Quadrotor Position xyz",color=:blue,xlabel="Time",ylabel="Position",label=["x";"y";"z"])
-plot!(to_array(results_con.X)[1:3,:]',color=:green)
-
-# Control
-plot(to_array(results_uncon.U)[1:m,:]',title="Quadrotor Control",color=:blue)
-plot(to_array(results_con.U)[1:m,:]',color=:green)
+# ## Results
+# # Position
+# plot(to_array(results_uncon.X)[1:3,:]',title="Quadrotor Position xyz",color=:blue,xlabel="Time",ylabel="Position",label=["x";"y";"z"])
+# plot!(to_array(results_con.X)[1:3,:]',color=:green)
+#
+# # Control
+# plot(to_array(results_uncon.U)[1:m,:]',title="Quadrotor Control",color=:blue)
+# plot(to_array(results_con.U)[1:m,:]',color=:green)
 
 ################################################
 ## Visualizer using MeshCat and GeometryTypes ##
