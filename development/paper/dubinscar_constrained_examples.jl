@@ -1,10 +1,17 @@
 Random.seed!(7)
+include("N_plots.jl")
 
 # Solver Options
 dt = 0.01
-integration = :rk4
+integration = :rk3_foh
+method = :hermite_simpson
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
+
+function convergence_plot(stat_i,stat_d)
+    plot(stat_i["cost"],width=2,label="iLQR")
+    plot!(stat_d["cost"], ylim=[0,10], ylabel="Cost",xlabel="iterations",width=2,label="DIRCOL")
+end
 
 ###################
 ## Parallel Park ##
@@ -29,16 +36,22 @@ x_max = [0.25; 1.001; Inf]
 obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
 solver_uncon = Solver(model, obj, integration=integration, dt=dt, opts=opts)
-solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
+solver_con_box = Solver(model, obj_con_box, integration=integration, N=301, opts=opts)
 
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
+X0 = line_trajectory(solver_con_box)
+X0_rollout = rollout(solver_uncon, U0)
 
 results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
+solver_con_box.opts.verbose = false
+solver_con_box.opts.cost_tolerance = 1e-6
+solver_con_box.opts.cost_intermediate_tolerance = 1e-5
 results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
+res_inf, stats_inf = TrajectoryOptimization.solve(solver_con_box,X0,U0)
+res_d, stats_d = TrajectoryOptimization.solve_dircol(solver_con_box, X0_rollout, U0)
 
-# plt = plot(title="Parallel Park")
-# plot_trajectory!(to_array(results_uncon.X),width=2,color=:blue,label="",aspect_ratio=:equal,xlim=[-0.5,0.5],ylim=[-.25,1.25])
-# display(plt)
+res_warm, stat_warm = solve(solver_con_box,Array(res_d.U))
+
 
 # Parallel Park (boxed)
 plt = plot(title="Parallel Park")#,aspect_ratio=:equal)
@@ -48,7 +61,57 @@ plot!(collect(range(x_min[1],stop=x_max[1],length=1000)),x_min[2]*ones(1000),col
 plot!(collect(range(x_min[1],stop=x_max[1],length=1000)),x_max[2]*ones(1000),color=:red,width=2,label="")
 plot_trajectory!(to_array(results_uncon.X),width=2,color=:blue,label="Unconstrained")
 plot_trajectory!(to_array(results_con_box.X),width=2,color=:green,label="Constrained",legend=:bottomright)
+plot_trajectory!(to_array(res_warm.X),width=2,color=:green,label="Constrained (warm)",legend=:bottomright)
+plot_trajectory!(res_d.X,width=2,color=:black,linestyle=:dash,label="DIRCOL")
+# plot_trajectory!(X_truth,width=2,color=:yellow,linestyle=:dash,label="DIRCOL (truth)")
 display(plt)
+
+# Stats comparison
+eval_f, = gen_usrfun_ipopt(solver_con_box,method)
+res_i = DircolVars(to_array(results_con_box.X),to_array(results_con_box.U))
+stats_con_box["runtime"]
+stats_d["runtime"]
+stats_con_box["iterations"]
+stats_d["iterations"]
+convergence_plot(stats_con_box,stats_d)
+eval_f(res_i.Z)
+eval_f(res_d.Z)
+_cost(solver_con_box,results_con_box)
+
+
+# STEP SIZE COMPARISONS #
+# Unconstrained
+Ns = [21,41,51,81,101,201,401,501,801,1001]
+disable_logging(Logging.Debug)
+group = "dubinscar/parallelpark/unconstrained"
+run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
+plot_stat("runtime",group,legend=:topleft,title="Unconstrained Parallel Park")
+plot_stat("iterations",group,legend=:topright,title="Unconstrained Parallel Park")
+plot_stat("error",group,[:rk3,:rk3_foh],yscale=:log10,legend=:right,title="Unconstrained Parallel Park")
+
+# Constrained
+Ns = [21,41,51,81,101,201,401,501,801,1001]
+disable_logging(Logging.Debug)
+group = "dubinscar/parallelpark/constrained"
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
+plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park")
+plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park")
+plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
+plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
+
+# Infeasible
+opts = SolverOptions()
+opts.cost_tolerance = 1e-6
+opts.cost_intermediate_tolerance = 1e-5
+opts.resolve_feasible = false
+Ns = [21,41,51,81,101,201,401,501,801,1001]
+disable_logging(Logging.Debug)
+group = "dubinscar/parallelpark/infeasible"
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts, infeasible=true)
+plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park (infeasible)")
+plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park (infeasible)")
+plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
+plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
 
 ########################
 ## Obstacle Avoidance ##
@@ -88,16 +151,59 @@ solver_con_obstacles_control = Solver(model, obj_con_obstacles_control, integrat
 
 # -Initial state and control trajectories
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
+X0 = line_trajectory(solver_con_obstacles)
+X0_rollout = rollout(solver_con_obstacles,U0)
 
 results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
 results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
+results_inf, stats_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
+res_d, stats_d = solve_dircol(solver_con_obstacles,X0,U0)
+
 
 # Obstacle Avoidance
 plt = plot(title="Obstacle Avoidance")
 plot_obstacles(circles)
 plot_trajectory!(to_array(results_uncon_obstacles.X),width=2,color=:blue,label="Unconstrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
-plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:green,label="Constrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11],legend=:bottomright)
+plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:green,label="Constrained")
+plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:orange,label="Infeasible")
+plot_trajectory!(res_d.X,width=2,color=:black,linestyle=:dash,label="DIRCOL",legend=:bottomright)
 display(plt)
+
+group
+solver_truth = Solver(model,obj_con_obstacles,dt=1e-3)
+_,X_truth,U_truth = get_dircol_truth(solver_truth,X0,U0,group)
+plot_trajectory!(X_truth,width=2,color=:grey,linestyle=:dash,label="DIRCOL (truth)",legend=:bottomright)
+res_truth = DircolVars(X_truth,U_truth)
+
+
+# Stats comparison
+eval_f_truth, = gen_usrfun_ipopt(solver_truth,method)
+eval_f, = gen_usrfun_ipopt(solver_con_obstacles,method)
+res_i = DircolVars(to_array(results_con_obstacles.X),to_array(results_con_obstacles.U))
+res_inf = DircolVars(results_inf)
+stats_con_obstacles["runtime"]
+stats_d["runtime"]
+stats_con_obstacles["iterations"]
+stats_d["iterations"]
+convergence_plot(stats_con_obstacles,stats_d)
+plot!(stats_inf["cost"],width=2,label="Infeasible")
+eval_f(res_i.Z)
+eval_f(res_d.Z)
+eval_f(res_inf.Z)
+eval_f_truth(res_truth.Z)
+_cost(solver_con_obstacles,results_con_obstacles)
+_cost(solver_con_obstacles,results_inf)
+
+# KNOT POINT COMPARISON
+Ns = [21,41,51,81,101,201,401,501,801,1001]
+disable_logging(Logging.Debug)
+group = "dubinscar/obstacles/constrained"
+run_step_size_comparison(model, obj_con_obstacles, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
+plot_stat("runtime",group,legend=:topleft,title="Obstacle Avoidance")
+plot_stat("iterations",group,legend=:left,title="Obstacle Avoidance")
+plot_stat("error",group,yscale=:log10,legend=:topright,title=" Obstacle Avoidance")
+plot_stat("c_max",group,yscale=:log10,legend=:right,title="Obstacle Avoidance")
+
 
 ############
 ## Escape ##
@@ -161,6 +267,7 @@ U0 = rand(solver_uncon.model.m,solver_uncon.N)
 results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
 results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
 results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
+solve_dircol(solver_con_obstacles, X0,U0, method=method)
 
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)
