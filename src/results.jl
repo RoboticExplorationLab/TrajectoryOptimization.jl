@@ -523,6 +523,10 @@ function DircolVars(X::Matrix,U::Matrix)
     DircolVars(Z,n,m,N)
 end
 
+function DircolVars(res::SolverIterResults)
+    DircolVars(to_array(res.X), to_array(res.U))
+end
+
 DiffFloat = Union{Float64,ForwardDiff.Dual}
 struct DircolResults <: SolverIterResults
     vars::DircolVars
