@@ -108,6 +108,13 @@ function rollout!(res::SolverVectorResults, solver::Solver)
     return status
 end
 
+function rollout(solver::Solver, U::Matrix)
+    n,m,N = get_sizes(solver)
+    X = [zeros(n) for k=1:N]
+    rollout!(X, to_dvecs(U), solver)
+    return to_array(X)
+end
+
 function rollout!(X::Matrix, U::Matrix, solver::Solver)
     X_vecs = to_dvecs(X)
     status = rollout!(X_vecs, to_dvecs(U), solver)
