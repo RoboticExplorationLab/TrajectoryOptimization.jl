@@ -289,7 +289,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             if J > solver.opts.max_cost
                 error("Cost exceded maximum allowable cost")
             end
-            ################################
         end
         ### END INNER LOOP ###
 
