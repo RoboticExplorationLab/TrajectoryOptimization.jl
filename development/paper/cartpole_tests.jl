@@ -1,5 +1,6 @@
-using HDF5
 using TrajectoryOptimization
+using HDF5
+include("N_plots.jl")
 
 # Set up the problem
 model, obj0 = Dynamics.cartpole_analytical
@@ -117,7 +118,7 @@ opts.outer_loop_update = :individual
 opts.τ = .85
 
 # iLQR
-solver = Solver(model,obj_c,N=N,opts=opts,integration=:rk3)
+solver = Solver(model,obj_c,N=N,opts=opts,integration=:rk3_foh)
 res_i, stat_i = solve(solver,U0)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
@@ -266,123 +267,6 @@ plot!(dt_d)
 #                                                                              #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-# High-Accuracy DIRCOL
-function run_dircol_truth(model, obj, dt, X0, U0, group::String)
-    println("Solving DIRCOL \"truth\"")
-    solver_truth = Solver(model,obj,dt=dt_truth,integration=:rk3_foh)
-    res_truth, stat_truth = solve_dircol(solver_truth, X0, U0, method=:hermite_simpson)
-
-    println("Writing results to file")
-    h5open("data.h5","cw") do file
-        group *= "/dircol_truth"
-        if exists(file, group)
-            o_delete(file, group)
-        end
-        g_truth = g_create(file, group)
-        g_truth["X"] = res_truth.X
-        g_truth["U"] = res_truth.U
-        attrs(g_truth)["dt"] = dt
-        attrs(g_truth)["cost_tolerance"] = solver.opts.cost_tolerance
-    end
-
-    return solver_truth, res_truth, stat_truth
-end
-
-function run_Ns(model, obj, Ns, integration, dt_truth=1e-3; infeasible=false)
-    num_N = length(Ns)
-
-    err = zeros(num_N)
-    err_final = zeros(num_N)
-    stats = Array{Dict,1}(undef,num_N)
-    disable_logging(Logging.Info)
-    for (i,N) in enumerate(Ns)
-        println("Solving with $N knot points")
-        solver = Solver(model,obj,N=N,opts=opts,integration=integration)
-        if infeasible
-            res,stat = solve(solver,X0,U0)
-        else
-            res,stat = solve(solver,U0)
-        end
-        t = get_time(solver)
-        Xi,Ui = interpolate_trajectory(solver_truth, res_truth.X, res_truth.U, t)
-        err[i] = norm(Xi-to_array(res.X))/N
-        err_final[i] = norm(res.X[N] - obj.xf)
-        stats[i] = stat
-    end
-    return err, err_final, stats
-end
-
-function plot_stat(stat::String, group, names=["midpoint", "rk3", "rk3_foh", "rk4"]; kwargs...)
-    Ns, data = load_data(stat, names, group)
-    plot_vals(Ns, data, names, stat; kwargs...)
-end
-
-function plot_vals(Ns,vals,labels,name::String; kwargs...)
-    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points"; kwargs...)
-    for (val,label) in zip(vals[2:end],labels[2:end])
-        plot!(Ns,val,label=label,marker=:circle)
-    end
-    p
-end
-
-
-function save_data(group)
-    all_err = [err_mid, err_rk3, err_foh, err_rk4]
-    all_eterm = [eterm_mid, eterm_rk3, eterm_foh, eterm_rk4]
-    all_stats = [stats_mid, stats_rk3, stats_foh, stats_rk4]
-    all_names = ["midpoint", "rk3", "rk3_foh", "rk4"]
-    h5open("data.h5","cw") do file
-
-        # Create "N_plots" group
-        group *= "/N_plots"
-        if exists(file, group)
-            g_parent = file[group]
-        else
-            g_parent = g_create(file, group)
-        end
-
-        # Store Ns
-        if has(g_parent, "Ns")
-            o_delete(g_parent, "Ns")
-        end
-        g_parent["Ns"] = Ns
-
-        for name in all_names
-            if has(g_parent,name)
-                o_delete(g_parent, name)
-            end
-            g_create(g_parent, name)
-        end
-        gs = [g_parent[name] for name in all_names]
-
-        for i = 1:4
-            g = gs[i]
-            g["runtime"] = [stat["runtime"] for stat in all_stats[i]]
-            g["error"] = all_err[i]
-            g["error_final"] = all_eterm[i]
-            g["iterations"] = [stat["iterations"] for stat in all_stats[i]]
-            if ~isempty(all_stats[i][1]["c_max"])
-                g["c_max"] = [stat["c_max"][end] for stat in all_stats[i]]
-            end
-        end
-    end
-end
-
-function load_data(stat::String, names::Vector{String}, group)
-    data = [load_data(stat, name, group)[2] for name in names]
-    Ns = load_data(stat,names[1], group)[1]
-    return Ns,data
-end
-
-function load_data(stat::String, name::String, group)
-    h5open("data.h5","r") do file
-        g_parent = file[group * "/N_plots"]
-        Ns = read(g_parent, "Ns")
-        data = read(g_parent[name], stat)
-        return vec(Ns), data
-    end
-end
-
 Ns = [21,41,51,81,101,201,401,501,801,1001]
 obj.tf ./ (Ns.-1)
 dt_truth = 1e-3
@@ -390,30 +274,16 @@ dt_truth = 1e-3
 #####################################
 #          UNCONSTRAINED            #
 #####################################
-solver_truth, res_truth,  = run_dircol_truth(model, obj, 1e-3, "cartpole/unconstrained")
-time_truth = get_time(solver_truth)
-
-err_mid, eterm_mid, stats_mid = run_Ns(model, obj, Ns, :midpoint)
-err_rk3, eterm_rk3, stats_rk3 = run_Ns(model, obj, Ns, :rk3)
-err_foh, eterm_foh, stats_foh = run_Ns(model, obj, Ns, :rk3_foh)
-err_rk4, eterm_rk4, stats_rk4 = run_Ns(model, obj, Ns, :rk4)
-
-save_data("cartpole/unconstrained")
-
+group = "cartpole/unconstrained"
+run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:midpoint,:rk3,:rk3_foh,:rk4],dt_truth=1e-3,opts=opts)
+plot_stat("iterations",group)
 
 #####################################
 #            CONSTRAINED            #
 #####################################
-solver_truth, res_truth,  = run_dircol_truth(model, obj_c, 1e-3, "cartpole/constrained")
-time_truth = get_time(solver_truth)
-plot(res_truth.X')
-
-err_mid, eterm_mid, stats_mid = run_Ns(model, obj_c, Ns, :midpoint)
-err_rk3, eterm_rk3, stats_rk3 = run_Ns(model, obj_c, Ns, :rk3)
-err_foh, eterm_foh, stats_foh = run_Ns(model, obj_c, Ns, :rk3_foh)
-err_rk4, eterm_rk4, stats_rk4 = run_Ns(model, obj_c, Ns, :rk4)
-
-save_data("cartpole/constrained")
+Ns = [21,41,51,81,101,201]
+group = "cartpole/constrained"
+plot_stat("error",group)
 
 
 #####################################
