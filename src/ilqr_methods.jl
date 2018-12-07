@@ -781,6 +781,64 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
     x_traj
 end
 
+
+"""
+$(SIGNATURES)
+Generates the correctly sized input trajectory, tacking on infeasible and minimum
+time controls, if required. Will interpolate the initial trajectory as needed.
+# Arguments
+* X0: Matrix of initial states. May be empty. If empty and the infeasible flag is set in the solver, it will initialize a linear interpolation from start to goal state.
+* U0: Matrix of initial controls. May either be only the dynamics controls, or include infeasible and minimum time controls (as necessary).
+"""
+function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64})
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    if size(U0,1) ∉ [m,mm]
+        ArgumentError("Size of U0 must be either include only plant controls or all expected controls (infeasible + minimum time)")
+    end
+
+    if N != size(U0,2)
+        @info "Interpolating initial guess"
+        X0,U0 = interp_traj(N,solver.obj.tf,X0,U0)
+    end
+
+    if solver.opts.minimum_time
+        solver.opts.infeasible ? sep = " and " : sep = " with "
+        solve_string = sep * "minimum time..."
+
+        # Initialize controls with sqrt(dt)
+        if size(U0,1) == m
+            U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
+        end
+    else
+        solve_string = "..."
+        U_init = U0
+    end
+
+    if solver.opts.infeasible
+        solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
+
+        # Generate infeasible controls
+        if size(U0,1) == m
+            ui = infeasible_controls(solver,X0,U_init)  # generates n additional control input sequences that produce the desired infeasible state trajectory
+            U_init = [U_init; ui]  # augment control with additional control inputs that produce infeasible state trajectory
+        end
+
+        # Assign state trajectory
+        if isempty(X0)
+            X_init = line_trajectory(solver)
+        else
+            X_init = X0
+        end
+    else
+        solve_string = "Solving Constrained Problem" * solve_string
+        X_init = zeros(n,N)
+    end
+    @info solve_string
+
+    return X_init, U_init
+end
+
 """
 $(SIGNATURES)
     Regularization update scheme
