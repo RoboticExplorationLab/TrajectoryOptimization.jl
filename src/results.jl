@@ -633,14 +633,40 @@ end
 
 function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
     n,m,N = get_sizes(solver)
+
+    # Generate initial trajectoy (tacking on infeasible and minimum time controls)
+    X_init, U_init = get_initial_trajectory(solver, X, U)
+    @show size(U_init)
+
     if solver.opts.constrained
+        # Get sizes
         p,pI,pE = get_num_constraints(solver)
         m̄,mm = get_num_controls(solver)
+
         if solver.opts.use_static
             results = ConstrainedStaticResults(n,mm,p,N,n,solver.control_integration)
         else
             results = ConstrainedVectorResults(n,mm,p,N,n,solver.control_integration)
         end
+
+        # Set initial penalty term values
+        results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+
+        # Special penalty initializations
+        if solver.opts.minimum_time
+            for k = 1:solver.N
+                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
+                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
+            end
+        end
+        if solver.opts.infeasible
+            nothing #TODO
+        end
+
+        # Set initial regularization
+        results.ρ[1] = solver.opts.ρ_initial
+
     else
         if solver.opts.use_static
             results = UnconstrainedStaticResults(n,m,N,solver.control_integration)
@@ -648,8 +674,9 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
             results = UnconstrainedVectorResults(n,m,N,solver.control_integration)
         end
     end
-    copyto!(results.X, X)
-    copyto!(results.U, U)
+    @show length(results.U[1])
+    copyto!(results.X, X_init)
+    copyto!(results.U, U_init)
     return results
 end
 

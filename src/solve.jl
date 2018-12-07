@@ -241,6 +241,12 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             # increment iLQR inner loop counter
             iter += 1
 
+            if solver.opts.live_plotting
+                @show solver.opts.R_infeasible
+                X_traj = to_array(results.X)
+                display(plot(X_traj[1,:],X_traj[2,:]))
+            end
+
             ### UPDATE RESULTS ###
             X .= deepcopy(X_)
             U .= deepcopy(U_)
@@ -269,10 +275,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :j value=j
-
-            if solver.opts.live_plotting
-                display(plot(to_array(results.X)'))
-            end
 
             # if iter > 1
             #     c_diff = abs(c_max-c_max_hist[end-1])

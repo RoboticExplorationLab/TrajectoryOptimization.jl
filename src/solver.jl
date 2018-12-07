@@ -55,11 +55,16 @@ struct Solver{O<:Objective}
             throw(err)
         end
 
+        if O <: ConstrainedObjective
+            opts.constrained = true
+        end
+
         n, m = model.n, model.m
         f! = model.f
         m̄ = m
         if minimum_time
             m̄ += 1
+            opts.constrained = true
         end
         opts.minimum_time = minimum_time
 
