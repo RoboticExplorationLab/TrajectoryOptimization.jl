@@ -388,12 +388,13 @@ end
 """
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
+    A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates (Toussaint)
 """
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
-    c = solver.c_fun
+    c_fun = solver.c_fun
 
     if solver.control_integration == :foh
         final_index = N
@@ -401,8 +402,9 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
         final_index = N-1
     end
 
+    # Update constraints
     for k = 1:final_index
-        c(res.C[k], X[k], U[k]) # update results with constraint evaluations
+        c_fun(res.C[k], X[k], U[k]) # update results with constraint evaluations
 
         if solver.opts.minimum_time
             if k < N-1
@@ -414,29 +416,36 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
             end
         end
 
+        # Get active constraint set
+        get_active_set!(res,p,pI,k)
 
-        # Inequality constraints [see equation ref]
-        for j = 1:pI
-            if res.C[k][j] >= 0.0 || res.λ[k][j] > 0.0
-                res.Iμ[k][j,j] = res.μ[k][j] # active (or previously active) inequality constraints are penalized
-            else
-                res.Iμ[k][j,j] = 0. # inactive inequality constraints are not penalized
-            end
-        end
-
-        # Equality constraints
-        for j = pI+1:p
-            res.Iμ[k][j,j] = res.μ[k][j] # equality constraints are penalized
-        end
+        # Update Iμ matrices based on active set
+        res.Iμ[k] = Diagonal(res.active_set[k].*res.μ[k])
     end
 
     # Terminal constraint
-    c(res.CN,X[N])
+    c_fun(res.CN,X[N])
     res.IμN .= Diagonal(res.μN)  # NOTE: Assuming all terminal constraints are equality constraints
     return nothing # TODO allow for more general terminal constraint
 end
 
 function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
+    return nothing
+end
+
+function get_active_set!(results::ConstrainedIterResults,p::Int,pI::Int,k::Int)
+    # Inequality constraints
+    for j = 1:pI
+        if results.C[k][j] > 0.0 || results.λ[k][j] > 0.0
+            results.active_set[k][j] = 1
+        else
+            results.active_set[k][j] = 0
+        end
+    end
+    # Equality constraints
+    for j = pI+1:p
+        results.active_set[k][j] = 1
+    end
     return nothing
 end
 

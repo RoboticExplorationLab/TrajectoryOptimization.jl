@@ -42,7 +42,6 @@ U0 = ones(solver1.model.m,solver1.N)
 # U0 = [U0; ones(1,solver1.N)]
 # u0 = infeasible_controls(solver1,X0)
 # U0 = [U0;u0]
-
 solver2 = Solver(model,obj,integration=intergrator_foh,N=51)
 solver2.opts.minimum_time = false
 solver2.opts.infeasible = false

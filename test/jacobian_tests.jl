@@ -68,39 +68,39 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 @test all(B .== cu_known)
 ###
 
-### Custom equality constraint on quadrotor quaternion state: sqrt(q1^2 + q2^2 + q3^2 + q4^2) == 1
-opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
-opts.constraint_tolerance = 1e-3
-opts.cost_intermediate_tolerance = 1e-3
-opts.cost_tolerance = 1e-3
-######################
-
-### Set up model, objective, solver ###
-# Model
-n = 13 # states (quadrotor w/ quaternions)
-m = 4 # controls
-dt = 0.05
-model, obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
-
-# -control limits
-u_min = -50.0
-u_max = 50.0
-
-# -constraint that quaternion should be unit
-function cE(cdot,x,u)
-    cdot[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
-# Solver
-# - Initial control and state trajectories
-solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
-U = 10.0*ones(solver.model.m, solver.N)
-
-##################
-
-### Solve ###
-results, stats = TrajectoryOptimization.solve(solver,U)
-#############
-@test stats["c_max"][end] < opts.constraint_tolerance
+# ### Custom equality constraint on quadrotor quaternion state: sqrt(q1^2 + q2^2 + q3^2 + q4^2) == 1
+# opts = TrajectoryOptimization.SolverOptions()
+# opts.verbose = false
+# opts.constraint_tolerance = 1e-3
+# opts.cost_intermediate_tolerance = 1e-3
+# opts.cost_tolerance = 1e-3
+# ######################
+#
+# ### Set up model, objective, solver ###
+# # Model
+# n = 13 # states (quadrotor w/ quaternions)
+# m = 4 # controls
+# dt = 0.05
+# model, obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+#
+# # -control limits
+# u_min = -50.0
+# u_max = 50.0
+# 
+# # -constraint that quaternion should be unit
+# function cE(cdot,x,u)
+#     cdot[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
+# end
+#
+# obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cE=cE)#,cI=cI)
+# # Solver
+# # - Initial control and state trajectories
+# solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,dt=dt,opts=opts)
+# U = 10.0*ones(solver.model.m, solver.N)
+#
+# ##################
+#
+# ### Solve ###
+# results, stats = TrajectoryOptimization.solve(solver,U)
+# #############
+# @test stats["c_max"][end] < opts.constraint_tolerance

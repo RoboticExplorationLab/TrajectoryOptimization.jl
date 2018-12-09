@@ -189,6 +189,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     Cx_N::Matrix{Float64}
 
+    active_set::Vector{Vector{Float64}} # active set of constraints
+
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
 
@@ -199,9 +201,9 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
             K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
             C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
             CN::Vector{Float64},CN_prev,IμN,λN,μN,
-            cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+            cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
 
-        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
+        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -274,6 +276,8 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
     cu  = [zeros(p,m)   for i = 1:N]
     cxn = zeros(p_N,n)
 
+    active_set = [zeros(p)  for i = 1:N]
+
     ρ = ones(1)
     dρ = ones(1)
 
@@ -282,15 +286,14 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
 
     ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
         C,C_prev,Iμ,λ,μ,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,ρ,dρ,V_al_prev,V_al_current)
-
+        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
 end
 
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
-        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
+        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
 
 ##################
