@@ -73,7 +73,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
-    if (N != size(X0,2) && !isempty(X0)) || N != size(U0,2)
+    if N != size(U0,2)
         @info "Interpolating initial guess"
         X0,U0 = interp_traj(N,solver.obj.tf,X0,U0) # TODO move this function somewhere better
     end
@@ -242,9 +242,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             iter += 1
 
             if solver.opts.live_plotting
-                @show solver.opts.R_infeasible
-                X_traj = to_array(results.X)
-                display(plot(X_traj[1,:],X_traj[2,:]))
+                # X_traj = to_array(results.X)
+                # display(plot(X_traj[1,:],X_traj[2,:]))
+                display(plot(to_array(results.U)'))
             end
 
             ### UPDATE RESULTS ###
