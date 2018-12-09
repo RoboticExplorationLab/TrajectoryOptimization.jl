@@ -17,13 +17,18 @@ end
 ## Parallel Park ##
 ###################
 
+opts = SolverOptions()
+opts.verbose = false
+opts.cost_tolerance = 1e-6
+opts.cost_intermediate_tolerance = 1e-5
+
 # Set up model, objective, and solver
 model, = TrajectoryOptimization.Dynamics.dubinscar!
 n, m = model.n,model.m
 
 x0 = [0.0;0.0;0.]
 xf = [0.0;1.0;0.]
-tf =  3.0
+tf =  3.
 Qf = 100.0*Diagonal(I,n)
 Q = (1e-3)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
@@ -35,7 +40,7 @@ x_max = [0.25; 1.001; Inf]
 
 obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
-solver_uncon = Solver(model, obj, integration=integration, dt=dt, opts=opts)
+solver_uncon  = Solver(model, obj, integration=integration, dt=dt, opts=opts)
 solver_con_box = Solver(model, obj_con_box, integration=integration, N=301, opts=opts)
 
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
@@ -43,18 +48,9 @@ X0 = line_trajectory(solver_con_box)
 X0_rollout = rollout(solver_uncon, U0)
 
 @time results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
-println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Cost: $(stats_uncon["cost"][end])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
-
-solver_con_box.opts.verbose = false
-solver_con_box.opts.cost_tolerance = 1e-6
-solver_con_box.opts.cost_intermediate_tolerance = 1e-5
 @time results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
-println("Final state (constrained)-> pos: $(results_con_box.X[end][1:3]), goal: $(solver_con_box.obj.xf[1:3])\n Cost: $(stats_con_box["cost"][end])\n Iterations: $(stats_con_box["iterations"])\n Outer loop iterations: $(stats_con_box["major iterations"])\n Max violation: $(stats_con_box["c_max"][end])\n Max μ: $(maximum([to_array(results_con_box.μ)[:]; results_con_box.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_box.λ)[:]; results_con_box.λN[:]])))\n")
-
 res_inf, stats_inf = TrajectoryOptimization.solve(solver_con_box,X0,U0)
 res_d, stats_d = TrajectoryOptimization.solve_dircol(solver_con_box, X0_rollout, U0)
-
-res_warm, stat_warm = solve(solver_con_box,Array(res_d.U))
 
 
 # Parallel Park (boxed)
@@ -65,7 +61,7 @@ plot!(collect(range(x_min[1],stop=x_max[1],length=1000)),x_min[2]*ones(1000),col
 plot!(collect(range(x_min[1],stop=x_max[1],length=1000)),x_max[2]*ones(1000),color=:red,width=2,label="")
 plot_trajectory!(to_array(results_uncon.X),width=2,color=:blue,label="Unconstrained")
 plot_trajectory!(to_array(results_con_box.X),width=2,color=:green,label="Constrained",legend=:bottomright)
-plot_trajectory!(to_array(res_warm.X),width=2,color=:green,label="Constrained (warm)",legend=:bottomright)
+plot_trajectory!(to_array(res_inf.X),width=2,color=:yellow,label="Constrained (infeasible)",legend=:bottomright)
 plot_trajectory!(res_d.X,width=2,color=:black,linestyle=:dash,label="DIRCOL")
 # plot_trajectory!(X_truth,width=2,color=:yellow,linestyle=:dash,label="DIRCOL (truth)")
 display(plt)
@@ -116,6 +112,27 @@ plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park (infe
 plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park (infeasible)")
 plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
+
+
+####################
+#   MINIMUM TIME   $
+####################
+opts = SolverOptions()
+opts.verbose = true
+opts.cost_tolerance = 1e-6
+opts.cost_intermediate_tolerance = 1e-5
+opts.minimum_time_tf_estimate = 2.0
+opts.gradient_tolerance = 1e-10
+opts.live_plotting = true
+
+u_bnd = 2
+N = 51
+obj_mintime = update_objective(obj_con_box,tf=:min, u_min=-u_bnd, u_max=u_bnd)
+solver_min = Solver(model, obj_mintime, N=N, integration=:rk3, opts=opts)
+
+U0 = zeros(m,N)
+res,stats = solve(solver_min, U0)
+
 
 ########################
 ## Obstacle Avoidance ##
