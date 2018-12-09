@@ -27,9 +27,8 @@ Holds all information required to uniquely describe a dynamic system, including
 a general nonlinear dynamics function of the form `ẋ = f(x,u)`, where x ∈ ℜⁿ are
 the states and u ∈ ℜᵐ are the controls.
 
-Dynamics function `Model.f` should be in one of the following forms:
-* `f(x,u)` and return ẋ
-* 'f!(ẋ,x,u)' and modify ẋ in place (recommended)
+Dynamics function `Model.f` should be in the following forms:
+    'f!(ẋ,x,u)' and modify ẋ in place
 """
 struct Model
     f::Function # continuous dynamics (ie, differential equation)
@@ -40,7 +39,7 @@ struct Model
     function Model(f::Function, n::Int64, m::Int64)
         # Make dynamics inplace
         if is_inplace_dynamics(f,n,m)
-            f! =f
+            f! = f
         else
             f! = wrap_inplace(f)
         end
@@ -49,10 +48,9 @@ struct Model
     end
 
     # Construct model from a `Mechanism` type from `RigidBodyDynamics`
-    # Automatically assigns one control per joint
     function Model(mech::Mechanism)
         m = length(joints(mech))-1  # subtract off joint to world
-        Model(mech,ones(m,1))
+        Model(mech,ones(m))
     end
 
     """
@@ -65,27 +63,31 @@ struct Model
         # construct a model using robot dynamics equation assembed from URDF file
         n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
         num_joints = length(joints(mech))-1  # subtract off joint to world
-        m = num_joints # Default to number of joints
 
-        function fc(xdot,x,u)
-            state = MechanismState{eltype(x)}(mech)
-            # set the state variables:
-            q = x[1:num_joints]
-            qd = x[1+num_joints:num_joints+num_joints]
-            set_configuration!(state, q)
-            set_velocity!(state, qd)
-            xdot[1:num_joints] = qd
-            xdot[num_joints+1:num_joints+num_joints] = Array(mass_matrix(state))\(torques.*u - Array(dynamics_bias(state)))
+        if length(torques) != num_joints
+            error("Torque underactuation specified does not match mechanism dimensions")
+        end
+
+        m = convert(Int,sum(torques)) # number of actuated (ie, controllable) joints
+        torque_matrix = 1.0*Matrix(I,num_joints,num_joints)[:,torques.== 1] # matrix to convert from control inputs to mechanism joints
+
+        statecache = StateCache(mech)
+        dynamicsresultscache = DynamicsResultCache(mech)
+
+        function f(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
+            state = statecache[T]
+            dyn = dynamicsresultscache[T]
+            dynamics!(view(ẋ,1:n), dyn, state, x, torque_matrix*u)
             return nothing
         end
 
-        new(fc, n, convert(Int,sum(torques)))
+        new(f, n, m)
     end
 end
 
 "$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"
 function Model(urdf::String)
-    # construct modeling using string to urdf file
+    # construct model using string to urdf file
     mech = parse_urdf(Float64,urdf)
     Model(mech)
 end
@@ -93,10 +95,10 @@ end
 "$(SIGNATURES) Construct a partially actuated model from a string to a urdf file"
 function Model(urdf::String,torques::Array{Float64,1})
     # underactuated system (potentially)
-    # construct modeling using string to urdf file
     mech = parse_urdf(Float64,urdf)
     Model(mech,torques)
 end
+
 
 """
 $(SIGNATURES)
