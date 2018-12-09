@@ -28,14 +28,14 @@ u_max = u_max_dubins
 u_min = u_min_dubins
 
 obj = TrajectoryOptimization.update_objective(obj, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,model.n), R = 1e-3*Diagonal(I,model.m), Qf = Diagonal(I,model.n))
-
+obj = obj_con_dubins
 # Solver
-intergrator_foh = :rk3_foh
+intergrator_foh = :rk3
 
 dt = 0.005
 solver1 = Solver(model,obj,integration=intergrator_foh,N=51)
-solver1.opts.minimum_time = true
-solver1.opts.infeasible = true
+solver1.opts.minimum_time = false
+solver1.opts.infeasible = false
 solver1.opts.constrained = true
 X0 = line_trajectory(solver1)
 U0 = ones(solver1.model.m,solver1.N)
@@ -44,9 +44,10 @@ U0 = ones(solver1.model.m,solver1.N)
 # U0 = [U0;u0]
 
 solver2 = Solver(model,obj,integration=intergrator_foh,N=51)
-solver2.opts.minimum_time = true
-solver2.opts.infeasible = true
+solver2.opts.minimum_time = false
+solver2.opts.infeasible = false
 solver2.opts.constrained = true
+solver2.opts.R_infeasible = dt*solver1.opts.R_infeasible*tr(solver1.obj.R)
 
 results1 = init_results(solver1,X0,U0)
 results2 = init_results(solver2,X0,U0)
@@ -56,16 +57,16 @@ calculate_jacobians!(results1, solver1)
 calculate_jacobians!(results2, solver2)
 
 println("TEST")
-@time v1 = _backwardpass_foh!(results1,solver1)
-@time v2 = _backwardpass_foh_speedup!(results2,solver2)
+@time v1 = _backwardpass!(results1,solver1)
+@time v2 = _backwardpass_speedup!(results2,solver2)
 
 @test isapprox(v1[1:2], v2[1:2])
 @test isapprox(to_array(results1.K),to_array(results2.K))
 @test isapprox(to_array(results1.b),to_array(results2.b))
 @test isapprox(to_array(results1.d),to_array(results2.d))
 
-@benchmark _backwardpass_foh!($results1,$solver1)
-@benchmark _backwardpass_foh_speedup!($results2,$solver2)
+@benchmark _backwardpass!($results1,$solver1)
+@benchmark _backwardpass_speedup!($results2,$solver2)
 println("\n")
 
 # Benchmark
