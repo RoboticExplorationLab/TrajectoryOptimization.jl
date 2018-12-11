@@ -562,6 +562,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     m̄ = m
     min_time ? m̄ += 1 : nothing
+    labels = String[]
 
     # Append on min time bounds
     u_max = obj.u_max
@@ -586,6 +587,13 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u)[u_min_active]
     end
 
+    lbl_u_min = ["control (lower bound)" for i = 1:pI_u_min]
+    lbl_u_max = ["control (upper bound)" for i = 1:pI_u_max]
+    if min_time
+        lbl_u_min[end] = "* √dt (lower bound)"
+        lbl_u_max[end] = "* √dt (upper bound)"
+    end
+
     # Inequality on state
     pI_x_max = count(x_max_active)
     pI_x_min = count(x_min_active)
@@ -594,6 +602,9 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         c[1:pI_x_max] = (x - obj.x_max )[x_max_active]
         c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x)[x_min_active]
     end
+    lbl_x_max = ["state (upper bound)" for i = 1:pI_x_max]
+    lbl_x_min = ["state (lower bound)" for i = 1:pI_x_min]
+
 
     # Update pI
     pI = pI_x + pI_u + pI_c
@@ -606,6 +617,12 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
             obj.cI(view(c,(1:pI_c).+pI_u.+pI_x),x,u)
         end
     end
+    lbl_cI = ["custom inequality" for i = 1:pI_c]
+    lbl_cE = ["custom equality" for i = 1:pE_c]
+
+    # Construct labels
+    c_labels = [lbl_u_max; lbl_u_min; lbl_x_max; lbl_x_min; lbl_cI; lbl_cE]
+
 
     # Augment functions together
     function c_function!(c,x,u,y=zero(x),v=zero(u))::Nothing
@@ -678,7 +695,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         j .= cx_N
     end
 
-    return c_function!, c_jacobian!
+    return c_function!, c_jacobian!, c_labels
 end
 
 generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing

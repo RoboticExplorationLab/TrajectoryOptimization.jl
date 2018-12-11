@@ -12,6 +12,7 @@ struct Solver{O<:Objective}
     Fc::Function         # Jacobian of continuous dynamics
     c_fun::Function
     c_jacobian::Function
+    c_labels::Vector{String}  # Constraint labels
     N::Int64             # Number of time steps
     integration::Symbol
     control_integration::Symbol
@@ -174,17 +175,41 @@ struct Solver{O<:Objective}
         end
 
         # Generate constraint functions
-        c!, c_jacobian! = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
+        c!, c_jacobian!, c_labels = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, c!, c_jacobian!, N, integration, control_integration)
+        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration, control_integration)
     end
 end
 
 function Solver(solver::Solver; model=solver.model, obj=solver.obj,integration=solver.integration, dt=solver.dt, N=solver.N, opts=solver.opts)
      Solver(model, obj, integration=integration, dt=dt, N=N, opts=opts)
+ end
+
+""" $(SIGNATURES) Descriptive labels of the constraints """
+ function get_constraint_labels(solver::Solver)
+     n,m,N = get_sizes(solver)
+     c_labels = copy(solver.c_labels)
+     if solver.opts.infeasible
+         lbl_inf = ["* infeasible control" for i = 1:n]
+         append!(c_labels, lbl_inf)
+     end
+     if solver.opts.minimum_time
+         push!(c_labels, "* √dt (equality)")
+     end
+     return c_labels
+ end
+
+
+""" $(SIGNATURES)
+Return boolean indices to the "original" constraints,
+i.e. the constraints specified by the user (and not added by the solver).
+"""
+ function original_constraint_inds(solver::Solver)
+     labels = get_constraint_labels(solver)
+     map(x -> x[1:2] != "* ", labels)
  end
 
 function calc_N(tf::Float64, dt::Float64)::Tuple
