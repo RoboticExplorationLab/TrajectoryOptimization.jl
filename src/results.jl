@@ -634,12 +634,15 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     results
 end
 
-function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
+function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array{Float64,2}(undef,0,0))
     n,m,N = get_sizes(solver)
+
+    if !isempty(X)
+        solver.opts.infeasible = true
+    end
 
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
-    @show size(U_init)
 
     if solver.opts.constrained
         # Get sizes
@@ -667,6 +670,11 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
             nothing #TODO
         end
 
+        # Initial Lagrange multipliers (warm start)
+        if ~isempty(λ)
+            copy_λ!(solver, results, λ)
+        end
+
         # Set initial regularization
         results.ρ[1] = solver.opts.ρ_initial
 
@@ -677,11 +685,29 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray)
             results = UnconstrainedVectorResults(n,m,N,solver.control_integration)
         end
     end
-    @show length(results.U[1])
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)
     return results
 end
+
+function copy_λ!(solver, results, λ)
+    p_new = length(λ[1])
+    p, = get_num_constraints(solver)
+    if p_new == p  # all constraint λs passed in
+        cid = trues(p)
+    elseif p_new == solver.obj.p  # only "original" constraint λs passed
+        cid = original_constraint_inds(solver)
+    else
+        err = ArgumentError("λ is not the correct dimension ($p_new). It must be either size $p or $(solver.obj.p)")
+        throw(err)
+    end
+    for k = 1:N
+        results.λ[k][cid] = λ[k]
+    end
+    results.λN .= λ[N+1]
+end
+
+
 
 """
 $(SIGNATURES)

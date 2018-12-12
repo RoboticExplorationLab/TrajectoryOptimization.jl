@@ -188,8 +188,11 @@ function Solver(solver::Solver; model=solver.model, obj=solver.obj,integration=s
      Solver(model, obj, integration=integration, dt=dt, N=N, opts=opts)
  end
 
-""" $(SIGNATURES) Descriptive labels of the constraints """
- function get_constraint_labels(solver::Solver)
+""" $(SIGNATURES) Descriptive labels of the constraints
+Any label with a "* " prefix is added by the solver and not in the original
+constraints specified by the user
+"""
+function get_constraint_labels(solver::Solver)
      n,m,N = get_sizes(solver)
      c_labels = copy(solver.c_labels)
      if solver.opts.infeasible
