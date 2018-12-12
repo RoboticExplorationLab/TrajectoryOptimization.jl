@@ -125,8 +125,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         end
 
         # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu
+        K[k] = -Quu_reg::Matrix{Float64}\Qux_reg::Matrix{Float64}
+        d[k] = -Quu_reg\Qu::Vector{Float64}
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
         s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
