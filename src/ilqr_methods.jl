@@ -698,7 +698,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_function!, c_jacobian!, c_labels
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing, String[]
 
 """
 $(SIGNATURES)
@@ -718,6 +718,13 @@ function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
 
+function constraint_violations(results::ConstrainedIterResults)
+    if size(results.CN,1) != 0
+        return map((x)->x.>0, results.Iμ) .* results.C
+    else
+        return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
+    end
+end
 
 function evaluate_trajectory(solver::Solver, X, U)
     n,m,N = get_sizes(solver)
@@ -744,7 +751,7 @@ end
 function total_time(solver::Solver, results::DircolVars)
     if is_min_time(solver)
         m̄, = get_num_controls(solver)
-        T = sum(results.U[m̄,:])
+        T = sum(results.U[m̄,1:N-1])
     else
         T = solver.dt*(solver.N-1)
     end

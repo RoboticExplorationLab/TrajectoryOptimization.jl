@@ -307,6 +307,10 @@ function plot_trajectory!(X;kwargs...)
     plot!(X[1,:],X[2,:];kwargs...)
 end
 
+function plot_trajectory!(res::SolverVectorResults; kwargs...)
+	plot_trajectory!(to_array(res.X); kwargs...)
+end
+
 """
 $(SIGNATURES)
     Convert quaternion to Euler angles
