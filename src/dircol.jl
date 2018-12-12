@@ -524,7 +524,7 @@ function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
 
         # Midpoints
         Xm = view(X_,:,2:2:N_-1)
-        Um = view(U_,:,2:2:N_-1)
+        Um = view(U_,1:m,2:2:N_-1)
         Um .= (U[1:m,1:end-1] + U[1:m,2:end])/2
         # fValm = view(fVal_,:,2:2:N_-1)
         for k = 1:N-1
