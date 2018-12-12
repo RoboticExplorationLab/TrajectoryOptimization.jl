@@ -30,3 +30,49 @@ p_N = rand(1:5)
 r = ConstrainedVectorResults(n,m,p,N,p_N)
 @test (length(r.C[1]),length(r.C)) == (p,N)
 @test (size(r.Iμ[1])...,length(r.Iμ)) == (p,p,N)
+
+
+# Test init_results
+N = 10
+model, obj = Dynamics.dubinscar
+obj_con = ConstrainedObjective(obj, u_min=-10, u_max=10)
+solver = Solver(model, obj_con, N=N)
+solver.opts.infeasible = true
+n,m = get_sizes(solver)
+p, = get_num_constraints(solver)
+X = rand(n,N)
+U = rand(m,N)
+
+results = init_results(solver, X, U)
+@test to_array(results.X) == X
+@test to_array(results.U)[1:m,:] == U
+@test results.λ[1] == zeros(p)
+
+# Test warm start (partial ⁠λs)
+λ = [rand(p-n) for i = 1:N]
+push!(λ,rand(n))
+results = init_results(solver, X, U, λ=λ)
+@test to_array(results.X) == X
+@test to_array(results.U)[1:m,:] == U
+@test results.λ[1] == [λ[1]; zeros(n)]
+λ[1][1] = 10
+@test results.λ[1][1] != 10
+
+# Test warm start (all ⁠λs)
+λ = [rand(p) for i = 1:N]
+push!(λ,rand(n))
+results = init_results(solver, X, U, λ=λ)
+@test to_array(results.X) == X
+@test to_array(results.U)[1:m,:] == U
+@test results.λ[1] == λ[1]
+λ[1][1] = 10
+@test results.λ[1][1] != 10
+
+λ = [rand(p-1) for i = 1:N-1]
+push!(λ,rand(n))
+@test_throws ArgumentError init_results(solver, X, U, λ=λ)
+
+
+λ = [rand(p) for i = 1:N-1]
+push!(λ,rand(n-1))
+@test_throws DimensionMismatch init_results(solver, X, U, λ=λ)
