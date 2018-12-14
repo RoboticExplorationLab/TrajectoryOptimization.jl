@@ -23,7 +23,7 @@ opts.cost_tolerance = 1e-6
 opts.cost_intermediate_tolerance = 1e-5
 
 # Set up model, objective, and solver
-model, = TrajectoryOptimization.Dynamics.dubinscar!
+model, = TrajectoryOptimization.Dynamics.dubinscar
 n, m = model.n,model.m
 
 x0 = [0.0;0.0;0.]

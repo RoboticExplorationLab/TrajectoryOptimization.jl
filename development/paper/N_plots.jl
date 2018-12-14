@@ -1,7 +1,7 @@
 using HDF5
 # High-Accuracy DIRCOL
 
-function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3,:rk3_foh,:rk4],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64,2}(undef,0,1))
+function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3,:rk3_foh,:rk4],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1))
     solver = Solver(model, obj, integration=:rk3_foh, N=size(U0,2))
     if infeasible
         if isempty(X0)
@@ -117,10 +117,6 @@ function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::St
             err[i] = norm(Xi-to_array(res.X))/N
             err_final[i] = norm(res.X[N] - obj.xf)
         end
-        p = plot()
-        plot_obstacles(circles)
-        plot_trajectory!(X,title="$integration with $N knot points")
-        display(p)
 
         stats[i] = stat
     end
