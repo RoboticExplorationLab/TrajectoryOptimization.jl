@@ -417,7 +417,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
         end
 
         # Get active constraint set
-        get_active_set!(res,p,pI,k)
+        get_active_set!(res,solver,p,pI,k)
 
         # Update Iμ matrices based on active set
         res.Iμ[k] = Diagonal(res.active_set[k].*res.μ[k])
@@ -433,10 +433,10 @@ function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X=re
     return nothing
 end
 
-function get_active_set!(results::ConstrainedIterResults,p::Int,pI::Int,k::Int)
+function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,pI::Int,k::Int)
     # Inequality constraints
     for j = 1:pI
-        if results.C[k][j] > 0.0 || results.λ[k][j] > 0.0
+        if results.C[k][j] > -solver.opts.active_constraint_tolerance || results.λ[k][j] > 0.0
             results.active_set[k][j] = 1
         else
             results.active_set[k][j] = 0

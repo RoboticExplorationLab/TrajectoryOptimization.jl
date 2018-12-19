@@ -149,8 +149,13 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     U::Vector{Vector{Float64}}  # Controls (m,N)
 
     K::Vector{Matrix{Float64}} # Feedback (state) gain (m,n,N)
+    M::Vector{Matrix{Float64}} # Feedback (multiplier) gain (m,p,N)
     b::Vector{Matrix{Float64}}  # Feedback (control) gain (m,m,N)
     d::Vector{Vector{Float64}}  # Feedforward gain (m,N)
+
+    Kλ::Vector{Matrix{Float64}}  # multiplier (state) gain (p,n,N)
+    Mλ::Vector{Matrix{Float64}}  # multiplier (multiplier) gain (p,p,N)
+    dλ::Vector{Vector{Float64}}  # multiplier feedforward gain (p,N)
 
     X_::Vector{Vector{Float64}} # Predicted states (n,N)
     U_::Vector{Vector{Float64}} # Predicted controls (m,N)
@@ -189,7 +194,7 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     Cx_N::Matrix{Float64}
 
-    active_set::Vector{Vector{Float64}} # active set of constraints
+    active_set::Vector{Vector{Bool}} # active set of constraints
 
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
@@ -198,12 +203,12 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
 
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+            K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
             C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
             CN::Vector{Float64},CN_prev,IμN,λN,μN,
             cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
 
-        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
+        new(X,U,K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
     end
 end
 
@@ -227,8 +232,13 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
     U  = [zeros(m)   for i = 1:N]
 
     K  = [zeros(m,n) for i = 1:N]
+    M  = [zeros(m,p) for i = 1:N]
     b  = [zeros(m,m) for i = 1:N]
     d  = [zeros(m)   for i = 1:N]
+
+    Kλ  = [i != N ? zeros(p,n) : zeros(p_N,n) for i = 1:N-1]
+    Mλ  = [i != N ? zeros(p,p) : zeros(p_N,p) for i = 1:N-1]
+    dλ  = [i != N ? zeros(p) : zeros(p_N)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
     U_ = [zeros(m)   for i = 1:N]
@@ -284,14 +294,14 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
     V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
     V_al_current = zeros(p,N)
 
-    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+    ConstrainedVectorResults(X,U,K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
         C,C_prev,Iμ,λ,μ,
         C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
 end
 
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.M),copy(r.b),copy(r.d),copy(r.Kλ),copy(r.Mλ),copy(r.dλ),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
         copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
 end
