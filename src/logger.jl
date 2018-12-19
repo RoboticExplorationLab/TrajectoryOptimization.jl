@@ -4,6 +4,20 @@ const OuterLoop = LogLevel(-100)
 const InnerLoop = LogLevel(-200)
 const InnerIters = LogLevel(-500)
 
+function default_logger(solver::Solver)
+    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
+
+    logger = SolverLogger(min_level)
+    inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
+    inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
+    outer_cols = [:outeriter, :iter, :iterations, :info]
+    outer_widths = [10,          5,        12,        40]
+    add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
+    add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
+    return logger
+end
+
+
 
 """
 $(SIGNATURES)
@@ -109,7 +123,7 @@ function create_row(ldata::LogData)
 end
 
 "$(SIGNATURES) Convert a float to a string, keeping the whole thing within a given character width"
-function trim_entry(data::Float64,width::Int)
+function trim_entry(data::Float64,width::Int; pad=true, kwargs...)
     base = log10(abs(data))
     if -ceil(width/2)+1 < base < floor(width / 2)
         if base > 0
@@ -121,22 +135,34 @@ function trim_entry(data::Float64,width::Int)
             width = width - prec + 1
             prec = 1
         end
-        rpad(format(data,precision=prec,conversion="f",stripzeros=true,positivespace=true),width)
+        val = format(data,precision=prec,conversion="f",stripzeros=true,positivespace=true; kwargs...)
     else
         width <= 8 ? width = 10 : nothing
-        rpad(format(data,conversion="e",precision=width-8,stripzeros=true,positivespace=true),width)
+        val = format(data,conversion="e",precision=width-8,stripzeros=true,positivespace=true; kwargs...)
     end
+    if pad
+        val = rpad(val,width)
+    end
+    return val
 end
 
 "$(SIGNATURES) Chops off the end of a string to keep it at width"
-function trim_entry(data::String,width)
+function trim_entry(data::String,width; pad=true)
     if length(data) > width-2
         return data[1:width-2]
     end
     return data
 end
 
-function trim_entry(data,width)
+function trim_entry(data::Int, width::Int; pad=true, kwargs...)
+    if pad
+        rpad(format(data; kwargs...), width)
+    else
+        format(data; kwargs...)
+    end
+end
+
+function trim_entry(data,width; pad=true, kwargs...)
     data
 end
 
