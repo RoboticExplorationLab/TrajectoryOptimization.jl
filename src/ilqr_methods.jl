@@ -864,7 +864,11 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
             X_init = X0
         end
     else
-        solve_string = "Solving Constrained Problem" * solve_string
+        if solver.opts.constrained
+            solve_string = "Solving Constrained Problem" * solve_string
+        else
+            solve_string = "Solving Unconstrained Problem" * solve_string
+        end
         X_init = zeros(n,N)
     end
     @info solve_string
