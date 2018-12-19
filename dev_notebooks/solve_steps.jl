@@ -1,8 +1,11 @@
-
+using Juno
+using Profile
+using BenchmarkTools
 
 # Set up
 N = 51
 model, obj = Dynamics.dubinscar
+n,m = model.n, model.m
 
 x0 = [0.0;0.0;0.]
 xf = [0.0;1.0;0.]
@@ -26,6 +29,7 @@ n,m = get_sizes(solver)
 X0 = Array{Float64,2}(undef,0,0)
 U0 = ones(m,N)
 
+# Profile.init(n=10^7,delay=0.0001)
 
 #****************************#
 #       INITIALIZATION       #
@@ -64,6 +68,18 @@ J_prev = cost(solver, results)
 TrajectoryOptimization.calculate_jacobians!(results, solver)
 Δv = backwardpass!(results, solver)
 J = forwardpass!(results, solver, Δv)
+
+Profile.init(delay=1e-4)
+Profile.clear()
+@profile backwardpass!(results, solver)
+Juno.profiler()
+Profile.print()
+
+Profile.clear()
+@profile forwardpass!(results, solver, Δv)
+Juno.profiler()
+Profile.print()
+
 
 X .= deepcopy(X_)
 U .= deepcopy(U_)
