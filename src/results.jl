@@ -701,6 +701,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 end
 
 function copy_λ!(solver, results, λ)
+    N = solver.N
     p_new = length(λ[1])
     p, = get_num_constraints(solver)
     if p_new == p  # all constraint λs passed in

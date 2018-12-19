@@ -55,6 +55,10 @@ export
 
 export
     get_sizes,
+    get_num_constraints,
+    get_num_controls,
+    init_results,
+    to_array,
     get_N,
     eul2quat,
     quat2rot,
