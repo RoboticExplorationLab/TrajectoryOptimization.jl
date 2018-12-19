@@ -115,15 +115,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     U_ = results.U_ # updated control trajectory
 
     # Set up logger
-    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
-
-    logger = SolverLogger(min_level)
-    inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
-    inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
-    outer_cols = [:outeriter, :iter, :iterations, :info]
-    outer_widths = [10,          5,        12,        40]
-    add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
-    add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
+    logger = default_logger(solver)
 
     update_constraints!(results, solver)
 
