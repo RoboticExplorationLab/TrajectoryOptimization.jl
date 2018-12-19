@@ -236,9 +236,9 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_in
     b  = [zeros(m,m) for i = 1:N]
     d  = [zeros(m)   for i = 1:N]
 
-    Kλ  = [i != N ? zeros(p,n) : zeros(p_N,n) for i = 1:N]
-    Mλ  = [i != N ? zeros(p,p) : zeros(p_N,p) for i = 1:N]
-    dλ  = [i != N ? zeros(p) : zeros(p_N)   for i = 1:N]
+    Kλ  = [i != N ? zeros(p,n) : zeros(p_N,n) for i = 1:N-1]
+    Mλ  = [i != N ? zeros(p,p) : zeros(p_N,p) for i = 1:N-1]
+    dλ  = [i != N ? zeros(p) : zeros(p_N)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
     U_ = [zeros(m)   for i = 1:N]
