@@ -78,7 +78,7 @@ $(SIGNATURES)
 * X0::Matrix{Float64} (optional) - initial state trajectory. If specified, it will solve use infeasible controls
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
-function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters
@@ -278,11 +278,24 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
     # Run Stats
     stats = Dict("iterations"=>iter,
-                 "major iterations"=>iter_outer,
-                 "runtime"=>float(time_ns() - t_solve_start)/1e9,
-                 "setup_time"=>float(time_setup)/1e9,
-                 "cost"=>J_hist,
-                 "c_max"=>c_max_hist)
+        "major iterations"=>iter_outer,
+        "runtime"=>float(time_ns() - t_solve_start)/1e9,
+        "setup_time"=>float(time_setup)/1e9,
+        "cost"=>J_hist,
+        "c_max"=>c_max_hist)
+    if !isempty(bmark_stats)
+        for key in intersect(keys(bmark_stats), keys(stats))
+            if stats[key] isa Vector
+                if length(stats[key]) > 0
+                    bmark_stats[key] = stats[key][end]
+                else
+                    bmark_stats[key] = 0
+                end
+            else
+                bmark_stats[key] = stats[key]
+            end
+        end
+    end
 
     if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
         @warn "*Solve reached max iterations*"
