@@ -21,10 +21,8 @@ using StaticArrays
 using Logging
 using Formatting
 using Plots
+using BenchmarkTools
 
-
-const level_priorities = Dict(:verbose=>1,:debug=>2,:info=>3,:critical=>4,:none=>Inf)
-const debug_level = :critical  # (:verbose, :debug, :info, :critical, :none)
 
 export
     Dynamics
@@ -108,13 +106,4 @@ write_ipopt_options()
 #     include("dircol_snopt.jl")
 # end
 
-function set_debug_level(level::Symbol)
-    global debug_level
-    if level ∈ keys(level_priorities)
-        debug_level = level
-    else
-        warn("Debug level not recognized")
-    end
-    return nothing
-end
 end
