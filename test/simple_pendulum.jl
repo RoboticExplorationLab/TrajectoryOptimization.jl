@@ -18,10 +18,10 @@ U = zeros(solver.model.m, solver.N)
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
-# with square root
-solver.opts.square_root = true
-results, = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[end]-obj.xf) < 1e-3
+# # with square root
+# solver.opts.square_root = true
+# results, = TrajectoryOptimization.solve(solver,U)
+# @test norm(results.X[end]-obj.xf) < 1e-3
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
@@ -38,11 +38,14 @@ results, =TrajectoryOptimization.solve(solver,U)
 
 ### CONSTRAINED ###
 # rk4
+opts.verbose = true
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
+
+plot(to_array(results_c.U)')
 
 # with Square Root
 # solver.opts.square_root = true
@@ -59,6 +62,8 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
+results_c.gc
+plot(to_array(results_c.μc)')
 # with Square Root
 # solver.opts.square_root = true
 # solver.opts.verbose = false
@@ -68,7 +73,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 # @test max_c < 1e-2
 
 
-### In-place dynamics ###
 # Unconstrained
 opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
@@ -82,6 +86,7 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
+plot(to_array(results_c.U)')
 # Constrained - midpoint
 solver = TrajectoryOptimization.Solver(model!,obj_c, integration=:midpoint, dt=0.1, opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)

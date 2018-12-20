@@ -24,123 +24,8 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass!(results, solver)
+        Δv = _backwardpass_speedup!(results, solver)
     end
-
-    return Δv
-end
-
-function _backwardpass!(res::SolverVectorResults,solver::Solver)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-
-    Q = solver.obj.Q; R = getR(solver); Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
-
-    dt = solver.dt
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
-
-    # Boundary Conditions
-    S[N] = Qf
-    s[N] = Qf*(X[N] - xf)
-
-    # Initialize expected change in cost-to-go
-    Δv = [0.0 0.0]
-
-    # Terminal constraints
-    if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
-    end
-
-
-    # Backward pass
-    k = N-1
-    while k >= 1
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-
-        lx = dt*Q*vec(X[k] - xf)
-        lu = dt*R*vec(U[k])
-        lxx = dt*Q
-        luu = dt*R
-
-        # Compute gradients of the dynamics
-        fdx, fdu = res.fdx[k], res.fdu[k]
-
-        # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = lx + fdx'*vec(s[k+1])
-        Qu = lu + fdu'*vec(s[k+1])
-        Qxx = lxx + fdx'*S[k+1]*fdx
-
-        Quu = luu + fdu'*S[k+1]*fdu
-        Qux = fdu'*S[k+1]*fdx
-
-        # Constraints
-        if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
-            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
-            Qxx += Cx'*Iμ[k]*Cx
-            Quu += Cu'*Iμ[k]*Cu
-            Qux += Cu'*Iμ[k]*Cx
-
-            if solver.opts.minimum_time
-                h = U[k][m̄]
-                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
-                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
-                tmp = zero(Quu)
-                tmp[:,m̄] = R*U[k]
-                Quu += 2h*(tmp+tmp')
-                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
-
-                if k > 1
-                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
-                    Quu[m̄,m̄] += Iμ[k-1][end,end]
-                end
-
-            end
-
-        end
-
-        if solver.opts.regularization_type == :state
-            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
-            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
-        elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
-            Qux_reg = Qux
-        end
-
-        # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
-
-            # increase regularization
-            regularization_update!(res,solver,:increase)
-
-            # reset backward pass
-            k = N-1
-            Δv = [0.0 0.0]
-            continue
-        end
-
-        # Compute gains
-        K[k] = -Quu_reg::Matrix{Float64}\Qux_reg::Matrix{Float64}
-        d[k] = -Quu_reg\Qu::Vector{Float64}
-
-        # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
-        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
-        S[k] = 0.5*(S[k] + S[k]')
-
-        # calculated change is cost-to-go over entire trajectory
-        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
-
-        k = k - 1;
-    end
-
-    # decrease regularization after backward pass
-    regularization_update!(res,solver,:decrease)
 
     return Δv
 end
@@ -177,10 +62,24 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
 
     # Terminal constraints
     if res isa ConstrainedIterResults
-        C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*(res.IμN*res.CN + res.λN)
+        gs = res.gs
+        gc = res.gc
+        hs = res.hs
+        hc = res.hc
+        λs = res.λs
+        λc = res.λc
+        κs = res.κs
+        κc = res.κc
+        Iμs = res.Iμs
+        Iμc = res.Iμc
+        Iνs = res.Iνs
+        Iνc = res.Iνc
+        gsx = res.gsx
+        gcu = res.gcu
+        hsx = res.hsx
+        hcu = res.hcu
+        S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
+        s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
     end
 
     # Backward pass
@@ -233,13 +132,22 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
             L[u_idx,u_idx] = Luu
             L[u_idx,x_idx] = Lux
 
-            Lu = view(l,n+1:n+mm)
-            Luu = view(L,n+1:n+mm,n+1:n+mm)
-            Lux = view(L,n+1:n+mm,1:n)
+            Lu = l[n+1:n+mm]
+            Luu = L[n+1:n+mm,n+1:n+mm]
+            Lux = L[n+1:n+mm,1:n]
         end
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            k != 1 ? Lx .+= gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
+            Lu .+= gcu[N]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            k != 1 ? Lxx .+= gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
+            Luu .+= gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
+            # Lux .+= Cu'*Iμ[k]*Cx # no coupling between constraints
+        end
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx = Lx + fdx'*s[k+1]
@@ -248,17 +156,7 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
         Quu = Luu + fdu'*S[k+1]*fdu
         Qux = Lux + fdu'*S[k+1]*fdx
 
-        # Constraints
-        if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx .+= Cx'*(Iμ[k]*C[k] + λ[k])
-            Qu .+= Cu'*(Iμ[k]*C[k] + λ[k])
-            Qxx .+= Cx'*Iμ[k]*Cx
-            Quu .+= Cu'*Iμ[k]*Cu
-            Qux .+= Cu'*Iμ[k]*Cx
-        end
-
-        if solver.opts.regularization_type == :state
+        if solver.opts.regularization_type == :state #TODO combined into one
             Quu_reg = Quu + res.ρ[1]*fdu'*fdu
             Qux_reg = Qux + res.ρ[1]*fdu'*fdx
         elseif solver.opts.regularization_type == :control
@@ -1214,4 +1112,120 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_pr
         error("Error: Cost increased during Forward Pass")
     end
     return J
+end
+
+
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    Q = solver.obj.Q; R = getR(solver); Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+
+    dt = solver.dt
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        lx = dt*Q*vec(X[k] - xf)
+        lu = dt*R*vec(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fdx'*vec(s[k+1])
+        Qu = lu + fdu'*vec(s[k+1])
+        Qxx = lxx + fdx'*S[k+1]*fdx
+
+        Quu = luu + fdu'*S[k+1]*fdu
+        Qux = fdu'*S[k+1]*fdx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+
+            if solver.opts.minimum_time
+                h = U[k][m̄]
+                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
+                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
+                tmp = zero(Quu)
+                tmp[:,m̄] = R*U[k]
+                Quu += 2h*(tmp+tmp')
+                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
+
+                if k > 1
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
+                    Quu[m̄,m̄] += Iμ[k-1][end,end]
+                end
+
+            end
+
+        end
+
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg::Matrix{Float64}\Qux_reg::Matrix{Float64}
+        d[k] = -Quu_reg\Qu::Vector{Float64}
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
 end

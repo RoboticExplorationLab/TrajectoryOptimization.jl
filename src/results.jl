@@ -148,17 +148,13 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     X::Vector{Vector{Float64}}  # States (n,N)
     U::Vector{Vector{Float64}}  # Controls (m,N)
 
-    K::Vector{Matrix{Float64}} # Feedback (state) gain (m,n,N)
-    M::Vector{Matrix{Float64}} # Feedback (multiplier) gain (m,p,N)
+    K::Vector{Matrix{Float64}}  # Feedback (state) gain (m,n,N)
     b::Vector{Matrix{Float64}}  # Feedback (control) gain (m,m,N)
     d::Vector{Vector{Float64}}  # Feedforward gain (m,N)
 
-    Kλ::Vector{Matrix{Float64}}  # multiplier (state) gain (p,n,N)
-    Mλ::Vector{Matrix{Float64}}  # multiplier (multiplier) gain (p,p,N)
-    dλ::Vector{Vector{Float64}}  # multiplier feedforward gain (p,N)
-
     X_::Vector{Vector{Float64}} # Predicted states (n,N)
     U_::Vector{Vector{Float64}} # Predicted controls (m,N)
+
     S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
 
@@ -177,133 +173,140 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     xm::Vector{Vector{Float64}} # State midpoints (n,N) should be (n,N-1)
     um::Vector{Vector{Float64}}  # Control midpoints (m,N)
 
-    C::Vector{Vector{Float64}}      # Constraint values (p,N)
-    C_prev::Vector{Vector{Float64}} # Previous constraint values (p,N)
-    Iμ::Vector{Diagonal{Float64,Vector{Float64}}}        # fcxtive constraint penalty matrix (p,p,N)
-    λ::Vector{Vector{Float64}} # Lagrange multipliers (p,N)
-    μ::Vector{Vector{Float64}}     # Penalty terms (p,N)
+    gs::Vector{Vector{Float64}} # Constraint values (pIs,N)
+    gc::Vector{Vector{Float64}} # Constraint values (pIc,N)
+    hs::Vector{Vector{Float64}} # Constraint values (pEs,N) (note: Nth constraint is pEsN)
+    hc::Vector{Vector{Float64}} # Constraint values (pEc,N)
 
-    CN::Vector{Float64}       # Final constraint values (p_N,)
-    CN_prev::Vector{Float64}  # Previous final constraint values (p_N,)
-    IμN::Diagonal{Float64,Vector{Float64}}        # Final constraint penalty matrix (p_N,p_N)
-    λN::Vector{Float64}       # Final lagrange multipliers (p_N,)
-    μN::Vector{Float64}       # Final penalty terms (p_N,)
+    gs_prev::Vector{Vector{Float64}} # Previous constraint values (pIs,N)
+    gc_prev::Vector{Vector{Float64}} # Previous constraint values (pIc,N)
+    hs_prev::Vector{Vector{Float64}} # Previous constraint values (pEs,N) (note: Nth constraint is pEsN)
+    hc_prev::Vector{Vector{Float64}} # Previous constraint values (pEc,N)
 
-    Cx::Vector{Matrix{Float64}}
-    Cu::Vector{Matrix{Float64}}
+    λs::Vector{Vector{Float64}} # state multipliers (pIs,N)
+    λc::Vector{Vector{Float64}} # control multipliers (pIc,N)
+    κs::Vector{Vector{Float64}} # state multipliers (pEs,N) (note: Nth multiplier is pEsN)
+    κc::Vector{Vector{Float64}} # control multipliers (pEc,N)
 
-    Cx_N::Matrix{Float64}
+    μs::Vector{Vector{Float64}}     # state Penalty terms (pIs,N)
+    μc::Vector{Vector{Float64}}     # control Penalty terms (pIc,N)
+    νs::Vector{Vector{Float64}}     # state Penalty terms (pEs,N) (note: Nth multiplier is pEsN)
+    νc::Vector{Vector{Float64}}     # control Penalty terms (pEc,N)
 
-    active_set::Vector{Vector{Bool}} # active set of constraints
+    # Penalty matrices
+    Iμs::Vector{Diagonal{Float64,Vector{Float64}}}
+    Iμc::Vector{Diagonal{Float64,Vector{Float64}}}
+    Iνs::Vector{Diagonal{Float64,Vector{Float64}}}
+    Iνc::Vector{Diagonal{Float64,Vector{Float64}}}
+
+    # Constraint Jacobians
+    gsx::Vector{Matrix{Float64}}
+    gcu::Vector{Matrix{Float64}}
+    hsx::Vector{Matrix{Float64}}
+    hcu::Vector{Matrix{Float64}}
+
+    gs_active_set::Vector{Vector{Bool}} # active set of state inequality constraints
+    gc_active_set::Vector{Vector{Bool}} # active set of control inequality constraints
 
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
 
-    V_al_prev::Array{Float64,2} # Augmented Lagrangian Method update terms, see ALGENCAN notation
-    V_al_current::Array{Float64,2} # Augmented Lagrangian Method update terms
+    #########
 
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
-            C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
-            CN::Vector{Float64},CN_prev,IμN,λN,μN,
-            cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
+            K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+            gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
 
-        new(X,U,K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
+        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
     end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
 
-ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0)
+ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0,0,0,0,0)
 
+function ConstrainedVectorResults(n::Int,m::Int,N::Int,pIs::Int,pIc::Int,pEs::Int,pEsN::Int,pEc::Int,ctrl_int::Symbol=:zoh)
+    X  = [zeros(n)   for k = 1:N]
+    U  = [zeros(m)   for k = 1:N]
 
-"""
-$(SIGNATURES)
-Construct results from sizes
-# Arguments
-* n: number of states
-* m: number of controls
-* p: number of constraints
-* N: number of time steps
-* p_N (default=n): number of terminal constraints
-"""
-function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n,ctrl_int::Symbol=:zoh)
-    X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for k = 1:N]
+    b  = [zeros(m,m) for k = 1:N]
+    d  = [zeros(m)   for k = 1:N]
 
-    K  = [zeros(m,n) for i = 1:N]
-    M  = [zeros(m,p) for i = 1:N]
-    b  = [zeros(m,m) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
-
-    Kλ  = [i != N ? zeros(p,n) : zeros(p_N,n) for i = 1:N-1]
-    Mλ  = [i != N ? zeros(p,p) : zeros(p_N,p) for i = 1:N-1]
-    dλ  = [i != N ? zeros(p) : zeros(p_N)   for i = 1:N-1]
-
-    X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
+    X_ = [zeros(n)   for k = 1:N]
+    U_ = [zeros(m)   for k = 1:N]
 
     if ctrl_int == :foh
-        S  = [zeros(n+m,n+m) for i = 1:N]
-        s  = [zeros(n+m)   for i = 1:N]
+        S  = [zeros(n+m,n+m) for k = 1:N]
+        s  = [zeros(n+m)   for k = 1:N]
         L = zeros(2*(n+m),2*(n+m))
         Q = zeros(n+m+m,n+m+m)
         l = zeros(2*(n+m))
         q = zeros(n+m+m)
     else
-        S  = [zeros(n,n) for i = 1:N]
-        s  = [zeros(n)   for i = 1:N]
+        S  = [zeros(n,n) for k = 1:N]
+        s  = [zeros(n)   for k = 1:N]
         L = zeros(n+m,n+m)
         Q = zeros(n+m,n+m)
         l = zeros(n+m)
         q = zeros(n+m)
     end
 
-    fdx = [zeros(n,n) for i = 1:N-1]
-    fdu = [zeros(n,m) for i = 1:N-1]
-    fdv = [zeros(n,m) for i = 1:N-1]
-    fcx = [zeros(n,n) for i = 1:N]
-    fcu = [zeros(n,m) for i = 1:N]
-    dx = [zeros(n)   for i = 1:N]
-    xm = [zeros(n)   for i = 1:N]
-    um = [zeros(m)   for i = 1:N]
+    fdx = [zeros(n,n) for k = 1:N-1]
+    fdu = [zeros(n,m) for k = 1:N-1]
+    fdv = [zeros(n,m) for k = 1:N-1]
+    fcx = [zeros(n,n) for k = 1:N]
+    fcu = [zeros(n,m) for k = 1:N]
+    dx = [zeros(n)   for k = 1:N]
+    xm = [zeros(n)   for k = 1:N]
+    um = [zeros(m)   for k = 1:N]
 
-    # Stage Constraints
-    C      = [zeros(p)  for i = 1:N]
-    C_prev = [zeros(p)  for i = 1:N]
-    Iμ     = [Diagonal(zeros(p)) for i = 1:N]
-    λ = [zeros(p)  for i = 1:N]
-    μ     = [ones(p)   for i = 1:N]
+    gs = [zeros(pIs) for k = 1:N] # Constraint values (pIs,N)
+    gc = [zeros(pIc) for k = 1:N] # Constraint values (pIc,N)
+    hs = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # Constraint values (pEs,N) (note: Nth constraint is pEsN)
+    hc = [zeros(pEc) for k = 1:N] # Constraint values (pEc,N)
 
-    # Terminal Constraints (make 2D so it works well with stage values)
-    C_N      = zeros(p_N)
-    C_N_prev = zeros(p_N)
-    Iμ_N     = Diagonal(zeros(p_N))
-    λ_N      = zeros(p_N)
-    μ_N      = ones(p_N)
+    gs_prev = [zeros(pIs) for k = 1:N] # Constraint values (pIs,N)
+    gc_prev = [zeros(pIc) for k = 1:N] # Constraint values (pIc,N)
+    hs_prev = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # Constraint values (pEs,N) (note: Nth constraint is pEsN)
+    hc_prev = [zeros(pEc) for k = 1:N] # Constraint values (pEc,N)
 
-    cx  = [zeros(p,n)   for i = 1:N]
-    cu  = [zeros(p,m)   for i = 1:N]
-    cxn = zeros(p_N,n)
+    λs = [zeros(pIs) for k = 1:N] # state multipliers (pIs,N)
+    λc = [zeros(pIc) for k = 1:N] # control multipliers (pIc,N)
+    κs = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # state multipliers (pEs,N) (note: Nth multiplier is pEsN)
+    κc = [zeros(pEc) for k = 1:N] # control multipliers (pEc,N)
 
-    active_set = [zeros(p)  for i = 1:N]
+    μs = [ones(pIs) for k = 1:N]    # state Penalty terms (pIs,N)
+    μc = [ones(pIc) for k = 1:N]     # control Penalty terms (pIc,N)
+    νs = [k != N ? ones(pEs) : ones(pEsN) for k = 1:N]     # state Penalty terms (pEs,N) (note: Nth multiplier is pEsN)
+    νc = [ones(pEc) for k = 1:N]     # control Penalty terms (pEc,N)
+
+    # Penalty matrices
+    Iμs = [Diagonal(ones(pIs)) for k = 1:N]
+    Iμc = [Diagonal(ones(pIc)) for k = 1:N]
+    Iνs = [k != N ? Diagonal(ones(pEs)) : Diagonal(ones(pEsN)) for k = 1:N]
+    Iνc = [Diagonal(ones(pEc)) for k = 1:N]
+
+    # Constraint Jacobians
+    gsx = [zeros(pIs,n) for k = 1:N]
+    gcu = [zeros(pIc,m) for k = 1:N]
+    hsx = [k != N ? zeros(pEs,n) : zeros(pEsN,n) for k = 1:N]
+    hcu = [zeros(pEc,m) for k = 1:N]
+
+    gs_active_set = [zeros(Bool,pIs) for k = 1:N] # active set of state inequality constraints
+    gc_active_set = [zeros(Bool,pIc) for k = 1:N]# active set of control inequality constraints
 
     ρ = ones(1)
     dρ = ones(1)
 
-    V_al_prev = zeros(p,N) #TODO preallocate only (pI,N)
-    V_al_current = zeros(p,N)
-
-    ConstrainedVectorResults(X,U,K,M,b,d,Kλ,Mλ,dλ,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
-        C,C_prev,Iμ,λ,μ,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,active_set,ρ,dρ,V_al_prev,V_al_current)
+    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+        gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
 end
 
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.M),copy(r.b),copy(r.d),copy(r.Kλ),copy(r.Mλ),copy(r.dλ),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
-        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
-        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.V_al_prev),copy(r.V_al_current))
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
+    copy(r.gs),copy(r.gc),copy(r.hs),copy(r.hc),copy(r.gs_prev),copy(r.gc_prev),copy(r.hs_prev),copy(r.hc_prev),copy(r.λs),copy(r.λc),copy(r.κs),copy(r.κc),copy(r.μs),copy(r.μc),copy(r.νs),copy(r.νc),copy(r.Iμs),copy(r.Iμc),copy(r.Iνs),copy(r.Iνc),copy(r.gsx),copy(r.gcu),copy(r.hsx),copy(r.hcu),copy(r.gs_active_set),copy(r.gc_active_set),copy(r.ρ),copy(r.dρ))
 end
 
 ##################
@@ -644,7 +647,7 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     results
 end
 
-function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array{Float64,2}(undef,0,0))
+function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResults=ConstrainedVectorResults())
     n,m,N = get_sizes(solver)
 
     if !isempty(X)
@@ -656,66 +659,78 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 
     if solver.opts.constrained
         # Get sizes
-        p,pI,pE = get_num_constraints(solver)
+        pIs, pIc, pEs,pEsN, pEc = get_num_constraints(solver)
         m̄,mm = get_num_controls(solver)
 
-        if solver.opts.use_static
-            results = ConstrainedStaticResults(n,mm,p,N,n,solver.control_integration)
-        else
-            results = ConstrainedVectorResults(n,mm,p,N,n,solver.control_integration)
-        end
+        # if solver.opts.use_static
+        #     results = ConstrainedStaticResults(n,mm,p,N,n,solver.control_integration)
+        # else
+        results = ConstrainedVectorResults(n,mm,N,pIs,pIc,pEs,pEsN,pEc,solver.control_integration)
+        # end
 
         # Set initial penalty term values
-        results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
-
+        results.μs .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        results.μc .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        results.νs .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        results.νc .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
         # Special penalty initializations
         if solver.opts.minimum_time
+            solver.opts.infeasible ? idx = n+1 : idx = 1
             for k = 1:solver.N
-                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
-                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μc[k][idx] = solver.opts.μ_initial_minimum_time_equality
+                results.μc[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μc[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
             end
         end
         if solver.opts.infeasible
             nothing #TODO
         end
 
-        # Initial Lagrange multipliers (warm start)
-        if ~isempty(λ)
-            copy_λ!(solver, results, λ)
+        # Initialize Lagrange multipliers (warm start)
+        if ~isempty(prevResults)
+            results.λs .= deepcopy(λs)
+
+            results.λc .= deepcopy(λc)
+
+            results.κs .= deepcopy(κs)
+
+            # remove infeasible control multipliers
+            for k = 1:N
+                results.κc[k] = κc[n+1:n+solver.opts.minimum_time+solver.obj.pEc]
+            end
         end
 
         # Set initial regularization
         results.ρ[1] = solver.opts.ρ_initial
 
     else
-        if solver.opts.use_static
-            results = UnconstrainedStaticResults(n,m,N,solver.control_integration)
-        else
-            results = UnconstrainedVectorResults(n,m,N,solver.control_integration)
-        end
+        # if solver.opts.use_static
+        #     results = UnconstrainedStaticResults(n,m,N,solver.control_integration)
+        # else
+        results = UnconstrainedVectorResults(n,m,N,solver.control_integration)
+        # end
     end
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)
     return results
 end
 
-function copy_λ!(solver, results, λ)
-    p_new = length(λ[1])
-    p, = get_num_constraints(solver)
-    if p_new == p  # all constraint λs passed in
-        cid = trues(p)
-    elseif p_new == solver.obj.p  # only "original" constraint λs passed
-        cid = original_constraint_inds(solver)
-    else
-        err = ArgumentError("λ is not the correct dimension ($p_new). It must be either size $p or $(solver.obj.p)")
-        throw(err)
-    end
-    for k = 1:N
-        results.λ[k][cid] = λ[k]
-    end
-    results.λN .= λ[N+1]
-end
+# function copy_λ!(solver, results, λ)
+#     p_new = length(λ[1])
+#     p, = get_num_constraints(solver)
+#     if p_new == p  # all constraint λs passed in
+#         cid = trues(p)
+#     elseif p_new == solver.obj.p  # only "original" constraint λs passed
+#         cid = original_constraint_inds(solver)
+#     else
+#         err = ArgumentError("λ is not the correct dimension ($p_new). It must be either size $p or $(solver.obj.p)")
+#         throw(err)
+#     end
+#     for k = 1:N
+#         results.λ[k][cid] = λ[k]
+#     end
+#     results.λN .= λ[N+1]
+# end
 
 
 

@@ -68,6 +68,7 @@ export
 
 include("model.jl")
 include("integration.jl")
+include("constraints.jl")
 include("solver.jl")
 include("results.jl")
 include("ilqr_algorithm.jl")
