@@ -7,14 +7,9 @@ function dubins_dynamics!(xdot,x,u)
     xdot[3] = u[2]
     xdot
 end
-
-function dubins_dynamics(x,u)
-    return [u[1]*cos(x[3]); u[1]*sin(x[3]); u[2]]
-end
-
 n,m = 3,2
-model = Model(dubins_dynamics,n,m)
-model! = Model(dubins_dynamics!,n,m)
+
+model = Model(dubins_dynamics!,n,m)
 
 
 # initial and goal states
@@ -33,4 +28,3 @@ dt = 0.01
 obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
 
 dubinscar = [model, obj_uncon]
-dubinscar! = [model!, obj_uncon]
