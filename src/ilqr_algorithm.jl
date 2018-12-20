@@ -143,7 +143,7 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
         # Constraints
         if res isa ConstrainedIterResults
             k != 1 ? Lx .+= gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
-            Lu .+= gcu[N]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            Lu .+= gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
             k != 1 ? Lxx .+= gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
             Luu .+= gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
             # Lux .+= Cu'*Iμ[k]*Cx # no coupling between constraints

@@ -40,12 +40,14 @@ results, =TrajectoryOptimization.solve(solver,U)
 # rk4
 opts.verbose = true
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver, U)
+results_c, stats_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
+cost(solver,results_c)
 
-plot(to_array(results_c.U)')
+stats_c["c_max"]
+a = maximum(norm.(map((x)->x.>0., results_c.Iμc) .* results_c.gc, Inf))
 
 # with Square Root
 # solver.opts.square_root = true

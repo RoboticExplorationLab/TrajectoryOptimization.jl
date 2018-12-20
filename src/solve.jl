@@ -246,8 +246,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         # update multiplier and penalty terms
         outer_loop_update(results,solver)
         update_constraints!(results, solver)
-        J_prev = cost(solver, results, results.X, results.U)
-
+        c_max = max_violation(results)
+        J = cost(solver, results, results.X, results.U)
+        J_prev = J
         # Logger output
         @logmsg OuterLoop :outeriter value=j
         @logmsg OuterLoop :iter value=iter
@@ -416,16 +417,16 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver)
     N = solver.N
     for k = 1:N
         if k != 1
-            results.λs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λs[k] + results.Iμs[k]*results.gs[k]))
+            results.λs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λs[k] + results.μs[k].*results.gs[k]))
             results.λs[k] = max.(0.0,results.λs[k])
 
-            results.κs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κs[k] + results.Iνs[k]*results.hs[k]))
+            results.κs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κs[k] + results.νs[k].*results.hs[k]))
         end
         if k != N || solver.control_integration == :foh
-            results.λc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λc[k] + results.Iμc[k]*results.gc[k]))
+            results.λc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λc[k] + results.μc[k].*results.gc[k]))
             results.λc[k] = max.(0.0,results.λc[k])
 
-            results.κc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κc[k] + results.Iνc[k]*results.hc[k]))
+            results.κc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κc[k] + results.νc[k].*results.hc[k]))
         end
     end
 end
@@ -445,12 +446,12 @@ function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
     N = solver.N
     for k = 1:N
         if k != 1
-            results.μs[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μs[k])
-            results.νs[k] = min.(solver.opts.μ_max, solver.opts.γ*results.νs[k])
+            results.μs[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.μs[k])
+            results.νs[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.νs[k])
         end
         if k != N || solver.control_integration == :foh
-            results.μc[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μc[k])
-            results.νc[k] = min.(solver.opts.μ_max, solver.opts.γ*results.νc[k])
+            results.μc[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.μc[k])
+            results.νc[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.νc[k])
         end
     end
     return nothing

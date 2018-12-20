@@ -69,9 +69,10 @@ function get_num_constraints(solver::Solver)
             pIc += 2
             pEc += 1
         end
+
         solver.opts.infeasible ? pEc += solver.model.n : nothing
 
-        return pIs, pIc, pEs,pEsN, pEc
+        return pIs, pIc, pEs, pEsN, pEc
     else
         return 0,0,0,0,0
     end
@@ -352,6 +353,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
         else
             res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
         end
+
         # TODO these jacobians are not changing and only need to be updated if custom constraints were used
         k != 1 ? solver.gsx(res.gsx[k],res.X[k]) : nothing
         solver.gcu(res.gcu[k],res.U[k])
@@ -443,9 +445,18 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
         # Get active constraint set
         get_active_set!(res,solver,pIs,pIc,k)
 
+        # # Update Iμ matrices based on active set
+        # k != 1 ? res.Iμs[k] = Diagonal(res.gs_active_set[k].*res.μs[k]) : nothing
+        # k != N || solver.control_integration == :foh ? res.Iμc[k] = Diagonal(res.gc_active_set[k].*res.μc[k]) : nothing
         # Update Iμ matrices based on active set
-        k != 1 ? res.Iμs[k] = Diagonal(res.gs_active_set[k].*res.μs[k]) : nothing
-        k != N || solver.control_integration == :foh ? res.Iμc[k] = Diagonal(res.gc_active_set[k].*res.μc[k]) : nothing
+        if k != 1
+            res.Iμs[k] = Diagonal(res.gs_active_set[k].*res.μs[k])
+            res.Iνs[k] = Diagonal(res.νs[k])
+        end
+        if k != N || solver.control_integration == :foh
+            res.Iμc[k] = Diagonal(res.gc_active_set[k].*res.μc[k])
+            res.Iνc[k] = Diagonal(res.νc[k])
+        end
     end
 
     return nothing
@@ -466,7 +477,7 @@ function get_active_set!(results::ConstrainedIterResults,solver::Solver,pIs::Int
             end
         end
     end
-    if k != N || solver.control_integration == :foh
+    if k != solver.N || solver.control_integration == :foh
         for j = 1:pIc
             if results.gc[k][j] > -solver.opts.active_constraint_tolerance || results.λc[k][j] > 0.0
                 results.gc_active_set[k][j] = 1
@@ -737,10 +748,10 @@ $(SIGNATURES)
 """
 function max_violation(results::ConstrainedIterResults)
 
-    a = maximum(norm.(map((x)->x.>0, results.Iμs) .* results.gs, Inf))
-    b = maximum(norm.(map((x)->x.>0, results.Iμc) .* results.gc, Inf))
-    c = maximum(norm.(results.Iνs .* results.hs, Inf))
-    d = maximum(norm.(results.Iνc .* results.hc, Inf))
+    a = maximum(norm.(map((x)->x.>0., results.Iμs) .* results.gs, Inf))
+    b = maximum(norm.(map((x)->x.>0., results.Iμc) .* results.gc, Inf))
+    c = maximum(norm.(map((x)->x.>0., results.Iνs) .* results.hs, Inf))
+    d = maximum(norm.(map((x)->x.>0., results.Iνc) .* results.hc, Inf))
     # println(a,b,c,d)
     return max(a,b,c,d)
 end

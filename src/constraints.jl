@@ -173,7 +173,7 @@ $(SIGNATURES)
     Generate coupled state and control equality constraints hsc(x,u) = 0
     [hsc_custom(x)]
 """
-function generate_coupled_inequality_constraints(obj::ConstrainedObjective)
+function generate_coupled_equality_constraints(obj::ConstrainedObjective)
     (c,x)->nothing
 end
 
@@ -401,7 +401,7 @@ function generate_coupled_inequality_constraints(obj::UnconstrainedObjective)
     (c,x)->nothing
 end
 
-function generate_coupled_inequality_constraints(obj::UnconstrainedObjective)
+function generate_coupled_equality_constraints(obj::UnconstrainedObjective)
     (c,x)->nothing
 end
 

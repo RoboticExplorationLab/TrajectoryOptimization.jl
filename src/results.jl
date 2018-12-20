@@ -612,37 +612,36 @@ end
 $(SIGNATURES)
     For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
 """
-function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
+function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver)::ConstrainedIterResults
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    p,pI,pE = get_num_constraints(solver)
-    p_N = solver.obj.p_N
-    if solver.opts.use_static
-        results = ConstrainedStaticResults(n,m̄,p,N,p_N,solver.control_integration)
-    else
-        results = ConstrainedVectorResults(n,m̄,p,N,p_N,solver.control_integration)
-    end
+    pIs, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
+    # if solver.opts.use_static
+    #     results = ConstrainedStaticResults(n,m̄,p,N,p_N,solver.control_integration)
+    # else
+    results = ConstrainedVectorResults(n,m̄,N,pIs, pIc, pEs, pEsN, pEc,solver.control_integration)
+    # end
     copyto!(results.X,r.X)
     copyto!(results.X_,r.X_)
     copyto!(results.dx,r.dx)
     copyto!(results.xm,r.xm)
     copyto!(results.fcx,r.fcx)
     copyto!(results.fdx,r.fdx)
+    copyto!(results.λs,r.λs)
+    copyto!(results.λc,r.λc)
+    copyto!(results.κs,r.κs)
+
     for k = 1:N
         results.U[k] = r.U[k][1:m̄]
         results.U_[k] = r.U_[k][1:m̄]
         results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
-        results.λ[k][1:end-solver.opts.minimum_time] = λ[k][1:end-n-solver.opts.minimum_time] # retain multipliers from all but infeasible and minimum time equality
-        if solver.opts.minimum_time
-            results.λ[k][end] = λ[k][end]
-        end
+        results.κc[k] = r.κc[k][n+1:n+solver.opts.minimum_time+solver.obj.pEc] # retain multipliers from all but infeasible and minimum time equality
         k == N ? continue : nothing
         results.um[k][1:m̄] = r.um[k][1:m̄]
         results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
         results.fdv[k][1:n,1:m̄] = r.fdv[k][1:n,1:m̄]
     end
-    results.λN .= λN
 
     results
 end
@@ -677,7 +676,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResu
         if solver.opts.minimum_time
             solver.opts.infeasible ? idx = n+1 : idx = 1
             for k = 1:solver.N
-                results.μc[k][idx] = solver.opts.μ_initial_minimum_time_equality
+                results.νc[k][idx] = solver.opts.μ_initial_minimum_time_equality
                 results.μc[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
                 results.μc[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
             end
@@ -689,9 +688,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResu
         # Initialize Lagrange multipliers (warm start)
         if ~isempty(prevResults)
             results.λs .= deepcopy(λs)
-
             results.λc .= deepcopy(λc)
-
             results.κs .= deepcopy(κs)
 
             # remove infeasible control multipliers
@@ -744,11 +741,11 @@ function remove_infeasible_controls_to_unconstrained_results(r::SolverIterResult
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    if solver.opts.use_static
-        results = UnconstrainedStaticResults(n,m̄,N,solver.control_integration)
-    else
+    # if solver.opts.use_static
+    #     results = UnconstrainedStaticResults(n,m̄,N,solver.control_integration)
+    # else
         results = UnconstrainedVectorResults(n,m̄,N,solver.control_integration)
-    end
+    # end
     copyto!(results.X,r.X)
     copyto!(results.X_,r.X_)
     copyto!(results.dx,r.dx)
