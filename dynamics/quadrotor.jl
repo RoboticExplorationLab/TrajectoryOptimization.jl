@@ -28,7 +28,7 @@ function quadrotor_dynamics!(ẋ,X,u)
       # Parameters
       m = .5 # mass
       J = Matrix(Diagonal([0.0023,0.0023,0.004])) # inertia matrix
-      Jinv = Matrix(Diagonal(1./[0.0023,0.0023,0.004])) # inverted inertia matrix
+      Jinv = Matrix(Diagonal(1. /[0.0023,0.0023,0.004])) # inverted inertia matrix
       g = 9.81 # gravity
       L = 0.1750 # distance between motors
 
@@ -58,7 +58,7 @@ function quadrotor_dynamics!(ẋ,X,u)
 end
 
 function quadrotor_dynamics(X,u)
-      ẋ = zero(13,1)
+      ẋ = zeros(13,1)
       quadrotor_dynamics!(ẋ,X,u)
       ẋ
 end
