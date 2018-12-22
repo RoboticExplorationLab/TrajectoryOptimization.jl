@@ -27,8 +27,8 @@ function quadrotor_dynamics!(ẋ,X,u)
 
       # Parameters
       m = .5 # mass
-      J = Matrix(Diagonal([0.0023,0.0023,0.004])) # inertia matrix
-      Jinv = Matrix(Diagonal(1. /[0.0023,0.0023,0.004])) # inverted inertia matrix
+      J = Matrix(Diagonal([0.0023; 0.0023; 0.004])) # inertia matrix
+      Jinv = Matrix(Diagonal(1.0./[0.0023; 0.0023; 0.004])) # inverted inertia matrix
       g = 9.81 # gravity
       L = 0.1750 # distance between motors
 
@@ -80,14 +80,6 @@ end
 function qmult(q1,q2)
       [q1[1]*q2[1] - q1[2:4]'*q2[2:4]; q1[1]*q2[2:4] + q2[1]*q1[2:4] + cross(q1[2:4],q2[2:4])]
 end
-
-# w = [1;2;3;4]
-# w /= norm(w)
-#
-# omega = [1;2;3]
-#
-# hamilton_product(w,[omega;0])
-# hamilton_product([omega;0],w)
 
 # Model
 n = 13
