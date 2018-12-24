@@ -38,16 +38,12 @@ results, =TrajectoryOptimization.solve(solver,U)
 
 ### CONSTRAINED ###
 # rk4
-opts.verbose = true
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, stats_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 cost(solver,results_c)
-
-stats_c["c_max"]
-a = maximum(norm.(map((x)->x.>0., results_c.Iμc) .* results_c.gc, Inf))
 
 # with Square Root
 # solver.opts.square_root = true
@@ -64,8 +60,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
-results_c.gc
-plot(to_array(results_c.μc)')
 # with Square Root
 # solver.opts.square_root = true
 # solver.opts.verbose = false
@@ -88,7 +82,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
-plot(to_array(results_c.U)')
 # Constrained - midpoint
 solver = TrajectoryOptimization.Solver(model!,obj_c, integration=:midpoint, dt=0.1, opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)
@@ -127,9 +120,11 @@ U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
 solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
-p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
+n,m,N = TrajectoryOptimization.get_sizes(solver)
+mm = m + n
+pIs, pIc, pEs, pEsN, pEc = TrajectoryOptimization.get_num_constraints(solver)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,solver.model.n)
+results_infeasible = ConstrainedVectorResults(n,mm,N,pIs,pIc,pEs,pEsN,pEc,solver.control_integration)
 copyto!(results_infeasible.U, [U_infeasible;ui])
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 

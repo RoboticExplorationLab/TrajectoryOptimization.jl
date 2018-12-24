@@ -1,14 +1,8 @@
 ### Solver options ###
 opts = SolverOptions()
-opts.square_root = false
 opts.verbose=false
-# opts.c1=1e-4
-# opts.c2=2.0
 opts.constraint_tolerance = 1e-3
 opts.τ = 0.25
-# opts.cost_tolerance = 1e-5
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
 ######################
 
 ### Pendulum ###

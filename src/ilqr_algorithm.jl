@@ -24,13 +24,13 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass_speedup!(results, solver)
+        Δv = _backwardpass!(results, solver)
     end
 
     return Δv
 end
 
-function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -1115,7 +1115,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_pr
 end
 
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_old!(res::SolverVectorResults,solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 

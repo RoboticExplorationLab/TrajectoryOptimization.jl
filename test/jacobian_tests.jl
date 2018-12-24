@@ -4,8 +4,8 @@ using Test
 dt = 0.1
 n_dc = 3
 m_dc = 2
-model_dc = TrajectoryOptimization.Dynamics.dubinscar![1]
-obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar![2]
+model_dc = TrajectoryOptimization.Dynamics.dubinscar[1]
+obj_uncon_dc = TrajectoryOptimization.Dynamics.dubinscar[2]
 
 # Use continuous dynamics to create augmented continuous dynamics function
 fc! = model_dc.f
@@ -86,7 +86,7 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 # # -control limits
 # u_min = -50.0
 # u_max = 50.0
-# 
+#
 # # -constraint that quaternion should be unit
 # function cE(cdot,x,u)
 #     cdot[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0

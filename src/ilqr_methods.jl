@@ -416,7 +416,7 @@ Evalutes all inequality and equality constraints (in place) for the current stat
     A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates (Toussaint)
 """
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
-    N = solver.N
+    n,m,N = get_sizes(solver)
     pIs, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
     m̄,mm = get_num_controls(solver)
     solver.opts.infeasible ? idx = n+1 : idx = 1

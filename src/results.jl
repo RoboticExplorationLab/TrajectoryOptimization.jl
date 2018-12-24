@@ -612,7 +612,7 @@ end
 $(SIGNATURES)
     For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
 """
-function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver)::ConstrainedIterResults
+function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λs::Vector=[],λc::Vector=[],κs::Vector=[],κc::Vector=[])::ConstrainedIterResults
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -628,15 +628,15 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     copyto!(results.xm,r.xm)
     copyto!(results.fcx,r.fcx)
     copyto!(results.fdx,r.fdx)
-    copyto!(results.λs,r.λs)
-    copyto!(results.λc,r.λc)
-    copyto!(results.κs,r.κs)
+    !isempty(λs) ? copyto!(results.λs,λs) : nothing
+    !isempty(λc) ? copyto!(results.λc,λc) : nothing
+    !isempty(κs) ? copyto!(results.κs,κs) : nothing
 
     for k = 1:N
         results.U[k] = r.U[k][1:m̄]
         results.U_[k] = r.U_[k][1:m̄]
         results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
-        results.κc[k] = r.κc[k][n+1:n+solver.opts.minimum_time+solver.obj.pEc] # retain multipliers from all but infeasible and minimum time equality
+        !isempty(κc) ? results.κc[k] = κc[k][n+1:n+solver.opts.minimum_time+solver.obj.pEc] : nothing # retain multipliers from all but infeasible and minimum time equality
         k == N ? continue : nothing
         results.um[k][1:m̄] = r.um[k][1:m̄]
         results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
@@ -646,11 +646,13 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     results
 end
 
-function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResults=ConstrainedVectorResults())
+function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λs::Vector=[],λc::Vector=[],κs::Vector=[],κc::Vector=[])
     n,m,N = get_sizes(solver)
 
     if !isempty(X)
         solver.opts.infeasible = true
+    else
+        solver.opts.infeasible = false
     end
 
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
@@ -686,14 +688,19 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResu
         end
 
         # Initialize Lagrange multipliers (warm start)
-        if ~isempty(prevResults)
-            results.λs .= deepcopy(λs)
-            results.λc .= deepcopy(λc)
-            results.κs .= deepcopy(κs)
 
+        ~isempty(λs) ? results.λs .= deepcopy(λs) : nothing
+        ~isempty(λc) ? results.λc .= deepcopy(λc) : nothing
+        ~isempty(κs) ? results.κs .= deepcopy(κs) : nothing
+
+        if ~isempty(κc)
             # remove infeasible control multipliers
-            for k = 1:N
-                results.κc[k] = κc[n+1:n+solver.opts.minimum_time+solver.obj.pEc]
+            if length(κc[1]) != pEc #&& !solver.opts.infeasible
+                for k = 1:N
+                    results.κc[k] = κc[n+1:n+solver.opts.minimum_time+solver.obj.pEc]
+                end
+            else
+                results.κc .= deepcopy(κc)
             end
         end
 
@@ -711,25 +718,6 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; prevResu
     copyto!(results.U, U_init)
     return results
 end
-
-# function copy_λ!(solver, results, λ)
-#     p_new = length(λ[1])
-#     p, = get_num_constraints(solver)
-#     if p_new == p  # all constraint λs passed in
-#         cid = trues(p)
-#     elseif p_new == solver.obj.p  # only "original" constraint λs passed
-#         cid = original_constraint_inds(solver)
-#     else
-#         err = ArgumentError("λ is not the correct dimension ($p_new). It must be either size $p or $(solver.obj.p)")
-#         throw(err)
-#     end
-#     for k = 1:N
-#         results.λ[k][cid] = λ[k]
-#     end
-#     results.λN .= λ[N+1]
-# end
-
-
 
 """
 $(SIGNATURES)

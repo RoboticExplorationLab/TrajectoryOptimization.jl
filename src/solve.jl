@@ -61,7 +61,7 @@ function solve(solver::Solver, results::SolverVectorResults; infeasible=false, w
         X0 = Array{Float64,2}(undef,0,0)
     end
 
-    _solve(solver, U0, X0, prevResults=results )
+    _solve(solver, U0, X0)
 end
 
 """
@@ -299,7 +299,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             end
 
             # Resolve feasible problem with warm start
-            results_feasible, stats_feasible = solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
+            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
 
             # Merge stats
             for key in keys(stats_feasible)
@@ -395,7 +395,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
-        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
+        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λs,results.λc,results.κs,results.κc)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end
@@ -403,7 +403,6 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
     end
-
     return results_feasible
 end
 
