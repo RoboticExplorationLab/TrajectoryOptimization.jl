@@ -313,42 +313,22 @@ end
 
 """
 $(SIGNATURES)
-    Convert quaternion to Euler angles
+    Skew-symmetric cross-product matrix (a.k.a. hat map)
 """
-function quat2eul(q)
-      q = q./norm(q) #TODO do we need this?
-      w = q[4]; x = q[1]; y = q[2]; z = q[3]
-
-      t0 = 2.0 * (w * x + y * z)
-      t1 = 1.0 - 2.0 * (x * x + y * y)
-      X = atan2(t0, t1)
-
-      t2 = 2.0 * (w * y - z * x)
-      if t2 > 1.0
-            t2 = 1.0
-      elseif t2 < -1.0
-            t2 = -1.0
-      else
-            nothing
-      end
-      Y = asin(t2)
-
-      t3 = 2.0 * (w * z + x * y);
-      t4 = 1.0 - 2.0 * (y * y + z * z);
-      Z = atan2(t3, t4)
-
-      return [X; Y; Z]
+function hat(x)
+      S = [  0   -x[3] x[2];
+	  	    x[3]   0  -x[1];
+		   -x[2]  x[1]  0]
 end
 
 """
 $(SIGNATURES)
-    Convert quaternion (q = [v;s]) to rotation matrix
+    Convert quaternion (q = [s;v]) to rotation matrix
 """
 function quat2rot(q)
       q = q./norm(q)
-      x = q[1]; y = q[2]; z = q[3]; w = q[4]
+      s = q[1]
+	  v = q[2:4]
 
-      [(-z^2 - y^2 + x^2 + w^2) (2*x*y - 2*z*w) (2*x*z + 2*y*w);
-       (2*z*w + 2*x*y) (-z^2 + y^2 - x^2 + w^2) (2*y*z - 2*x*w);
-       (2*x*z - 2*y*w) (2*y*z + 2*x*w) (z^2 - y^2 - x^2 + w^2)]
+      R = Matrix{Float64}(I,3,3) + 2*hat(v)*(hat(v) + s.*Matrix{Float64}(I,3,3))
 end
