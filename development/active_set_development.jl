@@ -41,6 +41,9 @@ plot(to_array(results2.λ)')
 
 results2.λN
 
+results2.Cx[3]'*results2.Iμ[3]*results2.Cu[3]
+
+
 solver1.opts.active_set_flag = true
 solver1.opts.active_constraint_tolerance = 0.0
 update_constraints!(results2,solver1)

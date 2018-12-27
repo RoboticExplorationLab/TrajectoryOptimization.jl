@@ -64,7 +64,7 @@ function norm2(X::Union{Vector{MVector{S,Float64}} where S, Vector{Vector{Float6
     v
 end
 
-function to_array(X::Vector{Vector{Float64}})
+function to_array(X::Vector{Vector{Any}})
     N = length(X)
     n = length(X[1])
     Y = zeros(n,N)
@@ -74,7 +74,7 @@ function to_array(X::Vector{Vector{Float64}})
     Y
 end
 
-function to_array(X::Vector{Matrix{Float64}})
+function to_array(X::Vector{Matrix{Any}})
     N = length(X)
     n,m = size(X[1])
     Y = zeros(n,m,N)
@@ -85,7 +85,7 @@ function to_array(X::Vector{Matrix{Float64}})
 end
 
 
-function to_array(X::Vector{T}) where {T<:MArray}
+function to_array(X::Vector{T}) where {T<:AbstractArray}
     N = length(X)
     Y = zeros(size(X[1])...,N)
     ax = axes(Y)

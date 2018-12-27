@@ -18,10 +18,10 @@ U = zeros(solver.model.m, solver.N)
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
-# with square root
-solver.opts.square_root = true
-results, = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[end]-obj.xf) < 1e-3
+# # with square root
+# solver.opts.square_root = true
+# results, = TrajectoryOptimization.solve(solver,U)
+# @test norm(results.X[end]-obj.xf) < 1e-3
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
@@ -39,10 +39,11 @@ results, =TrajectoryOptimization.solve(solver,U)
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver, U)
+results_c, stats_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
+cost(solver,results_c)
 
 # with Square Root
 # solver.opts.square_root = true
@@ -68,7 +69,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 # @test max_c < 1e-2
 
 
-### In-place dynamics ###
 # Unconstrained
 opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
@@ -120,9 +120,11 @@ U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0 = ones(solver.model.n)
 solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
-p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
+n,m,N = TrajectoryOptimization.get_sizes(solver)
+mm = m + n
+pIs, pIc, pEs, pEsN, pEc = TrajectoryOptimization.get_num_constraints(solver)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,solver.model.n)
+results_infeasible = ConstrainedVectorResults(n,mm,N,pIs,pIc,pEs,pEsN,pEc,solver.control_integration)
 copyto!(results_infeasible.U, [U_infeasible;ui])
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 

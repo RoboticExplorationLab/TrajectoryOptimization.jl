@@ -6,16 +6,24 @@ struct Solver{O<:Objective}
     obj::O               # Objective (cost function and constraints)
     opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
     dt::Float64          # Time step
-    fd::Function         # Discrete in place dynamics function, `fd(_,x,u)`
-    Fd::Function         # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    fd::Function         # Discrete in place dynamics function: fd(_,x,u)
+    Fd::Function         # Jacobian of discrete dynamics: fx,fu = F(x,u)
     fc::Function         # Continuous dynamics function (inplace)
     Fc::Function         # Jacobian of continuous dynamics
-    c_fun::Function
-    c_jacobian::Function
-    c_labels::Vector{String}  # Constraint labels
+    gs::Function         # state inequality constraints gs(x) <= 0
+    gc::Function         # control inequality constraints gc(u) <= 0
+    hs::Function         # state equality constraints hs(x) = 0
+    hsN::Function        # terminal state (equality) constraint hsN(x) = 0
+    hc::Function         # control equality constraints hc(u) = 0
+    gsx::Function        # state inequality constraint Jacobian
+    gcu::Function        # control inequality constraint Jacobian
+    hsx::Function        # state equality constraint Jacobian
+    hsNx::Function       # terminal state (equality) constraint Jacobian
+    hcu::Function        # control equality constraint Jacobian
     N::Int64             # Number of time steps
-    integration::Symbol
+    integration::Symbol  # type of numerical integration (eg, rk4, rk3, rk3_foh,...)
     control_integration::Symbol
+    constraint_labels::Vector{String}  # Constraint labels
 
     function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
         # Check for minimum time
@@ -167,20 +175,28 @@ struct Solver{O<:Objective}
         end
 
         function fc_jacobians!(x,u)
-            # infeasible = size(u,1) != m̄
             Sc[1:n] = x
             Sc[n+1:n+m] = u[1:m]
             Fc!(Jc,Scdot,Sc)
             return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
         end
 
-        # Generate constraint functions
-        c!, c_jacobian!, c_labels = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
+        # Generate constraint functions (and Jacobians)
+        gs = generate_state_inequality_constraints(obj)
+        gc = generate_control_inequality_constraints(obj,max_dt=opts.max_dt,min_dt=opts.min_dt)
+        hs = generate_state_equality_constraints(obj)
+        hsN = generate_state_terminal_constraints(obj)
+        hc = generate_control_equality_constraints(obj)
+        gsx = generate_state_inequality_constraint_jacobian(obj)
+        gcu = generate_control_inequality_constraint_jacobian(obj)
+        hsx = generate_state_equality_constraint_jacobian(obj)
+        hsNx = generate_state_terminal_constraint_jacobian(obj)
+        hcu = generate_control_equality_constraint_jacobian(obj)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration, control_integration)
+        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, gs, gc, hs, hsN, hc, gsx, gcu, hsx, hsNx, hcu, N, integration, control_integration,["empty" for i = 1:2])
     end
 end
 

@@ -122,6 +122,27 @@ function is_inplace_constraints(c::Function,n::Int64,m::Int64)
     return true
 end
 
+"""
+$(SIGNATURES)
+    Determine if the constraints are inplace. Returns boolean and number of constraints
+"""
+function is_inplace_constraints(c::Function,n::Int64)
+    x = rand(n)
+    q = 100
+    iter = 1
+
+    vals = NaN*(ones(q))
+    try
+        c(vals,x)
+    catch e
+        if e isa MethodError
+            return false
+        end
+    end
+
+    return true
+end
+
 function count_inplace_output(c::Function, n::Int, m::Int)
     x = rand(n)
     u = rand(m)
@@ -172,7 +193,7 @@ function count_inplace_output(c::Function, n::Int)
 
     while iter < 5
         try
-            c(vals,x,u)
+            c(vals,x)
             break
         catch e
             q *= 10
@@ -240,7 +261,7 @@ abstract type Objective end
 $(TYPEDEF)
 Defines a quadratic objective for an unconstrained optimization problem of the
     following form:
-    J = (xₙ-xf)'Q(xₙ-xf) + Σ (xₖ-xf)'Q(xₖ-xf) + uₖ'Ruₖ + c
+    J = 0.5(xₙ-xf)'Q(xₙ-xf) + Σ 0.5(xₖ-xf)'Q(xₖ-xf) + uₖ'Ruₖ
 """
 mutable struct UnconstrainedObjective{TQ,TR,TQf} <: Objective
     Q::TQ                 # Quadratic stage cost for states (n,n)
@@ -295,18 +316,20 @@ end
 
 """
 $(TYPEDEF)
-Define a quadratic objective for a constrained optimization problem.
+    Define a quadratic objective and custom constraints for a constrained optimization problem.
 
-# Constraint formulation
-* Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
+    J = 1/2(xₙ-xf)'Qf(xₙ-xf) + Σ 1/2(xₖ-xf)'Q(xₖ-xf) + 1/2uₖ'Ruₖ
 
+    Constraint formulation
+    gs_custom(x) <= 0
+    gc_custom(u) <= 0
+    hs_custom(x) = 0
+    hc_custom(u) = 0
 """
 mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:AbstractArray} <: Objective
-    Q::TQ                 # Quadratic stage cost for states (n,n)
-    R::TR                 # Quadratic stage cost for controls (m,m)
-    Qf::TQf               # Quadratic final cost for terminal state (n,n)
-    c::Float64            # Constant stage cost (weight for minimum time problems)
+    Q::TQ             # Quadratic stage cost for states (n,n)
+    R::TR              # Quadratic stage cost for controls (m,m)
+    Qf::TQf          # Quadratic final cost for terminal state (n,n)
     tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
     x0::Array{Float64,1}  # Initial state (n,)
     xf::Array{Float64,1}  # Final state (n,)
@@ -319,154 +342,108 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
     x_min::Array{Float64,1}  # Lower state bounds (n,)
     x_max::Array{Float64,1}  # Upper state bounds (n,)
 
-    # General Stage Constraints
-    cI::Function  # inequality constraint function (inplace)
-    cE::Function  # equality constraint function (inplace)
+    # Custom Stage Constraints
+    gs_custom::Function # inequality state constraints
+    gc_custom::Function # inequality control constraints
+    hs_custom::Function # equality state constraints
+    hc_custom::Function # equality control constraints
 
     # Terminal Constraints
     use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
-    # Overload cI and cE with a single argument for terminal constraints
 
     # Constants (these do not count infeasible or minimum time constraints)
-    p::Int   # Total number of stage constraints
-    pI::Int  # Number of inequality constraints
-    p_N::Int  # Number of terminal constraints
-    pI_N::Int  # Number of terminal inequality constraints
+    pIs::Int
+    pIc::Int
+    pEs::Int
+    pEc::Int
+    pEsN::Int # terminal state constraints (n)
 
-    function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,c::Float64,tf::Float64,x0,xf,
+    function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
-        cI, cE,
+        gs_custom, gc_custom, hs_custom, hc_custom,
         use_terminal_constraint) where {TQ,TR,TQf}
 
         n = size(Q,1)
         m = size(R,1)
 
-        # Make general inequality/equality constraints inplace
-        flag_cI = is_inplace_constraints(cI,n,m)
-        if !flag_cI
-            cI = wrap_inplace(cI)
-            println("Custom inequality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
+        # Check that custom constraints are inplace
+        if !is_inplace_constraints(gs_custom,n)
+            error("Custom state inequality constraints are not inplace")
         end
-        pI_c, pI_N_c = count_inplace_output(cI,n,m)
+        pIs_custom = count_inplace_output(gs_custom,n)
 
-        flag_cE = is_inplace_constraints(cE,n,m)
-        if !flag_cE
-            cE = wrap_inplace(cE)
-            println("Custom equality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
+        if !is_inplace_constraints(gc_custom,m)
+            error("Custom control inequality constraints are not inplace")
         end
-        pE_c, pE_N_c = count_inplace_output(cE,n,m)
+        pIc_custom = count_inplace_output(gc_custom,m)
+
+        if !is_inplace_constraints(hs_custom,n)
+            error("Custom state equality constraints are not inplace")
+        end
+        pEs_custom = count_inplace_output(hs_custom,n)
+
+        if !is_inplace_constraints(hc_custom,m)
+            error("Custom control equality constraints are not inplace")
+        end
+        pEc_custom = count_inplace_output(hc_custom,m)
 
         # Validity Tests
         u_max, u_min = _validate_bounds(u_max,u_min,m)
         x_max, x_min = _validate_bounds(x_max,x_min,n)
 
-        # Stage Constraints
-        pI = 0
-        pE = 0
-        pI += count(isfinite, u_min)
-        pI += count(isfinite, u_max)
-        pI += count(isfinite, x_min)
-        pI += count(isfinite, x_max)
+        u_min_active = isfinite.(u_min)
+        u_max_active = isfinite.(u_max)
+        x_min_active = isfinite.(x_min)
+        x_max_active = isfinite.(x_max)
 
-        # u0 = zeros(m)
-        # if ~isa(cI(x0,u0), Nothing)
-        #     pI += size(cI(x0,u0),1)
-        # end
-        # if ~isa(cE(x0,u0), Nothing)
-        #     pE += size(cE(x0,u0),1)
-        # end
-        pI += pI_c
-        pE += pE_c
+        pIs = count(x_min_active) + count(x_max_active) + pIs_custom
+        pIc = count(u_min_active) + count(u_max_active) + pIc_custom
+        pEs = pEs_custom
+        pEc = pEc_custom
+        pEsN = pEs + n
 
-        p = pI + pE
-
-        #TODO custom terminal constraints
-        # Terminal Constraints
-        pI_N = pI_N_c
-        pE_N = pE_N_c
-
-        # try cI(x0)
-        #     pI_N = size(cI(x0),1)
-        # catch
-        #     pI_N = 0
-        # end
-        # try cE(x0)
-        #     pE_N = size(cE(x0),1)
-        # catch
-        #     pE_N = 0
-        # end
-        if use_terminal_constraint
-            pE_N += n
-        end
-        p_N = pI_N + pE_N
-
-        new{TQ,TR,TQf}(Q,R,Qf,c,tf,x0,xf, u_min, u_max, x_min, x_max, cI, cE, use_terminal_constraint, p, pI, p_N, pI_N)
+        new{TQ,TR,TQf}(Q, R, Qf, tf, x0, xf, u_min, u_max, x_min, x_max, gs_custom, gc_custom, hs_custom, hc_custom, use_terminal_constraint, pIs, pIc, pEs, pEc, pEsN)
     end
 end
 
 """
 $(SIGNATURES)
-
-Construct a ConstrainedObjective with defaults.
-
-Create a ConstrainedObjective, specifying only the needed fields. All others
-will be set to their default, constrained values.
-
-# Constraint formulation
-* Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
-
-# Arguments
-* u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
-a vector of size (m,). A scalar will be copied to all states or controls. Values
-can be ±Inf.
-* cI, cE: Functions for inequality and equality constraints. Must be of the form
-`c = f(x,u)`, where `c` is of size (pI_c,) or (pE_c,).
-* cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
-where `c` is of size (pI_c_N,) or (pE_c_N,).
+    Construct a ConstrainedObjective with defaults.
 """
-function ConstrainedObjective(Q,R,Qf,tf,x0,xf; c::Float64=0.0,
+function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
-    cI=(c,x,u)->nothing, cE=(c,x,u)->nothing,
+    gs_custom=(c,x)->nothing, gc_custom=(c,u)->nothing, hs_custom=(c,x)->nothing, hc_custom=(c,u)->nothing,
     use_terminal_constraint=true)
 
-    ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
+    ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
-        cI, cE,
+        gs_custom, gc_custom, hs_custom, hc_custom,
         use_terminal_constraint)
 end
 
-# Positional arguments match unconstrained
-function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Float64,x0,xf; kwargs...)
-    ConstrainedObjective(Q,R,Qf,tf,x0,xf,c=c; kwargs...)
-end
-
-# Minimum time constructor (c not specified)
+# Minimum time constructor
 function ConstrainedObjective(Q,R,Qf,tf::Symbol,x0,xf; kwargs...)
-    ConstrainedObjective(Q,R,Qf,1.0,tf,x0,xf; kwargs...)
-end
-
-# Minimum time constructor (c specified)
-function ConstrainedObjective(Q,R,Qf,c::Float64,tf::Symbol,x0,xf; kwargs...)
     if tf == :min
-        ConstrainedObjective(Q,R,Qf,c,0.,x0,xf; kwargs...)
+        ConstrainedObjective(Q,R,Qf,0.,x0,xf; kwargs...)
     else
         throw(ArgumentError())
     end
 end
-
-
+#
 function copy(obj::ConstrainedObjective)
-    ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.c),copy(obj.tf),copy(obj.x0),copy(obj.xf),
+    ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
-        cI=obj.cI, cE=obj.cE,
+        gs_custom=obj.gs_custom, gc_custom=obj.gc_custom, hs_custom=obj.hs_custom, hc_custom=obj.hc_custom,
         use_terminal_constraint=obj.use_terminal_constraint)
 end
 
-"$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
+"""
+$(SIGNATURES)
+    Construct a ConstrainedObjective from an UnconstrainedObjective
+"""
 function ConstrainedObjective(obj::UnconstrainedObjective; kwargs...)
     ConstrainedObjective(obj.Q, obj.R, obj.Qf, obj.tf, obj.x0, obj.xf; kwargs...)
 end
@@ -479,17 +456,16 @@ Only updates the specified fields, all others are copied from the previous
 Objective.
 """
 function update_objective(obj::ConstrainedObjective;
-    Q=obj.Q, R=obj.R, Qf=obj.Qf, c=obj.c, tf=obj.tf, x0=obj.x0, xf = obj.xf,
+    Q=obj.Q, R=obj.R, Qf=obj.Qf, tf=obj.tf, x0=obj.x0, xf=obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
-    cI=obj.cI, cE=obj.cE,
+    gs_custom=obj.gs_custom, gc_custom=obj.gc_custom, hs_custom=obj.hs_custom, hc_custom=obj.hc_custom,
     use_terminal_constraint=obj.use_terminal_constraint)
 
-    ConstrainedObjective(Q,R,Qf,c,tf,x0,xf,
+    ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
-        cI=cI, cE=cE,
+        gs_custom=gs_custom, gc_custom=gc_custom, hs_custom=hs_custom, hc_custom=hc_custom,
         use_terminal_constraint=use_terminal_constraint)
-
 end
 
 """

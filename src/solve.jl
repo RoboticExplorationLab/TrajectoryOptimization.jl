@@ -60,13 +60,8 @@ function solve(solver::Solver, results::SolverVectorResults; infeasible=false, w
     else
         X0 = Array{Float64,2}(undef,0,0)
     end
-    if warm_start
-        λ = deepcopy(results.λ)
-        push!(λ, results.λN)
-    else
-        λ = []
-    end
-    _solve(solver, U0, X0, λ=λ)
+
+    _solve(solver, U0, X0)
 end
 
 """
@@ -78,7 +73,7 @@ $(SIGNATURES)
 * X0::Matrix{Float64} (optional) - initial state trajectory. If specified, it will solve use infeasible controls
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
-function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); prevResults=ConstrainedVectorResults())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     t_start = time_ns()
 
     ## Unpack model, objective, and solver parameters
@@ -103,7 +98,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #       INITIALIZATION       #
     #****************************#
     if isempty(prevResults)
-        results = init_results(solver, X0, U0, λ=λ)
+        results = init_results(solver, X0, U0)
     else
         results = prevResults
     end
@@ -159,8 +154,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     dJ = Inf
     gradient = Inf
     Δv = [Inf, Inf]
-    sqrt_tolerance = false
-
 
     with_logger(logger) do
     for j = 1:solver.opts.iterations_outerloop
@@ -168,8 +161,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @info "Outer loop $j (begin)"
 
         if solver.opts.constrained && j == 1
-            results.C_prev .= deepcopy(results.C)
-            results.CN_prev .= deepcopy(results.CN)
+            results.gs_prev .= deepcopy(results.gs)
+            results.gc_prev .= deepcopy(results.gc)
+            results.hs_prev .= deepcopy(results.hs)
+            results.hc_prev .= deepcopy(results.hc)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
@@ -196,8 +191,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             iter += 1
 
             if solver.opts.live_plotting
-                # X_traj = to_array(results.X)
-                # display(plot(X_traj[1,:],X_traj[2,:]))
                 display(plot(to_array(results.U)'))
             end
 
@@ -216,12 +209,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             end
 
             ## Check gradients for convergence ##
-            d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
-            s_grad = maximum(abs.(results.s[1]))
             todorov_grad = calculate_todorov_gradient(results)
 
-            @logmsg InnerLoop :dgrad value=d_grad
-            @logmsg InnerLoop :sgrad value=s_grad
             @logmsg InnerLoop :grad value=todorov_grad
             gradient = todorov_grad
 
@@ -231,13 +220,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_counter value=dJ_zero_counter
-
-            # if iter > 1
-            #     c_diff = abs(c_max-c_max_hist[end-1])
-            # else
-            #     c_diff = 0.
-            # end
-            # @logmsg InnerLoop :c_diff value=c_diff
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
@@ -254,10 +236,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,false)
+        outer_loop_update(results,solver)
         update_constraints!(results, solver)
-        J_prev = cost(solver, results, results.X, results.U)
-
+        c_max = max_violation(results)
+        J = cost(solver, results, results.X, results.U)
+        J_prev = J
         # Logger output
         @logmsg OuterLoop :outeriter value=j
         @logmsg OuterLoop :iter value=iter
@@ -417,7 +400,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
-        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
+        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λs,results.λc,results.κs,results.κc)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     end
@@ -425,44 +408,8 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
     end
-
     return results_feasible
 end
-
-# """
-# $(SIGNATURES)
-#     Infeasible start solution is run through time varying LQR to track state and control trajectories
-# """
-# function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-#     # turn off infeasible solve
-#     solver.opts.infeasible = false
-#
-#     # remove infeasible components
-#     results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
-#
-#     # backward pass (ie, time varying lqr)
-#     if solver.control_integration == :foh
-#         Δv = backwardpass_foh!(results_feasible,solver)
-#     elseif solver.opts.square_root
-#         Δv = backwardpass_sqrt!(results_feasible, solver)
-#     else
-#         Δv = backwardpass!(results_feasible, solver)
-#     end
-#
-#     # rollout
-#     forwardpass!(results_feasible,solver,Δv)
-#     results_feasible.X .= results_feasible.X_
-#     results_feasible.U .= results_feasible.U_
-#
-#     # return constrained results if input was constrained
-#     if !solver.opts.unconstrained
-#         results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
-#         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
-#         calculate_jacobians!(results_feasible,solver)
-#     end
-#
-#     return results_feasible
-# end
 
 """
 $(SIGNATURES)
@@ -471,18 +418,21 @@ $(SIGNATURES)
         -see Toussaint 'A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates'
 """
 function λ_update!(results::ConstrainedIterResults,solver::Solver)
-    p,pI,pE = get_num_constraints(solver)
     N = solver.N
-    for k = 1:N-1
-        results.λ[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k] + results.Iμ[k]*results.C[k]))
-        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
-    end
-    if solver.control_integration == :foh
-        results.λ[N] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[N] + results.Iμ[N]*results.C[N]))
-        results.λ[N][1:pI] = max.(0.0,results.λ[N][1:pI])
-    end
+    for k = 1:N
+        if k != 1
+            results.λs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λs[k] + results.μs[k].*results.gs[k]))
+            results.λs[k] = max.(0.0,results.λs[k])
 
-    results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
+            results.κs[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κs[k] + results.νs[k].*results.hs[k]))
+        end
+        if k != N || solver.control_integration == :foh
+            results.λc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λc[k] + results.μc[k].*results.gc[k]))
+            results.λc[k] = max.(0.0,results.λc[k])
+
+            results.κc[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.κc[k] + results.νc[k].*results.hc[k]))
+        end
+    end
 end
 
 """ @(SIGNATURES) Penalty update """
@@ -497,67 +447,68 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
 function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
-    # println("default penalty update")
-    if solver.control_integration == :foh
-        final_index = solver.N
-    else
-        final_index = solver.N-1
+    N = solver.N
+    for k = 1:N
+        if k != 1
+            results.μs[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.μs[k])
+            results.νs[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.νs[k])
+        end
+        if k != N || solver.control_integration == :foh
+            results.μc[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.μc[k])
+            results.νc[k] = min.(solver.opts.μ_max, solver.opts.γ.*results.νc[k])
+        end
     end
-
-    for k = 1:final_index
-        results.μ[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μ[k])
-    end
-
-    results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
-
     return nothing
 end
 
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
-    # println("individual penalty update")
-    p,pI,pE = get_num_constraints(solver)
-    n = solver.model.n
-
+    N = solver.N
     τ = solver.opts.τ
     μ_max = solver.opts.μ_max
     γ_no  = solver.opts.γ_no
     γ = solver.opts.γ
 
-    if solver.control_integration == :foh
-        final_index = solver.N
-    else
-        final_index = solver.N-1
-    end
+    pIs, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
 
     # Stage constraints
-    for k = 1:final_index
-        for i = 1:p
-            if p <= pI
-                if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
-                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
+    for k = 1:N
+        if k != 1
+            for i = 1:pIs
+                if max(0.0,results.gs[k][i]) <= τ*max(0.0,results.gs_prev[k][i])
+                    results.μs[k][i] = min(μ_max, γ_no*results.μs[k][i])
                 else
-                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
+                    results.μs[k][i] = min(μ_max, γ*results.μs[k][i])
                 end
-            else
-                if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
-                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
+            end
+
+            for i = 1:pEs
+                if abs(results.hs[k][i]) <= τ*abs(results.hs_prev[k][i])
+                    results.νs[k][i] = min(μ_max, γ_no*results.νs[k][i])
                 else
-                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
+                    results.νs[k][i] = min(μ_max, γ*results.νs[k][i])
+                end
+            end
+        end
+
+        if k != N || solver.control_integration == :foh
+            for i = 1:pIc
+                if max(0.0,results.gc[k][i]) <= τ*max(0.0,results.gc_prev[k][i])
+                    results.μc[k][i] = min(μ_max, γ_no*results.μc[k][i])
+                else
+                    results.μc[k][i] = min(μ_max, γ*results.μc[k][i])
+                end
+            end
+
+            for i = 1:pEc
+                if abs(results.hc[k][i]) <= τ*abs(results.hc_prev[k][i])
+                    results.νc[k][i] = min(μ_max, γ_no*results.νc[k][i])
+                else
+                    results.νc[k][i] = min(μ_max, γ*results.νc[k][i])
                 end
             end
         end
     end
-
-    # Terminal constraints
-    for i = 1:n
-        if abs(results.CN[i]) <= τ*abs(results.CN_prev[i])
-            results.μN[i] = min(μ_max, γ_no*results.μN[i])
-        else
-            results.μN[i] = min(μ_max, γ*results.μN[i])
-        end
-    end
-
     return nothing
 end
 
@@ -565,7 +516,7 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
 
     ## Lagrange multiplier updates
     λ_update!(results,solver)
@@ -574,13 +525,15 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
     μ_update!(results,solver)
 
     ## Store current constraints evaluations for next outer loop update
-    results.C_prev .= deepcopy(results.C)
-    results.CN_prev .= deepcopy(results.CN)
+    results.gs_prev .= deepcopy(results.gs)
+    results.gc_prev .= deepcopy(results.gc)
+    results.hs_prev .= deepcopy(results.hs)
+    results.hc_prev .= deepcopy(results.hc)
 
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver,sqrt_tolerance::Bool)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver)::Nothing
     return nothing
 end
 
