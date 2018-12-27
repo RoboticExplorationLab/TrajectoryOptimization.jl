@@ -234,6 +234,38 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
+function _omega_quat_cost(solver::Solver,res::SolverVectorResults, X=res.X,U=res.U)
+    #alternative to _cost function ONLY with the following format:
+    #first three entries of stage are omega entries and last 4 are quaternion
+
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    obj = solver.obj
+    Q = obj.Q; R = obj.R; xf::Vector{Float64} = obj.xf; Qf::Matrix{Float64} = obj.Qf
+    dt = solver.dt
+
+    J = 0.0
+    for k = 1:N-1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+        if solver.control_integration == :foh
+            xm = res.xm[k]
+            um = res.um[k]
+            J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(xm,um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+        else
+            J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            # J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
+            # solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            # solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+        end
+    end
+
+    J += 0.5*(X[N,1:3] - xf[1:3])'*Qf*(X[N,1:3] - xf[1:3])+X[N,4:7]*(xf[4:7])'
+
+    return J
+end
+
 function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
     # pull out solver/objective values
     n,m,N = get_sizes(solver)

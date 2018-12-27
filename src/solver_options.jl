@@ -9,6 +9,8 @@ mutable struct SolverOptions
     minimum_time::Bool
     infeasible::Bool
 
+    "Solver is in the attitude form of omega-quaterion"
+    omega_quat::Bool
     "Use cholesky decomposition of the cost-to-go Hessian"
     square_root::Bool
     "Display statistics at each iteration"
@@ -97,14 +99,14 @@ mutable struct SolverOptions
 
     live_plotting::Bool
 
-    function SolverOptions(;constrained=false,minimum_time=false,infeasible=false,square_root=false,verbose=false,
+    function SolverOptions(;constrained=false,omega_quat=false,minimum_time=false,infeasible=false,square_root=false,verbose=false,
         z_min=1.0e-8,z_max=10.0,max_cost=1.0e8,max_state_value=1.0e8,max_control_value=1.0e8,max_dt=1.0,min_dt=1e-3,minimum_time_tf_estimate=0.0,minimum_time_dt_estimate=0.0,gradient_tolerance=1e-5,gradient_intermediate_tolerance=1e-5,cost_tolerance=1.0e-4,cost_intermediate_tolerance=1.0e-3,
         constraint_tolerance=1e-3,iterations=500,iterations_innerloop=150,iterations_outerloop=50,
         iterations_linesearch=15,R_infeasible=1e3,R_minimum_time=1.0e3,
         benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,λ_min=-1.0e8,λ_max=1.0e8,μ_max=1.0e8,μ_initial=1.0,μ_initial_infeasible=1.0,μ_initial_minimum_time_inequality=1.0,μ_initial_minimum_time_equality=1.0,γ=10.0,γ_infeasible=10.0,γ_minimum_time_inequality=10.0,γ_minimum_time_equality=10.0,γ_no=1.0,τ=0.25,outer_loop_update=:default,λ_second_order_update=false,
         ρ_initial=0.0,ρ_factor=1.6,ρ_max=1.0e8,ρ_min=1e-6,regularization_type=:state,ρ_forwardpass=10.0,eigenvalue_scaling=2.0,eigenvalue_threshold=1e-8,use_static=false,live_plotting=false)
 
-        new(constrained,minimum_time,infeasible,square_root,verbose,z_min,z_max,max_cost,max_state_value,max_control_value,max_dt,min_dt,minimum_time_tf_estimate,minimum_time_dt_estimate,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
+        new(constrained,minimum_time,infeasible,omega_quat,square_root,verbose,z_min,z_max,max_cost,max_state_value,max_control_value,max_dt,min_dt,minimum_time_tf_estimate,minimum_time_dt_estimate,gradient_tolerance,gradient_intermediate_tolerance,cost_tolerance,cost_intermediate_tolerance,
         constraint_tolerance,iterations,iterations_innerloop,iterations_outerloop,
         iterations_linesearch,R_infeasible,R_minimum_time,
         benchmark,unconstrained_original_problem,resolve_feasible,
