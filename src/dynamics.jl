@@ -19,5 +19,6 @@ include("../dynamics/cartpole.jl")
 include("../dynamics/dubinscar.jl")
 include("../dynamics/quadrotor.jl")
 include("../dynamics/quadrotor_euler.jl")
+include("../dynamics/kuka.jl")
 
 end

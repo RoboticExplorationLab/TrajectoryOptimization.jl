@@ -8,3 +8,4 @@ deps/deps.jl
 *.DS_Store
 ipopt.opt
 ipopt.out
+temp/

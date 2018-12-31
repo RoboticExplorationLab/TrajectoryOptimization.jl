@@ -49,7 +49,7 @@ struct Model
 
     # Construct model from a `Mechanism` type from `RigidBodyDynamics`
     function Model(mech::Mechanism)
-        m = length(joints(mech))-1  # subtract off joint to world
+        m = length(joints(mech))  # subtract off joint to world
         Model(mech,ones(m))
     end
 
@@ -62,7 +62,7 @@ struct Model
 
         # construct a model using robot dynamics equation assembed from URDF file
         n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
-        num_joints = length(joints(mech))-1  # subtract off joint to world
+        num_joints = length(joints(mech))  # subtract off joint to world
 
         if length(torques) != num_joints
             error("Torque underactuation specified does not match mechanism dimensions")
@@ -88,14 +88,14 @@ end
 "$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"
 function Model(urdf::String)
     # construct model using string to urdf file
-    mech = parse_urdf(Float64,urdf)
+    mech = parse_urdf(urdf)
     Model(mech)
 end
 
 "$(SIGNATURES) Construct a partially actuated model from a string to a urdf file"
 function Model(urdf::String,torques::Array{Float64,1})
     # underactuated system (potentially)
-    mech = parse_urdf(Float64,urdf)
+    mech = parse_urdf(urdf)
     Model(mech,torques)
 end
 
