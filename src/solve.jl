@@ -414,11 +414,12 @@ $(SIGNATURES)
     Infeasible start solution is run through time varying LQR to track state and control trajectories
 """
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
+    # remove infeasible components
+    remove_infeasible_controls!(results,solver)
+
     # get sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
-
-    remove_infeasible_controls!(results,solver)
 
     # re-initialize bp expansion terms
     solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm) : bp = BackwardPassZOH(n,mm,N)

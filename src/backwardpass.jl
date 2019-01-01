@@ -18,6 +18,174 @@ struct BackwardPassZOH <: BackwardPass
     end
 end
 
+"""
+$(SIGNATURES)
+Solve the dynamic programming problem, starting from the terminal time step
+Computes the gain matrices K and d by applying the principle of optimality at
+each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
+function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
+Online Trajectory Optimization)
+"""
+function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
+    if solver.control_integration == :foh
+        Δv = _backwardpass_foh!(results,solver)
+    elseif solver.opts.square_root
+        Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+    else
+        Δv = _backwardpass!(results, solver, bp)
+    end
+
+    return Δv
+end
+
+function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
+    dt = solver.dt
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d;
+
+    S = res.S; s = res.s
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Qux = bp.Qux; Quu = bp.Quu
+
+    # reset expansion terms #TODO not sure why these need to be reset...
+    for k = 1:N-1
+        Quu[k] = zeros(mm,mm)
+        Qux[k] = zeros(mm,n)
+    end
+
+    # Boundary Conditions
+    S[N] = Wf
+    s[N] = Wf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = zeros(2)
+
+    # Terminal constraints
+    if solver.opts.constrained
+        gs = res.gs; gc = res.gc; hs = res.hs; hc = res.hc
+        λs = res.λs; λc = res.λc; κs = res.κs; κc = res.κc
+        Iμs = res.Iμs; Iμc = res.Iμc; Iνs = res.Iνs; Iνc = res.Iνc
+        gsx = res.gsx; gcu = res.gcu; hsx = res.hsx; hcu = res.hcu
+
+        S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
+        s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
+    end
+
+    # Backward pass
+    k = N-1
+
+    # for the special case of the tracking quadratic cost
+    ℓxx = W
+    ℓuu = R
+    ℓux = zeros(m,n)
+
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        x = X[k]
+        u = U[k][1:m]
+
+        # for the special case of the tracking quadratic cost:
+        ℓ1 = ℓ(x,u,W,R,xf)
+        ℓx = W*(x - xf)
+        ℓu = R*u
+
+        # Assemble expansion
+        Qx[k][1:n] = dt*ℓx
+        Qu[k][1:m] = dt*ℓu
+        Qxx[k][1:n,1:n] = dt*ℓxx
+        Quu[k][1:m,1:m] = dt*ℓuu
+        Qux[k][1:m,1:n] = dt*ℓux
+
+        # Minimum time expansion components
+        if solver.opts.minimum_time
+            h = U[k][m̄]
+
+            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+
+            tmp = 2*h*ℓu
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+
+            Qux[k][m̄,1:n] = 2*h*ℓx'
+        end
+
+        # Infeasible expansion components
+        if solver.opts.infeasible
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
+        end
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Constraints
+        if solver.opts.constrained
+            k != 1 ? Qx[k] += gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
+            Qu[k] += gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            k != 1 ? Qxx[k] += gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
+            Quu[k] += gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
+        end
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qxx[k] += fdx'*S[k+1]*fdx
+        Quu[k] += fdu'*S[k+1]*fdu
+        Qux[k] += fdu'*S[k+1]*fdx
+
+        if solver.opts.regularization_type == :state #TODO combined into one
+            Quu_reg = Quu[k] + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux[k] + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu[k] + res.ρ[1]*I
+            Qux_reg = Qux[k]
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv[1] = 0.
+            Δv[2] = 0.
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu[k]
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
+        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv[1] += d[k]'*Qu[k]
+        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
 struct BackwardPassFOH <: BackwardPass
     Qx::Vector{Float64}
     Qu::Vector{Float64}
@@ -90,171 +258,6 @@ struct BackwardPassFOH <: BackwardPass
 
         new(Qx,Qu,Qy,Qv,Qxx,Quu,Qyy,Qvv,Qxu,Qxy,Qxv,Quy,Quv,Qyv,Lx,Lu,Ly,Lv,Lxx,Luu,Lyy,Lvv,Lxu,Lxy,Lxv,Luy,Luv,Lyv)
     end
-end
-
-"""
-$(SIGNATURES)
-Solve the dynamic programming problem, starting from the terminal time step
-Computes the gain matrices K and d by applying the principle of optimality at
-each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
-function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
-Online Trajectory Optimization)
-"""
-function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
-    if solver.control_integration == :foh
-        Δv = _backwardpass_foh!(results,solver)
-    elseif solver.opts.square_root
-        Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
-    else
-        Δv = _backwardpass!(results, solver, bp)
-    end
-
-    return Δv
-end
-
-function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-
-    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
-
-    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
-    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
-
-    dt = solver.dt
-
-    # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d;
-
-    S = res.S; s = res.s
-
-    bp = BackwardPassZOH(n,mm,N)
-    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Qux = bp.Qux; Quu = bp.Quu
-
-    # Boundary Conditions
-    S[N] = Wf
-    s[N] = Wf*(X[N] - xf)
-
-    # Initialize expected change in cost-to-go
-    Δv = zeros(2)
-
-    # Terminal constraints
-    if solver.opts.constrained
-        gs = res.gs; gc = res.gc; hs = res.hs; hc = res.hc
-        λs = res.λs; λc = res.λc; κs = res.κs; κc = res.κc
-        Iμs = res.Iμs; Iμc = res.Iμc; Iνs = res.Iνs; Iνc = res.Iνc
-        gsx = res.gsx; gcu = res.gcu; hsx = res.hsx; hcu = res.hcu
-
-        S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
-        s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
-    end
-
-    # Backward pass
-    k = N-1
-
-    # for the special case of the tracking quadratic cost
-    ℓxx = W
-    ℓuu = R
-    ℓux = zeros(m,n)
-
-    while k >= 1
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-
-        x = X[k]
-        u = U[k][1:m]
-
-        # for the special case of the tracking quadratic cost:
-        ℓ1 = ℓ(x,u,W,R,xf)
-        ℓx = W*(x - xf)
-        ℓu = R*u
-
-
-        # Assemble expansion
-        Qx[k][1:n] = dt*ℓx
-        Qu[k][1:m] = dt*ℓu
-        Qxx[k][1:n,1:n] = dt*ℓxx
-        Quu[k][1:m,1:m] = dt*ℓuu
-        Qux[k][1:m,1:n] = dt*ℓux
-
-        # Minimum time expansion components
-        if solver.opts.minimum_time
-            h = U[k][m̄]
-
-            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
-
-            tmp = 2*h*ℓu
-            Quu[k][1:m,m̄] = tmp
-            Quu[k][m̄,1:m] = tmp'
-            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
-
-            Qux[k][m̄,1:n] = 2*h*ℓx'
-        end
-
-        # Infeasible expansion components
-        if solver.opts.infeasible
-            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
-            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
-        end
-
-        # Compute gradients of the dynamics
-        fdx, fdu = res.fdx[k], res.fdu[k]
-
-        # Constraints
-        if solver.opts.constrained
-            k != 1 ? Qx[k] += gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
-            Qu[k] += gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
-            k != 1 ? Qxx[k] += gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
-            Quu[k] += gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
-            # Qux[k] += # no coupling between constraints
-        end
-
-        # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx[k] += fdx'*s[k+1]
-        Qu[k] += fdu'*s[k+1]
-        Qxx[k] += fdx'*S[k+1]*fdx
-        Quu[k] += fdu'*S[k+1]*fdu
-        Qux[k] += fdu'*S[k+1]*fdx
-
-        if solver.opts.regularization_type == :state #TODO combined into one
-            Quu_reg = Quu[k] + res.ρ[1]*fdu'*fdu
-            Qux_reg = Qux[k] + res.ρ[1]*fdu'*fdx
-        elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu[k] + res.ρ[1]*I
-            Qux_reg = Qux[k]
-        end
-
-        # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
-            # increase regularization
-            regularization_update!(res,solver,:increase)
-
-            # reset backward pass
-            k = N-1
-            Δv[1] = 0.
-            Δv[2] = 0.
-            continue
-        end
-
-        # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu[k]
-
-        # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
-        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
-        S[k] = 0.5*(S[k] + S[k]')
-
-        # calculated change is cost-to-go over entire trajectory
-        Δv[1] += d[k]'*Qu[k]
-        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
-
-        k = k - 1;
-    end
-
-    # decrease regularization after backward pass
-    regularization_update!(res,solver,:decrease)
-
-    return Δv
 end
 
 function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
