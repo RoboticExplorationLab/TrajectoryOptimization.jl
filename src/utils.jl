@@ -332,3 +332,13 @@ function quat2rot(q)
 
       R = Matrix{Float64}(I,3,3) + 2*hat(v)*(hat(v) + s.*Matrix{Float64}(I,3,3))
 end
+
+
+function ispossemidef(A)
+	eigs = eigvals(A)
+	if any(real(eigs) .< 0)
+		return false
+	else
+		return true
+	end
+end

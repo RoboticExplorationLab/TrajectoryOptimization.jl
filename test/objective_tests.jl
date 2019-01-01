@@ -1,4 +1,5 @@
 using TrajectoryOptimization: generate_general_constraint_jacobian
+using Test
 
 """ Simple Pendulum """
 pendulum = Dynamics.pendulum[1]
@@ -136,13 +137,14 @@ obj = ConstrainedObjective(Q,R,Qf,c,tf_,x0,xf,u_min=-2)
 
 
 # Test constraint function
-function cI(cres,x,u)
+function cI!(cres,x,u)
     cres[1] = x[1]*x[2] + u[1]
     cres[2] = u[1]*x[2] + 3x[1]
 end
-function cE(cres,x,u)
+function cE!(cres,x,u)
     cres[1] = x[1]^2
 end
+
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
 @test obj.p_N == 2
 @test obj.p == 9
@@ -253,3 +255,79 @@ B1 = zeros(3,2)
 jac_cE(A1,B1,x,u)
 @test A1 == jac_x(x,u)
 @test B1 == jac_u(x,u)
+
+
+
+
+
+
+
+# COST FUNCTION TESTS
+using Test, Juno, LinearAlgebra, BenchmarkTools
+using TrajectoryOptimization: taylor_expansion
+n,m = 3,2
+Q = Diagonal([1.,2,3])
+R = Diagonal([4.,5])
+Qf = Diagonal(ones(n)*10)
+xf = Vector{Float64}(1:n)
+
+x = ones(n)
+u = ones(m)*2
+
+LinQuad = LQRCost(Q,R,Qf,xf)
+J = stage_cost(LinQuad,x,u)
+@test taylor_expansion(LinQuad,x,u) == (Q,R,zeros(n,m),Q*(x-xf),R*u)
+@test taylor_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
+
+# Generic Cost Function
+stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
+final_cost(x) = (x[1] - 1)^2 + x[1]*x[2]
+qfun(x,u) = [2*x[1], 2*x[3] + u[1], 1 + 2*x[2] + 1/x[3]]
+rfun(x,u) = [3 + x[2] + u[2], 2*u[2] + u[1] + cos(u[2])]
+Qfun(x,u) = [2 0 0;
+          0 0 2;
+          0 2 -1/x[3]^2]
+Rfun(x,u) = [0 1; 1 2-sin(u[2])]
+Hfun(x,u) = [0 0; 1 0; 0 0]
+qffun(x) = [2(x[1] -1) + x[2], x[1], 0]
+Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
+
+mycost = GenericCost(stage_cost,final_cost,n,m)
+@test taylor_expansion(mycost,x,u) == (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
+@test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
+
+
+# Unconstrained Objective
+x0 = x
+xf = x*2
+gs(x) = [x[1]*x[2] + x[3]^2,
+         x[2]^2,
+         x[3]*x[2]]
+gc(u) = u[1] + u[2] + u[1]*u[2]
+function gs!(c,x)
+    c[1] = x[1]*x[2] + x[3]^2
+    c[2] = x[2]^2
+    c[3] = x[3]*x[2]
+end
+gc!(c,u) = c[1] = gc(u)
+pIs = 3
+pIc = 1
+
+@test !is_inplace_constraint(gs,n)
+@test is_inplace_constraint(gs!,n)
+gs2! = wrap_inplace(gs)
+@test is_inplace_constraint(gs2!,n)
+@test is_inplace_constraint(gc!,m)
+
+@test count_inplace_constraint(gs!,n) == pIs
+@test count_inplace_constraint(gc!,m) == pIc
+
+costfun = LinQuad
+obj = UnconstrainedObjectiveNew(costfun,:min,x0,xf)
+@test obj.tf == 0
+obj = UnconstrainedObjectiveNew(costfun,tf,x0,xf)
+@test_throws ArgumentError UnconstrainedObjectiveNew(costfun,tf,x0,u)
+UnconstrainedObjectiveNew(costfun,tf,x0,Float64[])
+obj = LQRObjective(Q,R,Qf,tf,x0,xf)
+@test stage_cost(obj.cost,x,u) == J
+@test stage_cost(obj,x,u) == J
