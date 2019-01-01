@@ -58,11 +58,6 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
     S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
 
-    L::Array{Float64} # Stage costs
-    Q::Array{Float64} # Action-value cost-to-go
-    l::Vector{Float64}
-    q::Vector{Float64}
-
     fdx::Vector{Matrix{Float64}} # Discrete dynamics state jacobian (n,n,N)
     fdu::Vector{Matrix{Float64}} # Discrete dynamics control jacobian (n,m,N-1)
     fdv::Vector{Matrix{Float64}} # Control (k+1) jacobian (n,m,N-1)
@@ -77,8 +72,8 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
     dρ::Vector{Float64}
 
     function UnconstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
-        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
+            K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
+        new(X,U,K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
     end
 end
 
@@ -105,17 +100,9 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int,ctrl_int::Symbol=:zoh)
     if ctrl_int == :foh
         S  = [zeros(n+m,n+m) for i = 1:N]
         s  = [zeros(n+m)   for i = 1:N]
-        L = zeros(2*(n+m),2*(n+m))
-        Q = zeros(n+m+m,n+m+m)
-        l = zeros(2*(n+m))
-        q = zeros(n+m+m)
     else
         S  = [zeros(n,n) for i = 1:N]
         s  = [zeros(n)   for i = 1:N]
-        L = zeros(n+m,n+m)
-        Q = zeros(n+m,n+m)
-        l = zeros(n+m)
-        q = zeros(n+m)
     end
 
     fdx = [zeros(n,n) for i = 1:N-1]
@@ -131,11 +118,11 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int,ctrl_int::Symbol=:zoh)
     ρ = ones(1)
     dρ = ones(1)
 
-    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
+    UnconstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,ρ,dρ)
 end
 
 function copy(r::UnconstrainedVectorResults)
-    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),copy(r.ρ),copy(r.dρ))
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),copy(r.ρ),copy(r.dρ))
 end
 
 ################################################################################
@@ -157,11 +144,6 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
-
-    L::Array{Float64} # Stage costs
-    Q::Array{Float64} # Action-value cost-to-go
-    l::Vector{Float64}
-    q::Vector{Float64}
 
     fdx::Vector{Matrix{Float64}} # State jacobian (n,n,N)
     fdu::Vector{Matrix{Float64}} # Control (k) jacobian (n,m,N-1)
@@ -214,18 +196,18 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     #########
 
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+            K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
             gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
 
-        new(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
+        new(X,U,K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
     end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
 
-ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0,0,0,0,0)
+ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0,0,0,0,0,0)
 
-function ConstrainedVectorResults(n::Int,m::Int,N::Int,pIs::Int,pIc::Int,pEs::Int,pEsN::Int,pEc::Int,ctrl_int::Symbol=:zoh)
+function ConstrainedVectorResults(n::Int,m::Int,N::Int,pIs::Int,pIsN::Int,pIc::Int,pEs::Int,pEsN::Int,pEc::Int,ctrl_int::Symbol=:zoh)
     X  = [zeros(n)   for k = 1:N]
     U  = [zeros(m)   for k = 1:N]
 
@@ -239,17 +221,9 @@ function ConstrainedVectorResults(n::Int,m::Int,N::Int,pIs::Int,pIc::Int,pEs::In
     if ctrl_int == :foh
         S  = [zeros(n+m,n+m) for k = 1:N]
         s  = [zeros(n+m)   for k = 1:N]
-        L = zeros(2*(n+m),2*(n+m))
-        Q = zeros(n+m+m,n+m+m)
-        l = zeros(2*(n+m))
-        q = zeros(n+m+m)
     else
         S  = [zeros(n,n) for k = 1:N]
         s  = [zeros(n)   for k = 1:N]
-        L = zeros(n+m,n+m)
-        Q = zeros(n+m,n+m)
-        l = zeros(n+m)
-        q = zeros(n+m)
     end
 
     fdx = [zeros(n,n) for k = 1:N-1]
@@ -261,51 +235,51 @@ function ConstrainedVectorResults(n::Int,m::Int,N::Int,pIs::Int,pIc::Int,pEs::In
     xm = [zeros(n)   for k = 1:N]
     um = [zeros(m)   for k = 1:N]
 
-    gs = [zeros(pIs) for k = 1:N] # Constraint values (pIs,N)
+    gs = [k != N ? zeros(pIs) : zeros(pIsN) for k = 1:N] # Constraint values (pIs,N) (note: Nth constraint is pIsN)
     gc = [zeros(pIc) for k = 1:N] # Constraint values (pIc,N)
     hs = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # Constraint values (pEs,N) (note: Nth constraint is pEsN)
     hc = [zeros(pEc) for k = 1:N] # Constraint values (pEc,N)
 
-    gs_prev = [zeros(pIs) for k = 1:N] # Constraint values (pIs,N)
+    gs_prev = [k != N ? zeros(pIs) : zeros(pIsN) for k = 1:N] # Constraint values (pIs,N)
     gc_prev = [zeros(pIc) for k = 1:N] # Constraint values (pIc,N)
     hs_prev = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # Constraint values (pEs,N) (note: Nth constraint is pEsN)
     hc_prev = [zeros(pEc) for k = 1:N] # Constraint values (pEc,N)
 
-    λs = [zeros(pIs) for k = 1:N] # state multipliers (pIs,N)
+    λs = [k != N ? zeros(pIs) : zeros(pIsN) for k = 1:N] # state multipliers (pIs,N)
     λc = [zeros(pIc) for k = 1:N] # control multipliers (pIc,N)
     κs = [k != N ? zeros(pEs) : zeros(pEsN) for k = 1:N] # state multipliers (pEs,N) (note: Nth multiplier is pEsN)
     κc = [zeros(pEc) for k = 1:N] # control multipliers (pEc,N)
 
-    μs = [ones(pIs) for k = 1:N]    # state Penalty terms (pIs,N)
+    μs = [k != N ? ones(pIs) : ones(pIsN) for k = 1:N]    # state Penalty terms (pIs,N)
     μc = [ones(pIc) for k = 1:N]     # control Penalty terms (pIc,N)
     νs = [k != N ? ones(pEs) : ones(pEsN) for k = 1:N]     # state Penalty terms (pEs,N) (note: Nth multiplier is pEsN)
     νc = [ones(pEc) for k = 1:N]     # control Penalty terms (pEc,N)
 
     # Penalty matrices
-    Iμs = [Diagonal(ones(pIs)) for k = 1:N]
+    Iμs = [k != N ? Diagonal(ones(pIs)) : Diagonal(ones(pIsN)) for k = 1:N]
     Iμc = [Diagonal(ones(pIc)) for k = 1:N]
     Iνs = [k != N ? Diagonal(ones(pEs)) : Diagonal(ones(pEsN)) for k = 1:N]
     Iνc = [Diagonal(ones(pEc)) for k = 1:N]
 
     # Constraint Jacobians
-    gsx = [zeros(pIs,n) for k = 1:N]
+    gsx = [k != N ? zeros(pIs,n) : zeros(pIsN,n) for k = 1:N]
     gcu = [zeros(pIc,m) for k = 1:N]
     hsx = [k != N ? zeros(pEs,n) : zeros(pEsN,n) for k = 1:N]
     hcu = [zeros(pEc,m) for k = 1:N]
 
-    gs_active_set = [zeros(Bool,pIs) for k = 1:N] # active set of state inequality constraints
+    gs_active_set = [k != N ? zeros(Bool,pIs) : zeros(Bool,pIsN) for k = 1:N] # active set of state inequality constraints
     gc_active_set = [zeros(Bool,pIc) for k = 1:N]# active set of control inequality constraints
 
     ρ = ones(1)
     dρ = ones(1)
 
-    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,L,Q,l,q,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
+    ConstrainedVectorResults(X,U,K,b,d,X_,U_,S,s,fdx,fdu,fdv,fcx,fcu,dx,xm,um,
         gs,gc,hs,hc,gs_prev,gc_prev,hs_prev,hc_prev,λs,λc,κs,κc,μs,μc,νs,νc,Iμs,Iμc,Iνs,Iνc,gsx,gcu,hsx,hcu,gs_active_set,gc_active_set,ρ,dρ)
 end
 
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.L),copy(r.Q),copy(r.l),copy(r.q),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.b),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),copy(r.fdv),copy(r.fcx),copy(r.fcu),copy(r.dx),copy(r.xm),copy(r.um),
     copy(r.gs),copy(r.gc),copy(r.hs),copy(r.hc),copy(r.gs_prev),copy(r.gc_prev),copy(r.hs_prev),copy(r.hc_prev),copy(r.λs),copy(r.λc),copy(r.κs),copy(r.κc),copy(r.μs),copy(r.μc),copy(r.νs),copy(r.νc),copy(r.Iμs),copy(r.Iμc),copy(r.Iνs),copy(r.Iνc),copy(r.gsx),copy(r.gcu),copy(r.hsx),copy(r.hcu),copy(r.gs_active_set),copy(r.gc_active_set),copy(r.ρ),copy(r.dρ))
 end
 
@@ -608,43 +582,43 @@ end
 # Utilities #
 #############
 
-"""
-$(SIGNATURES)
-    For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
-"""
-function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λs::Vector=[],λc::Vector=[],κs::Vector=[],κc::Vector=[])::ConstrainedIterResults
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-
-    pIs, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
-    # if solver.opts.use_static
-    #     results = ConstrainedStaticResults(n,m̄,p,N,p_N,solver.control_integration)
-    # else
-    results = ConstrainedVectorResults(n,m̄,N,pIs, pIc, pEs, pEsN, pEc,solver.control_integration)
-    # end
-    copyto!(results.X,r.X)
-    copyto!(results.X_,r.X_)
-    copyto!(results.dx,r.dx)
-    copyto!(results.xm,r.xm)
-    copyto!(results.fcx,r.fcx)
-    copyto!(results.fdx,r.fdx)
-    !isempty(λs) ? copyto!(results.λs,λs) : nothing
-    !isempty(λc) ? copyto!(results.λc,λc) : nothing
-    !isempty(κs) ? copyto!(results.κs,κs) : nothing
-
-    for k = 1:N
-        results.U[k] = r.U[k][1:m̄]
-        results.U_[k] = r.U_[k][1:m̄]
-        results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
-        !isempty(κc) ? results.κc[k] = κc[k][n+1:n+solver.opts.minimum_time+solver.obj.pEc] : nothing # retain multipliers from all but infeasible and minimum time equality
-        k == N ? continue : nothing
-        results.um[k][1:m̄] = r.um[k][1:m̄]
-        results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
-        results.fdv[k][1:n,1:m̄] = r.fdv[k][1:n,1:m̄]
-    end
-
-    results
-end
+# """
+# $(SIGNATURES)
+#     For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
+# """
+# function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λs::Vector=[],λc::Vector=[],κs::Vector=[],κc::Vector=[])::ConstrainedIterResults
+#     n,m,N = get_sizes(solver)
+#     m̄,mm = get_num_controls(solver)
+#
+#     pIs, pIsN, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
+#     # if solver.opts.use_static
+#     #     results = ConstrainedStaticResults(n,m̄,p,N,p_N,solver.control_integration)
+#     # else
+#     results = ConstrainedVectorResults(n,m̄,N,pIs, pIc, pEs, pEsN, pEc,solver.control_integration)
+#     # end
+#     copyto!(results.X,r.X)
+#     copyto!(results.X_,r.X_)
+#     copyto!(results.dx,r.dx)
+#     copyto!(results.xm,r.xm)
+#     copyto!(results.fcx,r.fcx)
+#     copyto!(results.fdx,r.fdx)
+#     !isempty(λs) ? copyto!(results.λs,λs) : nothing
+#     !isempty(λc) ? copyto!(results.λc,λc) : nothing
+#     !isempty(κs) ? copyto!(results.κs,κs) : nothing
+#
+#     for k = 1:N
+#         results.U[k] = r.U[k][1:m̄]
+#         results.U_[k] = r.U_[k][1:m̄]
+#         results.fcu[k][1:n,1:m] = r.fcu[k][1:n,1:m]
+#         !isempty(κc) ? results.κc[k] = κc[k][n+1:n+solver.opts.minimum_time+solver.obj.pEc] : nothing # retain multipliers from all but infeasible and minimum time equality
+#         k == N ? continue : nothing
+#         results.um[k][1:m̄] = r.um[k][1:m̄]
+#         results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
+#         results.fdv[k][1:n,1:m̄] = r.fdv[k][1:n,1:m̄]
+#     end
+#
+#     results
+# end
 
 function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λs::Vector=[],λc::Vector=[],κs::Vector=[],κc::Vector=[])
     n,m,N = get_sizes(solver)
@@ -657,16 +631,16 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λs::Vec
 
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
+    m̄,mm = get_num_controls(solver)
 
     if solver.opts.constrained
         # Get sizes
-        pIs, pIc, pEs,pEsN, pEc = get_num_constraints(solver)
-        m̄,mm = get_num_controls(solver)
+        pIs, pIsN, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
 
         # if solver.opts.use_static
         #     results = ConstrainedStaticResults(n,mm,p,N,n,solver.control_integration)
         # else
-        results = ConstrainedVectorResults(n,mm,N,pIs,pIc,pEs,pEsN,pEc,solver.control_integration)
+        results = ConstrainedVectorResults(n,mm,N,pIs,pIsN,pIc,pEs,pEsN,pEc,solver.control_integration)
         # end
 
         # Set initial penalty term values
@@ -711,7 +685,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λs::Vec
         # if solver.opts.use_static
         #     results = UnconstrainedStaticResults(n,m,N,solver.control_integration)
         # else
-        results = UnconstrainedVectorResults(n,m,N,solver.control_integration)
+        results = UnconstrainedVectorResults(n,mm,N,solver.control_integration)
         # end
     end
     copyto!(results.X, X_init)

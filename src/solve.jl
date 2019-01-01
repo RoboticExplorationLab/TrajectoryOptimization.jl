@@ -97,11 +97,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
     if isempty(prevResults)
         results = init_results(solver, X0, U0)
     else
         results = prevResults
     end
+
+    # Initialize bp expansion terms
+    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm) : bp = BackwardPassZOH(n,mm,N)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -126,15 +132,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #           SOLVER           #
     #****************************#
     ## Initial rollout
-    if !solver.opts.infeasible #&& isempty(prevResults)
+    if !solver.opts.infeasible
         X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
-
-        if !flag
-            @info "Bad initial control sequence, setting initial control to zero"
-            results.U .= zeros(mm,N)
-            rollout!(results,solver)
-        end
+        !flag ? error("Bad initial control sequence") : nothing
     end
 
     if solver.opts.infeasible
@@ -189,10 +190,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
-            Δv = backwardpass!(results, solver)
+            update_constraints!(results, solver)
+            Δv = backwardpass!(results, solver, bp)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)#, J_prev)
+            J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
             # increment iLQR inner loop counter
@@ -374,36 +376,71 @@ end
 
 """
 $(SIGNATURES)
+    Remove infeasible controls from results
+"""
+function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
+    # turn off infeasible functionality
+    solver.opts.infeasible = false
+
+    # get sizes
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    idx = n+1:n+solver.opts.minimum_time+solver.obj.pEc
+
+    for k = 1:N
+        results.U[k] = results.U[k][1:m̄]
+        results.U_[k] = results.U_[k][1:m̄]
+        results.hc[k] = results.hc[k][idx]
+        results.hc_prev[k] = results.hc_prev[k][idx]
+        results.hcu[k] = results.hcu[k][idx,1:m̄]
+        results.gcu[k] = results.gcu[k][:,1:m̄]
+        results.κc[k] = results.κc[k][idx]
+        results.νc[k] = results.νc[k][idx]
+        results.Iνc[k] = Diagonal(Array(results.Iνc[k])[idx,idx]) # TODO there should be a more efficient way to do this
+        results.fcu[k] = results.fcu[k][1:n,1:m]
+        k == N ? continue : nothing
+        results.um[k] = results.um[k][1:m̄]
+        results.fdu[k] = results.fdu[k][1:n,1:m̄]
+        results.fdv[k] = results.fdv[k][1:n,1:m̄]
+    end
+    return nothing
+end
+
+"""
+$(SIGNATURES)
     Infeasible start solution is run through time varying LQR to track state and control trajectories
 """
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-    # turn off infeasible solve
-    solver.opts.infeasible = false
+    # get sizes
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
 
-    # remove infeasible components
-    results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
+    remove_infeasible_controls!(results,solver)
+
+    # re-initialize bp expansion terms
+    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm) : bp = BackwardPassZOH(n,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results_feasible, solver)
+    calculate_jacobians!(results, solver)
+    update_constraints!(results, solver)
+    solver.opts.constrained = false
+    Δv = backwardpass!(results, solver, bp)
+
+    solver.opts.unconstrained_original_problem ? solver.opts.constrained = false : solver.opts.constrained = true
 
     # forward pass
-    forwardpass!(results_feasible,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
+    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
 
     # update trajectories
-    results_feasible.X .= deepcopy(results_feasible.X_)
-    results_feasible.U .= deepcopy(results_feasible.U_)
+    results.X .= deepcopy(results.X_)
+    results.U .= deepcopy(results.U_)
 
-    # return constrained results if input was constrained
-    if !solver.opts.unconstrained_original_problem
-        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λs,results.λc,results.κs,results.κc)
-        update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
-        calculate_jacobians!(results_feasible,solver)
-    end
     if solver.control_integration == :foh
         calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
     end
-    return results_feasible
+    return results
 end
 
 """
@@ -464,7 +501,7 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     γ_no  = solver.opts.γ_no
     γ = solver.opts.γ
 
-    pIs, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
+    pIs, pIsN, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
 
     # Stage constraints
     for k = 1:N

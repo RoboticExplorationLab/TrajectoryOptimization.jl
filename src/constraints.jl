@@ -49,18 +49,61 @@ end
 
 """
 $(SIGNATURES)
-    Generate state terminal (equality) constraint xn = 0
+    Generate state terminal (inequality) constraint
+    [x - xmax
+     xmin - x
+     gs_custom(x)
+     gsN_custom(x)]
+"""
+function generate_terminal_state_inequality_constraints(obj::ConstrainedObjective)
+    pIs = obj.pIs
+    pIsN = obj.pIsN
+
+    x_min_active = isfinite.(obj.x_min)
+    x_max_active = isfinite.(obj.x_max)
+
+    pI_x_max = count(x_max_active)
+    pI_x_min = count(x_min_active)
+    pI_x = pI_x_max + pI_x_min
+
+    function state_limits!(c,x)
+        c[1:pI_x_max] = (x - obj.x_max )[x_max_active]
+        c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x)[x_min_active]
+    end
+
+    function gsN!(c,x)
+        state_limits!(view(c,1:pI_x),x)
+        if pIs > pI_x
+            obj.gs_custom(view(c,pI_x+1:pIs),x)
+        end
+        if pIsN > pIs
+            obj.gsN_custom(view(c,pIs+1:pIsN),x)
+        end
+    end
+    return gsN!
+end
+
+"""
+$(SIGNATURES)
+    Generate state terminal (equality) constraint
     [xn - xf
      hs_custom(x)]
 """
-function generate_state_terminal_constraints(obj::ConstrainedObjective)
+function generate_terminal_state_equality_constraints(obj::ConstrainedObjective)
     n = length(obj.x0) # number of states
     pEsN = obj.pEsN
 
     function hs_terminal!(c,x)
-        c[1:n] = x - obj.xf
-        if pEsN > n
-            obj.hs_custom(view(c,n+1:pEsN),x)
+        if obj.use_terminal_state_equality_constraint
+            c[1:n] = x - obj.xf
+
+            if pEsN > n
+                obj.hs_custom(view(c,n+1:pEsN),x)
+            end
+        else
+            if pEsN > 0
+                obj.hs_custom(view(c,1:pEsN),x)
+            end
         end
     end
     return hs_terminal!
@@ -182,7 +225,6 @@ end
 """
 $(SIGNATURES)
     Generate state inequality constraints dgs/dx
-
 """
 function generate_state_inequality_constraint_jacobian(obj::ConstrainedObjective)
     n = length(obj.x0) # number of states
@@ -241,10 +283,57 @@ end
 
 """
 $(SIGNATURES)
-    Generate state terminal (equality) constraint Jacobian dhsN/dx
+    Generate terminal state inequality constraints dgsN/dx
+"""
+function generate_terminal_state_inequality_constraint_jacobian(obj::ConstrainedObjective)
+    n = length(obj.x0) # number of states
+    pIs = obj.pIs
+    pIsN = obj.pIsN
+
+    x_min_active = isfinite.(obj.x_min)
+    x_max_active = isfinite.(obj.x_max)
+
+    pI_x_max = count(x_max_active)
+    pI_x_min = count(x_min_active)
+    pI_x = pI_x_max + pI_x_min
+
+    In = 1.0*Matrix(I,n,n)
+
+    p_custom = pIs - pI_x
+    if p_custom > 0
+        J_custom = zeros(p_custom,n)
+        g = zeros(p_custom)
+        F_custom(J,g,z) = ForwardDiff.jacobian!(J,obj.gs_custom,g,z)
+    end
+
+    p_custom2 = pIsN - pIs
+    if p_custom2 > 0
+        J_custom2 = zeros(p_custom2,n)
+        g2 = zeros(p_custom2)
+        F_custom2(J2,g2,z2) = ForwardDiff.jacobian!(J2,obj.gsN_custom,g2,z2)
+    end
+
+    function gsNx!(J,x)
+        J[1:pI_x_max, 1:n] = In[x_max_active,:]
+        J[pI_x_max+1:pI_x,1:n] = -In[x_min_active,:]
+        if p_custom > 0
+            F_custom(J_custom,g,x)
+            J[pI_x+1:pIs,1:n] = J_custom
+        end
+        if p_custom2 > 0
+            F_custom2(J_custom2,g2,x)
+            J[pIs+1:pIsN,1:n] = J_custom2
+        end
+    end
+
+    return gsNx!
+end
 
 """
-function generate_state_terminal_constraint_jacobian(obj::ConstrainedObjective)
+$(SIGNATURES)
+    Generate state terminal (equality) constraint Jacobian dhsN/dx
+"""
+function generate_terminal_state_equality_constraint_jacobian(obj::ConstrainedObjective)
     n = length(obj.x0) # number of states
     pEsN = obj.pEsN
     In = 1.0*Matrix(I,n,n)
@@ -346,7 +435,7 @@ function generate_control_equality_constraint_jacobian(obj::ConstrainedObjective
     function hcu!(J,u)
         infeasible = length(u) != m̄
         if infeasible
-            J[1:n,1:n] = In
+            J[1:n,m̄+1:m̄+n] = In
 
             if min_time
                 J[n+1,m̄] = 1.
@@ -385,7 +474,11 @@ function generate_state_equality_constraints(obj::UnconstrainedObjective)
     (c,x)->nothing
 end
 
-function generate_state_terminal_constraints(obj::UnconstrainedObjective)
+function generate_terminal_state_inequality_constraints(obj::UnconstrainedObjective)
+    (c,x)->nothing
+end
+
+function generate_terminal_state_equality_constraints(obj::UnconstrainedObjective)
     (c,x)->nothing
 end
 
@@ -414,7 +507,11 @@ function generate_state_equality_constraint_jacobian(obj::UnconstrainedObjective
     (c,x)->nothing
 end
 
-function generate_state_terminal_constraint_jacobian(obj::UnconstrainedObjective)
+function generate_terminal_state_inequality_constraint_jacobian(obj::UnconstrainedObjective)
+    (c,x)->nothing
+end
+
+function generate_terminal_state_equality_constraint_jacobian(obj::UnconstrainedObjective)
     (c,x)->nothing
 end
 
@@ -424,4 +521,39 @@ end
 
 function generate_control_equality_constraint_jacobian(obj::UnconstrainedObjective)
     (c,x)->nothing
+end
+
+##
+"""
+$(SIGNATURES)
+    Generate the Jacobian of a general (coupled) nonlinear constraint function
+        -constraint function must be inplace
+        -automatic differentition via ForwardDiff.jl
+"""
+function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int64,m::Int64)::Function
+    c_aug! = f_augmented!(c,n,m)
+    J = zeros(p,n+m)
+    S = zeros(n+m)
+    cdot = zeros(p)
+    F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
+
+    function c_jacobian(cx,cu,x,u)
+        S[1:n] = x
+        S[n+1:n+m] = u
+        F(J,cdot,S)
+        cx[1:p,1:n] = J[1:p,1:n]
+        cu[1:p,1:m] = J[1:p,n+1:n+m]
+    end
+
+    if p_N > 0
+        J_N = zeros(p_N,n)
+        xdot = zeros(p_N)
+        F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
+        function c_jacobian(cx,x)
+            F_N(J_N,xdot,x)
+            cx .= J_N
+        end
+    end
+
+    return c_jacobian
 end

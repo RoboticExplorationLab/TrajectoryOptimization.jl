@@ -11,11 +11,13 @@ struct Solver{O<:Objective}
     fc::Function         # Continuous dynamics function (inplace)
     Fc::Function         # Jacobian of continuous dynamics
     gs::Function         # state inequality constraints gs(x) <= 0
+    gsN::Function        # terminal state inequality constraints gsN(x) <= 0
     gc::Function         # control inequality constraints gc(u) <= 0
     hs::Function         # state equality constraints hs(x) = 0
     hsN::Function        # terminal state (equality) constraint hsN(x) = 0
     hc::Function         # control equality constraints hc(u) = 0
     gsx::Function        # state inequality constraint Jacobian
+    gsNx::Function       # terminal state inequality constraint Jacobian
     gcu::Function        # control inequality constraint Jacobian
     hsx::Function        # state equality constraint Jacobian
     hsNx::Function       # terminal state (equality) constraint Jacobian
@@ -183,20 +185,22 @@ struct Solver{O<:Objective}
 
         # Generate constraint functions (and Jacobians)
         gs = generate_state_inequality_constraints(obj)
+        gsN = generate_terminal_state_inequality_constraints(obj)
         gc = generate_control_inequality_constraints(obj,max_dt=opts.max_dt,min_dt=opts.min_dt)
         hs = generate_state_equality_constraints(obj)
-        hsN = generate_state_terminal_constraints(obj)
+        hsN = generate_terminal_state_equality_constraints(obj)
         hc = generate_control_equality_constraints(obj)
         gsx = generate_state_inequality_constraint_jacobian(obj)
+        gsNx = generate_terminal_state_inequality_constraint_jacobian(obj)
         gcu = generate_control_inequality_constraint_jacobian(obj)
         hsx = generate_state_equality_constraint_jacobian(obj)
-        hsNx = generate_state_terminal_constraint_jacobian(obj)
+        hsNx = generate_terminal_state_equality_constraint_jacobian(obj)
         hcu = generate_control_equality_constraint_jacobian(obj)
 
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, gs, gc, hs, hsN, hc, gsx, gcu, hsx, hsNx, hcu, N, integration, control_integration,["empty" for i = 1:2])
+        new{O}(model, obj, options, dt, fd!, fd_jacobians!, f!, fc_jacobians!, gs, gsN, gc, hs, hsN, hc, gsx, gsNx, gcu, hsx, hsNx, hcu, N, integration, control_integration,["empty"])
     end
 end
 

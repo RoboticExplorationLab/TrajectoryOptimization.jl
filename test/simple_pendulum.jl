@@ -28,14 +28,6 @@ solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,op
 results, =TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
-#  with square root
-# solver.opts.square_root = true
-# results_sr, = TrajectoryOptimization.solve(solver,U)
-# @test norm(results_sr.X[end]-obj.xf) < 1e-3
-# # @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
-# # @test norm(results_sr.X - results.X) < 1e-12 # breaks macOS test??
-# @test all(isapprox.(results_sr.X,results.X))
-
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
@@ -43,7 +35,7 @@ results_c, stats_c = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
-cost(solver,results_c)
+
 
 # with Square Root
 # solver.opts.square_root = true
@@ -101,6 +93,7 @@ x_max = [10; 10]
 obj_uncon = TrajectoryOptimization.Dynamics.pendulum[2]
 obj_uncon.R[:] = [1e-2] # control needs to be properly regularized for infeasible start to produce a good warm-start control output
 
+opts.resolve_feasible = true
 obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
@@ -122,9 +115,9 @@ solver.obj.x0 = ones(solver.model.n)
 solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
 n,m,N = TrajectoryOptimization.get_sizes(solver)
 mm = m + n
-pIs, pIc, pEs, pEsN, pEc = TrajectoryOptimization.get_num_constraints(solver)
+pIs, pIsN, pIc, pEs, pEsN, pEc = TrajectoryOptimization.get_num_constraints(solver)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = ConstrainedVectorResults(n,mm,N,pIs,pIc,pEs,pEsN,pEc,solver.control_integration)
+results_infeasible = ConstrainedVectorResults(n,mm,N,pIs,pIsN,pIc,pEs,pEsN,pEc,solver.control_integration)
 copyto!(results_infeasible.U, [U_infeasible;ui])
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 

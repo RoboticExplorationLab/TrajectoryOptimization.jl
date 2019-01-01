@@ -2,7 +2,7 @@
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_prev::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array, J_prev::Float64)
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
@@ -87,7 +87,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_pr
 
     end  # forward pass loop
 
-    if res isa ConstrainedIterResults
+    if solver.opts.constrained
         @logmsg InnerLoop :c_max value=max_violation(res)
     end
     @logmsg InnerLoop :cost value=J

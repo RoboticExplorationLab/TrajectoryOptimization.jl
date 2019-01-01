@@ -349,20 +349,28 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
     hc_custom::Function # equality control constraints
 
     # Terminal Constraints
-    use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
+    gsN_custom::Function # inequality terminal state constraints
+    use_terminal_state_equality_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false)
 
     # Constants (these do not count infeasible or minimum time constraints)
     pIs::Int
+    pIsN::Int
     pIc::Int
     pEs::Int
     pEc::Int
-    pEsN::Int # terminal state constraints (n)
+    pEsN::Int
+
+    pIs_custom::Int
+    pIsN_custom::Int
+    pIc_custom::Int
+    pEs_custom::Int
+    pEc_custom::Int
 
     function ConstrainedObjective(Q::TQ,R::TR,Qf::TQf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         gs_custom, gc_custom, hs_custom, hc_custom,
-        use_terminal_constraint) where {TQ,TR,TQf}
+        gsN_custom, use_terminal_state_equality_constraint) where {TQ,TR,TQf}
 
         n = size(Q,1)
         m = size(R,1)
@@ -372,6 +380,12 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
             error("Custom state inequality constraints are not inplace")
         end
         pIs_custom = count_inplace_output(gs_custom,n)
+
+        # Check that custom constraints are inplace
+        if !is_inplace_constraints(gsN_custom,n)
+            error("Custom terminal state inequality constraints are not inplace")
+        end
+        pIsN_custom = count_inplace_output(gsN_custom,n)
 
         if !is_inplace_constraints(gc_custom,m)
             error("Custom control inequality constraints are not inplace")
@@ -398,12 +412,13 @@ mutable struct ConstrainedObjective{TQ<:AbstractArray,TR<:AbstractArray,TQf<:Abs
         x_max_active = isfinite.(x_max)
 
         pIs = count(x_min_active) + count(x_max_active) + pIs_custom
+        pIsN = pIs + pIsN_custom
         pIc = count(u_min_active) + count(u_max_active) + pIc_custom
         pEs = pEs_custom
         pEc = pEc_custom
-        pEsN = pEs + n
+        pEsN = pEs + n*use_terminal_state_equality_constraint
 
-        new{TQ,TR,TQf}(Q, R, Qf, tf, x0, xf, u_min, u_max, x_min, x_max, gs_custom, gc_custom, hs_custom, hc_custom, use_terminal_constraint, pIs, pIc, pEs, pEc, pEsN)
+        new{TQ,TR,TQf}(Q, R, Qf, tf, x0, xf, u_min, u_max, x_min, x_max, gs_custom, gc_custom, hs_custom, hc_custom, gsN_custom, use_terminal_state_equality_constraint, pIs, pIsN, pIc, pEs, pEc, pEsN, pIs_custom, pIsN_custom, pIc_custom, pEs_custom, pEc_custom)
     end
 end
 
@@ -415,13 +430,13 @@ function ConstrainedObjective(Q,R,Qf,tf,x0,xf;
     u_min=-ones(size(R,1))*Inf, u_max=ones(size(R,1))*Inf,
     x_min=-ones(size(Q,1))*Inf, x_max=ones(size(Q,1))*Inf,
     gs_custom=(c,x)->nothing, gc_custom=(c,u)->nothing, hs_custom=(c,x)->nothing, hc_custom=(c,u)->nothing,
-    use_terminal_constraint=true)
+    gsN_custom=(c,x)->nothing, use_terminal_state_equality_constraint=true)
 
     ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         gs_custom, gc_custom, hs_custom, hc_custom,
-        use_terminal_constraint)
+        gsN_custom, use_terminal_state_equality_constraint)
 end
 
 # Minimum time constructor
@@ -437,7 +452,7 @@ function copy(obj::ConstrainedObjective)
     ConstrainedObjective(copy(obj.Q),copy(obj.R),copy(obj.Qf),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         gs_custom=obj.gs_custom, gc_custom=obj.gc_custom, hs_custom=obj.hs_custom, hc_custom=obj.hc_custom,
-        use_terminal_constraint=obj.use_terminal_constraint)
+        gsN_custom=obj.gsN_custom, use_terminal_state_equality_constraint=obj.use_terminal_state_equality_constraint)
 end
 
 """
@@ -459,13 +474,13 @@ function update_objective(obj::ConstrainedObjective;
     Q=obj.Q, R=obj.R, Qf=obj.Qf, tf=obj.tf, x0=obj.x0, xf=obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     gs_custom=obj.gs_custom, gc_custom=obj.gc_custom, hs_custom=obj.hs_custom, hc_custom=obj.hc_custom,
-    use_terminal_constraint=obj.use_terminal_constraint)
+    gsN_custom=obj.gsN_custom, use_terminal_state_equality_constraint=obj.use_terminal_state_equality_constraint)
 
     ConstrainedObjective(Q,R,Qf,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
         gs_custom=gs_custom, gc_custom=gc_custom, hs_custom=hs_custom, hc_custom=hc_custom,
-        use_terminal_constraint=use_terminal_constraint)
+        gsN_custom=gsN_custom,use_terminal_state_equality_constraint=use_terminal_state_equality_constraint)
 end
 
 """
@@ -506,7 +521,7 @@ function to_static(obj::ConstrainedObjective)
         obj.tf, obj.x0, obj.xf,
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
-        use_terminal_constraint=obj.use_terminal_constraint)
+        use_terminal_state_equality_constraint=obj.use_terminal_state_equality_constraint)
 end
 
 function to_static(obj::UnconstrainedObjective)

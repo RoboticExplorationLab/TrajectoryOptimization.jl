@@ -50,10 +50,12 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test isa(obj.gc_custom(ones(0),u0),Nothing)
 @test isa(obj.hs_custom(ones(0),x0),Nothing)
 @test isa(obj.hc_custom(ones(0),u0),Nothing)
+@test isa(obj.gsN_custom(ones(0),x0),Nothing)
 
 
-@test obj.use_terminal_constraint == true
+@test obj.use_terminal_state_equality_constraint == true
 @test obj.pIs == 0
+@test obj.pIsN == 0
 @test obj.pIc == 0
 @test obj.pEs == 0
 @test obj.pEsN == n
@@ -76,14 +78,17 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=1, u_max=Inf)
 # State constraints
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
 @test obj.pIs == 4
+@test obj.pIsN == 4
 
 @test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
 @test obj.pIs == 2
+@test obj.pIsN == 2
 
 # Scalar to array constraint
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-4, x_max=4)
 @test obj.pIs == 4
+@test obj.pIsN == 4
 @test obj.x_max == [4,4]
 
 # Custom constraints
@@ -101,6 +106,10 @@ end
 function hc_custom(cdot,u)
     cdot[1] = u[1]
 end
+function gsN_custom(cdot,x)
+    cdot[1] = x[1]
+    cdot[2] = x[2]
+end
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,gs_custom=gs_custom)
 @test obj.pIs == 2
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,gc_custom=gc_custom)
@@ -109,6 +118,12 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,hs_custom=hs_custom)
 @test obj.pEs == 2
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,hc_custom=hc_custom)
 @test obj.pEc == 1
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,gsN_custom=gsN_custom)
+@test obj.pIsN == 2
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,gs_custom=gs_custom,gsN_custom=gsN_custom)
+@test obj.pIs == 2
+@test obj.pIsN == 4
+
 
 # Construct from unconstrained
 obj = ConstrainedObjective(obj_uncon)
@@ -120,7 +135,8 @@ obj = ConstrainedObjective(obj_uncon)
 @test isa(obj.gc_custom(ones(0),u0),Nothing)
 @test isa(obj.hs_custom(ones(0),x0),Nothing)
 @test isa(obj.hc_custom(ones(0),u0),Nothing)
-@test obj.use_terminal_constraint == true
+@test isa(obj.gsN_custom(ones(0),x0),Nothing)
+@test obj.use_terminal_state_equality_constraint == true
 @test obj.pEsN == 2
 
 obj = ConstrainedObjective(obj_uncon, u_min=-1)
@@ -222,16 +238,28 @@ hcu(Z,u0)
 
 z = zeros(obj_con.pEsN)
 Z = zeros(obj_con.pEsN,n)
-hsN = TrajectoryOptimization.generate_state_terminal_constraints(obj_con)
-hsNx = TrajectoryOptimization.generate_state_terminal_constraint_jacobian(obj_con)
+hsN = TrajectoryOptimization.generate_terminal_state_equality_constraints(obj_con)
+hsNx = TrajectoryOptimization.generate_terminal_state_equality_constraint_jacobian(obj_con)
 hsN(z,x0)
 hsNx(Z,x0)
 @test isapprox(z,x0-xf)
 @test isapprox(Z,Matrix(I,n,n))
 
 # custom constraints
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,x_max=x_max,x_min=x_min,gs_custom=c_fun,gc_custom=c_fun,hs_custom=c_fun,hc_custom=c_fun)
+function c_terminal_fun(cdot,x)
+    cdot[1:n] = x[1:n]
+end
+
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,
+                                                      x_max=x_max,x_min=x_min,
+                                                      gs_custom=c_fun,
+                                                      gc_custom=c_fun,
+                                                      hs_custom=c_fun,
+                                                      hc_custom=c_fun,
+                                                      gsN_custom=c_terminal_fun)
+
 @test obj_con.pIs == 2*n+n
+@test obj_con.pIsN == 2*n + n + n
 @test obj_con.pIc == 2*m+n
 @test obj_con.pEs == 0+n
 @test obj_con.pEsN == n+n
@@ -282,19 +310,30 @@ hcu(Z,u0)
 @test isapprox(Z,zeros(n,m))
 
 z = zeros(obj_con.pEsN)
-hsN = TrajectoryOptimization.generate_state_terminal_constraints(obj_con)
+hsN = TrajectoryOptimization.generate_terminal_state_equality_constraints(obj_con)
 hsN(z,x0)
 @test isapprox(z,[x0-xf;10*ones(n)])
 
 Z = zeros(obj_con.pEsN,n)
-hsNx = TrajectoryOptimization.generate_state_terminal_constraint_jacobian(obj_con)
+hsNx = TrajectoryOptimization.generate_terminal_state_equality_constraint_jacobian(obj_con)
 hsNx(Z,x0)
 @test isapprox(Z,[Matrix(I,n,n); zeros(n,n)])
+
+z = zeros(obj_con.pIsN)
+gsN = TrajectoryOptimization.generate_terminal_state_inequality_constraints(obj_con)
+gsN(z,x0)
+@test isapprox(z,[x0 .- x_max;x_min .- x0; 10*ones(n); x0])
+
+Z = zeros(obj_con.pIsN,n)
+hsNx = TrajectoryOptimization.generate_terminal_state_inequality_constraint_jacobian(obj_con)
+hsNx(Z,x0)
+@test isapprox(Z,[Matrix(I,n,n); -Matrix(I,n,n); zeros(n,n); Matrix(I,n,n)])
 
 # minimum time
 obj_con_min_time = TrajectoryOptimization.update_objective(obj_con,tf=0.0)
 @test obj_con.pIs == 2*n+n
 @test obj_con.pIc == 2*m+n
+
 @test obj_con.pEs == 0+n
 @test obj_con.pEsN == n+n
 @test obj_con.pEc == 0+n
@@ -345,8 +384,7 @@ Z = zeros(obj_con_min_time.pEc+1+n,m+1+n)
 Z0 = copy(Z)
 hcu = TrajectoryOptimization.generate_control_equality_constraint_jacobian(obj_con_min_time)
 hcu(Z,U)
-@test isapprox(Z,[Matrix(I,n,m+1+n); 0 0 1 0 0 0; zeros(n,m+1+n)])
-
+@test isapprox(Z,[[zeros(n,m+1) Matrix(I,n,n)]; 0 0 1 0 0 0; zeros(n,m+1+n)])
 
 ### GENERAL CONSTRAINTS JACOBIAN ###
 n, m = 3,2

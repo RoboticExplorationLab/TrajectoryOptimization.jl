@@ -1,40 +1,24 @@
-mutable struct BackwardPass
-    Qx::Vector{Float64}
-    Qu::Vector{Float64}
-    Qxx::Matrix{Float64}
-    Qxu::Matrix{Float64}
-    Quu::Matrix{Float64}
+abstract type BackwardPass end
 
-    Qxu_reg::Matrix{Float64}
-    Quu_reg::Matrix{Float64}
+struct BackwardPassZOH <: BackwardPass
+    Qx::Vector{Vector{Float64}}
+    Qu::Vector{Vector{Float64}}
+    Qxx::Vector{Matrix{Float64}}
+    Qux::Vector{Matrix{Float64}}
+    Quu::Vector{Matrix{Float64}}
 
-    Lx::Vector{Float64}
-    Lu::Vector{Float64}
-    Lxx::Matrix{Float64}
-    Lxu::Matrix{Float64}
-    Luu::Matrix{Float64}
+    function BackwardPassZOH(n::Int,m::Int,N::Int)
+        Qx = [zeros(n) for i = 1:N-1]
+        Qu = [zeros(m) for i = 1:N-1]
+        Qxx = [zeros(n,n) for i = 1:N-1]
+        Qux = [zeros(m,n) for i = 1:N-1]
+        Quu = [zeros(m,m) for i = 1:N-1]
 
-    function BackwardPass(n::Int,m::Int)
-        Qx = zeros(n)
-        Qu = zeros(m)
-        Qxx = zeros(n,n)
-        Qux = zeros(m,n)
-        Quu = zeros(m,m)
-
-        Qux_reg = zero(Qux)
-        Quu_reg = zero(Quu)
-
-        Lx = zeros(n)
-        Lu = zeros(m)
-        Lxx = zeros(n,n)
-        Lux = zeros(m,n)
-        Luu = zeros(m,m)
-
-        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg,Lx,Lu,Lxx,Lux,Luu)
+        new(Qx,Qu,Qxx,Qux,Quu)
     end
 end
 
-mutable struct BackwardPassFOH
+struct BackwardPassFOH <: BackwardPass
     Qx::Vector{Float64}
     Qu::Vector{Float64}
     Qy::Vector{Float64}
@@ -116,19 +100,19 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
 Online Trajectory Optimization)
 """
-function backwardpass!(results::SolverVectorResults,solver::Solver)
+function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
     if solver.control_integration == :foh
         Δv = _backwardpass_foh!(results,solver)
     elseif solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass!(results, solver)
+        Δv = _backwardpass!(results, solver, bp)
     end
 
     return Δv
 end
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver)
+function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -140,16 +124,12 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     dt = solver.dt
 
     # pull out values from results
-    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
-    L = res.L; l = res.l
+    X = res.X; U = res.U; K = res.K; d = res.d;
 
-    # Useful linear indices
-    idx = Array(1:2*(n+mm))
-    Idx = reshape(Array(1:(n+mm)^2),n+mm,n+mm)
+    S = res.S; s = res.s
 
-    x_idx = idx[1:n]
-    u_idx = idx[n+1:n+m]
-    ū_idx = idx[n+1:n+mm]
+    bp = BackwardPassZOH(n,mm,N)
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Qux = bp.Qux; Quu = bp.Quu
 
     # Boundary Conditions
     S[N] = Wf
@@ -159,107 +139,87 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     Δv = zeros(2)
 
     # Terminal constraints
-    if res isa ConstrainedIterResults
-        gs = res.gs
-        gc = res.gc
-        hs = res.hs
-        hc = res.hc
-        λs = res.λs
-        λc = res.λc
-        κs = res.κs
-        κc = res.κc
-        Iμs = res.Iμs
-        Iμc = res.Iμc
-        Iνs = res.Iνs
-        Iνc = res.Iνc
-        gsx = res.gsx
-        gcu = res.gcu
-        hsx = res.hsx
-        hcu = res.hcu
+    if solver.opts.constrained
+        gs = res.gs; gc = res.gc; hs = res.hs; hc = res.hc
+        λs = res.λs; λc = res.λc; κs = res.κs; κc = res.κc
+        Iμs = res.Iμs; Iμc = res.Iμc; Iνs = res.Iνs; Iνc = res.Iνc
+        gsx = res.gsx; gcu = res.gcu; hsx = res.hsx; hcu = res.hcu
+
         S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
         s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
     end
 
     # Backward pass
     k = N-1
+
+    # for the special case of the tracking quadratic cost:
+    ℓxx = W
+    ℓuu = R
+    ℓux = zeros(m,n)
+
     while k >= 1
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         x = X[k]
         u = U[k][1:m]
 
+        # for the special case of the tracking quadratic cost:
         ℓ1 = ℓ(x,u,W,R,xf)
         ℓx = W*(x - xf)
         ℓu = R*u
-        ℓxx = W
-        ℓuu = R
-        ℓux = zeros(m,n)
 
         # Assemble expansion
-
-        Lx = dt*ℓx
-        Lu = dt*ℓu
-        Lxx = dt*ℓxx
-        Luu = dt*ℓuu
-        Lux = dt*ℓux
+        Qx[k][1:n] = dt*ℓx
+        Qu[k][1:m] = dt*ℓu
+        Qxx[k][1:n,1:n] = dt*ℓxx
+        Quu[k][1:m,1:m] = dt*ℓuu
+        Qux[k][1:m,1:n] = dt*ℓux
 
         # Minimum time expansion components
         if solver.opts.minimum_time
             h = U[k][m̄]
 
-            l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
 
             tmp = 2*h*ℓu
-            L[u_idx,m̄] = tmp
-            L[m̄,u_idx] = tmp'
-            L[m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
 
-            L[m̄,x_idx] = 2*h*ℓx'
+            Qux[k][m̄,1:n] = 2*h*ℓx'
         end
 
         # Infeasible expansion components
         if solver.opts.infeasible
-            l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
-            L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
-        end
-
-        # Final expansion terms
-        if solver.opts.minimum_time || solver.opts.infeasible
-            l[u_idx] = Lu
-
-            L[u_idx,u_idx] = Luu
-            L[u_idx,x_idx] = Lux
-
-            Lu = l[n+1:n+mm]
-            Luu = L[n+1:n+mm,n+1:n+mm]
-            Lux = L[n+1:n+mm,1:n]
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
         end
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k], res.fdu[k]
 
         # Constraints
-        if res isa ConstrainedIterResults
-            k != 1 ? Lx .+= gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
-            Lu .+= gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
-            k != 1 ? Lxx .+= gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
-            Luu .+= gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
-            # Lux .+= Cu'*Iμ[k]*Cx # no coupling between constraints
+        if solver.opts.constrained
+            k != 1 ? Qx[k] += gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
+            Qu[k] += gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            k != 1 ? Qxx[k] += gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
+            Quu[k] += gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
+            # Qux[k] += # no coupling between constraints
         end
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = Lx + fdx'*s[k+1]
-        Qu = Lu + fdu'*s[k+1]
-        Qxx = Lxx + fdx'*S[k+1]*fdx
-        Quu = Luu + fdu'*S[k+1]*fdu
-        Qux = Lux + fdu'*S[k+1]*fdx
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qxx[k] += fdx'*S[k+1]*fdx
+        Quu[k] += fdu'*S[k+1]*fdu
+        Qux[k] += fdu'*S[k+1]*fdx
 
         if solver.opts.regularization_type == :state #TODO combined into one
-            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
-            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+            Quu_reg = Quu[k] + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux[k] + res.ρ[1]*fdu'*fdx
         elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
-            Qux_reg = Qux
+            Quu_reg = Quu[k] + res.ρ[1]*I
+            Qux_reg = Qux[k]
         end
 
         # Regularization
@@ -276,16 +236,16 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
 
         # Compute gains
         K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu
+        d[k] = -Quu_reg\Qu[k]
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Qx + K[k]'*Quu*d[k] + K[k]'*Qu + Qux'*d[k]
-        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
+        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
         S[k] = 0.5*(S[k] + S[k]')
 
         # calculated change is cost-to-go over entire trajectory
-        Δv[1] += d[k]'*Qu
-        Δv[2] += 0.5*d[k]'*Quu*d[k]
+        Δv[1] += d[k]'*Qu[k]
+        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
 
         k = k - 1;
     end
@@ -1107,5 +1067,174 @@ function _backwardpass_foh_old!(results::SolverVectorResults,solver::Solver)
 
     # if successful backward pass, reduce regularization
     regularization_update!(results,solver,:decrease)
+    return Δv
+end
+
+function _backwardpass_old!(res::SolverVectorResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
+    dt = solver.dt
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+    L = zeros(n+mm,n+mm)
+    l = zeros(n+mm)
+
+    # Useful linear indices
+    idx = Array(1:2*(n+mm))
+    Idx = reshape(Array(1:(n+mm)^2),n+mm,n+mm)
+
+    x_idx = idx[1:n]
+    u_idx = idx[n+1:n+m]
+    ū_idx = idx[n+1:n+mm]
+
+    # Boundary Conditions
+    S[N] = Wf
+    s[N] = Wf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = zeros(2)
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        gs = res.gs
+        gc = res.gc
+        hs = res.hs
+        hc = res.hc
+        λs = res.λs
+        λc = res.λc
+        κs = res.κs
+        κc = res.κc
+        Iμs = res.Iμs
+        Iμc = res.Iμc
+        Iνs = res.Iνs
+        Iνc = res.Iνc
+        gsx = res.gsx
+        gcu = res.gcu
+        hsx = res.hsx
+        hcu = res.hcu
+        S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
+        s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
+    end
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        x = X[k]
+        u = U[k][1:m]
+
+        ℓ1 = ℓ(x,u,W,R,xf)
+        ℓx = W*(x - xf)
+        ℓu = R*u
+        ℓxx = W
+        ℓuu = R
+        ℓux = zeros(m,n)
+
+        # Assemble expansion
+
+        Lx = dt*ℓx
+        Lu = dt*ℓu
+        Lxx = dt*ℓxx
+        Luu = dt*ℓuu
+        Lux = dt*ℓux
+
+        # Minimum time expansion components
+        if solver.opts.minimum_time
+            h = U[k][m̄]
+
+            l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
+
+            tmp = 2*h*ℓu
+            L[u_idx,m̄] = tmp
+            L[m̄,u_idx] = tmp'
+            L[m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+
+            L[m̄,x_idx] = 2*h*ℓx'
+        end
+
+        # Infeasible expansion components
+        if solver.opts.infeasible
+            l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
+        end
+
+        # Final expansion terms
+        if solver.opts.minimum_time || solver.opts.infeasible
+            l[u_idx] = Lu
+
+            L[u_idx,u_idx] = Luu
+            L[u_idx,x_idx] = Lux
+
+            Lu = l[n+1:n+mm]
+            Luu = L[n+1:n+mm,n+1:n+mm]
+            Lux = L[n+1:n+mm,1:n]
+        end
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            k != 1 ? Lx .+= gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k]) : nothing
+            Lu .+= gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            k != 1 ? Lxx .+= gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k] : nothing
+            Luu .+= gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
+            # Lux .+= Cu'*Iμ[k]*Cx # no coupling between constraints
+        end
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = Lx + fdx'*s[k+1]
+        Qu = Lu + fdu'*s[k+1]
+        Qxx = Lxx + fdx'*S[k+1]*fdx
+        Quu = Luu + fdu'*S[k+1]*fdu
+        Qux = Lux + fdu'*S[k+1]*fdx
+
+        if solver.opts.regularization_type == :state #TODO combined into one
+            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv[1] = 0.
+            Δv[2] = 0.
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Qu
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = Qx + K[k]'*Quu*d[k] + K[k]'*Qu + Qux'*d[k]
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv[1] += d[k]'*Qu
+        Δv[2] += 0.5*d[k]'*Quu*d[k]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
     return Δv
 end

@@ -74,3 +74,6 @@ solver_min.opts.infeasible = true
     "custom inequality", "custom inequality", "custom equality", "custom equality", "custom equality",
     "* infeasible control","* infeasible control","* infeasible control","* √dt (equality)"]
 get_constraint_labels(solver_min)
+
+#TODO
+# custom terminal state inequality constraints and jacobians
