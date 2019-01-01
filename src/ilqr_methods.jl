@@ -260,13 +260,11 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             xm = res.xm[k]
             um = res.um[k]
             J += dt*(1/6*ℓ(X[k],U[k][1:m],Q,R,xf) + 4/6*ℓ(xm,um[1:m],Q,R,xf) + 1/6*ℓ(X[k+1],U[k+1][1:m],Q,R,xf)) # Simpson quadrature (integral approximation) for foh stage cost
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
             J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
+        solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+        solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
     end
 
     J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
@@ -280,16 +278,17 @@ function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     pIs, pIsN, pIc, pEs, pEsN, pEc = get_num_constraints(solver)
 
     J = 0.0
+
     for k = 1:N
         # state constraints from k=2 - k=N
         if k != 1
-             J += 0.5*res.gs[k]'*res.Iμs[k]*res.gs[k] + res.λs[k]'*res.gs[k]
-             J += 0.5*res.hs[k]'*res.Iνs[k]*res.hs[k] + res.κs[k]'*res.hs[k]
+            (k < N && pIs > 0) || (k == N && pIsN > 0) ? J += 0.5*res.gs[k]'*res.Iμs[k]*res.gs[k] + res.λs[k]'*res.gs[k] : nothing
+            (k < N && pEs > 0) || (k == N && pEsN > 0) ? J += 0.5*res.hs[k]'*res.Iνs[k]*res.hs[k] + res.κs[k]'*res.hs[k] : nothing
         end
         # control constraints from k=1 - k=N-1 (foh k=N)
         if k != N || solver.control_integration == :foh
-            J += 0.5*res.gc[k]'*res.Iμc[k]*res.gc[k] + res.λc[k]'*res.gc[k]
-            J += 0.5*res.hc[k]'*res.Iνc[k]*res.hc[k] + res.κc[k]'*res.hc[k]
+            pIc > 0 ? J += 0.5*res.gc[k]'*res.Iμc[k]*res.gc[k] + res.λc[k]'*res.gc[k] : nothing
+            pEc > 0 ? J += 0.5*res.hc[k]'*res.Iνc[k]*res.hc[k] + res.κc[k]'*res.hc[k] : nothing
         end
     end
 
@@ -303,40 +302,6 @@ end
 
 function cost(solver::Solver, res::SolverIterResults, X=res.X, U=res.U)
     _cost(solver,res,X,U) + cost_constraints(solver,res)
-end
-
-"""
-$(SIGNATURES)
-    Calculate state midpoint using cubic spline
-"""
-function cubic_midpoint(x1::AbstractVector,dx1::AbstractVector,x2::AbstractVector,dx2::AbstractVector,dt::Float64)
-    0.5*x1 + dt/8.0*dx1 + 0.5*x2 - dt/8.0*dx2
-end
-
-"""
-$(SIGNATURES)
-    Calculate state midpoints (xm)
-"""
-function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X=results.X, U=results.U)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    dt = solver.dt
-    for k = 1:N-1
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-        results.xm[k] = cubic_midpoint(X[k],results.dx[k],X[k+1],results.dx[k+1],dt)
-        results.um[k] = 0.5*(U[k] + U[k+1])
-    end
-end
-
-"""
-$(SIGNATURES)
-    Calculate state derivatives (dx)
-"""
-function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X=results.X, U=results.U)
-    n,m,N = get_sizes(solver)
-    for k = 1:N
-        solver.fc(results.dx[k],X[k],U[k][1:m])
-    end
 end
 
 """

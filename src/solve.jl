@@ -391,6 +391,8 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
     for k = 1:N
         results.U[k] = results.U[k][1:m̄]
         results.U_[k] = results.U_[k][1:m̄]
+        results.b[k] = results.b[k][1:m̄,1:m̄]
+        results.d[k] = results.d[k][1:m̄]
         results.hc[k] = results.hc[k][idx]
         results.hc_prev[k] = results.hc_prev[k][idx]
         results.hcu[k] = results.hcu[k][idx,1:m̄]
