@@ -1,6 +1,7 @@
 ### Solver options ###
 opts = SolverOptions()
 opts.verbose=false
+opts.R_infeasible = 10.0
 opts.constraint_tolerance = 1e-3
 opts.τ = 0.25
 ######################
@@ -47,18 +48,3 @@ max_violation(results)
 # Test final state from foh solve
 @test norm(results.X[end] - solver.obj.xf) < 1e-3
 ##################
-
-# n,m,N = get_sizes(solver)
-# m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-# bp = TrajectoryOptimization.BackwardPassZOH(n,mm,N)
-# TrajectoryOptimization._backwardpass!(results,solver,bp)
-#
-#
-#
-# for i = 1:100
-#     v = TrajectoryOptimization._backwardpass!(results,solver,bp)
-#     println(v)
-# end
-#
-#
-# bp

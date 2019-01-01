@@ -348,7 +348,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
         end
 
         # Outer loop update if forward pass is repeatedly unsuccessful
-        if dJ_zero_counter >= 10
+        if dJ_zero_counter >= 1
             return true
         end
 
@@ -422,9 +422,9 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm) : bp = BackwardPassZOH(n,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    calculate_jacobians!(results, solver)
-    update_constraints!(results, solver)
-    solver.opts.constrained = false
+    # calculate_jacobians!(results, solver)
+    # update_constraints!(results, solver)
+    # solver.opts.constrained = false
     Δv = backwardpass!(results, solver, bp)
 
     solver.opts.unconstrained_original_problem ? solver.opts.constrained = false : solver.opts.constrained = true
@@ -555,6 +555,19 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
 
     ## Penalty updates
     μ_update!(results,solver)
+
+    N = solver.N
+    res = results
+    for k = 1:N
+        if k != 1
+            res.Iμs[k] = Diagonal(res.gs_active_set[k].*res.μs[k])
+            res.Iνs[k] = Diagonal(res.νs[k])
+        end
+        if k != N || solver.control_integration == :foh
+            res.Iμc[k] = Diagonal(res.gc_active_set[k].*res.μc[k])
+            res.Iνc[k] = Diagonal(res.νc[k])
+        end
+    end
 
     ## Store current constraints evaluations for next outer loop update
     results.gs_prev .= deepcopy(results.gs)

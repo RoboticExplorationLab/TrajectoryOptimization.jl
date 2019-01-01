@@ -112,6 +112,106 @@ function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardP
     return Δv
 end
 
+function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    Q = solver.obj.Q; R = getR(solver); Qf = solver.obj.Qf; xf = solver.obj.xf;
+
+    dt = solver.dt
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N] = Qf
+    s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if solver.opts.constrained
+        gs = res.gs; gc = res.gc; hs = res.hs; hc = res.hc
+        λs = res.λs; λc = res.λc; κs = res.κs; κc = res.κc
+        Iμs = res.Iμs; Iμc = res.Iμc; Iνs = res.Iνs; Iνc = res.Iνc
+        gsx = res.gsx; gcu = res.gcu; hsx = res.hsx; hcu = res.hcu
+
+        S[N] += gsx[N]'*Iμs[N]*gsx[N] + hsx[N]'*Iνs[N]*hsx[N]
+        s[N] += gsx[N]'*(Iμs[N]*gs[N] + λs[N]) + hsx[N]'*(Iνs[N]*hs[N] + κs[N])
+    end
+
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        lx = dt*Q*vec(X[k] - xf)
+        lu = dt*R*vec(U[k])
+        lxx = dt*Q
+        luu = dt*R
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fdx'*vec(s[k+1])
+        Qu = lu + fdu'*vec(s[k+1])
+        Qxx = lxx + fdx'*S[k+1]*fdx
+
+        Quu = luu + fdu'*S[k+1]*fdu
+        Qux = fdu'*S[k+1]*fdx
+
+        # Constraints
+        if solver.opts.constrained
+            Qx += gsx[k]'*(Iμs[k]*gs[k] + λs[k]) + hsx[k]'*(Iνs[k]*hs[k] + κs[k])
+            Qu += gcu[k]'*(Iμc[k]*gc[k] + λc[k]) + hcu[k]'*(Iνc[k]*hc[k] + κc[k])
+            Qxx += gsx[k]'*Iμs[k]*gsx[k] + hsx[k]'*Iνs[k]*hsx[k]
+            Quu += gcu[k]'*Iμc[k]*gcu[k] + hcu[k]'*Iνc[k]*hcu[k]
+            # Qux += Cu'*Iμ[k]*Cx
+        end
+
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg::Matrix{Float64}\Qux_reg::Matrix{Float64}
+        d[k] = -Quu_reg\Qu::Vector{Float64}
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
 function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -152,10 +252,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
     # Backward pass
     k = N-1
 
-    # for the special case of the tracking quadratic cost:
-    ℓxx = W
-    ℓuu = R
-    ℓux = zeros(m,n)
+    # for the special case of the tracking quadratic cost
 
     while k >= 1
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
@@ -167,6 +264,9 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
         ℓ1 = ℓ(x,u,W,R,xf)
         ℓx = W*(x - xf)
         ℓu = R*u
+        ℓxx = W
+        ℓuu = R
+        ℓux = zeros(m,n)
 
         # Assemble expansion
         Qx[k][1:n] = dt*ℓx

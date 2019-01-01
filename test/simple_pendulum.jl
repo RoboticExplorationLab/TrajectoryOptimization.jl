@@ -94,11 +94,12 @@ obj_uncon = TrajectoryOptimization.Dynamics.pendulum[2]
 obj_uncon.R[:] = [1e-2] # control needs to be properly regularized for infeasible start to produce a good warm-start control output
 
 opts.resolve_feasible = true
+opts.R_infeasible = 10.0
 obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
-# max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
+max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
