@@ -11,6 +11,8 @@
 #         f_augmented_foh!: Create function with augmented state and control input foh
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# TODO: Change S to Z
+
 """
 $(SIGNATURES)
 In place Midpoint integration

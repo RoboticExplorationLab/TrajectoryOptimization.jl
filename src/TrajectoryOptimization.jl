@@ -34,6 +34,9 @@ export
     SolverResults,
     ConstrainedObjective,
     UnconstrainedObjective,
+    LinearQuadraticCost,
+    LQRCost,
+    GenericCost,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
     ConstrainedStaticResults,
@@ -77,6 +80,7 @@ include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
+include("objective.jl")
 
 using Ipopt
 
