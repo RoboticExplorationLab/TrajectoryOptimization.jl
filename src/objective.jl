@@ -124,6 +124,14 @@ end
 stage_cost(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}) = cost.ℓ(x,u)
 stage_cost(cost::GenericCost, xN::AbstractVector{Float64}) = cost.ℓf(xN)
 
+get_sizes(cost::GenericCost) = cost.n, cost.m
+
+
+"""
+$(TYPEDEF)
+Generic type for Objective functions, which are currently strictly Quadratic
+"""
+abstract type Objective end
 
 """
 $(TYPEDEF)
@@ -140,6 +148,9 @@ struct UnconstrainedObjectiveNew{C} <: Objective
     function UnconstrainedObjectiveNew(cost::C,tf::Float64,x0,xf=Float64[]) where {C}
         if !isempty(xf) && length(xf) != length(x0)
             throw(ArgumentError("x0 and xf must be the same length"))
+        end
+        if tf < 0
+            throw(ArgumentError("tf must be non-negative"))
         end
         new{C}(cost,tf,x0,xf)
     end
@@ -165,13 +176,14 @@ end
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #                      CONSTRAINED OBJECTIVE                                   #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-function is_inplace_constraint(f::Function,n)
+function is_inplace_function(c::Function, input...)
     q = 100
-    while true
-        c = zeros(q)
+    iter = 1
+
+    vals = ones(q)
+    while iter < 5
         try
-            f(c,rand(n))
+            c(vals,input...)
             return true
         catch e
             if e isa MethodError
@@ -181,25 +193,35 @@ function is_inplace_constraint(f::Function,n)
             else
                 throw(e)
             end
+            iter += 1
         end
     end
+    return false
 end
 
-function count_inplace_constraint(f::Function,n)
-    q = 100
-    while true
-        c = zeros(q)*Inf
+function count_inplace_output(c::Function, input...)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
         try
-            f(c,rand(n))
-            return count(isfinite.(c))
+            c(vals,input...)
+            break
         catch e
             if e isa BoundsError
                 q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
             else
                 throw(e)
             end
         end
     end
+    p = count(isfinite.(vals))
+
+    return p
 end
 
 struct ConstrainedObjectiveNew{C} <: Objective
@@ -217,51 +239,153 @@ struct ConstrainedObjectiveNew{C} <: Objective
     x_max::Array{Float64,1}  # Upper state bounds (n,)
 
     # Custom constraints
-    gs::Function    # inequality state constraint
-    gc::Function    # inequality control constraint
-    hs::Function    # equality state constraint
-    hc::Function    # inequality control constraint
+    cI::Function  # inequality constraint function (inplace)
+    cE::Function  # equality constraint function (inplace)
 
     # Terminal Constraints
-    gs_N::Function  # terminal inequality state constraint
-    use_terminal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
+    cI_N::Function          # custom terminal inequality constraint
+    cE_N::Function          # custom teriminal equality constraint
+    use_goal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
 
-    function ConstrainedObjectiveNew(cost::C,tf::Float64,x0,xf,
+    p::Int   # Total number of stage constraints
+    pI::Int  # Number of inequality constraints
+    p_N::Int  # Number of terminal constraints
+    pI_N::Int  # Number of terminal inequality constraints
+
+    pI_custom::Int   # Number of custom inequality constraints
+    pE_custom::Int   # Number of custom equality constraints
+    pI_N_custom::Int # Nubmer of custom terminal inequality constraints
+    pE_N_custom::Int # Number of custom terminal equality constraints
+
+    function ConstrainedObjectiveNew(cost::C,tf::Real,x0,xf,
         u_min, u_max,
         x_min, x_max,
-        gs, gc,
-        hs, hc,
-        gs_N, use_terminal_constraint) where {C}
+        cI, cE,
+        cI_N, cE_N,
+        use_goal_constraint) where {C}
 
-        n = size(Q,1)
-        m = size(R,1)
+        n,m = get_sizes(cost)
+        x = rand(n)
+        u = rand(m)
 
         # Make general inequality/equality constraints inplace
-        if !is_inplace_constraint(gs,n)
-            gs = wrap_inplace(gs)
-            println("Custom state inequality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
+        is_inplace_function(cI,x,u) ? nothing : error("Custom inequality constraints are not inplace")
+        pI_custom = count_inplace_output(cI,x,u)
+
+        is_inplace_function(cE,x,u) ? nothing : error("Custom equality constraints are not inplace")
+        pE_custom = count_inplace_output(cE,x,u)
+
+        is_inplace_function(cI_N,x) ? nothing : error("Custom terminal inequality constraints are not inplace")
+        pI_N_custom = count_inplace_output(cI_N,x)
+
+        is_inplace_function(cE_N,x) ? nothing : error("Custom terminal equality constraints are not inplace")
+        pE_N_custom = count_inplace_output(cE_N,x)
+
+        # Validity Tests
+        u_max, u_min = _validate_bounds(u_max,u_min,m)
+        x_max, x_min = _validate_bounds(x_max,x_min,n)
+
+        # Stage Constraints
+        pI = 0
+        pE = 0
+        pI += count(isfinite, u_min)
+        pI += count(isfinite, u_max)
+        pI += count(isfinite, x_min)
+        pI += count(isfinite, x_max)
+
+        pI += pI_custom
+        pE += pE_custom
+
+        p = pI + pE
+
+        # Terminal Constraints
+        pI_N = pI_N_custom
+        if use_goal_constraint
+            if pI_N_custom > 0 || pE_N_custom > 0
+                throw(ArgumentError("Can't specify custom terminal constraints with a goal constrait"))
+            end
+            pE_N = n
+        else
+            pE_N = 0
         end
-
-        if !is_inplace_constraint(gc,n)
-            gc = wrap_inplace(gc)
-            println("Custom control inequality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
-        end
-
-        if !is_inplace_constraint(hs,n)
-            hs = wrap_inplace(hs)
-            println("Custom state equality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
-        end
-
-        if !is_inplace_constraint(hc,n)
-            hc = wrap_inplace(hc)
-            println("Custom control equality constraints are not inplace\n -converting to inplace\n -THIS IS SLOW")
-        end
+        pE_N += pE_N_custom
+        p_N = pI_N + pE_N
 
 
-        new{C}(cost::C, tf,x0,xf, u_min, u_max, x_min, x_max, gs, gc, hs, hc, gs_N, use_terminal_constraint)
+        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_goal_constraint,
+            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom)
     end
 end
 
+function ConstrainedObjectiveNew(cost::C,tf::Symbol,x0,xf,
+    u_min, u_max,
+    x_min, x_max,
+    cI, cE,
+    cI_N, cE_N,
+    use_goal_constraint) where {C}
+    if tf == :min
+        ConstrainedObjectiveNew(cost,0.0,x0,xf,
+            u_min, u_max,
+            x_min, x_max,
+            cI, cE,
+            cI_N, cE_N,
+            use_goal_constraint)
+    else
+        err = ArgumentError(":min is the only recognized Symbol for the final time")
+        throw(err)
+    end
+end
+
+function ConstrainedObjectiveNew(cost,tf,x0,xf;
+    u_min=-ones(get_sizes(cost)[2])*Inf, u_max=ones(get_sizes(cost)[2])*Inf,
+    x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
+    cI=null_constraint, cE=null_constraint,
+    cI_N=null_constraint, cE_N=null_constraint,
+    use_goal_constraint=true)
+
+    ConstrainedObjectiveNew(cost,tf,x0,xf,
+        u_min, u_max,
+        x_min, x_max,
+        cI, cE,
+        cI_N, cE_N,
+        use_goal_constraint)
+end
+
+
+"$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
+function ConstrainedObjectiveNew(obj::UnconstrainedObjectiveNew; kwargs...)
+    ConstrainedObjectiveNew(obj.cost, obj.tf, obj.x0, obj.xf; kwargs...)
+end
+
+
+"""
+$(SIGNATURES)
+Updates constrained objective values and returns a new objective.
+
+Only updates the specified fields, all others are copied from the previous
+Objective.
+"""
+function update_objective(obj::ConstrainedObjectiveNew;
+    cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
+    u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
+    cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
+    use_goal_constraint=obj.use_goal_constraint)
+
+    ConstrainedObjectiveNew(cost,tf,x0,xf,
+        u_min=u_min, u_max=u_max,
+        x_min=x_min, x_max=x_max,
+        cI=cI, cE=cE,
+        cI_N=cI_N, cE_N=cE_N,
+        use_goal_constraint=use_goal_constraint)
+
+end
+
+
+null_constraint(c,x,u) = nothing
+null_constraint(c,x) = nothing
+
+
+get_sizes(obj::Objective) = get_sizes(obj.cost)
 
 
 
