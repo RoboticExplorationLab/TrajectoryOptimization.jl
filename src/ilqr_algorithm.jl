@@ -45,15 +45,17 @@ Online Trajectory Optimization)
 """
 function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh_speedup!(results,solver)
+        Δv = _backwardpass_foh_speedup!(results,solver, bp)
     elseif solver.opts.square_root
-        ΔV = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+        Δv = _backwardpass_sqrt!(results, solver, bp) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass_speedup!(results, solver)
+        Δv = _backwardpass_speedup!(results, solver, bp)
     end
 
-    return ΔV
+    return Δv
 end
+
+
 function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -288,7 +290,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver{Obj}) where Obj 
     return Δv
 end
 
-function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -599,7 +601,7 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp)
     N = solver.N
     n = solver.model.n
     m = solver.model.m
