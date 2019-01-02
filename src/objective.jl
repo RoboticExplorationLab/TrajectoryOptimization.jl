@@ -1,3 +1,4 @@
+import Base.copy
 
 #*********************************#
 #       COST FUNCTION CLASS       #
@@ -169,8 +170,9 @@ function UnconstrainedObjectiveNew(cost::CostFunction,tf::Symbol,x0,xf)
     end
 end
 
-
-
+function copy(obj::UnconstrainedObjectiveNew)
+    UnconstrainedObjectiveNew(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf))
+end
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -224,6 +226,15 @@ function count_inplace_output(c::Function, input...)
     return p
 end
 
+"""
+$(TYPEDEF)
+Define a quadratic objective for a constrained optimization problem.
+
+# Constraint formulation
+* Equality constraints: `f(x,u) = 0`
+* Inequality constraints: `f(x,u) ≥ 0`
+
+"""
 struct ConstrainedObjectiveNew{C} <: Objective
     cost::C
     tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
@@ -336,6 +347,28 @@ function ConstrainedObjectiveNew(cost::C,tf::Symbol,x0,xf,
     end
 end
 
+
+"""
+$(SIGNATURES)
+
+Construct a ConstrainedObjective with defaults.
+
+Create a ConstrainedObjective, specifying only the needed fields. All others
+will be set to their default, constrained values.
+
+# Constraint formulation
+* Equality constraints: `f(x,u) = 0`
+* Inequality constraints: `f(x,u) ≥ 0`
+
+# Arguments
+* u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
+a vector of size (m,). A scalar will be copied to all states or controls. Values
+can be ±Inf.
+* cI, cE: Functions for inequality and equality constraints. Must be of the form
+`c = f(x,u)`, where `c` is of size (pI_c,) or (pE_c,).
+* cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
+where `c` is of size (pI_c_N,) or (pE_c_N,).
+"""
 function ConstrainedObjectiveNew(cost,tf,x0,xf;
     u_min=-ones(get_sizes(cost)[2])*Inf, u_max=ones(get_sizes(cost)[2])*Inf,
     x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
@@ -355,6 +388,13 @@ end
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
 function ConstrainedObjectiveNew(obj::UnconstrainedObjectiveNew; kwargs...)
     ConstrainedObjectiveNew(obj.cost, obj.tf, obj.x0, obj.xf; kwargs...)
+end
+
+function copy(obj::ConstrainedObjectiveNew)
+    ConstrainedObjectiveNew(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
+        u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
+        cI=obj.cI, cE=obj.cE,
+        use_goal_constraint=obj.use_goal_constraint)
 end
 
 
@@ -388,6 +428,35 @@ null_constraint(c,x) = nothing
 get_sizes(obj::Objective) = get_sizes(obj.cost)
 
 
+"""
+$(SIGNATURES)
+Check max/min bounds for state and control.
+
+Converts scalar bounds to vectors of appropriate size and checks that lengths
+are equal and bounds do not result in an empty set (i.e. max > min).
+
+# Arguments
+* n: number of elements in the vector (n for states and m for controls)
+"""
+function _validate_bounds(max,min,n::Int)
+
+    if min isa Real
+        min = ones(n)*min
+    end
+    if max isa Real
+        max = ones(n)*max
+    end
+    if length(max) != length(min)
+        throw(DimensionMismatch("u_max and u_min must have equal length"))
+    end
+    if ~all(max .> min)
+        throw(ArgumentError("u_max must be greater than u_min"))
+    end
+    if length(max) != n
+        throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
+    end
+    return max, min
+end
 
 """
 $(SIGNATURES)
