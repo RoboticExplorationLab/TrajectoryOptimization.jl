@@ -320,6 +320,5 @@ obj = UnconstrainedObjectiveNew(costfun,:min,x0,xf)
 obj = UnconstrainedObjectiveNew(costfun,tf,x0,xf)
 @test_throws ArgumentError UnconstrainedObjectiveNew(costfun,tf,x0,u)
 UnconstrainedObjectiveNew(costfun,tf,x0,Float64[])
-obj = LQRObjective(Q,R,Qf,tf,x0,xf)
 @test stage_cost(obj.cost,x,u) == J
 @test stage_cost(obj,x,u) == J

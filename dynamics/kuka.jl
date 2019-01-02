@@ -1,7 +1,7 @@
 traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-urdf_folder = joinpath(traj_folder, "dynamics/urdf")
+urdf_folder = joinpath(traj_folder, "dynamics","urdf")
 urdf_kuka_orig = joinpath(urdf_folder, "kuka_iiwa.urdf")
-urdf_kuka = joinpath(urdf_folder, "temp/kuka.urdf")
+urdf_kuka = joinpath(urdf_folder, "temp","kuka.urdf")
 
 function write_kuka_urdf()
     kuka_mesh_dir = joinpath(TrajectoryOptimization.root_dir(),"dynamics","urdf","kuka_iiwa_mesh")

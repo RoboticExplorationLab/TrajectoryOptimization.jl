@@ -103,11 +103,17 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     #       INITIALIZATION       #
     #****************************#
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
     if isempty(prevResults)
         results = init_results(solver, X0, U0, λ=λ)
     else
         results = prevResults
     end
+
+    # Initialized backward pass expansion terms
+    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm,N) : bp = BackwardPassZOH(n,mm,N)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -187,7 +193,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             ### BACKWARD PASS ###
             calculate_jacobians!(results, solver)
-            Δv = backwardpass!(results, solver)
+            Δv = backwardpass!(results, solver, bp)
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv)#, J_prev)
@@ -407,8 +413,14 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # remove infeasible components
     results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
 
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    # Initialized backward pass expansion terms
+    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm,N) : bp = BackwardPassZOH(n,mm,N)
+
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results_feasible, solver)
+    Δv = backwardpass!(results_feasible, solver, bp)
 
     # forward pass
     forwardpass!(results_feasible,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
@@ -430,41 +442,6 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     return results_feasible
 end
-
-# """
-# $(SIGNATURES)
-#     Infeasible start solution is run through time varying LQR to track state and control trajectories
-# """
-# function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-#     # turn off infeasible solve
-#     solver.opts.infeasible = false
-#
-#     # remove infeasible components
-#     results_feasible = no_infeasible_controls_unconstrained_results(results,solver)
-#
-#     # backward pass (ie, time varying lqr)
-#     if solver.control_integration == :foh
-#         Δv = backwardpass_foh!(results_feasible,solver)
-#     elseif solver.opts.square_root
-#         Δv = backwardpass_sqrt!(results_feasible, solver)
-#     else
-#         Δv = backwardpass!(results_feasible, solver)
-#     end
-#
-#     # rollout
-#     forwardpass!(results_feasible,solver,Δv)
-#     results_feasible.X .= results_feasible.X_
-#     results_feasible.U .= results_feasible.U_
-#
-#     # return constrained results if input was constrained
-#     if !solver.opts.unconstrained
-#         results_feasible = new_constrained_results(results_feasible,solver,results.λ,results.λN,results.ρ)
-#         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
-#         calculate_jacobians!(results_feasible,solver)
-#     end
-#
-#     return results_feasible
-# end
 
 """
 $(SIGNATURES)
