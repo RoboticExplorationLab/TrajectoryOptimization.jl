@@ -234,7 +234,7 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
-function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
+function _cost(solver::Solver{UnconstrainedObjective{TQ,TR,TQf}},res::SolverVectorResults,X=res.X,U=res.U) where {TQ,TR,TQf}
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -252,14 +252,46 @@ function _cost(solver::Solver,res::SolverVectorResults,X=res.X,U=res.U)
             solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
-            J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
-            # J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
-            # solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            # solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+            # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            J += dt*ℓ(X[k],U[k][1:m],Q,R,xf)
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
     end
 
     J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
+
+    return J
+end
+
+function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjectiveNew, UnconstrainedObjectiveNew}
+    # pull out solver/objective values
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    costfun = solver.obj.cost
+    dt = solver.dt
+    xf = solver.obj.xf
+    Q = costfun.Q
+
+    J = 0.0
+    for k = 1:N-1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+        if solver.control_integration == :foh
+            xm = res.xm[k]
+            um = res.um[k]
+            J += dt*(1/6*stage_cost(costfun,X[k],U[k][1:m]) + 4/6*stage_cost(costfun,xm,um[1:m]) + 1/6*stage_cost(costfun,X[k+1],U[k+1][1:m])) # Simpson quadrature (integral approximation) for foh stage cost
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+        else
+            # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
+            J += (stage_cost(costfun,X[k],U[k][1:m]) + 0.5*xf'*Q*xf)*dt
+            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+        end
+    end
+
+    # J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
+    J += stage_cost(costfun, X[N]) + 0.5*xf'*costfun.Qf*xf
 
     return J
 end

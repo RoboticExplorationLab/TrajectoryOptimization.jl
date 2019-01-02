@@ -145,11 +145,131 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
+function _backwardpass!(res::SolverVectorResults,solver::Solver{Obj}) where Obj <: Union{UnconstrainedObjectiveNew,ConstrainedObjectiveNew}
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    costfun = solver.obj.cost
+    # Q = solver.obj.Q; R = getR(solver); Qf = solver.obj.Qf; xf = solver.obj.xf; c = solver.obj.c;
+
+    dt = solver.dt
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    # Boundary Conditions
+    S[N], s[N] = taylor_expansion(costfun,X[N])
+    # S[N] = Qf
+    # s[N] = Qf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = [0.0 0.0]
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ
+        CxN = res.Cx_N
+        S[N] += CxN'*res.IμN*CxN
+        s[N] += CxN'*res.IμN*res.CN + CxN'*res.λN
+    end
+
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        expansion = taylor_expansion(costfun,X[k],U[k])
+        lxx,luu,lxu,lx,lu = expansion .* dt
+        # lx = dt*Q*vec(X[k] - xf)
+        # lu = dt*R*vec(U[k])
+        # lxx = dt*Q
+        # luu = dt*R
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = lx + fdx'*vec(s[k+1])
+        Qu = lu + fdu'*vec(s[k+1])
+        Qxx = lxx + fdx'*S[k+1]*fdx
+
+        Quu = luu + fdu'*S[k+1]*fdu
+        Qux = fdu'*S[k+1]*fdx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Cx, Cu = res.Cx[k], res.Cu[k]
+            Qx += Cx'*Iμ[k]*C[k] + Cx'*λ[k]
+            Qu += Cu'*Iμ[k]*C[k] + Cu'*λ[k]
+            Qxx += Cx'*Iμ[k]*Cx
+            Quu += Cu'*Iμ[k]*Cu
+            Qux += Cu'*Iμ[k]*Cx
+
+            if solver.opts.minimum_time
+                h = U[k][m̄]
+                Qu[m̄] += 2*h*stage_cost(X[k],U[k],Q,R,xf,c)
+                Qux[m̄,1:n] += vec(2h*(X[k]-xf)'Q)
+                tmp = zero(Quu)
+                tmp[:,m̄] = R*U[k]
+                Quu += 2h*(tmp+tmp')
+                Quu[m̄,m̄] += 2*stage_cost(X[k],U[k],Q,R,xf,c)
+
+                if k > 1
+                    Qu[m̄] += - C[k-1][end]*Iμ[k-1][end,end] - λ[k-1][end]
+                    Quu[m̄,m̄] += Iμ[k-1][end,end]
+                end
+
+            end
+
+        end
+
+        if solver.opts.regularization_type == :state
+            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg = Quu + res.ρ[1]*I
+            Qux_reg = Qux
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv = [0.0 0.0]
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg::Matrix{Float64}\Qux_reg::Matrix{Float64}
+        d[k] = -Quu_reg\Qu::Vector{Float64}
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = vec(Qx) + K[k]'*Quu*vec(d[k]) + K[k]'*vec(Qu) + Qux'*vec(d[k])
+        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv += [vec(d[k])'*vec(Qu) 0.5*vec(d[k])'*Quu*vec(d[k])]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
 function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    # W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    costfun = solver.obj.cost
 
     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
@@ -169,8 +289,9 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
     ū_idx = idx[n+1:n+mm]
 
     # Boundary Conditions
-    S[N] = Wf
-    s[N] = Wf*(X[N] - xf)
+    S[N], s[N] = taylor_expansion(costfun, X[N])
+    # S[N] = Wf
+    # s[N] = Wf*(X[N] - xf)
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -190,24 +311,28 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
 
         x = X[k]
         u = U[k][1:m]
+        #
+        # ℓ1 = ℓ(x,u,W,R,xf)
+        # ℓx = W*(x - xf)
+        # ℓu = R*u
+        # ℓxx = W
+        # ℓuu = R
+        # ℓux = zeros(m,n)
+        #
+        # # Assemble expansion
+        # Lx = dt*ℓx
+        # Lu = dt*ℓu
+        # Lxx = dt*ℓxx
+        # Luu = dt*ℓuu
+        # Lux = dt*ℓux
 
-        ℓ1 = ℓ(x,u,W,R,xf)
-        ℓx = W*(x - xf)
-        ℓu = R*u
-        ℓxx = W
-        ℓuu = R
-        ℓux = zeros(m,n)
-
-        # Assemble expansion
-
-        Lx = dt*ℓx
-        Lu = dt*ℓu
-        Lxx = dt*ℓxx
-        Luu = dt*ℓuu
-        Lux = dt*ℓux
+        expansion = taylor_expansion(costfun,x,u)
+        Lxx,Luu,Lxu,Lx,Lu = expansion .* dt
+        Lux = Lxu'
 
         # Minimum time expansion components
         if solver.opts.minimum_time
+            ℓ1 = stage_cost(costfun,x,u)
             h = U[k][m̄]
 
             l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
@@ -282,6 +407,8 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
         K[k] = -Quu_reg\Qux_reg
         d[k] = -Quu_reg\Qu
 
+
+
         # Calculate cost-to-go (using unregularized Quu and Qux)
         s[k] = Qx + K[k]'*Quu*d[k] + K[k]'*Qu + Qux'*d[k]
         S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
@@ -314,26 +441,25 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         m += n
     end
 
-    Q = solver.obj.Q
-    R = solver.obj.R
-    xf = solver.obj.xf
-    Qf = solver.obj.Qf
+    # Q = solver.obj.Q
+    # R = solver.obj.R
+    # xf = solver.obj.xf
+    # Qf = solver.obj.Qf
+    costfun = solver.obj.cost
     dt = solver.dt
-
-    Uq = cholesky(Q).U
-    Ur = cholesky(R).U
 
     # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
 
     # Terminal Cost-to-go
+    lxx,lx = taylor_expansion(costfun, X[N])
     if isa(solver.obj, ConstrainedObjective)
         Cx = res.Cx_N
-        Su[N] = cholesky(Qf + Cx'*res.IμN*Cx).U
-        s[N] = Qf*(X[N] - xf) + Cx'*res.IμN*res.CN + Cx'*res.λN
+        Su[N] = cholesky(lxx + Cx'*res.IμN*Cx).U
+        s[N] = lxx + Cx'*res.IμN*res.CN + Cx'*res.λN
     else
-        Su[N] = cholesky(Qf).U
-        s[N] = Qf*(X[N] - xf)
+        Su[N] = cholesky(lxx).U
+        s[N] = lx
     end
 
     # Initialization of expected change in cost-to-go
@@ -343,10 +469,12 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
     # Backward pass
     while k >= 1
-        lx = dt*Q*(X[k] - xf)
-        lu = dt*R*(U[k])
-        lxx = dt*Q
-        luu = dt*R
+        expansion = taylor_expansion(costfun,X[k],U[k])
+        lxx,luu,lxu,lx,lu = expansion .* dt
+        # lx = dt*Q*(X[k] - xf)
+        # lu = dt*R*(U[k])
+        # lxx = dt*Q
+        # luu = dt*R
 
         fx, fu = res.fdx[k], res.fdu[k]
 
@@ -682,7 +810,8 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
     m̄,mm = get_num_controls(solver)
 
     # Objective parameters
-    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    # W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    costfun = solver.obj.cost
 
     dt = solver.dt
 
@@ -714,8 +843,9 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
     # s = zeros(n+mm)
     # S[xx_idx] = Wf
     # s[x_idx] = Wf*(X[N] - xf)
-    S[N][xx_idx] = Wf
-    s[N][x_idx] = Wf*(X[N] - xf)
+    S[N][xx_idx], s[N][x_idx] = taylor_expansion(costfun, X[N])
+    # S[N][xx_idx] = Wf
+    # s[N][x_idx] = Wf*(X[N] - xf)
 
 
     # Terminal constraints
@@ -781,44 +911,50 @@ function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
         xmy = 0.5*I - dt/8*fcy
         xmv = -dt/8*fcv
 
-        ℓxm = W*(xm - xf)
-        ℓum = 0.5*R*um
+        ℓxxm,ℓuum,ℓxum,ℓxm,ℓum = taylor_expansion(costfun,xm,um)
+        # ℓxm = W*(xm - xf)
+        # ℓum = 0.5*R*um
 
         # ℓ(x,u) expansion
-        ℓ1 = ℓ(x,u,W,R,xf)
-        ℓ1x = W*(x - xf)
-        ℓ1u = R*u
-
-        ℓ1xx = W
-        ℓ1uu = R
+        ℓ1 = stage_cost(costfun,x,u)
+        ℓ1xx,ℓ1uu,ℓ1xu,ℓ1x,ℓ1u = taylor_expansion(costfun,x,u)
+        # ℓ1 = ℓ(x,u,W,R,xf)
+        # ℓ1x = W*(x - xf)
+        # ℓ1u = R*u
+        #
+        # ℓ1xx = W
+        # ℓ1uu = R
 
         # ℓ(xm,um) expansion
-        ℓ2 = ℓ(xm,um,W,R,xf)
+        ℓ2 = stage_cost(costfun,xm,um)
+        # ℓ2 = ℓ(xm,um,W,R,xf)
         ℓ2x = xmx'*ℓxm #(I/2 + dt/8*fcx)'*W*(xm - xf)
         ℓ2u = xmu'*ℓxm + ℓum #((dt/8*fcu[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
         ℓ2y = xmy'*ℓxm #(I/2 - dt/8*fcy)'*W*(xm - xf)
         ℓ2v = xmv'*ℓxm + ℓum #((-dt/8*fcv[:,1:m])'*W*(xm - xf) + 0.5*R*um[1:m])
 
-        ℓ2xx = xmx'*W*xmx #(I/2.0 + dt/8.0*fcx)'*W*(I/2.0 + dt/8.0*fcx)
-        ℓ2uu = xmu'*W*xmu + 0.25*R #((dt/8*fcu[:,1:m])'*W*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
-        ℓ2yy = xmy'*W*xmy #(I/2 - dt/8*fcy)'*W*(I/2 - dt/8*fcy)
-        ℓ2vv = xmv'*W*xmv + 0.25*R #((-dt/8*fcv[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
+        ℓ2xx = xmx'*ℓxxm*xmx #(I/2.0 + dt/8.0*fcx)'*W*(I/2.0 + dt/8.0*fcx)
+        ℓ2uu = xmu'*ℓxxm*xmu + 0.25*ℓuum #((dt/8*fcu[:,1:m])'*W*(dt/8*fcu[:,1:m]) + 0.5*R*0.5)
+        ℓ2yy = xmy'*ℓxxm*xmy #(I/2 - dt/8*fcy)'*W*(I/2 - dt/8*fcy)
+        ℓ2vv = xmv'*ℓxxm*xmv + 0.25*ℓuum #((-dt/8*fcv[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
 
-        ℓ2xu = xmx'*W*xmu #(I/2 + dt/8*fcx)'*W*(dt/8*fcu[:,1:m])
-        ℓ2xy = xmx'*W*xmy #(I/2 + dt/8*fcx)'*W*(I/2 - dt/8*fcy)
-        ℓ2xv = xmx'*W*xmv #(I/2 + dt/8*fcx)'*W*(-dt/8*fcv[:,1:m])
-        ℓ2uy = xmu'*W*xmy #(dt/8*fcu[:,1:m])'*W*(I/2 - dt/8*fcy)
-        ℓ2uv = xmu'*W*xmv + 0.25*R #((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
-        ℓ2yv = xmy'*W*xmv #(I/2 - dt/8*fcy)'*W*(-dt/8*fcv[:,1:m])
+        ℓ2xu = xmx'*ℓxxm*xmu #(I/2 + dt/8*fcx)'*W*(dt/8*fcu[:,1:m])
+        ℓ2xy = xmx'*ℓxxm*xmy #(I/2 + dt/8*fcx)'*W*(I/2 - dt/8*fcy)
+        ℓ2xv = xmx'*ℓxxm*xmv #(I/2 + dt/8*fcx)'*W*(-dt/8*fcv[:,1:m])
+        ℓ2uy = xmu'*ℓxxm*xmy #(dt/8*fcu[:,1:m])'*W*(I/2 - dt/8*fcy)
+        ℓ2uv = xmu'*ℓxxm*xmv + 0.25*ℓuum #((dt/8*fcu[:,1:m])'*W*(-dt/8*fcv[:,1:m]) + 0.5*R*0.5)
+        ℓ2yv = xmy'*ℓxxm*xmv #(I/2 - dt/8*fcy)'*W*(-dt/8*fcv[:,1:m])
 
         # ℓ(y,v) expansion
-        ℓ3 = ℓ(y,v,W,R,xf)
-
-        ℓ3y = W*(y - xf)
-        ℓ3v = R*v
-
-        ℓ3yy = W
-        ℓ3vv = R
+        ℓ3 = stage_cost(costfun,y,v)
+        ℓ3yy,ℓ3vv,ℓ3yv,ℓ3y,ℓ3v = taylor_expansion(costfun,y,v)
+        # ℓ3 = ℓ(y,v,W,R,xf)
+        #
+        # ℓ3y = W*(y - xf)
+        # ℓ3v = R*v
+        #
+        # ℓ3yy = W
+        # ℓ3vv = R
 
         # Assemble expansion
         Lx = dt/6*(ℓ1x + 4*ℓ2x)
