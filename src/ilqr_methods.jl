@@ -453,11 +453,14 @@ end
 $(SIGNATURES)
     Count the number of constraints of each type from an objective
 """
-function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
+function count_constraints(obj::ConstrainedObjectiveNew, constraints::Symbol=:all)
     n = size(obj.Q,1)
     p = obj.p # number of constraints
     pI = obj.pI # number of inequality and equality constraints
     pE = p-pI # number of equality constraints
+
+    pI_c = obj.pI_custom
+    pE_c = obj.pE_custom
 
     u_min_active = isfinite.(obj.u_min)
     u_max_active = isfinite.(obj.u_max)
@@ -545,9 +548,8 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-2)
-    m = size(obj.R,1) # number of control inputs
-    n = length(obj.x0) # number of states
+function generate_constraint_functions(obj::ConstrainedObjectiveNew; max_dt::Float64=1.0, min_dt::Float64=1e-2)
+    n,m = get_sizes(obj)
 
     # Key: I=> inequality,   E=> equality
     #     _c=> custom   (lack)=> box constraint
@@ -555,11 +557,9 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     min_time = obj.tf == 0
 
-    pI_obj, pE_obj = count_constraints(obj)
     p = obj.p # number of constraints
-    pI, pI_c, pI_N, pI_N_c = pI_obj
-    pE, pE_c, pE_N, pE_N_c = pE_obj
-
+    pI, pI_c, pI_N, pI_N_c = obj.pI, obj.pI_custom, obj.pI_N, obj.pI_N_custom
+    pE, pE_c, pE_N, pE_N_c = p-obj.pI, obj.pE_custom, obj.p_N - obj.pI_N, obj.pE_N_custom
     m̄ = m
     min_time ? m̄ += 1 : nothing
     labels = String[]
@@ -639,8 +639,15 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     # Terminal Constraint
     # TODO make this more general
+    iI = 1:pI_N
+    iE = pI_N .+ (1:pE_N)
     function c_function!(c,x)
-        c[1:n] = x - obj.xf
+        if obj.use_goal_constraint
+            c[1:n] = x - obj.xf
+        else
+            c[iI] = obj.cI_N(c,x)
+            c[iE] = obj.cE_N(c,x)
+        end
     end
 
     ### Jacobians ###
@@ -698,7 +705,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_function!, c_jacobian!, c_labels
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (x,u)->nothing, (x,u)->nothing, String[]
+generate_constraint_functions(obj::UnconstrainedObjectiveNew; max_dt::Float64=1.0,min_dt=1.0e-2) = (c,x,u)->nothing, (cx,cu,x,u)->nothing, String[]
 
 """
 $(SIGNATURES)

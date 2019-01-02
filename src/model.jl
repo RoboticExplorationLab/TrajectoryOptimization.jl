@@ -232,12 +232,6 @@ end
 
 """
 $(TYPEDEF)
-Generic type for Objective functions, which are currently strictly Quadratic
-"""
-abstract type Objective end
-
-"""
-$(TYPEDEF)
 Defines a quadratic objective for an unconstrained optimization problem of the
     following form:
     J = (xₙ-xf)'Q(xₙ-xf) + Σ (xₖ-xf)'Q(xₖ-xf) + uₖ'Ruₖ + c
