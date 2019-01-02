@@ -56,9 +56,13 @@ Get true number of constraints, accounting for minimum time and infeasible start
 """
 function get_num_constraints(solver::Solver)
     if solver.opts.constrained
-        p = solver.obj.p
-        pI = solver.obj.pI
-        pE = p - pI
+        if solver.obj isa ConstrainedObjectiveNew
+            p = solver.obj.p
+            pI = solver.obj.pI
+            pE = p - pI
+        else
+            p,pI,pE = 0,0,0
+        end
         if is_min_time(solver)
             pI += 2
             pE += 1
