@@ -9,6 +9,31 @@
 #     chol_minus: Calculate sqrt(A-B)
 #     forwardpass!: iLQR forward pass
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+abstract type BackwardPass end
+
+struct BackwardPassZOH <: BackwardPass
+    Qx::Vector{Vector{Float64}}
+    Qu::Vector{Vector{Float64}}
+    Qxx::Vector{Matrix{Float64}}
+    Qux::Vector{Matrix{Float64}}
+    Quu::Vector{Matrix{Float64}}
+
+    Qux_reg::Vector{Matrix{Float64}}
+    Quu_reg::Vector{Matrix{Float64}}
+
+    function BackwardPassZOH(n::Int,m::Int,N::Int)
+        Qx = [zeros(n) for i = 1:N-1]
+        Qu = [zeros(m) for i = 1:N-1]
+        Qxx = [zeros(n,n) for i = 1:N-1]
+        Qux = [zeros(m,n) for i = 1:N-1]
+        Quu = [zeros(m,m) for i = 1:N-1]
+
+        Qux_reg = [zeros(m,n) for i = 1:N-1]
+        Quu_reg = [zeros(m,m) for i = 1:N-1]
+
+        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
+    end
+end
 
 """
 $(SIGNATURES)
@@ -18,19 +43,18 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
 Online Trajectory Optimization)
 """
-function backwardpass!(results::SolverVectorResults,solver::Solver)
+function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
     if solver.control_integration == :foh
-        Δv = _backwardpass_foh!(results,solver)
+        ΔV = _backwardpass_foh!(results,solver,bp)
     elseif solver.opts.square_root
-        Δv = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
+        ΔV = _backwardpass_sqrt!(results, solver) #TODO option to help avoid ill-conditioning [see algorithm xx]
     else
-        Δv = _backwardpass!(results, solver)
+        ΔV = _backwardpass!(results, solver,bp)
     end
 
-    return Δv
+    return ΔV
 end
-
-function _backwardpass!(res::SolverVectorResults,solver::Solver)
+function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -145,7 +169,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
+function _backwardpass_a!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
@@ -300,6 +324,149 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
+function _backwardpass_alt!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+
+    W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+
+    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
+    dt = solver.dt
+
+    # pull out values from results
+    X = res.X; U = res.U; K = res.K; d = res.d;
+    S = res.S; s = res.s
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+
+    for k = 1:N-1
+        Qx[k] = zeros(n); Qu[k] = zeros(mm); Qxx[k] = zeros(n,n); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,n)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,n)
+    end
+
+    # Boundary Conditions
+    S[N] = Wf
+    s[N] = Wf*(X[N] - xf)
+
+    # Initialize expected change in cost-to-go
+    Δv = zeros(2)
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ; Cx = res.Cx; Cu = res.Cu
+        CN = res.CN; CxN = res.Cx_N; IμN = res.IμN; λN = res.λN
+
+        S[N] += CxN'*IμN*CxN
+        s[N] += CxN'*(IμN*CN + λN)
+    end
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        x = X[k]
+        u = U[k][1:m]
+
+        ℓ1 = ℓ(x,u,W,R,xf)
+        ℓx = W*(x - xf)
+        ℓu = R*u
+        ℓxx = W
+        ℓuu = R
+        ℓux = zeros(m,n)
+
+        # Assemble expansion
+
+        Qx[k] = dt*ℓx
+        Qu[k][1:m] = dt*ℓu
+        Qxx[k] = dt*ℓxx
+        Quu[k][1:m,1:m] = dt*ℓuu
+        Qux[k][1:m,1:n] = dt*ℓux
+
+        # Minimum time expansion components
+        if solver.opts.minimum_time
+            h = U[k][m̄]
+
+            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+
+            tmp = 2*h*ℓu
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+
+            Qux[k][m̄,1:n] = 2*h*ℓx'
+        end
+
+        # Infeasible expansion components
+        if solver.opts.infeasible
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
+        end
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qxx[k] += fdx'*S[k+1]*fdx
+        Quu[k] += fdu'*S[k+1]*fdu
+        Qux[k] += fdu'*S[k+1]*fdx
+
+        # Constraints
+        if res isa ConstrainedIterResults
+            Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            Qxx[k] += Cx[k]'*Iμ[k]*Cx[k]
+            Quu[k] += Cu[k]'*Iμ[k]*Cu[k]
+            Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
+        end
+
+        if solver.opts.regularization_type == :state
+            Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
+            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.regularization_type == :control
+            Quu_reg[k] = Quu[k] + res.ρ[1]*I
+            Qux_reg[k] = Qux[k]
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
+            # increase regularization
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv[1] = 0.
+            Δv[2] = 0.
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg[k]\Qux_reg[k]
+        d[k] = -Quu_reg[k]\Qu[k]
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
+        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv[1] += d[k]'*Qu[k]
+        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
 """
 $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
@@ -391,7 +558,81 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
+struct BackwardPassFOH <: BackwardPass
+    Qx::Vector{Float64}
+    Qu::Vector{Float64}
+    Qy::Vector{Float64}
+    Qv::Vector{Float64}
+
+    Qxx::Matrix{Float64}
+    Quu::Matrix{Float64}
+    Qyy::Matrix{Float64}
+    Qvv::Matrix{Float64}
+
+    Qxu::Matrix{Float64}
+    Qxy::Matrix{Float64}
+    Qxv::Matrix{Float64}
+    Quy::Matrix{Float64}
+    Quv::Matrix{Float64}
+    Qyv::Matrix{Float64}
+
+    Lx::Vector{Float64}
+    Lu::Vector{Float64}
+    Ly::Vector{Float64}
+    Lv::Vector{Float64}
+
+    Lxx::Matrix{Float64}
+    Luu::Matrix{Float64}
+    Lyy::Matrix{Float64}
+    Lvv::Matrix{Float64}
+
+    Lxu::Matrix{Float64}
+    Lxy::Matrix{Float64}
+    Lxv::Matrix{Float64}
+    Luy::Matrix{Float64}
+    Luv::Matrix{Float64}
+    Lyv::Matrix{Float64}
+
+    function BackwardPassFOH(n::Int,m::Int,N::Int)
+        Qx = zeros(n)
+        Qu = zeros(m)
+        Qy = zeros(n)
+        Qv = zeros(m)
+
+        Qxx = zeros(n,n)
+        Quu = zeros(m,m)
+        Qyy = zeros(n,n)
+        Qvv = zeros(m,m)
+
+        Qxu = zeros(n,m)
+        Qxy = zeros(n,n)
+        Qxv = zeros(n,m)
+        Quy = zeros(m,n)
+        Quv = zeros(m,m)
+        Qyv = zeros(n,m)
+
+        Lx = zeros(n)
+        Lu = zeros(m)
+        Ly = zeros(n)
+        Lv = zeros(m)
+
+        Lxx = zeros(n,n)
+        Luu = zeros(m,m)
+        Lyy = zeros(n,n)
+        Lvv = zeros(m,m)
+
+        Lxu = zeros(n,m)
+        Lxy = zeros(n,n)
+        Lxv = zeros(n,m)
+        Luy = zeros(m,n)
+        Luv = zeros(m,m)
+        Lyv = zeros(n,m)
+
+        new(Qx,Qu,Qy,Qv,Qxx,Quu,Qyy,Qvv,Qxu,Qxy,Qxv,Quy,Quv,Qyv,Lx,Lu,Ly,Lv,Lxx,Luu,Lyy,Lvv,Lxu,Lxy,Lxv,Luy,Luv,Lyv)
+    end
+end
+
+function _backwardpass_foh!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -676,7 +917,7 @@ function _backwardpass_foh!(results::SolverVectorResults,solver::Solver)
     return Δv
 end
 
-function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver)
+function _backwardpass_foh_speedup!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
     # Problem dimensions
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)

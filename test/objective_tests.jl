@@ -145,7 +145,7 @@ function cE!(cres,x,u)
     cres[1] = x[1]^2
 end
 
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
+obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 9
 c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
@@ -157,7 +157,7 @@ c(cres,x,u)
 @test cres == cans
 
 # test with minimum time
-obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
+obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p == 9
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
 cres = zeros(11)
@@ -263,8 +263,8 @@ jac_cE(A1,B1,x,u)
 
 
 # COST FUNCTION TESTS
-using Test, Juno, LinearAlgebra, BenchmarkTools
-using TrajectoryOptimization: taylor_expansion
+using Test, LinearAlgebra, BenchmarkTools
+using TrajectoryOptimization: taylor_expansion, LQRCost, stage_cost, GenericCost, is_inplace_constraint, wrap_inplace, count_inplace_constraint, UnconstrainedObjectiveNew
 n,m = 3,2
 Q = Diagonal([1.,2,3])
 R = Diagonal([4.,5])
@@ -280,7 +280,7 @@ J = stage_cost(LinQuad,x,u)
 @test taylor_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
 
 # Generic Cost Function
-stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
+_stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
 final_cost(x) = (x[1] - 1)^2 + x[1]*x[2]
 qfun(x,u) = [2*x[1], 2*x[3] + u[1], 1 + 2*x[2] + 1/x[3]]
 rfun(x,u) = [3 + x[2] + u[2], 2*u[2] + u[1] + cos(u[2])]
@@ -292,7 +292,7 @@ Hfun(x,u) = [0 0; 1 0; 0 0]
 qffun(x) = [2(x[1] -1) + x[2], x[1], 0]
 Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 
-mycost = GenericCost(stage_cost,final_cost,n,m)
+mycost = GenericCost(_stage_cost,final_cost,n,m)
 @test taylor_expansion(mycost,x,u) == (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
 @test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
 
@@ -328,6 +328,5 @@ obj = UnconstrainedObjectiveNew(costfun,:min,x0,xf)
 obj = UnconstrainedObjectiveNew(costfun,tf,x0,xf)
 @test_throws ArgumentError UnconstrainedObjectiveNew(costfun,tf,x0,u)
 UnconstrainedObjectiveNew(costfun,tf,x0,Float64[])
-obj = LQRObjective(Q,R,Qf,tf,x0,xf)
 @test stage_cost(obj.cost,x,u) == J
 @test stage_cost(obj,x,u) == J
