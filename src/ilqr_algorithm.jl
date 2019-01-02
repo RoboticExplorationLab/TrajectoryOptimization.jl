@@ -622,7 +622,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp)
 
     # Terminal Cost-to-go
     lxx,lx = taylor_expansion(costfun, X[N])
-    if isa(solver.obj, ConstrainedObjective)
+    if isa(solver.obj, ConstrainedObjectiveNew)
         Cx = res.Cx_N
         Su[N] = cholesky(lxx + Cx'*res.IμN*Cx).U
         s[N] = lxx + Cx'*res.IμN*res.CN + Cx'*res.λN
@@ -656,7 +656,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp)
         Qxu = (fx'*Su[k+1]')*(Su[k+1]*fu)
 
         # Constraints
-        if isa(solver.obj, ConstrainedObjective)
+        if isa(solver.obj, ConstrainedObjectiveNew)
             Iμ = res.Iμ; C = res.C; λ = res.λ;
             Cx, Cu = res.Cx[k], res.Cu[k]
             Iμ2 = sqrt.(Iμ[k])

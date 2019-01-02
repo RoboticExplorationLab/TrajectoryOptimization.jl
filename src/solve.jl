@@ -92,7 +92,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     isempty(X0) ? solver.opts.infeasible = false : solver.opts.infeasible = true
 
     # Check for constrained solve
-    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjective
+    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjectiveNew
         solver.opts.constrained = true
     else
         solver.opts.constrained = false

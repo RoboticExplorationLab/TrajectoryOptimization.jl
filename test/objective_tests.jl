@@ -88,7 +88,7 @@ end
 obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,cI=cI)
 @test obj.p == 1
 @test obj.pI == 1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cE=cI)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,cE=cI)
 @test obj.p == 1
 @test obj.pI == 0
 
