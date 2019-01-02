@@ -21,6 +21,6 @@ R = (1e-2)*Diagonal(I,m)
 tf = 5.0
 dt = 0.1
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 double_integrator = [model, obj_uncon]
