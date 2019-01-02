@@ -39,8 +39,8 @@ u_max = 2
 x_min = [-10;-10]
 x_max = [10; 10]
 obj_uncon = Dynamics.pendulum[2]
-obj_uncon.R[:] = [1e-2]
-obj = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+obj_uncon.cost.R[:] = [1e-2]
+obj = ConstrainedObjectiveNew(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
 solver = Solver(model!,obj,dt=0.1,opts=opts)
 

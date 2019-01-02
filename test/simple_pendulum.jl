@@ -2,14 +2,9 @@
 using Test
 u_bound = 3.
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
+obj_c = Dynamics.pendulum_constrained[2]
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
-
-obj.Q = 1e-3*Diagonal(I,2)
-obj.R = 1e-2*Diagonal(I,1)
-obj.tf = 5.
-model! = TrajectoryOptimization.Model(TrajectoryOptimization.Dynamics.pendulum_dynamics!,2,1) # inplace dynamics
-obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
 
 ### UNCONSTRAINED ###
 # rk4
@@ -38,6 +33,7 @@ results, =TrajectoryOptimization.solve(solver,U)
 
 ### CONSTRAINED ###
 # rk4
+obj_c.x_max
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
@@ -71,19 +67,19 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 ### In-place dynamics ###
 # Unconstrained
 opts = TrajectoryOptimization.SolverOptions()
-solver = TrajectoryOptimization.Solver(model!,obj,dt=0.1,opts=opts)
+solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 results, =TrajectoryOptimization.solve(solver) # Test random init
 @test norm(results.X[end]-obj.xf) < 1e-3
 
 # Constrained
-solver = TrajectoryOptimization.Solver(model!,obj_c,dt=0.1,opts=opts)
+solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 
 # Constrained - midpoint
-solver = TrajectoryOptimization.Solver(model!,obj_c, integration=:midpoint, dt=0.1, opts=opts)
+solver = TrajectoryOptimization.Solver(model,obj_c, integration=:midpoint, dt=0.1, opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
@@ -98,11 +94,10 @@ u_min = -3
 u_max = 3
 x_min = [-10;-10]
 x_max = [10; 10]
-obj_uncon = TrajectoryOptimization.Dynamics.pendulum[2]
-obj_uncon.R[:] = [1e-2] # control needs to be properly regularized for infeasible start to produce a good warm-start control output
+solver.obj.x0[:] = zeros(solver.model.n)
 
-obj_inf = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
-solver = TrajectoryOptimization.Solver(model!, obj_inf, dt=0.1, opts=opts)
+obj_inf = TrajectoryOptimization.ConstrainedObjectiveNew(obj, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 # max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
@@ -116,9 +111,10 @@ results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 @test all(X_interp[2,2:end-1] .<= max(solver.obj.x0[2],solver.obj.xf[2]))
 
 # test that additional augmented controls can achieve an infeasible state trajectory
+solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
 U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
-solver.obj.x0 = ones(solver.model.n)
+solver.obj.x0[:] = ones(solver.model.n)
 solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
 p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
@@ -133,4 +129,4 @@ TrajectoryOptimization.rollout!(results_infeasible,solver)
 
 ### OTHER TESTS ###
 # Test undefined integration
-@test_throws ArgumentError TrajectoryOptimization.Solver(model!,obj_c, integration=:bogus, dt=0.1, opts=opts)
+@test_throws ArgumentError TrajectoryOptimization.Solver(model,obj_c, integration=:bogus, dt=0.1, opts=opts)

@@ -29,7 +29,7 @@ sol_foh, = TrajectoryOptimization.solve(solver_foh,U)
 ## Control constraints pendulum (foh) ##
 u_min = -2.0
 u_max = 2.0
-obj_con_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max) # constrained objective
+obj_con_p = TrajectoryOptimization.ConstrainedObjectiveNew(obj_uncon_p, u_min=u_min, u_max=u_max) # constrained objective
 
 solver_foh_con = Solver(model_p, obj_con_p, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con = Solver(model_p, obj_con_p, integration=:rk3, dt=dt, opts=opts)
@@ -48,7 +48,7 @@ u_min = -20
 u_max = 6
 x_min = [-10; -2]
 x_max = [10; 6]
-obj_con2_p = TrajectoryOptimization.ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+obj_con2_p = TrajectoryOptimization.ConstrainedObjectiveNew(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh_con2 = Solver(model_p, obj_con2_p, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con2 = Solver(model_p, obj_con2_p, integration=:rk3, dt=dt, opts=opts)
@@ -80,7 +80,7 @@ u_max = 3
 x_min = [-10;-10]
 x_max = [10; 10]
 
-obj_con_p = ConstrainedObjective(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+obj_con_p = ConstrainedObjectiveNew(obj_uncon_p, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 opts.verbose = false
 solver_con2 = Solver(model_p,obj_con_p,integration=:rk3_foh,dt=dt,opts=opts)
 
@@ -95,6 +95,9 @@ results_inf2, stats_inf2 = solve(solver_con2,X_interp,U)
 # stats_inf2["cost"][end]
 
 # Test final state from foh solve
+TrajectoryOptimization._cost(solver_con2,results_inf2)
+TrajectoryOptimization.cost_constraints(solver_con2,results_inf2)
+cost(solver_con2,results_inf2)
 @test norm(results_inf2.X[end] - solver_con2.obj.xf) < 1e-3
 ######################################################
 
@@ -123,7 +126,7 @@ u_max = [100; 100]
 x_min = [0; -100; -100]
 x_max = [1.0; 100; 100]
 
-obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+obj_con2_dc = TrajectoryOptimization.ConstrainedObjectiveNew(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
@@ -143,12 +146,13 @@ u_max = [100; 100]
 x_min = [0; -100; -100]
 x_max = [1.0; 100; 100]
 
-obj_con2_dc = TrajectoryOptimization.ConstrainedObjective(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+obj_con2_dc = TrajectoryOptimization.ConstrainedObjectiveNew(obj_uncon_dc, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 solver_foh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3_foh, dt=dt, opts=opts)
 solver_zoh_con2 = Solver(model_dc, obj_con2_dc, integration=:rk3, dt=dt, opts=opts)
 
 # -initial control and state trajectories
+Random.seed!(1)
 U = 5*rand(solver_foh_con2.model.m,solver_foh_con2.N)
 X_interp = line_trajectory(solver_foh_con2)
 

@@ -1,4 +1,4 @@
-using TrajectoryOptimization: generate_general_constraint_jacobian
+using TrajectoryOptimization: generate_general_constraint_jacobian, is_inplace_function, count_inplace_output, stage_cost
 using Test
 
 """ Simple Pendulum """
@@ -9,40 +9,37 @@ x0 = [0; 0.];
 xf = [pi; 0]; # (ie, swing up)
 u0 = [1]
 Q = 1e-3*Diagonal(I,n)
-Qf = 100*Diagonal(I,n)
+Qf = 100. *Diagonal(I,n)
 R = 1e-3*Diagonal(I,m)
 tf = 5.
 
-@test_nowarn UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-@test obj_uncon.c == 0
+costfun = LQRCost(Q,R,Qf,xf)
+@test_nowarn UnconstrainedObjectiveNew(costfun, tf, x0, xf)
+obj_uncon = UnconstrainedObjectiveNew(costfun, tf, x0, xf)
 @test obj_uncon.tf == tf
 
-# Test full constructor
-obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, tf, x0, xf)
-@test obj_uncon.c == 0.1
-
-# Test minimum time constructors
-obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, :min, x0, xf)
-@test obj_uncon.c == 0.1
-@test obj_uncon.tf == 0
-obj_uncon = UnconstrainedObjective(Q, R, Qf, :min, x0, xf)
-@test obj_uncon.c == 1.
+# Test minimum time constructor
+obj_uncon = UnconstrainedObjectiveNew(costfun, :min, x0, xf)
 @test obj_uncon.tf == 0
 
 # Try invalid inputs
 tf = -1.
-@test_throws ArgumentError UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-tf = 1.; R_ = Diagonal(I,m)*-1
-@test_throws ArgumentError("R must be positive definite") UnconstrainedObjective(Q, R_, Qf, tf, x0, xf)
-c = -1.
-@test_throws ArgumentError("$c is invalid input for constant stage cost. Must be positive") UnconstrainedObjective(Q,R,Qf,c,tf,x0,xf)
-@test_throws ArgumentError(":min is the only recognized Symbol for the final time") obj_uncon = UnconstrainedObjective(Q, R, Qf, 0.1, :max, x0, xf)
+@test_throws ArgumentError("tf must be non-negative") UnconstrainedObjectiveNew(costfun, tf, x0, xf)
+tf = 1.; R_ = Diagonal(I,m)*-1.
+@test_throws ArgumentError("R must be positive definite") LQRObjective(Q, R_, Qf, tf, x0, xf)
+@test_throws ArgumentError(":min is the only recognized Symbol for the final time") obj_uncon = UnconstrainedObjectiveNew(costfun, :max, x0, xf)
 
+function myfun(c,x,u)
+    c[1:2] = x + u
+end
+c = zeros(2)
+myfun(c,ones(2),ones(2))
+is_inplace_function(myfun,ones(2),ones(2))
+count_inplace_output(myfun,ones(2),ones(2))
 
 ### Constraints ###
 # Test defaults
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf)
 @test obj.u_min == [-Inf]
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
@@ -51,36 +48,36 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 
 @test obj.p == 0
-@test obj.use_terminal_constraint == true
+@test obj.use_goal_constraint == true
 @test obj.p_N == 2
 
 # Use scalar control constraints
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-1,u_max=1)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-1,u_max=1)
 @test obj.p == 2
 @test obj.p_N == 2
 
 # Single-sided
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_max=1)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_max=1)
 @test obj.p == 1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=1, u_max=Inf)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=1, u_max=Inf)
 @test obj.p == 1
 
 # Error testing
-@test_throws ArgumentError ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=1, u_max=-1)
-@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=[1], u_max=[1,2])
+@test_throws ArgumentError ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=1, u_max=-1)
+@test_throws DimensionMismatch ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=[1], u_max=[1,2])
 
 # State constraints
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
 @test obj.p == 4
 @test obj.pI == 4
 
-@test_throws DimensionMismatch ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
+@test_throws DimensionMismatch ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
 @test obj.p == 2
 @test obj.pI == 2
 
 # Scalar to array constraint
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-4, x_max=4)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-4, x_max=4)
 @test obj.p == 4
 @test obj.x_max == [4,4]
 
@@ -88,7 +85,7 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,x_min=-4, x_max=4)
 function cI(cdot,x,u)
     cdot[1] = x[2]+u[1]-2
 end
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cI=cI)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,cI=cI)
 @test obj.p == 1
 @test obj.pI == 1
 obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cE=cI)
@@ -96,7 +93,7 @@ obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,cE=cI)
 @test obj.pI == 0
 
 # Construct from unconstrained
-obj = ConstrainedObjective(obj_uncon)
+obj = ConstrainedObjectiveNew(obj_uncon)
 @test obj.u_min == [-Inf]
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
@@ -104,10 +101,10 @@ obj = ConstrainedObjective(obj_uncon)
 @test isa(obj.cI(ones(0),x0,u0),Nothing)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 @test obj.p == 0
-@test obj.use_terminal_constraint == true
+@test obj.use_goal_constraint == true
 @test obj.p_N == 2
 
-obj = ConstrainedObjective(obj_uncon, u_min=-1)
+obj = ConstrainedObjectiveNew(obj_uncon, u_min=-1)
 @test obj.p == 1
 
 # Update objectve
@@ -116,25 +113,17 @@ obj = update_objective(obj, u_max=2, x_max = 4, cE=cI)
 
 # Minimum time
 c = 0.1
-obj = ConstrainedObjective(Q,R,Qf,c,tf,x0,xf, x_max=2)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf, x_max=2)
 @test obj.p == 2
-@test obj.c == 0.1
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,c=0.2,u_min=-2)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2)
 @test obj.p == 1
-@test obj.c == 0.2
 @test obj.tf == tf
 tf_ = :min
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,c=0.2,u_min=-2)
+obj = ConstrainedObjectiveNew(costfun,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
 @test obj.p == 1
-@test obj.c == 0.2
-obj = ConstrainedObjective(Q,R,Qf,tf_,x0,xf,u_min=-2)
+obj = ConstrainedObjectiveNew(costfun,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
-@test obj.c == 1
-obj = ConstrainedObjective(Q,R,Qf,c,tf_,x0,xf,u_min=-2)
-@test obj.tf == 0
-@test obj.c == c
-
 
 # Test constraint function
 function cI!(cres,x,u)
@@ -144,11 +133,40 @@ end
 function cE!(cres,x,u)
     cres[1] = x[1]^2
 end
+function cI!(cres,x)
+    cres[1] = x[1]^2
+    cres[2] = x[2]^2
+end
+function cE!(cres,x)
+    cres[1] = x[1] + x[2] - 5
+end
+c = zeros(2)
+cI!(c,ones(2))
+is_inplace_function(cI!,ones(n))
+is_inplace_function(cE!,ones(n))
+count_inplace_output(cE!,ones(n))
 
-obj = ConstrainedObjective(Q,R,Qf,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_goal_constraint=false)
+@test obj.p_N == 3
+@test obj.p == 9
+@test obj.pI_custom == 2
+@test obj.pE_custom == 1
+@test obj.pI_N_custom == 2
+@test obj.pE_N_custom == 1
+@test_throws ArgumentError ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 9
-c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
+@test obj.p_N == 2
+@test obj.p == 7
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_goal_constraint=false)
+@test obj.p_N == 1
+@test obj.p == 6
+
+@test get_sizes(obj) == (2,1)
+obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
+c,c_jacob,c_labels = TrajectoryOptimization.generate_constraint_functions(obj)
 cres = zeros(9)
 x = [1,5]
 u = [1]
@@ -157,16 +175,13 @@ c(cres,x,u)
 @test cres == cans
 
 # test with minimum time
-obj = ConstrainedObjective(Q,R,Qf,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI, cE=cE)
+obj = ConstrainedObjectiveNew(costfun,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p == 9
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
 cres = zeros(11)
 u_dt = [u; 0.1]
 cans = [0,-0.9,-3,0,-3,1,-4,-8,6,8,1]
 c(cres,x,u_dt)
-cres
-x
-u_dt
 @test cres == cans
 
 # Change upper bound on dt
@@ -179,10 +194,11 @@ cres
 
 # use infeasible start
 u_inf = [u_dt; -1; -1]
-cans = [0,-9.9, -3,-0.1  ,-3,1,-4,-8,  6,8,1, -1,-1, 0]
+cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1, -1,-1, 0]
 cres = zeros(14)
 c(cres,x,u_inf)
-cres == cans
+cres
+@test cres == cans
 
 # Verify jacobians
 ∇x_cI(x,u) = [x[2] x[1]; 3 u[1]]
@@ -263,13 +279,13 @@ jac_cE(A1,B1,x,u)
 
 
 # COST FUNCTION TESTS
-using Test, Juno, LinearAlgebra, BenchmarkTools
 using TrajectoryOptimization: taylor_expansion
 n,m = 3,2
 Q = Diagonal([1.,2,3])
 R = Diagonal([4.,5])
 Qf = Diagonal(ones(n)*10)
 xf = Vector{Float64}(1:n)
+x0 = zeros(n)
 
 x = ones(n)
 u = ones(m)*2
@@ -280,8 +296,8 @@ J = stage_cost(LinQuad,x,u)
 @test taylor_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
 
 # Generic Cost Function
-stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
-final_cost(x) = (x[1] - 1)^2 + x[1]*x[2]
+my_stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
+my_final_cost(x) = (x[1] - 1)^2 + x[1]*x[2]
 qfun(x,u) = [2*x[1], 2*x[3] + u[1], 1 + 2*x[2] + 1/x[3]]
 rfun(x,u) = [3 + x[2] + u[2], 2*u[2] + u[1] + cos(u[2])]
 Qfun(x,u) = [2 0 0;
@@ -292,36 +308,12 @@ Hfun(x,u) = [0 0; 1 0; 0 0]
 qffun(x) = [2(x[1] -1) + x[2], x[1], 0]
 Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 
-mycost = GenericCost(stage_cost,final_cost,n,m)
+mycost = GenericCost(my_stage_cost,my_final_cost,n,m)
 @test taylor_expansion(mycost,x,u) == (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
 @test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
 
 
 # Unconstrained Objective
-x0 = x
-xf = x*2
-gs(x) = [x[1]*x[2] + x[3]^2,
-         x[2]^2,
-         x[3]*x[2]]
-gc(u) = u[1] + u[2] + u[1]*u[2]
-function gs!(c,x)
-    c[1] = x[1]*x[2] + x[3]^2
-    c[2] = x[2]^2
-    c[3] = x[3]*x[2]
-end
-gc!(c,u) = c[1] = gc(u)
-pIs = 3
-pIc = 1
-
-@test !is_inplace_constraint(gs,n)
-@test is_inplace_constraint(gs!,n)
-gs2! = wrap_inplace(gs)
-@test is_inplace_constraint(gs2!,n)
-@test is_inplace_constraint(gc!,m)
-
-@test count_inplace_constraint(gs!,n) == pIs
-@test count_inplace_constraint(gc!,m) == pIc
-
 costfun = LinQuad
 obj = UnconstrainedObjectiveNew(costfun,:min,x0,xf)
 @test obj.tf == 0

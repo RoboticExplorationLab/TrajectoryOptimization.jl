@@ -35,7 +35,7 @@ r = ConstrainedVectorResults(n,m,p,N,p_N)
 # Test init_results
 N = 10
 model, obj = Dynamics.dubinscar
-obj_con = ConstrainedObjective(obj, u_min=-10, u_max=10)
+obj_con = ConstrainedObjectiveNew(obj, u_min=-10, u_max=10)
 solver = Solver(model, obj_con, N=N)
 solver.opts.infeasible = true
 n,m = get_sizes(solver)

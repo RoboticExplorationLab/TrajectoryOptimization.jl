@@ -10,6 +10,9 @@ using LinearAlgebra
 using Random
 using SparseArrays
 using ForwardDiff
+using Logging
+
+disable_logging(Logging.Info)
 
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")
@@ -36,6 +39,8 @@ end
 #     include("dircol_test.jl")
 #     include("ipopt_test.jl")
 # end
+
+disable_logging(Logging.Debug)
 
 """
 # NEEDED TESTS:
