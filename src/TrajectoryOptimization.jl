@@ -37,6 +37,9 @@ export
     LinearQuadraticCost,
     LQRCost,
     GenericCost,
+    UnconstrainedObjectiveNew,
+    ConstrainedObjectiveNew,
+    LQRObjective,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
     ConstrainedStaticResults,
@@ -69,6 +72,7 @@ export
     generate_controller,
     lqr
 
+include("objective.jl")
 include("model.jl")
 include("integration.jl")
 include("solver.jl")
@@ -80,7 +84,7 @@ include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
-include("objective.jl")
+
 
 using Ipopt
 
