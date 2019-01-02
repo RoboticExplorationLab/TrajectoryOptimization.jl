@@ -103,7 +103,7 @@ xf = zeros(n)
 xf[1:3] = [10.0;10.0;5.0] # xyz position
 xf[4:7] = [1;0;0;0]
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 # Model + objective
 quadrotor = [model, obj_uncon]

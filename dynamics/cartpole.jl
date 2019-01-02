@@ -85,8 +85,8 @@ R = 0.01*Diagonal(I,m)
 tf = 5.0
 dt = 0.1
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
-obj_uncon_flipped = UnconstrainedObjective(Q, R, Qf, tf, x0_flipped, xf_flipped)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon_flipped = LQRObjective(Q, R, Qf, tf, x0_flipped, xf_flipped)
 
 cartpole = [model_urdf, obj_uncon_flipped]
 cartpole_analytical = [model_analytical, obj_uncon]

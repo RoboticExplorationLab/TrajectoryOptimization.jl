@@ -6,6 +6,9 @@ urdf_kuka = joinpath(urdf_folder, "temp/kuka.urdf")
 function write_kuka_urdf()
     kuka_mesh_dir = joinpath(TrajectoryOptimization.root_dir(),"dynamics","urdf","kuka_iiwa_mesh")
     temp_dir = joinpath(TrajectoryOptimization.root_dir(),"dynamics","urdf","temp")
+    if !isdir(temp_dir)
+        mkdir(temp_dir)
+    end
     open(urdf_kuka_orig,"r") do f
         open(urdf_kuka, "w") do fnew
             for ln in eachline(f)
@@ -44,6 +47,6 @@ R = 1e-4*Diagonal(I,m)
 tf = 5.0
 dt = 0.01
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 kuka = [model, obj_uncon]

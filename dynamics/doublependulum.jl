@@ -22,5 +22,5 @@ R = 0.0001*Diagonal(I,m)
 # simulation
 tf = 5.0
 
-obj = UnconstrainedObjective(Q,R,Qf,tf,x0,xf)
+obj = LQRObjective(Q,R,Qf,tf,x0,xf)
 doublependulum = [model,obj]

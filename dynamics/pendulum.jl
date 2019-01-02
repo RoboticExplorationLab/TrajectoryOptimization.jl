@@ -42,14 +42,15 @@ R = 1e-2*Diagonal(I,m)
 # simulation
 tf = 5.
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 # Constraints
-u_min = [-3]
-u_max = [3]
+u_bound = 3
+u_min = [-u_bound]
+u_max = [u_bound]
 x_min = [-5;-5]
 x_max = [10; 10]
-obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+obj_con = ConstrainedObjectiveNew(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 # Set up problem
 pendulum = [model,obj_uncon]
