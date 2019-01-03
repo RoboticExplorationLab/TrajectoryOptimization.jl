@@ -245,7 +245,6 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     costfun = solver.obj.cost
     dt = solver.dt
     xf = solver.obj.xf
-    Q = costfun.Q
 
     J = 0.0
     for k = 1:N-1
@@ -258,14 +257,14 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         else
             # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
-            J += (stage_cost(costfun,X[k],U[k][1:m]) + 0.5*xf'*Q*xf)*dt
+            J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
             solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
             solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
         end
     end
 
     # J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
-    J += stage_cost(costfun, X[N]) + 0.5*xf'*costfun.Qf*xf
+    J += stage_cost(costfun, X[N])
 
     return J
 end
