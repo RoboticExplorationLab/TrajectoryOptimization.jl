@@ -56,7 +56,7 @@ Get true number of constraints, accounting for minimum time and infeasible start
 """
 function get_num_constraints(solver::Solver)
     if solver.opts.constrained
-        if solver.obj isa ConstrainedObjectiveNew
+        if solver.obj isa ConstrainedObjective
             p = solver.obj.p
             pI = solver.obj.pI
             pE = p - pI
@@ -238,7 +238,7 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
-function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjectiveNew, UnconstrainedObjectiveNew}
+function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjective, UnconstrainedObjective}
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -458,7 +458,7 @@ end
 $(SIGNATURES)
     Count the number of constraints of each type from an objective
 """
-function count_constraints(obj::ConstrainedObjectiveNew, constraints::Symbol=:all)
+function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
     n = size(obj.Q,1)
     p = obj.p # number of constraints
     pI = obj.pI # number of inequality and equality constraints
@@ -553,7 +553,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt - dt+1)]
 """
-function generate_constraint_functions(obj::ConstrainedObjectiveNew; max_dt::Float64=1.0, min_dt::Float64=1e-2)
+function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-2)
     n,m = get_sizes(obj)
 
     # Key: I=> inequality,   E=> equality
@@ -710,7 +710,7 @@ function generate_constraint_functions(obj::ConstrainedObjectiveNew; max_dt::Flo
     return c_function!, c_jacobian!, c_labels
 end
 
-generate_constraint_functions(obj::UnconstrainedObjectiveNew; max_dt::Float64=1.0,min_dt=1.0e-2) = (c,x,u)->nothing, (cx,cu,x,u)->nothing, String[]
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = (c,x,u)->nothing, (cx,cu,x,u)->nothing, String[]
 
 """
 $(SIGNATURES)

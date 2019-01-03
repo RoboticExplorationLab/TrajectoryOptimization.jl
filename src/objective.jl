@@ -140,13 +140,13 @@ Defines an objective for an unconstrained optimization problem.
 xf does not have to specified. It is provided for convenience when used as part of the cost function (see LQRObjective function)
 If tf = 0, the objective is assumed to be minimum-time.
 """
-struct UnconstrainedObjectiveNew{C} <: Objective
+struct UnconstrainedObjective{C} <: Objective
     cost::C
     tf::Float64          # Final time (sec). If tf = 0, the problem is set to minimum time
     x0::Vector{Float64}  # Initial state (n,)
     xf::Vector{Float64}  # (optional) Final state (n,)
 
-    function UnconstrainedObjectiveNew(cost::C,tf::Float64,x0,xf=Float64[]) where {C}
+    function UnconstrainedObjective(cost::C,tf::Float64,x0,xf=Float64[]) where {C}
         if !isempty(xf) && length(xf) != length(x0)
             throw(ArgumentError("x0 and xf must be the same length"))
         end
@@ -161,17 +161,17 @@ end
 $(SIGNATURES)
 Minimum time constructor for unconstrained objective
 """
-function UnconstrainedObjectiveNew(cost::CostFunction,tf::Symbol,x0,xf)
+function UnconstrainedObjective(cost::CostFunction,tf::Symbol,x0,xf)
     if tf == :min
-        UnconstrainedObjectiveNew(cost,0.0,x0,xf)
+        UnconstrainedObjective(cost,0.0,x0,xf)
     else
         err = ArgumentError(":min is the only recognized Symbol for the final time")
         throw(err)
     end
 end
 
-function copy(obj::UnconstrainedObjectiveNew)
-    UnconstrainedObjectiveNew(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf))
+function copy(obj::UnconstrainedObjective)
+    UnconstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf))
 end
 
 
@@ -235,7 +235,7 @@ Define a quadratic objective for a constrained optimization problem.
 * Inequality constraints: `f(x,u) ≥ 0`
 
 """
-struct ConstrainedObjectiveNew{C} <: Objective
+struct ConstrainedObjective{C} <: Objective
     cost::C
     tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
     x0::Array{Float64,1}  # Initial state (n,)
@@ -268,7 +268,7 @@ struct ConstrainedObjectiveNew{C} <: Objective
     pI_N_custom::Int # Nubmer of custom terminal inequality constraints
     pE_N_custom::Int # Number of custom terminal equality constraints
 
-    function ConstrainedObjectiveNew(cost::C,tf::Real,x0,xf,
+    function ConstrainedObjective(cost::C,tf::Real,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
@@ -328,14 +328,14 @@ struct ConstrainedObjectiveNew{C} <: Objective
     end
 end
 
-function ConstrainedObjectiveNew(cost::C,tf::Symbol,x0,xf,
+function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     u_min, u_max,
     x_min, x_max,
     cI, cE,
     cI_N, cE_N,
     use_goal_constraint) where {C}
     if tf == :min
-        ConstrainedObjectiveNew(cost,0.0,x0,xf,
+        ConstrainedObjective(cost,0.0,x0,xf,
             u_min, u_max,
             x_min, x_max,
             cI, cE,
@@ -369,14 +369,14 @@ can be ±Inf.
 * cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
 where `c` is of size (pI_c_N,) or (pE_c_N,).
 """
-function ConstrainedObjectiveNew(cost,tf,x0,xf;
+function ConstrainedObjective(cost,tf,x0,xf;
     u_min=-ones(get_sizes(cost)[2])*Inf, u_max=ones(get_sizes(cost)[2])*Inf,
     x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
     cI=null_constraint, cE=null_constraint,
     cI_N=null_constraint, cE_N=null_constraint,
     use_goal_constraint=true)
 
-    ConstrainedObjectiveNew(cost,tf,x0,xf,
+    ConstrainedObjective(cost,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
@@ -386,12 +386,12 @@ end
 
 
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
-function ConstrainedObjectiveNew(obj::UnconstrainedObjectiveNew; kwargs...)
-    ConstrainedObjectiveNew(obj.cost, obj.tf, obj.x0, obj.xf; kwargs...)
+function ConstrainedObjective(obj::UnconstrainedObjective; kwargs...)
+    ConstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf; kwargs...)
 end
 
-function copy(obj::ConstrainedObjectiveNew)
-    ConstrainedObjectiveNew(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
+function copy(obj::ConstrainedObjective)
+    ConstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
         use_goal_constraint=obj.use_goal_constraint)
@@ -405,13 +405,13 @@ Updates constrained objective values and returns a new objective.
 Only updates the specified fields, all others are copied from the previous
 Objective.
 """
-function update_objective(obj::ConstrainedObjectiveNew;
+function update_objective(obj::ConstrainedObjective;
     cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
     use_goal_constraint=obj.use_goal_constraint)
 
-    ConstrainedObjectiveNew(cost,tf,x0,xf,
+    ConstrainedObjective(cost,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
         cI=cI, cE=cE,
@@ -467,7 +467,7 @@ Create unconstrained objective for a problem of the form:
 """
 function LQRObjective(Q,R,Qf,tf,x0,xf)
     cost = LQRCost(Q,R,Qf,xf)
-    UnconstrainedObjectiveNew(cost,tf,x0,xf)
+    UnconstrainedObjective(cost,tf,x0,xf)
 end
 
 

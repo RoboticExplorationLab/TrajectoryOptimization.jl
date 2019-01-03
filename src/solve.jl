@@ -25,10 +25,10 @@ function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat)::Tuple{SolverResults,
     isempty(U0) ? U0 = zeros(solver.m,solver.N) : nothing
 
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
-    if isa(solver.obj, UnconstrainedObjectiveNew)
+    if isa(solver.obj, UnconstrainedObjective)
         solver.opts.unconstrained_original_problem = true
         solver.opts.infeasible = true
-        obj_c = ConstrainedObjectiveNew(solver.obj)
+        obj_c = ConstrainedObjective(solver.obj)
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
 
@@ -92,7 +92,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     isempty(X0) ? solver.opts.infeasible = false : solver.opts.infeasible = true
 
     # Check for constrained solve
-    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjectiveNew
+    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjective
         solver.opts.constrained = true
     else
         solver.opts.constrained = false
@@ -322,7 +322,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             # create unconstrained solver from infeasible solver if problem is unconstrained
             if solver.opts.unconstrained_original_problem
                 obj = solver.obj
-                obj_uncon = UnconstrainedObjectiveNew(obj.cost, obj.tf, obj.x0, obj.xf)
+                obj_uncon = UnconstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf)
                 solver_feasible = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
             else
                 solver_feasible = solver

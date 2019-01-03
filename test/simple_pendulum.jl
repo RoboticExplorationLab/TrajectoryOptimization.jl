@@ -96,7 +96,7 @@ x_min = [-10;-10]
 x_max = [10; 10]
 solver.obj.x0[:] = zeros(solver.model.n)
 
-obj_inf = TrajectoryOptimization.ConstrainedObjectiveNew(obj, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+obj_inf = TrajectoryOptimization.ConstrainedObjective(obj, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)

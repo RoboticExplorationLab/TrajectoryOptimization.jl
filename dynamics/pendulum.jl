@@ -50,7 +50,7 @@ u_min = [-u_bound]
 u_max = [u_bound]
 x_min = [-5;-5]
 x_max = [10; 10]
-obj_con = ConstrainedObjectiveNew(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
+obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max) # constrained objective
 
 # Set up problem
 pendulum = [model,obj_uncon]

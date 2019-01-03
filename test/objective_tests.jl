@@ -14,20 +14,20 @@ R = 1e-3*Diagonal(I,m)
 tf = 5.
 
 costfun = LQRCost(Q,R,Qf,xf)
-@test_nowarn UnconstrainedObjectiveNew(costfun, tf, x0, xf)
-obj_uncon = UnconstrainedObjectiveNew(costfun, tf, x0, xf)
+@test_nowarn UnconstrainedObjective(costfun, tf, x0, xf)
+obj_uncon = UnconstrainedObjective(costfun, tf, x0, xf)
 @test obj_uncon.tf == tf
 
 # Test minimum time constructor
-obj_uncon = UnconstrainedObjectiveNew(costfun, :min, x0, xf)
+obj_uncon = UnconstrainedObjective(costfun, :min, x0, xf)
 @test obj_uncon.tf == 0
 
 # Try invalid inputs
 tf = -1.
-@test_throws ArgumentError("tf must be non-negative") UnconstrainedObjectiveNew(costfun, tf, x0, xf)
+@test_throws ArgumentError("tf must be non-negative") UnconstrainedObjective(costfun, tf, x0, xf)
 tf = 1.; R_ = Diagonal(I,m)*-1.
 @test_throws ArgumentError("R must be positive definite") LQRObjective(Q, R_, Qf, tf, x0, xf)
-@test_throws ArgumentError(":min is the only recognized Symbol for the final time") obj_uncon = UnconstrainedObjectiveNew(costfun, :max, x0, xf)
+@test_throws ArgumentError(":min is the only recognized Symbol for the final time") obj_uncon = UnconstrainedObjective(costfun, :max, x0, xf)
 
 function myfun(c,x,u)
     c[1:2] = x + u
@@ -39,7 +39,7 @@ count_inplace_output(myfun,ones(2),ones(2))
 
 ### Constraints ###
 # Test defaults
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf)
+obj = ConstrainedObjective(costfun,tf,x0,xf)
 @test obj.u_min == [-Inf]
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
@@ -52,32 +52,32 @@ obj = ConstrainedObjectiveNew(costfun,tf,x0,xf)
 @test obj.p_N == 2
 
 # Use scalar control constraints
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-1,u_max=1)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-1,u_max=1)
 @test obj.p == 2
 @test obj.p_N == 2
 
 # Single-sided
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_max=1)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_max=1)
 @test obj.p == 1
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=1, u_max=Inf)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=1, u_max=Inf)
 @test obj.p == 1
 
 # Error testing
-@test_throws ArgumentError ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=1, u_max=-1)
-@test_throws DimensionMismatch ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=[1], u_max=[1,2])
+@test_throws ArgumentError ConstrainedObjective(costfun,tf,x0,xf,u_min=1, u_max=-1)
+@test_throws DimensionMismatch ConstrainedObjective(costfun,tf,x0,xf,u_min=[1], u_max=[1,2])
 
 # State constraints
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
+obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
 @test obj.p == 4
 @test obj.pI == 4
 
-@test_throws DimensionMismatch ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
+@test_throws DimensionMismatch ConstrainedObjective(costfun,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
+obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
 @test obj.p == 2
 @test obj.pI == 2
 
 # Scalar to array constraint
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-4, x_max=4)
+obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-4, x_max=4)
 @test obj.p == 4
 @test obj.x_max == [4,4]
 
@@ -85,15 +85,15 @@ obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,x_min=-4, x_max=4)
 function cI(cdot,x,u)
     cdot[1] = x[2]+u[1]-2
 end
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,cI=cI)
+obj = ConstrainedObjective(costfun,tf,x0,xf,cI=cI)
 @test obj.p == 1
 @test obj.pI == 1
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,cE=cI)
+obj = ConstrainedObjective(costfun,tf,x0,xf,cE=cI)
 @test obj.p == 1
 @test obj.pI == 0
 
 # Construct from unconstrained
-obj = ConstrainedObjectiveNew(obj_uncon)
+obj = ConstrainedObjective(obj_uncon)
 @test obj.u_min == [-Inf]
 @test obj.u_max == [Inf]
 @test obj.x_min == -[Inf,Inf]
@@ -104,7 +104,7 @@ obj = ConstrainedObjectiveNew(obj_uncon)
 @test obj.use_goal_constraint == true
 @test obj.p_N == 2
 
-obj = ConstrainedObjectiveNew(obj_uncon, u_min=-1)
+obj = ConstrainedObjective(obj_uncon, u_min=-1)
 @test obj.p == 1
 
 # Update objectve
@@ -113,16 +113,16 @@ obj = update_objective(obj, u_max=2, x_max = 4, cE=cI)
 
 # Minimum time
 c = 0.1
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf, x_max=2)
+obj = ConstrainedObjective(costfun,tf,x0,xf, x_max=2)
 @test obj.p == 2
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2)
 @test obj.p == 1
 @test obj.tf == tf
 tf_ = :min
-obj = ConstrainedObjectiveNew(costfun,tf_,x0,xf,u_min=-2)
+obj = ConstrainedObjective(costfun,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
 @test obj.p == 1
-obj = ConstrainedObjectiveNew(costfun,tf_,x0,xf,u_min=-2)
+obj = ConstrainedObjective(costfun,tf_,x0,xf,u_min=-2)
 @test obj.tf == 0
 
 # Test constraint function
@@ -146,26 +146,26 @@ is_inplace_function(cI!,ones(n))
 is_inplace_function(cE!,ones(n))
 count_inplace_output(cE!,ones(n))
 
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_goal_constraint=false)
 @test obj.p_N == 3
 @test obj.p == 9
 @test obj.pI_custom == 2
 @test obj.pE_custom == 1
 @test obj.pI_N_custom == 2
 @test obj.pE_N_custom == 1
-@test_throws ArgumentError ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!)
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
+@test_throws ArgumentError ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 9
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 7
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_goal_constraint=false)
 @test obj.p_N == 1
 @test obj.p == 6
 
 @test get_sizes(obj) == (2,1)
-obj = ConstrainedObjectiveNew(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 c,c_jacob,c_labels = TrajectoryOptimization.generate_constraint_functions(obj)
 cres = zeros(9)
 x = [1,5]
@@ -175,7 +175,7 @@ c(cres,x,u)
 @test cres == cans
 
 # test with minimum time
-obj = ConstrainedObjectiveNew(costfun,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
+obj = ConstrainedObjective(costfun,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p == 9
 c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
 cres = zeros(11)
@@ -315,10 +315,10 @@ mycost = GenericCost(my_stage_cost,my_final_cost,n,m)
 
 # Unconstrained Objective
 costfun = LinQuad
-obj = UnconstrainedObjectiveNew(costfun,:min,x0,xf)
+obj = UnconstrainedObjective(costfun,:min,x0,xf)
 @test obj.tf == 0
-obj = UnconstrainedObjectiveNew(costfun,tf,x0,xf)
-@test_throws ArgumentError UnconstrainedObjectiveNew(costfun,tf,x0,u)
-UnconstrainedObjectiveNew(costfun,tf,x0,Float64[])
+obj = UnconstrainedObjective(costfun,tf,x0,xf)
+@test_throws ArgumentError UnconstrainedObjective(costfun,tf,x0,u)
+UnconstrainedObjective(costfun,tf,x0,Float64[])
 @test stage_cost(obj.cost,x,u) == J
 @test stage_cost(obj,x,u) == J

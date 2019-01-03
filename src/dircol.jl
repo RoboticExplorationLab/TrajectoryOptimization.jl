@@ -22,7 +22,7 @@ Solve a trajectory optimization problem with direct collocation
 function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         nlp::Symbol=:ipopt, method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
 
-    if solver.obj isa UnconstrainedObjectiveNew
+    if solver.obj isa UnconstrainedObjective
         solver = Solver(solver,obj=ConstrainedObjective(solver.obj))
     end
 

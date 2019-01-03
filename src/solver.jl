@@ -56,7 +56,7 @@ struct Solver{O<:Objective}
             throw(err)
         end
 
-        if O <: ConstrainedObjectiveNew
+        if O <: ConstrainedObjective
             opts.constrained = true
         end
 
