@@ -212,22 +212,6 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
     return true
 end
-#
-# """
-# $(SIGNATURES)
-# Quadratic stage cost (with goal state)
-# """
-# function stage_cost(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64},c::Float64=0)::Union{Float64,ForwardDiff.Dual}
-#     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u + c
-# end
-#
-# function stage_cost(obj::Objective, x::Vector, u::Vector)::Float64
-#     0.5*(x - obj.xf)'*obj.Q*(x - obj.xf) + 0.5*u'*obj.R*u + obj.c
-# end
-#
-# function ℓ(x,u,Q,R,xf=zero(x))
-#     0.5*(x - xf)'*Q*(x - xf) + 0.5*u'*R*u
-# end
 
 
 """
