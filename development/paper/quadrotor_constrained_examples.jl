@@ -76,7 +76,7 @@ end
 #     c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 # end
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 obj_uncon_min = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max)
 obj_uncon_min = TrajectoryOptimization.update_objective(obj_uncon_min, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, cI=cI)

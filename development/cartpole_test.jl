@@ -23,7 +23,7 @@ xf = [0.;0.;0.;0.]
 
 tf = 5.0
 
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 # -Constraints
 u_min = -20

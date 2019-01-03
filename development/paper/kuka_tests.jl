@@ -36,7 +36,7 @@ Qf = 250.0*Diagonal(I,n)
 R = 1e-4*Diagonal(I,m)
 
 tf = 5.0
-obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 # Define solver
 N = 41

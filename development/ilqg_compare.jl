@@ -13,7 +13,7 @@ tf = 5.0
 x0 = [0.0; 0.0]
 xf = [pi; 0.0]
 
-obj = UnconstrainedObjective(Q,R,Qf,tf,x0,xf)
+obj = LQRObjective(Q,R,Qf,tf,x0,xf)
 
 opts = SolverOptions()
 opts.cost_tolerance = 1e-5
@@ -41,7 +41,7 @@ tf = 5.0
 x0 = [0.0; 0.0; 0.0; 0.0]
 xf = [0.0; pi; 0.0; 0.0]
 
-obj = UnconstrainedObjective(Q,R,Qf,tf,x0,xf)
+obj = LQRObjective(Q,R,Qf,tf,x0,xf)
 
 opts = SolverOptions()
 opts.cost_tolerance = 1e-5

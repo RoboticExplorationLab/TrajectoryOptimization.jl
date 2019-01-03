@@ -23,7 +23,7 @@ function pendulum_benchmarks()
     Qf = 100.0*Diagonal(I,n)
     R = 1e-2*Diagonal(I,m)
     tf = 5.
-    obj_uncon = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+    obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
     u_min = [-3]
     u_max = [3]

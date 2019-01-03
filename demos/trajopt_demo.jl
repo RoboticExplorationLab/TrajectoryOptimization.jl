@@ -19,7 +19,7 @@ R = Array((1e-2)*Diagonal(I,m))
 tf = 5.0
 dt = 0.01
 
-obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=dt,integration=:rk3)
 U = zeros(m,solver.N)

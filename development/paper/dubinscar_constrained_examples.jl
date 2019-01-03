@@ -33,7 +33,7 @@ Qf = 100.0*Diagonal(I,n)
 Q = (1e-3)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
-obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 x_min = [-0.25; -0.001; -Inf]
 x_max = [0.25; 1.001; Inf]
@@ -145,7 +145,7 @@ Qf = 100.0*Diagonal(I,n)
 Q = (1e-3)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
-obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 u_min = [-100.; -100.]
 u_max = [100.; 100.]
@@ -241,7 +241,7 @@ Qf = 100.0*Diagonal(I,n)
 Q = (1e-3)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
-obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 r = 0.5
 s1 = 30; s2 = 50; s3 = 15

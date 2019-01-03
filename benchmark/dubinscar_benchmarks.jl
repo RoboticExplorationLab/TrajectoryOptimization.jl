@@ -29,7 +29,7 @@ function parallelpark_benchmark()
     Qf = 100.0*Diagonal(I,n)
     Q = (1e-3)*Diagonal(I,n)
     R = (1e-2)*Diagonal(I,m)
-    obj = UnconstrainedObjective(Q, R, Qf, tf, x0, xf)
+    obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
     # Unconstrained
     solver_uncon = Solver(model, obj, N=N, integration=integration)
