@@ -109,13 +109,13 @@ end
 "$(SIGNATURES) Create the header row (returns a string)"
 function create_header(ldata::LogData, delim::String="")
     :indent in keys(ldata.metadata) ? indent = ldata.metadata.indent : indent = 0
-    repeat("_",indent) * join([rpad(col, width) for (col,width,do_print) in zip(ldata.cols,ldata.widths,ldata.print) if do_print],delim) * "\n" * repeat("_",indent) * repeat('-',sum(ldata.widths)) *"\n"
+    repeat(" ",indent) * join([rpad(col, width) for (col,width,do_print) in zip(ldata.cols,ldata.widths,ldata.print) if do_print],delim) * "\n" * repeat("_",indent) * repeat('-',sum(ldata.widths)) *"\n"
 end
 
 "$(SIGNATURES) Create a data row (returns a string)"
 function create_row(ldata::LogData)
     :indent in keys(ldata.metadata) ? indent = ldata.metadata.indent : indent = 0
-    row = repeat("_",indent) * join([rpad(trim_entry(ldata.data[col],width),width) for (col,width,do_print) in zip(ldata.cols,ldata.widths,ldata.print) if col != :info && do_print])
+    row = repeat(" ",indent) * join([begin rpad(trim_entry(ldata.data[col],width),width) end for (col,width,do_print) in zip(ldata.cols,ldata.widths,ldata.print) if col != :info && do_print])
     if :info in ldata.cols
         row *= join(ldata.data[:info],". ")
     end
@@ -125,7 +125,7 @@ end
 "$(SIGNATURES) Convert a float to a string, keeping the whole thing within a given character width"
 function trim_entry(data::Float64,width::Int; pad=true, kwargs...)
     base = log10(abs(data))
-    if -ceil(width/2)+1 < base < floor(width / 2)
+    if -ceil(width/2)+1 < base < floor(width / 2) && isfinite(data)
         if base > 0
             prec = width - ceil(Int,base) - 3
         else
@@ -136,6 +136,8 @@ function trim_entry(data::Float64,width::Int; pad=true, kwargs...)
             prec = 1
         end
         val = format(data,precision=prec,conversion="f",stripzeros=true,positivespace=true; kwargs...)
+    elseif !isfinite(data)
+        val = string(data)
     else
         width <= 8 ? width = 10 : nothing
         val = format(data,conversion="e",precision=width-8,stripzeros=true,positivespace=true; kwargs...)
