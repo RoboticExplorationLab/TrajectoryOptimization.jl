@@ -24,7 +24,7 @@ function test_ipopt_funcs(method)
     # Get functions and evaluate
     eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
     J = eval_f(Z)
-    X_,U_,fVal_ = eval_g(Z,g)
+    eval_g(Z,g)
     eval_grad_f(Z,grad_f)
     eval_jac_g(Z,:Structure,rows,cols,vals)
     eval_jac_g(Z,:vals,rows,cols,vals)
