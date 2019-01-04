@@ -8,73 +8,43 @@
 function generate_controller(X::Matrix,U::Matrix,K::Array{Float64,3},N::Int64,dt::Float64,integration::Symbol=:zoh,u_min=-Inf,u_max=Inf)
     """
     X - (n,N)
-    U - zoh: (m,N-1), foh: (m,N)
-    K - zoh: (m,n,N-1), foh: (m,n,N)
+    U - zoh: (m,N-1)
+    K - zoh: (m,n,N-1)
 
     """
     m, n, _ = size(K)
-    if integration == :zoh
 
-        # Get matrices in correct format for Interpolations.jl
-        K_zoh = [K[:,:,k] for k = 1:N-1]
-        X_zoh = [X[:,k] for k = 1:N-1]
-        U_zoh = [U[:,k] for k = 1:N-1]
+    # Get matrices in correct format for Interpolations.jl
+    K_zoh = [K[:,:,k] for k = 1:N-1]
+    X_zoh = [X[:,k] for k = 1:N-1]
+    U_zoh = [U[:,k] for k = 1:N-1]
 
-        # For zoh and Interpolations.jl we repeate the final K,X,U
-        push!(K_zoh,K[:,:,N-1])
-        push!(X_zoh,X[:,N-1])
-        push!(U_zoh,U[:,N-1])
+    # For zoh and Interpolations.jl we repeate the final K,X,U
+    push!(K_zoh,K[:,:,N-1])
+    push!(X_zoh,X[:,N-1])
+    push!(U_zoh,U[:,N-1])
 
-        # zero-order hold interpolation on gains, and trajectories, NOTE: cubic on states
-        K_interp_zoh = interpolate(K_zoh,BSpline(Constant()))
-        X_interp_zoh = interpolate(X_zoh,BSpline(Constant()))
-        X_zoh = []
-        for i = 1:n
-            push!(X_zoh,[X[i,k] for k = 1:N])
-        end
-        function X_interp_zoh(j)
-            x = zeros(n)
-            for i = 1:n
-                x[i] = interpolate(X_zoh[i],BSpline(Cubic(Line(OnGrid()))))(j)
-            end
-            return x
-        end
-        U_interp_zoh = interpolate(U_zoh,BSpline(Constant()))
-
-        function controller_zoh(x,t)
-            j = t/dt + 1
-            return max.(min.(K_interp_zoh(floor(Int64,j))*(x - X_interp_zoh(j)) + U_interp_zoh(floor(Int64,j)),u_max),u_min)
-        end
-        return controller_zoh
-
-    elseif integration == :foh
-        # Get matrices in correct format for Interpolations.jl
-        K_foh = [K[:,:,k] for k = 1:N]
-        # Interpolations.jl does not work with matrices and cubic interpolation so we loop
-        X_foh = []
-        for i = 1:n
-            push!(X_foh,[X[i,k] for k = 1:N])
-        end
-        U_foh = [U[:,k] for k = 1:N]
-
-        # Linear interpolation on gains and control trajectory, cubic interpolation for state trajectory
-        K_interp = interpolate(K_foh,BSpline(Linear()))
-        function X_interp_foh(j)
-            x = zeros(n)
-            for i = 1:n
-                x[i] = interpolate(X_foh[i],BSpline(Cubic(Line(OnGrid()))))(j)
-            end
-            return x
-        end
-        U_interp = interpolate(U_foh,BSpline(Linear()))
-
-        function controller_foh(x,t)
-            j = t/dt + 1
-            return max.(min.(K_interp(j)*(x - X_interp_foh(j)) + U_interp(j),u_max),u_min)
-        end
-
-        return controller_foh
+    # zero-order hold interpolation on gains, and trajectories, NOTE: cubic on states
+    K_interp_zoh = interpolate(K_zoh,BSpline(Constant()))
+    X_interp_zoh = interpolate(X_zoh,BSpline(Constant()))
+    X_zoh = []
+    for i = 1:n
+        push!(X_zoh,[X[i,k] for k = 1:N])
     end
+    function X_interp_zoh(j)
+        x = zeros(n)
+        for i = 1:n
+            x[i] = interpolate(X_zoh[i],BSpline(Cubic(Line(OnGrid()))))(j)
+        end
+        return x
+    end
+    U_interp_zoh = interpolate(U_zoh,BSpline(Constant()))
+
+    function controller_zoh(x,t)
+        j = t/dt + 1
+        return max.(min.(K_interp_zoh(floor(Int64,j))*(x - X_interp_zoh(j)) + U_interp_zoh(floor(Int64,j)),u_max),u_min)
+    end
+    return controller_zoh
 end
 
 function interpolate_trajectory(solver::Solver, X, U, t)
@@ -90,11 +60,10 @@ function interpolate_trajectory(solver::Solver, X, U, t)
         interp_X = interpolate_rows(time, X, :cubic)
     end
 
-    if solver.control_integration == :zoh
-        interp_U = interpolate_rows(time, U, :zoh)
-    else  # :zoh
-        interp_U = interpolate_rows(time, U, :linear)
-    end
+    interp_U = interpolate_rows(time, U, :zoh)
+    # else  # :zoh
+    #     interp_U = interpolate_rows(time, U, :linear)
+    # end
     Xnew = interp_X(t)
     Unew = interp_U(t)
     return Xnew, Unew

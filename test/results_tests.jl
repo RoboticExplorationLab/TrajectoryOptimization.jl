@@ -16,14 +16,6 @@ r2.X[1][1] = 4
 @test r.X[1][1] == 1  # Make sure the copies aren't linked
 
 
-# Static Results
-rs = TrajectoryOptimization.UnconstrainedStaticResults(n,m,N)
-@test length(rs.X) == N
-@test length(rs.X[1]) == n
-@test length(rs.U) == N
-@test length(rs.U[1]) == m
-@test size(rs.K[1]) == (m,n)
-
 # Constrained Results
 p = rand(1:5)
 p_N = rand(1:5)
