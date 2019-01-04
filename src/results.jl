@@ -54,6 +54,7 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
 
     X_::Vector{Vector{Float64}} # Predicted states (n,N)
     U_::Vector{Vector{Float64}} # Predicted controls (m,N)
+
     S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
 
@@ -83,7 +84,6 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     U  = [zeros(m)   for i = 1:N]
 
     K  = [zeros(m,n) for i = 1:N]
-    b  = [zeros(m,m) for i = 1:N]
     d  = [zeros(m)   for i = 1:N]
 
     X_ = [zeros(n)   for i = 1:N]
