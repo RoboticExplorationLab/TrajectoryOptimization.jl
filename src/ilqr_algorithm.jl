@@ -164,21 +164,31 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver{Obj}) where Obj 
 end
 
 function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
+    # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    # W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
+    # Objective
     costfun = solver.obj.cost
 
+    # Minimum time and infeasible options
     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     dt = solver.dt
 
-    # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
     # L = res.L; l = res.l
     L = zeros(n+mm,n+mm); l = zeros(n+mm)
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+
+    # TEMP resets values for now - this will get fixed
+    for k = 1:N-1
+        Qx[k] = zeros(n); Qu[k] = zeros(mm); Qxx[k] = zeros(n,n); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,n)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,n)
+    end
 
     # Useful linear indices
     idx = Array(1:2*(n+mm))
@@ -190,8 +200,6 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
 
     # Boundary Conditions
     S[N], s[N] = taylor_expansion(costfun, X[N])
-    # S[N] = Wf
-    # s[N] = Wf*(X[N] - xf)
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -199,9 +207,11 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
     # Terminal constraints
     if res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; λ = res.λ
-        CxN = res.Cx_N
-        S[N] += CxN'*res.IμN*CxN
-        s[N] += CxN'*(res.IμN*res.CN + res.λN)
+        Cx = res.Cx; Cu = res.Cu
+        CN = res.CN; CxN = res.Cx_N; IμN = res.IμN; λN = res.λN
+
+        S[N] += CxN'*IμN*CxN
+        s[N] += CxN'*(IμN*CN + λN)
     end
 
     # Backward pass
@@ -227,72 +237,59 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
         # Lux = dt*ℓux
 
         expansion = taylor_expansion(costfun,x,u)
-        Lxx,Luu,Lxu,Lx,Lu = expansion .* dt
-        Lux = Lxu'
+        Qxx[k],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k],Qu[k][1:m] = expansion .* dt
 
         # Minimum time expansion components
         if solver.opts.minimum_time
             ℓ1 = stage_cost(costfun,x,u)
             h = U[k][m̄]
 
-            l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
 
             tmp = 2*h*ℓu
-            L[u_idx,m̄] = tmp
-            L[m̄,u_idx] = tmp'
-            L[m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
 
-            L[m̄,x_idx] = 2*h*ℓx'
+            Qux[k][m̄,1:n] = 2*h*expansion[4]'
         end
 
         # Infeasible expansion components
         if solver.opts.infeasible
-            l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
-            L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
-        end
-
-        # Final expansion terms
-        if solver.opts.minimum_time || solver.opts.infeasible
-            l[u_idx] = Lu
-
-            L[u_idx,u_idx] = Luu
-            L[u_idx,x_idx] = Lux
-
-            Lu = view(l,n+1:n+mm)
-            Luu = view(L,n+1:n+mm,n+1:n+mm)
-            Lux = view(L,n+1:n+mm,1:n)
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
         end
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = Lx + fdx'*s[k+1]
-        Qu = Lu + fdu'*s[k+1]
-        Qxx = Lxx + fdx'*S[k+1]*fdx
-        Quu = Luu + fdu'*S[k+1]*fdu
-        Qux = Lux + fdu'*S[k+1]*fdx
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qxx[k] += fdx'*S[k+1]*fdx
+        Quu[k] += fdu'*S[k+1]*fdu
+        Qux[k] += fdu'*S[k+1]*fdx
 
         # Constraints
         if res isa ConstrainedIterResults
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Qx .+= Cx'*(Iμ[k]*C[k] + λ[k])
-            Qu .+= Cu'*(Iμ[k]*C[k] + λ[k])
-            Qxx .+= Cx'*Iμ[k]*Cx
-            Quu .+= Cu'*Iμ[k]*Cu
-            Qux .+= Cu'*Iμ[k]*Cx
+
+            Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            Qxx[k] += Cx[k]'*Iμ[k]*Cx[k]
+            Quu[k] += Cu[k]'*Iμ[k]*Cu[k]
+            Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
         end
 
         if solver.opts.regularization_type == :state
-            Quu_reg = Quu + res.ρ[1]*fdu'*fdu
-            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+            Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
+            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
         elseif solver.opts.regularization_type == :control
-            Quu_reg = Quu + res.ρ[1]*I
-            Qux_reg = Qux
+            Quu_reg[k] = Quu[k] + res.ρ[1]*I
+            Qux_reg[k] = Qux[k]
         end
 
         # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+        if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
             regularization_update!(res,solver,:increase)
 
@@ -304,19 +301,17 @@ function _backwardpass_speedup!(res::SolverVectorResults,solver::Solver,bp)
         end
 
         # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Qu
-
-
+        K[k] = -Quu_reg[k]\Qux_reg[k]
+        d[k] = -Quu_reg[k]\Qu[k]
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Qx + K[k]'*Quu*d[k] + K[k]'*Qu + Qux'*d[k]
-        S[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'*K[k]
+        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
+        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
         S[k] = 0.5*(S[k] + S[k]')
 
         # calculated change is cost-to-go over entire trajectory
-        Δv[1] += d[k]'*Qu
-        Δv[2] += 0.5*d[k]'*Quu*d[k]
+        Δv[1] += d[k]'*Qu[k]
+        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
 
         k = k - 1;
     end

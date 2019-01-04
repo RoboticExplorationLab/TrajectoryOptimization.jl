@@ -404,6 +404,8 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
+    else
+        solver.opts.constrained = false
     end
 
     return results_feasible
