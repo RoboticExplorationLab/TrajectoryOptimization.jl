@@ -222,6 +222,21 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
+function cost(solver::Solver, X::AbstractMatrix, U::AbstractMatrix)
+    cost(solver, to_dvecs(X), to_dvecs(U))
+end
+
+function cost(solver::Solver,X::AbstractVector,U::AbstractVector)
+    N = solver.N
+    J = 0.0
+    costfun = solver.obj.cost
+    for k = 1:N-1
+        J += stage_cost(costfun,X[k],U[k])*solver.dt
+    end
+    J += stage_cost(costfun, X[N])
+end
+
+
 function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjective, UnconstrainedObjective}
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
