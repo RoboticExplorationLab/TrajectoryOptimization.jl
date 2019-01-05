@@ -172,7 +172,7 @@ function count_inplace_output(c::Function, n::Int)
 
     while iter < 5
         try
-            c(vals,x,u)
+            c(vals,x)
             break
         catch e
             q *= 10
