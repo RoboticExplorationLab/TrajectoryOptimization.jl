@@ -1,3 +1,4 @@
+using Random
 traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
 urdf_folder = joinpath(traj_folder, "dynamics","urdf")
 urdf_kuka_orig = joinpath(urdf_folder, "kuka_iiwa.urdf")
@@ -24,6 +25,81 @@ function write_kuka_urdf()
             end
         end
     end
+end
+
+function get_kuka_ee(kuka)
+    ee_body = findbody(kuka, "iiwa_link_ee")
+    ee_point = Point3D(default_frame(ee_body),0.,0.,0.)
+    return ee_body, ee_point
+end
+
+
+function kuka_ee_ik(kuka::Mechanism,point::Vector,ik_iterations=1000,attempts=20,tol=1e-2)
+    state = MechanismState(kuka)
+    world = root_frame(kuka)
+
+    # Get end-effector
+    ee_body, ee_point = get_kuka_ee(kuka)
+
+    # Run IK
+    err = Inf
+    iter = 1
+    while err > tol
+        rand!(state)
+        goal = Point3D(world,point)
+        ik_res = jacobian_transpose_ik!(state,ee_body,ee_point,goal,iterations=ik_iterations)
+        point_res = transform(ik_res,ee_point,world).v
+        err = norm(point-point_res)
+        if iter > attempts
+            error("IK cannot get sufficiently close to the goal")
+        end
+        return ik_res
+    end
+end
+
+function calc_ee_position(kuka::Mechanism,X::Vector)
+    ee = zero.(X)
+    N = length(X)
+    state = MechanismState(kuka)
+    world = root_frame(kuka)
+    ee_point = get_kuka_ee(kuka)[2]
+    nn = num_positions(kuka)
+    for k = 1:N
+        set_configuration!(state, X[k][1:nn])
+        ee[k] = transform(state, ee_point, world).v
+    end
+    return ee
+end
+
+
+function jacobian_transpose_ik!(state::MechanismState,
+                               body::RigidBody,
+                               point::Point3D,
+                               desired::Point3D;
+                               α=0.1,
+                               iterations=100)
+    mechanism = state.mechanism
+    world = root_frame(mechanism)
+
+    # Compute the joint path from world to our target body
+    p = path(mechanism, root_body(mechanism), body)
+    # Allocate the point jacobian (we'll update this in-place later)
+    Jp = point_jacobian(state, p, transform(state, point, world))
+
+    q = copy(configuration(state))
+
+    for i in 1:iterations
+        # Update the position of the point
+        point_in_world = transform(state, point, world)
+        # Update the point's jacobian
+        point_jacobian!(Jp, state, p, point_in_world)
+        # Compute an update in joint coordinates using the jacobian transpose
+        Δq = α * Array(Jp)' * (transform(state, desired, world) - point_in_world).v
+        # Apply the update
+        q .= configuration(state) .+ Δq
+        set_configuration!(state, q)
+    end
+    state
 end
 
 # Write new urdf file with correct absolute paths

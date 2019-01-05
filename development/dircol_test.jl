@@ -5,15 +5,20 @@ using Test
 model, obj0 = Dynamics.cartpole_analytical
 n,m = model.n, model.m
 
-obj = copy(obj0)
-obj.x0 = [0;0;0;0.]
-obj.xf = [0.5;pi;0;0]
-obj.tf = 2.
+Q = copy(obj0.cost.Q)
+R = copy(obj0.cost.R)
+Qf = copy(obj0.cost.Qf)
+
+x0 = [0;0;0;0.]
+xf = [0.5;pi;0;0]
+tf = 2.
 u_bnd = 50
 x_bnd = [0.6,Inf,Inf,Inf]
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_max=x_bnd)
 obj_con = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
-obj_mintime = update_objective(obj_con,tf=:min,Q=obj.Q*0,Qf=obj.Qf,R=obj.R*0.001)
+cost_mintime = LQRCost(Q*0,R*0.001,Qf,xf)
+obj_mintime = update_objective(obj_con,cost=cost_mintime,tf=:min)
 dt = 0.05
 
 
@@ -134,6 +139,7 @@ J = cost(solver::Solver,X0,U0,weights::Vector,method::Symbol)
 
 # Cost Gradient
 eval_grad_f(Z,grad_f)
+grad_f
 grad_f_check = ForwardDiff.gradient(eval_f,Z)
 @test grad_f_check ≈ grad_f
 
@@ -192,22 +198,24 @@ t1 = @elapsed sol,stats = solve_dircol(solver)
 
 # Test dircol constraint stuff
 n,m = 3,2
-cE(x,u) = [2x[1:2]+u;
-          x'x + 5]
+cE!(c,x,u) = begin c[1:2] = 2x[1:2]+u; c[3] = x'x + 5 end
 pE = 3
-cE(x) = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
+cE!(c,x) = begin c[1] = cos(x[1]) + x[2]*x[3]; c[2] = x[1]*x[2]^2 end
 pE_N = 2
-cI(x,u) = [x[3]-x[2]; u[1]*x[1]]
+cI!(c,x,u) = begin c[1] = x[3]-x[2]; c[2] = u[1]*x[1] end
 pI = 2
 pI_N = 0
 
+x = rand(n); u = rand(m);
+c = zeros(3)
+cI!(c,x,u)
+is_inplace_function(cE!,x,u)
 model, obj = Dynamics.dubinscar
-obj.tf = 3
-obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
+obj_con = ConstrainedObjective(obj,cE=cE!,cI=cI!,cE_N=cE!,use_goal_constraint=false,tf=3)
 @test obj_con.p == pE + pI
 @test obj_con.pI == pI
 @test obj_con.pI_N == pI_N
-@test obj_con.p_N == n + pE_N + pI_N
+@test obj_con.p_N == pE_N + pI_N
 
 method = :trapezoid
 solver = Solver(model,obj_con,dt=1.)
@@ -219,15 +227,13 @@ U = [0. 1 0 0; -1 0 -1 0]
 # X = line_trajectory(obj.x0,obj.xf,N)
 x,u = X[:,1],U[:,1]
 c = zeros(3)
-cE! = wrap_inplace(cE)
-@test !is_inplace_constraints(cE,n,m)
-@test is_inplace_constraints(cE!,n,m)
-@test (n,m) == count_inplace_output(cE!,n,m)
+@test is_inplace_function(cE!,x,u)
+@test 3 == count_inplace_output(cE!,x,u)
 
 # Constraint function
 pI_obj, pE_obj = TrajectoryOptimization.count_constraints(obj_con)
 @test pI_obj == (pI, pI, 0, 0)
-@test pE_obj == (pE, pE, pE_N+n, pE_N)
+@test pE_obj == (pE, pE, pE_N, pE_N)
 p_total = (pE + pI)*(N-1) + pE_N + pI_N
 p_colloc = (N-1)n
 
@@ -235,6 +241,9 @@ c_fun!, jac_c = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
 C = zeros(p_total)
 c_fun!(C,X,U)
 Z = packZ(X,U)
+cE(x,u) = begin c=zeros(3); cE!(c,x,u); return c end
+cE(x) = begin c=zeros(2); cE!(c,x); return c end
+cI(x,u) = begin c=zeros(2); cI!(c,x,u); return c end
 C_expected = [cE(X[:,1],U[:,1]);
               cE(X[:,2],U[:,2]);
               cE(X[:,3],U[:,3]);

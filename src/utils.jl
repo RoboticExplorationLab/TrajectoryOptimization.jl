@@ -64,6 +64,14 @@ function norm2(X::Union{Vector{MVector{S,Float64}} where S, Vector{Vector{Float6
     v
 end
 
+function norm2(x::Vector{Real})
+    v = 0.
+    for val in x
+        v += val^2
+    end
+    return v
+end
+
 function to_array(X::Vector{Vector{Float64}})
     N = length(X)
     n = length(X[1])
@@ -105,13 +113,13 @@ function to_array(A::Vector{D} where {D<:Diagonal})
     return B
 end
 
-function to_dvecs(X::Array)
+function to_dvecs(X::AbstractArray)
     N = size(X)[end]
     ax = axes(X)[1:end-1]
     [X[ax...,i] for i = 1:N]
 end
 
-function to_svecs(X::Array)
+function to_svecs(X::AbstractArray)
     N = size(X)[end]
     s = size(X)[1:end-1]
     ax = axes(X)[1:end-1]
@@ -244,6 +252,10 @@ Sphere constraint function (c ⩽ 0, negative is satisfying constraint)
 """
 function sphere_constraint(x,x0,y0,z0,r)
 	return -((x[1]-x0)^2 + (x[2]-y0)^2 + (x[3]-z0)^2  - r^2)
+end
+
+function sphere_constraint(x,x0,r)
+	return -((x[1]-x0[1])^2 + (x[2]-x0[2])^2 + (x[3]-x0[3])^2-r^2)
 end
 
 """

@@ -1,7 +1,7 @@
 function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
     obj = solver.obj
     f = solver.fc
-    Q = obj.Q; xf = obj.xf; Qf = obj.Qf; R = obj.R;
+    Q = obj.cost.Q; xf = obj.xf; Qf = obj.cost.Qf; R = obj.cost.R;
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)
     N,N_ = get_N(solver,method)
@@ -23,12 +23,11 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
             Xm = (x1+x2)/2 + dt/8*(f1-f2)
             Um = (U[1:m,k] + U[1:m,k+1])/2
 
-
-            J[k] = dt/6*(ℓ(X[:,k],U[1:m,k],Q,R,xf) + 4*ℓ(Xm,Um,Q,R,xf) + ℓ(X[:,k+1],U[1:m,k+1],Q,R,xf)) # rk3 foh stage cost (integral approximation
+            J[k] = dt/6*(stage_cost(obj.cost,X[:,k],U[1:m,k]) + 4*stage_cost(obj.cost,Xm,Um) + stage_cost(obj.cost,X[:,k+1],U[1:m,k+1])) # rk3 foh stage cost (integral approximation
             solver.opts.minimum_time ? J[k] += solver.opts.R_minimum_time*dt : nothing
         end
         J = sum(J)
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        J += stage_cost(obj.cost,X[:,N])
         return J#, XM, UM, fVal
     elseif method == :midpoint
         Xm = zeros(eltype(X),n,N-1)
@@ -37,19 +36,19 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
         end
         J = zeros(eltype(Xm),N)
         for k = 1:N-1
-            J[k] = stage_cost(Xm[:,k],U[:,k],Q,R,xf,0.)
+            J[k] = stage_cost(obj.cost,Xm[:,k],U[:,k])
         end
         J = weights'J
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        J += stage_cost(obj.cost,X[:,N])
         return J
 
     else
         J = zeros(eltype(X),N)
         for k = 1:N
-            J[k] = stage_cost(X[:,k],U[:,k],Q,R,xf,0.)
+            J[k] = stage_cost(obj.cost,X[:,k],U[:,k])
         end
         J = weights'J
-        J += 0.5*(X[:,N] - xf)'*Qf*(X[:,N] - xf)
+        J += stage_cost(obj.cost,X[:,N])
         return J
     end
 end
@@ -70,7 +69,7 @@ function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float6
     dt = solver.dt
 
     obj = solver.obj
-    Q = obj.Q; xf = obj.xf; R = obj.R; Qf = obj.Qf;
+    Q = obj.cost.Q; xf = obj.xf; R = obj.cost.R; Qf = obj.cost.Qf;
     # X,U = res.X_, res.U_
     grad_f = reshape(vals, n+m, N)
 

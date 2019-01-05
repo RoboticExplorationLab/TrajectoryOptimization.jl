@@ -54,16 +54,20 @@ function taylor_expansion(cost::LinearQuadraticCost, xN::AbstractVector{Float64}
     return cost.Qf, cost.Qf*xN + cost.qf
 end
 
-function stage_cost(cost::LinearQuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
+function stage_cost(cost::LinearQuadraticCost, x::AbstractVector, u::AbstractVector)
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u
 end
 
-function stage_cost(cost::LinearQuadraticCost, xN::AbstractVector{Float64})
+function stage_cost(cost::LinearQuadraticCost, xN::AbstractVector)
     0.5*xN'cost.Qf*xN + cost.qf'*xN
 end
 
 function get_sizes(cost::LinearQuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
+end
+
+function copy(cost::LinearQuadraticCost)
+    return LinearQuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.Qf), copy(cost.qf))
 end
 
 
@@ -126,6 +130,7 @@ stage_cost(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Floa
 stage_cost(cost::GenericCost, xN::AbstractVector{Float64}) = cost.ℓf(xN)
 
 get_sizes(cost::GenericCost) = cost.n, cost.m
+copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
 
 
 """
@@ -386,8 +391,8 @@ end
 
 
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
-function ConstrainedObjective(obj::UnconstrainedObjective; kwargs...)
-    ConstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf; kwargs...)
+function ConstrainedObjective(obj::UnconstrainedObjective; tf=obj.tf, kwargs...)
+    ConstrainedObjective(obj.cost, tf, obj.x0, obj.xf; kwargs...)
 end
 
 function copy(obj::ConstrainedObjective)

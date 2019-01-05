@@ -214,6 +214,21 @@ function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
 
+
+function cost(solver::Solver, X::AbstractMatrix, U::AbstractMatrix)
+    cost(solver, to_dvecs(X), to_dvecs(U))
+end
+
+function cost(solver::Solver,X::AbstractVector,U::AbstractVector)
+    N = solver.N
+    J = 0.0
+    costfun = solver.obj.cost
+    for k = 1:N-1
+        J += stage_cost(costfun,X[k],U[k])*solver.dt
+    end
+    J += stage_cost(costfun, X[N])
+end
+
 """
 $(SIGNATURES)
     Compute the optimal control problem unconstrained cost,
@@ -384,7 +399,7 @@ $(SIGNATURES)
     Count the number of constraints of each type from an objective
 """
 function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
-    n = size(obj.Q,1)
+    n,m = get_sizes(obj)
     p = obj.p # number of constraints
     pI = obj.pI # number of inequality and equality constraints
     pE = p-pI # number of equality constraints
@@ -412,7 +427,7 @@ function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
     pI_N = obj.pI_N
     pE_N = p_N - pI_N
     pI_N_c = pI_N
-    if obj.use_terminal_constraint
+    if obj.use_goal_constraint
         pE_N_c = pE_N - n
     else
         pE_N_c = pE_N
