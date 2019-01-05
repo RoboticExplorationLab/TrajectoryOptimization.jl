@@ -292,7 +292,7 @@ u = ones(m)*2
 
 LinQuad = LQRCost(Q,R,Qf,xf)
 J = stage_cost(LinQuad,x,u)
-@test taylor_expansion(LinQuad,x,u) == (Q,R,zeros(n,m),Q*(x-xf),R*u)
+@test taylor_expansion(LinQuad,x,u) == (Q,R,zeros(m,n),Q*(x-xf),R*u)
 @test taylor_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
 
 # Generic Cost Function
@@ -304,7 +304,7 @@ Qfun(x,u) = [2 0 0;
           0 0 2;
           0 2 -1/x[3]^2]
 Rfun(x,u) = [0 1; 1 2-sin(u[2])]
-Hfun(x,u) = [0 0; 1 0; 0 0]
+Hfun(x,u) = [0 0; 1 0; 0 0]'
 qffun(x) = [2(x[1] -1) + x[2], x[1], 0]
 Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 

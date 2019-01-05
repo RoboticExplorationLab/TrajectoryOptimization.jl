@@ -113,7 +113,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     # Initialized backward pass expansion terms
-    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm,N) : bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(n,mm,N)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -133,22 +133,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     if !solver.opts.infeasible #&& isempty(prevResults)
         X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
-
-        if !flag
-            @info "Bad initial control sequence, setting initial control to zero"
-            copyto!(results.U, zeros(mm,N))
-            rollout!(results,solver)
-        end
+        !flag ? error("Bad initial control sequence") : nothing
     end
 
-    if solver.opts.infeasible
-        if solver.control_integration == :foh
-            calculate_derivatives!(results, solver, results.X, results.U)
-            calculate_midpoints!(results, solver, results.X, results.U)
-        end
-        update_constraints!(results,solver,results.X,results.U)
-    end
-    ##
+    solver.opts.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -166,8 +154,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     dJ = Inf
     gradient = Inf
     Δv = [Inf, Inf]
-    sqrt_tolerance = false
-
 
     with_logger(logger) do
     for j = 1:solver.opts.iterations_outerloop
@@ -202,11 +188,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             # increment iLQR inner loop counter
             iter += 1
 
-            if solver.opts.live_plotting
-                # X_traj = to_array(results.X)
-                # display(plot(X_traj[1,:],X_traj[2,:]))
-                display(plot(to_array(results.U)'))
-            end
+            solver.opts.live_plotting ? display(plot(to_array(results.U)')) : nothing
 
             ### UPDATE RESULTS ###
             X .= deepcopy(X_)
@@ -223,14 +205,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             end
 
             ## Check gradients for convergence ##
-            d_grad = maximum(map((x)->maximum(abs.(x)),results.d))
-            s_grad = maximum(abs.(results.s[1]))
-            todorov_grad = calculate_todorov_gradient(results)
+            gradient = calculate_todorov_gradient(results)
 
-            @logmsg InnerLoop :dgrad value=d_grad
-            @logmsg InnerLoop :sgrad value=s_grad
-            @logmsg InnerLoop :grad value=todorov_grad
-            gradient = todorov_grad
+            @logmsg InnerLoop :grad value=gradient
 
             # Print Log
             @logmsg InnerLoop :iter value=iter
@@ -238,13 +215,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_counter value=dJ_zero_counter
-
-            # if iter > 1
-            #     c_diff = abs(c_max-c_max_hist[end-1])
-            # else
-            #     c_diff = 0.
-            # end
-            # @logmsg InnerLoop :c_diff value=c_diff
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
@@ -261,7 +231,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,false)
+        outer_loop_update(results,solver)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
@@ -376,7 +346,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
         end
 
         # Outer loop update if forward pass is repeatedly unsuccessful
-        if dJ_zero_counter >= 10
+        if dJ_zero_counter > solver.opts.dJ_counter_limit
             return true
         end
 
@@ -417,7 +387,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     m̄,mm = get_num_controls(solver)
 
     # Initialized backward pass expansion terms
-    solver.control_integration == :foh ? bp = BackwardPassFOH(n,mm,N) : bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(n,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results_feasible, solver, bp)
@@ -434,10 +404,8 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
-    end
-    if solver.control_integration == :foh
-        calculate_derivatives!(results_feasible,solver,results_feasible.X,results_feasible.U)
-        calculate_midpoints!(results_feasible,solver,results_feasible.X,results_feasible.U)
+    else
+        solver.opts.constrained = false
     end
 
     return results_feasible
@@ -452,13 +420,10 @@ $(SIGNATURES)
 function λ_update!(results::ConstrainedIterResults,solver::Solver)
     p,pI,pE = get_num_constraints(solver)
     N = solver.N
+
     for k = 1:N-1
         results.λ[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k] + results.Iμ[k]*results.C[k]))
         results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
-    end
-    if solver.control_integration == :foh
-        results.λ[N] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[N] + results.Iμ[N]*results.C[N]))
-        results.λ[N][1:pI] = max.(0.0,results.λ[N][1:pI])
     end
 
     results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
@@ -476,14 +441,9 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
 function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
-    # println("default penalty update")
-    if solver.control_integration == :foh
-        final_index = solver.N
-    else
-        final_index = solver.N-1
-    end
+    N = solver.N
 
-    for k = 1:final_index
+    for k = 1:N-1
         results.μ[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μ[k])
     end
 
@@ -494,7 +454,7 @@ end
 
 """ @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
-    # println("individual penalty update")
+    N = solver.N
     p,pI,pE = get_num_constraints(solver)
     n = solver.model.n
 
@@ -503,14 +463,10 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     γ_no  = solver.opts.γ_no
     γ = solver.opts.γ
 
-    if solver.control_integration == :foh
-        final_index = solver.N
-    else
-        final_index = solver.N-1
-    end
+
 
     # Stage constraints
-    for k = 1:final_index
+    for k = 1:N-1
         for i = 1:p
             if p <= pI
                 if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
@@ -544,7 +500,7 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_tolerance::Bool=false)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
 
     ## Lagrange multiplier updates
     λ_update!(results,solver)
@@ -559,7 +515,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,sqrt_t
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver,sqrt_tolerance::Bool)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver)::Nothing
     return nothing
 end
 

@@ -38,7 +38,7 @@ mutable struct LinearQuadraticCost{TM,TH,TV} <: CostFunction
 end
 
 function LQRCost(Q,R,Qf,xf)
-    H = zeros(size(Q,1),size(R,1))
+    H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
     qf = -Qf*xf
@@ -91,7 +91,7 @@ struct GenericCost <: CostFunction
         linds = LinearIndices(zeros(n+m,n+m))
         xinds = 1:n
         uinds = n .+(1:m)
-        inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], xu=linds[xinds,uinds])
+        inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], ux=linds[uinds,xinds])
         function ℓ_aug(z)
             x = view(z,xinds)
             u = view(z,uinds)
@@ -116,7 +116,7 @@ function taylor_expansion(cost::GenericCost, x::AbstractVector{Float64}, u::Abst
     r = view(cost.grad,inds.u)
     Q = view(cost.hess,inds.xx)
     R = view(cost.hess,inds.uu)
-    H = view(cost.hess,inds.xu)
+    H = view(cost.hess,inds.ux)
     return Q,R,H,q,r
 end
 

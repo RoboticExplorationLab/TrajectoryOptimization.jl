@@ -29,7 +29,6 @@ U = ones(solver_uncon.model.m,solver_uncon.N)
 
 results, stats = solve(solver_uncon,X_interp,U)
 
-# Test final state from foh solve
 @test norm(results.X[end] - solver_uncon.obj.xf) < 1e-3
 #############################
 
@@ -50,6 +49,5 @@ U = ones(solver.model.m,solver.N)
 
 results, = solve(solver,X_interp,U)
 
-# Test final state from foh solve
 @test norm(results.X[end] - solver.obj.xf) < 1e-3
 ##################

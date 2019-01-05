@@ -27,7 +27,10 @@
 ###         GENERAL METHODS          ###
 ########################################
 
-"$(SIGNATURES) determine if the solver is solving a minimum time problem"
+"""
+$(SIGNATURES)
+    Determine if solving a minimum time problem
+"""
 function is_min_time(solver::Solver)
     if solver.dt == 0 && solver.N > 0
         return true
@@ -37,10 +40,10 @@ end
 
 """
 $(SIGNATURES)
-Get number of controls, accounting for minimum time and infeasible start
+Get number of (solver) controls, accounting for minimum time and infeasible start
 # Output
-- m̄ = number of non infeasible controls. Augmented by one if time is included as a control for minimum time problems.
-- mm = total number of controls
+- m̄:  number of non infeasible controls (ie, system controls + time control if minimum time). System controls augmented by one if time is included as a control for minimum time problems.
+- mm: total number of solver controls
 """
 function get_num_controls(solver::Solver)
     n,m = get_sizes(solver)
@@ -52,7 +55,10 @@ end
 
 """
 $(SIGNATURES)
-Get true number of constraints, accounting for minimum time and infeasible start constraints
+    Get true number of constraints, accounting for minimum time and infeasible start constraints
+    -p: total number of stage constraints (state and control)
+    -pI: number of inequality stage constraints (state and control)
+    -pE: number of equality stage constraints (stage and control)
 """
 function get_num_constraints(solver::Solver)
     if solver.opts.constrained
@@ -75,6 +81,11 @@ function get_num_constraints(solver::Solver)
     end
 end
 
+"""
+$(SIGNATURES)
+    Determine an initial dt for minimum time solver
+"""
+
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
         if solver.opts.minimum_time_dt_estimate > 0.0
@@ -96,18 +107,12 @@ end
 
 """
 $(SIGNATURES)
-Roll out the dynamics for a given control sequence (initial)
-Updates `res.X` by propagating the dynamics, using the controls specified in
-`res.U`.
+Simulate system dynamics for a given control trajectory U
+Updates X by propagating the dynamics, using the controls specified in
+U
 """
 function rollout!(res::SolverVectorResults, solver::Solver)
     status = rollout!(res.X, res.U, solver)
-
-    # Calculate state derivatives and midpoints
-    if solver.control_integration == :foh
-        calculate_derivatives!(res, solver, res.X, res.U)
-        calculate_midpoints!(res, solver, res.X, res.U)
-    end
 
     # Update constraints
     update_constraints!(res,solver,res.X,res.U)
@@ -135,14 +140,14 @@ function rollout!(X::Vector, U::Vector, solver::Solver)
 
     X[1] = solver.obj.x0
     for k = 1:N-1
+
+        # Get dt is minimum time
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
 
-        if solver.control_integration == :foh
-            solver.fd(X[k+1], X[k], U[k][1:m], U[k+1][1:m], dt) # get new state
-        else
-            solver.fd(X[k+1], X[k], U[k][1:m], dt)
-        end
+        # Propagate dynamics forward
+        solver.fd(X[k+1], X[k], U[k][1:m], dt)
 
+        # Add infeasible controls
         solver.opts.infeasible ? X[k+1] += U[k][m̄+1:m̄+n] : nothing
 
         # Check that rollout has not diverged
@@ -156,11 +161,12 @@ end
 
 """
 $(SIGNATURES)
-Roll out the dynamics using the gains and optimal controls computed by the
-backward pass
-Updates `res.X` by propagating the dynamics at each timestep, by applying the
-gains `res.K` and `res.d` to the difference between states
-Will return a flag indicating if the values are finite for all time steps.
+Simulate system dynamics using new control trajectory comprising
+feedback gains K and feedforward gains d from backward pass
+and previous control trajectory.
+Line search option using alpha
+
+flag indicates values are finite for all time steps.
 """
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     n,m,N = get_sizes(solver)
@@ -171,40 +177,26 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
 
     X_[1] = solver.obj.x0;
 
-    if solver.control_integration == :foh
-        b = res.b
-        du = alpha*d[1]
-        U_[1] = U[1] + du
-        dv = zero(du)
-    end
-
     for k = 2:N
+        # Calculate state trajectory difference
         δx = X_[k-1] - X[k-1]
 
-        if solver.control_integration == :foh
-            dv = K[k]*δx + b[k]*du + alpha*d[k]
-            U_[k] = U[k] + dv
-            solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
-            solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
-            du = dv
-        else
-            U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
-            solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
-            solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
-        end
+        # Calculate updated control
+        U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
+        # Get dt if minimum time
+        solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+
+        # Propagate dynamics
+        solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
+
+        # Add infeasible controls
         solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
             return false
         end
-    end
-
-    # Calculate state derivatives and midpoints
-    if solver.control_integration == :foh
-        calculate_derivatives!(res, solver, X_, U_)
-        calculate_midpoints!(res, solver, X_, U_)
     end
 
     # Update constraints
@@ -216,11 +208,12 @@ end
 
 """
 $(SIGNATURES)
-Compute the unconstrained cost
+    Compute the optimal control problem cost
 """
 function cost(solver::Solver,vars::DircolVars)
     cost(solver,vars.X,vars.U)
 end
+
 
 function cost(solver::Solver, X::AbstractMatrix, U::AbstractMatrix)
     cost(solver, to_dvecs(X), to_dvecs(U))
@@ -236,6 +229,11 @@ function cost(solver::Solver,X::AbstractVector,U::AbstractVector)
     J += stage_cost(costfun, X[N])
 end
 
+"""
+$(SIGNATURES)
+    Compute the optimal control problem unconstrained cost,
+    including minimum time and infeasible controls
+"""
 
 function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjective, UnconstrainedObjective}
     # pull out solver/objective values
@@ -247,37 +245,34 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
 
     J = 0.0
     for k = 1:N-1
+        # Get dt if minimum time
         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-        if solver.control_integration == :foh
-            xm = res.xm[k]
-            um = res.um[k]
-            J += dt*(1/6*stage_cost(costfun,X[k],U[k][1:m]) + 4/6*stage_cost(costfun,xm,um[1:m]) + 1/6*stage_cost(costfun,X[k+1],U[k+1][1:m])) # Simpson quadrature (integral approximation) for foh stage cost
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
-        else
-            # J += dt*stage_cost(X[k],U[k],Q,getR(solver),xf,obj.c)
-            J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
-            solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
-        end
+
+        # Stage cost
+        J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
+
+        # Minimum time cost
+        solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+
+        # Infeasible control cost
+        solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
     end
 
-    # J += 0.5*(X[N] - xf)'*Qf*(X[N] - xf)
+    # Terminal Cost
     J += stage_cost(costfun, X[N])
 
     return J
 end
 
-""" $(SIGNATURES) Compute the Constraints Cost """
+"""
+$(SIGNATURES)
+    Compute the Augmented Lagrangian constraints cost
+"""
 function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
     for k = 1:N-1
         J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
-    end
-
-    if solver.control_integration == :foh
-        J += 0.5*res.C[N]'*res.Iμ[N]*res.C[N] + res.λ[N]'*res.C[N]
     end
 
     J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
@@ -296,42 +291,7 @@ end
 
 """
 $(SIGNATURES)
-    Calculate state midpoint using cubic spline
-"""
-function cubic_midpoint(x1::AbstractVector,dx1::AbstractVector,x2::AbstractVector,dx2::AbstractVector,dt::Float64)
-    0.5*x1 + dt/8.0*dx1 + 0.5*x2 - dt/8.0*dx2
-end
-
-"""
-$(SIGNATURES)
-    Calculate state midpoints (xm)
-"""
-function calculate_midpoints!(results::SolverVectorResults, solver::Solver, X=results.X, U=results.U)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    dt = solver.dt
-    for k = 1:N-1
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
-        results.xm[k] = cubic_midpoint(X[k],results.dx[k],X[k+1],results.dx[k+1],dt)
-        results.um[k] = 0.5*(U[k] + U[k+1])
-    end
-end
-
-"""
-$(SIGNATURES)
-    Calculate state derivatives (dx)
-"""
-function calculate_derivatives!(results::SolverVectorResults, solver::Solver, X=results.X, U=results.U)
-    n,m,N = get_sizes(solver)
-    for k = 1:N
-        solver.fc(results.dx[k],X[k],U[k][1:m])
-    end
-end
-
-"""
-$(SIGNATURES)
-Calculate Jacobians prior to the backwards pass
-Updates both dyanmics and constraint jacobians, depending on the results type.
+    Calculate dynamics and constraint Jacobians (perform prior to the backwards pass)
 """
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
@@ -339,30 +299,21 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     dt = solver.dt
 
     for k = 1:N-1
-        if solver.control_integration == :foh
-            res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
-        else
-            res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
-        end
+        # Update discrete dynamics Jacobians
+        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
+
+        # Update constraint Jacobians
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+
+        # Minimum time special case
         if solver.opts.minimum_time && k < N-1
             res.Cu[k][end,m̄] = 1
         end
     end
 
-    if solver.control_integration == :foh
-        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
-        solver.c_jacobian(res.Cx[N], res.Cu[N], res.X[N],res.U[N])
-        if solver.opts.minimum_time
-            res.Cu[N][m̄,:] .= 0.0
-            res.Cu[N][m̄+m̄,:] .= 0.0
-            res.Cu[N-1][end,:] .= 0.0
-            res.Cu[N][end,:] .= 0.0
-        end
-    end
-
+    # Update terminal constraint Jacobian
     solver.c_jacobian(res.Cx_N, res.X[N])
+
     return nothing
 end
 
@@ -371,15 +322,8 @@ function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::No
     m̄,mm = get_num_controls(solver)
 
     for k = 1:N-1
-        if solver.control_integration == :foh
-            res.fdx[k], res.fdu[k], res.fdv[k] = solver.Fd(res.X[k], res.U[k], res.U[k+1])
-            res.fcx[k], res.fcu[k][:,1:m] = solver.Fc(res.X[k], res.U[k][1:m])
-        else
-            res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
-        end
-    end
-    if solver.control_integration == :foh
-        res.fcx[N], res.fcu[N][:,1:m] = solver.Fc(res.X[N], res.U[N][1:m])
+        # Update discrete dynamics Jacobians
+        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
     end
 
     return nothing
@@ -391,8 +335,10 @@ end
 
 """
 $(SIGNATURES)
-Evalutes all inequality and equality constraints (in place) for the current state and control trajectories
-    A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates (Toussaint)
+Evalutes all inequality and equality constraints (in place) for the current
+state and control trajectories
+    see: A Novel Augmented Lagrangian Approach for Inequalities and Convergent
+    Any-Time Non-Central Updates (Toussaint)
 """
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
     N = solver.N
@@ -400,30 +346,21 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     m̄,mm = get_num_controls(solver)
     c_fun = solver.c_fun
 
-    if solver.control_integration == :foh
-        final_index = N
-    else
-        final_index = N-1
-    end
+    for k = 1:N-1
+        # Update constraints
+        c_fun(res.C[k], X[k], U[k])
 
-    # Update constraints
-    for k = 1:final_index
-        c_fun(res.C[k], X[k], U[k]) # update results with constraint evaluations
-
+        # Minimum time special case
         if solver.opts.minimum_time
             if k < N-1
                 res.C[k][end] = U[k][m̄] - U[k+1][m̄]
-            end
-            if solver.control_integration == :foh && k == N
-                res.C[k][m̄] = 0.0
-                res.C[k][m̄+m̄] = 0.0
             end
         end
 
         # Get active constraint set
         get_active_set!(res,solver,p,pI,k)
 
-        # Update Iμ matrices based on active set
+        # Update penality-indicator matrices based on active set
         res.Iμ[k] = Diagonal(res.active_set[k].*res.μ[k])
     end
 
@@ -437,6 +374,10 @@ function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X=re
     return nothing
 end
 
+"""
+$(SIGNATURES)
+    Determine active set for inequality constraints
+"""
 function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,pI::Int,k::Int)
     # Inequality constraints
     for j = 1:pI
@@ -714,8 +655,7 @@ generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,m
 """
 $(SIGNATURES)
 Compute the maximum constraint violation. Inactive inequality constraints are
-not counted (masked by the Iμ matrix). For speed, the diagonal indices can be
-precomputed and passed in.
+not counted (masked by the Iμ matrix).
 """
 function max_violation(results::ConstrainedIterResults)
     if size(results.CN,1) != 0
@@ -773,7 +713,7 @@ end
 
 """
 $(SIGNATURES)
-Additional controls for producing an infeasible state trajectory
+    Calculate infeasible controls to produce an infeasible state trajectory
 """
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
     ui = zeros(solver.model.n,solver.N) # initialize
@@ -785,11 +725,9 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
         solver.opts.minimum_time ? dt = u[m̄,k]^2 : nothing
-        if solver.control_integration == :foh
-            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k],u[1:m,k+1], dt)
-        else
-            solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
-        end
+
+        solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
+
         ui[:,k] = X0[:,k+1] - x[:,k+1]
         x[:,k+1] += ui[:,k]
     end
