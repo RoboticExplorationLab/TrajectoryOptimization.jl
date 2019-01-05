@@ -391,8 +391,8 @@ end
 
 
 "$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
-function ConstrainedObjective(obj::UnconstrainedObjective; tf=obj.tf, x0=obj.x0, xf=obj.xf, kwargs...)
-    ConstrainedObjective(obj.cost, tf, x0, xf; kwargs...)
+function ConstrainedObjective(obj::UnconstrainedObjective; tf=obj.tf, kwargs...)
+    ConstrainedObjective(obj.cost, tf, obj.x0, obj.xf; kwargs...)
 end
 
 function copy(obj::ConstrainedObjective)

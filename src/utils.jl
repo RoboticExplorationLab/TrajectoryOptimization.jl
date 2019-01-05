@@ -113,13 +113,13 @@ function to_array(A::Vector{D} where {D<:Diagonal})
     return B
 end
 
-function to_dvecs(X::Array)
+function to_dvecs(X::AbstractArray)
     N = size(X)[end]
     ax = axes(X)[1:end-1]
     [X[ax...,i] for i = 1:N]
 end
 
-function to_svecs(X::Array)
+function to_svecs(X::AbstractArray)
     N = size(X)[end]
     s = size(X)[1:end-1]
     ax = axes(X)[1:end-1]
