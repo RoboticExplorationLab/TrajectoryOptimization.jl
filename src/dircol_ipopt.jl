@@ -153,7 +153,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
 
 end
 
-function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, method::Symbol)
+function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, method::Symbol; options::Dict{String,T}=Dict{String,Any}()) where T
     X0 = copy(X0)
     U0 = copy(U0)
 
@@ -186,6 +186,9 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     dir = root_dir()
     opt_file = joinpath(dir,"ipopt.opt")
     addOption(prob,"option_file_name",opt_file)
+    for (opt,val) in pairs(options)
+        addOption(prob,opt,val)
+    end
     if solver.opts.verbose == false
         addOption(prob,"print_level",0)
     end

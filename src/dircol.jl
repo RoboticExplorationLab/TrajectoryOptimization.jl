@@ -20,7 +20,7 @@ Solve a trajectory optimization problem with direct collocation
     :quadratic - uses functions exploiting quadratic cost functions
 """
 function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
-        nlp::Symbol=:ipopt, method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold)
+        nlp::Symbol=:ipopt, method::Symbol=:auto, grads::Symbol=:quadratic, start=:cold, options::Dict{String,T}=Dict{String,Any}()) where T
 
     if solver.obj isa UnconstrainedObjective
         solver = Solver(solver,obj=ConstrainedObjective(solver.obj))
@@ -58,7 +58,7 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
     end
 
     if nlp == :ipopt
-        return solve_ipopt(solver,X0,U0,method)
+        return solve_ipopt(solver,X0,U0,method,options=options)
     elseif nlp == :snopt
         return solve_snopt(solver,X0,U0, method=method, grads=grads, start=start)
     else
