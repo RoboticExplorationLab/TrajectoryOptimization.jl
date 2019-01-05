@@ -47,7 +47,7 @@ xf[1] = pi/4
 
 Q = 1e-4*Diagonal(I,n)
 Qf = 250.0*Diagonal(I,n)
-R = 1e-5*Diagonal(I,m)
+R = 1e-5*Diagonal(I,m)/2
 
 tf = 5.0
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
@@ -66,8 +66,19 @@ solver.opts.verbose = true
 solver.opts.live_plotting = false
 solver.opts.iterations_innerloop = 200
 solver.opts.infeasible
+solver.opts.cost_tolerance = 1e-5
 res, stats = solve(solver,U0)
 norm(res.X[N]-xf)
+
+J = TrajectoryOptimization.cost(solver,res)
+TrajectoryOptimization.cost(solver,res.X,res.U) == J
+
+eval_f = gen_usrfun_ipopt(solver::Solver,:hermite_simpson)[1]
+res_d, stats_d = solve_dircol(solver,X0,U0)
+J - TrajectoryOptimization.cost(solver,res_d.X,res_d.U)
+
+
+eval_f(res_d.Z)
 
 set_configuration!(vis, x0[1:7])
 animate_trajectory(vis, res.X)
@@ -82,9 +93,28 @@ plot(to_array(res.U)')
 # Limit Torques
 obj_con = ConstrainedObjective(obj_uncon, u_min=-20,u_max=20)
 solver = Solver(model,obj_con,N=N)
-res_con, stats_con = solve(solver,to_array(res.U))
+solver.opts.verbose = false
+solver.opts.γ = 100
+solver.opts.μ_initial = 0.1
+solver.opts.cost_tolerance = 1e-6
+solver.opts.cost_intermediate_tolerance = 1e-2
+solver.opts.iterations = 200
+solver.opts.ρ_initial = 0
+U_uncon = to_array(res.U)
+
+# iLQR
+res_con, stats_con = solve(solver,U_uncon)
+cost(solver,res_con)
+
+# DIRCOL
+X0 = rollout(solver,to_array(res.U))
+res_con_d, stats_con_d = solve_dircol(solver,X0,to_array(res.U))
+cost(solver,res_con_d)
+
+# Visualize
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_con.X)
+animate_trajectory(vis, res_con_d.X)
+
 plot(to_array(res_con.U)')
 
 
@@ -102,14 +132,22 @@ obj_ik = LQRObjective(Q, R*1e-6, Qf, tf, x0, xf)
 # Solve
 solver_ik = Solver(model,obj_ik,N=N)
 res_ik, stats_ik = solve(solver_ik,U0)
+cost(solver,res_ik)
 norm(res_ik.X[N] - xf)
 ee_ik = Dynamics.calc_ee_position(kuka,res_ik.X)
 norm(ee_ik[N] - goal)
 
+X0 = rollout(solver,U0)
+options = Dict("max_iter"=>10000,"tol"=>1e-6)
+res_ik_d, stats_ik_d = solve_dircol(solver_ik,X0,U0,options=options)
+cost(solver,res_ik_d)
+
+
+
 # Plot the goal as a sphere
 setelement!(vis,Point3D(world,goal),0.02)
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_ik.X)
+animate_trajectory(vis, res_ik_d.X)
 
 
 ##########################################################
@@ -151,15 +189,28 @@ addcircles!(vis,circles)
 # Formulate and solve problem
 obj_obs = ConstrainedObjective(obj_ik,cI=cI)
 solver = Solver(model, obj_obs, N=N)
-solver.opts.verbose = true
-res_obs, stats_obs = solve(solver,U0)
+solver.opts.verbose = false
+solver.opts.γ = 100
+solver.opts.μ_initial = 0.001
+# solver.opts.cost_tolerance = 1e-6
+solver.opts.cost_intermediate_tolerance = 1e-3
+# solver.opts.iterations = 200
+solver.opts.ρ_initial = 10
+U0 = to_array(res_ik.U)
+U0_hold = hold_trajectory(solver,kuka,x0[1:nn])
+res_obs, stats_obs = solve(solver,U0_hold)
+cost(solver,res_obs)
 X = res_obs.X
 U = res_obs.U
 ee_obs = Dynamics.calc_ee_position(kuka,X)
 
+X0 = rollout(solver,U0_hold)
+res_obs_d, stat_obs_d = solve_dircol(solver,X0,U0,options=options)
+cost(solver,res_obs_d)
+
 # Visualize
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_ik.X)
+# animate_trajectory(vis, res_ik.X)
 animate_trajectory(vis, res_obs.X, 0.2)
 
 # Plot Constraints

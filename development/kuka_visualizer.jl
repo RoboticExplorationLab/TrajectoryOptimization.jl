@@ -16,8 +16,8 @@ using RigidBodyDynamics
 # IJuliaCell(vis)
 
 
-function animate_trajectory(vis, X::Matrix{Float64}, dt=0.1)
-    animate_trajectory(vis, to_dvecs(X))
+function animate_trajectory(vis, X::AbstractMatrix{Float64}, dt=0.1)
+    animate_trajectory(vis, TrajectoryOptimization.to_dvecs(X))
 end
 
 function animate_trajectory(vis, X::Vector{Vector{Float64}}, dt=0.1)
