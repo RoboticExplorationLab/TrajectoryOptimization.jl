@@ -47,22 +47,24 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     A,B = init_jacobians(solver,method)
 
     # Generate custom constraint functions
-    custom_constraints!, custom_constraint_jacobian!, custom_jacobian_sparsity = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
-    pI_c, pE_c = count_constraints(solver.obj, :custom)
-    PI_c = (N-1)pI_c[1] + pI_c[2]  # Total custom inequality constraints
-    PE_c = (N-1)pE_c[1] + pE_c[2]  # Total custom equality constraints
-    P_c = PI_c + PE_c              # Total custom constraints
+    if solver.opts.constrained
+        custom_constraints!, custom_constraint_jacobian!, custom_jacobian_sparsity = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+        pI_c, pE_c = count_constraints(solver.obj, :custom)
+        PI_c = (N-1)pI_c[1] + pI_c[2]  # Total custom inequality constraints
+        PE_c = (N-1)pE_c[1] + pE_c[2]  # Total custom equality constraints
+        P_c = PI_c + PE_c              # Total custom constraints
 
-    # Partition constraints
-    n_colloc = (N-1)n  # Number of collocation constraints
-    g_colloc = 1:n_colloc           # Collocation constraints
-    g_custom = n_colloc.+(1:P_c)    # Custom constraints
-    g_dt = (n_colloc+P_c).+(1:N-2)  # dt constraints (minimum time)
+        # Partition constraints
+        n_colloc = (N-1)n  # Number of collocation constraints
+        g_colloc = 1:n_colloc           # Collocation constraints
+        g_custom = n_colloc.+(1:P_c)    # Custom constraints
+        g_dt = (n_colloc+P_c).+(1:N-2)  # dt constraints (minimum time)
 
-    nG,Gpart = get_nG(solver,method)
-    jac_g_colloc = 1:Gpart.collocation
-    jac_g_custom = Gpart.collocation .+ (1:Gpart.custom)
-    jac_g_dt = Gpart.collocation + Gpart.custom + 1:nG
+        nG,Gpart = get_nG(solver,method)
+        jac_g_colloc = 1:Gpart.collocation
+        jac_g_custom = Gpart.collocation .+ (1:Gpart.custom)
+        jac_g_dt = Gpart.collocation + Gpart.custom + 1:nG
+    end
 
 
 
@@ -95,9 +97,11 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal, method)
         collocation_constraints!(solver::Solver, X_, U_, fVal_, view(g,g_colloc), method::Symbol)
-        custom_constraints!(view(g,g_custom),X,U)
-        if solver.opts.minimum_time
-            dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
+        if solver.opts.constrained
+            custom_constraints!(view(g,g_custom),X,U)
+            if solver.opts.minimum_time
+                dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
+            end
         end
         return nothing
     end
@@ -141,7 +145,9 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
             get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
             update_jacobians!(solver,X_,U_,A,B,method)
             collocation_constraint_jacobian!(solver, X_,U_,fVal_, A,B, view(vals, jac_g_colloc), method)
-            custom_constraint_jacobian!(view(vals, jac_g_custom), X,U)
+            if solver.opts.constrained
+                custom_constraint_jacobian!(view(vals, jac_g_custom), X,U)
+            end
             if solver.opts.minimum_time
                 time_step_constraint_jacobian!(view(vals, jac_g_dt), solver)
             end
@@ -242,7 +248,7 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
 
     open(file) do f
         for ln in eachline(f)
-            stash_prop(ln,"Number of Iterations","iterations",Int64) ? iter_lines = false : nothing
+            stash_prop(ln,"Number of Iterations..","iterations",Int64) ? iter_lines = false : nothing
             stash_prop(ln,"Total CPU secs in IPOPT (w/o function evaluations)","self time")
             stash_prop(ln,"Total CPU secs in NLP function evaluations","function time")
             stash_prop(ln,"Number of objective function evaluations","objective calls",Int64)
