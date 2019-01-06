@@ -20,7 +20,6 @@ results, = TrajectoryOptimization.solve(solver,U)
 
 ### CONSTRAINED ###
 # rk4
-obj_c.x_max
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
@@ -73,9 +72,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 
 ### Infeasible Start
 opts = TrajectoryOptimization.SolverOptions()
-opts.square_root = false
-opts.verbose = false
-
 u_min = -3
 u_max = 3
 x_min = [-10;-10]

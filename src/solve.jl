@@ -160,7 +160,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
         if solver.state.constrained && j == 1
             results.C_prev .= deepcopy(results.C)
-            results.CN_prev .= deepcopy(results.CN)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
@@ -373,11 +372,7 @@ $(SIGNATURES)
     Infeasible start solution is run through time varying LQR to track state and control trajectories
 """
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-    # turn off infeasible solve
-    solver.state.infeasible = false
-
-    # remove infeasible components
-    results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
+    remove_infeasible_controls!(results,solver)
 
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -386,25 +381,24 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     bp = BackwardPassZOH(n,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results_feasible, solver, bp)
+    Δv = backwardpass!(results, solver, bp)
 
     # forward pass
-    forwardpass!(results_feasible,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
+    forwardpass!(results,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
 
     # update trajectories
-    results_feasible.X .= deepcopy(results_feasible.X_)
-    results_feasible.U .= deepcopy(results_feasible.U_)
+    results.X .= deepcopy(results.X_)
+    results.U .= deepcopy(results.U_)
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
-        results_feasible = unconstrained_to_constrained_results(results_feasible,solver,results.λ,results.λN)
-        update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
-        calculate_jacobians!(results_feasible,solver)
+        update_constraints!(results,solver,results.X,results.U)
+        calculate_jacobians!(results,solver)
     else
         solver.state.constrained = false
     end
 
-    return results_feasible
+    return results
 end
 
 """

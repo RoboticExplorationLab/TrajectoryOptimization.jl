@@ -239,7 +239,7 @@ cE(cdot,x,u)
 @test cdot == [3; 3; 19]
 
 # Jacobians
-jac_cE = generate_general_constraint_jacobian(cE,pE,0,n,m)
+jac_cE = generate_general_constraint_jacobian(cE,pE,n,m)
 jac_x(x,u) = [2 0 0;
               0 2 0;
               2x']
@@ -253,7 +253,7 @@ jac_cE(A,B,x,u)
 @test B == jac_u(x,u)
 
 # Add terminal
-function cE(xdot,x)
+function _cE(xdot,x)
     xdot[1:2] = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
 end
 
@@ -261,9 +261,11 @@ pE_N = 2
 
 jac_xN(x) = [-sin(x[1]) x[3] x[2]; x[2]^2 2x[1]*x[2] 0]
 
-jac_cE = generate_general_constraint_jacobian(cE,pE,pE_N,n,m)
+jac_cE = generate_general_constraint_jacobian(cE,pE,n,m)
+
+_jac_cE = generate_general_constraint_jacobian(_cE,pE_N,n)
 tmp1 = zeros(pE_N,n)
-jac_cE(tmp1,x)
+_jac_cE(tmp1,x)
 @test tmp1 == jac_xN(x)
 
 A1 = zeros(3,3)
@@ -311,7 +313,6 @@ Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 mycost = GenericCost(my_stage_cost,my_final_cost,n,m)
 @test taylor_expansion(mycost,x,u) == (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
 @test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
-
 
 # Unconstrained Objective
 costfun = LinQuad

@@ -32,6 +32,7 @@ solver = Solver(model, obj_con, N=N)
 solver.state.infeasible = true
 n,m = get_sizes(solver)
 p, = get_num_constraints(solver)
+p_N, = TrajectoryOptimization.get_num_terminal_constraints(solver)
 X = rand(n,N)
 U = rand(m,N-1)
 
@@ -41,8 +42,7 @@ results = init_results(solver, X, U)
 @test results.λ[1] == zeros(p)
 
 # Test warm start (partial ⁠λs)
-λ = [rand(p-n) for i = 1:N]
-push!(λ,rand(n))
+λ = [i != N ? rand(p-n) : rand(p_N) for i = 1:N]
 results = init_results(solver, X, U, λ=λ)
 @test isapprox(to_array(results.X),X)
 @test isapprox(to_array(results.U)[1:m,:],U)
@@ -63,8 +63,3 @@ results = init_results(solver, X, U, λ=λ)
 λ = [rand(p-1) for i = 1:N-1]
 push!(λ,rand(n))
 @test_throws ArgumentError init_results(solver, X, U, λ=λ)
-
-
-λ = [rand(p) for i = 1:N-1]
-push!(λ,rand(n-1))
-@test_throws DimensionMismatch init_results(solver, X, U, λ=λ)

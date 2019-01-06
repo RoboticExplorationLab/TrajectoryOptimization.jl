@@ -76,11 +76,9 @@ $(SIGNATURES)
 function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
-    for k = 1:N-1
+    for k = 1:N
         J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
     end
-
-    J += 0.5*res.CN'*res.IμN*res.CN + res.λN'*res.CN
 
     return J
 end
@@ -116,7 +114,8 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     end
 
     # Update terminal constraint Jacobian
-    solver.c_jacobian(res.Cx_N, res.X[N])
+    k = N
+    solver.c_jacobian(res.Cx[k], res.X[k])
 
     return nothing
 end

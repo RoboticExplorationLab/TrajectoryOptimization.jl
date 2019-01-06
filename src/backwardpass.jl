@@ -76,10 +76,9 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
     if res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; λ = res.λ
         Cx = res.Cx; Cu = res.Cu
-        CN = res.CN; CxN = res.Cx_N; IμN = res.IμN; λN = res.λN
-
-        S[N] += CxN'*IμN*CxN
-        s[N] += CxN'*(IμN*CN + λN)
+        
+        S[N] += Cx[N]'*Iμ[N]*Cx[N]
+        s[N] += Cx[N]'*(Iμ[N]*C[N] + λ[N])
     end
 
     # Backward pass

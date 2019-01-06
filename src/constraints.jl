@@ -51,7 +51,9 @@ state and control trajectories
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
     m̄,mm = get_num_controls(solver)
+
     c_fun = solver.c_fun
 
     for k = 1:N-1
@@ -73,8 +75,10 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     end
 
     # Terminal constraint
-    c_fun(res.CN,X[N])
-    res.IμN .= Diagonal(res.μN)  # NOTE: Assuming all terminal constraints are equality constraints
+    c_fun(res.C[N],X[N])
+    get_active_set!(res,solver,p_N,pI_N,N)
+
+    res.Iμ[N] = Diagonal(res.active_set[N].*res.μ[N])
     return nothing # TODO allow for more general terminal constraint
 end
 
@@ -156,7 +160,7 @@ $(SIGNATURES)
         -constraint function must be inplace
         -automatic differentition via ForwardDiff.jl
 """
-function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int64,m::Int64)::Function
+function generate_general_constraint_jacobian(c::Function,p::Int,n::Int64,m::Int64)::Function
     c_aug! = f_augmented!(c,n,m)
     J = zeros(p,n+m)
     S = zeros(n+m)
@@ -170,19 +174,20 @@ function generate_general_constraint_jacobian(c::Function,p::Int,p_N::Int,n::Int
         cx[1:p,1:n] = J[1:p,1:n]
         cu[1:p,1:m] = J[1:p,n+1:n+m]
     end
-
-    if p_N > 0
-        J_N = zeros(p_N,n)
-        xdot = zeros(p_N)
-        F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
-        function c_jacobian(cx,x)
-            F_N(J_N,xdot,x)
-            cx .= J_N
-        end
-    end
-
     return c_jacobian
 end
+
+function generate_general_constraint_jacobian(c::Function,p::Int,n::Int64)::Function
+    J_N = zeros(p,n)
+    xdot = zeros(p)
+    F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x) # NOTE: terminal constraints can only be dependent on state x_N
+    function c_jacobian(cx,x)
+        F_N(J_N,xdot,x)
+        cx .= J_N
+    end
+    return c_jacobian
+end
+
 
 """
 $(SIGNATURES)
@@ -281,6 +286,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Augment functions together
     function c_function!(c,x,u)::Nothing
         infeasible = length(u) != m̄
+
         cI!(view(c,1:pI),x,u[1:m̄])
         if pE_c > 0
             obj.cE(view(c,(1:pE_c).+pI),x,u[1:m])
@@ -292,14 +298,20 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     end
 
     # Terminal Constraint
-    # TODO make this more general
+    """
+    [cI_N_custom;
+     xN-xf;
+     cI_E_custom]
+    """
     iI = 1:pI_N
     iE = pI_N .+ (1:pE_N)
     function c_function!(c,x)
-        if obj.use_xf_equality_constraint
-            c[1:n] = x - obj.xf
-        else
+        if obj.pI_N_custom > 0
             c[iI] = obj.cI_N(c,x)
+        end
+        if obj.use_xf_equality_constraint
+            c[pI_N .+ (1:n)] = x - obj.xf
+        elseif obj.pE_N_custom > 0
             c[iE] = obj.cE_N(c,x)
         end
     end
@@ -319,16 +331,16 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     cu_state_limits = zeros(pI_x,m̄)
 
     if pI_c > 0
-        cI_custom_jacobian! = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
+        cI_custom_jacobian! = generate_general_constraint_jacobian(obj.cI, pI_c, n, m)
     end
     if pE_c > 0
-        cE_custom_jacobian! = generate_general_constraint_jacobian(obj.cE, pE_c, 0, n, m)  # QUESTION: Why is pE_N_c = 0?
+        cE_custom_jacobian! = generate_general_constraint_jacobian(obj.cE, pE_c, n, m)
     end
 
     cx_infeasible = zeros(n,n)
     cu_infeasible = In
 
-    function c_jacobian!(cx::AbstractMatrix, cu::AbstractMatrix, x::AbstractArray,u::AbstractArray,y=zero(x),v=zero(u))
+    function c_jacobian!(cx::AbstractMatrix, cu::AbstractMatrix, x::AbstractArray,u::AbstractArray)
         infeasible = length(u) != m̄
         let m = m̄
             cx[1:pI_u, 1:n] = cx_control_limits
@@ -351,9 +363,29 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         end
     end
 
-    cx_N = In  # Jacobian of final state
+    # Terminal Constraint
+    """
+    [JI_N_custom;
+     In;
+     JI_E_custom]
+    """
+
+    if obj.pI_N_custom > 0
+        cI_N_custom_jacobian! = generate_general_constraint_jacobian(obj.cI_N, obj.pI_N_custom, n)
+    end
+    if obj.pE_N_custom > 0
+        cE_N_custom_jacobian! = generate_general_constraint_jacobian(obj.cE_N, obj.pE_N_custom, n)
+    end
+
     function c_jacobian!(j::AbstractArray,x::AbstractArray)
-        j .= cx_N
+        if obj.pI_N_custom > 0
+            cI_N_custom_jacobian!(view(j,iI,1:n),x)
+        end
+        if obj.use_xf_equality_constraint
+            j[pI_N .+ (1:n),1:n] = In
+        elseif obj.pE_N_custom > 0
+            cE_N_custom_jacobian!(view(j,iE,1:n),x)
+        end
     end
 
     return c_function!, c_jacobian!, c_labels
@@ -367,21 +399,17 @@ Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix).
 """
 function max_violation(results::ConstrainedIterResults)
-    if size(results.CN,1) != 0
-        return max(maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf)), norm(results.CN,Inf))
-    else
-        return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
-    end
+    return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
 end
 
 function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
 
-function constraint_violations(results::ConstrainedIterResults)
-    if size(results.CN,1) != 0
-        return map((x)->x.>0, results.Iμ) .* results.C
-    else
-        return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
-    end
-end
+# function constraint_violations(results::ConstrainedIterResults)
+#     if size(results.CN,1) != 0
+#         return map((x)->x.>0, results.Iμ) .* results.C
+#     else
+#         return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
+#     end
+# end
