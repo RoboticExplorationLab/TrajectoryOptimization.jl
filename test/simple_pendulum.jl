@@ -1,6 +1,6 @@
 # Set up models and objective
 using Test
-u_bound = 3.
+u_bound = 2.
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
 obj_c = Dynamics.pendulum_constrained[2]
 opts = TrajectoryOptimization.SolverOptions()
@@ -9,27 +9,14 @@ opts.verbose = false
 ### UNCONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
-U = zeros(solver.model.m, solver.N)
-results, = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[end]-obj.xf) < 1e-3
-
-# with square root
-solver.opts.square_root = true
+U = zeros(solver.model.m, solver.N-1)
 results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
 # midpoint
 solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
-results, =TrajectoryOptimization.solve(solver,U)
+results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
-
-#  with square root
-# solver.opts.square_root = true
-# results_sr, = TrajectoryOptimization.solve(solver,U)
-# @test norm(results_sr.X[end]-obj.xf) < 1e-3
-# # @test norm(results_sr.X - results.X) ≈ 0. atol=1e-12 # breaks macOS test??
-# # @test norm(results_sr.X - results.X) < 1e-12 # breaks macOS test??
-# @test all(isapprox.(results_sr.X,results.X))
 
 ### CONSTRAINED ###
 # rk4
@@ -64,7 +51,6 @@ max_c = TrajectoryOptimization.max_violation(results_c)
 # @test max_c < 1e-2
 
 
-### In-place dynamics ###
 # Unconstrained
 opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
@@ -112,7 +98,7 @@ results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 
 # test that additional augmented controls can achieve an infeasible state trajectory
 solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
-U_infeasible = ones(solver.model.m,solver.N)
+U_infeasible = ones(solver.model.m,solver.N-1)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0[:] = ones(solver.model.n)
 solver.state.infeasible = true  # solver needs to know to use an infeasible rollout

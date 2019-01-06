@@ -2,8 +2,6 @@
 opts = SolverOptions()
 opts.square_root = false
 opts.verbose=false
-# opts.c1=1e-4
-# opts.c2=2.0
 opts.constraint_tolerance = 1e-3
 opts.τ = 0.25
 # opts.cost_tolerance = 1e-5
@@ -25,7 +23,7 @@ solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
 
 # -Initial state and control trajectories
 X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
-U = ones(solver_uncon.model.m,solver_uncon.N)
+U = ones(solver_uncon.model.m,solver_uncon.N-1)
 
 results, stats = solve(solver_uncon,X_interp,U)
 
@@ -45,7 +43,7 @@ solver = Solver(model!,obj,dt=0.1,opts=opts)
 
 # Linear interpolation for state trajectory
 X_interp = line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
-U = ones(solver.model.m,solver.N)
+U = ones(solver.model.m,solver.N-1)
 
 results, = solve(solver,X_interp,U)
 

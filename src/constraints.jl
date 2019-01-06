@@ -175,6 +175,7 @@ Generate the constraints function C(x,u) and a function to compute the jacobians
 Cx, Cu = Jc(x,u) from a `ConstrainedObjective` type. Automatically stacks inequality
 and equality constraints and takes jacobians of custom functions with `ForwardDiff`.
 Stacks the constraints as follows:
+
 [upper control inequalities
  (√dt upper bound)
  lower control inequalities
@@ -263,7 +264,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
 
     # Augment functions together
-    function c_function!(c,x,u,y=zero(x),v=zero(u))::Nothing
+    function c_function!(c,x,u)::Nothing
         infeasible = length(u) != m̄
         cI!(view(c,1:pI),x,u[1:m̄])
         if pE_c > 0

@@ -7,7 +7,7 @@ $(SIGNATURES)
     Calculate infeasible controls to produce an infeasible state trajectory
 """
 function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
-    ui = zeros(solver.model.n,solver.N) # initialize
+    ui = zeros(solver.model.n,solver.N-1) # initialize
     m = solver.model.m
     m̄,mm = get_num_controls(solver)
     dt = solver.dt
@@ -26,10 +26,10 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
 end
 
 function infeasible_controls(solver::Solver,X0::Array{Float64,2})
-    u = zeros(solver.model.m,solver.N)
+    u = zeros(solver.model.m,solver.N-1)
     if solver.state.minimum_time
         dt = get_initial_dt(solver)
-        u_dt = ones(1,solver.N)
+        u_dt = ones(1,solver.N-1)
         u = [u; u_dt]
     end
     infeasible_controls(solver,X0,u)

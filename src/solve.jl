@@ -20,7 +20,7 @@ initial guess for the controls
 """
 function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat)::Tuple{SolverResults,Dict}
     # If infeasible without control initialization, initialize controls to zero
-    isempty(U0) ? U0 = zeros(solver.m,solver.N) : nothing
+    isempty(U0) ? U0 = zeros(solver.m,solver.N-1) : nothing
 
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
     if isa(solver.obj, UnconstrainedObjective)
@@ -40,7 +40,7 @@ end
 
 function solve(solver::Solver)::Tuple{SolverResults,Dict}
     # Generate random control sequence
-    U0 = rand(solver.model.m, solver.N)
+    U0 = rand(solver.model.m, solver.N-1)
     solve(solver,U0)
 end
 
@@ -414,7 +414,7 @@ $(SIGNATURES)
 function calculate_todorov_gradient(res::SolverVectorResults)
     N = length(res.X)
     maxes = zeros(N)
-    for k = 1:N
+    for k = 1:N-1
         maxes[k] = maximum(abs.(res.d[k])./(abs.(res.U[k]).+1))
     end
     mean(maxes)

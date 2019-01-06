@@ -9,16 +9,8 @@ import Base: isempty,copy
 #        SolverIterResults                      SolverResults
 #        ConstrainedResults                       ↙     ↘
 #        UnconstrainedResults          ResultsCache   SolverIterResults
-#        ResultsCache                                     ↙     ↘
+#                                                          ↙     ↘
 #                                      UnconstrainedResults    ConstrainedResults
-#
-#     METHODS
-#         copy(UnconstrainedResults)
-#         copy(ConstrainedResults)
-#         size(ResultsCache): size of pre-allocated cache
-#         length(ResultsCache): current number of stored iterations
-#         merge_results_cache: merge two ResultsCache's
-#         add_iter!: fdxd a SolverIterResults to ResultsCache
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
@@ -81,13 +73,13 @@ Construct results from sizes
 """
 function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N-1]
 
-    K  = [zeros(m,n) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for i = 1:N-1]
+    d  = [zeros(m)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N-1]
 
 
     S  = [zeros(n,n) for i = 1:N]
@@ -177,13 +169,13 @@ Construct results from sizes
 """
 function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N-1]
 
-    K  = [zeros(m,n) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for i = 1:N-1]
+    d  = [zeros(m)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N-1]
 
     S  = [zeros(n,n) for i = 1:N]
     s  = [zeros(n)   for i = 1:N]
@@ -345,13 +337,13 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     copyto!(results.fdx,r.fdx)
 
     for k = 1:N
-        results.U[k] = r.U[k][1:m̄]
-        results.U_[k] = r.U_[k][1:m̄]
         results.λ[k][1:end-solver.state.minimum_time] = λ[k][1:end-n-solver.state.minimum_time] # retain multipliers from all but infeasible and minimum time equality
         if solver.state.minimum_time
             results.λ[k][end] = λ[k][end]
         end
         k == N ? continue : nothing
+        results.U[k] = r.U[k][1:m̄]
+        results.U_[k] = r.U_[k][1:m̄]
         results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
     end
     results.λN .= λN
@@ -441,10 +433,9 @@ function remove_infeasible_controls_to_unconstrained_results(r::SolverIterResult
     copyto!(results.X,r.X)
     copyto!(results.X_,r.X_)
     copyto!(results.fdx,r.fdx)
-    for k = 1:N
+    for k = 1:N-1
         results.U[k] = r.U[k][1:m̄]
         results.U_[k] = r.U_[k][1:m̄]
-        k == N ? continue : nothing
         results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
     end
     results
