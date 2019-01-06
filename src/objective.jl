@@ -187,54 +187,6 @@ end
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #                      CONSTRAINED OBJECTIVE                                   #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-function is_inplace_function(c::Function, input...)
-    q = 100
-    iter = 1
-
-    vals = ones(q)
-    while iter < 5
-        try
-            c(vals,input...)
-            return true
-        catch e
-            if e isa MethodError
-                return false
-            elseif e isa BoundsError
-                q *= 10
-            else
-                throw(e)
-            end
-            iter += 1
-        end
-    end
-    return false
-end
-
-function count_inplace_output(c::Function, input...)
-    q0 = 100
-    iter = 1
-
-    q = q0
-    vals = NaN*(ones(q))
-    while iter < 5
-        try
-            c(vals,input...)
-            break
-        catch e
-            if e isa BoundsError
-                q *= 10
-                iter += 1
-                vals = NaN*(ones(q))
-            else
-                throw(e)
-            end
-        end
-    end
-    p = count(isfinite.(vals))
-
-    return p
-end
-
 """
 $(TYPEDEF)
 Define a quadratic objective for a constrained optimization problem.
@@ -265,7 +217,7 @@ struct ConstrainedObjective{C} <: Objective
     # Terminal Constraints
     cI_N::Function          # custom terminal inequality constraint
     cE_N::Function          # custom teriminal equality constraint
-    use_goal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
+    use_xf_equality_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
 
     p::Int   # Total number of stage constraints
     pI::Int  # Number of inequality constraints
@@ -282,7 +234,7 @@ struct ConstrainedObjective{C} <: Objective
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_goal_constraint) where {C}
+        use_xf_equality_constraint) where {C}
 
         n,m = get_sizes(cost)
         x = rand(n)
@@ -320,19 +272,22 @@ struct ConstrainedObjective{C} <: Objective
 
         # Terminal Constraints
         pI_N = pI_N_custom
-        if use_goal_constraint
-            if pI_N_custom > 0 || pE_N_custom > 0
-                throw(ArgumentError("Can't specify custom terminal constraints with a goal constrait"))
+
+        if use_xf_equality_constraint
+            if pE_N_custom > 0
+                throw(ArgumentError("Can't specify custom terminal constraints AND xf constraint -- set use_xf_equality_constraint=false"))
+            else
+                pE_N = n
             end
-            pE_N = n
+        elseif pE_N_custom > 0
+            pE_N = pE_N_custom
         else
             pE_N = 0
         end
-        pE_N += pE_N_custom
+
         p_N = pI_N + pE_N
 
-
-        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_goal_constraint,
+        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_xf_equality_constraint,
             p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom)
     end
 end
@@ -342,14 +297,14 @@ function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     x_min, x_max,
     cI, cE,
     cI_N, cE_N,
-    use_goal_constraint) where {C}
+    use_xf_equality_constraint) where {C}
     if tf == :min
         ConstrainedObjective(cost,0.0,x0,xf,
             u_min, u_max,
             x_min, x_max,
             cI, cE,
             cI_N, cE_N,
-            use_goal_constraint)
+            use_xf_equality_constraint)
     else
         err = ArgumentError(":min is the only recognized Symbol for the final time")
         throw(err)
@@ -383,14 +338,14 @@ function ConstrainedObjective(cost,tf,x0,xf;
     x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
     cI=null_constraint, cE=null_constraint,
     cI_N=null_constraint, cE_N=null_constraint,
-    use_goal_constraint=true)
+    use_xf_equality_constraint=true)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_goal_constraint)
+        use_xf_equality_constraint)
 end
 
 
@@ -403,7 +358,7 @@ function copy(obj::ConstrainedObjective)
     ConstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
-        use_goal_constraint=obj.use_goal_constraint)
+        use_xf_equality_constraint=obj.use_xf_equality_constraint)
 end
 
 
@@ -418,14 +373,14 @@ function update_objective(obj::ConstrainedObjective;
     cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
-    use_goal_constraint=obj.use_goal_constraint)
+    use_xf_equality_constraint=obj.use_xf_equality_constraint)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
         cI=cI, cE=cE,
         cI_N=cI_N, cE_N=cE_N,
-        use_goal_constraint=use_goal_constraint)
+        use_xf_equality_constraint=use_xf_equality_constraint)
 
 end
 
@@ -433,9 +388,7 @@ end
 null_constraint(c,x,u) = nothing
 null_constraint(c,x) = nothing
 
-
 get_sizes(obj::Objective) = get_sizes(obj.cost)
-
 
 """
 $(SIGNATURES)
@@ -569,4 +522,52 @@ function count_inplace_output(c::Function, n::Int)
         end
     end
     return count(isfinite.(vals))
+end
+
+function is_inplace_function(c::Function, input...)
+    q = 100
+    iter = 1
+
+    vals = ones(q)
+    while iter < 5
+        try
+            c(vals,input...)
+            return true
+        catch e
+            if e isa MethodError
+                return false
+            elseif e isa BoundsError
+                q *= 10
+            else
+                throw(e)
+            end
+            iter += 1
+        end
+    end
+    return false
+end
+
+function count_inplace_output(c::Function, input...)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,input...)
+            break
+        catch e
+            if e isa BoundsError
+                q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
+            else
+                throw(e)
+            end
+        end
+    end
+    p = count(isfinite.(vals))
+
+    return p
 end

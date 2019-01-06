@@ -48,7 +48,7 @@ obj = ConstrainedObjective(costfun,tf,x0,xf)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 
 @test obj.p == 0
-@test obj.use_goal_constraint == true
+@test obj.use_xf_equality_constraint == true
 @test obj.p_N == 2
 
 # Use scalar control constraints
@@ -101,7 +101,7 @@ obj = ConstrainedObjective(obj_uncon)
 @test isa(obj.cI(ones(0),x0,u0),Nothing)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 @test obj.p == 0
-@test obj.use_goal_constraint == true
+@test obj.use_xf_equality_constraint == true
 @test obj.p_N == 2
 
 obj = ConstrainedObjective(obj_uncon, u_min=-1)
@@ -146,7 +146,7 @@ is_inplace_function(cI!,ones(n))
 is_inplace_function(cE!,ones(n))
 count_inplace_output(cE!,ones(n))
 
-obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_xf_equality_constraint=false)
 @test obj.p_N == 3
 @test obj.p == 9
 @test obj.pI_custom == 2
@@ -160,7 +160,7 @@ obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, c
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 7
-obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_xf_equality_constraint=false)
 @test obj.p_N == 1
 @test obj.p == 6
 

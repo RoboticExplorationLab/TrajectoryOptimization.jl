@@ -86,7 +86,7 @@ obj_inf = TrajectoryOptimization.ConstrainedObjective(obj, u_min=u_min, u_max=u_
 solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.N)
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
-# max_c = TrajectoryOptimization.max_violation(results_inf.result[end])
+max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[end]-obj.xf) < 1e-3
 @test max_c < 1e-2
 

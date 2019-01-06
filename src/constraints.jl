@@ -26,6 +26,21 @@ function get_num_constraints(solver::Solver)
     end
 end
 
+function get_num_terminal_constraints(solver::Solver)
+    if solver.state.constrained
+        if solver.obj isa ConstrainedObjective
+            p_N = solver.obj.p_N
+            pI_N = solver.obj.pI_N
+            pE_N = p_N - pI_N
+        else
+            p_N,pI_N,pE_N = 0,0,0
+        end
+        return p_N,pI_N,pE_N
+    else
+        return 0,0,0
+    end
+end
+
 """
 $(SIGNATURES)
 Evalutes all inequality and equality constraints (in place) for the current
@@ -120,7 +135,7 @@ function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
     pI_N = obj.pI_N
     pE_N = p_N - pI_N
     pI_N_c = pI_N
-    if obj.use_goal_constraint
+    if obj.use_xf_equality_constraint
         pE_N_c = pE_N - n
     else
         pE_N_c = pE_N
@@ -281,7 +296,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     iI = 1:pI_N
     iE = pI_N .+ (1:pE_N)
     function c_function!(c,x)
-        if obj.use_goal_constraint
+        if obj.use_xf_equality_constraint
             c[1:n] = x - obj.xf
         else
             c[iI] = obj.cI_N(c,x)
