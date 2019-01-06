@@ -29,7 +29,7 @@ N = 10
 model, obj = Dynamics.dubinscar
 obj_con = ConstrainedObjective(obj, u_min=-10, u_max=10)
 solver = Solver(model, obj_con, N=N)
-solver.opts.infeasible = true
+solver.state.infeasible = true
 n,m = get_sizes(solver)
 p, = get_num_constraints(solver)
 X = rand(n,N)

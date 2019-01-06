@@ -115,7 +115,7 @@ solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
 U_infeasible = ones(solver.model.m,solver.N)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0[:] = ones(solver.model.n)
-solver.opts.infeasible = true  # solver needs to know to use an infeasible rollout
+solver.state.infeasible = true  # solver needs to know to use an infeasible rollout
 p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
 results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,solver.model.n)

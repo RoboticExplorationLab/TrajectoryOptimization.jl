@@ -347,8 +347,8 @@ function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solve
     for k = 1:N
         results.U[k] = r.U[k][1:m̄]
         results.U_[k] = r.U_[k][1:m̄]
-        results.λ[k][1:end-solver.opts.minimum_time] = λ[k][1:end-n-solver.opts.minimum_time] # retain multipliers from all but infeasible and minimum time equality
-        if solver.opts.minimum_time
+        results.λ[k][1:end-solver.state.minimum_time] = λ[k][1:end-n-solver.state.minimum_time] # retain multipliers from all but infeasible and minimum time equality
+        if solver.state.minimum_time
             results.λ[k][end] = λ[k][end]
         end
         k == N ? continue : nothing
@@ -363,13 +363,13 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
     n,m,N = get_sizes(solver)
 
     if !isempty(X)
-        solver.opts.infeasible = true
+        solver.state.infeasible = true
     end
 
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
 
-    if solver.opts.constrained
+    if solver.state.constrained
         # Get sizes
         p,pI,pE = get_num_constraints(solver)
         m̄,mm = get_num_controls(solver)
@@ -380,14 +380,14 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
-        if solver.opts.minimum_time
+        if solver.state.minimum_time
             for k = 1:solver.N
                 results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
                 results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
                 results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
             end
         end
-        if solver.opts.infeasible
+        if solver.state.infeasible
             nothing #TODO
         end
 

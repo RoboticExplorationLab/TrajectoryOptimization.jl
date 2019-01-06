@@ -210,7 +210,7 @@ J_min = cost(solver_min, res_min, res_min.X_, res_min.U_)
 
 
 # Test infeasible
-solver = Solver(model,obj_c,dt=dt,opts=opts); solver.opts.infeasible = true;
+solver = Solver(model,obj_c,dt=dt,opts=opts); solver.state.infeasible = true;
 solver_min = Solver(model,obj_min,N=21,opts=opts); solver_min.opts.infeasible = true;
 m̄,mm = get_num_controls(solver)
 @test (m̄,mm) == (1,3)
@@ -266,7 +266,7 @@ function init_solve(solver)
     if is_min_time(solver)
         U0 = [U0; ones(m,solver.N)*sqrt(dt)]
     end
-    if solver.opts.infeasible
+    if solver.state.infeasible
         X0 = line_trajectory(solver)
         copyto!(res.X, X0)
 

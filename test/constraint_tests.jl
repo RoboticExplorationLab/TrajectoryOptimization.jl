@@ -21,7 +21,7 @@ obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
 
 N = 5
 solver = Solver(model, obj, N=N)
-@test solver.opts.constrained == true
+@test solver.state.constrained == true
 @test get_num_constraints(solver) == (5,2,3)
 @test original_constraint_inds(solver) == trues(5)
 @test get_constraint_labels(solver) == ["custom inequality", "custom inequality", "custom equality", "custom equality", "custom equality"]
@@ -37,7 +37,7 @@ pE = p-pI
 
 N = 5
 solver = Solver(model, obj_con, N=N)
-@test solver.opts.constrained == true
+@test solver.state.constrained == true
 @test get_num_constraints(solver) == (5+pI_bnd,2+pI_bnd,3)
 @test original_constraint_inds(solver) == trues(5+pI_bnd)
 @test get_constraint_labels(solver) == ["control (upper bound)", "control (upper bound)", "control (lower bound)", "state (upper bound)", "state (upper bound)", "state (upper bound)", "state (lower bound)",

@@ -27,7 +27,7 @@ function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat)::Tuple{SolverResults,
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
     if isa(solver.obj, UnconstrainedObjective)
         solver.opts.unconstrained_original_problem = true
-        solver.opts.infeasible = true
+        solver.state.infeasible = true
         obj_c = ConstrainedObjective(solver.obj)
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
     end
@@ -86,16 +86,16 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     m,mm = get_num_controls(solver)
 
     # Check for minimum time solve
-    # is_min_time(solver) ? solver.opts.minimum_time = true : solver.opts.minimum_time = false
+    # is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
 
     # Check for infeasible start
-    isempty(X0) ? solver.opts.infeasible = false : solver.opts.infeasible = true
+    isempty(X0) ? solver.state.infeasible = false : solver.state.infeasible = true
 
     # Check for constrained solve
-    if solver.opts.infeasible || solver.opts.minimum_time || Obj <: ConstrainedObjective
-        solver.opts.constrained = true
+    if solver.state.infeasible || solver.state.minimum_time || Obj <: ConstrainedObjective
+        solver.state.constrained = true
     else
-        solver.opts.constrained = false
+        solver.state.constrained = false
         iterations_outerloop_original = solver.opts.iterations_outerloop
         solver.opts.iterations_outerloop = 1
     end
@@ -130,13 +130,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #           SOLVER           #
     #****************************#
     ## Initial rollout
-    if !solver.opts.infeasible #&& isempty(prevResults)
+    if !solver.state.infeasible #&& isempty(prevResults)
         X[1] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    solver.opts.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
+    solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -160,7 +160,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         iter_outer = j
         @info "Outer loop $j (begin)"
 
-        if solver.opts.constrained && j == 1
+        if solver.state.constrained && j == 1
             results.C_prev .= deepcopy(results.C)
             results.CN_prev .= deepcopy(results.CN)
         end
@@ -198,13 +198,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             J_prev = copy(J)
             dJ == 0 ? dJ_zero_counter += 1 : dJ_zero_counter = 0
 
-            if solver.opts.constrained
+            if solver.state.constrained
                 c_max = max_violation(results)
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
                 if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_λ_second_order_update
-                    solver.opts.λ_second_order_update = true
+                    solver.state.second_order_dual_update = true
                     @logmsg InnerLoop "λ 2-update"
                 end
             end
@@ -212,12 +212,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             ## Check gradients for convergence ##
             gradient = calculate_todorov_gradient(results)
 
-            @logmsg InnerLoop :grad value=gradient
-
-            # Print Log
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
+            @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_counter value=dJ_zero_counter
 
@@ -256,7 +254,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
     ### END OUTER LOOP ###
 
-    solver.opts.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
+    solver.state.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
 
     # Run Stats
     stats = Dict("iterations"=>iter,
@@ -265,6 +263,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
         "c_max"=>c_max_hist)
+
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
             if stats[key] isa Vector
@@ -284,7 +283,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     ### Infeasible -> feasible trajectory
-    if solver.opts.infeasible
+    if solver.state.infeasible
         @info "Infeasible solve complete"
 
         # run single backward pass/forward pass to get dynamically feasible solution (ie, remove infeasible controls)
@@ -342,11 +341,9 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
     end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.opts.constrained && gradient < solver.opts.gradient_tolerance) || (solver.opts.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iter_outerloop != solver.opts.iterations_outerloop))
-            # @logmsg OuterLoop "--iLQR (inner loop) gradient eps criteria met at iteration: $ii"
+        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iter_outerloop != solver.opts.iterations_outerloop))
             return true
-        elseif ((solver.opts.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
-            # @logmsg OuterLoop "--iLQR (inner loop) gradient and constraint eps criteria met at iteration: $ii"
+        elseif ((solver.state.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
             return true
         end
 
@@ -357,18 +354,15 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
         # Check for cost convergence
             # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
-        if ((~solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.opts.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iter_outerloop != solver.opts.iterations_outerloop))
-            # @logmsg OuterLoop "--iLQR (inner loop) cost eps criteria met at iteration: $ii"
-            # ~solver.opts.constrained ? @info "Unconstrained solve complete": nothing
+        if ((~solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.state.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iter_outerloop != solver.opts.iterations_outerloop))
             return true
-        elseif ((solver.opts.constrained && (0.0 < dJ < solver.opts.cost_tolerance) && c_max < solver.opts.constraint_tolerance))
-            # @logmsg OuterLoop "--iLQR (inner loop) cost and constraint eps criteria met at iteration: $ii"
+        elseif ((solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance) && c_max < solver.opts.constraint_tolerance))
             return true
         end
     end
 
     if loop == :outer
-        if solver.opts.constrained
+        if solver.state.constrained
             if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
                 return true
             end
@@ -383,7 +377,7 @@ $(SIGNATURES)
 """
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
     # turn off infeasible solve
-    solver.opts.infeasible = false
+    solver.state.infeasible = false
 
     # remove infeasible components
     results_feasible = remove_infeasible_controls_to_unconstrained_results(results,solver)
@@ -410,119 +404,13 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         update_constraints!(results_feasible,solver,results_feasible.X,results_feasible.U)
         calculate_jacobians!(results_feasible,solver)
     else
-        solver.opts.constrained = false
+        solver.state.constrained = false
     end
 
     return results_feasible
 end
 
-"""
-$(SIGNATURES)
-    Lagrange multiplier updates
-        -see Bertsekas 'Constrained Optimization' chapter 2 (p.135)
-        -see Toussaint 'A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates'
-"""
-function λ_update!(results::ConstrainedIterResults,solver::Solver)
-    p,pI,pE = get_num_constraints(solver)
-    N = solver.N
 
-    for k = 1:N-1
-        results.λ[k] = max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λ[k] + results.Iμ[k]*results.C[k]))
-        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
-    end
-
-    results.λN .= max.(solver.opts.λ_min, min.(solver.opts.λ_max, results.λN + results.IμN*results.CN))
-end
-
-""" @(SIGNATURES) Penalty update """
-function μ_update!(results::ConstrainedIterResults,solver::Solver)
-    if solver.opts.outer_loop_update == :default
-        μ_update_default!(results,solver)
-    elseif solver.opts.outer_loop_update == :individual
-        μ_update_individual!(results,solver)
-    end
-    return nothing
-end
-
-""" @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
-function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
-    N = solver.N
-
-    for k = 1:N-1
-        results.μ[k] = min.(solver.opts.μ_max, solver.opts.γ*results.μ[k])
-    end
-
-    results.μN .= min.(solver.opts.μ_max, solver.opts.γ*results.μN)
-
-    return nothing
-end
-
-""" @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
-function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
-    N = solver.N
-    p,pI,pE = get_num_constraints(solver)
-    n = solver.model.n
-
-    τ = solver.opts.τ
-    μ_max = solver.opts.μ_max
-    γ_no  = solver.opts.γ_no
-    γ = solver.opts.γ
-
-
-
-    # Stage constraints
-    for k = 1:N-1
-        for i = 1:p
-            if p <= pI
-                if max(0.0,results.C[k][i]) <= τ*max(0.0,results.C_prev[k][i])
-                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
-                else
-                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
-                end
-            else
-                if abs(results.C[k][i]) <= τ*abs(results.C_prev[k][i])
-                    results.μ[k][i] = min(μ_max, γ_no*results.μ[k][i])
-                else
-                    results.μ[k][i] = min(μ_max, γ*results.μ[k][i])
-                end
-            end
-        end
-    end
-
-    # Terminal constraints
-    for i = 1:n
-        if abs(results.CN[i]) <= τ*abs(results.CN_prev[i])
-            results.μN[i] = min(μ_max, γ_no*results.μN[i])
-        else
-            results.μN[i] = min(μ_max, γ*results.μN[i])
-        end
-    end
-
-    return nothing
-end
-
-"""
-$(SIGNATURES)
-    Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
-"""
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
-
-    ## Lagrange multiplier updates
-    solver.opts.λ_second_order_update ? solve_batch_qp_dual(results,solver) : λ_update!(results,solver)
-
-    ## Penalty updates
-    μ_update!(results,solver)
-
-    ## Store current constraints evaluations for next outer loop update
-    results.C_prev .= deepcopy(results.C)
-    results.CN_prev .= deepcopy(results.CN)
-
-    return nothing
-end
-
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver)::Nothing
-    return nothing
-end
 
 """
 $(SIGNATURES)

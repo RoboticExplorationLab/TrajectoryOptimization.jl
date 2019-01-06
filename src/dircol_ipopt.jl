@@ -24,7 +24,7 @@ function get_nG(solver::Solver,method::Symbol)
     elseif method == :midpoint
         nC = (2n+m̄)*(N-1)n
     end
-    solver.opts.minimum_time ? nE = 2(N-2) : nE = 0
+    solver.state.minimum_time ? nE = 2(N-2) : nE = 0
 
     # Custom constraints
     pI,pE = count_constraints(solver.obj, :custom)
@@ -47,7 +47,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     A,B = init_jacobians(solver,method)
 
     # Generate custom constraint functions
-    if solver.opts.constrained
+    if solver.state.constrained
         custom_constraints!, custom_constraint_jacobian!, custom_jacobian_sparsity = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
         pI_c, pE_c = count_constraints(solver.obj, :custom)
         PI_c = (N-1)pI_c[1] + pI_c[2]  # Total custom inequality constraints
@@ -97,9 +97,9 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
         get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal, method)
         collocation_constraints!(solver::Solver, X_, U_, fVal_, view(g,g_colloc), method::Symbol)
-        if solver.opts.constrained
+        if solver.state.constrained
             custom_constraints!(view(g,g_custom),X,U)
-            if solver.opts.minimum_time
+            if solver.state.minimum_time
                 dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
             end
         end
@@ -145,10 +145,10 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
             get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
             update_jacobians!(solver,X_,U_,A,B,method)
             collocation_constraint_jacobian!(solver, X_,U_,fVal_, A,B, view(vals, jac_g_colloc), method)
-            if solver.opts.constrained
+            if solver.state.constrained
                 custom_constraint_jacobian!(view(vals, jac_g_custom), X,U)
             end
-            if solver.opts.minimum_time
+            if solver.state.minimum_time
                 time_step_constraint_jacobian!(view(vals, jac_g_dt), solver)
             end
         end

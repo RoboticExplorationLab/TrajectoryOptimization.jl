@@ -73,8 +73,8 @@ function _backwardpass_active_set!(res::SolverVectorResults,solver::Solver)
     pN = n
     W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
 
-    solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
-    solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+    solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 
     dt = solver.dt
 
@@ -122,7 +122,7 @@ function _backwardpass_active_set!(res::SolverVectorResults,solver::Solver)
     # Backward pass
     k = N-1
     while k >= 1
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         x = X[k]
         u = U[k][1:m]
@@ -143,7 +143,7 @@ function _backwardpass_active_set!(res::SolverVectorResults,solver::Solver)
         Lux = dt*ℓux
 
         # Minimum time expansion components
-        if solver.opts.minimum_time
+        if solver.state.minimum_time
             h = U[k][m̄]
 
             l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
@@ -157,13 +157,13 @@ function _backwardpass_active_set!(res::SolverVectorResults,solver::Solver)
         end
 
         # Infeasible expansion components
-        if solver.opts.infeasible
+        if solver.state.infeasible
             l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
             L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
         end
 
         # Final expansion terms
-        if solver.opts.minimum_time || solver.opts.infeasible
+        if solver.state.minimum_time || solver.state.infeasible
             l[u_idx] = Lu
 
             L[u_idx,u_idx] = Luu
@@ -394,12 +394,12 @@ function rollout_active_set!(res::SolverVectorResults,solver::Solver,alpha::Floa
         if solver.control_integration == :foh
             dv = K[k]*δx + b[k]*du + alpha*d[k]
             U_[k] = U[k] + dv
-            solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+            solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
             du = dv
         else
             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
-            solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+            solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
         end
 
@@ -413,7 +413,7 @@ function rollout_active_set!(res::SolverVectorResults,solver::Solver,alpha::Floa
         #         res.λN[1:pN] += δλ[Array(pu_idx[end]+1:pu_idx[end]+pN)]
         #     end
         # end
-        solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
+        solver.state.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
@@ -442,8 +442,8 @@ a = 1
 #
 #     W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
 #
-#     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
-#     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+#     solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+#     solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 #
 #     dt = solver.dt
 #
@@ -477,7 +477,7 @@ a = 1
 #     # Backward pass
 #     k = N-1
 #     while k >= 1
-#         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+#         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 #
 #         x = X[k]
 #         u = U[k][1:m]
@@ -498,7 +498,7 @@ a = 1
 #         Lux = dt*ℓux
 #
 #         # Minimum time expansion components
-#         if solver.opts.minimum_time
+#         if solver.state.minimum_time
 #             h = U[k][m̄]
 #
 #             l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
@@ -512,13 +512,13 @@ a = 1
 #         end
 #
 #         # Infeasible expansion components
-#         if solver.opts.infeasible
+#         if solver.state.infeasible
 #             l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
 #             L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
 #         end
 #
 #         # Final expansion terms
-#         if solver.opts.minimum_time || solver.opts.infeasible
+#         if solver.state.minimum_time || solver.state.infeasible
 #             l[u_idx] = Lu
 #
 #             L[u_idx,u_idx] = Luu
@@ -632,8 +632,8 @@ a = 1
 #
 #     W = solver.obj.Q; R = solver.obj.R; Wf = solver.obj.Qf; xf = solver.obj.xf
 #
-#     solver.opts.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
-#     solver.opts.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+#     solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+#     solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
 #
 #     dt = solver.dt
 #
@@ -678,7 +678,7 @@ a = 1
 #     k = N-1
 #     while k >= 1
 #         println("k: $k")
-#         solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+#         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 #
 #         x = X[k]
 #         u = U[k][1:m]
@@ -699,7 +699,7 @@ a = 1
 #         Lux = dt*ℓux
 #
 #         # Minimum time expansion components
-#         if solver.opts.minimum_time
+#         if solver.state.minimum_time
 #             h = U[k][m̄]
 #
 #             l[n+m̄] = 2*h*(ℓ1 + R_minimum_time)
@@ -713,13 +713,13 @@ a = 1
 #         end
 #
 #         # Infeasible expansion components
-#         if solver.opts.infeasible
+#         if solver.state.infeasible
 #             l[n+m̄+1:n+mm] = R_infeasible*U[k][m̄+1:m̄+n]
 #             L[n+m̄+1:n+mm,n+m̄+1:n+mm] = R_infeasible
 #         end
 #
 #         # Final expansion terms
-#         if solver.opts.minimum_time || solver.opts.infeasible
+#         if solver.state.minimum_time || solver.state.infeasible
 #             l[u_idx] = Lu
 #
 #             L[u_idx,u_idx] = Luu
@@ -945,22 +945,22 @@ a = 1
 #         if solver.control_integration == :foh
 #             dv = K[k]*δx + b[k]*du + alpha*d[k]
 #             U_[k] = U[k] + dv
-#             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+#             solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 #             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
 #             du = dv
 #         elseif solver.opts.active_set_flag
 #             U_[k-1] = U[k-1] + K[k-1]*δx + M[k-1]*δλ + alpha*d[k-1]
 #             δλ = Kλ[k]*δx + Mλ[k]*δλ + alpha*dλ[k]
 #             k != N ? λ[k] += δλ : res.λN += δλ
-#             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+#             solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 #             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
 #         else
 #             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
-#             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+#             solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 #             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
 #         end
 #
-#         solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
+#         solver.state.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 #
 #         # Check that rollout has not diverged
 #         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
@@ -1012,12 +1012,12 @@ a = 1
 #         if solver.control_integration == :foh
 #             dv = K[k]*δx + b[k]*du + alpha*d[k]
 #             U_[k] = U[k] + dv
-#             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+#             solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 #             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], U_[k][1:m], dt)
 #             du = dv
 #         else
 #             U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
-#             solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+#             solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 #             solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
 #         end
 #
@@ -1025,7 +1025,7 @@ a = 1
 #             k != N ? δλ = Kλ[k]*δx + alpha*dλ[k] : nothing
 #             k != N ? λ[k] += δλ : res.λN .+= Kλ[k]*δx + Mλ[k]*δλ + alpha*dλ[k]
 #         end
-#         solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
+#         solver.state.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 #
 #         # Check that rollout has not diverged
 #         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)

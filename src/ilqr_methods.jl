@@ -48,8 +48,8 @@ Get number of (solver) controls, accounting for minimum time and infeasible star
 function get_num_controls(solver::Solver)
     n,m = get_sizes(solver)
     m̄ = m
-    solver.opts.minimum_time ? m̄ += 1 : nothing
-    solver.opts.infeasible ? mm = m̄ + n : mm = m̄
+    solver.state.minimum_time ? m̄ += 1 : nothing
+    solver.state.infeasible ? mm = m̄ + n : mm = m̄
     return m̄, mm
 end
 
@@ -61,7 +61,7 @@ $(SIGNATURES)
     -pE: number of equality stage constraints (stage and control)
 """
 function get_num_constraints(solver::Solver)
-    if solver.opts.constrained
+    if solver.state.constrained
         if solver.obj isa ConstrainedObjective
             p = solver.obj.p
             pI = solver.obj.pI
@@ -73,7 +73,7 @@ function get_num_constraints(solver::Solver)
             pI += 2
             pE += 1
         end
-        solver.opts.infeasible ? pE += solver.model.n : nothing
+        solver.state.infeasible ? pE += solver.model.n : nothing
         p = pI + pE
         return p, pI, pE
     else
@@ -88,10 +88,10 @@ $(SIGNATURES)
 
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
-        if solver.opts.minimum_time_dt_estimate > 0.0
+        if solver.state.minimum_time_dt_estimate > 0.0
             dt = opts.minimum_time_dt_estimate
-        elseif solver.opts.minimum_time_tf_estimate > 0.0
-            dt = solver.opts.minimum_time_tf_estimate / (solver.N - 1)
+        elseif solver.state.minimum_time_tf_estimate > 0.0
+            dt = solver.state.minimum_time_tf_estimate / (solver.N - 1)
             if dt > solver.opts.max_dt
                 dt = solver.opts.max_dt
                 @warn "Specified minimum_time_tf_estimate is greater than max_dt. Capping at max_dt"
@@ -142,13 +142,13 @@ function rollout!(X::Vector, U::Vector, solver::Solver)
     for k = 1:N-1
 
         # Get dt is minimum time
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Propagate dynamics forward
         solver.fd(X[k+1], X[k], U[k][1:m], dt)
 
         # Add infeasible controls
-        solver.opts.infeasible ? X[k+1] += U[k][m̄+1:m̄+n] : nothing
+        solver.state.infeasible ? X[k+1] += U[k][m̄+1:m̄+n] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X[k+1],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
@@ -185,13 +185,13 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Get dt if minimum time
-        solver.opts.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+        solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 
         # Propagate dynamics
         solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
 
         # Add infeasible controls
-        solver.opts.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
+        solver.state.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
@@ -246,16 +246,16 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     J = 0.0
     for k = 1:N-1
         # Get dt if minimum time
-        solver.opts.minimum_time ? dt = U[k][m̄]^2 : nothing
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Stage cost
         J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
 
         # Minimum time cost
-        solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
+        solver.state.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
 
         # Infeasible control cost
-        solver.opts.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
+        solver.state.infeasible ? J += 0.5*solver.opts.R_infeasible*U[k][m̄.+(1:n)]'*U[k][m̄.+(1:n)] : nothing
     end
 
     # Terminal Cost
@@ -306,7 +306,7 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
 
         # Minimum time special case
-        if solver.opts.minimum_time && k < N-1
+        if solver.state.minimum_time && k < N-1
             res.Cu[k][end,m̄] = 1
         end
     end
@@ -351,7 +351,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
         c_fun(res.C[k], X[k], U[k])
 
         # Minimum time special case
-        if solver.opts.minimum_time
+        if solver.state.minimum_time
             if k < N-1
                 res.C[k][end] = U[k][m̄] - U[k+1][m̄]
             end
@@ -724,7 +724,7 @@ function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float6
     x = zeros(solver.model.n,solver.N)
     x[:,1] = solver.obj.x0
     for k = 1:solver.N-1
-        solver.opts.minimum_time ? dt = u[m̄,k]^2 : nothing
+        solver.state.minimum_time ? dt = u[m̄,k]^2 : nothing
 
         solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
 
@@ -736,7 +736,7 @@ end
 
 function infeasible_controls(solver::Solver,X0::Array{Float64,2})
     u = zeros(solver.model.m,solver.N)
-    if solver.opts.minimum_time
+    if solver.state.minimum_time
         dt = get_initial_dt(solver)
         u_dt = ones(1,solver.N)
         u = [u; u_dt]
@@ -784,8 +784,8 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         X0,U0 = interp_traj(N,solver.obj.tf,X0,U0)
     end
 
-    if solver.opts.minimum_time
-        solver.opts.infeasible ? sep = " and " : sep = " with "
+    if solver.state.minimum_time
+        solver.state.infeasible ? sep = " and " : sep = " with "
         solve_string = sep * "minimum time..."
 
         # Initialize controls with sqrt(dt)
@@ -797,7 +797,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         U_init = U0
     end
 
-    if solver.opts.infeasible
+    if solver.state.infeasible
         solve_string =  "Solving Constrained Problem with Infeasible Start" * solve_string
 
         # Generate infeasible controls
@@ -813,7 +813,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
             X_init = X0
         end
     else
-        if solver.opts.constrained
+        if solver.state.constrained
             solve_string = "Solving Constrained Problem" * solve_string
         else
             solve_string = "Solving Unconstrained Problem" * solve_string

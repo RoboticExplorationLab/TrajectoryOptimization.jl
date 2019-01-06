@@ -18,13 +18,13 @@ function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
             x1 = X[:,k]
             x2 = X[:,k+1]
 
-            solver.opts.minimum_time ? dt = U[m̄,k] : nothing
+            solver.state.minimum_time ? dt = U[m̄,k] : nothing
 
             Xm = (x1+x2)/2 + dt/8*(f1-f2)
             Um = (U[1:m,k] + U[1:m,k+1])/2
 
             J[k] = dt/6*(stage_cost(obj.cost,X[:,k],U[1:m,k]) + 4*stage_cost(obj.cost,Xm,Um) + stage_cost(obj.cost,X[:,k+1],U[1:m,k+1])) # rk3 foh stage cost (integral approximation
-            solver.opts.minimum_time ? J[k] += solver.opts.R_minimum_time*dt : nothing
+            solver.state.minimum_time ? J[k] += solver.opts.R_minimum_time*dt : nothing
         end
         J = sum(J)
         J += stage_cost(obj.cost,X[:,N])
@@ -177,7 +177,7 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
         Z = packZ(X,U)
         z = reshape(Z,n+m,N)
 
-        solver.opts.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
+        solver.state.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
 
         # First time step
         fz = A[:,:,1]

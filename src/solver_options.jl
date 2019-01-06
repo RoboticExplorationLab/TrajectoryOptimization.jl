@@ -2,7 +2,7 @@ import Base: show, copy
 
 """
 $(TYPEDEF)
-Specifies options for Solver.
+    Specifies options for Solver.
 """
 mutable struct SolverOptions
     constrained::Bool

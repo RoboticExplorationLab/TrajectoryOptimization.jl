@@ -65,7 +65,7 @@ X0 = TrajectoryOptimization.rollout(solver,U0)
 solver.opts.verbose = true
 solver.opts.live_plotting = false
 solver.opts.iterations_innerloop = 200
-solver.opts.infeasible
+solver.state.infeasible
 solver.opts.cost_tolerance = 1e-5
 res, stats = solve(solver,U0)
 norm(res.X[N]-xf)
