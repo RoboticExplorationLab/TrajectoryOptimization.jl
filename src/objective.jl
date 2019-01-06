@@ -12,7 +12,7 @@ Cost function of the form
     xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + q⁠ᵀx + rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-mutable struct LinearQuadraticCost{TM,TH,TV} <: CostFunction
+mutable struct QuadraticCost{TM,TH,TV} <: CostFunction
     Q::TM                 # Quadratic stage cost for states (n,n)
     R::TM                 # Quadratic stage cost for controls (m,m)
     H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
@@ -20,7 +20,7 @@ mutable struct LinearQuadraticCost{TM,TH,TV} <: CostFunction
     r::TV                 # Lineqr term on controls (m,)
     Qf::TM                # Quadratic final cost for terminal state (n,n)
     qf::TV                # Linear term on terminal state (n,)
-    function LinearQuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, Qf::TM, qf::TV) where {TM, TH, TV}
+    function QuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, Qf::TM, qf::TV) where {TM, TH, TV}
         if !isposdef(R)
             err = ArgumentError("R must be positive definite")
             throw(err)
@@ -42,32 +42,32 @@ function LQRCost(Q,R,Qf,xf)
     q = -Q*xf
     r = zeros(size(R,1))
     qf = -Qf*xf
-    return LinearQuadraticCost(Q, R, H, q, r, Qf, qf)
+    return QuadraticCost(Q, R, H, q, r, Qf, qf)
 end
 
-function taylor_expansion(cost::LinearQuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
+function taylor_expansion(cost::QuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
     m = get_sizes(cost)[2]
     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u[1:m] + cost.r
 end
 
-function taylor_expansion(cost::LinearQuadraticCost, xN::AbstractVector{Float64})
+function taylor_expansion(cost::QuadraticCost, xN::AbstractVector{Float64})
     return cost.Qf, cost.Qf*xN + cost.qf
 end
 
-function stage_cost(cost::LinearQuadraticCost, x::AbstractVector, u::AbstractVector)
+function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u
 end
 
-function stage_cost(cost::LinearQuadraticCost, xN::AbstractVector)
+function stage_cost(cost::QuadraticCost, xN::AbstractVector)
     0.5*xN'cost.Qf*xN + cost.qf'*xN
 end
 
-function get_sizes(cost::LinearQuadraticCost)
+function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
 end
 
-function copy(cost::LinearQuadraticCost)
-    return LinearQuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.Qf), copy(cost.qf))
+function copy(cost::QuadraticCost)
+    return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.Qf), copy(cost.qf))
 end
 
 

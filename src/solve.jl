@@ -202,6 +202,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 c_max = max_violation(results)
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
+
+                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_λ_second_order_update
+                    solver.opts.λ_second_order_update = true
+                    @logmsg InnerLoop "λ 2-update"
+                end
             end
 
             ## Check gradients for convergence ##
@@ -503,7 +508,7 @@ $(SIGNATURES)
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
 
     ## Lagrange multiplier updates
-    λ_update!(results,solver)
+    solver.opts.λ_second_order_update ? solve_batch_qp_dual(results,solver) : λ_update!(results,solver)
 
     ## Penalty updates
     μ_update!(results,solver)

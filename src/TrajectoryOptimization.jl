@@ -35,7 +35,7 @@ export
     ConstrainedObjective,
     UnconstrainedObjective,
     LQRObjective,
-    LinearQuadraticCost,
+    QuadraticCost,
     LQRCost,
     GenericCost,
     ConstrainedVectorResults,

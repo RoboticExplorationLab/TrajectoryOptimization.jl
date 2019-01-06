@@ -5,7 +5,7 @@ x̄ = [2;-1;1]
 λ = [3;-2]
 
 # set up model
-m = Model(solver=IpoptSolver())
+m = Model(solver=IpoptSolver(print_level=0))
 
 # set up primal variables
 n = 3

@@ -184,22 +184,22 @@ function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
     # @test isapprox(D,L)
 
     # solve QP
-    m = JuMP.Model(solver=IpoptSolver())
+    m = JuMP.Model(solver=IpoptSolver(print_level=0))
 
     @variable(m, λ[1:Np])
     # @objective(m, Min, λ'*λ)
-    # @constraint(md, con, Q_dual*λ .== -q_dual')
+    # @constraint(m, con, Q_dual*λ .== -q_dual')
 
     @objective(m, Max, 0.5*λ'*Q_dual*λ + q_dual*λ + qq_dual)
     @constraint(m, con2, λ[idx_inequality] .>= 0)
 
-    print(m)
+    # print(m)
 
     status = JuMP.solve(m)
 
     # Solution
-    println("Objective value: ", JuMP.getobjectivevalue(m))
-    println("λ = ", getvalue(λ))
+    # println("Objective value: ", JuMP.getobjectivevalue(m))
+    # println("λ = ", getvalue(λ))
 
     for k = 1:N
         if k != N
@@ -214,3 +214,15 @@ function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
 end
 
 solve_batch_qp_dual(results_c,solver)
+
+solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+U = zeros(model.m,solver.N)
+solver.opts.verbose = true
+solver.opts.cost_tolerance = 1e-4
+solver.opts.cost_intermediate_tolerance = 1e-4
+solver.opts.gradient_tolerance = 1e-4
+solver.opts.gradient_intermediate_tolerance = 1e-4
+solver.opts.constraint_tolerance = 1e-4
+@time results_c,stats = TrajectoryOptimization.solve(solver, U)
+
+plot!(log.(stats["cost"] .+ 1000))
