@@ -50,8 +50,6 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     γ_no  = solver.opts.γ_no
     γ = solver.opts.γ
 
-
-
     # Stage constraints
     for k = 1:N-1
         for i = 1:p

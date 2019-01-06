@@ -487,3 +487,86 @@ Convenience method for getting the stage cost from any objective
 function stage_cost(obj::Objective,x::Vector{Float64},u::Vector{Float64})
     stage_cost(obj.cost,x,u)
 end
+
+"""
+$(SIGNATURES)
+    Determine if the constraints are inplace. Returns boolean and number of constraints
+"""
+function is_inplace_constraints(c::Function,n::Int64,m::Int64)
+    x = rand(n)
+    u = rand(m)
+    q = 100
+    iter = 1
+
+    vals = NaN*(ones(q))
+    try
+        c(vals,x,u)
+    catch e
+        if e isa MethodError
+            return false
+        end
+    end
+
+    return true
+end
+
+function count_inplace_output(c::Function, n::Int, m::Int)
+    x = rand(n)
+    u = rand(m)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x,u)
+            break
+        catch e
+            q *= 10
+            iter += 1
+            vals = NaN*(ones(q))
+        end
+    end
+    p = count(isfinite.(vals))
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x)
+            break
+        catch e
+            if e isa MethodError
+                p_N = 0
+                break
+            else
+                q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
+            end
+        end
+    end
+    p_N = count(isfinite.(vals))
+
+    return p, p_N
+end
+
+function count_inplace_output(c::Function, n::Int)
+    x = rand(n)
+    q = 100
+    iter = 1
+    vals = NaN*(ones(q))
+
+    while iter < 5
+        try
+            c(vals,x)
+            break
+        catch e
+            q *= 10
+            iter += 1
+            vals = NaN*(ones(q))
+        end
+    end
+    return count(isfinite.(vals))
+end

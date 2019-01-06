@@ -10,8 +10,6 @@ import Base.println
 #         solve(solver, U0): Solve iLQR problem with initial guess for controls
 #         solve(solver): Solve iLQR problem with random initial guess for controls
 #         _solve: lower-level method for setting and solving iLQR problem
-#
-#         outer_loop_update: Update parameters on major iterations
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -333,7 +331,6 @@ $(SIGNATURES)
     Check convergence
     -return true is convergence criteria is met, else return false
 """
-
 function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::Float64, gradient::Float64, iter_total::Int64, iter_outerloop::Int64, dJ_zero_counter::Int)
     # Check total iterations
     if iter_total >= solver.opts.iterations
@@ -409,8 +406,6 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     return results_feasible
 end
-
-
 
 """
 $(SIGNATURES)
