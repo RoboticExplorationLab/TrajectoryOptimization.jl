@@ -6,7 +6,7 @@ model, obj = TrajectoryOptimization.Dynamics.pendulum!
 obj = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound)
 
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
+opts.verbose = true
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(model.m,solver.N)
