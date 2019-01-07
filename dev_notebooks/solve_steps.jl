@@ -26,7 +26,7 @@ obj_con_new = ConstrainedObjective(obj_new,x_min=x_min,x_max=x_max)
 solver = Solver(model,obj,N=N)
 solver_new = Solver(model,obj_new,N=N)
 solver.opts.verbose = true
-solver.opts.infeasible
+solver.state.infeasible
 n,m = get_sizes(solver)
 
 X0 = Array{Float64,2}(undef,0,0)
@@ -48,7 +48,7 @@ X_,U_ = results.X_, results.U_
 #           SOLVER           #
 #****************************#
 ## Initial rollout
-if !solver.opts.infeasible
+if !solver.state.infeasible
     X[1] = solver.obj.x0
     flag = rollout!(results,solver) # rollout new state trajectoy
     rollout!(results_new,solver_new)
@@ -60,7 +60,7 @@ if !solver.opts.infeasible
     end
 end
 
-if solver.opts.infeasible
+if solver.state.infeasible
     if solver.control_integration == :foh
         calculate_derivatives!(results, solver, results.X, results.U)
         calculate_midpoints!(results, solver, results.X, results.U)

@@ -219,25 +219,6 @@ function print_solver(solver::Solver,name::String,io::IO=STDOUT)
 
 end
 
-# """
-# $(SIGNATURES)
-# Checks if Snopt.jl is installed and the SNOPT library has been built.
-# Does not check if Snopt.jl runs, only that the necessary files are there.
-# NOTE: Snopt.jl does not currently support Windows.
-# """
-# function check_snopt_installation()::Bool
-#     if is_windows()
-#         return false
-#     end
-#     snopt_dir = Pkg.dir("Snopt")
-#     if isdir(snopt_dir)
-#         if isfile(joinpath(snopt_dir),"deps","src","libsnopt.so")
-#             return true
-#         end
-#     end
-#     return false
-# end
-
 """
 $(SIGNATURES)
 Circle constraint function (c ⩽ 0, negative is satisfying constraint)

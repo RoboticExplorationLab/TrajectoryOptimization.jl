@@ -9,16 +9,8 @@ import Base: isempty,copy
 #        SolverIterResults                      SolverResults
 #        ConstrainedResults                       ↙     ↘
 #        UnconstrainedResults          ResultsCache   SolverIterResults
-#        ResultsCache                                     ↙     ↘
+#                                                          ↙     ↘
 #                                      UnconstrainedResults    ConstrainedResults
-#
-#     METHODS
-#         copy(UnconstrainedResults)
-#         copy(ConstrainedResults)
-#         size(ResultsCache): size of pre-allocated cache
-#         length(ResultsCache): current number of stored iterations
-#         merge_results_cache: merge two ResultsCache's
-#         add_iter!: fdxd a SolverIterResults to ResultsCache
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 """
@@ -81,13 +73,13 @@ Construct results from sizes
 """
 function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N-1]
 
-    K  = [zeros(m,n) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for i = 1:N-1]
+    d  = [zeros(m)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N-1]
 
 
     S  = [zeros(n,n) for i = 1:N]
@@ -122,6 +114,7 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     X_::Vector{Vector{Float64}} # Predicted states (n,N)
     U_::Vector{Vector{Float64}} # Predicted controls (m,N)
+
     S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
     s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
 
@@ -134,16 +127,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     λ::Vector{Vector{Float64}} # Lagrange multipliers (p,N)
     μ::Vector{Vector{Float64}}     # Penalty terms (p,N)
 
-    CN::Vector{Float64}       # Final constraint values (p_N,)
-    CN_prev::Vector{Float64}  # Previous final constraint values (p_N,)
-    IμN::Diagonal{Float64,Vector{Float64}}        # Final constraint penalty matrix (p_N,p_N)
-    λN::Vector{Float64}       # Final lagrange multipliers (p_N,)
-    μN::Vector{Float64}       # Final penalty terms (p_N,)
-
-    Cx::Vector{Matrix{Float64}}
-    Cu::Vector{Matrix{Float64}}
-
-    Cx_N::Matrix{Float64}
+    Cx::Vector{Matrix{Float64}} # State jacobian (n,n,N)
+    Cu::Vector{Matrix{Float64}} # Control (k) jacobian (n,m,N-1)
 
     active_set::Vector{Vector{Bool}} # active set of constraints
 
@@ -153,16 +138,14 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
             K,d,X_,U_,S,s,fdx,fdu,
             C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
-            CN::Vector{Float64},CN_prev,IμN,λN,μN,
-            cx,cu,cxn,active_set,ρ,dρ)
-
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,CN,CN_prev,IμN,λN,μN,cx,cu,cxn,active_set,ρ,dρ)
+            Cx,Cu,active_set,ρ,dρ)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
     end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
 
-ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0)
+ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0,0)
 
 
 """
@@ -175,15 +158,15 @@ Construct results from sizes
 * N: number of time steps
 * p_N (default=n): number of terminal constraints
 """
-function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
+function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N-1]
 
-    K  = [zeros(m,n) for i = 1:N]
-    d  = [zeros(m)   for i = 1:N]
+    K  = [zeros(m,n) for i = 1:N-1]
+    d  = [zeros(m)   for i = 1:N-1]
 
     X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N-1]
 
     S  = [zeros(n,n) for i = 1:N]
     s  = [zeros(n)   for i = 1:N]
@@ -193,38 +176,30 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int=n)
     fdu = [zeros(n,m) for i = 1:N-1]
 
     # Stage Constraints
-    C      = [zeros(p)  for i = 1:N]
-    C_prev = [zeros(p)  for i = 1:N]
-    Iμ     = [Diagonal(zeros(p)) for i = 1:N]
-    λ = [zeros(p)  for i = 1:N]
-    μ     = [ones(p)   for i = 1:N]
+    C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    C_prev = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
+    λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
 
-    # Terminal Constraints (make 2D so it works well with stage values)
-    C_N      = zeros(p_N)
-    C_N_prev = zeros(p_N)
-    Iμ_N     = Diagonal(zeros(p_N))
-    λ_N      = zeros(p_N)
-    μ_N      = ones(p_N)
+    Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
+    Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
 
-    cx  = [zeros(p,n)   for i = 1:N]
-    cu  = [zeros(p,m)   for i = 1:N]
-    cxn = zeros(p_N,n)
-
-    active_set = [zeros(p)  for i = 1:N]
+    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
     ρ = ones(1)
     dρ = ones(1)
 
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
         C,C_prev,Iμ,λ,μ,
-        C_N,C_N_prev,Iμ_N,λ_N,μ_N,cx,cu,cxn,active_set,ρ,dρ)
+        Cx,Cu,active_set,ρ,dρ)
 end
 
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
-        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),copy(r.CN),copy(r.CN_prev),copy(r.IμN),copy(r.λN),copy(r.μN),
-        copy(r.Cx),copy(r.Cu),copy(r.Cx_N),copy(r.active_set),copy(r.ρ),copy(r.dρ))
+        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
+        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ))
 end
 
 ################################################################################
@@ -328,66 +303,73 @@ end
 #############
 # Utilities #
 #############
+function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
+    # turn off infeasible functionality
+    p_inf,pI_inf,pE_inf = get_num_constraints(solver)
 
-"""
-$(SIGNATURES)
-    For infeasible solve, return a constrained results from a (special) unconstrained results along with AuLa constrained results
-"""
-function unconstrained_to_constrained_results(r::SolverIterResults,solver::Solver,λ,λN)::ConstrainedIterResults
+    solver.state.infeasible = false
+
+    # get sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
 
-    p,pI,pE = get_num_constraints(solver)
-    p_N = solver.obj.p_N
-    results = ConstrainedVectorResults(n,m̄,p,N,p_N)
-    copyto!(results.X,r.X)
-    copyto!(results.X_,r.X_)
-    copyto!(results.fdx,r.fdx)
-
-    for k = 1:N
-        results.U[k] = r.U[k][1:m̄]
-        results.U_[k] = r.U_[k][1:m̄]
-        results.λ[k][1:end-solver.opts.minimum_time] = λ[k][1:end-n-solver.opts.minimum_time] # retain multipliers from all but infeasible and minimum time equality
-        if solver.opts.minimum_time
-            results.λ[k][end] = λ[k][end]
-        end
-        k == N ? continue : nothing
-        results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
+    if solver.state.minimum_time
+        idx = 1:p_inf-n-1
+        idx = [idx;p_inf]
+    else
+        idx = 1:p_inf-n
     end
-    results.λN .= λN
 
-    results
+    for k = 1:N-1
+        results.U[k] = results.U[k][1:m̄]
+        results.U_[k] = results.U_[k][1:m̄]
+        results.K[k] = results.K[k][1:m̄,1:n]
+        results.d[k] = results.d[k][1:m̄]
+        results.fdu[k] = results.fdu[k][1:n,1:m̄]
+
+        results.C[k] = results.C[k][idx]
+        results.Cx[k] = results.Cx[k][idx,1:n]
+        results.Cu[k] = results.Cu[k][idx,1:m̄]
+        results.λ[k] = results.λ[k][idx]
+        results.μ[k] = results.μ[k][idx]
+        results.Iμ[k] = Diagonal(Array(results.Iμ[k])[idx,idx]) # TODO there should be a more efficient way to do this
+        results.active_set[k] = results.active_set[k][idx]
+    end
+    # Don't need to modify terminal results C,Cx,Cu,λ,μ,Iμ since they are uneffected by u_infeasible
+    return nothing
 end
 
 function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array{Float64,2}(undef,0,0))
     n,m,N = get_sizes(solver)
 
     if !isempty(X)
-        solver.opts.infeasible = true
+        solver.state.infeasible = true
     end
 
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
 
-    if solver.opts.constrained
+    if solver.state.constrained
         # Get sizes
         p,pI,pE = get_num_constraints(solver)
+        p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
         m̄,mm = get_num_controls(solver)
 
-        results = ConstrainedVectorResults(n,mm,p,N,n)
+        results = ConstrainedVectorResults(n,mm,p,N,p_N)
 
         # Set initial penalty term values
         results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
-        if solver.opts.minimum_time
-            for k = 1:solver.N
+        if solver.state.minimum_time
+            for k = 1:solver.N-1
                 results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
                 results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
                 results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
             end
         end
-        if solver.opts.infeasible
+        if solver.state.infeasible
             nothing #TODO
         end
 
@@ -410,7 +392,11 @@ end
 function copy_λ!(solver, results, λ)
     N = solver.N
     p_new = length(λ[1])
+    p_N_new = length(λ[end])
+
     p, = get_num_constraints(solver)
+    p_N, = get_num_terminal_constraints(solver)
+
     if p_new == p  # all constraint λs passed in
         cid = trues(p)
     elseif p_new == solver.obj.p  # only "original" constraint λs passed
@@ -419,33 +405,9 @@ function copy_λ!(solver, results, λ)
         err = ArgumentError("λ is not the correct dimension ($p_new). It must be either size $p or $(solver.obj.p)")
         throw(err)
     end
-    for k = 1:N
+    for k = 1:N-1
         results.λ[k][cid] = λ[k]
     end
-    results.λN .= λ[N+1]
-end
 
-
-
-"""
-$(SIGNATURES)
-    For infeasible solve, return an unconstrained results from a prior unconstrained or constrained results
-        -removes infeasible controls and infeasible components in Jacobians
-        -additionally, we need an unconstrained problem (temporarily) to project into the feasible space
-"""
-function remove_infeasible_controls_to_unconstrained_results(r::SolverIterResults,solver::Solver)::UnconstrainedIterResults
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-
-    results = UnconstrainedVectorResults(n,m̄,N)
-    copyto!(results.X,r.X)
-    copyto!(results.X_,r.X_)
-    copyto!(results.fdx,r.fdx)
-    for k = 1:N
-        results.U[k] = r.U[k][1:m̄]
-        results.U_[k] = r.U_[k][1:m̄]
-        k == N ? continue : nothing
-        results.fdu[k][1:n,1:m̄] = r.fdu[k][1:n,1:m̄]
-    end
-    results
+    results.λ[N] = λ[N]
 end

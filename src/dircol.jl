@@ -269,7 +269,7 @@ function get_bounds(solver::Solver,method::Symbol)
     x_U[n.+(1:m),:] .= obj.u_max
 
     # Minimum time bounds
-    if solver.opts.minimum_time
+    if solver.state.minimum_time
         x_L[n+m̄,:] .= solver.opts.min_dt
         x_U[n+m̄,:] .= solver.opts.max_dt
         p_dt = N-2
@@ -367,20 +367,20 @@ function cost(solver::Solver,X::AbstractMatrix,U::AbstractMatrix,method::Symbol)
         Uk = view(U,:,1:2:N_)
         Xm = view(X,:,2:2:N_-1)
         Um = view(U,:,2:2:N_-1)
-        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
+        solver.state.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
 
         for k = 1:nSeg
              # Simpson quadrature (integral approximation) for foh stage cost
             J += dt[k]/6*(stage_cost(obj.cost,Xk[:,k],Uk[1:m,k]) + 4stage_cost(obj.cost,Xm[:,k],Um[1:m,k]) + stage_cost(obj.cost,Xk[:,k+1],Uk[1:m,k+1]))
-            solver.opts.minimum_time ? J += solver.opts.R_minimum_time*dt[k] : nothing
+            solver.state.minimum_time ? J += solver.opts.R_minimum_time*dt[k] : nothing
         end
     elseif method == :midpoint
-        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
+        solver.state.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
         for k = 1:N-1
             J += dt[k]*stage_cost(obj.cost,X[:,k],U[1:m,k])
         end
     elseif method == :trapezoid
-        solver.opts.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
+        solver.state.minimum_time ? dt = view(U,m̄,1:2:N_) : dt = ones(N)*solver.dt
         for k = 1:N-1
             J += dt[k]*(stage_cost(obj.cost,X[:,k],U[1:m,k]) + stage_cost(obj.cost,X[:,k+1],U[1:m,k+1]))/2
         end
@@ -398,7 +398,7 @@ function cost(solver::Solver,X::AbstractArray,U::AbstractArray,weights::Vector{F
     m̄, = get_num_controls(solver)
     Qf = solver.obj.cost.Qf; Q = solver.obj.cost.Q;
     xf = solver.obj.xf; R = solver.obj.cost.R;
-    solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+    solver.state.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
 
     J = zeros(eltype(X),N_)
     for k = 1:N_
@@ -436,7 +436,7 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
         Bk = view(B,:,:,1:2:N_)
         fk = fVal
 
-        if solver.opts.minimum_time
+        if solver.state.minimum_time
             dt = Uk[m̄,:]
             c_dt = solver.opts.R_minimum_time
         else
@@ -445,34 +445,34 @@ function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method:
 
         grad_f[1:n,1] =     (Q*(Xk[:,1]-xf) + 4*(I_n/2 + dt[1]/8*Ak[:,:,1])'Q*(Xm[:,1] - xf))*dt[1]/6
         grad_f[n.+(1:m),1] = (R*Uk[1:m,1] + 4(dt[1]/8*Bk[:,:,1]'Q*(Xm[:,1] - xf) + R*Um[1:m,1]/2))*dt[1]/6
-        solver.opts.minimum_time ? grad_f[n+m̄,1] = (stage_cost(obj.cost,Xk[:,1],Uk[1:m,1]) + 4stage_cost(obj.cost,Xm[:,1],Um[1:m,1]) + stage_cost(obj.cost,Xk[:,2],Uk[1:m,2]))/6 +
+        solver.state.minimum_time ? grad_f[n+m̄,1] = (stage_cost(obj.cost,Xk[:,1],Uk[1:m,1]) + 4stage_cost(obj.cost,Xm[:,1],Um[1:m,1]) + stage_cost(obj.cost,Xk[:,2],Uk[1:m,2]))/6 +
                                                  (fk[:,1] - fk[:,2])'*Q*(Xm[:,1] - xf)*dt[1]/12 + c_dt : nothing
         for k = 2:N-1
             grad_f[1:n,k] = (Q*(Xk[:,k]-xf) + 4(I_n/2 + dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k] - xf))*dt[k]/6 +
                             (Q*(Xk[:,k]-xf) + 4(I_n/2 - dt[k]/8*Ak[:,:,k])'Q*(Xm[:,k-1] - xf))*dt[k-1]/6
             grad_f[n.+(1:m),k] = (R*Uk[1:m,k] + 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k] - xf)   + R*Um[1:m,k]/2))*dt[k]/6 +
                                  (R*Uk[1:m,k] - 4(dt[k]/8*Bk[:,:,k]'Q*(Xm[:,k-1] - xf) - R*Um[1:m,k-1]/2))*dt[k-1]/6
-            solver.opts.minimum_time ? grad_f[n+m̄,k] = (stage_cost(obj.cost,Xk[:,k],Uk[1:m,k]) + 4stage_cost(obj.cost,Xm[:,k],Um[1:m,k]) + stage_cost(obj.cost,Xk[:,k+1],Uk[1:m,k+1]))/6 +
+            solver.state.minimum_time ? grad_f[n+m̄,k] = (stage_cost(obj.cost,Xk[:,k],Uk[1:m,k]) + 4stage_cost(obj.cost,Xm[:,k],Um[1:m,k]) + stage_cost(obj.cost,Xk[:,k+1],Uk[1:m,k+1]))/6 +
                                                      (fk[:,k] - fk[:,k+1])'*Q*(Xm[:,k] - xf)*dt[k]/12 + c_dt : nothing
         end
         grad_f[1:n,N] = (Q*(Xk[:,N]-xf) + 4(I_n/2 - dt[N-1]/8*Ak[:,:,N])'Q*(Xm[:,N-1] - xf))*dt[N-1]/6
         grad_f[n.+(1:m),N] = (R*Uk[1:m,N] - 4(dt[N-1]/8*Bk[:,:,N]'Q*(Xm[:,N-1] - xf) - R*Um[1:m,N-1]/2))*dt[N-1]/6
-        solver.opts.minimum_time ? grad_f[n+m̄,N] = 0 : nothing
+        solver.state.minimum_time ? grad_f[n+m̄,N] = 0 : nothing
         grad_f[1:n,N] += Qf*(Xk[:,N] - xf)
     elseif method == :midpoint
         I_n = Matrix(I,n,n)
         Xm = X
 
         # Get dt
-        solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
+        solver.state.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
 
         grad_f[1:n,1] = Q*(Xm[:,1] - xf)*dt[1]/2
         grad_f[n.+(1:m),1] = R*U[1:m,1]*dt[1]
-        solver.opts.minimum_time ? grad_f[n+m̄,1] = stage_cost(obj.cost,Xm[:,1],U[1:m,1]) : nothing
+        solver.state.minimum_time ? grad_f[n+m̄,1] = stage_cost(obj.cost,Xm[:,1],U[1:m,1]) : nothing
         for k = 2:N-1
             grad_f[1:n,k] = Q*(Xm[:,k] - xf)*dt[k]/2 + Q*(Xm[:,k-1] - xf)*dt[k-1]/2
             grad_f[n.+(1:m),k] = R*U[1:m,k]*dt[k]
-            solver.opts.minimum_time ? grad_f[n+m̄,k] = stage_cost(obj.cost,Xm[:,k],U[1:m,k]) : nothing
+            solver.state.minimum_time ? grad_f[n+m̄,k] = stage_cost(obj.cost,Xm[:,k],U[1:m,k]) : nothing
         end
         grad_f[1:n,N] = Q*(Xm[:,N-1] - xf)*dt[N-1]/2
         grad_f[n+1:end,N] = zeros(m̄)
@@ -529,12 +529,12 @@ function get_traj_points!(solver::Solver,X,U,X_,U_,fVal,method::Symbol)
         Um .= (U[1:m,1:end-1] + U[1:m,2:end])/2
         # fValm = view(fVal_,:,2:2:N_-1)
         for k = 1:N-1
-            solver.opts.minimum_time ? dt = U[m̄,k] : nothing
+            solver.state.minimum_time ? dt = U[m̄,k] : nothing
             x1,x2 = X[:,k], X[:,k+1]
             Xm[:,k] = (x1+x2)/2 + dt/8*(fVal[:,k]-fVal[:,k+1])
             # solver.fc(view(fValm,:,k),Xm[:,k],Um[:,k])
         end
-        # if solver.opts.minimum_time
+        # if solver.state.minimum_time
         #     U_[m̄,2:2:N_-1] = U[m̄,1:N-1]
         #     U_[m̄,3:2:N_-2] = (U[m̄,1:N-2] + U[m̄,2:N-1])/2
         #     U_[m̄,N_] = U[m̄,N-1]
@@ -637,7 +637,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
     dt = solver.dt
 
     if method == :trapezoid
-        # solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
+        # solver.state.minimum_time ? dt = U[m̄,:] : dt = ones(N)*solver.dt
         for k = 1:N-1
             # Collocation Constraints
             g[:,k] = dt*( fVal[:,k+1] + fVal[:,k] )/2 - X[:,k+1] + X[:,k]
@@ -646,7 +646,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
         iLow = 1:2:N_-1
         iMid = iLow .+ 1
         iUpp = iMid .+ 1
-        solver.opts.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
+        solver.state.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
 
         collocation = - X[:,iUpp] + X[:,iLow] + dt[:,iLow].*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
 
@@ -667,7 +667,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
         # for k = 1:N-1
         #     x1,x2 = Xk[:,k],Xk[:,k+1]
         #     u1,u2 = Uk[1:m,k],Uk[1:m,k+1]
-        #     solver.opts.minimum_time ? dt = Uk[m̄,k] : dt = solver.dt
+        #     solver.state.minimum_time ? dt = Uk[m̄,k] : dt = solver.dt
         #     f1 = Fk[:,k]
         #     f2 = Fk[:,k+1]
         #     fm = Fm[:,k]
@@ -679,7 +679,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
         # Calculate the knot points from the midpoints (and the terminal point)
         Xk = zero(Xm)
         Xk[:,end] = Xm[:,end]
-        solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+        solver.state.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
         for k = N-1:-1:1
             Xk[:,k] = 2Xm[:,k] - Xk[:,k+1]
         end
@@ -712,13 +712,13 @@ function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{F
         Z = packZ(X,U)
         z = reshape(Z,n+m̄,N)
         n_blk = 2(n+m̄)n
-        solver.opts.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
+        solver.state.minimum_time ? dt = U[m̄,:] : dt = ones(N_)*solver.dt
 
         function calc_block_trap(k,blk::SubArray{Float64})
             blk = reshape(blk,n,2(n+m̄))
             blk[:,1:n+m] =         dt[k]*A[:,:,k  ]/2+Inm
             blk[:,n.+m̄.+(1:n+m)] = dt[k]*A[:,:,k+1]/2-Inm
-            if solver.opts.minimum_time
+            if solver.state.minimum_time
                 blk[:,n+m̄] = (fVal[:,k] + fVal[:,k+1])/2
             end
             return nothing
@@ -771,7 +771,7 @@ function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{F
         fk = view(fVal,:,1:2:N_)
         fm = view(fVal,:,2:2:N_-1)
 
-        solver.opts.minimum_time ? dt = Uk[m̄,:] : dt = ones(N_)*solver.dt
+        solver.state.minimum_time ? dt = Uk[m̄,:] : dt = ones(N_)*solver.dt
 
         function calc_block_hs!(k::Int,vals::SubArray)
             x1,u1 = Xk[:,k],Uk[:,k]
@@ -789,7 +789,7 @@ function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{F
             vals[:,n.+(1:m)] =     dt[k]/6*(B1 + 4Am*( dt[k]/8*B1) + 4Bm*(Im/2))   # ∇u1
             vals[:,n.+m̄.+(1:n)] =  dt[k]/6*(A2 + 4Am*(-dt[k]/8*A2 + In/2)) - In    # ∇x2
             vals[:,2n.+m̄.+(1:m)] = dt[k]/6*(B2 + 4Am*(-dt[k]/8*B2) + 4Bm*(Im/2))   # ∇u2
-            if solver.opts.minimum_time
+            if solver.state.minimum_time
                 vals[:,n+m̄] = (fk[:,k] + 4fm[:,k] + fk[:,k+1])/6 + dt[k]/12*Am*(fk[:,k] - fk[:,k+1])
             end
             return nothing
@@ -824,7 +824,7 @@ function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{F
 end
 
 function time_step_constraint_jacobian!(vals, solver::Solver)
-    if solver.opts.minimum_time
+    if solver.state.minimum_time
         vals[1:2:2(N-2)] .= 1
         vals[2:2:2(N-2)+1] .= -1
     end
@@ -890,7 +890,7 @@ function time_step_constraint_jacobian_sparsity(solver::Solver, start::Int=0)
     n,m,N = get_sizes(solver)
     m̄, = get_num_controls(solver)
     NN = (n+m̄)N
-    if solver.opts.minimum_time
+    if solver.state.minimum_time
         jacob_dt = spzeros(Int,N-2,NN)
         dts = n+m̄:n+m̄:NN-2(n+m̄)
         jacob_dt[CartesianIndex.(1:N-2,dts)] = (1:2:2(N-2)) .+ start
@@ -901,35 +901,6 @@ function time_step_constraint_jacobian_sparsity(solver::Solver, start::Int=0)
     end
 end
 
-"""
-$(SIGNATURES)
-Interpolate a trajectory using cubic interpolation
-"""
-function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
-    if isempty(X)
-        X2 = X
-    else
-        X2 = interp_rows(N,tf,X)
-    end
-    U2 = interp_rows(N,tf,U)
-    return X2, U2
-end
-
-"""
-$(SIGNATURES)
-Interpolate the rows of a matrix using cubic interpolation
-"""
-function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
-    n,N1 = size(X)
-    t1 = range(0,stop=tf,length=N1)
-    t2 = collect(range(0,stop=tf,length=N))
-    X2 = zeros(n,N)
-    for i = 1:n
-        interp_cubic = CubicSplineInterpolation(t1, X[i,:])
-        X2[i,:] = interp_cubic(t2)
-    end
-    return X2
-end
 
 
 # JUNK FUNCTIONS

@@ -1,10 +1,25 @@
 include("solver_options.jl")
 import Base: copy, length, size
 
+mutable struct SolverState
+    constrained::Bool # Constrained solve
+    minimum_time::Bool # Minimum time solve
+    infeasible::Bool # Infeasible solve
+    second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
+
+    function SolverState()
+        new(false,false,false,false)
+    end
+end
+
+include("solver_options.jl")
+import Base: copy, length, size
+
 struct Solver{O<:Objective}
     model::Model         # Dynamics model
     obj::O               # Objective (cost function and constraints)
     opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
+    state::SolverState   # Solver state
     dt::Float64          # Time step
     fd::Function         # Discrete in place dynamics function, `fd(_,x,u)`
     Fd::Function         # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
@@ -15,15 +30,17 @@ struct Solver{O<:Objective}
     integration::Symbol
 
     function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
+        state = SolverState()
+
         # Check for minimum time
         if obj.tf == 0
-            minimum_time = true
+            state.minimum_time = true
             dt = 0.
             if N==-1
                 throw(ArgumentError("N must be specified for a minimum-time problem"))
             end
         else
-            minimum_time = false
+            state.minimum_time = false
 
             # Handle combination of N and dt
             if isnan(dt) && N>0
@@ -54,17 +71,16 @@ struct Solver{O<:Objective}
         end
 
         if O <: ConstrainedObjective
-            opts.constrained = true
+            state.constrained = true
         end
 
         n, m = model.n, model.m
         f! = model.f
         m̄ = m
-        if minimum_time
+        if state.minimum_time
             m̄ += 1
-            opts.constrained = true
+            state.constrained = true
         end
-        opts.minimum_time = minimum_time
 
         # Get integration scheme
         if isdefined(TrajectoryOptimization,integration)
@@ -102,7 +118,7 @@ struct Solver{O<:Objective}
             # Assign state, control (and dt) to augmented vector
             Sd[1:n] = x
             Sd[n+1:n+m] = u[1:m]
-            minimum_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
+            state.minimum_time ? Sd[n+m+1] = u[m̄] : Sd[n+m+1] = √dt
 
             # Calculate Jacobian
             Fd!(Jd,Sdotd,Sd)
@@ -121,7 +137,7 @@ struct Solver{O<:Objective}
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, dt, fd!, fd_jacobians!, c!, c_jacobian!, c_labels, N, integration)
+        new{O}(model, obj, options, state, dt, fd!, fd_jacobians!, c!, c_jacobian!, c_labels, N, integration)
     end
 end
 
@@ -136,11 +152,11 @@ constraints specified by the user
 function get_constraint_labels(solver::Solver)
      n,m,N = get_sizes(solver)
      c_labels = copy(solver.c_labels)
-     if solver.opts.infeasible
+     if solver.state.infeasible
          lbl_inf = ["* infeasible control" for i = 1:n]
          append!(c_labels, lbl_inf)
      end
-     if solver.opts.minimum_time
+     if solver.state.minimum_time
          push!(c_labels, "* √dt (equality)")
      end
      return c_labels
@@ -168,7 +184,7 @@ Return the quadratic control stage cost R
 If using an infeasible start, will return the augmented cost matrix
 """
 function getR(solver::Solver)::Array{Float64,2}
-    if !solver.opts.infeasible && !is_min_time(solver)
+    if !solver.state.infeasible && !is_min_time(solver)
         return solver.obj.R
     else
         n = solver.model.n
@@ -179,7 +195,7 @@ function getR(solver::Solver)::Array{Float64,2}
         if is_min_time(solver)
             R[m̄,m̄] = solver.opts.R_minimum_time
         end
-        if solver.opts.infeasible
+        if solver.state.infeasible
             R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.R_infeasible*tr(solver.obj.R))
         end
         return R

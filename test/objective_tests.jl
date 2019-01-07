@@ -48,7 +48,7 @@ obj = ConstrainedObjective(costfun,tf,x0,xf)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 
 @test obj.p == 0
-@test obj.use_goal_constraint == true
+@test obj.use_xf_equality_constraint == true
 @test obj.p_N == 2
 
 # Use scalar control constraints
@@ -101,7 +101,7 @@ obj = ConstrainedObjective(obj_uncon)
 @test isa(obj.cI(ones(0),x0,u0),Nothing)
 @test isa(obj.cE(ones(0),x0,u0),Nothing)
 @test obj.p == 0
-@test obj.use_goal_constraint == true
+@test obj.use_xf_equality_constraint == true
 @test obj.p_N == 2
 
 obj = ConstrainedObjective(obj_uncon, u_min=-1)
@@ -146,7 +146,7 @@ is_inplace_function(cI!,ones(n))
 is_inplace_function(cE!,ones(n))
 count_inplace_output(cE!,ones(n))
 
-obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_xf_equality_constraint=false)
 @test obj.p_N == 3
 @test obj.p == 9
 @test obj.pI_custom == 2
@@ -160,7 +160,7 @@ obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, c
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
 @test obj.p_N == 2
 @test obj.p == 7
-obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_goal_constraint=false)
+obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_xf_equality_constraint=false)
 @test obj.p_N == 1
 @test obj.p == 6
 
@@ -239,7 +239,7 @@ cE(cdot,x,u)
 @test cdot == [3; 3; 19]
 
 # Jacobians
-jac_cE = generate_general_constraint_jacobian(cE,pE,0,n,m)
+jac_cE = generate_general_constraint_jacobian(cE,pE,n,m)
 jac_x(x,u) = [2 0 0;
               0 2 0;
               2x']
@@ -253,7 +253,7 @@ jac_cE(A,B,x,u)
 @test B == jac_u(x,u)
 
 # Add terminal
-function cE(xdot,x)
+function _cE(xdot,x)
     xdot[1:2] = [cos(x[1]) + x[2]*x[3]; x[1]*x[2]^2]
 end
 
@@ -261,9 +261,11 @@ pE_N = 2
 
 jac_xN(x) = [-sin(x[1]) x[3] x[2]; x[2]^2 2x[1]*x[2] 0]
 
-jac_cE = generate_general_constraint_jacobian(cE,pE,pE_N,n,m)
+jac_cE = generate_general_constraint_jacobian(cE,pE,n,m)
+
+_jac_cE = generate_general_constraint_jacobian(_cE,pE_N,n)
 tmp1 = zeros(pE_N,n)
-jac_cE(tmp1,x)
+_jac_cE(tmp1,x)
 @test tmp1 == jac_xN(x)
 
 A1 = zeros(3,3)
@@ -311,7 +313,6 @@ Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 mycost = GenericCost(my_stage_cost,my_final_cost,n,m)
 @test taylor_expansion(mycost,x,u) == (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
 @test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
-
 
 # Unconstrained Objective
 costfun = LinQuad

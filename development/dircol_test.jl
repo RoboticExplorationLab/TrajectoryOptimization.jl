@@ -211,7 +211,7 @@ c = zeros(3)
 cI!(c,x,u)
 is_inplace_function(cE!,x,u)
 model, obj = Dynamics.dubinscar
-obj_con = ConstrainedObjective(obj,cE=cE!,cI=cI!,cE_N=cE!,use_goal_constraint=false,tf=3)
+obj_con = ConstrainedObjective(obj,cE=cE!,cI=cI!,cE_N=cE!,use_xf_equality_constraint=false,tf=3)
 @test obj_con.p == pE + pI
 @test obj_con.pI == pI
 @test obj_con.pI_N == pI_N

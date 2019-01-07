@@ -100,7 +100,7 @@ results
 # end
 # μ[(N-1)*p+1:(N-1)*p+n,(N-1)*p+1:(N-1)*p+n] = results.IμN
 #
-# if !solver.opts.λ_second_order_update
+# if !solver.state.second_order_dual_update
 #     # first order multiplier update
 #     λ .= λ + μ*c
 #     λ[idx_inequality] = max.(0.0,λ[idx_inequality])
@@ -126,7 +126,7 @@ results
 #
 # B = cz[idx_active,:]*inv(L)*cz[idx_active,:]'
 #
-# if solver.opts.λ_second_order_update
+# if solver.state.second_order_dual_update
 #     λ[idx_active] = λ[idx_active] + inv(B)*c[idx_active]
 #     λ[idx_inequality] = max.(0.0,λ[idx_inequality])
 # end
@@ -190,7 +190,7 @@ for k = 1:N
 end
 μ[N*p+1:N*p+n,N*p+1:N*p+n] = results.IμN
 
-if !solver.opts.λ_second_order_update
+if !solver.state.second_order_dual_update
     # first order multiplier update
     λ .= λ + μ*c
     λ[idx_inequality] = max.(0.0,λ[idx_inequality])
@@ -236,7 +236,7 @@ L .+= cz[idx_active,:]'*μ[idx_active,idx_active]*cz[idx_active,:]
 
 B = cz[idx_active,:]*inv(L)*cz[idx_active,:]'
 
-if solver.opts.λ_second_order_update
+if solver.state.second_order_dual_update
     λ[idx_active] = λ[idx_active] + inv(B)*c[idx_active]
     λ[idx_inequality] = max.(0.0,λ[idx_inequality])
 end

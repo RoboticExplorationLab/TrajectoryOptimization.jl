@@ -12,15 +12,17 @@ Cost function of the form
     xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + q⁠ᵀx + rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-mutable struct LinearQuadraticCost{TM,TH,TV} <: CostFunction
+mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
     Q::TM                 # Quadratic stage cost for states (n,n)
     R::TM                 # Quadratic stage cost for controls (m,m)
     H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
     q::TV                 # Linear term on states (n,)
-    r::TV                 # Lineqr term on controls (m,)
+    r::TV                 # Linear term on controls (m,)
+    c::T                  # constant term
     Qf::TM                # Quadratic final cost for terminal state (n,n)
     qf::TV                # Linear term on terminal state (n,)
-    function LinearQuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, Qf::TM, qf::TV) where {TM, TH, TV}
+    cf::T                 # constant term (terminal)
+    function QuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, c::T, Qf::TM, qf::TV, cf::T) where {TM, TH, TV, T}
         if !isposdef(R)
             err = ArgumentError("R must be positive definite")
             throw(err)
@@ -33,7 +35,7 @@ mutable struct LinearQuadraticCost{TM,TH,TV} <: CostFunction
             err = ArgumentError("Qf must be positive semi-definite")
             throw(err)
         end
-        new{TM,TH,TV}(Q,R,H,q,r,Qf,qf)
+        new{TM,TH,TV,T}(Q,R,H,q,r,c,Qf,qf,cf)
     end
 end
 
@@ -41,33 +43,35 @@ function LQRCost(Q,R,Qf,xf)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
+    c = 0.5*xf'*Q*xf
     qf = -Qf*xf
-    return LinearQuadraticCost(Q, R, H, q, r, Qf, qf)
+    cf = 0.5*xf'*Qf*xf
+    return QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
 end
 
-function taylor_expansion(cost::LinearQuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
+function taylor_expansion(cost::QuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
     m = get_sizes(cost)[2]
     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u[1:m] + cost.r
 end
 
-function taylor_expansion(cost::LinearQuadraticCost, xN::AbstractVector{Float64})
+function taylor_expansion(cost::QuadraticCost, xN::AbstractVector{Float64})
     return cost.Qf, cost.Qf*xN + cost.qf
 end
 
-function stage_cost(cost::LinearQuadraticCost, x::AbstractVector, u::AbstractVector)
-    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u
+function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
 
-function stage_cost(cost::LinearQuadraticCost, xN::AbstractVector)
-    0.5*xN'cost.Qf*xN + cost.qf'*xN
+function stage_cost(cost::QuadraticCost, xN::AbstractVector)
+    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 
-function get_sizes(cost::LinearQuadraticCost)
+function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
 end
 
-function copy(cost::LinearQuadraticCost)
-    return LinearQuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.Qf), copy(cost.qf))
+function copy(cost::QuadraticCost)
+    return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end
 
 
@@ -183,54 +187,6 @@ end
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #                      CONSTRAINED OBJECTIVE                                   #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-function is_inplace_function(c::Function, input...)
-    q = 100
-    iter = 1
-
-    vals = ones(q)
-    while iter < 5
-        try
-            c(vals,input...)
-            return true
-        catch e
-            if e isa MethodError
-                return false
-            elseif e isa BoundsError
-                q *= 10
-            else
-                throw(e)
-            end
-            iter += 1
-        end
-    end
-    return false
-end
-
-function count_inplace_output(c::Function, input...)
-    q0 = 100
-    iter = 1
-
-    q = q0
-    vals = NaN*(ones(q))
-    while iter < 5
-        try
-            c(vals,input...)
-            break
-        catch e
-            if e isa BoundsError
-                q *= 10
-                iter += 1
-                vals = NaN*(ones(q))
-            else
-                throw(e)
-            end
-        end
-    end
-    p = count(isfinite.(vals))
-
-    return p
-end
-
 """
 $(TYPEDEF)
 Define a quadratic objective for a constrained optimization problem.
@@ -261,7 +217,7 @@ struct ConstrainedObjective{C} <: Objective
     # Terminal Constraints
     cI_N::Function          # custom terminal inequality constraint
     cE_N::Function          # custom teriminal equality constraint
-    use_goal_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
+    use_xf_equality_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
 
     p::Int   # Total number of stage constraints
     pI::Int  # Number of inequality constraints
@@ -278,7 +234,7 @@ struct ConstrainedObjective{C} <: Objective
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_goal_constraint) where {C}
+        use_xf_equality_constraint) where {C}
 
         n,m = get_sizes(cost)
         x = rand(n)
@@ -316,19 +272,22 @@ struct ConstrainedObjective{C} <: Objective
 
         # Terminal Constraints
         pI_N = pI_N_custom
-        if use_goal_constraint
-            if pI_N_custom > 0 || pE_N_custom > 0
-                throw(ArgumentError("Can't specify custom terminal constraints with a goal constrait"))
+
+        if use_xf_equality_constraint
+            if pE_N_custom > 0
+                throw(ArgumentError("Can't specify custom terminal constraints AND xf constraint -- set use_xf_equality_constraint=false"))
+            else
+                pE_N = n
             end
-            pE_N = n
+        elseif pE_N_custom > 0
+            pE_N = pE_N_custom
         else
             pE_N = 0
         end
-        pE_N += pE_N_custom
+
         p_N = pI_N + pE_N
 
-
-        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_goal_constraint,
+        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_xf_equality_constraint,
             p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom)
     end
 end
@@ -338,14 +297,14 @@ function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     x_min, x_max,
     cI, cE,
     cI_N, cE_N,
-    use_goal_constraint) where {C}
+    use_xf_equality_constraint) where {C}
     if tf == :min
         ConstrainedObjective(cost,0.0,x0,xf,
             u_min, u_max,
             x_min, x_max,
             cI, cE,
             cI_N, cE_N,
-            use_goal_constraint)
+            use_xf_equality_constraint)
     else
         err = ArgumentError(":min is the only recognized Symbol for the final time")
         throw(err)
@@ -379,14 +338,14 @@ function ConstrainedObjective(cost,tf,x0,xf;
     x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
     cI=null_constraint, cE=null_constraint,
     cI_N=null_constraint, cE_N=null_constraint,
-    use_goal_constraint=true)
+    use_xf_equality_constraint=true)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_goal_constraint)
+        use_xf_equality_constraint)
 end
 
 
@@ -399,7 +358,7 @@ function copy(obj::ConstrainedObjective)
     ConstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
-        use_goal_constraint=obj.use_goal_constraint)
+        use_xf_equality_constraint=obj.use_xf_equality_constraint)
 end
 
 
@@ -414,14 +373,14 @@ function update_objective(obj::ConstrainedObjective;
     cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
-    use_goal_constraint=obj.use_goal_constraint)
+    use_xf_equality_constraint=obj.use_xf_equality_constraint)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
         cI=cI, cE=cE,
         cI_N=cI_N, cE_N=cE_N,
-        use_goal_constraint=use_goal_constraint)
+        use_xf_equality_constraint=use_xf_equality_constraint)
 
 end
 
@@ -429,9 +388,7 @@ end
 null_constraint(c,x,u) = nothing
 null_constraint(c,x) = nothing
 
-
 get_sizes(obj::Objective) = get_sizes(obj.cost)
-
 
 """
 $(SIGNATURES)
@@ -482,4 +439,135 @@ Convenience method for getting the stage cost from any objective
 """
 function stage_cost(obj::Objective,x::Vector{Float64},u::Vector{Float64})
     stage_cost(obj.cost,x,u)
+end
+
+"""
+$(SIGNATURES)
+    Determine if the constraints are inplace. Returns boolean and number of constraints
+"""
+function is_inplace_constraints(c::Function,n::Int64,m::Int64)
+    x = rand(n)
+    u = rand(m)
+    q = 100
+    iter = 1
+
+    vals = NaN*(ones(q))
+    try
+        c(vals,x,u)
+    catch e
+        if e isa MethodError
+            return false
+        end
+    end
+
+    return true
+end
+
+function count_inplace_output(c::Function, n::Int, m::Int)
+    x = rand(n)
+    u = rand(m)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x,u)
+            break
+        catch e
+            q *= 10
+            iter += 1
+            vals = NaN*(ones(q))
+        end
+    end
+    p = count(isfinite.(vals))
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,x)
+            break
+        catch e
+            if e isa MethodError
+                p_N = 0
+                break
+            else
+                q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
+            end
+        end
+    end
+    p_N = count(isfinite.(vals))
+
+    return p, p_N
+end
+
+function count_inplace_output(c::Function, n::Int)
+    x = rand(n)
+    q = 100
+    iter = 1
+    vals = NaN*(ones(q))
+
+    while iter < 5
+        try
+            c(vals,x)
+            break
+        catch e
+            q *= 10
+            iter += 1
+            vals = NaN*(ones(q))
+        end
+    end
+    return count(isfinite.(vals))
+end
+
+function is_inplace_function(c::Function, input...)
+    q = 100
+    iter = 1
+
+    vals = ones(q)
+    while iter < 5
+        try
+            c(vals,input...)
+            return true
+        catch e
+            if e isa MethodError
+                return false
+            elseif e isa BoundsError
+                q *= 10
+            else
+                throw(e)
+            end
+            iter += 1
+        end
+    end
+    return false
+end
+
+function count_inplace_output(c::Function, input...)
+    q0 = 100
+    iter = 1
+
+    q = q0
+    vals = NaN*(ones(q))
+    while iter < 5
+        try
+            c(vals,input...)
+            break
+        catch e
+            if e isa BoundsError
+                q *= 10
+                iter += 1
+                vals = NaN*(ones(q))
+            else
+                throw(e)
+            end
+        end
+    end
+    p = count(isfinite.(vals))
+
+    return p
 end

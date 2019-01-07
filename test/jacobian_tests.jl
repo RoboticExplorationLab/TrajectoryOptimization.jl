@@ -1,5 +1,3 @@
-using Test
-
 ### General constraint Jacobians match known solutions
 pI = 6
 n = 3
@@ -14,7 +12,7 @@ function cI(cdot,x,u)
     cdot[6] = u[3]
 end
 
-c_jac = TrajectoryOptimization.generate_general_constraint_jacobian(cI,pI,0,n,m)
+c_jac = TrajectoryOptimization.generate_general_constraint_jacobian(cI,pI,n,m)
 
 x = [1;2;3]
 u = [4;5;6]

@@ -35,7 +35,7 @@ export
     ConstrainedObjective,
     UnconstrainedObjective,
     LQRObjective,
-    LinearQuadraticCost,
+    QuadraticCost,
     LQRCost,
     GenericCost,
     ConstrainedVectorResults,
@@ -75,14 +75,20 @@ include("model.jl")
 include("integration.jl")
 include("solver.jl")
 include("results.jl")
-include("ilqr_algorithm.jl")
+include("objective.jl")
+include("backwardpass.jl")
+include("forwardpass.jl")
+include("constraints.jl")
+include("rollout.jl")
+include("infeasible.jl")
+include("minimum_time.jl")
 include("ilqr_methods.jl")
+include("augmented_lagrangian.jl")
 include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
-
 
 using Ipopt
 

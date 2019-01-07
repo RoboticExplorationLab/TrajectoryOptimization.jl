@@ -5,8 +5,8 @@ m = rand(1:10)
 N = rand(10:10:100)
 r = TrajectoryOptimization.UnconstrainedVectorResults(n,m,N)
 @test (length(r.X[1]),length(r.X)) == (n,N)
-@test (length(r.U[1]),length(r.U)) == (m,N)
-@test (size(r.K[1])...,length(r.K)) == (m,n,N)
+@test (length(r.U[1]),length(r.U)) == (m,N-1)
+@test (size(r.K[1])...,length(r.K)) == (m,n,N-1)
 
 r2 = TrajectoryOptimization.UnconstrainedVectorResults(n,m,N)
 r.X[1] .= 1:n
@@ -29,23 +29,23 @@ N = 10
 model, obj = Dynamics.dubinscar
 obj_con = ConstrainedObjective(obj, u_min=-10, u_max=10)
 solver = Solver(model, obj_con, N=N)
-solver.opts.infeasible = true
+solver.state.infeasible = true
 n,m = get_sizes(solver)
 p, = get_num_constraints(solver)
+p_N, = TrajectoryOptimization.get_num_terminal_constraints(solver)
 X = rand(n,N)
-U = rand(m,N)
+U = rand(m,N-1)
 
 results = init_results(solver, X, U)
-@test to_array(results.X) == X
-@test to_array(results.U)[1:m,:] == U
+@test isapprox(to_array(results.X),X)
+@test isapprox(to_array(results.U)[1:m,:],U)
 @test results.λ[1] == zeros(p)
 
 # Test warm start (partial ⁠λs)
-λ = [rand(p-n) for i = 1:N]
-push!(λ,rand(n))
+λ = [i != N ? rand(p-n) : rand(p_N) for i = 1:N]
 results = init_results(solver, X, U, λ=λ)
-@test to_array(results.X) == X
-@test to_array(results.U)[1:m,:] == U
+@test isapprox(to_array(results.X),X)
+@test isapprox(to_array(results.U)[1:m,:],U)
 @test results.λ[1] == [λ[1]; zeros(n)]
 λ[1][1] = 10
 @test results.λ[1][1] != 10
@@ -54,8 +54,8 @@ results = init_results(solver, X, U, λ=λ)
 λ = [rand(p) for i = 1:N]
 push!(λ,rand(n))
 results = init_results(solver, X, U, λ=λ)
-@test to_array(results.X) == X
-@test to_array(results.U)[1:m,:] == U
+@test isapprox(to_array(results.X),X)
+@test isapprox(to_array(results.U)[1:m,:],U)
 @test results.λ[1] == λ[1]
 λ[1][1] = 10
 @test results.λ[1][1] != 10
@@ -63,8 +63,3 @@ results = init_results(solver, X, U, λ=λ)
 λ = [rand(p-1) for i = 1:N-1]
 push!(λ,rand(n))
 @test_throws ArgumentError init_results(solver, X, U, λ=λ)
-
-
-λ = [rand(p) for i = 1:N-1]
-push!(λ,rand(n-1))
-@test_throws DimensionMismatch init_results(solver, X, U, λ=λ)
