@@ -295,7 +295,7 @@ $(SIGNATURES)
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
 
     ## Lagrange multiplier updates
-    solver.state.second_order_dual_update ? λ_update_second_order!(results,solver) : λ_update!(results,solver)
+    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,false) : λ_update!(results,solver)
 
     ## Penalty updates
     μ_update!(results,solver)

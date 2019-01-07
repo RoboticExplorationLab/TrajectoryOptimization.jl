@@ -38,10 +38,10 @@ function rollout!(X::Vector, U::Vector, solver::Solver)
         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Propagate dynamics forward
-        solver.fd(X[k+1], X[k], U[k][1:m], dt)
+        solver.fd(view(X,k+1,1:n), X[k][1:n], U[k][1:m], dt)
 
         # Add infeasible controls
-        solver.state.infeasible ? X[k+1] += U[k][m̄+1:m̄+n] : nothing
+        solver.state.infeasible ? X[k+1][1:n] += U[k][m̄+1:m̄+n] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X[k+1],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
@@ -81,10 +81,10 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 
         # Propagate dynamics
-        solver.fd(X_[k], X_[k-1], U_[k-1][1:m], dt)
+        solver.fd(view(X_,k,1:n), X_[k-1][1:n], U_[k-1][1:m], dt)
 
         # Add infeasible controls
-        solver.state.infeasible ? X_[k] += U_[k-1][m̄.+(1:n)] : nothing
+        solver.state.infeasible ? X_[k][1:n] += U_[k-1][m̄.+(1:n)] : nothing
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)

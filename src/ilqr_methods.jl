@@ -15,6 +15,22 @@ end
 
 """
 $(SIGNATURES)
+Get number of (solver) stats, accounting for minimum time
+# Output
+- n̄:  number of non infeasible states (ie, system states + time state if minimum time). System state augmented by one if time is included as a state for minimum time problems.
+- nn: total number of solver states
+"""
+function get_num_states(solver::Solver)
+    n,m = get_sizes(solver)
+    n̄ = n
+    # TODO for now:
+    nn = n̄
+    solver.state.minimum_time ? n̄ += 1 : nothing
+    return n̄, nn
+end
+
+"""
+$(SIGNATURES)
     Compute the optimal control problem cost
 """
 function cost(solver::Solver,vars::DircolVars)
@@ -44,6 +60,8 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     costfun = solver.obj.cost
     dt = solver.dt
     xf = solver.obj.xf
@@ -54,7 +72,7 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Stage cost
-        J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
+        J += (stage_cost(costfun,X[k][1:n],U[k][1:m]))*dt
 
         # Minimum time cost
         solver.state.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
@@ -64,7 +82,7 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     end
 
     # Terminal Cost
-    J += stage_cost(costfun, X[N])
+    J += stage_cost(costfun, X[N][1:n])
 
     return J
 end

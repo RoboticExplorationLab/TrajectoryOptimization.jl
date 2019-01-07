@@ -200,8 +200,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
-                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_second_order_dual_update
+                if c_max <= 1.5*solver.opts.constraint_tolerance && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
+                end
+                if solver.state.second_order_dual_update
                     @logmsg InnerLoop "λ 2-update"
                 end
             end
@@ -376,9 +378,11 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_controls(solver)
+
 
     # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(nn,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results, solver, bp)

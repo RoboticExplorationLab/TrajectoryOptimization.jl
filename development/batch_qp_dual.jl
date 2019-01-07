@@ -1,4 +1,4 @@
-using Test, Plots, JuMP, Ipopt, LinearAlgebra
+using Test, Plots, JuMP, Ipopt, Clp, LinearAlgebra
 
 u_bound = 1.5
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
@@ -6,7 +6,7 @@ obj = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_b
 
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = true
-
+solver
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(model.m,solver.N-1)
 results_c, = TrajectoryOptimization.solve(solver, U)
@@ -21,6 +21,9 @@ plot(to_array(results_c.U)')
 # Q,R,H,q,r = taylor_expansion(costfun,x,u)
 # H
 
+plot(to_array(results_c.λ)[:,1:solver.N-1]')
+
+a = 1
 function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbose::Bool=false)
     n = solver.model.n
     m = solver.model.m
@@ -170,28 +173,48 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
         idx_inequality[(k-1)*p+1:(k-1)*p+pI]
         @test all(idx_inequality[(N-1)*p+1:Np] .== true)
     end
-    # ū = -(B̄'*Q̄*B̄)\(B̄'*(q̄ + Q̄*Ā*x0) + B̄'*C̄'*λ_tmp)
+    ū = -(B̄'*Q̄*B̄)\(B̄'*(q̄ + Q̄*Ā*x0) + B̄'*C̄'*λ_tmp)
 
+    # println(any(isnan.(q̄)))
+    # println(any(isnan.(Ā)))
+    # println(any(isnan.(λ_tmp)))
+    # println(any(isnan.(ū)))
+    # println(any(isnan.(Ā)))
+    # println(any(isnan.(B̄)))
+    # println(any(isnan.(C̄)))
+    # println(any(isnan.(c̄)))
     P = B̄'*Q̄*B̄
     M = q̄ + Q̄*Ā*x0
 
-    # L = 0.5*ū'*P*ū + M'*B̄*ū + λ_tmp'*(C̄*B̄*ū + C̄*Ā*x0 + c̄)
+    # println(rank(P))
+    # println(size(P))
+    # println(λ_tmp)
 
-    # D = 0.5*M'*B̄*inv(P')*B̄'*M + 0.5*M'*B̄*inv(P')*B̄'*C̄'*λ_tmp + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*M + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*C̄'*λ_tmp - M'*B̄*inv(P)*B̄'*M - M'*B̄*inv(P)*B̄'*C̄'*λ_tmp - λ_tmp'*C̄*B̄*inv(P)*B̄'*M - λ_tmp'*C̄*B̄*inv(P)*B̄'*C̄'*λ_tmp + λ_tmp'*C̄*Ā*x0 + λ_tmp'*c̄
+    L = 0.5*ū'*P*ū + M'*B̄*ū + λ_tmp'*(C̄*B̄*ū + C̄*Ā*x0 + c̄)
+
+    D = 0.5*M'*B̄*inv(P')*B̄'*M + 0.5*M'*B̄*inv(P')*B̄'*C̄'*λ_tmp + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*M + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*C̄'*λ_tmp - M'*B̄*inv(P)*B̄'*M - M'*B̄*inv(P)*B̄'*C̄'*λ_tmp - λ_tmp'*C̄*B̄*inv(P)*B̄'*M - λ_tmp'*C̄*B̄*inv(P)*B̄'*C̄'*λ_tmp + λ_tmp'*C̄*Ā*x0 + λ_tmp'*c̄
     Q_dual = C̄*B̄*inv(P')*B̄'*C̄' - 2*C̄*B̄*inv(P)*B̄'*C̄'
     q_dual = M'*B̄*inv(P')*B̄'*C̄' - 2*M'*B̄*inv(P)*B̄'*C̄' + x0'*Ā'*C̄' + c̄'
     qq_dual = 0.5*M'*B̄*inv(P')*B̄'*M - M'*B̄*inv(P)*B̄'*M
 
-    # DD = 0.5*λ_tmp'*Q_dual*λ_tmp + q_dual*λ_tmp + qq_dual
+    DD = 0.5*λ_tmp'*Q_dual*λ_tmp + q_dual*λ_tmp + qq_dual
 
-    # @test isapprox(D,L)
+    @test isapprox(D,L)
+    @test isapprox(DD,L)
 
     # solve QP
-    m = JuMP.Model(solver=IpoptSolver(print_level=0))
+    m = JuMP.Model(solver=IpoptSolver())#print_level=0))
+    # m = JuMP.Model(solver=ClpSolver())
+
+    # @variable(m, u[1:Nu])
+    #
+    # @objective(m, Min, 0.5*u'*P*u + M'*B̄*u)
+    # @constraint(m, con, C̄*B̄*u + C̄*Ā*x0 + c̄ .== 0.)
 
     @variable(m, λ[1:Np])
+    #
     # @objective(m, Min, λ'*λ)
-    # @constraint(m, con, Q_dual*λ .== -q_dual')
+    # @constraint(m, con, Q_dual*λ + q_dual' .== 0.)
 
     @objective(m, Max, 0.5*λ'*Q_dual*λ + q_dual*λ + qq_dual)
     @constraint(m, con2, λ[idx_inequality] .>= 0)
@@ -199,6 +222,10 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
     # print(m)
 
     status = JuMP.solve(m)
+
+    if status != :Optimal
+        error("QP failed")
+    end
 
     # Solution
     # println("Objective value: ", JuMP.getobjectivevalue(m))
@@ -211,15 +238,21 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
             results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
         else
             idx = ((N-1)*p + 1):Np
-            results.λ[N] .= JuMP.getvalue(λ[idx])
-            results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+            results.λ[k] = JuMP.getvalue(λ[idx])
+            results.λ[k][1:pI_N] = max.(0.0,results.λ[k][1:pI_N])
         end
+
+        # tolerance check
+        results.λ[k][abs.(results.λ[k]) .< 1e-8] .= 0.
     end
+
 end
 
 λ_second_order_update!(results_c,solver,true)
 
-solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+plot!(to_array(results_c.λ)[:,1:solver.N-1]')
+
+solver = TrajectoryOptimization.Solver(model,obj,dt=0.01,opts=opts)
 U = zeros(model.m,solver.N-1)
 solver.opts.verbose = true
 solver.opts.cost_tolerance = 1e-4
@@ -227,6 +260,11 @@ solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.gradient_tolerance = 1e-4
 solver.opts.gradient_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
+solver.opts.use_second_order_dual_update = true
 @time results_c,stats = TrajectoryOptimization.solve(solver, U)
+
+plot(to_array(results_c.λ)[:,1:solver.N-1]')
+
+plot(to_array(results_c.U)[:,1:solver.N-1]')
 
 plot!(log.(stats["cost"] .+ 1000))

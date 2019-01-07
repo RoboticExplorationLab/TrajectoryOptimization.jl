@@ -77,8 +77,10 @@ struct Solver{O<:Objective}
         n, m = model.n, model.m
         f! = model.f
         m̄ = m
+        n̄ = n
         if state.minimum_time
             m̄ += 1
+            n̄ += 1
             state.constrained = true
         end
 

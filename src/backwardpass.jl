@@ -45,6 +45,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     # Objective
     costfun = solver.obj.cost
@@ -62,12 +63,12 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
 
     # TEMP resets values for now - this will get fixed
     for k = 1:N-1
-        Qx[k] = zeros(n); Qu[k] = zeros(mm); Qxx[k] = zeros(n,n); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,n)
-        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,n)
+        Qx[k] = zeros(nn); Qu[k] = zeros(mm); Qxx[k] = zeros(nn,nn); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,nn)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,nn)
     end
 
     # Boundary Conditions
-    S[N], s[N] = taylor_expansion(costfun, X[N])
+    S[N], s[N] = taylor_expansion(costfun, X[N][1:n])
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -86,11 +87,11 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
     while k >= 1
         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
-        x = X[k]
+        x = X[k][1:n]
         u = U[k][1:m]
 
         expansion = taylor_expansion(costfun,x,u)
-        Qxx[k],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k],Qu[k][1:m] = expansion .* dt
+        Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* dt
 
         # Minimum time expansion components
         if solver.state.minimum_time
