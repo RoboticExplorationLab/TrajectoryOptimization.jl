@@ -346,6 +346,11 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         solver.state.infeasible = true
     end
 
+    # Chop off last control if N controls are passed in
+    if size(U,2) == N
+        U = U[:,1:N-1]
+    end
+
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
 
