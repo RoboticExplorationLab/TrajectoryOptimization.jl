@@ -48,6 +48,14 @@ function set_baseline_benchmark(results::BenchmarkGroup, stats::BenchmarkGroup)
     return nothing
 end
 
+function get_last_benchmark(;offset=0)
+    suite_history, stats_history = load_benchmark_history()
+    tags = collect(keys(suite_history))
+    tags = tags[tags .!= "baseline"]
+    last = sort(tags)[end-offset]
+    suite_history[last], stats_history[last]
+end
+
 function get_baseline_benchmark()
     suite_history, stats_history = load_benchmark_history()
     suite_history["baseline"], stats_history["baseline"]
@@ -57,14 +65,25 @@ function load_benchmark_history()
     suite_history, stats_history = BenchmarkTools.load(histfile)
 end
 
+function prev_benchmark_comparison(results, stats; f=BenchmarkTools.median, styled=true, offset=0)
+    base_res, base_stats = get_last_benchmark(offset=offset)
+    benchmark_comparison(results, stats, base_res, base_stats)
+end
+
+function prev_benchmark_comparison(;verbose=false, offset=0)
+    results = run(suite,verbose=verbose)
+    last_comparison(results,stats,offset=offset)
+end
+
 function baseline_comparison(results, stats; f=BenchmarkTools.median, styled=true)
     base_res, base_stats = get_baseline_benchmark()
     benchmark_comparison(results, stats, base_res, base_stats)
 end
 
-function baseline_comparison()
-    results = run(suite)
+function baseline_comparison(;verbose=false)
+    results = run(suite,verbose=verbose)
     baseline_comparison(results, stats)
+    results
 end
 
 function benchmark_comparison(r1,s1,r2,s2; f=BenchmarkTools.median, styled=true)
