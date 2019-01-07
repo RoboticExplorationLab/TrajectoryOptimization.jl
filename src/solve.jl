@@ -200,7 +200,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
-                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_λ_second_order_update
+                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                     @logmsg InnerLoop "λ 2-update"
                 end
@@ -231,7 +231,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update_type(results,solver)
+        outer_loop_update(results,solver)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 

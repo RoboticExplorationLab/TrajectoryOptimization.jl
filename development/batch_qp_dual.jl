@@ -1,6 +1,5 @@
 using Test, Plots, JuMP, Ipopt, LinearAlgebra
 
-
 u_bound = 1.5
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
 obj = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound)
@@ -22,17 +21,18 @@ plot(to_array(results_c.U)')
 # Q,R,H,q,r = taylor_expansion(costfun,x,u)
 # H
 
-function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
+function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbose::Bool=false)
     n = solver.model.n
     m = solver.model.m
     nm = n+m
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_constraints(solver)
 
     Nz = n*N + m*(N-1) # number of decision variables x, u
     Nu = m*(N-1) # number of control decision variables u
 
-    Np = p*(N-1) + obj.p_N # number of constraints
+    Np = p*(N-1) + p_N # number of constraints
 
     Mz = N + N-1 # number of decision vectors
     Mu = N-1 # number of control decision vectors
@@ -55,9 +55,9 @@ function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
 
     for k = 1:N
         x = results.X[k]
-        u = results.U[k]
 
         if k != N
+            u = results.U[k]
             Q,R,H,q,r = taylor_expansion(costfun,x,u)
         else
             Qf,qf = taylor_expansion(costfun,x)
@@ -103,70 +103,73 @@ function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
             q̄[idx] = qf
 
             idx2 = ((k-1)*p + 1):Np
-            C̄[idx2,idx] = results.Cx_N
-            c̄[idx2] = results.CN
+            C̄[idx2,idx] = results.Cx[N]
+            c̄[idx2] = results.C[N]
 
-            λ_tmp[idx2] = results.λN
-            idx_inequality[idx2] .= true
-            active_set[idx2] .= true
+            idx6 = ((k-1)*p + 1):((k-1)*p + pI_N)
 
+            λ_tmp[idx2] = results.λ[N]
+            idx_inequality[idx6] .= true
+            active_set[idx2] .= results.active_set[N]
         end
 
     end
     N_active_set = sum(active_set)
-    # # Tests
-    # @test Ā[1:n,:] == Matrix(I,n,n)
-    # k = 3
-    # @test Ā[(k-1)*nm+1:(k-1)*nm+n,:] == prod(results.fdx[1:2])
-    # @test results.fdx[1]*results.fdx[2] == prod(results.fdx[1:2])
-    #
-    # k = 7
-    # @test Ā[(k-1)*nm+1:(k-1)*nm+n,:] == prod(results.fdx[1:k-1])
-    # @test Ā[(N-1)*nm+1:Nz,:] == prod(results.fdx[1:N-1])
-    #
-    # @test B̄[1:n,1:n] == zeros(n,n)
-    # @test B̄[n+1:nm,1:m] == 1.0*Matrix(I,m,m)
-    # @test B̄[nm+1:nm+n,1:m] == results.fdu[1][1:n,1:m]
-    # @test B̄[nm+n+1:2*nm,m+1:2*m] == 1.0*Matrix(I,m,m)
-    # @test B̄[(N-1)*nm+1:Nz,1:m] == prod(results.fdx[2:N-1])*results.fdu[1]
-    # @test B̄[(N-1)*nm+1:Nz,m+1:2*m] == prod(results.fdx[3:N-1])*results.fdu[2]
-    # @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
-    #
-    # k = 1
-    # Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
-    # @test Q̄[1:nm,1:nm] == [Q H'; H R]
-    # @test q̄[1:nm] == [q;r]
-    #
-    # k = 13
-    # Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
-    # @test Q̄[(k-1)*nm+1:k*nm,(k-1)*nm+1:k*nm] == [Q H'; H R]
-    # @test q̄[(k-1)*nm+1:k*nm] == [q;r]
-    #
-    # k = N
-    # Qf,qf = taylor_expansion(costfun,results.X[k])
-    # @test Q̄[(k-1)*nm+1:Nz,(k-1)*nm+1:Nz] == Qf
-    # @test q̄[(k-1)*nm+1:Nz] == qf
-    #
-    # @test C̄[1:p,1:nm] == [results.Cx[1] results.Cu[1]]
-    #
-    # k = 9
-    # @test C̄[(k-1)*p+1:k*p,(k-1)*nm+1:k*nm] == [results.Cx[k] results.Cu[k]]
-    # @test C̄[(N-1)*p+1:Np,(N-1)*nm+1:Nz] == results.Cx_N
-    #
-    # @test c̄[1:p] == results.C[1]
-    #
-    # k = 17
-    # @test c̄[(k-1)*p+1:k*p] == results.C[k]
-    # @test c̄[(N-1)*p+1:Np] == results.CN
-    #
-    # @test all(idx_inequality[1:pI] .== true)
-    # @test all(idx_inequality[pI+1:p] .== false)
-    # k = 12
-    #
-    # @test all(idx_inequality[(k-1)*p+1:(k-1)*p+pI] .== true)
-    # idx_inequality[(k-1)*p+1:(k-1)*p+pI]
-    # @test all(idx_inequality[(N-1)*p+1:Np] .== true)
 
+    if verbose
+        # Tests
+        @test Ā[1:n,:] == Matrix(I,n,n)
+        k = 3
+        @test Ā[(k-1)*nm+1:(k-1)*nm+n,:] == prod(results.fdx[1:2])
+        @test results.fdx[1]*results.fdx[2] == prod(results.fdx[1:2])
+
+        k = 7
+        @test Ā[(k-1)*nm+1:(k-1)*nm+n,:] == prod(results.fdx[1:k-1])
+        @test Ā[(N-1)*nm+1:Nz,:] == prod(results.fdx[1:N-1])
+
+        @test B̄[1:n,1:n] == zeros(n,n)
+        @test B̄[n+1:nm,1:m] == 1.0*Matrix(I,m,m)
+        @test B̄[nm+1:nm+n,1:m] == results.fdu[1][1:n,1:m]
+        @test B̄[nm+n+1:2*nm,m+1:2*m] == 1.0*Matrix(I,m,m)
+        @test B̄[(N-1)*nm+1:Nz,1:m] == prod(results.fdx[2:N-1])*results.fdu[1]
+        @test B̄[(N-1)*nm+1:Nz,m+1:2*m] == prod(results.fdx[3:N-1])*results.fdu[2]
+        @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
+
+        k = 1
+        Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+        @test Q̄[1:nm,1:nm] == [Q H'; H R]
+        @test q̄[1:nm] == [q;r]
+
+        k = 13
+        Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+        @test Q̄[(k-1)*nm+1:k*nm,(k-1)*nm+1:k*nm] == [Q H'; H R]
+        @test q̄[(k-1)*nm+1:k*nm] == [q;r]
+
+        k = N
+        Qf,qf = taylor_expansion(costfun,results.X[k])
+        @test Q̄[(k-1)*nm+1:Nz,(k-1)*nm+1:Nz] == Qf
+        @test q̄[(k-1)*nm+1:Nz] == qf
+
+        @test C̄[1:p,1:nm] == [results.Cx[1] results.Cu[1]]
+
+        k = 9
+        @test C̄[(k-1)*p+1:k*p,(k-1)*nm+1:k*nm] == [results.Cx[k] results.Cu[k]]
+        @test C̄[(N-1)*p+1:Np,(N-1)*nm+1:Nz] == results.Cx[N]
+
+        @test c̄[1:p] == results.C[1]
+
+        k = 17
+        @test c̄[(k-1)*p+1:k*p] == results.C[k]
+        @test c̄[(N-1)*p+1:Np] == results.C[N]
+
+        @test all(idx_inequality[1:pI] .== true)
+        @test all(idx_inequality[pI+1:p] .== false)
+        k = 12
+
+        @test all(idx_inequality[(k-1)*p+1:(k-1)*p+pI] .== true)
+        idx_inequality[(k-1)*p+1:(k-1)*p+pI]
+        @test all(idx_inequality[(N-1)*p+1:Np] .== true)
+    end
     # ū = -(B̄'*Q̄*B̄)\(B̄'*(q̄ + Q̄*Ā*x0) + B̄'*C̄'*λ_tmp)
 
     P = B̄'*Q̄*B̄
@@ -207,13 +210,14 @@ function solve_batch_qp_dual(results::SolverIterResults,solver::Solver)
             results.λ[k] = JuMP.getvalue(λ[idx])
             results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
         else
-            idx = ((k-1)*p + 1):Np
-            results.λN .= JuMP.getvalue(λ[idx])
+            idx = ((N-1)*p + 1):Np
+            results.λ[N] .= JuMP.getvalue(λ[idx])
+            results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
         end
     end
 end
 
-solve_batch_qp_dual(results_c,solver)
+λ_second_order_update!(results_c,solver,true)
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
 U = zeros(model.m,solver.N-1)

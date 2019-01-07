@@ -10,6 +10,7 @@ module TrajectoryOptimization
 
 using RigidBodyDynamics
 using ForwardDiff
+using JuMP
 using DocStringExtensions
 using Interpolations
 using RecipesBase
@@ -75,7 +76,6 @@ include("model.jl")
 include("integration.jl")
 include("solver.jl")
 include("results.jl")
-include("objective.jl")
 include("backwardpass.jl")
 include("forwardpass.jl")
 include("constraints.jl")
