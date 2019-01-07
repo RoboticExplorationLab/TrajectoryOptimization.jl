@@ -127,30 +127,30 @@ end
 #                                                                              #
 ################################################################################
 
-struct ConstrainedVectorResults <: ConstrainedIterResults
-    X::Vector{Vector{Float64}}  # States (n,N)
-    U::Vector{Vector{Float64}}  # Controls (m,N)
+struct ConstrainedVectorResults{TV,TV} <: ConstrainedIterResults
+    X::TV  # States (n,N)
+    U::TV  # Controls (m,N)
 
-    K::Vector{Matrix{Float64}} # Feedback (state) gain (m,n,N)
-    d::Vector{Vector{Float64}}  # Feedforward gain (m,N)
+    K::TM # Feedback (state) gain (m,n,N)
+    d::TV  # Feedforward gain (m,N)
 
-    X_::Vector{Vector{Float64}} # Predicted states (n,N)
-    U_::Vector{Vector{Float64}} # Predicted controls (m,N)
+    X_::TV # Predicted states (n,N)
+    U_::TV # Predicted controls (m,N)
 
-    S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
-    s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
+    S::TM  # Cost-to-go hessian (n,n)
+    s::TV  # Cost-to-go gradient (n,1)
 
-    fdx::Vector{Matrix{Float64}} # State jacobian (n,n,N)
-    fdu::Vector{Matrix{Float64}} # Control (k) jacobian (n,m,N-1)
+    fdx::TM # State jacobian (n,n,N)
+    fdu::TM # Control (k) jacobian (n,m,N-1)
 
-    C::Vector{Vector{Float64}}      # Constraint values (p,N)
-    C_prev::Vector{Vector{Float64}} # Previous constraint values (p,N)
+    C::TV      # Constraint values (p,N)
+    C_prev::TV # Previous constraint values (p,N)
     Iμ::Vector{Diagonal{Float64,Vector{Float64}}}        # fcxtive constraint penalty matrix (p,p,N)
-    λ::Vector{Vector{Float64}} # Lagrange multipliers (p,N)
-    μ::Vector{Vector{Float64}}     # Penalty terms (p,N)
+    λ::TV # Lagrange multipliers (p,N)
+    μ::TV     # Penalty terms (p,N)
 
-    Cx::Vector{Matrix{Float64}} # State jacobian (n,n,N)
-    Cu::Vector{Matrix{Float64}} # Control (k) jacobian (n,m,N-1)
+    Cx::TM # State jacobian (n,n,N)
+    Cu::TM # Control (k) jacobian (n,m,N-1)
 
     active_set::Vector{Vector{Bool}} # active set of constraints
 
@@ -217,6 +217,37 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
         Cx,Cu,active_set,ρ,dρ)
 end
 
+function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type)
+    if T <: AbstractArray
+        UnconstrainedVectorResults(n,m,N)
+    else
+        X = T(N,n)
+        U = T(N-1,m)
+        K = T(N,m,n)
+        d = T(N,m)
+        X_ = T(N,n)
+        U_ = T(N-1,m)
+        S = T(N,n,n)
+        s = T(N,n)
+        fdx = T(N,n,n)
+        fdu = T(N,n,m)
+
+        C =      T(N,p, size_N=p_N)
+        C_prev = T(N,p, size_N=p_N)
+        Iμ     = T([i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N])
+        λ =      T(N,p, size_N=p_N)
+        μ =      T(N,p, size_N=p_N)
+
+        Cu = T(N, (p,n), size_N=(p_N,n))
+        Cu = T(N, (p,m), size_N=(p_N,0))
+
+        ρ = ones(1)
+        dρ = ones(1)
+
+        UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    end
+end
+
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
@@ -237,6 +268,11 @@ end
 
 function TVar1(N::Int,sze::Vararg{Int,K}) where K
     x = [zeros(sze) for k = 1:N]
+    TVar1(x)
+end
+
+function TVar1(N::Int,sze::Union{NTuple{K,Int} where K,Int}; size_N::Union{NTuple{K,Int} where K,Int})
+    x = [k == N ? zeros(size_N) : zeros(sze) for k = 1:N]
     TVar1(x)
 end
 

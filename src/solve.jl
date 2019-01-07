@@ -188,8 +188,13 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             solver.opts.live_plotting ? display(plot(to_array(results.U)')) : nothing
 
             ### UPDATE RESULTS ###
-            X .= deepcopy(X_)
-            U .= deepcopy(U_)
+            if solver.opts.restype == Matrix
+                X .= deepcopy(X_)
+                U .= deepcopy(U_)
+            else
+                copyto!(X,X_)
+                copyto!(U,U_)
+            end
 
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
