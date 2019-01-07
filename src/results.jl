@@ -1,4 +1,4 @@
-import Base: isempty,copy
+import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
@@ -37,28 +37,28 @@ abstract type ConstrainedIterResults <: SolverVectorResults end
 #                                                                              #
 ################################################################################
 
-struct UnconstrainedVectorResults <: UnconstrainedIterResults
-    X::Vector{Vector{Float64}}  # States (n,N)
-    U::Vector{Vector{Float64}}  # Controls (m,N)
+struct UnconstrainedVectorResults{TV,TM} <: UnconstrainedIterResults
+    X::TV  # States (n,N)
+    U::TV  # Controls (m,N)
 
-    K::Vector{Matrix{Float64}} # Feedback (state) gain (m,n,N)
-    d::Vector{Vector{Float64}}  # Feedforward gain (m,N)
+    K::TM # Feedback (state) gain (m,n,N)
+    d::TV  # Feedforward gain (m,N)
 
-    X_::Vector{Vector{Float64}} # Predicted states (n,N)
-    U_::Vector{Vector{Float64}} # Predicted controls (m,N)
+    X_::TV # Predicted states (n,N)
+    U_::TV # Predicted controls (m,N)
 
-    S::Vector{Matrix{Float64}}  # Cost-to-go hessian (n,n)
-    s::Vector{Vector{Float64}}  # Cost-to-go gradient (n,1)
+    S::TM  # Cost-to-go hessian (n,n)
+    s::TV  # Cost-to-go gradient (n,1)
 
-    fdx::Vector{Matrix{Float64}} # Discrete dynamics state jacobian (n,n,N)
-    fdu::Vector{Matrix{Float64}} # Discrete dynamics control jacobian (n,m,N-1)
+    fdx::TM # Discrete dynamics state jacobian (n,n,N)
+    fdu::TM # Discrete dynamics control jacobian (n,m,N-1)
 
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
-    function UnconstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    function UnconstrainedVectorResults(X::TV,U::TV,
+            K::TM,d,X_,U_,S,s,fdx,fdu,ρ,dρ) where {TV,TM}
+        new{TV,TM}(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
     end
 end
 
@@ -93,6 +93,28 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     dρ = ones(1)
 
     UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+end
+
+function UnconstrainedVectorResults(n::Int,m::Int,N::Int,T::Type)
+    if T <: AbstractArray
+        UnconstrainedVectorResults(n,m,N)
+    else
+        X = T(N,n)
+        U = T(N-1,m)
+        K = T(N,m,n)
+        d = T(N,m)
+        X_ = T(N,n)
+        U_ = T(N-1,m)
+        S = T(N,n,n)
+        s = T(N,n)
+        fdx = T(N,n,n)
+        fdu = T(N,n,m)
+
+        ρ = ones(1)
+        dρ = ones(1)
+
+        UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    end
 end
 
 function copy(r::UnconstrainedVectorResults)
@@ -201,6 +223,98 @@ function copy(r::ConstrainedVectorResults)
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
         copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ))
 end
+
+abstract type TrajectoryVariable  end
+
+struct TVar1{T <: AbstractArray} <: TrajectoryVariable
+    x::Vector{T}
+end
+
+function TVar1(N::Int,n::Int)
+    x = [zeros(n) for k = 1:N]
+    TVar1(x)
+end
+
+function TVar1(N::Int,sze::Vararg{Int,K}) where K
+    x = [zeros(sze) for k = 1:N]
+    TVar1(x)
+end
+
+function size(x::TVar1)
+    return (size(x.x[1])...,length(x.x))
+end
+
+function getindex(x::TVar1,ind::Int)
+    x.x[ind]
+end
+
+function setindex!(x::TVar1,value,ind::Int)
+    x.x[ind] = value
+end
+
+firstindex(x::TVar1) = 1
+lastindex(x::TVar1) = length(x.x)
+length(x::TVar1) = length(x.x)
+
+function copyto!(x::TVar1,y::Matrix)
+    for k = 1:length(x.x)
+        x.x[k] = y[:,k]
+    end
+end
+
+function copyto!(x::TVar1,y::TVar1)
+    for k = 1:length(x.x)
+        copyto!(x.x[k], y.x[k])
+    end
+end
+
+
+
+
+struct TVar{T} <: TrajectoryVariable
+    A::Array{T}
+    X::Vector{SubArray{T,N,P,I,L}} where {N,P,I,L}
+end
+
+function TVar(N::Int,sze::Vararg{Int,K}) where K
+    A = zeros(sze...,N)
+    TVar(A)
+end
+
+function TVar(A::Matrix{Float64})
+    n,N = size(A)
+    X = [view(A,1:n,k) for k = 1:N]
+    TVar(A,X)
+end
+
+function TVar(A::Array{Float64,3})
+    n,m,N = size(A)
+    X = [view(A,1:n,1:m,k) for k = 1:N]
+    TVar(A,X)
+end
+
+length(x::TVar) = length(x.X)
+
+function size(x::TVar)
+    return size(x.A)
+end
+
+function getindex(x::TVar,ind::Int)
+    x.X[ind]
+end
+
+function setindex!(x::TVar,value,ind::Int)
+    copyto!(x.X[ind],value)
+end
+
+function copyto!(x::TVar{T},y::Matrix{T}) where T
+    copyto!(x.A,y)
+end
+
+function copyto!(x::TVar{T},y::TVar{T}) where T
+    copyto!(x.A,y.A)
+end
+
 
 ################################################################################
 #                                                                              #
@@ -387,7 +501,8 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results.ρ[1] = solver.opts.ρ_initial
 
     else
-        results = UnconstrainedVectorResults(n,m,N)
+        restype = solver.opts.restype
+        results = UnconstrainedVectorResults(n,m,N,restype)
     end
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)
