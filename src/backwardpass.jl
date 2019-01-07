@@ -76,7 +76,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
     if res isa ConstrainedIterResults
         C = res.C; Iμ = res.Iμ; λ = res.λ
         Cx = res.Cx; Cu = res.Cu
-        
+
         S[N] += Cx[N]'*Iμ[N]*Cx[N]
         s[N] += Cx[N]'*(Iμ[N]*C[N] + λ[N])
     end
@@ -130,10 +130,10 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
             Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
         end
 
-        if solver.opts.regularization_type == :state
+        if solver.opts.bp_reg_type == :state
             Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
             Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
-        elseif solver.opts.regularization_type == :control
+        elseif solver.opts.bp_reg_type == :control
             Quu_reg[k] = Quu[k] + res.ρ[1]*I
             Qux_reg[k] = Qux[k]
         end

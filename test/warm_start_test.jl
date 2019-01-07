@@ -13,7 +13,7 @@ res.μ[1]
 
 solver_warm = Solver(model,obj_con,N=N)
 solver_warm.opts.verbose = true
-solver_warm.opts.μ_initial = res.μ[1][1]
+solver_warm.opts.penalty_initial = res.μ[1][1]
 λ = deepcopy(res.λ)
 push!(λ, res.λN)
 res_warm, stats_warm = _solve(solver_warm, to_array(res.U))

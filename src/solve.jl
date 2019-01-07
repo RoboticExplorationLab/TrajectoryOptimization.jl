@@ -220,7 +220,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             print_row(logger,InnerLoop)
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
-            if J > solver.opts.max_cost
+            if J > solver.opts.max_cost_value
                 error("Cost exceded maximum allowable cost")
             end
         end
@@ -231,7 +231,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver)
+        outer_loop_update_type(results,solver)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
@@ -337,7 +337,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
     end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
             return true
         elseif ((solver.state.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
             return true
@@ -350,7 +350,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
         # Check for cost convergence
             # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
-        if ((~solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.state.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance_intermediate) && iter_outerloop != solver.opts.iterations_outerloop))
             return true
         elseif ((solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance) && c_max < solver.opts.constraint_tolerance))
             return true

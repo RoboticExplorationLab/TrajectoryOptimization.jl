@@ -69,8 +69,8 @@ colors_X = [:red :blue :orange :green]
 opts = SolverOptions()
 opts.use_static = false
 opts.cost_tolerance = 1e-6
-opts.outer_loop_update = :default
-opts.τ = 0.75
+opts.outer_loop_update_type = :default
+opts.constraint_decrease_ratio = 0.75
 
 # iLQR
 solver = Solver(model,obj,N=N,opts=opts,integration=:rk3_foh)
@@ -112,10 +112,10 @@ time_per_iter = stat_d["runtime"]/stat_d["iterations"]
 # Solver Options
 opts = SolverOptions()
 opts.cost_tolerance = 1e-6
-opts.cost_intermediate_tolerance = 1e-1
+opts.cost_tolerance_intermediate = 1e-1
 opts.constraint_tolerance = 1e-3
-opts.outer_loop_update = :individual
-opts.τ = .85
+opts.outer_loop_update_type = :individual
+opts.constraint_decrease_ratio = .85
 
 # iLQR
 solver = Solver(model,obj_c,N=N,opts=opts,integration=:rk3_foh)
@@ -157,10 +157,10 @@ time_per_iter = stat_d["runtime"]/stat_d["iterations"]
 # Solver Options
 opts = SolverOptions()
 opts.cost_tolerance = 1e-6
-opts.cost_intermediate_tolerance = 1e-1
+opts.cost_tolerance_intermediate = 1e-1
 # opts.constraint_tolerance = 1e-3
-opts.outer_loop_update = :default
-opts.τ = .85
+opts.outer_loop_update_type = :default
+opts.constraint_decrease_ratio = .85
 opts.resolve_feasible = false
 
 # iLQR
@@ -209,13 +209,13 @@ opts.use_static = false
 opts.max_dt = 0.25
 opts.verbose = false
 opts.cost_tolerance = 1e-4
-opts.cost_intermediate_tolerance = 1e-3
+opts.cost_tolerance_intermediate = 1e-3
 opts.constraint_tolerance = 0.05
-opts.outer_loop_update = :default
+opts.outer_loop_update_type = :default
 opts.R_minimum_time = 500
 opts.resolve_feasible = false
-opts.μ_initial_minimum_time_equality = 50.
-opts.γ_minimum_time_equality = 15
+opts.penalty_initial_minimum_time_equality = 50.
+opts.penalty_scaling_minimum_time_equality = 15
 
 # iLQR
 solver = Solver(model,obj_min,N=N,opts=opts,integration=:rk3)

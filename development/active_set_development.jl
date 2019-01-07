@@ -192,10 +192,10 @@ function _backwardpass_active_set!(res::SolverVectorResults,solver::Solver)
         Quu = Luu + fdu'*S[k+1][1:n,1:n]*fdu
         Qux = Lux + fdu'*S[k+1][1:n,1:n]*fdx
 
-        if solver.opts.regularization_type == :state
+        if solver.opts.bp_reg_type == :state
             Quu_reg = Quu + res.ρ[1]*fdu'*fdu
             Qux_reg = Qux + res.ρ[1]*fdu'*fdx
-        elseif solver.opts.regularization_type == :control
+        elseif solver.opts.bp_reg_type == :control
             Quu_reg = Quu + res.ρ[1]*I
             Qux_reg = Qux
         end
@@ -549,10 +549,10 @@ a = 1
 #             Qux .+= Cu'*Iμ[k]*Cx
 #         end
 #
-#         if solver.opts.regularization_type == :state
+#         if solver.opts.bp_reg_type == :state
 #             Quu_reg = Quu + res.ρ[1]*fdu'*fdu
 #             Qux_reg = Qux + res.ρ[1]*fdu'*fdx
-#         elseif solver.opts.regularization_type == :control
+#         elseif solver.opts.bp_reg_type == :control
 #             Quu_reg = Quu + res.ρ[1]*I
 #             Qux_reg = Qux
 #         end

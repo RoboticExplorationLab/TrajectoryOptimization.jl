@@ -10,14 +10,14 @@ opts.cache = false
 # opts.c1 = 1e-4
 # opts.c2 = 2.0
 opts.constraint_tolerance = 1e-5
-opts.cost_intermediate_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
 opts.cost_tolerance = 1e-5
 # opts.iterations_outerloop = 100
 # opts.iterations = 1000
 # opts.iterations_linesearch = 50
 opts.infeasible_regularization = 1e6
-opts.outer_loop_update = :individual
-opts.τ = 0.1
+opts.outer_loop_update_type = :individual
+opts.constraint_decrease_ratio = 0.1
 ######################
 
 ### Simple Pendulum ###

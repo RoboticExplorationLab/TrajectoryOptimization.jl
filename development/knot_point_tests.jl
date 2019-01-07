@@ -2,13 +2,13 @@
 opts = TrajectoryOptimization.SolverOptions()
 opts.square_root = false
 opts.verbose = false
-opts.cost_intermediate_tolerance = 1e-6
+opts.cost_tolerance_intermediate = 1e-6
 opts.constraint_tolerance = 1e-6
 opts.cost_tolerance = 1e-6
-opts.τ = 0.25
-opts.γ = 10.0
-opts.ρ_initial = 0.0
-opts.outer_loop_update = :default
+opts.constraint_decrease_ratio = 0.25
+opts.penalty_scaling = 10.0
+opts.bp_reg_initial = 0.0
+opts.outer_loop_update_type = :default
 opts.use_static = false
 opts.resolve_feasible = false
 ######################

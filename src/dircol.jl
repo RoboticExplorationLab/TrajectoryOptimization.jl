@@ -967,10 +967,10 @@ end
 
 function interp(t,T,X,U,F)
     k = findlast(t .> T)
-    τ = t-T[k]
+    constraint_decrease_ratio = t-T[k]
     if method == :trapezoid
-        u = U[:,k] + τ/dt*(F[:,k+1]-F[:,k])
-        x = X[:,k] + F[:,k]*τ + τ^2/(2*dt)*(F[:,k+1]-F[:,k])
+        u = U[:,k] + constraint_decrease_ratio/dt*(F[:,k+1]-F[:,k])
+        x = X[:,k] + F[:,k]*constraint_decrease_ratio + constraint_decrease_ratio^2/(2*dt)*(F[:,k+1]-F[:,k])
     elseif method == :hermite_simpson || method == :hermite_simpson_separated
         x1,x2 = X[:,k], X[:,k+1]
         u1,u2 = U[:,k], U[:,k+1]
@@ -978,8 +978,8 @@ function interp(t,T,X,U,F)
         xm = (x1+x2)/2 + dt/8*(f1-f2)
         um = (U[:,k] + U[:,k+1])/2
 
-        u = (2(τ-dt/2)(τ-dt)U[:,k] - 4τ*(τ-dt)Um + 2τ*(τ-dt/2)*U[:,k+1])/dt^2
-        x = X[:,k] + F[:,k]*τ/dt + 1/2*(-3F[:,])
+        u = (2(constraint_decrease_ratio-dt/2)(constraint_decrease_ratio-dt)U[:,k] - 4constraint_decrease_ratio*(constraint_decrease_ratio-dt)Um + 2constraint_decrease_ratio*(constraint_decrease_ratio-dt/2)*U[:,k+1])/dt^2
+        x = X[:,k] + F[:,k]*constraint_decrease_ratio/dt + 1/2*(-3F[:,])
     end
     return x,u
 end

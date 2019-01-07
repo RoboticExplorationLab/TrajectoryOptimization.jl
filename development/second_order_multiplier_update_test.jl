@@ -8,14 +8,14 @@ opts.verbose = true
 opts.cache = false
 # opts.c1 = 1e-4
 opts.c2 = 5.0
-opts.cost_intermediate_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
 opts.constraint_tolerance = 1e-5
 opts.cost_tolerance = 1e-5
 opts.iterations_outerloop = 50
 opts.iterations = 500
 # opts.iterations_linesearch = 50
-opts.τ = 0.25
-opts.outer_loop_update = :individual
+opts.constraint_decrease_ratio = 0.25
+opts.outer_loop_update_type = :individual
 ######################
 
 ### Set up model, objective, solver ###

@@ -359,14 +359,14 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results = ConstrainedVectorResults(n,mm,p,N,p_N)
 
         # Set initial penalty term values
-        results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        results.μ .*= solver.opts.penalty_initial # TODO change to assign, not multiply: penalty_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
         if solver.state.minimum_time
             for k = 1:solver.N-1
-                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
-                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
+                results.μ[k][p] = solver.opts.penalty_initial_minimum_time_equality
+                results.μ[k][m̄] = solver.opts.penalty_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] = solver.opts.penalty_initial_minimum_time_inequality
             end
         end
         if solver.state.infeasible
@@ -379,7 +379,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         end
 
         # Set initial regularization
-        results.ρ[1] = solver.opts.ρ_initial
+        results.ρ[1] = solver.opts.bp_reg_initial
 
     else
         results = UnconstrainedVectorResults(n,m,N)

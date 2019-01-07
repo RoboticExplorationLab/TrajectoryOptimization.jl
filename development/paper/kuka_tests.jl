@@ -94,12 +94,12 @@ plot(to_array(res.U)')
 obj_con = ConstrainedObjective(obj_uncon, u_min=-20,u_max=20)
 solver = Solver(model,obj_con,N=N)
 solver.opts.verbose = false
-solver.opts.γ = 100
-solver.opts.μ_initial = 0.1
+solver.opts.penalty_scaling = 100
+solver.opts.penalty_initial = 0.1
 solver.opts.cost_tolerance = 1e-6
-solver.opts.cost_intermediate_tolerance = 1e-2
+solver.opts.cost_tolerance_intermediate = 1e-2
 solver.opts.iterations = 200
-solver.opts.ρ_initial = 0
+solver.opts.bp_reg_initial = 0
 U_uncon = to_array(res.U)
 
 # iLQR
@@ -190,12 +190,12 @@ addcircles!(vis,circles)
 obj_obs = ConstrainedObjective(obj_ik,cI=cI)
 solver = Solver(model, obj_obs, N=N)
 solver.opts.verbose = false
-solver.opts.γ = 100
-solver.opts.μ_initial = 0.001
+solver.opts.penalty_scaling = 100
+solver.opts.penalty_initial = 0.001
 # solver.opts.cost_tolerance = 1e-6
-solver.opts.cost_intermediate_tolerance = 1e-3
+solver.opts.cost_tolerance_intermediate = 1e-3
 # solver.opts.iterations = 200
-solver.opts.ρ_initial = 10
+solver.opts.bp_reg_initial = 10
 U0 = to_array(res_ik.U)
 U0_hold = hold_trajectory(solver,kuka,x0[1:nn])
 res_obs, stats_obs = solve(solver,U0_hold)

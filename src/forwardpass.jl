@@ -37,7 +37,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_pr
 
             @logmsg InnerLoop "Max iterations (forward pass)"
             regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] += solver.opts.ρ_forwardpass
+            res.ρ[1] += solver.opts.bp_reg_fp
             break
         end
 

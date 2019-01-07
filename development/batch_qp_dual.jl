@@ -9,7 +9,7 @@ opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = true
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
-U = zeros(model.m,solver.N)
+U = zeros(model.m,solver.N-1)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 
@@ -216,12 +216,12 @@ end
 solve_batch_qp_dual(results_c,solver)
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
-U = zeros(model.m,solver.N)
+U = zeros(model.m,solver.N-1)
 solver.opts.verbose = true
 solver.opts.cost_tolerance = 1e-4
-solver.opts.cost_intermediate_tolerance = 1e-4
+solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.gradient_tolerance = 1e-4
-solver.opts.gradient_intermediate_tolerance = 1e-4
+solver.opts.gradient_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
 @time results_c,stats = TrajectoryOptimization.solve(solver, U)
 

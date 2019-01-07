@@ -201,8 +201,8 @@ opts = SolverOptions(verbose=false,
                    eps_constraint=1e-6,
                    eps_intermediate=1e-4,
                    eps=1e-6,
-                   outer_loop_update=:uniform,
-                   τ=0.1)
+                   outer_loop_update_type=:uniform,
+                   constraint_decrease_ratio=0.1)
 
 opts0 = SolverOptions()
 name *= "_" * string(method)

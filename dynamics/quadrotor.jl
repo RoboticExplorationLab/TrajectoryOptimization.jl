@@ -54,7 +54,7 @@ function quadrotor_dynamics!(ẋ,X,u)
       ẋ[1:3] = v # velocity in world frame
       ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
       ẋ[8:10] = [0;0;-g] + (1/m)*qrot(q,F) #acceleration in world frame
-      ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = τ
+      ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
 end
 
 function quadrotor_dynamics(X,u)

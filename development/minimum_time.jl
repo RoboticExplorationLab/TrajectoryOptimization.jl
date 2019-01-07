@@ -29,10 +29,10 @@ solver_min.opts.max_dt = 0.15
 solver_min.opts.min_dt = 1e-3
 solver_min.opts.constraint_tolerance = 0.001 # 0.005
 solver_min.opts.R_minimum_time = 15.0 #13.5 # 12.0
-solver_min.opts.ρ_initial = 0
-solver_min.opts.τ = .25
-solver_min.opts.γ = 2.0
-solver_min.opts.outer_loop_update = :individual
+solver_min.opts.bp_reg_initial = 0
+solver_min.opts.constraint_decrease_ratio = .25
+solver_min.opts.penalty_scaling = 2.0
+solver_min.opts.outer_loop_update_type = :individual
 solver_min.opts.iterations = 100
 solver_min.opts.iterations_outerloop = 25 # 20
 
@@ -61,13 +61,13 @@ opts.max_dt = 0.05 #0.1
 opts.min_dt = 1e-4
 opts.constraint_tolerance = 0.001
 opts.R_minimum_time = 800.0 #1000.0
-opts.ρ_initial = 0
-opts.τ = .25
-opts.γ = 2.0
-opts.outer_loop_update = :individual
+opts.bp_reg_initial = 0
+opts.constraint_decrease_ratio = .25
+opts.penalty_scaling = 2.0
+opts.outer_loop_update_type = :individual
 opts.iterations = 250
 opts.iterations_outerloop = 35 # 20
-opts.ρ_forwardpass = 10.0
+opts.bp_reg_fp = 10.0
 opts.iterations_linesearch = 20
 
 solver_min = TrajectoryOptimization.Solver(model,obj_min,integration=:rk3_foh,N=31,opts=opts)
