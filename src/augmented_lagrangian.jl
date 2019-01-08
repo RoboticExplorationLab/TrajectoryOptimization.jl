@@ -251,7 +251,7 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver)
     end
 end
 
-""" @(SIGNATURES) Penalty update """
+""" $(SIGNATURES) Penalty update """
 function μ_update!(results::ConstrainedIterResults,solver::Solver)
     if solver.opts.outer_loop_update_type == :default
         μ_update_default!(results,solver)
@@ -261,7 +261,7 @@ function μ_update!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
-""" @(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
+""" $(SIGNATURES) Penalty update scheme ('default') - all penalty terms are updated"""
 function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
     for k = 1:N
@@ -270,7 +270,7 @@ function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
-""" @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
+""" $(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
