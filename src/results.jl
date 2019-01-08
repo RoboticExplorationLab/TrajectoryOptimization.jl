@@ -81,7 +81,9 @@ function iterate(x::TrajectoryVariable,state)
     end
 end
 
-
+function to_array(x::TrajectoryVariable)
+    to_array(x.x)
+end
 
 """
 $(TYPEDEF)
@@ -398,7 +400,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results = ConstrainedVectorResults(nn,mm,p,N,p_N,TrajectoryVariable)
 
         # Set initial penalty term values
-        copyto!(results.μ, results.μ*solver.opts.μ_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        copyto!(results.μ, results.μ*solver.opts.penalty_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
         if solver.state.minimum_time
