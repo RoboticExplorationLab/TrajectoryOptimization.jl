@@ -97,7 +97,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
         if solver.state.minimum_time
             ℓ1 = stage_cost(costfun,x,u)
             h = U[k][m̄]
-            tmp = 2*h*ℓu
+            tmp = 2*h*expansion[5]
 
             Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
             Quu[k][1:m,m̄] = tmp

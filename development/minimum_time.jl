@@ -18,10 +18,18 @@ model,obj = TrajectoryOptimization.Dynamics.pendulum!
 n,m = model.n, model.m
 
 u_bound = 5.
-obj_c = TrajectoryOptimization.ConstrainedObjective(obj, u_min=-u_bound, u_max=u_bound) # constrained objective
-obj_min = TrajectoryOptimization.update_objective(obj_c, tf=:min, c=0.0, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
+Q = Array(1e-3*Diagonal(I,n))
+R = Array(1e-3*Diagonal(I,m))
+Qf = Array(Diagonal(I,n)*0.0)
+tf = obj.tf
+x0 = obj.x0
+xf = obj.xf
 
-solver_min = TrajectoryOptimization.Solver(model,obj_min,integration=:rk3_foh,N=31)
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_c = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=-u_bound, u_max=u_bound) # constrained objective
+obj_min = TrajectoryOptimization.update_objective(obj_c, tf=:min)
+
+solver_min = TrajectoryOptimization.Solver(model,obj_min,integration=:rk4,N=31)
 
 solver_min.opts.verbose = false
 solver_min.opts.use_static = false
@@ -36,7 +44,16 @@ solver_min.opts.outer_loop_update_type = :individual
 solver_min.opts.iterations = 100
 solver_min.opts.iterations_outerloop = 25 # 20
 
-U = ones(m,solver_min.N)
+U = ones(m,solver_min.N-1)
+U_init = [U; ones(1,solver_min.N-1)*sqrt(get_initial_dt(solver))]
+X_, U_ = get_initial_trajectory(solver_min,zeros(n,solver_min.N),U)
+m̄,mm = get_num_controls(solver_min)
+n̄,nn = get_num_states(solver_min)
+
+p,pI,pE = get_num_constraints(solver_min)
+p_N,pI_N,pE_N = get_num_terminal_constraints(solver_min)
+
+results = ConstrainedVectorResults(nn,mm,p,solver_min.N,p_N)
 
 @time results_min,stats_min = TrajectoryOptimization.solve(solver_min,U)
 

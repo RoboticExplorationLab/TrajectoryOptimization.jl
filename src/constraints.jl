@@ -53,12 +53,14 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
 
     c_fun = solver.c_fun
 
     for k = 1:N-1
         # Update constraints
-        c_fun(res.C[k], X[k], U[k])
+        c_fun(view(res.C[k],1:p), X[k][1:nn], U[k][1:mm])
 
         # Minimum time special case
         if solver.state.minimum_time
@@ -75,11 +77,12 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     end
 
     # Terminal constraint
-    c_fun(res.C[N],X[N])
+    c_fun(view(res.C[N],1:p_N),X[N][1:n])
     get_active_set!(res,solver,p_N,pI_N,N)
 
     res.Iμ[N] = Diagonal(res.active_set[N].*res.μ[N])
-    return nothing # TODO allow for more general terminal constraint
+
+    return nothing
 end
 
 function update_constraints!(res::UnconstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing

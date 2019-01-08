@@ -231,7 +231,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
 
         # Initialize controls with sqrt(dt)
         if size(U0,1) == m
-            U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
+            U_init = [U0; ones(1,N-1)*sqrt(get_initial_dt(solver))]
         end
     else
         solve_string = "..."
@@ -262,11 +262,11 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         X_init = zeros(n,N)
     end
 
-    if solver.state.minimum_time
-        # Augmentd state vector with x[n̄]_k+1 = u[n̄]_k
-        X_init = [X0;zeros(1,N)]
-    end
     @info solve_string
+
+    if solver.state.minimum_time
+        X_init = [X_init; zeros(1,N)]
+    end
 
     return X_init, U_init
 end
