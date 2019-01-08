@@ -68,7 +68,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
     end
 
     # Boundary Conditions
-    S[N], s[N] = taylor_expansion(costfun, X[N][1:n])
+    S[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)

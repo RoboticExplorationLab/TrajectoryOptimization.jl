@@ -29,13 +29,18 @@ end
 function rollout!(X::Vector, U::Vector, solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     dt = solver.dt
 
-    X[1] = solver.obj.x0
+    X[1][1:n] = solver.obj.x0
     for k = 1:N-1
-
-        # Get dt is minimum time
-        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
+        # Get dt if minimum time and h to state dynamics
+        if solver.state.minimum_time
+            h = U[k][m̄]
+            X[k+1][n̄] = h
+            dt = h^2
+        end
 
         # Propagate dynamics forward
         solver.fd(view(X[k+1],1:n), X[k][1:n], U[k][1:m], dt)
@@ -64,11 +69,13 @@ flag indicates values are finite for all time steps.
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
 
-    X_[1] = solver.obj.x0;
+    X_[1][1:n] = solver.obj.x0;
 
     for k = 2:N
         # Calculate state trajectory difference
@@ -77,8 +84,12 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         # Calculate updated control
         U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
-        # Get dt if minimum time
-        solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
+        # Get dt if minimum time and h to states
+        if solver.state.minimum_time
+            h = U_[k-1][m̄]
+            X_[k][n̄] = h
+            dt = h^2
+        end
 
         # Propagate dynamics
         solver.fd(view(X_[k],1:n), X_[k-1][1:n], U_[k-1][1:m], dt)

@@ -62,8 +62,8 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
 
         # Minimum time special case
         if solver.state.minimum_time
-            if k < N-1
-                res.C[k][end] = U[k][m̄] - U[k+1][m̄]
+            if k == 1
+                res.C[k][p] = 0.0
             end
         end
 
@@ -168,8 +168,8 @@ function generate_general_constraint_jacobian(c::Function,p::Int,n::Int64,m::Int
     F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
 
     function c_jacobian(cx,cu,x,u)
-        S[1:n] = x
-        S[n+1:n+m] = u
+        S[1:n] = x[1:n]
+        S[n+1:n+m] = u[1:m]
         F(J,cdot,S)
         cx[1:p,1:n] = J[1:p,1:n]
         cu[1:p,1:m] = J[1:p,n+1:n+m]
@@ -205,7 +205,7 @@ Stacks the constraints as follows:
  general inequalities
  general equalities
  (control equalities for infeasible start)
- (dt - dt+1)]
+ (dt equality)]
 """
 function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-2)
     n,m = get_sizes(obj)
@@ -220,7 +220,11 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     pI, pI_c, pI_N, pI_N_c = obj.pI, obj.pI_custom, obj.pI_N, obj.pI_N_custom
     pE, pE_c, pE_N, pE_N_c = p-obj.pI, obj.pE_custom, obj.p_N - obj.pI_N, obj.pE_N_custom
     m̄ = m
-    min_time ? m̄ += 1 : nothing
+    n̄ = n
+    if min_time
+         m̄ += 1
+         n̄ += 1
+    end
     labels = String[]
 
     # Append on min time bounds
@@ -242,8 +246,8 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     pI_u_min = count(u_min_active)
     pI_u = pI_u_max + pI_u_min
     function c_control_limits!(c,x,u)
-        c[1:pI_u_max] = (u - u_max)[u_max_active]
-        c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u)[u_min_active]
+        c[1:pI_u_max] = (u[1:m̄] - u_max)[u_max_active]
+        c[pI_u_max+1:pI_u_max+pI_u_min] = (u_min - u[1:m̄])[u_min_active]
     end
 
     lbl_u_min = ["control (lower bound)" for i = 1:pI_u_min]
@@ -258,8 +262,8 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     pI_x_min = count(x_min_active)
     pI_x = pI_x_max + pI_x_min
     function c_state_limits!(c,x,u)
-        c[1:pI_x_max] = (x - obj.x_max )[x_max_active]
-        c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x)[x_min_active]
+        c[1:pI_x_max] = (x[1:n] - obj.x_max )[x_max_active]
+        c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x[1:n])[x_min_active]
     end
     lbl_x_max = ["state (upper bound)" for i = 1:pI_x_max]
     lbl_x_min = ["state (lower bound)" for i = 1:pI_x_min]
@@ -293,6 +297,9 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
         end
         if infeasible
             c[pI.+pE_c.+(1:n)] = u[m̄.+(1:n)]
+        end
+        if min_time
+            c[pI+pE_c+(n*infeasible)+1] = u[m̄] - x[n̄]
         end
         return nothing
     end
@@ -361,6 +368,10 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
             cx[pI+pE_c+1:pI+pE_c+n,1:n] = cx_infeasible
             cu[pI+pE_c+1:pI+pE_c+n,m̄+1:m̄+n] = cu_infeasible
         end
+        if min_time
+            cx[pI+pE_c+(n*infeasible)+1,n̄] = -1.0
+            cu[pI+pE_c+(n*infeasible)+1,m̄] = 1.0
+        end
     end
 
     # Terminal Constraint
@@ -405,11 +416,3 @@ end
 function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
-
-# function constraint_violations(results::ConstrainedIterResults)
-#     if size(results.CN,1) != 0
-#         return map((x)->x.>0, results.Iμ) .* results.C
-#     else
-#         return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
-#     end
-# end

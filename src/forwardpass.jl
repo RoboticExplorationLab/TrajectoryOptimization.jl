@@ -2,7 +2,7 @@
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array)#, J_prev::Float64)
+function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev::Float64)
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 

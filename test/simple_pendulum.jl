@@ -4,7 +4,7 @@ u_bound = 2.
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
 obj_c = Dynamics.pendulum_constrained[2]
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
+opts.verbose = true
 
 ### UNCONSTRAINED ###
 # rk4

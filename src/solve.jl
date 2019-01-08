@@ -79,11 +79,7 @@ $(SIGNATURES)
 function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     t_start = time_ns()
 
-    ## Unpack model, objective, and solver parameters
-    n,m,N = get_sizes(solver)
-    m,mm = get_num_controls(solver)
-
-    # Check for minimum time solve
+    # Minimum time solve checked in Solver
     # is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
 
     # Check for infeasible start
@@ -103,6 +99,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     if isempty(prevResults)
         results = init_results(solver, X0, U0, λ=λ)
@@ -111,7 +108,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(nn,mm,N)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -128,7 +125,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     ## Initial rollout
     if !solver.state.infeasible #&& isempty(prevResults)
-        X[1] = solver.obj.x0
+        X[1][1:n] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
         !flag ? error("Bad initial control sequence") : nothing
     end
@@ -179,7 +176,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             Δv = backwardpass!(results, solver, bp)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)#, J_prev)
+            J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
             # increment iLQR inner loop counter
@@ -380,7 +377,6 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_controls(solver)
 
-
     # Initialized backward pass expansion terms
     bp = BackwardPassZOH(nn,mm,N)
 
@@ -388,7 +384,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     Δv = backwardpass!(results, solver, bp)
 
     # forward pass
-    forwardpass!(results,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
+    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
 
     # update trajectories
     results.X .= deepcopy(results.X_)

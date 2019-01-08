@@ -23,9 +23,10 @@ Get number of (solver) stats, accounting for minimum time
 function get_num_states(solver::Solver)
     n,m = get_sizes(solver)
     n̄ = n
+    solver.state.minimum_time ? n̄ += 1 : nothing
+
     # TODO for now:
     nn = n̄
-    solver.state.minimum_time ? n̄ += 1 : nothing
     return n̄, nn
 end
 
@@ -46,9 +47,9 @@ function cost(solver::Solver,X::AbstractVector,U::AbstractVector)
     J = 0.0
     costfun = solver.obj.cost
     for k = 1:N-1
-        J += stage_cost(costfun,X[k],U[k])*solver.dt
+        J += stage_cost(costfun,X[k][1:n],U[k][1:m])*solver.dt
     end
-    J += stage_cost(costfun, X[N])
+    J += stage_cost(costfun, X[N][1:n])
 end
 
 """
@@ -116,24 +117,35 @@ $(SIGNATURES)
 function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
     dt = solver.dt
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
+        res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
 
         # Update constraint Jacobians
-        solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+        solver.c_jacobian(view(res.Cx[k],1:p,1:n̄), view(res.Cu[k],1:p,1:mm), res.X[k],res.U[k])
 
         # Minimum time special case
-        if solver.state.minimum_time && k < N-1
-            res.Cu[k][end,m̄] = 1
+        if solver.state.minimum_time
+            # No equality constraint at first time step
+            if k == 1
+                res.Cu[k][p,m̄] = 0.
+                res.Cx[k][p,n̄] = 0.
+            end
+            # Jacobian for x[n̄]_k+1 = u[m̄]_k
+            res.fdu[k][n̄,m̄] = 1.
         end
     end
 
     # Update terminal constraint Jacobian
     k = N
-    solver.c_jacobian(res.Cx[k], res.X[k])
+    solver.c_jacobian(view(res.Cx[k],1:p_N,1:n), res.X[k][1:n])
 
     return nothing
 end
@@ -141,10 +153,11 @@ end
 function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
+        res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
     end
 
     return nothing
@@ -155,8 +168,6 @@ function evaluate_trajectory(solver::Solver, X, U)
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     results = init_results(solver,X,U)
-    calculate_midpoints!(results, solver)
-    calculate_derivatives!(results, solver)
     calculate_jacobians!(results, solver)
     update_constraints!(results, solver)
     return results
@@ -203,8 +214,10 @@ time controls, if required. Will interpolate the initial trajectory as needed.
 function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64})
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     if size(U0,1) ∉ [m,mm]
-        ArgumentError("Size of U0 must be either include only plant controls or all expected controls (infeasible + minimum time)")
+        ArgumentError("Size of U0 must be either: system controls OR all expected solver controls (system + infeasible + minimum time)")
     end
 
     if N-1 != size(U0,2)
@@ -247,6 +260,11 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
             solve_string = "Solving Unconstrained Problem" * solve_string
         end
         X_init = zeros(n,N)
+    end
+
+    if solver.state.minimum_time
+        # Augmentd state vector with x[n̄]_k+1 = u[n̄]_k
+        X_init = [X0;zeros(1,N)]
     end
     @info solve_string
 

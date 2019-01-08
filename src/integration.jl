@@ -91,8 +91,8 @@ of a continuous dynamics function.
 * f!: in place dynamics function, i.e. `f!(x?,x,u)` for separate or `f!(S?,S)` for augmented dynamics
 * dt: time step
 """
-function rk3(f!::Function, dt::Float64) #TODO - test that this is correct
-    # Runge-Kutta 3 (zero order hold)
+function rk3(f!::Function, dt::Float64)
+        # Runge-Kutta 3 (zero order hold)
     fd!(xdot,x,u,dt=dt) = begin
         k1 = k2 = k3 = zero(x)
         f!(k1, x, u);               k1 *= dt;

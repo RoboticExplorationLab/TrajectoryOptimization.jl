@@ -76,8 +76,10 @@ struct Solver{O<:Objective}
             state.constrained = true
         end
 
-        n, m = model.n, model.m
         f! = model.f
+
+        n, m = model.n, model.m
+
         m̄ = m
         n̄ = n
         if state.minimum_time
@@ -92,7 +94,6 @@ struct Solver{O<:Objective}
         else
             throw(ArgumentError("$integration is not a defined integration scheme"))
         end
-
 
         # Generate discrete dynamics equations
         fd! = discretizer(f!, dt)
@@ -181,27 +182,3 @@ function calc_N(tf::Float64, dt::Float64)::Tuple
     dt = tf/(N-1)
     return N, dt
 end
-
-"""
-$(SIGNATURES)
-Return the quadratic control stage cost R
-If using an infeasible start, will return the augmented cost matrix
-"""
-function getR(solver::Solver)::Array{Float64,2}
-    if !solver.state.infeasible && !is_min_time(solver)
-        return solver.obj.R
-    else
-        n = solver.model.n
-        m = solver.model.m
-        m̄,mm = get_num_controls(solver)
-        R = zeros(mm,mm)
-        R[1:m,1:m] = solver.obj.R
-        if is_min_time(solver)
-            R[m̄,m̄] = solver.opts.R_minimum_time
-        end
-        if solver.state.infeasible
-            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.R_infeasible*tr(solver.obj.R))
-        end
-        return R
-    end
-end # TODO: make this type stable (maybe make it a type so it only calculates once)

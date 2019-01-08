@@ -5,7 +5,7 @@ x̄ = [2;-1;1]
 λ = [3;-2]
 
 # set up model
-m = Model(solver=IpoptSolver(print_level=0))
+m = JuMP.Model(solver=IpoptSolver(print_level=0))
 
 # set up primal variables
 n = 3
@@ -23,9 +23,39 @@ b = [3.; 0.]
 
 print(m)
 
-status = solve(m)
+status = JuMP.solve(m)
 
 # Solution
 println("Objective value: ", getobjectivevalue(m))
 println("x = ", getvalue(x))
-println("x = ", getdual(con))
+println("λ = ", getdual(con))
+
+
+##
+
+# set up model
+m = JuMP.Model(solver=IpoptSolver())
+
+# set up primal variables
+n = 3
+@variable(m, x[1:n])
+
+# set up constraints
+G = [6. 2. 1.; 2. 5. 2.; 1. 2. 4.]
+c = [-8.; -3.; -3]
+A = [1. 0. 1.; 0. 1. 1.]
+b = [3.; 0.]
+
+@objective(m, Min, x'*x)
+
+@constraint(m, con, G*x - c .== 0)
+# @constraint(m, con2, A*x .== b)
+
+print(m)
+
+status = JuMP.solve(m)
+
+# Solution
+println("Objective value: ", getobjectivevalue(m))
+println("x = ", getvalue(x))
+println("λ = ", getdual(con))
