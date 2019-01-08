@@ -72,7 +72,7 @@ end
 
 function prev_benchmark_comparison(;verbose=false, offset=0)
     results = run(suite,verbose=verbose)
-    last_comparison(results,stats,offset=offset)
+    prev_benchmark_comparison(results,stats,offset=offset)
 end
 
 function baseline_comparison(results, stats; f=BenchmarkTools.median, styled=true)
