@@ -159,7 +159,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @info "Outer loop $j (begin)"
 
         if solver.state.constrained && j == 1
-            results.C_prev .= deepcopy(results.C)
+            copyto!(results.C_prev,results.C)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
@@ -188,13 +188,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             solver.opts.live_plotting ? display(plot(to_array(results.U)')) : nothing
 
             ### UPDATE RESULTS ###
-            if solver.opts.restype == Matrix
-                X .= deepcopy(X_)
-                U .= deepcopy(U_)
-            else
-                copyto!(X,X_)
-                copyto!(U,U_)
-            end
+            copyto!(X,X_)
+            copyto!(U,U_)
 
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)

@@ -1,4 +1,4 @@
-import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
+import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length,*,+,IndexStyle,iterate
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
@@ -12,6 +12,76 @@ import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
 #                                                          ↙     ↘
 #                                      UnconstrainedResults    ConstrainedResults
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+abstract type AbstractTrajectoryVariable   end
+
+struct TrajectoryVariable{T <: AbstractArray} <: AbstractTrajectoryVariable
+    x::Vector{T}
+end
+
+function TrajectoryVariable(N::Int,n::Int)
+    x = [zeros(n) for k = 1:N]
+    TrajectoryVariable(x)
+end
+
+function TrajectoryVariable(N::Int,sze::Vararg{Int,K}) where K
+    x = [zeros(sze) for k = 1:N]
+    TrajectoryVariable(x)
+end
+
+function TrajectoryVariable(N::Int,sze::Union{NTuple{K,Int} where K,Int}; size_N::Union{NTuple{K,Int} where K,Int})
+    x = [k == N ? zeros(size_N) : zeros(sze) for k = 1:N]
+    TrajectoryVariable(x)
+end
+
+function TrajectoryVariable(X::Matrix)
+    x = [X[:,k] for k = 1:size(X,2)]
+    TrajectoryVariable(x)
+end
+
+function size(x::TrajectoryVariable)
+    return (size(x.x[1])...,length(x.x))
+end
+
+function getindex(x::TrajectoryVariable,ind::Int)
+    x.x[ind]
+end
+
+function setindex!(x::TrajectoryVariable,value,ind::Int)
+    x.x[ind] = value
+end
+
+firstindex(x::TrajectoryVariable) = 1
+lastindex(x::TrajectoryVariable) = length(x.x)
+length(x::TrajectoryVariable) = length(x.x)
+*(x::TrajectoryVariable,c::Real) = TrajectoryVariable(x.x * c)
+
+function copyto!(x::TrajectoryVariable,y::Matrix)
+    for k = 1:length(x.x)
+        x.x[k] = y[:,k]
+    end
+end
+
+function copyto!(x::TrajectoryVariable,y::TrajectoryVariable)
+    for k = 1:length(x.x)
+        copyto!(x.x[k], y.x[k])
+    end
+end
+
+function iterate(x::TrajectoryVariable)
+    (x[1],1)
+end
+function iterate(x::TrajectoryVariable,state)
+    if state < length(x.x)
+        return (x[state+1],state+1)
+    else
+        return nothing
+    end
+end
+
+
 
 """
 $(TYPEDEF)
@@ -127,7 +197,7 @@ end
 #                                                                              #
 ################################################################################
 
-struct ConstrainedVectorResults{TV,TV} <: ConstrainedIterResults
+struct ConstrainedVectorResults{TV,TM} <: ConstrainedIterResults
     X::TV  # States (n,N)
     U::TV  # Controls (m,N)
 
@@ -152,17 +222,18 @@ struct ConstrainedVectorResults{TV,TV} <: ConstrainedIterResults
     Cx::TM # State jacobian (n,n,N)
     Cu::TM # Control (k) jacobian (n,m,N-1)
 
-    active_set::Vector{Vector{Bool}} # active set of constraints
+    active_set::Vector{Vector{T}} where T # active set of constraints
 
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
 
-    function ConstrainedVectorResults(X::Vector{Vector{Float64}},U::Vector{Vector{Float64}},
-            K,d,X_,U_,S,s,fdx,fdu,
-            C::Vector{Vector{Float64}},C_prev,Iμ,λ,μ,
-            Cx,Cu,active_set,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
-    end
+    # function ConstrainedVectorResults(X::TV,U::TV,
+    #         K::TM,d,X_,U_,S,s,fdx,fdu,
+    #         C::TV,C_prev,Iμ,λ,μ,
+    #         Cx,Cu,active_set,ρ,dρ) where {TV,TM}
+    #     println("This constructor")
+    #     new{TM,TV}(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
+    # end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
@@ -219,7 +290,7 @@ end
 
 function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type)
     if T <: AbstractArray
-        UnconstrainedVectorResults(n,m,N)
+        ConstrainedVectorResults(n,m,p,N,p_N)
     else
         X = T(N,n)
         U = T(N-1,m)
@@ -234,17 +305,21 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type)
 
         C =      T(N,p, size_N=p_N)
         C_prev = T(N,p, size_N=p_N)
-        Iμ     = T([i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N])
+        Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
         λ =      T(N,p, size_N=p_N)
-        μ =      T(N,p, size_N=p_N)
+        μ =      T([i != N ? ones(p) : ones(p_N)  for i = 1:N])
 
-        Cu = T(N, (p,n), size_N=(p_N,n))
+        Cx = T(N, (p,n), size_N=(p_N,n))
         Cu = T(N, (p,m), size_N=(p_N,0))
+
+        active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
         ρ = ones(1)
         dρ = ones(1)
 
-        UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+        ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
+            C,C_prev,Iμ,λ,μ,
+            Cx,Cu,active_set,ρ,dρ)
     end
 end
 
@@ -253,102 +328,6 @@ function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
         copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ))
-end
-
-abstract type TrajectoryVariable  end
-
-struct TVar1{T <: AbstractArray} <: TrajectoryVariable
-    x::Vector{T}
-end
-
-function TVar1(N::Int,n::Int)
-    x = [zeros(n) for k = 1:N]
-    TVar1(x)
-end
-
-function TVar1(N::Int,sze::Vararg{Int,K}) where K
-    x = [zeros(sze) for k = 1:N]
-    TVar1(x)
-end
-
-function TVar1(N::Int,sze::Union{NTuple{K,Int} where K,Int}; size_N::Union{NTuple{K,Int} where K,Int})
-    x = [k == N ? zeros(size_N) : zeros(sze) for k = 1:N]
-    TVar1(x)
-end
-
-function size(x::TVar1)
-    return (size(x.x[1])...,length(x.x))
-end
-
-function getindex(x::TVar1,ind::Int)
-    x.x[ind]
-end
-
-function setindex!(x::TVar1,value,ind::Int)
-    x.x[ind] = value
-end
-
-firstindex(x::TVar1) = 1
-lastindex(x::TVar1) = length(x.x)
-length(x::TVar1) = length(x.x)
-
-function copyto!(x::TVar1,y::Matrix)
-    for k = 1:length(x.x)
-        x.x[k] = y[:,k]
-    end
-end
-
-function copyto!(x::TVar1,y::TVar1)
-    for k = 1:length(x.x)
-        copyto!(x.x[k], y.x[k])
-    end
-end
-
-
-
-
-struct TVar{T} <: TrajectoryVariable
-    A::Array{T}
-    X::Vector{SubArray{T,N,P,I,L}} where {N,P,I,L}
-end
-
-function TVar(N::Int,sze::Vararg{Int,K}) where K
-    A = zeros(sze...,N)
-    TVar(A)
-end
-
-function TVar(A::Matrix{Float64})
-    n,N = size(A)
-    X = [view(A,1:n,k) for k = 1:N]
-    TVar(A,X)
-end
-
-function TVar(A::Array{Float64,3})
-    n,m,N = size(A)
-    X = [view(A,1:n,1:m,k) for k = 1:N]
-    TVar(A,X)
-end
-
-length(x::TVar) = length(x.X)
-
-function size(x::TVar)
-    return size(x.A)
-end
-
-function getindex(x::TVar,ind::Int)
-    x.X[ind]
-end
-
-function setindex!(x::TVar,value,ind::Int)
-    copyto!(x.X[ind],value)
-end
-
-function copyto!(x::TVar{T},y::Matrix{T}) where T
-    copyto!(x.A,y)
-end
-
-function copyto!(x::TVar{T},y::TVar{T}) where T
-    copyto!(x.A,y.A)
 end
 
 
@@ -511,10 +490,10 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 
         m̄,mm = get_num_controls(solver)
 
-        results = ConstrainedVectorResults(n,mm,p,N,p_N)
+        results = ConstrainedVectorResults(n,mm,p,N,p_N,TrajectoryVariable)
 
         # Set initial penalty term values
-        results.μ .*= solver.opts.μ_initial # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
+        copyto!(results.μ, results.μ*solver.opts.μ_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
         if solver.state.minimum_time
@@ -537,8 +516,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results.ρ[1] = solver.opts.ρ_initial
 
     else
-        restype = solver.opts.restype
-        results = UnconstrainedVectorResults(n,m,N,restype)
+        results = UnconstrainedVectorResults(n,m,N,TrajectoryVariable)
     end
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)

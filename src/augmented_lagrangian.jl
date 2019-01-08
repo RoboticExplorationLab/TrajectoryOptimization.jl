@@ -100,7 +100,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
     μ_update!(results,solver)
 
     ## Store current constraints evaluations for next outer loop update
-    results.C_prev .= deepcopy(results.C)
+    copyto!(results.C_prev,results.C)
 
     return nothing
 end
