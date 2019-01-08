@@ -38,7 +38,7 @@ function rollout!(X::Vector, U::Vector, solver::Solver)
         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Propagate dynamics forward
-        solver.fd(view(X,k+1,1:n), X[k][1:n], U[k][1:m], dt)
+        solver.fd(view(X[k+1],1:n), X[k][1:n], U[k][1:m], dt)
 
         # Add infeasible controls
         solver.state.infeasible ? X[k+1][1:n] += U[k][m̄+1:m̄+n] : nothing
@@ -81,7 +81,7 @@ function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
         solver.state.minimum_time ? dt = U_[k-1][m̄]^2 : nothing
 
         # Propagate dynamics
-        solver.fd(view(X_,k,1:n), X_[k-1][1:n], U_[k-1][1:m], dt)
+        solver.fd(view(X_[k],1:n), X_[k-1][1:n], U_[k-1][1:m], dt)
 
         # Add infeasible controls
         solver.state.infeasible ? X_[k][1:n] += U_[k-1][m̄.+(1:n)] : nothing

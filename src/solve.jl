@@ -122,7 +122,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     # Set up logger
     logger = default_logger(solver)
 
-    update_constraints!(results, solver)
 
     #****************************#
     #           SOLVER           #
@@ -134,7 +133,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
+    # solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
+    update_constraints!(results, solver)
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -200,7 +200,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
-                if c_max <= 1.5*solver.opts.constraint_tolerance && solver.opts.use_second_order_dual_update
+                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
                 if solver.state.second_order_dual_update

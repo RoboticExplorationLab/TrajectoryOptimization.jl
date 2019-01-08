@@ -5,10 +5,12 @@ mutable struct SolverState
     constrained::Bool # Constrained solve
     minimum_time::Bool # Minimum time solve
     infeasible::Bool # Infeasible solve
+
     second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
+    fixed_constraint_jacobians::Bool # If no custom constraints are provided, all constraint Jacobians are fixed and only need to be updated once
 
     function SolverState()
-        new(false,false,false,false)
+        new(false,false,false,false,false)
     end
 end
 

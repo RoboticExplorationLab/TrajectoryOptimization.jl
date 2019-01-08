@@ -207,7 +207,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         ArgumentError("Size of U0 must be either include only plant controls or all expected controls (infeasible + minimum time)")
     end
 
-    if N != size(U0,2)
+    if N-1 != size(U0,2)
         @info "Interpolating initial guess"
         X0,U0 = interp_traj(N,solver.obj.tf,X0,U0)
     end

@@ -10,26 +10,26 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
     for k = 1:N-1
-        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.Iμ[k]*results.C[k]))
+        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
         results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
     end
 
-    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + results.Iμ[N]*results.C[N]))
+    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + results.μ[N].*results.C[N]))
     results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
 end
 
 """
 $(SIGNATURES)
     Second order dual update - Batch Dual QP solve
-    -UNDER DEVELOPMENT
+    -UNDER DEVELOPMENT - currently not improving convergence rate
 """
-function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbose::Bool=false)
+function λ_second_order_update!(results::SolverIterResults,solver::Solver)
     n = solver.model.n
     m = solver.model.m
     nm = n+m
     N = solver.N
     p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
     Nz = n*N + m*(N-1) # number of decision variables x, u
     Nu = m*(N-1) # number of control decision variables u
@@ -80,7 +80,7 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
         if k > 1
             for j = 1:k-1
                 idx7 = ((j-1)*m + 1):j*m
-                j == k-1 ? B̄[idx3,idx7] = results.fdu[j][1:n,1:m] : B̄[idx3,idx7] = prod(results.fdx[j+1:(k-1)])*results.fdu[j]
+                j == k-1 ? B̄[idx3,idx7] = results.fdu[j][1:n,1:m] : B̄[idx3,idx7] = prod(results.fdx[j+1:(k-1)])*results.fdu[j][1:n,1:m]
             end
         end
 
@@ -170,52 +170,84 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
     #
     #     @test all(idx_inequality[(k-1)*p+1:(k-1)*p+pI] .== true)
     #     idx_inequality[(k-1)*p+1:(k-1)*p+pI]
-    #     @test all(idx_inequality[(N-1)*p+1:Np] .== true)
+    #     @test all(idx_inequality[(N-1)*p+1:(N-1)*pI_N] .== true)
     # end
-    # ū = -(B̄'*Q̄*B̄)\(B̄'*(q̄ + Q̄*Ā*x0) + B̄'*C̄'*λ_tmp)
+    ū = -(B̄'*Q̄*B̄)\(B̄'*(q̄ + Q̄*Ā*x0) + B̄'*C̄'*λ_tmp)
 
+    # println(any(isnan.(q̄)))
+    # println(any(isnan.(Ā)))
+    # println(any(isnan.(λ_tmp)))
+    # println(any(isnan.(ū)))
+    # println(any(isnan.(Ā)))
+    # println(any(isnan.(B̄)))
+    # println(any(isnan.(C̄)))
+    # println(any(isnan.(c̄)))
     P = B̄'*Q̄*B̄
     M = q̄ + Q̄*Ā*x0
 
-    # L = 0.5*ū'*P*ū + M'*B̄*ū + λ_tmp'*(C̄*B̄*ū + C̄*Ā*x0 + c̄)
+    # println(rank(P))
+    # println(size(P))
+    # println(λ_tmp)
 
-    # D = 0.5*M'*B̄*inv(P')*B̄'*M + 0.5*M'*B̄*inv(P')*B̄'*C̄'*λ_tmp + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*M + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*C̄'*λ_tmp - M'*B̄*inv(P)*B̄'*M - M'*B̄*inv(P)*B̄'*C̄'*λ_tmp - λ_tmp'*C̄*B̄*inv(P)*B̄'*M - λ_tmp'*C̄*B̄*inv(P)*B̄'*C̄'*λ_tmp + λ_tmp'*C̄*Ā*x0 + λ_tmp'*c̄
+    L = 0.5*ū'*P*ū + M'*B̄*ū + λ_tmp'*(C̄*B̄*ū + C̄*Ā*x0 + c̄)
+
+    D = 0.5*M'*B̄*inv(P')*B̄'*M + 0.5*M'*B̄*inv(P')*B̄'*C̄'*λ_tmp + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*M + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*C̄'*λ_tmp - M'*B̄*inv(P)*B̄'*M - M'*B̄*inv(P)*B̄'*C̄'*λ_tmp - λ_tmp'*C̄*B̄*inv(P)*B̄'*M - λ_tmp'*C̄*B̄*inv(P)*B̄'*C̄'*λ_tmp + λ_tmp'*C̄*Ā*x0 + λ_tmp'*c̄
     Q_dual = C̄*B̄*inv(P')*B̄'*C̄' - 2*C̄*B̄*inv(P)*B̄'*C̄'
     q_dual = M'*B̄*inv(P')*B̄'*C̄' - 2*M'*B̄*inv(P)*B̄'*C̄' + x0'*Ā'*C̄' + c̄'
     qq_dual = 0.5*M'*B̄*inv(P')*B̄'*M - M'*B̄*inv(P)*B̄'*M
 
-    # DD = 0.5*λ_tmp'*Q_dual*λ_tmp + q_dual*λ_tmp + qq_dual
+    DD = 0.5*λ_tmp'*Q_dual*λ_tmp + q_dual*λ_tmp + qq_dual
 
     # @test isapprox(D,L)
+    # @test isapprox(DD,L)
 
     # solve QP
     m = JuMP.Model(solver=IpoptSolver(print_level=0))
+    # m = JuMP.Model(solver=ClpSolver())
 
-    @variable(m, λ[1:Np])
+    # @variable(m, u[1:Nu])
+    #
+    # @objective(m, Min, 0.5*u'*P*u + M'*B̄*u)
+    # @constraint(m, con, C̄*B̄*u + C̄*Ā*x0 + c̄ .== 0.)
+
+    # @variable(m, λ[1:Np])
+    N_active_set = sum(active_set)
+
+    @variable(m, λ[1:N_active_set])
+
     # @objective(m, Min, λ'*λ)
-    # @constraint(m, con, Q_dual*λ .== -q_dual')
-
-    @objective(m, Max, 0.5*λ'*Q_dual*λ + q_dual*λ + qq_dual)
-    @constraint(m, con2, λ[idx_inequality] .>= 0)
-
-    # print(m)
-
+    # @constraint(m, con, Q_dual[active_set,active_set]*λ + q_dual[active_set] .== 0.)
+    #
+    @objective(m, Max, 0.5*λ'*Q_dual[active_set,active_set]*λ + q_dual[active_set]'*λ)
+    @constraint(m, con2, λ[idx_inequality[active_set]] .>= 0)
+    #
+    # # print(m)
+    #
     status = JuMP.solve(m)
+    #
+    if status != :Optimal
+        error("QP failed")
+    end
 
     # Solution
     # println("Objective value: ", JuMP.getobjectivevalue(m))
-    # println("λ = ", getvalue(λ))
+    # println("λ = ", JuMP.getvalue(λ))
+
+    λ_tmp[active_set] = JuMP.getvalue(λ)
 
     for k = 1:N
         if k != N
             idx = ((k-1)*p + 1):k*p
-            results.λ[k] = JuMP.getvalue(λ[idx])
-            results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+            results.λ[k] = λ_tmp[idx]#JuMP.getvalue(λ[idx])
+            # results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
         else
             idx = ((N-1)*p + 1):Np
-            results.λ[N] .= JuMP.getvalue(λ[idx])
-            results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+            results.λ[k] = λ_tmp[idx]#JuMP.getvalue(λ[idx])
+            # results.λ[k][1:pI_N] = max.(0.0,results.λ[k][1:pI_N])
         end
+
+        # tolerance check
+        results.λ[k][abs.(results.λ[k]) .< 1e-8] .= 0.
     end
 end
 
@@ -295,7 +327,7 @@ $(SIGNATURES)
 function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
 
     ## Lagrange multiplier updates
-    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,false) : λ_update!(results,solver)
+    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update!(results,solver)
 
     ## Penalty updates
     μ_update!(results,solver)
