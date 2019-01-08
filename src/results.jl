@@ -330,105 +330,6 @@ function copy(r::ConstrainedVectorResults)
         copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ))
 end
 
-
-################################################################################
-#                                                                              #
-#                        DIRCOL VARIABLES STRUCTURE                            #
-#                                                                              #
-################################################################################
-
-struct DircolVars{T}
-    Z::Vector{T}
-    X::SubArray{T}
-    U::SubArray{T}
-end
-
-function DircolVars(Z::Vector,n::Int,m::Int,N::Int)
-    z = reshape(Z,n+m,N)
-    X = view(z,1:n,:)
-    U = view(z,n+1:n+m,:)
-    DircolVars(Z,X,U)
-end
-
-function DircolVars(n::Int,m::Int,N::Int)
-    Z = zeros((n+m)N)
-    z = reshape(Z,n+m,N)
-    X = view(z,1:n,:)
-    U = view(z,n+1:n+m,:)
-    DircolVars(Z,X,U)
-end
-
-function DircolVars(X::Matrix,U::Matrix)
-    Z = packZ(X,U)
-    n,m,N = get_sizes(X,U)
-    DircolVars(Z,n,m,N)
-end
-
-function DircolVars(res::SolverIterResults)
-    DircolVars(to_array(res.X), to_array(res.U))
-end
-
-DiffFloat = Union{Float64,ForwardDiff.Dual}
-struct DircolResults <: SolverIterResults
-    vars::DircolVars
-    # vars_::DircolVars
-    Z::Vector{Float64}
-    X::SubArray{Float64}
-    U::SubArray{Float64}
-    fVal::Matrix{Float64}
-    X_::Union{Matrix{Float64},SubArray{Float64}}
-    U_::Union{Matrix{Float64},SubArray{Float64}}
-    fVal_::Matrix{Float64}
-    A::Array{Float64,3}
-    B::Array{Float64,3}
-    weights::Vector{Float64}
-    # c_colloc::Matrix{Float64}
-    # ceq::Matrix{Float64}
-    # c::Matrix{Float64}
-    # DircolResults(Z,X,U,fVal,X_,U_,fVal_,A,B,weights) =
-    #     new(Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
-end
-#
-# abstract type DircolMethod end
-#
-# type HermiteSimpson <: DircolMethod end
-
-function DircolResults(solver::Solver,method::Symbol)
-    DircolResults(get_sizes(solver)...,method)
-end
-
-function DircolResults(n::Int,m::Int,N::Int,method::Symbol)
-    N,N_ = get_N(N,method)
-    Z = zeros(N*(n+m))
-    vars = DircolVars(Z,n,m,N)
-    X,U = vars.X,vars.U
-    fVal = zero(X)
-    if method == :hermite_simpson
-        X_ = zeros(n,N_)
-        U_ = zeros(m,N_)
-        fVal_ = zeros(n,N_)
-        A = zeros(n,n,N_)
-        B = zeros(n,m,N_)
-    elseif method == :midpoint
-        X_ = zeros(n,N) # midpoints plus terminal
-        U_ = U
-        fVal_ = zero(X_)
-        N_ = size(X_,2)
-        A = zeros(n,n,N_)
-        B = zeros(n,m,N_)
-    else
-        X_ = X
-        U_ = U
-        fVal_ = fVal
-        N_ = size(X_,2)
-        A = zeros(n,n+m,N_) # These methods conveniently use the gradient of Z
-        B = zeros(0,0,N_)
-    end
-
-    weights = get_weights(method,N_)
-    DircolResults(vars,Z,X,U,fVal,X_,U_,fVal_,A,B,weights)
-end
-
 #############
 # Utilities #
 #############
@@ -441,6 +342,7 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
     # get sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     if solver.state.minimum_time
         idx = 1:p_inf-n-1
@@ -452,12 +354,12 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
     for k = 1:N-1
         results.U[k] = results.U[k][1:m̄]
         results.U_[k] = results.U_[k][1:m̄]
-        results.K[k] = results.K[k][1:m̄,1:n]
+        results.K[k] = results.K[k][1:m̄,1:nn]
         results.d[k] = results.d[k][1:m̄]
-        results.fdu[k] = results.fdu[k][1:n,1:m̄]
+        results.fdu[k] = results.fdu[k][1:nn,1:m̄]
 
         results.C[k] = results.C[k][idx]
-        results.Cx[k] = results.Cx[k][idx,1:n]
+        results.Cx[k] = results.Cx[k][idx,1:nn]
         results.Cu[k] = results.Cu[k][idx,1:m̄]
         results.λ[k] = results.λ[k][idx]
         results.μ[k] = results.μ[k][idx]
@@ -485,23 +387,24 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 
     if solver.state.constrained
         # Get sizes
+        m̄,mm = get_num_controls(solver)
+        n̄,nn = get_num_states(solver)
+
         p,pI,pE = get_num_constraints(solver)
         p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
         m̄,mm = get_num_controls(solver)
 
-        results = ConstrainedVectorResults(n,mm,p,N,p_N,TrajectoryVariable)
+        results = ConstrainedVectorResults(nn,mm,p,N,p_N,TrajectoryVariable)
 
         # Set initial penalty term values
         copyto!(results.μ, results.μ*solver.opts.μ_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
         if solver.state.minimum_time
-            for k = 1:solver.N-1
-                results.μ[k][p] = solver.opts.μ_initial_minimum_time_equality
-                results.μ[k][m̄] = solver.opts.μ_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] = solver.opts.μ_initial_minimum_time_inequality
-            end
+            results.μ[1:N-1][p] .*= solver.opts.penalty_initial_minimum_time_equality
+            results.μ[1:N-1][m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
+            results.μ[1:N-1][m̄+m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
         end
         if solver.state.infeasible
             nothing #TODO
@@ -513,7 +416,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         end
 
         # Set initial regularization
-        results.ρ[1] = solver.opts.ρ_initial
+        results.ρ[1] = solver.opts.bp_reg_initial
 
     else
         results = UnconstrainedVectorResults(n,m,N,TrajectoryVariable)
@@ -542,6 +445,5 @@ function copy_λ!(solver, results, λ)
     for k = 1:N-1
         results.λ[k][cid] = λ[k]
     end
-
     results.λ[N] = λ[N]
 end

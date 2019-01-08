@@ -448,7 +448,7 @@ $(SIGNATURES)
 function is_inplace_constraints(c::Function,n::Int64,m::Int64)
     x = rand(n)
     u = rand(m)
-    q = 100
+    q = 1000
     iter = 1
 
     vals = NaN*(ones(q))
@@ -466,7 +466,7 @@ end
 function count_inplace_output(c::Function, n::Int, m::Int)
     x = rand(n)
     u = rand(m)
-    q0 = 100
+    q0 = 1000
     iter = 1
 
     q = q0
@@ -507,7 +507,7 @@ end
 
 function count_inplace_output(c::Function, n::Int)
     x = rand(n)
-    q = 100
+    q = 1000
     iter = 1
     vals = NaN*(ones(q))
 
@@ -525,7 +525,7 @@ function count_inplace_output(c::Function, n::Int)
 end
 
 function is_inplace_function(c::Function, input...)
-    q = 100
+    q = 1000
     iter = 1
 
     vals = ones(q)
@@ -548,7 +548,7 @@ function is_inplace_function(c::Function, input...)
 end
 
 function count_inplace_output(c::Function, input...)
-    q0 = 100
+    q0 = 1000
     iter = 1
 
     q = q0

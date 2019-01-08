@@ -5,10 +5,12 @@ mutable struct SolverState
     constrained::Bool # Constrained solve
     minimum_time::Bool # Minimum time solve
     infeasible::Bool # Infeasible solve
+
     second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
+    fixed_constraint_jacobians::Bool # If no custom constraints are provided, all constraint Jacobians are fixed and only need to be updated once
 
     function SolverState()
-        new(false,false,false,false)
+        new(false,false,false,false,false)
     end
 end
 
@@ -71,11 +73,15 @@ struct Solver{O<:Objective}
             state.constrained = true
         end
 
-        n, m = model.n, model.m
         f! = model.f
+
+        n, m = model.n, model.m
+
         m̄ = m
+        n̄ = n
         if state.minimum_time
             m̄ += 1
+            n̄ += 1
             state.constrained = true
         end
 
@@ -85,7 +91,6 @@ struct Solver{O<:Objective}
         else
             throw(ArgumentError("$integration is not a defined integration scheme"))
         end
-
 
         # Generate discrete dynamics equations
         fd! = discretizer(f!, dt)
@@ -101,6 +106,8 @@ struct Solver{O<:Objective}
         fd_aug! = discretizer(f_aug!)
         nm1 = n + m + 1
 
+        In = 1.0*Matrix(I,n,n)
+
         # Initialize discrete and continuous dynamics Jacobians
         Jd = zeros(nm1, nm1)
         Sd = zeros(nm1)
@@ -108,7 +115,7 @@ struct Solver{O<:Objective}
         Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
 
         # Discrete dynamics Jacobians
-        function fd_jacobians_zoh!(x,u)
+        function fd_jacobians!(fdx,fdu,x,u)
             # Check for infeasible solve
             infeasible = length(u) != m̄
 
@@ -120,13 +127,23 @@ struct Solver{O<:Objective}
             # Calculate Jacobian
             Fd!(Jd,Sdotd,Sd)
 
+            # if infeasible
+            #     return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fū I]
+            # else
+            #     return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fū
+            # end
+
+            fdx[1:n,1:n] = Jd[1:n,1:n]
+            fdu[1:n,1:m̄] = Jd[1:n,n.+(1:m̄)]
+
             if infeasible
-                return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fū I]
-            else
-                return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fū
+                fdu[1:n,m̄+1:m̄+n] = In
             end
+            if state.minimum_time
+                fdu[n̄,m̄] = 1.
+            end
+
         end
-        fd_jacobians! = fd_jacobians_zoh!
 
         # Generate constraint functions
         c!, c_jacobian!, c_labels = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
@@ -174,27 +191,3 @@ function calc_N(tf::Float64, dt::Float64)::Tuple
     dt = tf/(N-1)
     return N, dt
 end
-
-"""
-$(SIGNATURES)
-Return the quadratic control stage cost R
-If using an infeasible start, will return the augmented cost matrix
-"""
-function getR(solver::Solver)::Array{Float64,2}
-    if !solver.state.infeasible && !is_min_time(solver)
-        return solver.obj.R
-    else
-        n = solver.model.n
-        m = solver.model.m
-        m̄,mm = get_num_controls(solver)
-        R = zeros(mm,mm)
-        R[1:m,1:m] = solver.obj.R
-        if is_min_time(solver)
-            R[m̄,m̄] = solver.opts.R_minimum_time
-        end
-        if solver.state.infeasible
-            R[m̄+1:end,m̄+1:end] = Diagonal(ones(n)*solver.opts.R_infeasible*tr(solver.obj.R))
-        end
-        return R
-    end
-end # TODO: make this type stable (maybe make it a type so it only calculates once)

@@ -1,5 +1,5 @@
 # Set up problem
-using TrajectoryOptimization: to_array, update_constraints!, calculate_jacobians!, outer_loop_update
+using TrajectoryOptimization: to_array, update_constraints!, update_jacobians!, outer_loop_update_type
 using LinearAlgebra
 using Plots
 using Test
@@ -32,9 +32,9 @@ solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.2
 solver_min.opts.constraint_tolerance = 0.5e-3
 solver_min.opts.R_minimum_time = 1000.0
-solver_min.opts.ρ_initial = 0
-solver_min.opts.τ = .25
-solver_min.opts.γ = 10.0
+solver_min.opts.bp_reg_initial = 0
+solver_min.opts.constraint_decrease_ratio = .25
+solver_min.opts.penalty_scaling = 10.0
 results_min,stats_min = solve(solver_min,U)
 total_time(solver_min,results_min)
 plot(to_array(results_min.X)[1:2,:]')
@@ -148,8 +148,8 @@ res_min.Iμ[1][end,end] == 1
 res_min.U[N-1][2] = √dt
 res_min.U[2][2] = √dt
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 @test size(res_min.fu[1]) == (n,m+1)
 @test res_reg.fx[1] == res_min.fx[1]
@@ -187,8 +187,8 @@ J_min = cost(solver_min,res_min)
 update_constraints!(res_reg,solver)
 update_constraints!(res_min,solver_min)
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 v_reg = backwardpass!(res_reg,solver)
 for k = 1:N
@@ -249,8 +249,8 @@ rollout!(res_min, solver_min)
 J = cost(solver, res_reg)
 J = cost(solver_min, res_min)
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 @test res_reg.fx[1] == res_min.fx[1]
 @test res_reg.fu[N-1] == res_min.fu[N-1][:,[1,3,4]]
 
@@ -281,7 +281,7 @@ function init_solve(solver)
 end
 
 function inner_loop(res, solver)
-    calculate_jacobians!(res,solver)
+    update_jacobians!(res,solver)
     v = backwardpass_mintime!(res,solver)
     with_logger(logger) do
         J = forwardpass!(res,solver,v)
@@ -308,9 +308,9 @@ res_min = init_solve(solver_min)
 [mu[4] = 100 for mu in res_min.MU]
 [mu[5] = 1000 for mu in res_min.MU]
 inner_loop(res_min, solver_min)
-outer_loop_update(res_min,solver_min)
+outer_loop_update_type(res_min,solver_min)
 
-outer_loop_update(res_reg,solver)
+outer_loop_update_type(res_reg,solver)
 
 res_min.U[1]
 
@@ -326,7 +326,7 @@ TrajectoryOptimization.add_level!(logger,TrajectoryOptimization.InnerIters,[],[]
 
 obj_min = update_objective(obj_c,tf=:min,c=10., Q = obj.Q*0, R = obj.R, Qf = obj.Qf*0)
 opts = SolverOptions()
-opts.outer_loop_update = :individual
+opts.outer_loop_update_type = :individual
 opts.verbose = true
 solver = Solver(model,obj_c,dt=dt,opts=opts)
 solver_min = Solver(model,obj_min,N=31,opts=opts)
@@ -357,8 +357,8 @@ J = cost(solver_min, res_min)
 
 iter = 1
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 # Test that the fwp rollouts are the same given the same bwp gains
 v_reg = backwardpass!(res_reg,solver)
@@ -389,8 +389,8 @@ display(plot(to_array(res_min.U)'))
 # display(plot(to_array(res_min.X)'))
 total_time(solver_min, res_min)
 
-outer_loop_update(res_reg,solver)
-outer_loop_update(res_min,solver_min)
+outer_loop_update_type(res_reg,solver)
+outer_loop_update_type(res_min,solver_min)
 
 norm(to_array(res_min.C)[end,:],Inf)
 res_min.CN
@@ -435,9 +435,9 @@ solver_min.opts.use_static = false
 solver_min.opts.max_dt = 0.25
 solver_min.opts.verbose = true
 solver_min.opts.cost_tolerance = 1e-4
-solver_min.opts.cost_intermediate_tolerance = 1e-2
+solver_min.opts.cost_tolerance_intermediate = 1e-2
 solver_min.opts.constraint_tolerance = 0.05
-solver_min.opts.outer_loop_update = :default
+solver_min.opts.outer_loop_update_type = :default
 solver_min.opts.min_time_regularization = 100
 solver_min.opts.μ1 = 1
 U0 = ones(1,solver_min.N)

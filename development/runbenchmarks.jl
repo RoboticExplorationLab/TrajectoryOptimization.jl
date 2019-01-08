@@ -39,7 +39,7 @@ disable_logging(Logging.Info)
 # Constrained
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=dt,opts=opts,integration=integration)
 solver.opts.verbose = false
-solver.opts.cost_intermediate_tolerance = 1e-2
+solver.opts.cost_tolerance_intermediate = 1e-2
 solver.opts.use_static = true
 results_c,stats = TrajectoryOptimization.solve(solver,U)
 

@@ -81,12 +81,8 @@ results.μ == results_new.μ.x
 
 
 J_prev = cost(solver, results)
-cost(solver_new, results_new)
-TrajectoryOptimization.calculate_jacobians!(results, solver)
-TrajectoryOptimization.calculate_jacobians!(results_new, solver_new)
-Δv = backwardpass!(results, solver, bp)
-backwardpass!(results_new, solver_new, bp) == Δv
-
+TrajectoryOptimization.update_jacobians!(results, solver)
+Δv = backwardpass!(results, solver)
 J = forwardpass!(results, solver, Δv)
 forwardpass!(results_new, solver_new, Δv)
 
@@ -141,6 +137,6 @@ res_warm = init_results(solver, X0, U0_warm, λ=λ)
 rollout!(res_warm,solver)
 
 J_prev = cost(solver, res_warm)
-calculate_jacobians!(res_warm, solver)
+update_jacobians!(res_warm, solver)
 Δv = backwardpass!(res_warm, solver)
 J = forwardpass!(res_warm, solver, Δv)

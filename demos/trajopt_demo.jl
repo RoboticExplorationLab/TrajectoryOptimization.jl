@@ -22,7 +22,7 @@ dt = 0.01
 obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 solver = TrajectoryOptimization.Solver(model,obj,dt=dt,integration=:rk3)
-U = zeros(m,solver.N)
+U = zeros(m,solver.N-1)
 
 results, stats = solve(solver,U)
 

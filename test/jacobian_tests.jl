@@ -33,7 +33,7 @@ cu_known = [8 0 0; 0 2 0; 0 0 0; 8 0 0; 0 75 0; 0 0 1]
 # opts = TrajectoryOptimization.SolverOptions()
 # opts.verbose = false
 # opts.constraint_tolerance = 1e-3
-# opts.cost_intermediate_tolerance = 1e-3
+# opts.cost_tolerance_intermediate = 1e-3
 # opts.cost_tolerance = 1e-3
 # ######################
 #

@@ -10,20 +10,20 @@ opts.verbose = false
 opts.cache = false
 opts.c1 = 1e-8
 opts.c2 = 10.0
-opts.cost_intermediate_tolerance = 1e-4
+opts.cost_tolerance_intermediate = 1e-4
 opts.constraint_tolerance = 1e-4
 opts.cost_tolerance = 1e-4
 opts.iterations_outerloop = 50
 opts.iterations = 250
 opts.iterations_linesearch = 25
-opts.τ = 0.25
-opts.γ = 10.0
-opts.ρ_initial = 0.0
-opts.outer_loop_update = :individual
+opts.constraint_decrease_ratio = 0.25
+opts.penalty_scaling = 10.0
+opts.bp_reg_initial = 0.0
+opts.outer_loop_update_type = :individual
 opts.use_static = false
 opts.resolve_feasible = false
 opts.λ_second_order_update = false
-opts.regularization_type = :control
+opts.bp_reg_type = :control
 ######################
 
 ### Set up model, objective, solver ###

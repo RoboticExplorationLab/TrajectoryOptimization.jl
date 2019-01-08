@@ -177,26 +177,25 @@ c(cres,x,u)
 # test with minimum time
 obj = ConstrainedObjective(costfun,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
 @test obj.p == 9
-c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj)
-cres = zeros(11)
+c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=1.0,min_dt=0.01)
+cres = zeros(12)
 u_dt = [u; 0.1]
-cans = [0,-0.9,-3,0,-3,1,-4,-8,6,8,1]
-c(cres,x,u_dt)
+cans = [0,-0.9,-3,sqrt(0.01)-0.1,-3,1,-4,-8,6,8,1,0.1-0.9]
+c(cres,[x; 0.9],u_dt)
 @test cres == cans
 
 # Change upper bound on dt
-c,c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.)
+c, c_jacob = TrajectoryOptimization.generate_constraint_functions(obj,max_dt=10.)
 cres = zeros(12)
-cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1,0]
-c(cres,x,u_dt)
-cres
+cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1,0.1-0.9]
+c(cres,[x;0.9],u_dt)
 @test cres == cans
 
 # use infeasible start
 u_inf = [u_dt; -1; -1]
-cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1, -1,-1, 0]
+cans = [0,.1-sqrt(10), -3,0  ,-3,1,-4,-8,  6,8,1, -1,-1, 0.1-0.9]
 cres = zeros(14)
-c(cres,x,u_inf)
+c(cres,[x;0.9],u_inf)
 cres
 @test cres == cans
 
@@ -205,22 +204,22 @@ cres
 ∇u_cI(x,u) = [1; x[2]]
 ∇x_cE(x,u) = [2x[1] 0]
 ∇u_cE(x,u) = [0,]
-cx = [zeros(2(m+1),n);
-      Matrix(I,n,n);
-     -Matrix(I,n,n);
-      ∇x_cI(x,u);
-      ∇x_cE(x,u);
-      zeros(n,n);
-      zeros(1,n)]
+cx = [zeros(2(m+1),n+1) ;
+      Matrix(I,n,n) zeros(n);
+     -Matrix(I,n,n) zeros(n);
+      ∇x_cI(x,u) zeros(2);
+      ∇x_cE(x,u) zeros(1);
+      zeros(n,n) zeros(n);
+      zeros(1,n) -1.]
 cu = [Matrix(I,m+1,m+1)     zeros(m+1,n);
      -Matrix(I,m+1,m+1)     zeros(m+1,n);
       zeros(2n,m+1)         zeros(2n,n);
       ∇u_cI(x,u) zeros(2,1) zeros(2,n);
       ∇u_cE(x,u) zeros(1,1) zeros(1,n);
       zeros(n,m+1)       Matrix(I,n,n);
-      zeros(1,m+1)         zeros(1,n)]
+      zeros(1,m) 1.0 zeros(1,n)]
 cx_res,cu_res = zero(cx),zero(cu)
-c_jacob(cx_res,cu_res,x,u_inf)
+c_jacob(cx_res,cu_res,[x; 0.9],u_inf)
 @test cx_res == cx
 @test cu_res == cu
 

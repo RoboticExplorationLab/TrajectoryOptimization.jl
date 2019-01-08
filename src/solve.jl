@@ -79,11 +79,7 @@ $(SIGNATURES)
 function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     t_start = time_ns()
 
-    ## Unpack model, objective, and solver parameters
-    n,m,N = get_sizes(solver)
-    m,mm = get_num_controls(solver)
-
-    # Check for minimum time solve
+    # Minimum time solve checked in Solver
     # is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
 
     # Check for infeasible start
@@ -103,6 +99,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     #****************************#
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     if isempty(prevResults)
         results = init_results(solver, X0, U0, λ=λ)
@@ -111,7 +108,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     end
 
     # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(nn,mm,N)
 
     # Unpack results for convenience
     X = results.X # state trajectory
@@ -122,19 +119,19 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     # Set up logger
     logger = default_logger(solver)
 
-    update_constraints!(results, solver)
 
     #****************************#
     #           SOLVER           #
     #****************************#
     ## Initial rollout
     if !solver.state.infeasible #&& isempty(prevResults)
-        X[1] = solver.obj.x0
+        X[1][1:n] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
+    # solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
+    update_constraints!(results, solver)
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -175,11 +172,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             iter_inner = ii
 
             ### BACKWARD PASS ###
-            calculate_jacobians!(results, solver)
+            update_jacobians!(results, solver)
             Δv = backwardpass!(results, solver, bp)
 
             ### FORWARDS PASS ###
-            J = forwardpass!(results, solver, Δv)#, J_prev)
+            J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
             # increment iLQR inner loop counter
@@ -200,8 +197,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
-                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_λ_second_order_update
+                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
+                end
+                if solver.state.second_order_dual_update
                     @logmsg InnerLoop "λ 2-update"
                 end
             end
@@ -220,7 +219,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             print_row(logger,InnerLoop)
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
-            if J > solver.opts.max_cost
+            if J > solver.opts.max_cost_value
                 error("Cost exceded maximum allowable cost")
             end
         end
@@ -337,7 +336,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
     end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_intermediate_tolerance && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
             return true
         elseif ((solver.state.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
             return true
@@ -350,7 +349,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
         # Check for cost convergence
             # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
-        if ((~solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.state.constrained && (0.0 < dJ < solver.opts.cost_intermediate_tolerance) && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance)) || (solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance_intermediate) && iter_outerloop != solver.opts.iterations_outerloop))
             return true
         elseif ((solver.state.constrained && (0.0 < dJ < solver.opts.cost_tolerance) && c_max < solver.opts.constraint_tolerance))
             return true
@@ -376,15 +375,16 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
 
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_controls(solver)
 
     # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(n,mm,N)
+    bp = BackwardPassZOH(nn,mm,N)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results, solver, bp)
 
     # forward pass
-    forwardpass!(results,solver,Δv)#,cost(solver, results_feasible, results_feasible.X, results_feasible.U))
+    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
 
     # update trajectories
     results.X .= deepcopy(results.X_)
@@ -393,7 +393,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
         update_constraints!(results,solver,results.X,results.U)
-        calculate_jacobians!(results,solver)
+        update_jacobians!(results,solver)
     else
         solver.state.constrained = false
     end

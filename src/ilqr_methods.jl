@@ -15,6 +15,23 @@ end
 
 """
 $(SIGNATURES)
+Get number of (solver) stats, accounting for minimum time
+# Output
+- n̄:  number of non infeasible states (ie, system states + time state if minimum time). System state augmented by one if time is included as a state for minimum time problems.
+- nn: total number of solver states
+"""
+function get_num_states(solver::Solver)
+    n,m = get_sizes(solver)
+    n̄ = n
+    solver.state.minimum_time ? n̄ += 1 : nothing
+
+    # TODO for now:
+    nn = n̄
+    return n̄, nn
+end
+
+"""
+$(SIGNATURES)
     Compute the optimal control problem cost
 """
 function cost(solver::Solver,vars::DircolVars)
@@ -30,9 +47,9 @@ function cost(solver::Solver,X,U)
     J = 0.0
     costfun = solver.obj.cost
     for k = 1:N-1
-        J += stage_cost(costfun,X[k],U[k])*solver.dt
+        J += stage_cost(costfun,X[k][1:n],U[k][1:m])*solver.dt
     end
-    J += stage_cost(costfun, X[N])
+    J += stage_cost(costfun, X[N][1:n])
 end
 
 """
@@ -44,6 +61,8 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     costfun = solver.obj.cost
     dt = solver.dt
     xf = solver.obj.xf
@@ -54,7 +73,7 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
         solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
 
         # Stage cost
-        J += (stage_cost(costfun,X[k],U[k][1:m]))*dt
+        J += (stage_cost(costfun,X[k][1:n],U[k][1:m]))*dt
 
         # Minimum time cost
         solver.state.minimum_time ? J += solver.opts.R_minimum_time*dt : nothing
@@ -64,7 +83,7 @@ function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) whe
     end
 
     # Terminal Cost
-    J += stage_cost(costfun, X[N])
+    J += stage_cost(costfun, X[N][1:n])
 
     return J
 end
@@ -95,38 +114,54 @@ end
 $(SIGNATURES)
     Calculate dynamics and constraint Jacobians (perform prior to the backwards pass)
 """
-function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
     dt = solver.dt
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
+        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
+
 
         # Update constraint Jacobians
         solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
 
         # Minimum time special case
-        if solver.state.minimum_time && k < N-1
-            res.Cu[k][end,m̄] = 1
+        if solver.state.minimum_time
+            # No equality constraint at first time step
+            if k == 1
+                res.Cu[k][p,m̄] = 0.
+                res.Cx[k][p,n̄] = 0.
+            end
+            # Jacobian for x[n̄]_k+1 = u[m̄]_k
+            res.fdu[k][n̄,m̄] = 1.
         end
     end
 
     # Update terminal constraint Jacobian
     k = N
-    solver.c_jacobian(res.Cx[k], res.X[k])
+    solver.c_jacobian(view(res.Cx[k],1:p_N,1:n), res.X[k][1:n])
 
     return nothing
 end
 
-function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k], res.fdu[k] = solver.Fd(res.X[k], res.U[k])
+        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
+
     end
 
     return nothing
@@ -137,9 +172,7 @@ function evaluate_trajectory(solver::Solver, X, U)
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     results = init_results(solver,X,U)
-    calculate_midpoints!(results, solver)
-    calculate_derivatives!(results, solver)
-    calculate_jacobians!(results, solver)
+    update_jacobians!(results, solver)
     update_constraints!(results, solver)
     return results
 end
@@ -185,8 +218,10 @@ time controls, if required. Will interpolate the initial trajectory as needed.
 function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64})
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
     if size(U0,1) ∉ [m,mm]
-        ArgumentError("Size of U0 must be either include only plant controls or all expected controls (infeasible + minimum time)")
+        ArgumentError("Size of U0 must be either: system controls OR all expected solver controls (system + infeasible + minimum time)")
     end
 
     if N-1 != size(U0,2)
@@ -200,7 +235,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
 
         # Initialize controls with sqrt(dt)
         if size(U0,1) == m
-            U_init = [U0; ones(1,size(U0,2))*sqrt(get_initial_dt(solver))]
+            U_init = [U0; ones(1,N-1)*sqrt(get_initial_dt(solver))]
         end
     else
         solve_string = "..."
@@ -230,7 +265,12 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         end
         X_init = zeros(n,N)
     end
+
     @info solve_string
+
+    if solver.state.minimum_time
+        X_init = [X_init; zeros(1,N)]
+    end
 
     return X_init, U_init
 end
@@ -243,13 +283,13 @@ $(SIGNATURES)
 function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
     if status == :increase # increase regularization
         # @logmsg InnerLoop "Regularization Increased"
-        results.dρ[1] = max(results.dρ[1]*solver.opts.ρ_factor, solver.opts.ρ_factor)
-        results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.ρ_min)
-        if results.ρ[1] > solver.opts.ρ_max
+        results.dρ[1] = max(results.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)
+        results.ρ[1] = max(results.ρ[1]*results.dρ[1], solver.opts.bp_reg_min)
+        if results.ρ[1] > solver.opts.bp_reg_max
             @warn "Max regularization exceeded"
         end
     elseif status == :decrease # decrease regularization
-        results.dρ[1] = min(results.dρ[1]/solver.opts.ρ_factor, 1.0/solver.opts.ρ_factor)
-        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.ρ_min)
+        results.dρ[1] = min(results.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
+        results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.bp_reg_min)
     end
 end

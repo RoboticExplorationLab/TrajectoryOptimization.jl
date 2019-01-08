@@ -20,7 +20,7 @@ end
 opts = SolverOptions()
 opts.verbose = false
 opts.cost_tolerance = 1e-6
-opts.cost_intermediate_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
 
 # Set up model, objective, and solver
 model, = TrajectoryOptimization.Dynamics.dubinscar
@@ -102,7 +102,7 @@ plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel 
 # Infeasible
 opts = SolverOptions()
 opts.cost_tolerance = 1e-6
-opts.cost_intermediate_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
 opts.resolve_feasible = false
 Ns = [21,41,51,81,101,201,401,501,801,1001]
 disable_logging(Logging.Debug)
@@ -120,7 +120,7 @@ plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel 
 opts = SolverOptions()
 opts.verbose = true
 opts.cost_tolerance = 1e-6
-opts.cost_intermediate_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
 opts.minimum_time_tf_estimate = 2.0
 opts.gradient_tolerance = 1e-10
 opts.live_plotting = true
