@@ -272,6 +272,8 @@ struct ConstrainedObjective{C} <: Objective
 
         # Terminal Constraints
         pI_N = pI_N_custom
+        pI_N += count(isfinite, x_min)
+        pI_N += count(isfinite, x_max)
 
         if use_xf_equality_constraint
             if pE_N_custom > 0
