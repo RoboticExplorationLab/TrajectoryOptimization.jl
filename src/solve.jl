@@ -387,8 +387,8 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
 
     # update trajectories
-    results.X .= deepcopy(results.X_)
-    results.U .= deepcopy(results.U_)
+    copyto!(results.X, results.X_)
+    copyto!(results.U, results.U_)
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
