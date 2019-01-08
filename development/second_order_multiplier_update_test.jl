@@ -47,7 +47,7 @@ results = ConstrainedVectorResults(solver.model.n,solver.model.m,solver.obj.p,so
 copyto!(results.U,U)
 rollout!(results,solver)
 update_constraints!(results,solver)
-calculate_jacobians!(results,solver)
+update_jacobians!(results,solver)
 
 results
 

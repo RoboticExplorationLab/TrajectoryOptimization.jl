@@ -161,7 +161,7 @@ r2 = copy(results_pendulum)
 solver = solver_pendulum
 
 println("Jacobians")
-@btime calculate_jacobians!(r1,solver)
+@btime update_jacobians!(r1,solver)
 @btime calculate_jacobians_thread!(r2,solver)
 
 println("Derivatives")

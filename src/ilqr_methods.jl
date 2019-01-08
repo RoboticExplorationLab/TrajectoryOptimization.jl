@@ -114,7 +114,7 @@ end
 $(SIGNATURES)
     Calculate dynamics and constraint Jacobians (perform prior to the backwards pass)
 """
-function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
@@ -126,10 +126,12 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
+
 
         # Update constraint Jacobians
-        solver.c_jacobian(view(res.Cx[k],1:p,1:n̄), view(res.Cu[k],1:p,1:mm), res.X[k],res.U[k])
+        solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
 
         # Minimum time special case
         if solver.state.minimum_time
@@ -150,14 +152,16 @@ function calculate_jacobians!(res::ConstrainedIterResults, solver::Solver)::Noth
     return nothing
 end
 
-function calculate_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
+        solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
+
     end
 
     return nothing
@@ -168,7 +172,7 @@ function evaluate_trajectory(solver::Solver, X, U)
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     results = init_results(solver,X,U)
-    calculate_jacobians!(results, solver)
+    update_jacobians!(results, solver)
     update_constraints!(results, solver)
     return results
 end

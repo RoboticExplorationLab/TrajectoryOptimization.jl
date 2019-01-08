@@ -172,7 +172,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             iter_inner = ii
 
             ### BACKWARD PASS ###
-            calculate_jacobians!(results, solver)
+            update_jacobians!(results, solver)
             Δv = backwardpass!(results, solver, bp)
 
             ### FORWARDS PASS ###
@@ -393,7 +393,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
         update_constraints!(results,solver,results.X,results.U)
-        calculate_jacobians!(results,solver)
+        update_jacobians!(results,solver)
     else
         solver.state.constrained = false
     end

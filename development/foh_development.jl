@@ -12,7 +12,7 @@ results = UnconstrainedVectorResults(model.n,model.m,solver.N)
 U = ones(solver.model.m,solver.N)
 copyto!(results.U,U)
 rollout!(results,solver)
-calculate_jacobians!(results,solver)
+update_jacobians!(results,solver)
 
 # Results from backward pass
 k = 2

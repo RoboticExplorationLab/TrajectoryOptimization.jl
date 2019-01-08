@@ -1,5 +1,5 @@
 # Set up problem
-using TrajectoryOptimization: to_array, update_constraints!, calculate_jacobians!, outer_loop_update_type
+using TrajectoryOptimization: to_array, update_constraints!, update_jacobians!, outer_loop_update_type
 using LinearAlgebra
 using Plots
 using Test
@@ -148,8 +148,8 @@ res_min.Iμ[1][end,end] == 1
 res_min.U[N-1][2] = √dt
 res_min.U[2][2] = √dt
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 @test size(res_min.fu[1]) == (n,m+1)
 @test res_reg.fx[1] == res_min.fx[1]
@@ -187,8 +187,8 @@ J_min = cost(solver_min,res_min)
 update_constraints!(res_reg,solver)
 update_constraints!(res_min,solver_min)
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 v_reg = backwardpass!(res_reg,solver)
 for k = 1:N
@@ -249,8 +249,8 @@ rollout!(res_min, solver_min)
 J = cost(solver, res_reg)
 J = cost(solver_min, res_min)
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 @test res_reg.fx[1] == res_min.fx[1]
 @test res_reg.fu[N-1] == res_min.fu[N-1][:,[1,3,4]]
 
@@ -281,7 +281,7 @@ function init_solve(solver)
 end
 
 function inner_loop(res, solver)
-    calculate_jacobians!(res,solver)
+    update_jacobians!(res,solver)
     v = backwardpass_mintime!(res,solver)
     with_logger(logger) do
         J = forwardpass!(res,solver,v)
@@ -357,8 +357,8 @@ J = cost(solver_min, res_min)
 
 iter = 1
 
-calculate_jacobians!(res_reg,solver)
-calculate_jacobians!(res_min,solver_min)
+update_jacobians!(res_reg,solver)
+update_jacobians!(res_min,solver_min)
 
 # Test that the fwp rollouts are the same given the same bwp gains
 v_reg = backwardpass!(res_reg,solver)

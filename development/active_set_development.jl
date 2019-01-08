@@ -44,7 +44,7 @@ results2.λN
 solver1.opts.active_set_flag = true
 solver1.opts.active_constraint_tolerance = 0.0
 update_constraints!(results2,solver1)
-calculate_jacobians!(results2, solver1)
+update_jacobians!(results2, solver1)
 Δv = _backwardpass_active_set!(results2,solver1)
 
 results2.Kλ

@@ -65,7 +65,7 @@ plot_trajectory!(results)
 # plot(to_array(results.X)')
 
 J_prev = cost(solver, results)
-TrajectoryOptimization.calculate_jacobians!(results, solver)
+TrajectoryOptimization.update_jacobians!(results, solver)
 Δv = backwardpass!(results, solver)
 J = forwardpass!(results, solver, Δv)
 
@@ -96,6 +96,6 @@ res_warm = init_results(solver, X0, U0_warm, λ=λ)
 rollout!(res_warm,solver)
 
 J_prev = cost(solver, res_warm)
-calculate_jacobians!(res_warm, solver)
+update_jacobians!(res_warm, solver)
 Δv = backwardpass!(res_warm, solver)
 J = forwardpass!(res_warm, solver, Δv)

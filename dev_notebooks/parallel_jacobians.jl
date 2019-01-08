@@ -37,8 +37,8 @@ J_prev2 = cost(solver, res)
 J_prev3 = cost(solver, reS)
 
 
-@btime TrajectoryOptimization.calculate_jacobians!(res, solver)
-@btime TrajectoryOptimization.calculate_jacobians!(reS, solver)
+@btime TrajectoryOptimization.update_jacobians!(res, solver)
+@btime TrajectoryOptimization.update_jacobians!(reS, solver)
 
 
 X,U = res.X,res.U

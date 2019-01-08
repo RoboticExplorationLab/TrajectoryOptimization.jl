@@ -49,7 +49,7 @@ state and control trajectories
     Any-Time Non-Central Updates (Toussaint)
 """
 function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.X, U=res.U)::Nothing
-    N = solver.N
+    n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
     m̄,mm = get_num_controls(solver)
@@ -60,7 +60,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
 
     for k = 1:N-1
         # Update constraints
-        c_fun(view(res.C[k],1:p), X[k][1:nn], U[k][1:mm])
+        c_fun(res.C[k], X[k], U[k])
 
         # Minimum time special case
         if solver.state.minimum_time
@@ -77,7 +77,7 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     end
 
     # Terminal constraint
-    c_fun(view(res.C[N],1:p_N),X[N][1:n])
+    c_fun(res.C[N],X[N][1:n])
     get_active_set!(res,solver,p_N,pI_N,N)
 
     res.Iμ[N] = Diagonal(res.active_set[N].*res.μ[N])

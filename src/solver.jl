@@ -109,6 +109,8 @@ struct Solver{O<:Objective}
         fd_aug! = discretizer(f_aug!)
         nm1 = n + m + 1
 
+        In = 1.0*Matrix(I,n,n)
+
         # Initialize discrete and continuous dynamics Jacobians
         Jd = zeros(nm1, nm1)
         Sd = zeros(nm1)
@@ -116,7 +118,7 @@ struct Solver{O<:Objective}
         Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
 
         # Discrete dynamics Jacobians
-        function fd_jacobians_zoh!(x,u)
+        function fd_jacobians!(fdx,fdu,x,u)
             # Check for infeasible solve
             infeasible = length(u) != m̄
 
@@ -128,13 +130,23 @@ struct Solver{O<:Objective}
             # Calculate Jacobian
             Fd!(Jd,Sdotd,Sd)
 
+            # if infeasible
+            #     return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fū I]
+            # else
+            #     return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fū
+            # end
+
+            fdx[1:n,1:n] = Jd[1:n,1:n]
+            fdu[1:n,1:m̄] = Jd[1:n,n.+(1:m̄)]
+
             if infeasible
-                return Jd[1:n,1:n], [Jd[1:n,n.+(1:m̄)] I] # fx, [fū I]
-            else
-                return Jd[1:n,1:n], Jd[1:n,n.+(1:m̄)] # fx, fū
+                fdu[1:n,m̄+1:m̄+n] = In
             end
+            if state.minimum_time
+                fdu[n̄,m̄] = 1.
+            end
+
         end
-        fd_jacobians! = fd_jacobians_zoh!
 
         # Generate constraint functions
         c!, c_jacobian!, c_labels = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)
