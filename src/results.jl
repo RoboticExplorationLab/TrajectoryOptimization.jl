@@ -403,11 +403,11 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         copyto!(results.μ, results.μ*solver.opts.penalty_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
         # Special penalty initializations
-        if solver.state.minimum_time
-            results.μ[1:N-1][p] .*= solver.opts.penalty_initial_minimum_time_equality
-            results.μ[1:N-1][m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
-            results.μ[1:N-1][m̄+m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
-        end
+        # if solver.state.minimum_time
+        #     results.μ[1:N-1][p] .*= solver.opts.penalty_initial_minimum_time_equality
+        #     results.μ[1:N-1][m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
+        #     results.μ[1:N-1][m̄+m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
+        # end
         if solver.state.infeasible
             nothing #TODO
         end

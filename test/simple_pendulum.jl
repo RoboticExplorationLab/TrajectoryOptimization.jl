@@ -21,7 +21,6 @@ results, = TrajectoryOptimization.solve(solver,U)
 ### CONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-get_num_terminal_constraints(solver)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
