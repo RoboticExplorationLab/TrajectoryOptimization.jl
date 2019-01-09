@@ -157,68 +157,70 @@ plot(X_interp')
 @time results_uncon, stats_uncon = solve(solver_uncon,U0)
 # @time results_uncon_mintime, stats_uncon_mintime = solve(solver_uncon_mintime,U0)
 solver_con.opts.verbose = false
+solver_con.state.second_order_dual_update = false
+solver_con.opts.use_second_order_dual_update = true
 @time results_con, stats_con = solve(solver_con,X_interp,U0)
 # @time results_con_mintime, stats_con_mintime = solve(solver_con_mintime,X0,U0)
 
 plot(to_array(results_uncon.X)[1:3,:]')
 plot(to_array(results_con.X)[1:3,:]')
 
-println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
+# println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
 # println("Final state (constrained)-> pos: $(results_con.X[end][1:3]), goal: $(solver_con.obj.xf[1:3])\n Iterations: $(stats_con["iterations"])\n Outer loop iterations: $(stats_con["major iterations"])\n Max violation: $(stats_con["c_max"][end])\n Max μ: $(maximum(to_array(results_con.μ)))")# Max abs(λ): $(maximum(abs.(to_array(results_con.λ)[:]))\n")
 
-################################################
-## Visualizer using MeshCat and GeometryTypes ##
-################################################
-results = results_con
-solver = solver_con
-vis = Visualizer()
-open(vis)
-
-# Import quadrotor obj file
-traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-obj = joinpath(urdf_folder, "quadrotor_base.obj")
-
-# color options
-green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
-red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
-blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
-orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
-black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
-black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
-
-# geometries
-robot_obj = FileIO.load(obj)
-sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.1*r_quad)) # trajectory points
-sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
-
-obstacles = vis["obs"]
-traj = vis["traj"]
-target = vis["target"]
-robot = vis["robot"]
-
-# Set camera location
-settransform!(vis["/Cameras/default"], compose(Translation(25., -5., 10),LinearMap(RotZ(-pi/4))))
-
-# Create and place obstacles
-for i = 1:n_spheres
-    setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
-    settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
-end
-
-# Create and place trajectory
-for i = 1:solver.N
-    setobject!(vis["traj"]["t$i"],sphere_small,blue_)
-    settransform!(vis["traj"]["t$i"], Translation(results.X[i][1], results.X[i][2], results.X[i][3]))
-end
-
-# Create and place initial position
-setobject!(vis["robot"]["ball"],sphere_medium,black_transparent)
-setobject!(vis["robot"]["quad"],robot_obj,black_)
-settransform!(vis["robot"],compose(Translation(results.X[1][1], results.X[1][2], results.X[1][3]),LinearMap(quat2rot(results.X[1][4:7]))))
-
-# Animate quadrotor
-for i = 1:solver.N
-    settransform!(vis["robot"], compose(Translation(results.X[i][1], results.X[i][2], results.X[i][3]),LinearMap(quat2rot(results.X[i][4:7]))))
-    sleep(solver.dt*2)
-end
+# ################################################
+# ## Visualizer using MeshCat and GeometryTypes ##
+# ################################################
+# results = results_con
+# solver = solver_con
+# vis = Visualizer()
+# open(vis)
+#
+# # Import quadrotor obj file
+# traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+# urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+# obj = joinpath(urdf_folder, "quadrotor_base.obj")
+#
+# # color options
+# green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
+# red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
+# blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+# orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
+# black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
+# black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
+#
+# # geometries
+# robot_obj = FileIO.load(obj)
+# sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.1*r_quad)) # trajectory points
+# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
+#
+# obstacles = vis["obs"]
+# traj = vis["traj"]
+# target = vis["target"]
+# robot = vis["robot"]
+#
+# # Set camera location
+# settransform!(vis["/Cameras/default"], compose(Translation(25., -5., 10),LinearMap(RotZ(-pi/4))))
+#
+# # Create and place obstacles
+# for i = 1:n_spheres
+#     setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
+#     settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
+# end
+#
+# # Create and place trajectory
+# for i = 1:solver.N
+#     setobject!(vis["traj"]["t$i"],sphere_small,blue_)
+#     settransform!(vis["traj"]["t$i"], Translation(results.X[i][1], results.X[i][2], results.X[i][3]))
+# end
+#
+# # Create and place initial position
+# setobject!(vis["robot"]["ball"],sphere_medium,black_transparent)
+# setobject!(vis["robot"]["quad"],robot_obj,black_)
+# settransform!(vis["robot"],compose(Translation(results.X[1][1], results.X[1][2], results.X[1][3]),LinearMap(quat2rot(results.X[1][4:7]))))
+#
+# # Animate quadrotor
+# for i = 1:solver.N
+#     settransform!(vis["robot"], compose(Translation(results.X[i][1], results.X[i][2], results.X[i][3]),LinearMap(quat2rot(results.X[i][4:7]))))
+#     sleep(solver.dt*2)
+# end

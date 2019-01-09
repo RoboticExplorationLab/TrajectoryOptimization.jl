@@ -20,10 +20,43 @@ end
 
 """
 $(SIGNATURES)
-    Second order dual update - Batch Dual QP solve
-    -UNDER DEVELOPMENT - currently not improving convergence rate
+    Second order dual update - Buys Update
+    -UNDER DEVELOPMENT -
 """
-function λ_second_order_update!(results::SolverIterResults,solver::Solver)
+function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,bp::BackwardPass)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+
+    for k = 1:N
+        if k != N
+            ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
+            G = [results.Cx[k] results.Cu[k]]
+
+            tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
+            idx_pI = pI
+        else
+            ∇L = results.S[k]
+            G = results.Cx[k]
+
+            tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
+            idx_pI = pI_N
+        end
+
+        results.λ[k][results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
+        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+    end
+end
+"""
+$(SIGNATURES)
+    Second order dual update - Batch Dual QP solve
+    -UNDER DEVELOPMENT - currently not improving convergence rate, not implemented for infeasible, minimum time
+"""
+function qp_λ_second_order_update!(results::SolverIterResults,solver::Solver,bp::BackwardPass)
     n = solver.model.n
     m = solver.model.m
     nm = n+m
@@ -320,24 +353,26 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
+λ_second_order_update = Buys_λ_second_order_update!
+
 """
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp::BackwardPass)::Nothing
 
     ## Lagrange multiplier updates
-    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update!(results,solver)
+    solver.state.second_order_dual_update ? λ_second_order_update(results,solver,bp) : λ_update!(results,solver)
 
     ## Penalty updates
     μ_update!(results,solver)
 
     ## Store current constraints evaluations for next outer loop update
-    copyto!(results.C_prev,results.C)
+    results.C_prev .= deepcopy(results.C)
 
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver,bp::BackwardPass)::Nothing
     return nothing
 end

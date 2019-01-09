@@ -15,9 +15,9 @@ import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
 
 # Trajectory Types
 Trajectory = Vector{T} where T <: AbstractArray
-TrajectoryVectors = Vector{Vector{T}} where T <: AbstractFloat
-TrajectoryMatrices = Vector{Matrix{T}} where T <: AbstractFloat
-TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <:AbstractFloat
+TrajectoryVectors = Vector{Vector{T}} where T <: Real
+TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
+TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
 
 """
 $(TYPEDEF)
@@ -190,7 +190,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
     Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
 
-    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
 
     ρ = ones(1)
     dρ = ones(1)
