@@ -43,7 +43,8 @@ export
     UnconstrainedVectorResults,
     ConstrainedStaticResults,
     UnconstrainedStaticResults,
-    SolverOptions
+    SolverOptions,
+    TrajectoryVariable
 
 # Primary methods
 export
