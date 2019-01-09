@@ -197,7 +197,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 push!(c_max_hist, c_max)
                 @logmsg InnerLoop :c_max value=c_max
 
-                if c_max <= sqrt(solver.opts.constraint_tolerance) && solver.opts.use_second_order_dual_update
+                if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
                 if solver.state.second_order_dual_update
@@ -297,6 +297,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             else
                 solver_feasible = solver
             end
+
+            # Reset second order dual update flag
+            solver_feasible.state.second_order_dual_update = false
 
             # Resolve feasible problem with warm start
             results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))

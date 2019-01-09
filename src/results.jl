@@ -13,77 +13,11 @@ import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
 #                                      UnconstrainedResults    ConstrainedResults
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-
-abstract type AbstractTrajectoryVariable   end
-
-struct TrajectoryVariable{T <: AbstractArray} <: AbstractTrajectoryVariable
-    x::Vector{T}
-end
-
-function TrajectoryVariable(N::Int,n::Int)
-    x = [zeros(n) for k = 1:N]
-    TrajectoryVariable(x)
-end
-
-function TrajectoryVariable(N::Int,sze::Vararg{Int,K}) where K
-    x = [zeros(sze) for k = 1:N]
-    TrajectoryVariable(x)
-end
-
-function TrajectoryVariable(N::Int,sze::Union{NTuple{K,Int} where K,Int}; size_N::Union{NTuple{K,Int} where K,Int})
-    x = [k == N ? zeros(size_N) : zeros(sze) for k = 1:N]
-    TrajectoryVariable(x)
-end
-
-function TrajectoryVariable(X::Matrix)
-    x = [X[:,k] for k = 1:size(X,2)]
-    TrajectoryVariable(x)
-end
-
-function size(x::TrajectoryVariable)
-    return (size(x.x[1])...,length(x.x))
-end
-
-function getindex(x::TrajectoryVariable,ind::Int)
-    x.x[ind]
-end
-
-function setindex!(x::TrajectoryVariable,value,ind::Int)
-    x.x[ind] = value
-end
-
-firstindex(x::TrajectoryVariable) = 1
-lastindex(x::TrajectoryVariable) = length(x.x)
-length(x::TrajectoryVariable) = length(x.x)
-*(x::TrajectoryVariable,c::Real) = TrajectoryVariable(x.x * c)
-
-function copyto!(x::TrajectoryVariable,y::Matrix)
-    for k = 1:length(x.x)
-        x.x[k] = y[:,k]
-    end
-end
-
-function copyto!(x::TrajectoryVariable,y::TrajectoryVariable)
-    for k = 1:length(x.x)
-        copyto!(x.x[k], y.x[k])
-    end
-end
-
-function iterate(x::TrajectoryVariable)
-    (x[1],1)
-end
-function iterate(x::TrajectoryVariable,state)
-    if state < length(x.x)
-        return (x[state+1],state+1)
-    else
-        return nothing
-    end
-end
-
-function to_array(x::TrajectoryVariable)
-    to_array(x.x)
-end
+# Trajectory Types
+Trajectory = Vector{T} where T <: AbstractArray
+TrajectoryVectors = Vector{Vector{T}} where T <: Real
+TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
+TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
 
 isempty(x::TrajectoryVariable) = isempty(x.x)
 
@@ -111,28 +45,27 @@ abstract type ConstrainedIterResults <: SolverVectorResults end
 #                                                                              #
 ################################################################################
 
-struct UnconstrainedVectorResults{TV,TM} <: UnconstrainedIterResults
-    X::TV  # States (n,N)
-    U::TV  # Controls (m,N)
+struct UnconstrainedVectorResults <: UnconstrainedIterResults
+    X::Trajectory  # States (n,N)
+    U::Trajectory  # Controls (m,N)
 
-    K::TM # Feedback (state) gain (m,n,N)
-    d::TV  # Feedforward gain (m,N)
+    K::Trajectory # Feedback (state) gain (m,n,N)
+    d::Trajectory  # Feedforward gain (m,N)
 
-    X_::TV # Predicted states (n,N)
-    U_::TV # Predicted controls (m,N)
+    X_::Trajectory # Predicted states (n,N)
+    U_::Trajectory # Predicted controls (m,N)
 
-    S::TM  # Cost-to-go hessian (n,n)
-    s::TV  # Cost-to-go gradient (n,1)
+    S::Trajectory  # Cost-to-go hessian (n,n)
+    s::Trajectory  # Cost-to-go gradient (n,1)
 
-    fdx::TM # Discrete dynamics state jacobian (n,n,N)
-    fdu::TM # Discrete dynamics control jacobian (n,m,N-1)
+    fdx::Trajectory # Discrete dynamics state jacobian (n,n,N)
+    fdu::Trajectory # Discrete dynamics control jacobian (n,m,N-1)
 
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
-    function UnconstrainedVectorResults(X::TV,U::TV,
-            K::TM,d,X_,U_,S,s,fdx,fdu,ρ,dρ) where {TV,TM}
-        new{TV,TM}(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    function UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
     end
 end
 
@@ -169,28 +102,6 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
 end
 
-function UnconstrainedVectorResults(n::Int,m::Int,N::Int,T::Type)
-    if T <: AbstractArray
-        UnconstrainedVectorResults(n,m,N)
-    else
-        X = T(N,n)
-        U = T(N-1,m)
-        K = T(N,m,n)
-        d = T(N,m)
-        X_ = T(N,n)
-        U_ = T(N-1,m)
-        S = T(N,n,n)
-        s = T(N,n)
-        fdx = T(N,n,n)
-        fdu = T(N,n,m)
-
-        ρ = ones(1)
-        dρ = ones(1)
-
-        UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
-    end
-end
-
 function copy(r::UnconstrainedVectorResults)
     UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),copy(r.ρ),copy(r.dρ))
 end
@@ -201,30 +112,30 @@ end
 #                                                                              #
 ################################################################################
 
-struct ConstrainedVectorResults{TV,TM} <: ConstrainedIterResults
-    X::TV  # States (n,N)
-    U::TV  # Controls (m,N)
+struct ConstrainedVectorResults <: ConstrainedIterResults
+    X::Trajectory  # States (n,N)
+    U::Trajectory  # Controls (m,N)
 
-    K::TM # Feedback (state) gain (m,n,N)
-    d::TV  # Feedforward gain (m,N)
+    K::Trajectory # Feedback (state) gain (m,n,N)
+    d::Trajectory  # Feedforward gain (m,N)
 
-    X_::TV # Predicted states (n,N)
-    U_::TV # Predicted controls (m,N)
+    X_::Trajectory # Predicted states (n,N)
+    U_::Trajectory # Predicted controls (m,N)
 
-    S::TM  # Cost-to-go hessian (n,n)
-    s::TV  # Cost-to-go gradient (n,1)
+    S::Trajectory  # Cost-to-go hessian (n,n)
+    s::Trajectory  # Cost-to-go gradient (n,1)
 
-    fdx::TM # State jacobian (n,n,N)
-    fdu::TM # Control (k) jacobian (n,m,N-1)
+    fdx::Trajectory # State jacobian (n,n,N)
+    fdu::Trajectory # Control (k) jacobian (n,m,N-1)
 
-    C::TV      # Constraint values (p,N)
-    C_prev::TV # Previous constraint values (p,N)
-    Iμ::Vector{Diagonal{Float64,Vector{Float64}}}        # fcxtive constraint penalty matrix (p,p,N)
-    λ::TV # Lagrange multipliers (p,N)
-    μ::TV     # Penalty terms (p,N)
+    C::Trajectory      # Constraint values (p,N)
+    C_prev::Trajectory # Previous constraint values (p,N)
+    Iμ::Trajectory        # fcxtive constraint penalty matrix (p,p,N)
+    λ::Trajectory # Lagrange multipliers (p,N)
+    μ::Trajectory     # Penalty terms (p,N)
 
-    Cx::TM # State jacobian (n,n,N)
-    Cu::TM # Control (k) jacobian (n,m,N-1)
+    Cx::Trajectory # State jacobian (n,n,N)
+    Cu::Trajectory # Control (k) jacobian (n,m,N-1)
 
     t_prev::TV
     λ_prev::TV
@@ -236,13 +147,12 @@ struct ConstrainedVectorResults{TV,TM} <: ConstrainedIterResults
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
 
-    # function ConstrainedVectorResults(X::TV,U::TV,
-    #         K::TM,d,X_,U_,S,s,fdx,fdu,
-    #         C::TV,C_prev,Iμ,λ,μ,
-    #         Cx,Cu,active_set,ρ,dρ) where {TV,TM}
-    #     println("This constructor")
-    #     new{TM,TV}(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
-    # end
+    function ConstrainedVectorResults(X,U,
+            K,d,X_,U_,S,s,fdx,fdu,
+            C,C_prev,Iμ,λ,μ,
+            Cx,Cu,active_set,ρ,dρ)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
+    end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
@@ -260,78 +170,47 @@ Construct results from sizes
 * N: number of time steps
 * p_N (default=n): number of terminal constraints
 """
-function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type=TrajectoryVariable)
-    if T <: AbstractArray
-        X  = [zeros(n)   for i = 1:N]
-        U  = [zeros(m)   for i = 1:N-1]
+function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
 
-        K  = [zeros(m,n) for i = 1:N-1]
-        d  = [zeros(m)   for i = 1:N-1]
+    X  = [zeros(n)   for i = 1:N]
+    U  = [zeros(m)   for i = 1:N-1]
 
-        X_ = [zeros(n)   for i = 1:N]
-        U_ = [zeros(m)   for i = 1:N-1]
+    K  = [zeros(m,n) for i = 1:N-1]
+    d  = [zeros(m)   for i = 1:N-1]
 
-        S  = [zeros(n,n) for i = 1:N]
-        s  = [zeros(n)   for i = 1:N]
+    X_ = [zeros(n)   for i = 1:N]
+    U_ = [zeros(m)   for i = 1:N-1]
+
+    S  = [zeros(n,n) for i = 1:N]
+    s  = [zeros(n)   for i = 1:N]
 
 
-        fdx = [zeros(n,n) for i = 1:N-1]
-        fdu = [zeros(n,m) for i = 1:N-1]
+    fdx = [zeros(n,n) for i = 1:N-1]
+    fdu = [zeros(n,m) for i = 1:N-1]
 
-        # Stage Constraints
-        C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-        C_prev = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-        Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
-        λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-        μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+    # Stage Constraints
+    C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    C_prev = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
+    λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
 
-        Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
-        Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
+    Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
+    Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
 
-        t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
-        λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+    λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
-        active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    nesterov = [0.;1.]
 
-        ρ = ones(1)
-        dρ = ones(1)
-    else
-        X = T(N,n)
-        U = T(N-1,m)
-        K = T(N,m,n)
-        d = T(N,m)
-        X_ = T(N,n)
-        U_ = T(N-1,m)
-        S = T(N,n,n)
-        s = T(N,n)
-        fdx = T(N,n,n)
-        fdu = T(N,n,m)
+    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
-        C =      T(N,p, size_N=p_N)
-        C_prev = T(N,p, size_N=p_N)
-        Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
-        λ =      T(N,p, size_N=p_N)
-        μ =      T([i != N ? ones(p) : ones(p_N)  for i = 1:N])
+    ρ = zeros(1)
+    dρ = zeros(1)
 
-        Cx = T(N, (p,n), size_N=(p_N,n))
-        Cu = T(N, (p,m), size_N=(p_N,0))
-
-        t_prev = T(N, p, size_N=p_N)
-        λ_prev = T(N, p, size_N=p_N)
-
-        active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-
-        ρ = ones(1)
-        dρ = ones(1)
-    end
-    nesterov = [0.,1.]
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,
-        Cx,Cu,
-        t_prev,λ_prev,nesterov,
-        active_set,ρ,dρ)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
 end
-
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
@@ -404,7 +283,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 
         m̄,mm = get_num_controls(solver)
 
-        results = ConstrainedVectorResults(nn,mm,p,N,p_N,TrajectoryVariable)
+        results = ConstrainedVectorResults(nn,mm,p,N,p_N)
 
         # Set initial penalty term values
         copyto!(results.μ, results.μ*solver.opts.penalty_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
@@ -428,7 +307,7 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         results.ρ[1] = solver.opts.bp_reg_initial
 
     else
-        results = UnconstrainedVectorResults(n,m,N,TrajectoryVariable)
+        results = UnconstrainedVectorResults(n,m,N)
     end
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)

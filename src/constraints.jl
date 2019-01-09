@@ -31,6 +31,7 @@ function get_num_terminal_constraints(solver::Solver)
         if solver.obj isa ConstrainedObjective
             p_N = solver.obj.p_N
             pI_N = solver.obj.pI_N
+
             pE_N = p_N - pI_N
         else
             p_N,pI_N,pE_N = 0,0,0
@@ -271,7 +272,6 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     lbl_x_max = ["state (upper bound)" for i = 1:pI_x_max]
     lbl_x_min = ["state (lower bound)" for i = 1:pI_x_min]
 
-
     # Update pI
     pI = pI_x + pI_u + pI_c
 
@@ -309,20 +309,28 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     # Terminal Constraint
     """
-    [cI_N_custom;
+    [x - x_max
+     x_min - x
+     cI_N_custom;
      xN-xf;
      cI_E_custom]
     """
-    iI = 1:pI_N
-    iE = pI_N .+ (1:pE_N)
+    # iI = 1:pI_N
+    # iE = pI_N .+ (1:pE_N)
     function c_function!(c,x)
+        if pI_x_max > 0
+            c[1:pI_x_max] = (x[1:n] - obj.x_max )[x_max_active]
+        end
+        if pI_x_min > 0
+            c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x[1:n])[x_min_active]
+        end
         if obj.pI_N_custom > 0
-            c[iI] = obj.cI_N(c,x)
+            c[pI_x .+ (1:obj.pI_N_custom)] = obj.cI_N(c,x[1:n])
         end
         if obj.use_xf_equality_constraint
-            c[pI_N .+ (1:n)] = x - obj.xf
+            c[(obj.pI_N_custom + pI_x) .+ (1:n)] = x - obj.xf
         elseif obj.pE_N_custom > 0
-            c[iE] = obj.cE_N(c,x)
+            c[(obj.pI_N_custom + pI_x) .+ (1:pE_N)] = obj.cE_N(c,x[1:n])
         end
     end
 
@@ -379,7 +387,9 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
 
     # Terminal Constraint
     """
-    [JI_N_custom;
+    [In
+     -In
+    JI_N_custom;
      In;
      JI_E_custom]
     """
@@ -392,13 +402,19 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     end
 
     function c_jacobian!(j::AbstractArray,x::AbstractArray)
+        if pI_x_max > 0
+            j[1:pI_x_max,1:n] = In[x_max_active,:]
+        end
+        if pI_x_min > 0
+            j[pI_x_max+1:pI_x_max+pI_x_min,1:n] = -In[x_min_active,:]
+        end
         if obj.pI_N_custom > 0
-            cI_N_custom_jacobian!(view(j,iI,1:n),x)
+            cI_N_custom_jacobian!(view(j,pI_x .+(1:obj.pI_N_custom),1:n),x[1:n])
         end
         if obj.use_xf_equality_constraint
-            j[pI_N .+ (1:n),1:n] = In
+            j[(obj.pI_N_custom + pI_x) .+ (1:n),1:n] = In
         elseif obj.pE_N_custom > 0
-            cE_N_custom_jacobian!(view(j,iE,1:n),x)
+            cE_N_custom_jacobian!(view(j,(obj.pI_N_custom + pI_x) .+ (1:pE_N),1:n),x[1:n])
         end
     end
 

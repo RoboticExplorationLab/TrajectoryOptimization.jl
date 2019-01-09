@@ -24,7 +24,7 @@ solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+@test max_c < 1e-3
 
 # with Square Root
 # solver.opts.square_root = true
@@ -39,7 +39,7 @@ solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1)
 results_c, = TrajectoryOptimization.solve(solver, U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+@test max_c < 1e-3
 
 # with Square Root
 # solver.opts.square_root = true
@@ -61,14 +61,14 @@ solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+@test max_c < 1e-3
 
 # Constrained - midpoint
 solver = TrajectoryOptimization.Solver(model,obj_c, integration=:midpoint, dt=0.1, opts=opts)
 results_c, = TrajectoryOptimization.solve(solver,U)
 max_c = TrajectoryOptimization.max_violation(results_c)
 @test norm(results_c.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+@test max_c < 1e-3
 
 ### Infeasible Start
 opts = TrajectoryOptimization.SolverOptions()
@@ -84,7 +84,7 @@ X_interp = TrajectoryOptimization.line_trajectory(obj_inf.x0, obj_inf.xf,solver.
 results_inf, = TrajectoryOptimization.solve(solver,X_interp,U)
 max_c = TrajectoryOptimization.max_violation(results_inf)
 @test norm(results_inf.X[end]-obj.xf) < 1e-3
-@test max_c < 1e-2
+@test max_c < 1e-3
 
 # test linear interpolation for state trajectory
 @test norm(X_interp[:,1] - solver.obj.x0) < 1e-8
@@ -99,8 +99,10 @@ X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0[:] = ones(solver.model.n)
 solver.state.infeasible = true  # solver needs to know to use an infeasible rollout
 p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
+p_N, pI_N, pE_N = TrajectoryOptimization.get_num_constraints(solver::Solver)
+
 ui = TrajectoryOptimization.infeasible_controls(solver,X_infeasible,U_infeasible)
-results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,solver.model.n)
+results_infeasible = TrajectoryOptimization.ConstrainedVectorResults(solver.model.n,solver.model.m+solver.model.n,p,solver.N,p_N)
 copyto!(results_infeasible.U, [U_infeasible;ui])
 TrajectoryOptimization.rollout!(results_infeasible,solver)
 

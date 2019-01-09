@@ -80,6 +80,7 @@ mutable struct SolverOptions
     outer_loop_update_type::Symbol # type of outer loop update (default, individual, accelerated)
     use_second_order_dual_update::Bool # second order update for Lagrange multipliers once sqrt(cost tolerance | gradient) < desired tolerance
     penalty_update_frequency::Int  # determines how many iterations should pass before the penalty is updated (1 is every iteration)
+    constraint_tolerance_second_order_dual_update::Float64 # constraint tolerance for switching to second order dual update
 
     "Regularization parameters"
     bp_reg_initial::Float64 # initial regularization
@@ -104,17 +105,16 @@ mutable struct SolverOptions
         z_min=1.0e-8,z_max=10.0,max_cost_value=1.0e8,max_state_value=1.0e8,max_control_value=1.0e8,max_dt=1.0,min_dt=1e-3,minimum_time_tf_estimate=0.0,minimum_time_dt_estimate=0.0,gradient_tolerance=1e-5,gradient_tolerance_intermediate=1e-5,cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,
         constraint_tolerance=1e-3,iterations=500,iterations_innerloop=150,iterations_outerloop=50,
         iterations_linesearch=15,R_infeasible=1e3,R_minimum_time=1.0e3,
-        benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,dual_min=-1.0e8,dual_max=1.0e8,penalty_max=1.0e8,penalty_initial=1.0,penalty_initial_infeasible=1.0,penalty_initial_minimum_time_inequality=1.0,penalty_initial_minimum_time_equality=1.0,penalty_scaling=10.0,penalty_scaling_infeasible=10.0,penalty_scaling_minimum_time_inequality=10.0,penalty_scaling_minimum_time_equality=10.0,penalty_scaling_no=1.0,
-        constraint_decrease_ratio=0.25,outer_loop_update_type=:default,use_second_order_dual_update=false, penalty_update_frequency=1,
+        benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,dual_min=-1.0e8, dual_max=1.0e8,penalty_max=1.0e8,penalty_initial=1.0,penalty_initial_infeasible=1.0,penalty_initial_minimum_time_inequality=1.0,penalty_initial_minimum_time_equality=1.0,penalty_scaling=10.0,penalty_scaling_infeasible=10.0,penalty_scaling_minimum_time_inequality=10.0,penalty_scaling_minimum_time_equality=10.0,penalty_scaling_no=1.0,constraint_decrease_ratio=0.25,outer_loop_update_type=:default,use_second_order_dual_update=false,
+        penalty_update_frequency=1,constraint_tolerance_second_order_dual_update=sqrt(constraint_tolerance),
         bp_reg_initial=0.0,bp_reg_increase_factor=1.6,bp_reg_max=1.0e8,bp_reg_min=1e-6,bp_reg_type=:state,bp_reg_fp=10.0,eigenvalue_scaling=2.0,eigenvalue_threshold=1e-8,use_static=false,live_plotting=false,active_constraint_tolerance=1e-8,dJ_counter_limit=10)
 
         new(square_root,verbose,z_min,z_max,max_cost_value,max_state_value,max_control_value,max_dt,min_dt,minimum_time_tf_estimate,minimum_time_dt_estimate,gradient_tolerance,gradient_tolerance_intermediate,cost_tolerance,cost_tolerance_intermediate,
         constraint_tolerance,iterations,iterations_innerloop,iterations_outerloop,
         iterations_linesearch,R_infeasible,R_minimum_time,
         benchmark,unconstrained_original_problem,resolve_feasible,
-        dual_min,dual_max,penalty_max,penalty_initial,penalty_initial_infeasible,penalty_initial_minimum_time_inequality,penalty_initial_minimum_time_equality,penalty_scaling,penalty_scaling_infeasible,penalty_scaling_minimum_time_inequality,penalty_scaling_minimum_time_equality,penalty_scaling_no,
-        constraint_decrease_ratio,outer_loop_update_type,use_second_order_dual_update,penalty_update_frequency,
-        bp_reg_initial,bp_reg_increase_factor,bp_reg_max,bp_reg_min,bp_reg_type,bp_reg_fp,eigenvalue_scaling,eigenvalue_threshold,
+        dual_min,dual_max,penalty_max,penalty_initial,penalty_initial_infeasible,penalty_initial_minimum_time_inequality,penalty_initial_minimum_time_equality,penalty_scaling,penalty_scaling_infeasible,penalty_scaling_minimum_time_inequality,penalty_scaling_minimum_time_equality,penalty_scaling_no,constraint_decrease_ratio,outer_loop_update_type,use_second_order_dual_update,
+        penalty_update_frequency,constraint_tolerance_second_order_dual_update,bp_reg_initial,bp_reg_increase_factor,bp_reg_max,bp_reg_min,bp_reg_type,bp_reg_fp,eigenvalue_scaling,eigenvalue_threshold,
         use_static,live_plotting,active_constraint_tolerance,dJ_counter_limit)
     end
 end

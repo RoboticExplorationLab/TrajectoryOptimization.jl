@@ -24,7 +24,7 @@ obj_con = ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 solver = Solver(model,obj_con,N=N)
 solver.opts.restype = Matrix
 solver_new = Solver(model,obj_con,N=N)
-solver_new.opts.restype = TrajectoryVariable
+# solver_new.opts.restype = TrajectoryVariable
 solver.opts.verbose = true
 solver.state.infeasible
 n,m = get_sizes(solver)

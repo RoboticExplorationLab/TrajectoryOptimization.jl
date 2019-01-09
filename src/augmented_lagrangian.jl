@@ -73,6 +73,8 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver)
 
 end
 
+
+
 """
 $(SIGNATURES)
     Second order dual update - Batch Dual QP solve
@@ -341,6 +343,7 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
         for i = 1:p
             if p <= pI
                 if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
+
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
                     results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])

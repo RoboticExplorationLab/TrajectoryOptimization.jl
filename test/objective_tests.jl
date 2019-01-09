@@ -70,11 +70,13 @@ obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=1, u_max=Inf)
 obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-[1,2], x_max=[1,2])
 @test obj.p == 4
 @test obj.pI == 4
+@test obj.pI_N == 4
 
 @test_throws DimensionMismatch ConstrainedObjective(costfun,tf,x0,xf,x_min=-[Inf,2,3,4], x_max=[1,Inf,3,Inf])
 obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-[Inf,4], x_max=[3,Inf])
 @test obj.p == 2
 @test obj.pI == 2
+@test obj.pI_N == 2
 
 # Scalar to array constraint
 obj = ConstrainedObjective(costfun,tf,x0,xf,x_min=-4, x_max=4)
@@ -147,7 +149,8 @@ is_inplace_function(cE!,ones(n))
 count_inplace_output(cE!,ones(n))
 
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!, use_xf_equality_constraint=false)
-@test obj.p_N == 3
+@test obj.p_N == 7
+@test obj.pI_N == 6
 @test obj.p == 9
 @test obj.pI_custom == 2
 @test obj.pE_custom == 1
@@ -155,13 +158,14 @@ obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, c
 @test obj.pE_N_custom == 1
 @test_throws ArgumentError ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!, cI_N=cI!, cE_N=cE!)
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
-@test obj.p_N == 2
+@test obj.p_N == 6
+@test obj.pI_N == 4
 @test obj.p == 9
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE=cE!)
-@test obj.p_N == 2
+@test obj.p_N == 6
 @test obj.p == 7
 obj = ConstrainedObjective(costfun,tf,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cE_N=cE!, use_xf_equality_constraint=false)
-@test obj.p_N == 1
+@test obj.p_N == 5
 @test obj.p == 6
 
 @test get_sizes(obj) == (2,1)
@@ -173,6 +177,11 @@ u = [1]
 cans = [0,-3,-3,1,-4,-8,6,8,1]
 c(cres,x,u)
 @test cres == cans
+
+cresN = zeros(6)
+c(cresN,x)
+cansN = [x[1] - 4; x[2] - 4; -3 - x[1]; -3 - x[2]; x[1] - obj.xf[1]; x[2] - obj.xf[2]]
+@test cresN == cansN
 
 # test with minimum time
 obj = ConstrainedObjective(costfun,:min,x0,xf,u_min=-2,u_max=1,x_min=-3,x_max=4, cI=cI!, cE=cE!)
