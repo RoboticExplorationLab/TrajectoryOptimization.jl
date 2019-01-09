@@ -43,7 +43,7 @@ function cost(solver::Solver, X::AbstractMatrix, U::AbstractMatrix)
 end
 
 function cost(solver::Solver,X,U)
-    N = solver.N
+    n,m,N = get_sizes(solver)
     J = 0.0
     costfun = solver.obj.cost
     for k = 1:N-1
