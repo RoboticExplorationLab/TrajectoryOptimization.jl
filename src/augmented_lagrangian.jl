@@ -9,13 +9,68 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-    for k = 1:N-1
-        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
-        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+    if solver.opts.outer_loop_update_type ∈ [:default, :individual]
+        for k = 1:N-1
+            results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
+            results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+        end
+        results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + results.μ[N].*results.C[N]))
+        results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+    elseif solver.opts.outer_loop_update_type == :accelerated
+        λ,μ,C = results.λ, results.μ, results.C
+        t,λ_tilde_prev = results.t_prev, results.λ_prev
+        for k = 1:N-1
+            t_prime = @. (1+sqrt(1+4t[k]^2))/2
+            λ_tilde = λ[k] + μ[k].*C[k]
+            λ_prime = @. λ_tilde + ((t[k]-1)/t_prime)*(λ_tilde - λ_tilde_prev[k]) + (t[k]/t_prime)*(λ_tilde-λ[k])
+
+            results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
+            results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+
+            λ_tilde_prev[k] = λ_tilde
+            t[k] = t_prime
+        end
+        t_prime = @. (1+sqrt(1+4t[N]^2))
+        λ_tilde = λ[N] + μ[N].*C[N]
+        λ_prime = @. λ_tilde + ((t[N]-1)/t_prime)*(λ_tilde - λ_tilde_prev[N]) + (t[N]/t_prime)*(λ_tilde-λ[N])
+
+        results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
+        results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+
+        λ_tilde_prev[N] = λ_tilde
+        t[N] = t_prime
+    elseif solver.opts.outer_loop_update_type == :momentum
+        λ,μ,C = results.λ, results.μ, results.C
+        y = results.λ_prev
+        α_prev = results.nesterov[1]
+        α = results.nesterov[2]
+        α_next = (1+sqrt(1+4α^2))/2
+        γ_k = -(1-α)/α_next
+
+        for k = 1:N-1
+            y_next = λ[k] + μ[k].*C[k]
+            y_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, y_next))
+            y_next[1:pI] = max.(0.0,y_next[1:pI])
+            λ[k] = (1-γ_k)*y_next + γ_k*y[k]
+            y[k] = y_next
+
+            λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[k]))
+            λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+        end
+        y_next = λ[N] + μ[N].*C[N]
+        y_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, y_next))
+        y_next[1:pI_N] = max.(0.0,y_next[1:pI_N])
+        λ[N] = (1-γ_k)*y_next + γ_k*y[N]
+        @show y_next,y[N]
+        y[N] = y_next
+
+        λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[N]))
+        λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+
+        results.nesterov[1] = α
+        results.nesterov[2] = α_next
     end
 
-    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + results.μ[N].*results.C[N]))
-    results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
 end
 
 """
@@ -253,7 +308,7 @@ end
 
 """ $(SIGNATURES) Penalty update """
 function μ_update!(results::ConstrainedIterResults,solver::Solver)
-    if solver.opts.outer_loop_update_type == :default
+    if solver.opts.outer_loop_update_type ∈ [:default,:accelerated, :momentum]
         μ_update_default!(results,solver)
     elseif solver.opts.outer_loop_update_type == :individual
         μ_update_individual!(results,solver)
@@ -324,13 +379,15 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver, k::Int=0)::Nothing
 
     ## Lagrange multiplier updates
     solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update!(results,solver)
 
     ## Penalty updates
-    μ_update!(results,solver)
+    if k % solver.opts.penalty_update_frequency == 0
+        μ_update!(results,solver)
+    end
 
     ## Store current constraints evaluations for next outer loop update
     copyto!(results.C_prev,results.C)
@@ -338,6 +395,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver)::Noth
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver, k::Int=0)::Nothing
     return nothing
 end

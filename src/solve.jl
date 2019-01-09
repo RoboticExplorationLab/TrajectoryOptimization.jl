@@ -230,7 +230,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver)
+        outer_loop_update(results,solver,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 

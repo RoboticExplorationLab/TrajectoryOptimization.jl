@@ -85,6 +85,8 @@ function to_array(x::TrajectoryVariable)
     to_array(x.x)
 end
 
+isempty(x::TrajectoryVariable) = isempty(x.x)
+
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem
@@ -224,6 +226,11 @@ struct ConstrainedVectorResults{TV,TM} <: ConstrainedIterResults
     Cx::TM # State jacobian (n,n,N)
     Cu::TM # Control (k) jacobian (n,m,N-1)
 
+    t_prev::TV
+    λ_prev::TV
+
+    nesterov::Vector{Float64}
+
     active_set::Vector{Vector{T}} where T # active set of constraints
 
     ρ::Array{Float64,1}
@@ -253,46 +260,41 @@ Construct results from sizes
 * N: number of time steps
 * p_N (default=n): number of terminal constraints
 """
-function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
-    X  = [zeros(n)   for i = 1:N]
-    U  = [zeros(m)   for i = 1:N-1]
-
-    K  = [zeros(m,n) for i = 1:N-1]
-    d  = [zeros(m)   for i = 1:N-1]
-
-    X_ = [zeros(n)   for i = 1:N]
-    U_ = [zeros(m)   for i = 1:N-1]
-
-    S  = [zeros(n,n) for i = 1:N]
-    s  = [zeros(n)   for i = 1:N]
-
-
-    fdx = [zeros(n,n) for i = 1:N-1]
-    fdu = [zeros(n,m) for i = 1:N-1]
-
-    # Stage Constraints
-    C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-    C_prev = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-    Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
-    λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-    μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
-
-    Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
-    Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
-
-    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
-
-    ρ = ones(1)
-    dρ = ones(1)
-
-    ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,
-        Cx,Cu,active_set,ρ,dρ)
-end
-
-function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type)
+function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type=TrajectoryVariable)
     if T <: AbstractArray
-        ConstrainedVectorResults(n,m,p,N,p_N)
+        X  = [zeros(n)   for i = 1:N]
+        U  = [zeros(m)   for i = 1:N-1]
+
+        K  = [zeros(m,n) for i = 1:N-1]
+        d  = [zeros(m)   for i = 1:N-1]
+
+        X_ = [zeros(n)   for i = 1:N]
+        U_ = [zeros(m)   for i = 1:N-1]
+
+        S  = [zeros(n,n) for i = 1:N]
+        s  = [zeros(n)   for i = 1:N]
+
+
+        fdx = [zeros(n,n) for i = 1:N-1]
+        fdu = [zeros(n,m) for i = 1:N-1]
+
+        # Stage Constraints
+        C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+        C_prev = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+        Iμ     = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
+        λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+        μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+
+        Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
+        Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
+
+        t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+        λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+
+        active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+
+        ρ = ones(1)
+        dρ = ones(1)
     else
         X = T(N,n)
         U = T(N-1,m)
@@ -314,15 +316,20 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int,T::Type)
         Cx = T(N, (p,n), size_N=(p_N,n))
         Cu = T(N, (p,m), size_N=(p_N,0))
 
+        t_prev = T(N, p, size_N=p_N)
+        λ_prev = T(N, p, size_N=p_N)
+
         active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
         ρ = ones(1)
         dρ = ones(1)
-
-        ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-            C,C_prev,Iμ,λ,μ,
-            Cx,Cu,active_set,ρ,dρ)
     end
+    nesterov = [0.,1.]
+    ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
+        C,C_prev,Iμ,λ,μ,
+        Cx,Cu,
+        t_prev,λ_prev,nesterov,
+        active_set,ρ,dρ)
 end
 
 
