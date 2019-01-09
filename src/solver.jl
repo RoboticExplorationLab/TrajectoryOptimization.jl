@@ -14,9 +14,6 @@ mutable struct SolverState
     end
 end
 
-include("solver_options.jl")
-import Base: copy, length, size
-
 struct Solver{O<:Objective}
     model::Model         # Dynamics model
     obj::O               # Objective (cost function and constraints)

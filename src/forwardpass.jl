@@ -25,9 +25,9 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev:
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
             # set trajectories to original trajectory
-            X_ .= deepcopy(X)
-            U_ .= deepcopy(U)
-
+            copyto!(X_,X)
+            copyto!(U_,U)
+            
             update_constraints!(res,solver,X_,U_)
             J = cost(solver, res, X_, U_)
 

@@ -26,7 +26,7 @@ function rollout!(X::Matrix, U::Matrix, solver::Solver)
     return status
 end
 
-function rollout!(X::Vector, U::Vector, solver::Solver)
+function rollout!(X::Union{Vector,TrajectoryVariable}, U::Union{Vector,TrajectoryVariable}, solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)

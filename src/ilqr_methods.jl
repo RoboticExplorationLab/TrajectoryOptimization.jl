@@ -42,7 +42,7 @@ function cost(solver::Solver, X::AbstractMatrix, U::AbstractMatrix)
     cost(solver, to_dvecs(X), to_dvecs(U))
 end
 
-function cost(solver::Solver,X::AbstractVector,U::AbstractVector)
+function cost(solver::Solver,X,U)
     N = solver.N
     J = 0.0
     costfun = solver.obj.cost

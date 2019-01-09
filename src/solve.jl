@@ -156,7 +156,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @info "Outer loop $j (begin)"
 
         if solver.state.constrained && j == 1
-            results.C_prev .= deepcopy(results.C)
+            copyto!(results.C_prev,results.C)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
@@ -185,8 +185,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             solver.opts.live_plotting ? display(plot(to_array(results.U)')) : nothing
 
             ### UPDATE RESULTS ###
-            X .= deepcopy(X_)
-            U .= deepcopy(U_)
+            copyto!(X,X_)
+            copyto!(U,U_)
 
             dJ = copy(abs(J-J_prev)) # change in cost
             J_prev = copy(J)
@@ -387,8 +387,8 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
 
     # update trajectories
-    results.X .= deepcopy(results.X_)
-    results.U .= deepcopy(results.U_)
+    copyto!(results.X, results.X_)
+    copyto!(results.U, results.U_)
 
     # return constrained results if input was constrained
     if !solver.opts.unconstrained_original_problem
