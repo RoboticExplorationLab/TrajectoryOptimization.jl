@@ -3,7 +3,7 @@ include("N_plots.jl")
 
 # Solver Options
 dt = 0.01
-integration = :rk3
+integration = :rk4
 method = :hermite_simpson
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
@@ -43,7 +43,7 @@ obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=
 solver_uncon  = Solver(model, obj, integration=integration, dt=dt, opts=opts)
 solver_con_box = Solver(model, obj_con_box, integration=integration, N=301, opts=opts)
 
-U0 = rand(solver_uncon.model.m,solver_uncon.N)
+U0 = rand(solver_uncon.model.m,solver_uncon.N-1)
 X0 = line_trajectory(solver_con_box)
 X0_rollout = rollout(solver_uncon, U0)
 
@@ -117,22 +117,7 @@ plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel 
 ####################
 #   MINIMUM TIME   $
 ####################
-opts = SolverOptions()
-opts.verbose = true
-opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-5
-opts.minimum_time_tf_estimate = 2.0
-opts.gradient_tolerance = 1e-10
-opts.live_plotting = true
-
-u_bnd = 2
-N = 51
-obj_mintime = update_objective(obj_con_box,tf=:min, u_min=-u_bnd, u_max=u_bnd)
-solver_min = Solver(model, obj_mintime, N=N, integration=:rk3, opts=opts)
-
-U0 = zeros(m,N)
-res,stats = solve(solver_min, U0)
-
+# See minimum_time_test.jl
 
 ########################
 ## Obstacle Avoidance ##
