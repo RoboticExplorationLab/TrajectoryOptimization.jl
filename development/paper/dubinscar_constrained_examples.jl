@@ -3,7 +3,7 @@ include("N_plots.jl")
 
 # Solver Options
 dt = 0.01
-integration = :rk3_foh
+integration = :rk3
 method = :hermite_simpson
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
@@ -280,14 +280,16 @@ end
 
 obj_con_obstacles = TrajectoryOptimization.ConstrainedObjective(obj,cI=cI)
 
-solver_uncon_obstacles = Solver(model, obj, integration=integration, dt=dt, opts=opts)
-solver_con_obstacles = Solver(model, obj_con_obstacles, integration=integration, dt=dt, opts=opts)
+solver_uncon_obstacles = Solver(model, obj, dt=dt, opts=opts)
+solver_con_obstacles = Solver(model, obj_con_obstacles, dt=dt, opts=opts)
 solver_con_obstacles.opts.R_infeasible = 1.0
+n,m,N = get_sizes(solver_con_obstacles)
+
 # -Initial state and control trajectories
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
-X0 = interp_rows(solver_uncon.N,tf,Array(X_guess'))
+X0 = TrajectoryOptimization.interp_rows(N,tf,Array(X_guess'))
 # X0 = line_trajectory(solver_uncon)
-U0 = rand(solver_uncon.model.m,solver_uncon.N)
+U0 = rand(m,N)
 
 @time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
 println("Final state (unconstrained)-> pos: $(results_uncon_obstacles.X[end][1:3]), goal: $(solver_uncon_obstacles.obj.xf[1:3])\n Cost: $(stats_uncon_obstacles["cost"][end])\n Iterations: $(stats_uncon_obstacles["iterations"])\n Outer loop iterations: $(stats_uncon_obstacles["major iterations"])\n ")
