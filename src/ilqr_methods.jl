@@ -114,7 +114,7 @@ end
 $(SIGNATURES)
     Calculate dynamics and constraint Jacobians (perform prior to the backwards pass)
 """
-function update_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::ConstrainedIterResults, solver::Solver, jacobians::Symbol=:both)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
@@ -126,42 +126,40 @@ function update_jacobians!(res::ConstrainedIterResults, solver::Solver)::Nothing
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
-        solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
-
+        jacobians in [:dynamics,:both] ? solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k]) : nothing
 
         # Update constraint Jacobians
-        solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+        if !solver.state.fixed_constraint_jacobians && jacobians in [:constraints,:both]
 
-        # Minimum time special case
-        if solver.state.minimum_time
-            # No equality constraint at first time step
-            if k == 1
-                res.Cu[k][p,m̄] = 0.
-                res.Cx[k][p,n̄] = 0.
+             solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+
+            # Minimum time special case
+            if solver.state.minimum_time
+                # No equality constraint at first time step
+                if k == 1
+                    res.Cu[k][p,m̄] = 0.
+                    res.Cx[k][p,n̄] = 0.
+                end
+                # Jacobian for x[n̄]_k+1 = u[m̄]_k
+                res.fdu[k][n̄,m̄] = 1.
             end
-            # Jacobian for x[n̄]_k+1 = u[m̄]_k
-            res.fdu[k][n̄,m̄] = 1.
         end
     end
 
     # Update terminal constraint Jacobian
-    k = N
-    solver.c_jacobian(view(res.Cx[k],1:p_N,1:n), res.X[k][1:n])
+    (!solver.state.fixed_terminal_constraint_jacobian && jacobians in [:constraints,:both]) ? solver.c_jacobian(view(res.Cx[N],1:p_N,1:n), res.X[N][1:n]) : nothing
 
     return nothing
 end
 
-function update_jacobians!(res::UnconstrainedIterResults, solver::Solver)::Nothing
+function update_jacobians!(res::UnconstrainedIterResults, solver::Solver, jacobians::Symbol=:none)::Nothing
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        # res.fdx[k][1:n,1:n], res.fdu[k][1:n,1:mm] = solver.Fd(res.X[k][1:n], res.U[k][1:mm])
         solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k])
-
     end
 
     return nothing

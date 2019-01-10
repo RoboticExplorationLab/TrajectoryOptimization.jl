@@ -16,11 +16,14 @@ get_num_constraints(solver)
 get_num_terminal_constraints(solver)
 solver.state.second_order_dual_update = false
 solver.opts.use_second_order_dual_update = false
+solver.opts.use_gradient_aula = true
 U = zeros(solver.model.m, solver.N)
 results, stats = TrajectoryOptimization.solve(solver,U)
 
 plot(to_array(results.U)',label="")
 plot(to_array(results.X)',label="")
+
+plot!(stats["gradient_norm"])
 
 max_violation(results)
 maximum(abs.(to_array(results.U)))

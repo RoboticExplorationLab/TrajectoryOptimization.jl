@@ -201,7 +201,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
 
     nesterov = [0.;1.]
 
-    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+    active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
 
     ρ = zeros(1)
     dρ = zeros(1)

@@ -74,7 +74,6 @@ function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end
 
-
 """
 $(TYPEDEF)
 Cost function of the form
@@ -572,4 +571,35 @@ function count_inplace_output(c::Function, input...)
     p = count(isfinite.(vals))
 
     return p
+end
+
+"""
+$(SIGNATURES)
+    Check if constraints are custom
+"""
+function check_custom_constraints(obj::ConstrainedObjective)
+    if obj.pI_custom + obj.pE_custom > 0
+        return true
+    else
+        return false
+    end
+end
+
+function check_custom_constraints(obj::UnconstrainedObjective)
+    return false
+end
+"""
+$(SIGNATURES)
+    Check if constraints are custom
+"""
+function check_custom_terminal_constraints(obj::ConstrainedObjective)
+    if obj.pI_N_custom + obj.pE_N_custom > 0
+        return true
+    else
+        return false
+    end
+end
+
+function check_custom_terminal_constraints(obj::UnconstrainedObjective)
+    return false
 end

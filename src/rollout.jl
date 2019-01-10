@@ -7,8 +7,8 @@ U
 function rollout!(res::SolverVectorResults, solver::Solver)
     status = rollout!(res.X, res.U, solver)
 
-    # Update constraints
-    update_constraints!(res,solver,res.X,res.U)
+    # # Update constraints
+    # update_constraints!(res,solver,res.X,res.U)
     return status
 end
 

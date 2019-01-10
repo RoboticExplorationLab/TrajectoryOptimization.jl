@@ -78,10 +78,13 @@ $(SIGNATURES)
 """
 function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
     # Reset solver state
-    solver.state = SolverState()
+    reset_SolverState(solver.state)
 
     # Start timer
     t_start = time_ns()
+
+    # Check for minimum time solve 
+    is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
 
     # Check for infeasible start
     isempty(X0) ? solver.state.infeasible = false : solver.state.infeasible = true
@@ -131,8 +134,14 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    # solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
-    update_constraints!(results, solver)
+    if solver.state.constrained
+        update_constraints!(results, solver)
+
+        # Update constraints Jacobians; if fixed (ie, no custom constraints) set solver state to not update
+        update_jacobians!(results,solver,:constraints)
+        !check_custom_constraints(solver.obj) ? solver.state.fixed_constraint_jacobians = true : solver.state.fixed_constraint_jacobians = false
+        !check_custom_terminal_constraints(solver.obj) ? solver.state.fixed_terminal_constraint_jacobian = true : solver.state.fixed_terminal_constraint_jacobian = false
+    end
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
