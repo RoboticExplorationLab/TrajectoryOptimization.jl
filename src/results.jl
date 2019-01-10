@@ -19,7 +19,6 @@ TrajectoryVectors = Vector{Vector{T}} where T <: Real
 TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
 TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
 
-
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem

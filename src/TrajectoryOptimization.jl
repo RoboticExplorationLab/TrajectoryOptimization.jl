@@ -41,15 +41,11 @@ export
     GenericCost,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
-    ConstrainedStaticResults,
-    UnconstrainedStaticResults,
-    SolverOptions,
-    TrajectoryVariable
+    SolverOptions
 
 # Primary methods
 export
     solve,
-    solve_al,
     rollout!,
     forwardpass!,
     backwardpass!,

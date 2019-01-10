@@ -108,10 +108,41 @@ end
 
 """
 $(SIGNATURES)
+    Second order dual update - Buys Update
+    -UNDER DEVELOPMENT -
+"""
+function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,bp::BackwardPass)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+
+    for k = 1:N
+        if k != N
+            ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
+            G = [results.Cx[k] results.Cu[k]]
+            idx_pI = pI
+        else
+            ∇L = results.S[k]
+            G = results.Cx[k]
+            idx_pI = pI_N
+        end
+        tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
+
+        results.λ[k][results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
+        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+    end
+end
+
+"""
+$(SIGNATURES)
     Second order dual update - Batch Dual QP solve
     -UNDER DEVELOPMENT - currently not improving convergence rate
 """
-function λ_second_order_update!(results::SolverIterResults,solver::Solver)
+function qp_λ_second_order_update!(results::SolverIterResults,solver::Solver)
     n = solver.model.n
     m = solver.model.m
     nm = n+m
@@ -272,18 +303,15 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver)
     # println(any(isnan.(c̄)))
     P = B̄'*Q̄*B̄
     M = q̄ + Q̄*Ā*x0
-
     # println(rank(P))
     # println(size(P))
     # println(λ_tmp)
-
     L = 0.5*ū'*P*ū + M'*B̄*ū + λ_tmp'*(C̄*B̄*ū + C̄*Ā*x0 + c̄)
 
     D = 0.5*M'*B̄*inv(P')*B̄'*M + 0.5*M'*B̄*inv(P')*B̄'*C̄'*λ_tmp + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*M + 0.5*λ_tmp'*C̄*B̄*inv(P')*B̄'*C̄'*λ_tmp - M'*B̄*inv(P)*B̄'*M - M'*B̄*inv(P)*B̄'*C̄'*λ_tmp - λ_tmp'*C̄*B̄*inv(P)*B̄'*M - λ_tmp'*C̄*B̄*inv(P)*B̄'*C̄'*λ_tmp + λ_tmp'*C̄*Ā*x0 + λ_tmp'*c̄
     Q_dual = C̄*B̄*inv(P')*B̄'*C̄' - 2*C̄*B̄*inv(P)*B̄'*C̄'
     q_dual = M'*B̄*inv(P')*B̄'*C̄' - 2*M'*B̄*inv(P)*B̄'*C̄' + x0'*Ā'*C̄' + c̄'
     qq_dual = 0.5*M'*B̄*inv(P')*B̄'*M - M'*B̄*inv(P)*B̄'*M
-
     DD = 0.5*λ_tmp'*Q_dual*λ_tmp + q_dual*λ_tmp + qq_dual
 
     # @test isapprox(D,L)
@@ -358,7 +386,7 @@ function μ_update_default!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
-""" $(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
+""" @(SIGNATURES) Penalty update scheme ('individual')- all penalty terms are updated uniquely according to indiviual improvement compared to previous iteration"""
 function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
@@ -370,28 +398,23 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     penalty_scaling = solver.opts.penalty_scaling
 
     # Stage constraints
-<<<<<<< HEAD
-    for k = 1:N-1
-        for i = 1:p
-            if i <= pI
-=======
     for k = 1:N
-        k == N ? rng = p : rng = p_N
-        for i = 1:rng
-            if k == N ? p <= pI_N : p <= pI
->>>>>>> 3b7989a54359600cce708d821518d10100829cc0
+        if k != N
+            _p = p
+            _pI = pI
+        else
+            _p = p_N
+            _pI = pI_N
+        end
+        for i = 1:_p
+            if i <= _pI
                 if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
-                    results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i] + results.μ[k][i].*results.C[k][i]))
-                    results.λ[k][i] = max.(0.0,results.λ[k][i])
-
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
                     results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
                 end
             else
                 if abs(results.C[k][i]) <= constraint_decrease_ratio*abs(results.C_prev[k][i])
-                    results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i] + results.μ[k][i].*results.C[k][i]))
-
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
                     results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
@@ -402,19 +425,6 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     return nothing
 end
 
-<<<<<<< HEAD
-    k = N
-    for i = 1:p_N
-        if i <= pI_N
-            if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
-                results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
-            else
-                results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
-            end
-        else
-            if abs(results.C[k][i]) <= constraint_decrease_ratio*abs(results.C_prev[k][i])
-                results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
-=======
 function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
@@ -459,7 +469,6 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                 else
                     results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
                 end
->>>>>>> 3b7989a54359600cce708d821518d10100829cc0
             else
                 if abs(results.C[k][i]) <= constraint_decrease_ratio*abs(results.C_prev[k][i])
                     if use_nesterov
@@ -490,13 +499,13 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver, k::Int=0)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int=0)::Nothing
 
     if solver.opts.outer_loop_update_type == :default
         if solver.opts.use_nesterov
             λ_update_nesterov!(results,solver)
         else
-            solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update_default!(results,solver)
+            solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,bp) : λ_update_default!(results,solver)
         end
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
 
