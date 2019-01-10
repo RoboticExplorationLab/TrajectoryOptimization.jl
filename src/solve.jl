@@ -205,6 +205,11 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
+                if solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse
+                    solver.state.penalty_only = false
+                    println("Switching to multipier updates")
+                end
+
                 if solver.state.second_order_dual_update
                     @logmsg InnerLoop "λ 2-update"
                 end
@@ -232,7 +237,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,bp)
+        outer_loop_update(results,solver,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 

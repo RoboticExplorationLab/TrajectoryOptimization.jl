@@ -2,6 +2,7 @@ using MeshCatMechanisms
 using LinearAlgebra
 using RigidBodyDynamics
 using Plots
+import TrajectoryOptimization.rollout
 include("../kuka_visualizer.jl")
 model, obj = Dynamics.kuka
 n,m = model.n, model.m
@@ -134,7 +135,7 @@ solver_ik = Solver(model,obj_ik,N=N)
 res_ik, stats_ik = solve(solver_ik,U0)
 cost(solver,res_ik)
 norm(res_ik.X[N] - xf)
-ee_ik = Dynamics.calc_ee_position(kuka,res_ik.X)
+ee_ik = Dynamics.calc_ee_position(kuka,res_ik.X.x)
 norm(ee_ik[N] - goal)
 
 X0 = rollout(solver,U0)
@@ -147,7 +148,7 @@ cost(solver,res_ik_d)
 # Plot the goal as a sphere
 setelement!(vis,Point3D(world,goal),0.02)
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_ik_d.X)
+animate_trajectory(vis, res_ik.X)
 
 
 ##########################################################
@@ -156,7 +157,7 @@ animate_trajectory(vis, res_ik_d.X)
 
 # Define obstacles
 r = 0.2
-pos = [N÷10,N÷3]
+pos = Int.(floor.([0.12N, 0.28N]))
 circles = [ee_ik[p] for p in pos]
 for circle in circles; push!(circle,r) end
 n_obstacles = length(circles)
@@ -191,7 +192,7 @@ obj_obs = ConstrainedObjective(obj_ik,cI=cI)
 solver = Solver(model, obj_obs, N=N)
 solver.opts.verbose = false
 solver.opts.penalty_scaling = 100
-solver.opts.penalty_initial = 0.001
+solver.opts.penalty_initial = 0.0001
 # solver.opts.cost_tolerance = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-3
 # solver.opts.iterations = 200
@@ -283,9 +284,9 @@ end
 
 # Add more obstacles
 circles2 = copy(circles)
-push!(circles2,[-0.3,0,0.7,0.2])
-push!(circles2,[0.3,0.3,1.0,0.1])
-push!(circles2,[0.3,-0.5,0.4,0.15])
+push!(circles2,[-0.3,0.5,0.7,0.2])
+push!(circles2,[0.3,0.3,1.2,0.1])
+push!(circles2,[0.3,-0.5,0.5,0.15])
 addcircles!(vis,circles2)
 
 points,radii = kuka_points(kuka,true)
@@ -300,9 +301,18 @@ costfun = LQRCost(Q,R,Qf,xf)
 obj_obs_arm = ConstrainedObjective(obj_ik,cI=cI_arm_obstacles,u_min=-80,u_max=80)
 obj_obs_arm.cost.Q = Q
 obj_obs_arm.cost.R = R*1e-8
+
 solver = Solver(model, obj_obs_arm, N=41)
 solver.opts.verbose = true
-res_obs, stats_obs = solve(solver,to_array(res_ik.U))
+solver.opts.penalty_scaling = 150
+solver.opts.penalty_initial = 0.0005
+# solver.opts.cost_tolerance = 1e-6
+solver.opts.cost_tolerance_intermediate = 1e-2
+solver.opts.cost_tolerance = 1e-7
+# solver.opts.iterations = 200
+solver.opts.bp_reg_initial = 0
+solver.opts.outer_loop_update_type = :accelerated
+res_obs, stats_obs = solve(solver,U0_hold)
 X = res_obs.X
 U = res_obs.U
 ee_obs_arm = Dynamics.calc_ee_position(kuka,X)
@@ -311,8 +321,8 @@ U0_warm = to_array(U)
 
 # Visualize
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_ik.X)
-animate_trajectory(vis, res_obs.X, 0.2)
+animate_trajectory(vis, res_ik.X.x)
+animate_trajectory(vis, res_obs.X.x, 0.2)
 
 plot(to_array(res_obs.U)',legend=:none)
 

@@ -19,6 +19,7 @@ TrajectoryVectors = Vector{Vector{T}} where T <: Real
 TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
 TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
 
+
 """
 $(TYPEDEF)
 Abstract type for the output of solving a trajectory optimization problem
@@ -135,7 +136,12 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     Cx::Trajectory # State jacobian (n,n,N)
     Cu::Trajectory # Control (k) jacobian (n,m,N-1)
 
-    active_set::Trajectory # active set of constraints
+    t_prev::Trajectory
+    λ_prev::Trajectory
+
+    nesterov::Vector{Float64}
+
+    active_set::Vector{Vector{T}} where T # active set of constraints
 
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
@@ -143,8 +149,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     function ConstrainedVectorResults(X,U,
             K,d,X_,U_,S,s,fdx,fdu,
             C,C_prev,Iμ,λ,μ,
-            Cx,Cu,active_set,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
+            Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
     end
 end
 
@@ -164,6 +170,7 @@ Construct results from sizes
 * p_N (default=n): number of terminal constraints
 """
 function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
+
     X  = [zeros(n)   for i = 1:N]
     U  = [zeros(m)   for i = 1:N-1]
 
@@ -190,14 +197,18 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
     Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
 
-    active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
+    t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+    λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
 
-    ρ = ones(1)
-    dρ = ones(1)
+    nesterov = [0.;1.]
+
+    active_set = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
+
+    ρ = zeros(1)
+    dρ = zeros(1)
 
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,
-        Cx,Cu,active_set,ρ,dρ)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
 end
 
 function copy(r::ConstrainedVectorResults)

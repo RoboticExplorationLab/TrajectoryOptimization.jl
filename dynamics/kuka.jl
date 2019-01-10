@@ -57,7 +57,7 @@ function kuka_ee_ik(kuka::Mechanism,point::Vector,ik_iterations=1000,attempts=20
     end
 end
 
-function calc_ee_position(kuka::Mechanism,X::Vector)
+function calc_ee_position(kuka::Mechanism,X::Trajectory)
     ee = zero.(X)
     N = length(X)
     state = MechanismState(kuka)

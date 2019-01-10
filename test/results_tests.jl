@@ -19,7 +19,7 @@ r2.X[1][1] = 4
 # Constrained Results
 p = rand(1:5)
 p_N = rand(1:5)
-r = ConstrainedVectorResults(n,m,p,N,p_N)
+r = ConstrainedVectorResults(n,m,p,N,p_N,TrajectoryVariable)
 @test (length(r.C[1]),length(r.C)) == (p,N)
 @test (size(r.Iμ[1])...,length(r.Iμ)) == (p,p,N)
 
