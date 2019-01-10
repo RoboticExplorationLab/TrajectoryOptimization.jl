@@ -19,7 +19,6 @@ TrajectoryVectors = Vector{Vector{T}} where T <: Real
 TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
 TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
 
-isempty(x::TrajectoryVariable) = isempty(x.x)
 
 """
 $(TYPEDEF)
@@ -137,8 +136,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     Cx::Trajectory # State jacobian (n,n,N)
     Cu::Trajectory # Control (k) jacobian (n,m,N-1)
 
-    t_prev::TV
-    λ_prev::TV
+    t_prev::Trajectory
+    λ_prev::Trajectory
 
     nesterov::Vector{Float64}
 
@@ -150,8 +149,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     function ConstrainedVectorResults(X,U,
             K,d,X_,U_,S,s,fdx,fdu,
             C,C_prev,Iμ,λ,μ,
-            Cx,Cu,active_set,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ)
+            Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
     end
 end
 
@@ -209,7 +208,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     dρ = zeros(1)
 
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
 end
 
 function copy(r::ConstrainedVectorResults)
