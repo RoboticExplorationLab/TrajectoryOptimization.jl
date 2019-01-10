@@ -139,6 +139,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     iter_inner = 1
     time_setup = time_ns() - t_start
     J_hist = Vector{Float64}()
+    grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
     t_solve_start = time_ns()
 
@@ -179,6 +180,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
+            ## Check gradients for convergence ##
+            solver.opts.use_gradient_aula ? gradient = gradient_AuLa(results,solver,bp) : gradient = gradient_todorov(results)
+            push!(grad_norm_hist,gradient)
+
             # increment iLQR inner loop counter
             iter += 1
 
@@ -204,9 +209,6 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                     @logmsg InnerLoop "λ 2-update"
                 end
             end
-
-            ## Check gradients for convergence ##
-            gradient = calculate_todorov_gradient(results)
 
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
@@ -258,7 +260,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "runtime"=>float(time_ns() - t_solve_start)/1e9,
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
-        "c_max"=>c_max_hist)
+        "c_max"=>c_max_hist,
+        "gradient_norm"=>grad_norm_hist)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
@@ -300,7 +303,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             # Reset second order dual update flag
             solver_feasible.state.second_order_dual_update = false
-            
+
             # Resolve feasible problem with warm start
             results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))
 
@@ -314,6 +317,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             stats["setup_time"] += stats_feasible["setup_time"]
             append!(stats["cost"], stats_feasible["cost"])
             append!(stats["c_max"], stats_feasible["c_max"])
+            append!(stats["gradient_norm"], stats_feasible["gradient_norm"])
         end
 
         # return feasible results
@@ -408,7 +412,7 @@ end
 $(SIGNATURES)
     Calculate the problem gradient using heuristic from iLQG (Todorov) solver
 """
-function calculate_todorov_gradient(res::SolverVectorResults)
+function gradient_todorov(res::SolverVectorResults)
     N = length(res.X)
     maxes = zeros(N)
     for k = 1:N-1

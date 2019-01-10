@@ -33,8 +33,8 @@ m = model.m
 
 model.f(zeros(n),zeros(n),zeros(m))
 
-Qf = 100.0*Matrix(I,n,n)
-Q = (1e-3)*Matrix(I,n,n)
+Qf = (100.0)*Matrix(I,n,n)
+Q = (0.0)*Matrix(I,n,n)
 R = (1e-2)*Matrix(I,m,m)
 tf = 5.0
 
@@ -158,8 +158,10 @@ plot(X_interp')
 # @time results_uncon_mintime, stats_uncon_mintime = solve(solver_uncon_mintime,U0)
 solver_con.opts.verbose = false
 solver_con.state.second_order_dual_update = false
-solver_con.opts.use_second_order_dual_update = true
+solver_con.opts.use_second_order_dual_update = false
+solver_con.opts.resolve_feasible = false
 @time results_con, stats_con = solve(solver_con,X_interp,U0)
+println(stats_con["iterations"])
 # @time results_con_mintime, stats_con_mintime = solve(solver_con_mintime,X0,U0)
 
 plot(to_array(results_uncon.X)[1:3,:]')

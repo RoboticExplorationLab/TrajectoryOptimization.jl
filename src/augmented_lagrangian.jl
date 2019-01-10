@@ -1,5 +1,29 @@
 """
 $(SIGNATURES)
+    Gradient of the Augmented Lagrangian: ∂L/∂u = Quuδu + Quxδx + Qu + Cu'λ + Cu'IμC
+"""
+function gradient_AuLa(results::ConstrainedIterResults,solver::Solver,bp::BackwardPass)
+    N = solver.N
+    X = results.X; X_ = results.X_; U = results.U; U_ = results.U_
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    C = results.C; Cu = results.Cu; λ = results.λ; Iμ = results.Iμ
+
+    gradient_norm = 0. # ℓ2-norm
+
+    for k = 1:N-1
+        δx = X_[k] - X[k]
+        δu = U_[k] - U[k]
+        tmp = Quu[k]*δu + Qux[k]*δx + Qu[k] + Cu[k]'*(λ[k] + Iμ[k]*C[k])
+
+        gradient_norm += sum(tmp.^2)
+    end
+
+    return sqrt(gradient_norm)
+end
+
+"""
+$(SIGNATURES)
     Lagrange multiplier updates
         -see Bertsekas 'Constrained Optimization' chapter 2 (p.135)
         -see Toussaint 'A Novel Augmented Lagrangian Approach for Inequalities and Convergent Any-Time Non-Central Updates'
@@ -9,13 +33,12 @@ function λ_update!(results::ConstrainedIterResults,solver::Solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-    for k = 1:N-1
-        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
-        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
-    end
+    for k = 1:N
+        k != N ? idx_pI = pI : idx_pI = pI_N
 
-    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + results.μ[N].*results.C[N]))
-    results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
+        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+    end
 end
 
 """
@@ -36,16 +59,13 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
         if k != N
             ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
             G = [results.Cx[k] results.Cu[k]]
-
-            tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
             idx_pI = pI
         else
             ∇L = results.S[k]
             G = results.Cx[k]
-
-            tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
             idx_pI = pI_N
         end
+        tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
 
         results.λ[k][results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
         results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
@@ -317,7 +337,7 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
     # Stage constraints
     for k = 1:N-1
         for i = 1:p
-            if p <= pI
+            if i <= pI
                 if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
@@ -335,7 +355,7 @@ function μ_update_individual!(results::ConstrainedIterResults,solver::Solver)
 
     k = N
     for i = 1:p_N
-        if p_N <= pI_N
+        if i <= pI_N
             if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
                 results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
             else
