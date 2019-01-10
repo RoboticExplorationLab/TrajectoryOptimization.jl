@@ -8,9 +8,10 @@ mutable struct SolverState
 
     second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
     fixed_constraint_jacobians::Bool # If no custom constraints are provided, all constraint Jacobians are fixed and only need to be updated once
+    penalty_only::Bool  # initial phase where only penalty term is updated each outer loop
 
     function SolverState()
-        new(false,false,false,false,false)
+        new(false,false,false,false,false,true)
     end
 end
 
