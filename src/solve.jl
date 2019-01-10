@@ -77,10 +77,11 @@ $(SIGNATURES)
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
 function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
-    t_start = time_ns()
+    # Reset solver state
+    solver.state = SolverState()
 
-    # Minimum time solve checked in Solver
-    # is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
+    # Start timer
+    t_start = time_ns()
 
     # Check for infeasible start
     isempty(X0) ? solver.state.infeasible = false : solver.state.infeasible = true
