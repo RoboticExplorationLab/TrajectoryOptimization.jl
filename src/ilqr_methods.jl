@@ -229,7 +229,7 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
 
     if solver.state.minimum_time
         solver.state.infeasible ? sep = " and " : sep = " with "
-        solve_string = sep * "minimum time..."
+        solve_string = sep * "Minimum Time..."
 
         # Initialize controls with sqrt(dt)
         if size(U0,1) == m

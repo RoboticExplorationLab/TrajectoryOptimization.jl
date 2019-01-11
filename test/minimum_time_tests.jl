@@ -102,9 +102,9 @@ results_mintime, stats_mintime = solve(solver_mintime,to_array(results_con_box.U
 T = TrajectoryOptimization.total_time(solver_con_box,results_con_box)
 T_min = TrajectoryOptimization.total_time(solver_mintime,results_mintime)
 
-plot(to_array(results_mintime.U)[1:2,1:solver_mintime.N-1]',labels="")
-plot(to_array(results_mintime.X)[1:3,:]',labels="")
-plot(to_array(results_mintime.X)[1,:],to_array(results_mintime.X)[2,:],width=2,color=:blue,label="Minimum Time")
+# plot(to_array(results_mintime.U)[1:2,1:solver_mintime.N-1]',labels="")
+# plot(to_array(results_mintime.X)[1:3,:]',labels="")
+# plot(to_array(results_mintime.X)[1,:],to_array(results_mintime.X)[2,:],width=2,color=:blue,label="Minimum Time")
 
 @test max_violation(results_mintime) < solver_mintime.opts.constraint_tolerance
 @test T_min < 0.75*T

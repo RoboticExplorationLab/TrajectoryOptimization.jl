@@ -33,7 +33,7 @@ end
 
 """
 $(TYPEDEF)
-    Type for solver 
+    Type for solver
 """
 struct Solver{O<:Objective}
     model::Model         # Dynamics model

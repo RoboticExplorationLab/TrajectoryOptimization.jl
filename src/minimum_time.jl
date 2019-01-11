@@ -16,7 +16,7 @@ $(SIGNATURES)
 function get_initial_dt(solver::Solver)
     if is_min_time(solver)
         if solver.opts.minimum_time_dt_estimate > 0.0
-            dt = opts.minimum_time_dt_estimate
+            dt = solver.opts.minimum_time_dt_estimate
         elseif solver.opts.minimum_time_tf_estimate > 0.0
             dt = solver.opts.minimum_time_tf_estimate / (solver.N - 1)
             if dt > solver.opts.max_dt
