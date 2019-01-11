@@ -77,10 +77,14 @@ $(SIGNATURES)
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
 function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+    # Reset solver state
+    reset_SolverState(solver.state)
+
+    # Start timer
     t_start = time_ns()
 
-    # Minimum time solve checked in Solver
-    # is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
+    # Check for minimum time solve
+    is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
 
     # Check for infeasible start
     isempty(X0) ? solver.state.infeasible = false : solver.state.infeasible = true
@@ -130,8 +134,14 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    # solver.state.infeasible ? update_constraints!(results,solver,results.X,results.U) : nothing
-    update_constraints!(results, solver)
+    if solver.state.constrained
+        update_constraints!(results, solver)
+
+        # Update constraints Jacobians; if fixed (ie, no custom constraints) set solver state to not update
+        update_jacobians!(results,solver,:constraints)
+        !check_custom_constraints(solver.obj) ? solver.state.fixed_constraint_jacobians = true : solver.state.fixed_constraint_jacobians = false
+        !check_custom_terminal_constraints(solver.obj) ? solver.state.fixed_terminal_constraint_jacobian = true : solver.state.fixed_terminal_constraint_jacobian = false
+    end
 
     # Solver Statistics
     iter = 0 # counter for total number of iLQR iterations
@@ -139,6 +149,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     iter_inner = 1
     time_setup = time_ns() - t_start
     J_hist = Vector{Float64}()
+    grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
     t_solve_start = time_ns()
 
@@ -179,6 +190,10 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
+            ## Check gradients for convergence ##
+            solver.opts.use_gradient_aula ? gradient = gradient_AuLa(results,solver,bp) : gradient = gradient_todorov(results)
+            push!(grad_norm_hist,gradient)
+
             # increment iLQR inner loop counter
             iter += 1
 
@@ -200,18 +215,15 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
-                if solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse
+                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse) && solver.opts.use_penalty_burnin
                     solver.state.penalty_only = false
-                    @InnerLoop :info value="Switching to multipier updates"
+                    @logmsg InnerLoop "Switching to multipier updates"
                 end
 
                 if solver.state.second_order_dual_update
                     @logmsg InnerLoop "λ 2-update"
                 end
             end
-
-            ## Check gradients for convergence ##
-            gradient = calculate_todorov_gradient(results)
 
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
@@ -225,7 +237,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
             if J > solver.opts.max_cost_value
-                error("Cost exceded maximum allowable cost")
+                println("Cost exceded maximum allowable cost")
             end
         end
         ### END INNER LOOP ###
@@ -263,7 +275,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "runtime"=>float(time_ns() - t_solve_start)/1e9,
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
-        "c_max"=>c_max_hist)
+        "c_max"=>c_max_hist,
+        "gradient_norm"=>grad_norm_hist)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
@@ -319,6 +332,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             stats["setup_time"] += stats_feasible["setup_time"]
             append!(stats["cost"], stats_feasible["cost"])
             append!(stats["c_max"], stats_feasible["c_max"])
+            append!(stats["gradient_norm"], stats_feasible["gradient_norm"])
         end
 
         # return feasible results
@@ -413,7 +427,7 @@ end
 $(SIGNATURES)
     Calculate the problem gradient using heuristic from iLQG (Todorov) solver
 """
-function calculate_todorov_gradient(res::SolverVectorResults)
+function gradient_todorov(res::SolverVectorResults)
     N = length(res.X)
     maxes = zeros(N)
     for k = 1:N-1

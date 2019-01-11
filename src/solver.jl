@@ -1,6 +1,10 @@
 include("solver_options.jl")
 import Base: copy, length, size
 
+"""
+$(TYPEDEF)
+    Type for solver states
+"""
 mutable struct SolverState
     constrained::Bool # Constrained solve
     minimum_time::Bool # Minimum time solve
@@ -8,13 +12,29 @@ mutable struct SolverState
 
     second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
     fixed_constraint_jacobians::Bool # If no custom constraints are provided, all constraint Jacobians are fixed and only need to be updated once
+    fixed_terminal_constraint_jacobian::Bool
     penalty_only::Bool  # initial phase where only penalty term is updated each outer loop
 
     function SolverState()
-        new(false,false,false,false,false,true)
+        new(false,false,false,false,false,false,true)
     end
 end
 
+function reset_SolverState(state::SolverState)
+    state.constrained = false
+    state.minimum_time = false
+    state.infeasible = false
+    state.second_order_dual_update = false
+    state.fixed_constraint_jacobians = false
+    state.fixed_terminal_constraint_jacobian = false
+    state.penalty_only = true
+    return nothing
+end
+
+"""
+$(TYPEDEF)
+    Type for solver
+"""
 struct Solver{O<:Objective}
     model::Model         # Dynamics model
     obj::O               # Objective (cost function and constraints)

@@ -74,7 +74,6 @@ function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end
 
-
 """
 $(TYPEDEF)
 Cost function of the form
@@ -229,12 +228,22 @@ struct ConstrainedObjective{C} <: Objective
     pI_N_custom::Int # Nubmer of custom terminal inequality constraints
     pE_N_custom::Int # Number of custom terminal equality constraints
 
+    cIx::Function  # inequality constraint Jacobian (inplace)
+    cIu::Function  # inequality constraint Jacobian (inplace)
+    cEx::Function  # equality constraint Jacobian (inplace)
+    cEu::Function  # equality constraint Jacobian (inplace)
+
+    # Terminal Jacobians
+    cI_Nx::Function
+    cE_Nx::Function
+
     function ConstrainedObjective(cost::C,tf::Real,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_xf_equality_constraint) where {C}
+        use_xf_equality_constraint,
+        cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
 
         n,m = get_sizes(cost)
         x = rand(n)
@@ -290,7 +299,7 @@ struct ConstrainedObjective{C} <: Objective
         p_N = pI_N + pE_N
 
         new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_xf_equality_constraint,
-            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom)
+            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
     end
 end
 
@@ -299,20 +308,19 @@ function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     x_min, x_max,
     cI, cE,
     cI_N, cE_N,
-    use_xf_equality_constraint) where {C}
+    use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
     if tf == :min
         ConstrainedObjective(cost,0.0,x0,xf,
             u_min, u_max,
             x_min, x_max,
             cI, cE,
             cI_N, cE_N,
-            use_xf_equality_constraint)
+            use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
     else
         err = ArgumentError(":min is the only recognized Symbol for the final time")
         throw(err)
     end
 end
-
 
 """
 $(SIGNATURES)
@@ -340,14 +348,15 @@ function ConstrainedObjective(cost,tf,x0,xf;
     x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
     cI=null_constraint, cE=null_constraint,
     cI_N=null_constraint, cE_N=null_constraint,
-    use_xf_equality_constraint=true)
+    use_xf_equality_constraint=true,
+    cIx=null_constraint,cIu=null_constraint,cEx=null_constraint,cEu=null_constraint,cI_Nx=null_constraint,cE_Nx=null_constraint)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_xf_equality_constraint)
+        use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
 end
 
 
@@ -360,9 +369,9 @@ function copy(obj::ConstrainedObjective)
     ConstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
-        use_xf_equality_constraint=obj.use_xf_equality_constraint)
+        use_xf_equality_constraint=obj.use_xf_equality_constraint,
+        cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
 end
-
 
 """
 $(SIGNATURES)
@@ -375,14 +384,16 @@ function update_objective(obj::ConstrainedObjective;
     cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
-    use_xf_equality_constraint=obj.use_xf_equality_constraint)
+    use_xf_equality_constraint=obj.use_xf_equality_constraint,
+    cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min=u_min, u_max=u_max,
         x_min=x_min, x_max=x_max,
         cI=cI, cE=cE,
         cI_N=cI_N, cE_N=cE_N,
-        use_xf_equality_constraint=use_xf_equality_constraint)
+        use_xf_equality_constraint=use_xf_equality_constraint,
+        cIx=cIx,cIu=cIu,cEx=cEx,cEu=cEu,cI_Nx=cI_Nx,cE_Nx=cE_Nx)
 
 end
 
@@ -572,4 +583,91 @@ function count_inplace_output(c::Function, input...)
     p = count(isfinite.(vals))
 
     return p
+end
+
+"""
+$(SIGNATURES)
+    Check if constraints are custom
+"""
+function check_custom_constraints(obj::ConstrainedObjective)
+    if obj.pI_custom + obj.pE_custom > 0
+        return true
+    else
+        return false
+    end
+end
+
+function check_custom_constraints(obj::UnconstrainedObjective)
+    return false
+end
+
+"""
+$(SIGNATURES)
+    Check if constraints are custom
+"""
+function check_custom_terminal_constraints(obj::ConstrainedObjective)
+    if obj.pI_N_custom + obj.pE_N_custom > 0
+        return true
+    else
+        return false
+    end
+end
+
+function check_custom_terminal_constraints(obj::UnconstrainedObjective)
+    return false
+end
+
+"""
+$(SIGNATURES)
+    Generate Jacobian ∂C(x,u)/∂x
+"""
+function generate_Cx(c::Function,p::Int,n::Int64,m::Int64)::Function
+    c_aug! = f_augmented!(c,n,m)
+    J = zeros(p,n+m)
+    S = zeros(n+m)
+    cdot = zeros(p)
+    F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
+
+    function Cx(cx,x,u)
+        S[1:n] = x[1:n]
+        S[n+1:n+m] = u[1:m]
+        F(J,cdot,S)
+        cx .= J[1:p,1:n]
+    end
+    return Cx
+end
+
+"""
+$(SIGNATURES)
+    Generate Jacobian ∂C(x)/∂x
+"""
+function generate_Cx(c::Function,p::Int,n::Int64)::Function
+    J_N = zeros(p,n)
+    xdot = zeros(p)
+    F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x)
+    function Cx(cx,x)
+        F_N(J_N,xdot,x)
+        cx .= J_N
+    end
+    return Cx
+end
+
+"""
+$(SIGNATURES)
+    Generate Jacobian ∂C(x,u)/∂u
+"""
+function generate_Cu(c::Function,p::Int,n::Int64,m::Int64)::Function
+    c_aug! = f_augmented!(c,n,m)
+    J = zeros(p,n+m)
+    S = zeros(n+m)
+    cdot = zeros(p)
+    F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
+
+    function Cu(cu,x,u)
+        S[1:n] = x[1:n]
+        S[n+1:n+m] = u[1:m]
+        F(J,cdot,S)
+        cu .= J[1:p,n+1:n+m]
+    end
+    return Cu
 end

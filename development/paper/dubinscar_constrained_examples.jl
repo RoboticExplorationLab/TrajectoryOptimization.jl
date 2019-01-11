@@ -341,8 +341,11 @@ solver = Solver(model, obj_con_obstacles, dt=dt, opts=SolverOptions())
 solver.opts.R_infeasible = 1.
 solver.opts.cost_tolerance = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-5
+solver.opts.penalty_scaling = 200
+solver.opts.penalty_initial = 2
 solver.opts.resolve_feasible = false
 @time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver,X0,U0)
+stats_con_obstacles_inf["iterations"]
 plt = plot(title="Escape",aspect_ratio=:equal)
 plot_trajectory!(to_array(results_con_obstacles_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 

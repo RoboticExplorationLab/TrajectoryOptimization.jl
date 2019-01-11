@@ -276,8 +276,9 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     # Augment functions together
     function c_function!(c,x,u)::Nothing
         infeasible = length(u) != m̄
-
-        cI!(view(c,1:pI),x,u[1:m̄])
+        if pI > 0
+            cI!(view(c,1:pI),x,u[1:m̄])
+        end
         if pE_c > 0
             obj.cE(view(c,(1:pE_c).+pI),x,u[1:m])
         end
