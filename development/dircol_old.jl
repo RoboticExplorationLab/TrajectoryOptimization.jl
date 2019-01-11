@@ -1,6 +1,6 @@
 function cost(solver::Solver,X::Matrix,U::Matrix,weights::Vector,method::Symbol)
     obj = solver.obj
-    f = solver.fc
+    f = solver.model.f
     Q = obj.cost.Q; xf = obj.xf; Qf = obj.cost.Qf; R = obj.cost.R;
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)

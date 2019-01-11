@@ -23,6 +23,7 @@ struct Solver{O<:Objective}
     dt::Float64          # Time step
     fd::Function         # Discrete in place dynamics function, `fd(_,x,u)`
     Fd::Function         # Jacobian of discrete dynamics, `fx,fu = F(x,u)`
+    Fc::Function         # Jacobian of continuous dynamics, `fx, fu = F(x,u)`
     c_fun::Function
     c_jacobian::Function
     c_labels::Vector{String}  # Constraint labels
@@ -97,6 +98,19 @@ struct Solver{O<:Objective}
         fd! = discretizer(f!, dt)
         f_aug! = f_augmented!(f!, n, m)
 
+        # Get continuous dynamics jacobian
+        Jc = zeros(n+m,n+m)
+        Sc = zeros(n+m)
+        Scdot = zero(Sc)
+        Fc!(Jc,dS,S) = ForwardDiff.jacobian!(Jc,f_aug!,dS,S)
+        function fc_jacobians!(x,u)
+            # infeasible = size(u,1) != m̄
+            Sc[1:n] = x
+            Sc[n+1:n+m] = u[1:m]
+            Fc!(Jc,Scdot,Sc)
+            return Jc[1:n,1:n], Jc[1:n,n+1:n+m] # fx, fu
+        end
+
 
         """
         s = [x;u;h]
@@ -152,7 +166,7 @@ struct Solver{O<:Objective}
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, state, dt, fd!, fd_jacobians!, c!, c_jacobian!, c_labels, N, integration)
+        new{O}(model, obj, options, state, dt, fd!, fd_jacobians!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration)
     end
 end
 

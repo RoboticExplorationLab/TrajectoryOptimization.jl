@@ -24,13 +24,13 @@ dt = 0.05
 
 # Check Jacobians
 method = :hermite_simpson
-solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3_foh)
+solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3)
 N = solver.N
 NN = (n+m)N
 nG, = get_nG(solver,method)
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
-solver.opts.verbose = true
+solver.opts.verbose = false
 sol,stats = solve_dircol(solver,X0,U0, method=method)
 @test norm(sol.X[:,end] - obj.xf) < 1e-6
 plot(sol.X')
@@ -58,7 +58,7 @@ function check_grads(solver,method)
 
     function eval_ceq(Z)
         X,U = TrajectoryOptimization.unpackZ(Z,(n,m,N))
-        TrajectoryOptimization.collocation_constraints(X,U,method,solver.dt,solver.fc)
+        TrajectoryOptimization.collocation_constraints(X,U,method,solver.dt,solver.model.f)
     end
 
     function eval_f(Z)
@@ -105,7 +105,7 @@ check_grads(solver,:hermite_simpson_separated)
 
 
 # Minimum time
-method = :hermite_simpson
+method = :hermite_simpsonj
 # Set up problem
 solver = Solver(model,obj_mintime,N=51,integration=:rk3_foh)
 N,N_ = TrajectoryOptimization.get_N(solver,method)

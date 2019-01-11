@@ -24,6 +24,7 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
 
     if solver.obj isa UnconstrainedObjective
         solver = Solver(solver,obj=ConstrainedObjective(solver.obj))
+        # solver.state.constrained = false
     end
 
     obj = solver.obj
@@ -162,8 +163,8 @@ function gen_custom_constraint_fun(solver::Solver,method)
     end
 
     # Jacobian
-    jac_cI = generate_general_constraint_jacobian(obj.cI, pI_c, pI_N_c, n, m)
-    jac_cE = generate_general_constraint_jacobian(obj.cE, pE_c, pE_N_c, n, m)
+    jac_cI = generate_general_constraint_jacobian(obj.cI, pI_c, n, m)
+    jac_cE = generate_general_constraint_jacobian(obj.cE, pE_c, n, m)
 
     function jacobian_block!(vals, jac::Function, x, u, p::Int)
         blk = reshape(vals,p,n+m̄)
@@ -320,6 +321,9 @@ Z = [X1,U1,X2,U2,..,] (all transposed)
 function packZ(X,U)
     n, N = size(X)
     m = size(U,1)
+    if size(U,2) == N-1
+        U = [U U[:,end]]
+    end
     Z = zeros(n+m,N)
     Z[1:n,:] .= X
     Z[n+1:end,1:end] .= U
@@ -590,7 +594,7 @@ function update_derivatives!(solver::Solver,X::AbstractArray,U::AbstractArray,fV
     n,m = get_sizes(solver)
     N = size(X,2)
     for k = 1:N
-        solver.fc(view(fVal,:,k),X[:,k],U[1:m,k])
+        solver.model.f(view(fVal,:,k),X[:,k],U[1:m,k])
     end
 end
 

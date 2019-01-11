@@ -123,31 +123,14 @@ function count_constraints(obj::ConstrainedObjective, constraints::Symbol=:all)
     pI_c = obj.pI_custom
     pE_c = obj.pE_custom
 
-    u_min_active = isfinite.(obj.u_min)
-    u_max_active = isfinite.(obj.u_max)
-    x_min_active = isfinite.(obj.x_min)
-    x_max_active = isfinite.(obj.x_max)
-
-    pI_u_max = count(u_max_active)
-    pI_u_min = count(u_min_active)
-    pI_u = pI_u_max + pI_u_min
-
-    pI_x_max = count(x_max_active)
-    pI_x_min = count(x_min_active)
-    pI_x = pI_x_max + pI_x_min
-
-    pI_c = pI - pI_x - pI_u
-    pE_c = pE
-
+    # Terminal constraints
     p_N = obj.p_N
     pI_N = obj.pI_N
     pE_N = p_N - pI_N
-    pI_N_c = pI_N
-    if obj.use_xf_equality_constraint
-        pE_N_c = pE_N - n
-    else
-        pE_N_c = pE_N
-    end
+
+    pI_N_c = obj.pI_N_custom
+    pE_N_c = obj.pE_N_custom
+
     if constraints == :all
         return (pI, pI_c, pI_N, pI_N_c), (pE, pE_c, pE_N, pE_N_c)
     elseif constraints == :custom
