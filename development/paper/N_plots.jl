@@ -1,8 +1,9 @@
-using HDF5
+using HDF5, Logging
+import TrajectoryOptimization: get_time
 # High-Accuracy DIRCOL
 
-function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3,:rk3_foh,:rk4],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1))
-    solver = Solver(model, obj, integration=:rk3_foh, N=size(U0,2))
+function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1))
+    solver = Solver(model, obj, integration=:rk3, N=size(U0,2))
     if infeasible
         if isempty(X0)
             X0 = line_trajectory(solver)
@@ -11,9 +12,9 @@ function run_step_size_comparison(model, obj, U0, group::String, Ns; integration
         X0 = rollout(solver,U0)
     end
 
-    solver_truth = Solver(model, obj, dt=dt_truth, integration=:rk3_foh)
+    solver_truth = Solver(model, obj, dt=dt_truth)
     X_truth, U_truth = get_dircol_truth(solver_truth,X0,U0,group)[2:3]
-    interp(t) = interpolate_trajectory(solver_truth, X_truth, U_truth, t)
+    interp(t) = TrajectoryOptimization.interpolate_trajectory(solver_truth, X_truth, U_truth, t)
 
     h5open("data.h5","cw") do file
         N_group =  group * "/N_plots"
@@ -38,20 +39,24 @@ end
 
 function get_dircol_truth(solver::Solver,X0,U0,group)#::Tuple{Solver, Matrix{Float64}, Matrix{Float64}}
     read_dircol_truth = false
-    file = h5open("data.h5","r")
-    if exists(file,group)
-        if exists(file,group * "/dircol_truth")
-            if exists(file,group * "/dircol_truth/dt")
-                if read(file,group * "/dircol_truth/dt")[1] == solver.dt
-                    read_dircol_truth = true
+    if isfile("data.h5")
+        file = h5open("data.h5","r")
+        if exists(file,group)
+            if exists(file,group * "/dircol_truth")
+                if exists(file,group * "/dircol_truth/dt")
+                    if read(file,group * "/dircol_truth/dt")[1] == solver.dt
+                        read_dircol_truth = true
+                    end
                 end
             end
         end
+    else
+        file = h5open("data.h5","cw")
     end
     if read_dircol_truth
         @info "Reading Dircol Truth from file"
         dt = Float64(read(file,group * "/dircol_truth/dt")[1])
-        solver_truth = Solver(solver,integration=:rk3_foh)
+        solver_truth = Solver(solver)
         X_truth = read(file,group * "/dircol_truth/X")
         U_truth = read(file,group * "/dircol_truth/U")
         close(file)
@@ -68,7 +73,7 @@ end
 
 function run_dircol_truth(solver::Solver, X0, U0, group::String)
     println("Solving DIRCOL \"truth\"")
-    solver_truth = Solver(solver,integration=:rk3_foh)
+    solver_truth = Solver(solver)
     res_truth, stat_truth = solve_dircol(solver_truth, X0, U0, method=:hermite_simpson)
 
     println("Writing results to file")
@@ -86,7 +91,8 @@ function run_dircol_truth(solver::Solver, X0, U0, group::String)
     return solver_truth, res_truth, stat_truth
 end
 
-function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions())
+
+function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=false, opts=SolverOptions())
     num_N = length(Ns)
 
     err = zeros(num_N)
@@ -97,8 +103,9 @@ function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::St
         println("Solving with $N knot points")
 
         if integration == :hermite_simpson
-            solver = Solver(model, obj, N=N, opts=opts, integration=:rk3_foh)
-            res,stat = solve_dircol(solver, X0, U0, method=integration)
+            solver = Solver(model, obj, N=N, opts=opts)
+            dircol_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constraint_tolerance)
+            res,stat = solve_dircol(solver, X0, U0, method=integration, options=dircol_options)
             t = get_time(solver)
             Xi,Ui = interp(t)
             err[i] = norm(Xi-res.X)/N
@@ -122,6 +129,10 @@ function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::St
     end
     disable_logging(Logging.Debug)
 
+    return err, err_final, stats
+end
+
+function save_Ns(err, err_final, stats, group::String, name::String)
     # Save to h5 file
     h5open("data.h5","cw") do file
         group *= "/N_plots/"
@@ -131,7 +142,6 @@ function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::St
             g_parent = g_create(file, group)
         end
 
-        name = String(integration)
         if has(g_parent, name)
             o_delete(g_parent, name)
         end
@@ -146,6 +156,11 @@ function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::St
             g["c_max"] = [stat["c_max"][end] for stat in stats]
         end
     end
+end
+
+function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions())
+    err, err_final, stats = run_Ns(model, obj, X0, U0, Ns, interp, integration=integration, infeasible=infeasible, opts=opts)
+    save_Ns(err, err_final, stats, group, String(integration))
 
     return err, err_final, stats
 end
