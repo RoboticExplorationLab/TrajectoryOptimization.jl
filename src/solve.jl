@@ -202,7 +202,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
                 end
                 if solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse
                     solver.state.penalty_only = false
-                    println("Switching to multipier updates")
+                    @InnerLoop :info value="Switching to multipier updates"
                 end
 
                 if solver.state.second_order_dual_update
