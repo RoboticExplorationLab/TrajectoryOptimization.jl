@@ -1,4 +1,7 @@
 import Base.copy
+
+abstract type Model end
+
 """
 $(TYPEDEF)
 
@@ -11,13 +14,13 @@ the states and u ∈ ℜᵐ are the controls.
 Dynamics function `Model.f` should be in the following forms:
     'f!(ẋ,x,u)' and modify ẋ in place
 """
-struct Model
+struct AbstractModel <:Model
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
     m::Int # number of controls
 
     # Construct a model from an explicit differential equation
-    function Model(f::Function, n::Int64, m::Int64)
+    function AbstractModel(f::Function, n::Int64, m::Int64)
         # Make dynamics inplace
         if is_inplace_dynamics(f,n,m)
             f! = f
@@ -27,43 +30,53 @@ struct Model
 
         new(f!,n,m)
     end
+end
 
-    # Construct model from a `Mechanism` type from `RigidBodyDynamics`
-    function Model(mech::Mechanism)
-        m = length(joints(mech))  # subtract off joint to world
-        Model(mech,ones(m))
+struct RBDModel <: Model
+    f::Function # continuous dynamics (ie, differential equation)
+    n::Int # number of states
+    m::Int # number of controls
+    mech::Mechanism  # RigidBodyDynamics Mechanism
+end
+
+
+Model(f::Function, n::Int64, m::Int64) = AbstractModel(f,n,m)
+
+# Construct model from a `Mechanism` type from `RigidBodyDynamics`
+function Model(mech::Mechanism)
+    m = length(joints(mech))  # subtract off joint to world
+    Model(mech,ones(m))
+end
+
+"""
+    Model(mech::Mechanism, torques::Array{Bool, 1})
+Constructor for an underactuated mechanism, where torques is a binary array
+that specifies whether a joint is actuated.
+"""
+function Model(mech::Mechanism, torques::Array)
+
+    # construct a model using robot dynamics equation assembed from URDF file
+    n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
+    num_joints = length(joints(mech))  # subtract off joint to world
+
+    if length(torques) != num_joints
+        error("Torque underactuation specified does not match mechanism dimensions")
     end
 
-    """
-        Model(mech::Mechanism, torques::Array{Bool, 1})
-    Constructor for an underactuated mechanism, where torques is a binary array
-    that specifies whether a joint is actuated.
-    """
-    function Model(mech::Mechanism, torques::Array)
+    m = convert(Int,sum(torques)) # number of actuated (ie, controllable) joints
+    torque_matrix = 1.0*Matrix(I,num_joints,num_joints)[:,torques.== 1] # matrix to convert from control inputs to mechanism joints
 
-        # construct a model using robot dynamics equation assembed from URDF file
-        n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
-        num_joints = length(joints(mech))  # subtract off joint to world
+    statecache = StateCache(mech)
+    dynamicsresultscache = DynamicsResultCache(mech)
 
-        if length(torques) != num_joints
-            error("Torque underactuation specified does not match mechanism dimensions")
-        end
-
-        m = convert(Int,sum(torques)) # number of actuated (ie, controllable) joints
-        torque_matrix = 1.0*Matrix(I,num_joints,num_joints)[:,torques.== 1] # matrix to convert from control inputs to mechanism joints
-
-        statecache = StateCache(mech)
-        dynamicsresultscache = DynamicsResultCache(mech)
-
-        function f(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
-            state = statecache[T]
-            dyn = dynamicsresultscache[T]
-            dynamics!(view(ẋ,1:n), dyn, state, x, torque_matrix*u)
-            return nothing
-        end
-
-        new(f, n, m)
+    function f(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
+        state = statecache[T]
+        dyn = dynamicsresultscache[T]
+        dynamics!(view(ẋ,1:n), dyn, state, x, torque_matrix*u)
+        return nothing
     end
+
+    RBDModel(f, n, m, mech)
 end
 
 "$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"
