@@ -335,3 +335,35 @@ function ispossemidef(A)
 		return true
 	end
 end
+
+
+function convergence_rate(stats::Dict;tail::Float64=0.5,plot_fit=false)
+    total_iters = stats["iterations"]
+    start = Int(ceil((1-tail)*total_iters))
+    iters = collect(start:total_iters)
+    grad = stats["gradient_norm"][iters]
+    coeffs = convergence_rate(iters,grad)
+    if plot_fit
+        x = log.(1:total_iters)
+        p = plot(x,log.(stats["gradient_norm"]),xlabel="iterations (log)",ylabel="gradient (log)")
+        line = @. coeffs[2]*x + coeffs[1]
+        plot!(x,line)
+        ylim = collect(ylims(p))
+        plot_vertical_lines!(log.(stats["outer_updates"]),ylim,linecolor=:black,linestyle=:dash,label="")
+        display(p)
+    end
+    return coeffs[2]
+end
+
+function convergence_rate(x::Vector,y::Vector)
+    n = length(x)
+    X = [ones(n) log.(x)]
+    coeffs = X\log.(y)
+    return coeffs
+end
+
+function plot_vertical_lines!(x,ylim=[-100,100]; kwargs...)
+    ys = [ylim for val in x]
+    xs = [[val; val] for val in x]
+    plot!(xs,ys; kwargs...)
+end
