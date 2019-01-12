@@ -271,7 +271,6 @@ for i = range(10,stop=25,length=l1)
         push!(spheres,(i, 10, j*2*r_sphere + r_sphere,r_sphere))
     end
 end
-n_spheres += l1*2
 
 for i = range(-12.5,stop=12.5,length=l3)
     for j = range(0,stop=zh,length=l2)
@@ -284,7 +283,6 @@ for i = range(-25,stop=-10,length=l1)
         push!(spheres,(i, 50, j*2*r_sphere + r_sphere,r_sphere))
     end
 end
-n_spheres += l1*l2
 
 for i = range(10,stop=25,length=l1)
     for j = range(0,stop=zh,length=l2)

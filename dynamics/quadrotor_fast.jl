@@ -76,6 +76,9 @@ end
 
 quadrotor_dynamics_fast! = generate_fast_quadrotor()
 
+fnew = TrajectoryOptimization.f_augmented(quadrotor_dynamics_fast!,n,m)
+ForwardDiff.jacobian(fnew,zeros(n+m))
+
 function quadrotor_dynamics(X,u)
       ẋ = zeros(13,1)
       quadrotor_dynamics!(ẋ,X,u)
