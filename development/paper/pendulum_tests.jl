@@ -1,3 +1,5 @@
+# import TrajectoryOptimization
+include("N_plots.jl")
 
 # Read in the system
 model,obj = Dynamics.pendulum!
@@ -36,6 +38,18 @@ opts.outer_loop_update_type = :default
 opts.iterations = 500
 
 group  = "pendulum/unconstrained"
+solver = Solver(model, obj, N=N)
+res, stats = solve(solver, U0)
+
+solver.state.constrained
+using Juno, Profile
+Profile.init(n = 10^7, delay = 0.01)
+@profile solve_dircol(solver,X0_rollout,U0)
+Juno.profiler()
+res_d, stats_d  = solve_dircol(solver,X0,U0)
+
+
+
 solver_truth, res_truth,  = run_dircol_truth(model, obj, dt_truth, X0_rollout, U0, group)
 time_truth = get_time(solver_truth)
 plot(time_truth, res_truth.X')

@@ -1,12 +1,12 @@
+import TrajectoryOptimization: gen_usrfun_ipopt
+using Random, LinearAlgebra
 Random.seed!(7)
 include("N_plots.jl")
 
 # Solver Options
 dt = 0.01
-integration = :rk4
+integration = :rk3
 method = :hermite_simpson
-opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 
 function convergence_plot(stat_i,stat_d)
     plot(stat_i["cost"],width=2,label="iLQR")
@@ -21,6 +21,15 @@ opts = SolverOptions()
 opts.verbose = false
 opts.cost_tolerance = 1e-6
 opts.cost_tolerance_intermediate = 1e-5
+opts.constraint_tolerance = 1e-5
+opts.resolve_feasible = false
+opts.outer_loop_update_type = :default
+opts.use_nesterov = true
+opts.penalty_scaling = 200
+opts.penalty_initial = 1
+opts.R_infeasible = 10
+
+dircol_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constraint_tolerance)
 
 # Set up model, objective, and solver
 model, = TrajectoryOptimization.Dynamics.dubinscar
@@ -41,16 +50,18 @@ x_max = [0.25; 1.001; Inf]
 obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
 solver_uncon  = Solver(model, obj, integration=integration, dt=dt, opts=opts)
-solver_con_box = Solver(model, obj_con_box, integration=integration, N=301, opts=opts)
+solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
 
-U0 = rand(solver_uncon.model.m,solver_uncon.N-1)
+U0 = rand(solver_uncon.model.m,solver_uncon.N)
 X0 = line_trajectory(solver_con_box)
 X0_rollout = rollout(solver_uncon, U0)
 
 @time results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
+solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
 @time results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
-res_inf, stats_inf = TrajectoryOptimization.solve(solver_con_box,X0,U0)
-res_d, stats_d = TrajectoryOptimization.solve_dircol(solver_con_box, X0_rollout, U0)
+solver_con_box.opts.penalty_initial = .1
+@time res_inf, stats_inf = TrajectoryOptimization.solve(solver_con_box,X0,U0)
+@time res_d, stats_d = TrajectoryOptimization.solve_dircol(solver_con_box, X0_rollout, U0, options=dircol_options)
 
 
 # Parallel Park (boxed)
@@ -68,7 +79,7 @@ display(plt)
 
 # Stats comparison
 eval_f, = gen_usrfun_ipopt(solver_con_box,method)
-res_i = DircolVars(to_array(results_con_box.X),to_array(results_con_box.U))
+res_i = DircolVars(results_con_box)
 stats_con_box["runtime"]
 stats_d["runtime"]
 stats_con_box["iterations"]
@@ -76,52 +87,81 @@ stats_d["iterations"]
 convergence_plot(stats_con_box,stats_d)
 eval_f(res_i.Z)
 eval_f(res_d.Z)
-_cost(solver_con_box,results_con_box)
+TrajectoryOptimization._cost(solver_con_box,results_con_box)
 
 
 # STEP SIZE COMPARISONS #
 # Unconstrained
-Ns = [21,41,51,81,101,201,401,501,801,1001]
+Ns = [21,31,51,81,101]
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/unconstrained"
-run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
-plot_stat("runtime",group,legend=:topleft,title="Unconstrained Parallel Park")
-plot_stat("iterations",group,legend=:topright,title="Unconstrained Parallel Park")
-plot_stat("error",group,[:rk3,:rk3_foh],yscale=:log10,legend=:right,title="Unconstrained Parallel Park")
+run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts)
+plot_stat("runtime",group,legend=:bottomright,title="Unconstrained Parallel Park")
+plot_stat("iterations",group,legend=:bottom,title="Unconstrained Parallel Park")
+plot_stat("error",group,yscale=:log10,legend=:right,title="Unconstrained Parallel Park")
 
 # Constrained
-Ns = [21,41,51,81,101,201,401,501,801,1001]
+Ns = [21,31,51,81,101]
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/constrained"
-run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts)
 plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park")
 plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park")
 plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
 
 # Infeasible
-opts = SolverOptions()
-opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-5
-opts.resolve_feasible = false
-Ns = [21,41,51,81,101,201,401,501,801,1001]
+Ns = [21,31,51,81,101]
+opts_inf = copy(opts)
+opts_inf.penalty_initial = 0.1
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/infeasible"
-run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts, infeasible=true)
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts_inf, infeasible=true)
 plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park (infeasible)")
 plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park (infeasible)")
 plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
 
+dt_truth = 1e-3
+solver_truth = Solver(model, obj, dt=dt_truth)
+X_truth, U_truth = get_dircol_truth(solver_truth,X0,U0,group)[2:3]
+interp(t) = TrajectoryOptimization.interpolate_trajectory(solver_truth, X_truth, U_truth, t)
+
+opts.use_nesterov = false
+err, err_final, stats = run_Ns(model, obj_con_box, X0, U0, Ns, interp, opts=opts)
+opts.use_nesterov = true
+err_n, err_final_n, stats_n = run_Ns(model, obj_con_box, X0, U0, Ns, interp, opts=opts)
+iters = [[stat["iterations"] for stat in sts] for sts in [stats,stats_n]]
+runtime = [[stat["runtime"] for stat in sts] for sts in [stats,stats_n]]
+plot_vals(Ns,iters,["default","nesterov"],"iterations")
+plot_vals(Ns,runtime,["default","nesterov"],"runtime")
+
 
 ####################
 #   MINIMUM TIME   $
 ####################
-# See minimum_time_test.jl
+# opts = SolverOptions()
+# opts.verbose = true
+# opts.cost_tolerance = 1e-6
+# opts.cost_tolerance_intermediate = 1e-5
+# opts.minimum_time_tf_estimate = 2.0
+# opts.gradient_tolerance = 1e-10
+# opts.live_plotting = true
+#
+# u_bnd = 2
+# N = 51
+# obj_mintime = update_objective(obj_con_box,tf=:min, u_min=-u_bnd, u_max=u_bnd)
+# solver_min = Solver(model, obj_mintime, N=N, integration=:rk3, opts=opts)
+#
+# U0 = zeros(m,N)
+# res,stats = solve(solver_min, U0)
+
 
 ########################
 ## Obstacle Avoidance ##
 ########################
+
+opts.penalty_initial = 0.1
 
 x0 = [0.0;0.0;0.]
 xf = [10.0;10.0;0.]
@@ -153,7 +193,8 @@ obj_con_obstacles_control = TrajectoryOptimization.ConstrainedObjective(obj,u_mi
 
 solver_uncon_obstacles = Solver(model, obj, integration=integration, dt=dt, opts=opts)
 solver_con_obstacles = Solver(model, obj_con_obstacles, integration=integration, dt=dt, opts=opts)
-solver_con_obstacles_control = Solver(model, obj_con_obstacles_control, integration=integration, dt=dt, opts=opts)
+solver_con_obstacles.opts.penalty_scaling = 10
+solver_con_obstacles.opts.use_nesterov = false
 
 # -Initial state and control trajectories
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
@@ -161,13 +202,9 @@ X0 = line_trajectory(solver_con_obstacles)
 X0_rollout = rollout(solver_con_obstacles,U0)
 
 @time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
-println("Final state (unconstrained)-> pos: $(results_uncon_obstacles.X[end][1:3]), goal: $(solver_uncon_obstacles.obj.xf[1:3])\n Cost: $(stats_uncon_obstacles["cost"][end])\n Iterations: $(stats_uncon_obstacles["iterations"])\n Outer loop iterations: $(stats_uncon_obstacles["major iterations"])\n ")
-
 @time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
-println("Final state (constrained)-> pos: $(results_con_obstacles.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles["cost"][end])\n Iterations: $(stats_con_obstacles["iterations"])\n Outer loop iterations: $(stats_con_obstacles["major iterations"])\n Max violation: $(stats_con_obstacles["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles.μ)[:]; results_con_obstacles.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles.λ)[:]; results_con_obstacles.λN[:]])))\n")
-
 results_inf, stats_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
-res_d, stats_d = solve_dircol(solver_con_obstacles,X0,U0)
+res_d, stats_d = solve_dircol(solver_con_obstacles,X0_rollout,U0,options=dircol_options)
 
 
 # Obstacle Avoidance
@@ -201,19 +238,41 @@ eval_f(res_i.Z)
 eval_f(res_d.Z)
 eval_f(res_inf.Z)
 eval_f_truth(res_truth.Z)
-_cost(solver_con_obstacles,results_con_obstacles)
-_cost(solver_con_obstacles,results_inf)
+TrajectoryOptimization._cost(solver_con_obstacles,results_con_obstacles)
+TrajectoryOptimization._cost(solver_con_obstacles,results_inf)
 
 # KNOT POINT COMPARISON
-Ns = [21,41,51,81,101,201,401,501,801,1001]
+Ns = [21,41,51,81,101,201,301]
+opts.penalty_scaling = 10
+opts.use_nesterov = false
 disable_logging(Logging.Debug)
 group = "dubinscar/obstacles/constrained"
-run_step_size_comparison(model, obj_con_obstacles, U0, group, Ns, integrations=[:rk3,:rk3_foh],dt_truth=1e-3,opts=opts)
+run_step_size_comparison(model, obj_con_obstacles, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts)
 plot_stat("runtime",group,legend=:topleft,title="Obstacle Avoidance")
 plot_stat("iterations",group,legend=:left,title="Obstacle Avoidance")
 plot_stat("error",group,yscale=:log10,legend=:topright,title=" Obstacle Avoidance")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Obstacle Avoidance")
 
+Ns = [21,41,51,81,101,201,301]
+opts.penalty_scaling = 10
+opts.use_nesterov = false
+disable_logging(Logging.Debug)
+group = "dubinscar/obstacles/infeasible"
+run_step_size_comparison(model, obj_con_obstacles, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts,infeasible=true)
+plot_stat("runtime",group,legend=:topleft,title="Obstacle Avoidance")
+plot_stat("iterations",group,legend=:left,title="Obstacle Avoidance")
+plot_stat("error",group,yscale=:log10,legend=:topright,title=" Obstacle Avoidance")
+plot_stat("c_max",group,yscale=:log10,legend=:right,title="Obstacle Avoidance")
+
+# Nesterov comparison
+opts.use_nesterov = false
+err, err_final, stats = run_Ns(model, obj_con_obstacles, X0, U0, Ns, interp, opts=opts, infeasible=true)
+opts.use_nesterov = true
+err_n, err_final_n, stats_n = run_Ns(model, obj_con_obstacles, X0, U0, Ns, interp, opts=opts, infeasible=true)
+iters = [[stat["iterations"] for stat in sts] for sts in [stats,stats_n]]
+runtime = [[stat["runtime"] for stat in sts] for sts in [stats,stats_n]]
+plot_vals(Ns,iters,["default","nesterov"],"iterations")
+plot_vals(Ns,runtime,["default","nesterov"],"runtime")
 
 ############
 ## Escape ##
@@ -277,13 +336,18 @@ X0 = TrajectoryOptimization.interp_rows(N,tf,Array(X_guess'))
 U0 = rand(m,N)
 
 @time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
-println("Final state (unconstrained)-> pos: $(results_uncon_obstacles.X[end][1:3]), goal: $(solver_uncon_obstacles.obj.xf[1:3])\n Cost: $(stats_uncon_obstacles["cost"][end])\n Iterations: $(stats_uncon_obstacles["iterations"])\n Outer loop iterations: $(stats_uncon_obstacles["major iterations"])\n ")
-
 @time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
-println("Final state (constrained)-> pos: $(results_con_obstacles.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles["cost"][end])\n Iterations: $(stats_con_obstacles["iterations"])\n Outer loop iterations: $(stats_con_obstacles["major iterations"])\n Max violation: $(stats_con_obstacles["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles.μ)[:]; results_con_obstacles.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles.λ)[:]; results_con_obstacles.λN[:]])))\n")
-
-@time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0)
-println("Final state (infeasible + constrained)-> pos: $(results_con_obstacles_inf.X[end][1:3]), goal: $(solver_con_obstacles.obj.xf[1:3])\n Cost: $(stats_con_obstacles_inf["cost"][end])\n Iterations: $(stats_con_obstacles_inf["iterations"])\n Outer loop iterations: $(stats_con_obstacles_inf["major iterations"])\n Max violation: $(stats_con_obstacles_inf["c_max"][end])\n Max μ: $(maximum([to_array(results_con_obstacles_inf.μ)[:]; results_con_obstacles_inf.μN[:]]))\n Max abs(λ): $(maximum(abs.([to_array(results_con_obstacles_inf.λ)[:]; results_con_obstacles_inf.λN[:]])))\n")
+solver = Solver(model, obj_con_obstacles, dt=dt, opts=SolverOptions())
+solver.opts.R_infeasible = 1.
+solver.opts.cost_tolerance = 1e-6
+solver.opts.cost_tolerance_intermediate = 1e-5
+solver.opts.penalty_scaling = 200
+solver.opts.penalty_initial = 2
+solver.opts.resolve_feasible = false
+@time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver,X0,U0)
+stats_con_obstacles_inf["iterations"]
+plt = plot(title="Escape",aspect_ratio=:equal)
+plot_trajectory!(to_array(results_con_obstacles_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)

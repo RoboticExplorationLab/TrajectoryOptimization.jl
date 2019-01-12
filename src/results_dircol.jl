@@ -32,7 +32,7 @@ function DircolVars(X::Matrix,U::Matrix)
 end
 
 function DircolVars(res::SolverIterResults)
-    DircolVars(to_array(res.X), to_array(res.U))
+    DircolVars(to_array(res.X), [to_array(res.U) res.U[end]])
 end
 
 DiffFloat = Union{Float64,ForwardDiff.Dual}

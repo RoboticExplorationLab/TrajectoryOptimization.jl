@@ -1,3 +1,4 @@
+using LinearAlgebra
 ### Solver Options ###
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = true
@@ -14,9 +15,9 @@ model_urdf = Model(urdf_cartpole,[1.;0.])
 n = model.n
 m = model.m
 # Objective
-Q = 0.01*Matrix(I,n,n)
-Qf = 1000.0*Matrix(I,n,n)
-R = 0.01*Matrix(I,m,m)
+Q = 0.01*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = 0.01*Diagonal(I,m)
 
 x0 = [0.;pi;0.;0.]
 xf = [0.;0.;0.;0.]
@@ -40,12 +41,15 @@ solver_zoh = Solver(model, obj_uncon, integration=:rk3, dt=dt, opts=opts)
 # -Initial control and state trajectories
 U = ones(solver_zoh.model.m,solver_zoh.N)
 X_interp = line_trajectory(solver_zoh)
+X_rollout = TrajectoryOptimization.rollout(solver,U)
 # X_interp = ones(solver_zoh.model.n,solver.N)
 #######################################
 
 ### Solve ###
 # @time sol_foh, = TrajectoryOptimization.solve(solver_foh,X_interp,U)
+solver_zoh.opts.verbose = false
 @time sol_zoh, = TrajectoryOptimization.solve(solver_zoh,U)
+solve_dircol(solver_zoh,X_rollout,U,method=:hermite_simpson)
 #############
 
 # ### Results ###

@@ -47,6 +47,7 @@ export
 export
     solve,
     rollout!,
+    rollout,
     forwardpass!,
     backwardpass!,
     cost,
@@ -63,8 +64,10 @@ export
     to_array,
     get_N,
     quat2rot,
-    sphere_constraints,
-    circle_constraints,
+    sphere_constraint,
+    circle_constraint,
+    plot_trajectory!,
+    plot_obstacles,
     generate_controller,
     lqr
 
