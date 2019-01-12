@@ -242,6 +242,7 @@ function Logging.handle_message(logger::SolverLogger, level, message::Symbol, _m
         ldata = logger.leveldata[level]
         if !(message in ldata.cols)
             :info in ldata.cols ? idx = loc : idx = 0  # add before last "info" column
+            width = max(width,length(string(message))+1)
             add_col!(ldata, message, width, idx, do_print=print, vartype=typeof(value))
         end
         logger.leveldata[level].data[message] = value
