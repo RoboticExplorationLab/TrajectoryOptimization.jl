@@ -151,6 +151,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     J_hist = Vector{Float64}()
     grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
+    outer_updates = Int[]
     t_solve_start = time_ns()
 
     #****************************#
@@ -230,7 +231,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :j value=j
-            @logmsg InnerLoop :zero_counter value=dJ_zero_counter
+            @logmsg InnerLoop :zero_count value=dJ_zero_counter
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
@@ -258,6 +259,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         print_header(logger,OuterLoop)
         print_row(logger,OuterLoop)
 
+        push!(outer_updates,iter)
+
         #****************************#
         #    TERMINATION CRITERIA    #
         #****************************#
@@ -276,7 +279,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
         "c_max"=>c_max_hist,
-        "gradient_norm"=>grad_norm_hist)
+        "gradient_norm"=>grad_norm_hist,
+        "outer_updates"=>outer_updates)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
