@@ -94,8 +94,8 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     fdx = [zeros(n,n) for i = 1:N-1]
     fdu = [zeros(n,m) for i = 1:N-1]
 
-    ρ = ones(1)
-    dρ = ones(1)
+    ρ = zeros(1)
+    dρ = zeros(1)
 
     UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
 end
