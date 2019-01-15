@@ -1,15 +1,16 @@
-using HDF5, Logging
+using HDF5, Logging, BenchmarkTools
 import TrajectoryOptimization: get_time
 # High-Accuracy DIRCOL
 
-function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1),benchmark=false)
+function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3, :hermite_simpson],
+        dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1),benchmark=false)
     solver = Solver(model, obj, integration=:rk3, N=size(U0,2))
-    if infeasible
-        if isempty(X0)
-            X0 = line_trajectory(solver)
+    if isempty(X0)
+        if infeasible
+                X0 = line_trajectory(solver)
+        else
+            X0 = rollout(solver,U0)
         end
-    else
-        X0 = rollout(solver,U0)
     end
 
     solver_truth = Solver(model, obj, dt=dt_truth)
@@ -30,7 +31,7 @@ function run_step_size_comparison(model, obj, U0, group::String, Ns; integration
         g_parent["Ns"] = Ns
     end
 
-    run_Ns(model, obj, X0, U0, Ns, :hermite_simpson, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)
+    # run_Ns(model, obj, X0, U0, Ns, :hermite_simpson, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)
     for integration in integrations
         println("Starting Integration :$integration")
         run_Ns(model, obj, X0, U0, Ns, integration, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)

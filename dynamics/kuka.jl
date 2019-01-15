@@ -33,6 +33,32 @@ function get_kuka_ee(kuka)
     return ee_body, ee_point
 end
 
+function get_kuka_ee_postition_fun(kuka::Mechanism,statecache=StateCache(kuka)) where {O}
+    ee_body, ee_point = Dynamics.get_kuka_ee(kuka)
+    world = root_frame(kuka)
+    nn = num_positions(kuka)
+    
+    function ee_position(x::AbstractVector{T}) where T
+        state = statecache[T]
+        set_configuration!(state, x[1:nn])
+        transform(state, ee_point, world).v
+    end
+end
+
+function calc_ee_position(kuka::Mechanism,X::Trajectory)
+    ee = zero.(X)
+    N = length(X)
+    state = MechanismState(kuka)
+    world = root_frame(kuka)
+    ee_point = get_kuka_ee(kuka)[2]
+    nn = num_positions(kuka)
+    for k = 1:N
+        set_configuration!(state, X[k][1:nn])
+        ee[k] = transform(state, ee_point, world).v
+    end
+    return ee
+end
+
 
 function kuka_ee_ik(kuka::Mechanism,point::Vector,ik_iterations=1000,attempts=20,tol=1e-2)
     state = MechanismState(kuka)
@@ -55,20 +81,6 @@ function kuka_ee_ik(kuka::Mechanism,point::Vector,ik_iterations=1000,attempts=20
         end
         return ik_res
     end
-end
-
-function calc_ee_position(kuka::Mechanism,X::Trajectory)
-    ee = zero.(X)
-    N = length(X)
-    state = MechanismState(kuka)
-    world = root_frame(kuka)
-    ee_point = get_kuka_ee(kuka)[2]
-    nn = num_positions(kuka)
-    for k = 1:N
-        set_configuration!(state, X[k][1:nn])
-        ee[k] = transform(state, ee_point, world).v
-    end
-    return ee
 end
 
 

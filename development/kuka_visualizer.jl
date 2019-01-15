@@ -1,5 +1,6 @@
 using MeshCatMechanisms
 using RigidBodyDynamics
+using MeshCat
 # using Blink
 # AtomShell.isinstalled() || AtomShell.install()
 # traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
@@ -26,3 +27,12 @@ function animate_trajectory(vis, X::Trajectory, dt=0.1)
         sleep(dt)
     end
 end
+
+
+green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
+red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
+body_collision = MeshPhongMaterial(color=RGBA(1, 0, 0, 0.5))
+blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
+black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
+black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
