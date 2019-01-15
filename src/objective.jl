@@ -80,53 +80,97 @@ Cost function of the form
     ℓf(xₙ) + ∫ ℓ(x,u) dt from 0 to tf
 """
 struct GenericCost <: CostFunction
-    ℓ::Function
-    ℓ_aug::Function
-    ℓf::Function
-    n::Int
+    ℓ::Function             # Stage cost
+    ℓf::Function            # Terminal cost
+    expansion::Function     # 2nd order Taylor Series Expansion of the form,  Q,R,H,q,r = expansion(x,u)
+    n::Int                  #                                                     Qf,qf = expansion(xN)
     m::Int
-    inds::NamedTuple
-    hess::Matrix{Float64}  # Pre-allocated hessian
-    grad::Vector{Float64}  # Pre-allocated gradient
-    z::Vector{Float64}     # Pre-allocated augmented state and control
 
-    function GenericCost(ℓ::Function, ℓf::Function, n::Int, m::Int)
-        linds = LinearIndices(zeros(n+m,n+m))
-        xinds = 1:n
-        uinds = n .+(1:m)
-        inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], ux=linds[uinds,xinds])
-        function ℓ_aug(z)
-            x = view(z,xinds)
-            u = view(z,uinds)
-            ℓ(x,u)
-        end
-        hess = zeros(n+m,n+m)
-        grad = zeros(n+m)
-        z = zeros(n+m)
-        new(ℓ,ℓ_aug,ℓf,n,m,inds,hess,grad,z)
+end
+
+"""
+$(SIGNATURES)
+Create a Generic Cost, specifying the gradient and hessian of the cost function analytically
+
+# Arguments
+* hess: multiple-dispatch function of the form,
+    Q,R,H = hess(x,u) with sizes (n,n), (m,m), (m,n)
+    Qf = hess(xN) with size (n,n)
+* grad: multiple-dispatch function of the form,
+    q,r = grad(x,u) with sizes (n,), (m,)
+    qf = grad(x,u) with size (n,)
+
+"""
+function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
+    function expansion(x,u)
+        Q,R,H = hess(x,u)
+        q,r = grad(x,u)
+        return Q,R,H,q,r
+    end
+    expansion(xN) = hess(xN), grad(xN)
+    GenericCost(ℓ,ℓf, expansion, n,m)
+end
+
+
+"""
+$(SIGNATURES)
+Create a Generic Cost. Gradient and Hessian information will be determined using ForwardDiff
+
+# Arguments
+* ℓ: stage cost function of the form J = ℓ(x,u)
+* ℓf: terminal cost function of the form J = ℓ(xN)
+"""
+function GenericCost(ℓ::Function, ℓf::Function, n::Int, m::Int)
+    linds = LinearIndices(zeros(n+m,n+m))
+    xinds = 1:n
+    uinds = n .+(1:m)
+    inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], ux=linds[uinds,xinds])
+    expansion = auto_expansion_function(ℓ,ℓf,n,m)
+
+    GenericCost(ℓ,ℓf, expansion, n,m)
+end
+
+function auto_expansion_function(ℓ,ℓf,n,m)
+    z = zeros(n+m)
+    hess = zeros(n+m,n+m)
+    grad = zeros(n+m)
+    qf,Qf = zeros(n), zeros(n,n)
+
+    linds = LinearIndices(hess)
+    xinds = 1:n
+    uinds = n .+(1:m)
+    inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], ux=linds[uinds,xinds])
+    function ℓ_aug(z)
+        x = view(z,xinds)
+        u = view(z,uinds)
+        ℓ(x,u)
+    end
+    function expansion(x::Vector,u::Vector)
+        z[inds.x] = x
+        z[inds.u] = u
+        ForwardDiff.hessian!(hess, ℓ_aug, z)
+        Q = view(hess,inds.xx)
+        R = view(hess,inds.uu)
+        H = view(hess,inds.ux)
+
+        ForwardDiff.gradient!(grad, ℓ_aug, z)
+        q = view(grad,inds.x)
+        r = view(grad,inds.u)
+        return Q,R,H,q,r
+    end
+    function expansion(xN::Vector)
+        ForwardDiff.gradient!(qf,ℓf,xN)
+        ForwardDiff.hessian!(Qf,ℓf,xN)
+        return Qf, qf
     end
 end
 
 function taylor_expansion(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64})
-    inds = cost.inds
-    z = cost.z
-    z[inds.x] = x
-    z[inds.u] = u
-    ForwardDiff.gradient!(cost.grad, cost.ℓ_aug, z)
-    ForwardDiff.hessian!(cost.hess, cost.ℓ_aug, z)
-
-    q = view(cost.grad,inds.x)
-    r = view(cost.grad,inds.u)
-    Q = view(cost.hess,inds.xx)
-    R = view(cost.hess,inds.uu)
-    H = view(cost.hess,inds.ux)
-    return Q,R,H,q,r
+    cost.expansion(x,u)
 end
 
 function taylor_expansion(cost::GenericCost, xN::AbstractVector{Float64})
-    qf = ForwardDiff.gradient(cost.ℓf, xN)
-    Qf = ForwardDiff.hessian(cost.ℓf, xN)
-    return Qf,qf
+    cost.expansion(xN)
 end
 
 stage_cost(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}) = cost.ℓ(x,u)
