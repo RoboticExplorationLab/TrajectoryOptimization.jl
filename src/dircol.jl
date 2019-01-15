@@ -50,7 +50,7 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
     N = convert_N(N,method)
 
     if N != size(X0,2)
-        solver.opts.verbose ? println("Interpolating initial guess") : nothing
+        @info "Interpolating initial guess"
         X0,U0 = interp_traj(N,obj.tf,X0,U0)
     end
 
