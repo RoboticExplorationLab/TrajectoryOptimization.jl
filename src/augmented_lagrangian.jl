@@ -2,19 +2,25 @@
 $(SIGNATURES)
     Gradient of the Augmented Lagrangian: ∂L/∂u = Quuδu + Quxδx + Qu + Cu'λ + Cu'IμC
 """
-function gradient_AuLa(results::ConstrainedIterResults,solver::Solver,bp::BackwardPass)
+function gradient_AuLa(results::SolverIterResults,solver::Solver,bp::BackwardPass)
     N = solver.N
     X = results.X; X_ = results.X_; U = results.U; U_ = results.U_
 
     Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    C = results.C; Cu = results.Cu; λ = results.λ; Iμ = results.Iμ
+    if results isa ConstrainedIterResults
+        C = results.C; Cu = results.Cu; λ = results.λ; Iμ = results.Iμ
+    end
 
     gradient_norm = 0. # ℓ2-norm
 
     for k = 1:N-1
         δx = X_[k] - X[k]
         δu = U_[k] - U[k]
-        tmp = Quu[k]*δu + Qux[k]*δx + Qu[k] + Cu[k]'*(λ[k] + Iμ[k]*C[k])
+        tmp = Quu[k]*δu + Qux[k]*δx + Qu[k]
+
+        if results isa ConstrainedIterResults
+            tmp += Cu[k]'*(λ[k] + Iμ[k]*C[k])
+        end
 
         gradient_norm += sum(tmp.^2)
     end

@@ -4,111 +4,88 @@ using GeometryTypes
 using CoordinateTransformations
 using FileIO
 using MeshIO
+using Random
+
+Random.seed!(123)
+
+r_quad = 3.0
+
+###
+vis = Visualizer()
+open(vis)
+
+# Import quadrotor obj file
+traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+# color options
+green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
+green_transparent = MeshPhongMaterial(color=RGBA(0, 1, 0, 0.1))
+red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
+blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+blue_transparent = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.1))
+
+orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
+orange_transparent = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 0.1))
+black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
+black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
+
+# geometries
+robot_obj = FileIO.load(obj)
+sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.1*r_quad)) # trajectory points
+sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
+
+obstacles = vis["obs"]
+traj = vis["traj"]
+traj_uncon = vis["traj_uncon"]
+traj_mintime = vis["traj_mintime"]
+target = vis["target"]
+robot = vis["robot"]
+robot_uncon = vis["robot_uncon"]
+robot_mintime = vis["robot_mintime"]
+
+###
 
 # Solver options
-dt = 0.1
+tf = 5.0
+dt = 0.05
+N = 51
 integration = :rk4
 opts = SolverOptions()
 opts.verbose = false
-
-opts_mintime = SolverOptions()
-opts_mintime.verbose = true
-opts_mintime.max_dt = 0.2
-opts_mintime.minimum_time_dt_estimate = 0.1
-opts_mintime.min_dt = 1e-3
-opts_mintime.constraint_tolerance = 1e-2
-opts_mintime.R_minimum_time = 1.0
-opts_mintime.bp_reg_initial = 0
-opts_mintime.constraint_decrease_ratio = .5
-opts_mintime.penalty_scaling = 2.0
-opts_mintime.outer_loop_update_type = :individual
-opts_mintime.iterations_innerloop = 750
-opts_mintime.iterations_outerloop = 100
-opts_mintime.iterations = 5000
 
 # Set up model, objective, solver
 model, = TrajectoryOptimization.Dynamics.quadrotor
 n = model.n
 m = model.m
 
-model.f(zeros(n),zeros(n),zeros(m))
-
-Qf = (100.0)*Matrix(I,n,n)
-Q = (0.0)*Matrix(I,n,n)
-R = (1e-2)*Matrix(I,m,m)
-tf = 5.0
-
 # -initial state
-q0 = [1.;0.;0.;0.]
 x0 = zeros(n)
-x0[1:3] = [5.; 1.; 1.]
-# quat0 = eul2quat(zeros(3)) # ZYX Euler angles
+x0[1:3] = [0.; 0.; 0.]
+q0 = [1.;0.;0.;0.]
 x0[4:7] = q0
 
 # -final state
-xf = zeros(n)
-xf[1:3] = [5.0;30.0;1.0] # xyz position
-# quatf = eul2quat(zeros(3)) # ZYX Euler angles
+xf = copy(x0)
+xf[1:3] = [0.;40.;0.] # xyz position
 xf[4:7] = q0
 
 # -control limits
-u_min = 0.
-u_max = 100.0
+u_min = 0.0
+u_max = 5.0
 
-x_min = -Inf*ones(n)
-x_max = Inf*ones(n)
-x_min[1:3] = [0.;-100;0.]
-x_max[1:3] = [20.;100;20.]
-
-# -obstacles
-r_quad = 3.0
-r_sphere = 1.0
-
-# spheres = ((5.,5.,0.,r_sphere),(9.,9.,0.,r_sphere),(15.,15.,0.,r_sphere))
-# n_spheres = length(spheres)
-# function cI(c,x,u)
-#     for i = 1:n_spheres
-#         c[i] = sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
-#     end
-#     c
-# end
-
-s1 = 10; s2 = 10
-spheres = []
-n_spheres = 0
-
-# wall 1
-y_pos1 = 10.
-removed_spheres = zeros(Int,1)
-x_lim = (2,7)
-z_lim = (2,7)
-for i = 1:s1
-    for j = 1:s2
-        if (i > x_lim[1] && i < x_lim[2]) && (j > z_lim[1] && j < z_lim[2])
-            removed_spheres[1] += 1
-        else
-            push!(spheres,((i-1)*2*r_sphere + r_sphere,y_pos1,(j-1)*2*r_sphere + r_sphere,r_sphere))
-        end
-    end
-end
-
-n_spheres = s1*s2 - removed_spheres[1]
-
-# # # wall 2
-# y_pos2 = 20.
-# removed_spheres = zeros(Int,1)
-# x_lim = (4,9)
-# z_lim = (4,9)
-# for i = 1:s1
-#     for j = 1:s2
-#         if (i > x_lim[1] && i < x_lim[2]) && (j > z_lim[1] && j < z_lim[2])
-#             removed_spheres[1] += 1
-#         else
-#             push!(spheres,((i-1)*2*r_sphere + r_sphere,y_pos2,(j-1)*2*r_sphere + r_sphere,r_sphere))
-#         end
-#     end
-# end
-# n_spheres += s1*s2 - removed_spheres[1]
+Q = (1e-1)*Matrix(I,n,n)
+Q[4,4] = 1.0
+Q[5,5] = 1.0
+Q[6,6] = 1.0
+Q[7,7] = 1.0
+R = (1.0)*Matrix(I,m,m)
+Qf = (1000.0)*Matrix(I,n,n)
+# obstacles constraint
+r_sphere = 3.0
+spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
+n_spheres = 3
 
 function cI(c,x,u)
     for i = 1:n_spheres
@@ -117,92 +94,419 @@ function cI(c,x,u)
     c
 end
 
-
-# -constraint that quaternion should be unit
+# unit quaternion constraint
 function cE(c,x,u)
     c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 end
 
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI,cE=cE)
 
-# obj_uncon_min = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max)
-# obj_uncon_min = TrajectoryOptimization.update_objective(obj_uncon_min, tf=:min, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max, cI=cI, cE=cE)
-# obj_con_min = TrajectoryOptimization.update_objective(obj_con, tf=:min, Q = 1e-3*Diagonal(I,n), R = 1e-3*Diagonal(I,m), Qf = Diagonal(I,n)*0.0)
+solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
+solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 
-# Solver
-solver_uncon = Solver(model,obj_uncon,integration=integration,dt=dt,opts=opts)
-
-# solver_uncon_mintime = TrajectoryOptimization.Solver(model,obj_uncon_min,integration=integration,N=solver_uncon.N,opts=opts_mintime)
-solver_con = Solver(model,obj_con,integration=integration,dt=dt,opts=opts)
-# solver_con_mintime = TrajectoryOptimization.Solver(model,obj_con_min,integration=integration,N=solver_uncon.N,opts=opts_mintime)
-
-# - Initial control and state trajectories
-U0 = rand(solver_uncon.model.m, solver_uncon.N-1)
-X0 = line_trajectory(solver_uncon)
-X0[4:7,:] .= q0
-
-xm1 = zeros(n)
-xm1[1:3] = [5.;10.;10]
-xm1[4:7] = q0
-
-# xm2 = zeros(n)
-# xm2[1:3] = [5.;20.;6.5]
-# xm2[4:7] = q0
-
-X_guess = [x0 xm1 xf]
-X_interp = interp_rows(solver_uncon.N,tf,Array(X_guess))
-plot(X_interp')
-
+U0 = zeros(solver_uncon.model.m, solver_uncon.N-1)
 @time results_uncon, stats_uncon = solve(solver_uncon,U0)
-# @time results_uncon_mintime, stats_uncon_mintime = solve(solver_uncon_mintime,U0)
-solver_con.opts.verbose = false
-solver_con.state.second_order_dual_update = false
-solver_con.opts.use_second_order_dual_update = false
-solver_con.opts.resolve_feasible = false
-@time results_con, stats_con = solve(solver_con,X_interp,U0)
-println(stats_con["iterations"])
-# @time results_con_mintime, stats_con_mintime = solve(solver_con_mintime,X0,U0)
 
-plot(to_array(results_uncon.X)[1:3,:]')
+
+solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
+
+@time results_con, stats_con = solve(solver_con,U0)
+
+plot(to_array(results_con.U)[:,1:solver_con.N-1]')
 plot(to_array(results_con.X)[1:3,:]')
+max_violation(results_con)
+total_time(solver_con,results_con)
 
-# println("Final state (unconstrained)-> pos: $(results_uncon.X[end][1:3]), goal: $(solver_uncon.obj.xf[1:3])\n Iterations: $(stats_uncon["iterations"])\n Outer loop iterations: $(stats_uncon["major iterations"])\n ")
-# println("Final state (constrained)-> pos: $(results_con.X[end][1:3]), goal: $(solver_con.obj.xf[1:3])\n Iterations: $(stats_con["iterations"])\n Outer loop iterations: $(stats_con["major iterations"])\n Max violation: $(stats_con["c_max"][end])\n Max μ: $(maximum(to_array(results_con.μ)))")# Max abs(λ): $(maximum(abs.(to_array(results_con.λ)[:]))\n")
+obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
+
+# opts.max_dt = 0.2
+# opts.min_dt = 1e-3
+# opts.minimum_time_dt_estimate = tf/(N-1)
+# opts.constraint_tolerance = 0.001
+# opts.R_minimum_time = 1.0
+# opts.constraint_decrease_ratio = .25
+# opts.penalty_scaling = 3.0
+# opts.outer_loop_update_type = :individual
+# opts.iterations = 1000
+# opts.iterations_outerloop = 30 # 20
+
+opts.max_dt = 0.2
+opts.min_dt = 1e-3
+opts.minimum_time_dt_estimate = .05#tf/(N-1)
+opts.constraint_tolerance = 0.001
+opts.R_minimum_time = 1.0
+opts.constraint_decrease_ratio = .25
+opts.penalty_scaling = 3.0
+opts.outer_loop_update_type = :individual
+opts.iterations = 1000
+opts.iterations_outerloop = 30 # 20
+
+solver_mintime = Solver(model,obj_mintime,integration=integration,N=N,opts=opts)
+
+@time results_mintime, stats_mintime = solve(solver_mintime,to_array(results_con.U))
+
+plot(to_array(results_mintime.U)[:,1:solver_con.N-1]')
+plot(to_array(results_mintime.X)[1:3,1:solver_mintime.N]')
+max_violation(results_mintime)
+total_time(solver_mintime,results_mintime)
 
 # ################################################
 # ## Visualizer using MeshCat and GeometryTypes ##
 # ################################################
-# results = results_con
-# solver = solver_con
-# vis = Visualizer()
-# open(vis)
+
+# Set camera location
+settransform!(vis["/Cameras/default"], compose(Translation(25., 15., 20.),LinearMap(RotY(-pi/12))))
+
+# Create and place obstacles
+for i = 1:n_spheres
+    setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
+    settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
+end
+
+# Create and place trajectory
+for i = 1:N
+    setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
+    settransform!(vis["traj_uncon"]["t$i"], Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]))
+end
+for i = 1:N
+    setobject!(vis["traj"]["t$i"],sphere_small,blue_)
+    settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
+end
+for i = 1:N
+    setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
+    settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
+end
 #
-# # Import quadrotor obj file
-# traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-# urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-# obj = joinpath(urdf_folder, "quadrotor_base.obj")
+# Create and place initial position
+setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
+setobject!(vis["robot_uncon"]["quad"],robot_obj,orange_)
+
+setobject!(vis["robot"]["ball"],sphere_medium,blue_transparent)
+setobject!(vis["robot"]["quad"],robot_obj,blue_)
+
+setobject!(vis["robot_mintime"]["ball"],sphere_medium,green_transparent)
+setobject!(vis["robot_mintime"]["quad"],robot_obj,green_)
+
+# Animate quadrotor
+for i = 1:N
+    settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
+    sleep(solver_uncon.dt)
+end
+
+for i = 1:N
+    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
+    sleep(solver_con.dt)
+end
+
+for i = 1:N
+    settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
+    solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
+    sleep(dt)
+end
+
+##########
+## Maze ##
+##########
+
+# Set up quadrotor
+tf = 5.0
+dt = 0.05
+N = 51
+integration = :rk4
+opts = SolverOptions()
+opts.verbose = false
+
+# Set up model, objective, solver
+model, = TrajectoryOptimization.Dynamics.quadrotor
+n = model.n
+m = model.m
+
+# -initial state
+x0 = zeros(n)
+x0[1:3] = [0.; 0.; 3.]
+q0 = [1.;0.;0.;0.]
+x0[4:7] = q0
+
+
+# -final state
+xf = copy(x0)
+xf[1:3] = [0.;60.;3.] # xyz position
+xf[4:7] = q0
+
+# -control limits
+u_min = -100.0
+u_max = 100.0
+x_max = Inf*ones(n)
+x_min = -Inf*ones(n)
+x_max[1:3] = [25.0; Inf; 6.]
+x_min[1:3] = [-25.0; -Inf; 0.]
+
+Q = (1e-1)*Matrix(I,n,n)
+Q[4,4] = 1.0
+Q[5,5] = 1.0
+Q[6,6] = 1.0
+Q[7,7] = 1.0
+R = (1.0)*Matrix(I,m,m)
+Qf = (100.0)*Matrix(I,n,n)
+
+# obstacles constraint
+# -obstacles
+r_sphere = 2.
+spheres = []
+zh = 2
+l1 = 10
+l2 = 3
+l3 = 20
+l4 = 10
+
+for i = range(-25,stop=-10,length=l1)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(i, 10, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(10,stop=25,length=l1)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(i, 10, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(-12.5,stop=12.5,length=l3)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(i, 30, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(-25,stop=-10,length=l1)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(i, 50, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(10,stop=25,length=l1)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(i, 50, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(10+2*r_sphere,stop=50-2*r_sphere,length=l4)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(-25, i, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+
+for i = range(10+2*r_sphere,stop=50-2*r_sphere,length=l4)
+    for j = range(0,stop=zh,length=l2)
+        push!(spheres,(25, i, j*2*r_sphere + r_sphere,r_sphere))
+    end
+end
+n_spheres = length(spheres)
+
+for i = 1:n_spheres
+    setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
+    settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
+end
+
+function cI(c,x,u)
+    for i = 1:n_spheres
+        c[i] = sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
+    end
+    c
+end
+
+# unit quaternion constraint
+function cE(c,x,u)
+    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
+end
+
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,x_min=x_min,x_max=x_max,u_min=u_min,u_max=u_max,cI=cI,cE=cE)
+
+solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
+solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
+
+# Initial control trajectory
+U0 = ones(solver_uncon.model.m, solver_uncon.N-1)
+
+# Initial infeasible state trajectory
+X_guess = zeros(n,9)
+X_guess[:,1] = x0
+X_guess[:,9] = xf
+X_guess[1:3,2:8] .= [0 -12.5 -20 -20 -20 -12.5 0; 10 20 20 30 40 40 50; 3 3 3 3 3 3 3]
+X_guess[4:7,:] .= q0
+X0 = TrajectoryOptimization.interp_rows(N,tf,X_guess)
+
+@time results_uncon, stats_uncon = solve(solver_uncon,U0)
+solver_con.opts.R_infeasible = 10.0
+solver_con.opts.penalty_initial = 1.0
+solver_con.opts.iterations = 300
+solver_con.opts.verbose = false
+solver_con.opts.resolve_feasible = false
+solver_con
+@time results_con, stats_con = solve(solver_con,X0,U0)
+
+plot(to_array(results_con.U)[:,1:solver_con.N-1]')
+plot(to_array(results_con.X)[1:3,:]')
+max_violation(results_con)
+total_time(solver_con,results_con)
+
+obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
+
+# Set camera location
+settransform!(vis["/Cameras/default"], compose(Translation(25., 15., 20.),LinearMap(RotY(-pi/12))))
+
+# Create and place obstacles
+for i = 1:n_spheres
+    setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
+    settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
+end
+
+# Create and place trajectory
+for i = 1:N
+    setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
+    settransform!(vis["traj_uncon"]["t$i"], Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]))
+end
+for i = 1:N
+    setobject!(vis["traj"]["t$i"],sphere_small,blue_)
+    settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
+end
+for i = 1:N
+    setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
+    settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
+end
 #
-# # color options
-# green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
-# red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
-# blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
-# orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
-# black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
-# black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
+# Create and place initial position
+setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
+setobject!(vis["robot_uncon"]["quad"],robot_obj,orange_)
+
+setobject!(vis["robot"]["ball"],sphere_medium,blue_transparent)
+setobject!(vis["robot"]["quad"],robot_obj,blue_)
+
+setobject!(vis["robot_mintime"]["ball"],sphere_medium,green_transparent)
+setobject!(vis["robot_mintime"]["quad"],robot_obj,green_)
+
+# Animate quadrotor
+for i = 1:N
+    settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
+    sleep(solver_uncon.dt)
+end
+
+for i = 1:N
+    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
+    sleep(solver_con.dt)
+end
+
+for i = 1:N
+    settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
+    solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
+    sleep(dt)
+end
+
 #
-# # geometries
-# robot_obj = FileIO.load(obj)
-# sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.1*r_quad)) # trajectory points
-# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
 #
-# obstacles = vis["obs"]
-# traj = vis["traj"]
-# target = vis["target"]
-# robot = vis["robot"]
+plot(X0[1:3,:]')
 #
-# # Set camera location
-# settransform!(vis["/Cameras/default"], compose(Translation(25., -5., 10),LinearMap(RotZ(-pi/4))))
+# for i = 1:N
+#     setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
+#     settransform!(vis["traj_uncon"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
+# end
+
+# for i in 1:
+#     for j = range(0,stop=,length=)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 25
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 12.5
+# x = 30
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# x = 45
+# y = 0
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 25
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+
+# Create and place obstacles
+# for i = 1:n_spheres
+#     setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
+#     settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
+# end
+
+
+
+
+# s1 = 7
+# s2 = 5
+#
+# x = 15
+# y = 0
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 25
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 12.5
+# x = 30
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# x = 45
+# y = 0
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
+#
+# y = 25
+# for i in range(0,stop=(s1-1)*r_sphere,length=s1)
+#     for j = range(0,stop=(s2-1)*r_sphere,length=s2)
+#         push!(spheres,(x, y + (i-1)*2*r_sphere + r_sphere, (j-1)*2*r_sphere + r_sphere,r_sphere))
+#     end
+# end
+# n_spheres += s1*s2
 #
 # # Create and place obstacles
 # for i = 1:n_spheres
@@ -210,19 +514,41 @@ plot(to_array(results_con.X)[1:3,:]')
 #     settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
 # end
 #
-# # Create and place trajectory
-# for i = 1:solver.N
-#     setobject!(vis["traj"]["t$i"],sphere_small,blue_)
-#     settransform!(vis["traj"]["t$i"], Translation(results.X[i][1], results.X[i][2], results.X[i][3]))
-# end
 #
-# # Create and place initial position
-# setobject!(vis["robot"]["ball"],sphere_medium,black_transparent)
-# setobject!(vis["robot"]["quad"],robot_obj,black_)
-# settransform!(vis["robot"],compose(Translation(results.X[1][1], results.X[1][2], results.X[1][3]),LinearMap(quat2rot(results.X[1][4:7]))))
 #
-# # Animate quadrotor
-# for i = 1:solver.N
-#     settransform!(vis["robot"], compose(Translation(results.X[i][1], results.X[i][2], results.X[i][3]),LinearMap(quat2rot(results.X[i][4:7]))))
-#     sleep(solver.dt*2)
-# end
+# # # wall 1
+# # sx = 8
+# # sy = 8
+# # sz = 15
+# # removed_spheres = zeros(Int,1)
+# # limits1 = (2,7)
+# # limits2 = (2,7)
+# # for i = 1:sy
+# #     for j = 1:sz
+# #         if (i > limits1[1] && i < limits1[2]) && (j > limits2[1] && j < limits2[2])
+# #             removed_spheres[1] += 1
+# #         else
+# #             push!(spheres,(10,(i-1)*2*r_sphere + r_sphere,(j-1)*2*r_sphere + r_sphere,r_sphere))
+# #         end
+# #     end
+# # end
+# #
+# # n_spheres = sy*sz - removed_spheres[1]
+# #
+# # removed_spheres_2 = zeros(Int,1)
+# #
+# # # wall 2
+# # zh = (8-1)*2*r_sphere + r_sphere
+# # for i = 2:sx
+# #     for j = 1:sy
+# #         if (i > limits1[1] && i < limits1[2]) && (j > limits2[1] && j < limits2[2])
+# #             removed_spheres_2[1] += 1
+# #             println(removed_sphere_2[1])
+# #         else
+# #             push!(spheres,((i-1)*2*r_sphere + 10,(j-1)*2*r_sphere + r_sphere,zh,r_sphere))
+# #         end
+# #     end
+# # end
+# # removed_spheres
+# # n_spheres += (sx-1)*sy - removed_spheres_2[1]
+#
