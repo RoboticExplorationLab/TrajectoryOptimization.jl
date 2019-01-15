@@ -1,5 +1,6 @@
 import Base: convert, copyto!, Array
 import LinearAlgebra: norm
+import Plots: plot, plot!
 
 function get_cost_matrices(solver::Solver)
     solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
@@ -362,8 +363,17 @@ function convergence_rate(x::Vector,y::Vector)
     return coeffs
 end
 
+function plot_vertical_lines!(p::Plots.Plot,x::Vector; kwargs...)
+	ylim = collect(ylims(p))
+	plot_vertical_lines!(x, ylim; kwargs...)
+end
+
 function plot_vertical_lines!(x,ylim=[-100,100]; kwargs...)
     ys = [ylim for val in x]
     xs = [[val; val] for val in x]
-    plot!(xs,ys; kwargs...)
+    plot!(xs,ys, linestyle=:dash, color=:black, label=""; kwargs...)
 end
+
+
+plot(X::Trajectory; kwargs...) = plot(to_array(X)'; kwargs...)
+plot!(X::Trajectory; kwargs...) = plot!(to_array(X)'; kwargs...)
