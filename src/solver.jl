@@ -35,8 +35,8 @@ end
 $(TYPEDEF)
     Type for solver
 """
-struct Solver{O<:Objective}
-    model::Model         # Dynamics model
+struct Solver{M<:Model,O<:Objective}
+    model::M             # Dynamics model
     obj::O               # Objective (cost function and constraints)
     opts::SolverOptions  # Solver options (iterations, method, convergence criteria, etc)
     state::SolverState   # Solver state
@@ -50,7 +50,7 @@ struct Solver{O<:Objective}
     N::Int64             # Number of time steps
     integration::Symbol
 
-    function Solver(model::Model, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {O}
+    function Solver(model::M, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {M<:Model,O<:Objective}
         state = SolverState()
 
         # Check for minimum time
@@ -186,7 +186,7 @@ struct Solver{O<:Objective}
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{O}(model, obj, options, state, dt, fd!, fd_jacobians!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration)
+        new{M,O}(model, obj, options, state, dt, fd!, fd_jacobians!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration)
     end
 end
 

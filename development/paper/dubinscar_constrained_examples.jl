@@ -1,5 +1,6 @@
-import TrajectoryOptimization: gen_usrfun_ipopt
-using Random, LinearAlgebra
+import TrajectoryOptimization: gen_usrfun_ipopt,
+using Random, LinearAlgebra, Plots
+using BenchmarkTools, Statistics
 Random.seed!(7)
 include("N_plots.jl")
 
@@ -8,9 +9,9 @@ dt = 0.01
 integration = :rk3
 method = :hermite_simpson
 
-function convergence_plot(stat_i,stat_d)
-    plot(stat_i["cost"],width=2,label="iLQR")
-    plot!(stat_d["cost"], ylim=[0,10], ylabel="Cost",xlabel="iterations",width=2,label="DIRCOL")
+function convergence_plot(stat_i,stat_d;kwargs...)
+    plot(log.(abs.(stat_i["cost"])),width=2,label="iLQR")
+    plot!(log.(abs.(stat_d["cost"])), ylabel="Cost (abs log)",xlabel="iterations",width=2,label="DIRCOL"; kwargs...)
 end
 
 ###################
@@ -51,16 +52,42 @@ obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=
 
 solver_uncon  = Solver(model, obj, integration=integration, dt=dt, opts=opts)
 solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
+solver_nn = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
+solver_nn.opts.use_nesterov = false
 
 U0 = rand(solver_uncon.model.m,solver_uncon.N)
 X0 = line_trajectory(solver_con_box)
 X0_rollout = rollout(solver_uncon, U0)
 
 @time results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
-solver_con_box = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
-@time results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
-solver_con_box.opts.penalty_initial = .1
-@time res_inf, stats_inf = TrajectoryOptimization.solve(solver_con_box,X0,U0)
+
+solver_con = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
+solver_con.opts.use_nesterov = false
+solver_con.opts.penalty_scaling = 100
+solver_con.opts.penalty_initial = 0.01
+solver_con.opts.outer_loop_update_type = :feedback
+solver_con.opts.cost_tolerance_intermediate = 1e-3
+solver_con.opts.constraint_tolerance_coarse = 1
+solver_con.opts.use_penalty_burnin = false
+solver_con.opts.verbose = false
+@time results_con_box, stats_con_box = solve(solver_con,U0)
+solver_con_n = Solver(solver_con)
+solver_con_n.opts.use_nesterov = true
+results_n, stats_n = solve(solver_con_n,U0)
+
+solver_inf = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
+solver_inf.opts.use_nesterov = false
+solver_inf.opts.penalty_scaling = 100
+solver_inf.opts.penalty_initial = 0.001
+solver_inf.opts.outer_loop_update_type = :feedback
+solver_inf.opts.cost_tolerance_intermediate = 1e-3
+solver_inf.opts.constraint_tolerance_coarse = 1
+solver_inf.opts.use_penalty_burnin = false
+solver_inf.opts.verbose = false
+solver_inf.opts.R_infeasible = 10
+@time res_inf, stats_inf = TrajectoryOptimization.solve(solver_inf,X0,U0)
+stats_inf["iterations"]
+
 @time res_d, stats_d = TrajectoryOptimization.solve_dircol(solver_con_box, X0_rollout, U0, options=dircol_options)
 
 
@@ -74,8 +101,6 @@ plot_trajectory!(to_array(results_uncon.X),width=2,color=:blue,label="Unconstrai
 plot_trajectory!(to_array(results_con_box.X),width=2,color=:green,label="Constrained",legend=:bottomright)
 plot_trajectory!(to_array(res_inf.X),width=2,color=:yellow,label="Constrained (infeasible)",legend=:bottomright)
 plot_trajectory!(res_d.X,width=2,color=:black,linestyle=:dash,label="DIRCOL")
-# plot_trajectory!(X_truth,width=2,color=:yellow,linestyle=:dash,label="DIRCOL (truth)")
-display(plt)
 
 # Stats comparison
 eval_f, = gen_usrfun_ipopt(solver_con_box,method)
@@ -84,42 +109,54 @@ stats_con_box["runtime"]
 stats_d["runtime"]
 stats_con_box["iterations"]
 stats_d["iterations"]
-convergence_plot(stats_con_box,stats_d)
 eval_f(res_i.Z)
 eval_f(res_d.Z)
 TrajectoryOptimization._cost(solver_con_box,results_con_box)
+plot(stats_uncon["gradient_norm"][10:end])
+stats_uncon["gradient_norm"]
+
+# Convergence Behavior
+convergence_plot(stats_con_box,stats_d)
+plot!(log.(abs.(stats_inf["cost"])),linewidth=2,label="iLQR (infeasible)")
+convergence_rate(stats_uncon,tail=0.5,plot_fit=true)
+convergence_rate(stats_con_box,tail=0.5,plot_fit=true)
+convergence_rate(stats_inf,tail=0.5,plot_fit=true)
+
+p = plot(stats_con_box["gradient_norm"],yscale=:log10,label="no nesterov",color=:blue,xlabel="iterations",ylabel="gradient",title="Constrained Parallel Park")
+ylim = collect(ylims(p))
+plot_vertical_lines!(stats_con_box["outer_updates"],ylim,linecolor=:blue,linestyle=:dash,label="")
+plot!(stats_n["gradient_norm"],yscale=:log10,label="nesterov",linecolor=:red,legend=:bottomleft)
+plot_vertical_lines!(stats_n["outer_updates"],ylim,linecolor=:red,linestyle=:dash,label="")
 
 
 # STEP SIZE COMPARISONS #
 # Unconstrained
-Ns = [21,31,51,81,101]
+Ns = [21,31,51,81,101,201,301]
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/unconstrained"
-run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts)
+run_step_size_comparison(model, obj, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts,benchmark=true)
 plot_stat("runtime",group,legend=:bottomright,title="Unconstrained Parallel Park")
 plot_stat("iterations",group,legend=:bottom,title="Unconstrained Parallel Park")
 plot_stat("error",group,yscale=:log10,legend=:right,title="Unconstrained Parallel Park")
 
 # Constrained
-Ns = [21,31,51,81,101]
+Ns = [21,31,51,81,151,201,301]
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/constrained"
-run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts)
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=solver_con.opts)
 plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park")
-plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park")
-plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
+plot_stat("iterations",group,legend=:topright,title="Constrained Parallel Park")
+plot_stat("error",group,yscale=:log10,legend=:topright,title="Constrained Parallel Park")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park")
 
 # Infeasible
-Ns = [21,31,51,81,101]
-opts_inf = copy(opts)
-opts_inf.penalty_initial = 0.1
+Ns = [21,31,51,81,151,201,301]
 disable_logging(Logging.Debug)
 group = "dubinscar/parallelpark/infeasible"
-run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=opts_inf, infeasible=true)
+run_step_size_comparison(model, obj_con_box, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=1e-3,opts=solver_inf.opts, infeasible=true)
 plot_stat("runtime",group,legend=:topleft,title="Constrained Parallel Park (infeasible)")
-plot_stat("iterations",group,legend=:left,title="Constrained Parallel Park (infeasible)")
-plot_stat("error",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
+plot_stat("iterations",group,legend=:topright,title="Constrained Parallel Park (infeasible)")
+plot_stat("error",group,yscale=:log10,legend=:topright,title="Constrained Parallel Park (infeasible)")
 plot_stat("c_max",group,yscale=:log10,legend=:right,title="Constrained Parallel Park (infeasible)")
 
 dt_truth = 1e-3
@@ -136,25 +173,6 @@ runtime = [[stat["runtime"] for stat in sts] for sts in [stats,stats_n]]
 plot_vals(Ns,iters,["default","nesterov"],"iterations")
 plot_vals(Ns,runtime,["default","nesterov"],"runtime")
 
-
-####################
-#   MINIMUM TIME   $
-####################
-# opts = SolverOptions()
-# opts.verbose = true
-# opts.cost_tolerance = 1e-6
-# opts.cost_tolerance_intermediate = 1e-5
-# opts.minimum_time_tf_estimate = 2.0
-# opts.gradient_tolerance = 1e-10
-# opts.live_plotting = true
-#
-# u_bnd = 2
-# N = 51
-# obj_mintime = update_objective(obj_con_box,tf=:min, u_min=-u_bnd, u_max=u_bnd)
-# solver_min = Solver(model, obj_mintime, N=N, integration=:rk3, opts=opts)
-#
-# U0 = zeros(m,N)
-# res,stats = solve(solver_min, U0)
 
 
 ########################
@@ -322,7 +340,7 @@ function cI(c,x,u)
     c
 end
 
-obj_con_obstacles = TrajectoryOptimization.ConstrainedObjective(obj,cI=cI)
+obj_con_obstacles = TrajectoryOptimization.ConstrainedObjective(obj,cI=cI,u_min=-10,u_max=10)
 
 solver_uncon_obstacles = Solver(model, obj, dt=dt, opts=opts)
 solver_con_obstacles = Solver(model, obj_con_obstacles, dt=dt, opts=opts)
@@ -337,17 +355,24 @@ U0 = rand(m,N)
 
 @time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
 @time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
-solver = Solver(model, obj_con_obstacles, dt=dt, opts=SolverOptions())
-solver.opts.R_infeasible = 1.
-solver.opts.cost_tolerance = 1e-6
-solver.opts.cost_tolerance_intermediate = 1e-5
-solver.opts.penalty_scaling = 200
-solver.opts.penalty_initial = 2
+solver = Solver(model, obj_con_obstacles, N=101, opts=SolverOptions())
+solver.opts.R_infeasible = 1
 solver.opts.resolve_feasible = false
-@time results_con_obstacles_inf, stats_con_obstacles_inf = TrajectoryOptimization.solve(solver,X0,U0)
-stats_con_obstacles_inf["iterations"]
-plt = plot(title="Escape",aspect_ratio=:equal)
-plot_trajectory!(to_array(results_con_obstacles_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+solver.opts.cost_tolerance = 1e-6
+solver.opts.cost_tolerance_intermediate = 1e-3
+solver.opts.constraint_tolerance = 1e-5
+solver.opts.constraint_tolerance_coarse = 0.01
+solver.opts.penalty_scaling = 50
+solver.opts.penalty_initial = 10
+solver.opts.outer_loop_update_type = :feedback
+solver.opts.use_penalty_burnin = false
+solver.opts.use_nesterov = true
+solver.opts.live_plotting = false
+solver.opts.verbose = false
+@time res_inf, stats_inf = solve(solver,X0,U0)
+stats_inf["iterations"]
+
+res_d,stats_d = solve_dircol(solver,X0,U0,options=dircol_options)
 
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)
@@ -355,5 +380,41 @@ plot_obstacles(circles)
 plot_trajectory!(to_array(results_uncon_obstacles.X),width=2,color=:blue,label="Unconstrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:green,label="Constrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 plot_trajectory!(to_array(results_con_obstacles_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+plot_trajectory!(res_d.X,width=2,color=:yellow,label="DIRCOL",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 plot!(X0[1,:],X0[2,:],label="Infeasible Initialization",width=1,color=:purple,linestyle=:dash)
 display(plt)
+
+
+# Dircol Truth
+group = "dubinscar/escape/infeasible"
+solver_truth = Solver(model,obj_con_obstacles,N=1001)
+solve_dircol(solver_truth,Array(res_d.X), Array(res_d.U))
+run_dircol_truth(solver_truth, Array(res_d.X), Array(res_d.U), group::String)
+
+Ns = [101,151,201,251,301]
+disable_logging(Logging.Debug)
+run_step_size_comparison(model, obj_con_obstacles, U0, group, Ns, integrations=[:midpoint,:rk3],dt_truth=solver_truth.dt,opts=solver.opts,infeasible=true,X0=X0)
+plot_stat("runtime",group,legend=:topleft,title="Obstacle Avoidance",yscale=:log10)
+plot_stat("iterations",group,legend=:right,title="Obstacle Avoidance",yscale=:log10)
+plot_stat("error",group,yscale=:log10,legend=:topright,title=" Obstacle Avoidance")
+plot_stat("c_max",group,yscale=:log10,legend=:right,title="Obstacle Avoidance")
+
+
+
+X_truth, U_truth = get_dircol_truth(solver_truth,X0,U0,group)[2:3]
+interp(t) = TrajectoryOptimization.interpolate_trajectory(solver_truth, X_truth, U_truth, t)
+
+opts_no_nesterov = copy(solver.opts)
+opts_no_nesterov.use_nesterov = false
+opts_no_nesterov.outer_loop_update_type = :feedback
+err, err_final, stats = run_Ns(model, obj_con_box, X0, U0, Ns, interp, opts=opts_no_nesterov)
+opts_no_nesterov.use_nesterov = true
+err_n, err_final_n, stats_n = run_Ns(model, obj_con_box, X0, U0, Ns, interp, opts=opts_no_nesterov)
+iters = [[stat["iterations"] for stat in sts] for sts in [stats,stats_n]]
+runtime = [[stat["runtime"] for stat in sts] for sts in [stats,stats_n]]
+plot_vals(Ns,iters,["default","nesterov"],"iterations")
+plot_vals(Ns,runtime,["default","nesterov"],"runtime")
+
+
+plot(stats[2]["gradient_norm"],yscale=:log10)
+plot!(stats_n[2]["gradient_norm"])

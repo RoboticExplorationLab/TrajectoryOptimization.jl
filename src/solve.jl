@@ -76,7 +76,7 @@ $(SIGNATURES)
 * X0::Matrix{Float64} (optional) - initial state trajectory. If specified, it will solve use infeasible controls
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
-function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], μ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], μ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {M<:Model,Obj<:Objective}
     # Start timer
     t_start = time_ns()
 
@@ -158,7 +158,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     c_max_hist = Vector{Float64}()
     max_cn_hist = Vector{Float64}()
     min_eig_hist = Vector{Float64}()
-
+    outer_updates = Int[]
     t_solve_start = time_ns()
 
     #****************************#
@@ -256,6 +256,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :max_cn value=max_cn
             @logmsg InnerLoop :min_eig value=min_eig
+            @logmsg InnerLoop :zero_count value=dJ_zero_counter
+
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
@@ -272,7 +274,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,j)
+        outer_loop_update(results,solver,bp,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
@@ -282,6 +284,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         @logmsg OuterLoop :iterations value=iter_inner
         print_header(logger,OuterLoop)
         print_row(logger,OuterLoop)
+
+        push!(outer_updates,iter)
 
         #****************************#
         #    TERMINATION CRITERIA    #
@@ -302,7 +306,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "cost"=>J_hist,
         "c_max"=>c_max_hist,
         "gradient_norm"=>grad_norm_hist,
-        "max_condition_number"=>max_cn_hist)
+        "max_condition_number"=>max_cn_hist,
+        "outer_updates"=>outer_updates)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))

@@ -41,7 +41,8 @@ export
     GenericCost,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
-    SolverOptions
+    SolverOptions,
+    Trajectory
 
 # Primary methods
 export
@@ -67,6 +68,8 @@ export
     sphere_constraint,
     circle_constraint,
     plot_trajectory!,
+    plot_vertical_lines!,
+    convergence_rate,
     plot_obstacles,
     generate_controller,
     lqr

@@ -504,7 +504,7 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int=0)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp,k::Int=0)::Nothing
 
     if solver.opts.outer_loop_update_type == :default
         if solver.opts.use_nesterov
@@ -540,6 +540,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver, k::Int=0)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver, bp, k::Int=0)::Nothing
     return nothing
 end

@@ -1,15 +1,16 @@
-using HDF5, Logging
+using HDF5, Logging, BenchmarkTools
 import TrajectoryOptimization: get_time
 # High-Accuracy DIRCOL
 
-function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3],dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1))
+function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3, :hermite_simpson],
+        dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1),benchmark=false)
     solver = Solver(model, obj, integration=:rk3, N=size(U0,2))
-    if infeasible
-        if isempty(X0)
-            X0 = line_trajectory(solver)
+    if isempty(X0)
+        if infeasible
+                X0 = line_trajectory(solver)
+        else
+            X0 = rollout(solver,U0)
         end
-    else
-        X0 = rollout(solver,U0)
     end
 
     solver_truth = Solver(model, obj, dt=dt_truth)
@@ -30,10 +31,10 @@ function run_step_size_comparison(model, obj, U0, group::String, Ns; integration
         g_parent["Ns"] = Ns
     end
 
-    run_Ns(model, obj, X0, U0, Ns, :hermite_simpson, interp, group, opts=opts, infeasible=infeasible)
+    # run_Ns(model, obj, X0, U0, Ns, :hermite_simpson, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)
     for integration in integrations
         println("Starting Integration :$integration")
-        run_Ns(model, obj, X0, U0, Ns, integration, interp, group, opts=opts, infeasible=infeasible)
+        run_Ns(model, obj, X0, U0, Ns, integration, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)
     end
 end
 
@@ -92,7 +93,7 @@ function run_dircol_truth(solver::Solver, X0, U0, group::String)
 end
 
 
-function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=false, opts=SolverOptions())
+function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=false, opts=SolverOptions(),benchmark=false)
     num_N = length(Ns)
 
     err = zeros(num_N)
@@ -106,6 +107,10 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
             solver = Solver(model, obj, N=N, opts=opts)
             dircol_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constraint_tolerance)
             res,stat = solve_dircol(solver, X0, U0, method=integration, options=dircol_options)
+            if benchmark
+                b = @benchmark solve_dircol($solver, $X0, $U0, method=:hermite_simpson, options=$dircol_options)
+                stat["runtime"] = time(median(b))/1e9
+            end
             t = get_time(solver)
             Xi,Ui = interp(t)
             err[i] = norm(Xi-res.X)/N
@@ -115,8 +120,16 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
             solver = Solver(model,obj,N=N,opts=opts,integration=integration)
             if infeasible
                 res,stat = solve(solver,X0,U0)
+                if benchmark
+                    b = @benchmark solve($solver,$X0,$U0)
+                    stat["runtime"] = time(median(b))/1e9
+                end
             else
                 res,stat = solve(solver,U0)
+                if benchmark
+                    b = @benchmark solve($solver,$U0)
+                    stat["runtime"] = time(median(b))/1e9
+                end
             end
             X = to_array(res.X)
             t = get_time(solver)
@@ -158,8 +171,8 @@ function save_Ns(err, err_final, stats, group::String, name::String)
     end
 end
 
-function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions())
-    err, err_final, stats = run_Ns(model, obj, X0, U0, Ns, interp, integration=integration, infeasible=infeasible, opts=opts)
+function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions(), benchmark=false)
+    err, err_final, stats = run_Ns(model, obj, X0, U0, Ns, interp, integration=integration, infeasible=infeasible, opts=opts, benchmark=benchmark)
     save_Ns(err, err_final, stats, group, String(integration))
 
     return err, err_final, stats

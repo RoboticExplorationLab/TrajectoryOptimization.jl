@@ -57,7 +57,7 @@ $(SIGNATURES)
     Compute the optimal control problem unconstrained cost,
     including minimum time and infeasible controls
 """
-function _cost(solver::Solver{Obj},res::SolverVectorResults,X=res.X,U=res.U) where Obj <: Union{ConstrainedObjective, UnconstrainedObjective}
+function _cost(solver::Solver{M,Obj},res::SolverVectorResults,X=res.X,U=res.U) where {M, Obj<:Objective}
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
