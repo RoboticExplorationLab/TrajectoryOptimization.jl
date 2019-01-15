@@ -256,7 +256,7 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
     return nothing
 end
 
-function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array{Float64,2}(undef,0,0))
+function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array{Float64,2}(undef,0,0), μ=Array{Float64,2}(undef,0,0))
     n,m,N = get_sizes(solver)
 
     if !isempty(X)
@@ -279,8 +279,6 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         p,pI,pE = get_num_constraints(solver)
         p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-        m̄,mm = get_num_controls(solver)
-
         results = ConstrainedVectorResults(nn,mm,p,N,p_N)
 
         # Set initial penalty term values
@@ -288,9 +286,11 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
 
         # Special penalty initializations
         if solver.state.minimum_time
-            results.μ[1:N-1][p] .*= solver.opts.penalty_initial_minimum_time_equality
-            results.μ[1:N-1][m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
-            results.μ[1:N-1][m̄+m̄] .*= solver.opts.penalty_initial_minimum_time_inequality
+            for k = 1:N-1
+                k != 1 ? results.μ[k][p] = solver.opts.penalty_initial_minimum_time_equality : nothing
+                results.μ[k][m̄] = solver.opts.penalty_initial_minimum_time_inequality
+                results.μ[k][m̄+m̄] = solver.opts.penalty_initial_minimum_time_inequality
+            end
         end
         if solver.state.infeasible
             nothing #TODO
@@ -299,6 +299,9 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         # Initial Lagrange multipliers (warm start)
         if ~isempty(λ)
             copy_λ!(solver, results, λ)
+        end
+        if ~isempty(μ)
+            error("penalty warm start not implemented")
         end
 
         # Set initial regularization

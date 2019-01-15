@@ -76,12 +76,17 @@ $(SIGNATURES)
 * X0::Matrix{Float64} (optional) - initial state trajectory. If specified, it will solve use infeasible controls
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
-function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], μ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+    # Start timer
+    t_start = time_ns()
+
     # Reset solver state
     reset_SolverState(solver.state)
 
-    # Start timer
-    t_start = time_ns()
+    # Check for penalty burn-in mode
+    if !solver.opts.use_penalty_burnin
+        solver.state.penalty_only = false
+    end
 
     # Check for minimum time solve
     is_min_time(solver) ? solver.state.minimum_time = true : solver.state.minimum_time = false
@@ -106,7 +111,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     n̄,nn = get_num_states(solver)
 
     if isempty(prevResults)
-        results = init_results(solver, X0, U0, λ=λ)
+        results = init_results(solver, X0, U0, λ=λ, μ=μ)
     else
         results = prevResults
     end
@@ -151,6 +156,9 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
     J_hist = Vector{Float64}()
     grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
+    max_cn_hist = Vector{Float64}()
+    min_eig_hist = Vector{Float64}()
+
     t_solve_start = time_ns()
 
     #****************************#
@@ -185,6 +193,22 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             ### BACKWARD PASS ###
             update_jacobians!(results, solver)
             Δv = backwardpass!(results, solver, bp)
+
+            # condition numbers and min eigen value
+            max_cn = 0.
+            min_eig = Inf
+            for kkk = 1:N-1
+                cn = cond(bp.Quu_reg[kkk])
+                if cn > max_cn
+                    max_cn = cn
+                end
+                me = minimum(real.(eigvals(bp.Quu_reg[kkk])))
+                if me < min_eig
+                    min_eig = me
+                end
+            end
+            push!(max_cn_hist,max_cn)
+            push!(min_eig_hist,min_eig)
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
@@ -230,7 +254,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :j value=j
-            @logmsg InnerLoop :zero_counter value=dJ_zero_counter
+            @logmsg InnerLoop :max_cn value=max_cn
+            @logmsg InnerLoop :min_eig value=min_eig
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
             print_row(logger,InnerLoop)
@@ -276,7 +301,8 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
         "c_max"=>c_max_hist,
-        "gradient_norm"=>grad_norm_hist)
+        "gradient_norm"=>grad_norm_hist,
+        "max_condition_number"=>max_cn_hist)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
@@ -333,6 +359,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
             append!(stats["cost"], stats_feasible["cost"])
             append!(stats["c_max"], stats_feasible["c_max"])
             append!(stats["gradient_norm"], stats_feasible["gradient_norm"])
+            append!(stats["max_condition_number"], stats_feasible["max_condition_number"])
         end
 
         # return feasible results

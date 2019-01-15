@@ -41,7 +41,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardP
     return Δv
 end
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
+function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
