@@ -76,7 +76,7 @@ $(SIGNATURES)
 * X0::Matrix{Float64} (optional) - initial state trajectory. If specified, it will solve use infeasible controls
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
-function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {Obj<:Objective}
+function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {M<:Model,Obj<:Objective}
     # Reset solver state
     reset_SolverState(solver.state)
 
@@ -248,7 +248,7 @@ function _solve(solver::Solver{Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,j)
+        outer_loop_update(results,solver,bp,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
