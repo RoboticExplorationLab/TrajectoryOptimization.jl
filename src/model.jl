@@ -20,7 +20,7 @@ struct AnalyticalModel <:Model
     m::Int # number of controls
 
     # Construct a model from an explicit differential equation
-    function AbstractModel(f::Function, n::Int64, m::Int64)
+    function AnalyticalModel(f::Function, n::Int64, m::Int64)
         # Make dynamics inplace
         if is_inplace_dynamics(f,n,m)
             f! = f
