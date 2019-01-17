@@ -1,5 +1,6 @@
 using Documenter
 using TrajectoryOptimization
+using RigidBodyDynamics
 
 makedocs(
     sitename = "TrajectoryOptimization",
