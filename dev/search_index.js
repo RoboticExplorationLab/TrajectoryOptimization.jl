@@ -160,12 +160,4 @@ var documenterSearchIndex = {"docs": [
     "text": "With a defined model and objective, the next step is to create a Solver type. The Solver is responsible for storing solve-dependent variables (such as number of knot points, step size, discrete dynamics functions, etc.) and storing parameters used during the solve (via SolverOptions). The solver contains both the Model and Objective and contains all information needed for the solve, except for the initial trajectories.SolverOnce the solver is created, the user must create an initial guess for the control trajectory, and optionally a state trajectory. For simple problems a initialization of random values, ones, or zeros works well. For more complicated systems it is usually recommended to feed trim conditions, i.e. controls that maintain the initial state values. For convenience, the function get_sizes returns n,m,N from the solver. Note that for trajectory optimization the control trajectory should be length N-1 since there are no controls at the final time step. However, DIRCOL uses controls at the final time step, and iLQR will simply discard any controls at the time step. Therefore, an initial control trajectory of size (m,N) is valid (but be aware that iLQR will return the correctly-sized control trajectory). Once the initial state and control trajectories are specified, they are passed with the solver to one of the solve methods."
 },
 
-{
-    "location": "#Solve-Methods-1",
-    "page": "TrajectoryOptimization.jl",
-    "title": "Solve Methods",
-    "category": "section",
-    "text": "This will talk about solve methodsfracnk(n - k) = binomnk"
-},
-
 ]}
