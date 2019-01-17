@@ -11,5 +11,5 @@ makedocs(
 # See "Hosting Documentation" and deploydocs() in the Documenter manual
 # for more information.
 deploydocs(
-    repo = "https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git"
+    repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git"
 )
