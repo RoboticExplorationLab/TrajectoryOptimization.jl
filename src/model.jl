@@ -49,7 +49,10 @@ end
 
 
 
-# Construct model from a `Mechanism` type from `RigidBodyDynamics`
+"""
+$(SIGNATURES)
+ Construct model from a `Mechanism` type from `RigidBodyDynamics`
+ """
 function Model(mech::Mechanism)
     m = length(joints(mech))  # subtract off joint to world
     Model(mech,ones(m))
@@ -86,14 +89,14 @@ function Model(mech::Mechanism, torques::Array)
     RBDModel(f, n, m, mech)
 end
 
-"$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"
+"""$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"""
 function Model(urdf::String)
     # construct model using string to urdf file
     mech = parse_urdf(urdf)
     Model(mech)
 end
 
-"$(SIGNATURES) Construct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated."
+"""$(SIGNATURES) Construct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated."""
 function Model(urdf::String,torques::Array{Float64,1})
     # underactuated system (potentially)
     mech = parse_urdf(urdf)
