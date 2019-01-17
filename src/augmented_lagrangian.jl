@@ -50,7 +50,7 @@ function λ_update_accel!(results::ConstrainedIterResults,solver::Solver)
     for k = 1:N-1
         t_prime = @. (1+sqrt(1+4t[k]^2))/2
         λ_tilde = λ[k] + μ[k].*C[k]
-        λ_prime = @. λ_tilde + ((t[k]-1)/t_prime)*(λ_tilde - λ_tilde_prev[k]) + (t[k]/t_prime)*(λ_tilde-λ[k])
+        λ_prime = @. λ_tilde + ((t[k]-1)/t_prime)*(λ_tilde - λ_tilde_prev[k])
 
         results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
         results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
@@ -60,13 +60,35 @@ function λ_update_accel!(results::ConstrainedIterResults,solver::Solver)
     end
     t_prime = @. (1+sqrt(1+4t[N]^2))
     λ_tilde = λ[N] + μ[N].*C[N]
-    λ_prime = @. λ_tilde + ((t[N]-1)/t_prime)*(λ_tilde - λ_tilde_prev[N]) + (t[N]/t_prime)*(λ_tilde-λ[N])
+    λ_prime = @. λ_tilde + ((t[N]-1)/t_prime)*(λ_tilde - λ_tilde_prev[N])
 
     results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
     results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
 
     λ_tilde_prev[N] = λ_tilde
     t[N] = t_prime
+end
+
+function λ_update_momentum!(results::ConstrainedIterResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    λ,μ,C = results.λ, results.μ, results.C
+    λ_prev = results.λ_prev
+
+    for k = 1:N-1
+        λ_next = λ[k] + 1.9*μ[k].*C[k] + 0.99*λ_prev[k]
+        λ_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_next))
+        λ_next[1:pI] = max.(0.0,λ_next[1:pI])
+        λ_prev[k] = λ[k]
+        λ[k] = λ_next
+    end
+    λ_next = λ[N] + 1.9μ[N].*C[N] + 0.99*λ_prev[N]
+    λ_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_next))
+    λ_next[1:pI_N] = max.(0.0,λ_next[1:pI_N])
+    λ_prev[N] = λ[N]
+    λ[N] = λ_next
 end
 
 function λ_update_nesterov!(results::ConstrainedIterResults,solver::Solver)
@@ -523,7 +545,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp,k::
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
 
     elseif solver.opts.outer_loop_update_type == :momentum
-        λ_update_nesterov!(results,solver)
+        λ_update_momentum!(results,solver)
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
 
     elseif solver.opts.outer_loop_update_type == :feedback
