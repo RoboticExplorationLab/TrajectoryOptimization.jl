@@ -9,23 +9,6 @@ model, obj = Dynamics.kuka
 n,m = model.n, model.m
 nn = m   # Number of positions
 
-function hold_trajectory(solver, mech, q)
-    state = MechanismState(mech)
-    set_configuration!(state, q)
-    vd = zero(state.q)
-    u0 = dynamics_bias(state)
-
-    n,m,N = get_sizes(solver)
-    if length(q) > m
-        throw(ArgumentError("system must be fully actuated to hold an arbitrary position ($(length(q)) should be > $m)"))
-    end
-    U0 = zeros(m,N)
-    for k = 1:N
-        U0[:,k] = u0
-    end
-    return U0
-end
-
 function plot_sphere(frame::CartesianFrame3D,center,radius,mat,name="")
     geom = HyperSphere(Point3f0(center), convert(Float32,radius))
     setelement!(vis,frame,geom,mat,name)
@@ -79,19 +62,19 @@ solver.opts.live_plotting = false
 solver.opts.iterations_innerloop = 200
 solver.state.infeasible
 solver.opts.bp_reg_initial = 0
-res, stats = solve(solver,U0)
+res, stats = solve(solver,U0_hold)
 stats["iterations"]
 J = stats["cost"][end]
 norm(res.X[N]-xf)
 
-res_d, stats_d = solve_dircol(solver,X0,U0,options=dircol_options)
+res_d, stats_d = solve_dircol(solver,X0_hold,U0_hold,options=dircol_options)
 eval_f = gen_usrfun_ipopt(solver::Solver,:hermite_simpson)[1]
 J - cost(solver,res_d.X,res_d.U)
 
-res.X isa Trajectory
 set_configuration!(vis, x0[1:7])
 animate_trajectory(vis, res.X)
 set_configuration!(vis, xf[1:7])
+animate_trajectory(vis, res_d.X)
 plot(to_array(res.U)')
 
 plot(stats["cost"],yscale=:log10)

@@ -142,6 +142,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp)
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
+            @logmsg InnerIters "Fixing Quu with regularization"
             regularization_update!(res,solver,:increase)
 
             # reset backward pass
