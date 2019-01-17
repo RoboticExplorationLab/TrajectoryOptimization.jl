@@ -1,5 +1,4 @@
 # Set up models and objective
-using Test
 u_bound = 2.
 model, obj = TrajectoryOptimization.Dynamics.pendulum!
 obj_c = Dynamics.pendulum_constrained[2]

@@ -178,99 +178,131 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp)
-    N = solver.N
-    n = solver.model.n
-    m = solver.model.m
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+    # Get problem sizes
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
-    if solver.model.m != length(res.U[1])
-        m += n
-    end
-
-    # Q = solver.obj.Q
-    # R = solver.obj.R
-    # xf = solver.obj.xf
-    # Qf = solver.obj.Qf
+    # Objective
     costfun = solver.obj.cost
+
     dt = solver.dt
 
-    # pull out values from results
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
 
-    # Terminal Cost-to-go
-    lxx,lx = taylor_expansion(costfun, X[N])
-    if isa(solver.obj, ConstrainedObjective)
-        Cx = res.Cx_N
-        Su[N] = cholesky(lxx + Cx'*res.IμN*Cx).U
-        s[N] = lxx + Cx'*res.IμN*res.CN + Cx'*res.λN
+    for k = 1:N
+        res.S[k] = zeros(nn+mm,nn)
+    end
+    Su = res.S
+    # # for now just re-instantiate
+    # bp = BackwardPassZOH(nn,mm,N)
+    # Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+
+    # Boundary Conditions
+    lxx,lx = taylor_expansion(costfun, X[N][1:n])
+
+    # Initialize expected change in cost-to-go
+    Δv = zeros(2)
+
+    # Terminal constraints
+    if res isa ConstrainedIterResults
+        C = res.C; Iμ = res.Iμ; λ = res.λ
+        Cx = res.Cx; Cu = res.Cu
+        Iμ_sqrt = sqrt.(Iμ[N])
+
+        Su[N][1:nn,1:nn] = chol_plus(cholesky(lxx).U,Iμ_sqrt*Cx[N])
+        s[N] = lx + Cx[N]'*(Iμ[N]*C[N] + λ[N])
+
+        # @test isapprox(lxx + Cx[N]'*Iμ[N]*Cx[N],Su[N]'*Su[N])
     else
         Su[N] = cholesky(lxx).U
         s[N] = lx
     end
 
-    # Initialization of expected change in cost-to-go
-    Δv = [0. 0.]
-
-    k = N-1
-
     # Backward pass
+    k = N-1
     while k >= 1
-        expansion = taylor_expansion(costfun,X[k],U[k])
-        lxx,luu,lxu,lx,lu = expansion .* dt
 
-        fx, fu = res.fdx[k], res.fdu[k]
+        x = X[k][1:n]
+        u = U[k][1:m]
+        h = sqrt(dt)
 
-        Qx = lx + fx'*s[k+1]
-        Qu = lu + fu'*s[k+1]
+        expansion = taylor_expansion(costfun,x,u)
+        lxx,luu,lux,lx,_lu = expansion
 
-        Wxx = chol_plus(Su[k+1]*fx, cholesky(lxx).U)
-        Wuu = chol_plus(Su[k+1]*fu, cholesky(luu).U)
 
-        Qxu = (fx'*Su[k+1]')*(Su[k+1]*fu)
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
 
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx = dt*lx + fdx'*s[k+1]
+        Qu = dt*_lu + fdu'*s[k+1]
+        Wxx = chol_plus(cholesky(dt*lxx).U, Su[k+1]*fdx)
+        Wuu = chol_plus(cholesky(dt*luu).U, Su[k+1]*fdu)
+        Qux = dt*lux + (fdu'*Su[k+1]')*(Su[k+1]*fdx)
+
+        # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx, Wxx'*Wxx)
+        # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu, Wuu'*Wuu)
         # Constraints
-        if isa(solver.obj, ConstrainedObjective)
-            Iμ = res.Iμ; C = res.C; λ = res.λ;
-            Cx, Cu = res.Cx[k], res.Cu[k]
-            Iμ2 = sqrt.(Iμ[k])
-            Qx += (Cx'*Iμ[k]*C[k] + Cx'*λ[k])
-            Qu += (Cu'*Iμ[k]*C[k] + Cu'*λ[k])
-            Qxu += Cx'*Iμ[k]*Cu
+        if res isa ConstrainedIterResults
+            Iμ_sqrt = sqrt.(Iμ[k])
 
-            Wxx = chol_plus(Wxx.R, Iμ2*Cx)
-            Wuu = chol_plus(Wuu.R, Iμ2*Cu)
+            Qx += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qu += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            Wxx = chol_plus(Wxx,Iμ_sqrt*Cx[k])
+            Wuu = chol_plus(Wuu,Iμ_sqrt*Cu[k])
+            Qux += Cu[k]'*Iμ[k]*Cx[k]
+
+            # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx + Cx[k]'*Iμ[k]*Cx[k], Wxx'*Wxx)
+            # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu + Cu[k]'*Iμ[k]*Cu[k], Wuu'*Wuu)
+        end
+        #
+        if solver.opts.bp_reg_type == :state
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*I*fdu)
+            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.bp_reg_type == :control
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*Matrix(I,m,m))
+            Qux_reg = Qux
         end
 
-        K[k] = -Wuu.R\(Array(Wuu.R')\Array(Qxu'))
-        d[k] = -Wuu.R\(Wuu.R'\Qu)
+        #TODO find better PD check for Wuu_reg
+        # # Regularization
+        # if !isposdef(Hermitian(Array(Wuu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+        #     # increase regularization
+        #     regularization_update!(res,solver,:increase)
+        #
+        #     # reset backward pass
+        #     k = N-1
+        #     Δv[1] = 0.
+        #     Δv[2] = 0.
+        #     continue
+        # end
 
-        s[k] = Qx - Qxu*(Wuu.R\(Wuu.R'\Qu))
+        # Compute gains
+        K[k] = -Wuu_reg\(Wuu_reg'\Qux_reg)
+        d[k] = -Wuu_reg\(Wuu_reg'\Qu)
 
-        try  # Regularization
-            Su[k] = chol_minus(Wxx.R,(Array(Wuu.R'))\Array(Qxu'))
-        catch ex
-            error("sqrt bp not implemented")
-        end
+        # Calculate cost-to-go
+        s[k] = Qx + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu + Qux'*d[k]
 
-        # Expected change in cost-to-go
-        Δv += [vec(Qu)'*vec(d[k]) 0.5*vec(d[k])'*Wuu.R'*Wuu.R*vec(d[k])]
+        tmp1 = (Wxx')\Qux'
+        tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
+        Su[k][nn+1:nn+mm,1:nn] = tmp2*K[k]
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv[1] += d[k]'*Qu
+        Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
         k = k - 1;
     end
 
-    return Δv
-end
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
 
-"""
-$(SIGNATURES)
-Perform the operation sqrt(A-B), where A and B are Symmetric Matrices
-"""
-function chol_minus(A,B::Matrix)
-    AmB = Cholesky(A,:U,0)
-    for i = 1:size(B,1)
-        lowrankdowndate!(AmB,B[i,:])
-    end
-    U = AmB.U
+    return Δv
 end
 
 function chol_plus(A,B)
@@ -279,5 +311,5 @@ function chol_plus(A,B)
     P = zeros(n1+n2,m)
     P[1:n1,:] = A
     P[n1+1:end,:] = B
-    qr(P)
+    return qr(P).R
 end
