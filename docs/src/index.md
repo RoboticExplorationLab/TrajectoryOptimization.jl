@@ -51,10 +51,10 @@ Model(urdf::String, torques::Array)
 ```
 
 ## Creating an Objective
-While the model defines the dynamics of the system, the Objective defines what you want the dynamics to do. The Objective class defines the objective function via a [`CostFunction`](@ref) type, as well as the initial states and trajectory duration. The Objective class also specifies constraints on the states and controls. Both iLQR and Direct Collocation (DIRCOL) allow generic cost functions of the form ``g(x,u) \\leq 0 or h(x,u) = 0``: any generic function of the state and control is permitted, but no couples between time steps is allowed.
+While the model defines the dynamics of the system, the Objective defines what you want the dynamics to do. The Objective class defines the objective function via a [`CostFunction`](@ref) type, as well as the initial states and trajectory duration. The Objective class also specifies constraints on the states and controls. Both iLQR and Direct Collocation (DIRCOL) allow generic cost functions of the form ``g(x,u) \leq 0`` or ``h(x,u) = 0``: any generic function of the state and control is permitted, but no couples between time steps is allowed.
 
 ### Creating a Cost Function
-The cost (or objective) function is the first piece of the objective. While the majority of trajectory optimization problems have quadratic objectives, TrjaectoryOptimization.jl allows the user to specify any generic cost function of the form ``\\ell_N(x_N) + \\sum_{k=0}^N \\ell(x_k,u_k)``. Currently GenericObjective is only supported by iLQR, and not by DIRCOL. Since iLQR relies on 2nd Order Taylor Series Expansions of the cost, the user may specify analytical functions for this expansion in order to increase performance; if the user does not specify an analytical expansion it will be generated using ForwardDiff.
+The cost (or objective) function is the first piece of the objective. While the majority of trajectory optimization problems have quadratic objectives, TrjaectoryOptimization.jl allows the user to specify any generic cost function of the form ``\ell_N(x_N) + \sum_{k=0}^N \ell(x_k,u_k)``. Currently GenericObjective is only supported by iLQR, and not by DIRCOL. Since iLQR relies on 2nd Order Taylor Series Expansions of the cost, the user may specify analytical functions for this expansion in order to increase performance; if the user does not specify an analytical expansion it will be generated using ForwardDiff.
 
 ```@docs
 QuadraticCost
@@ -84,3 +84,10 @@ Solver
 ```
 
 Once the solver is created, the user must create an initial guess for the control trajectory, and optionally a state trajectory. For simple problems a initialization of random values, ones, or zeros works well. For more complicated systems it is usually recommended to feed trim conditions, i.e. controls that maintain the initial state values. For convenience, the function [`get_sizes`](@ref) returns n,m,N from the solver. Note that for trajectory optimization the control trajectory should be length N-1 since there are no controls at the final time step. However, DIRCOL uses controls at the final time step, and iLQR will simply discard any controls at the time step. Therefore, an initial control trajectory of size (m,N) is valid (but be aware that iLQR will return the correctly-sized control trajectory). Once the initial state and control trajectories are specified, they are passed with the solver to one of the [`solve`](@ref) methods.
+
+## Solve Methods
+This will talk about solve methods
+
+```math
+\frac{n!}{k!(n - k)!} = \binom{n}{k}
+```
