@@ -13,6 +13,8 @@ This package currently implements both indirect and direct methods for trajector
 * Iterative LQR (iLQR): indirect method based on differential dynamic programming
 * Direct Collocation: direct method that formulates the problem as an NLP and passes the problem off to a commercial NLP solver
 
+Key features include the use of ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints; the use of RigidBodyDynamics to work directly from URDF files; and the ability to specify general constraints. 
+
 The primary focus of this package is developing the iLQR algorithm, although we hope this will extend to many algorithms in the future.
 
 
@@ -47,3 +49,18 @@ Model(mech::Mechanism, torques::Array)
 Model(urdf::String)
 Model(urdf::String, torques::Array)
 ```
+
+## Creating an Objective
+While the model defines the dynamics of the system, the Objective defines what you want the dynamics to do. The Objective class defines the objective function via a (CostFunction)@ref type, as well as the initial states and trajectory duration. The Objective class also specifies constraints on the states and controls. Both iLQR and Direct Collocation (DIRCOL) allow generic cost functions of the form ``g(x,u) \\leq 0 or h(x,u) = 0``: any generic function of the state and control is permitted, but no couples between time steps is allowed.
+
+### Creating a Cost Function
+The cost (or objective) function is the first piece of the objective. While the majority of trajectory optimization problems have quadratic objectives, TrjaectoryOptimization.jl allows the user to specify any generic cost function of the form ``\\ell_N(x_N) + \\sum_{k=0}^N \\ell(x_k,u_k)``. Currently GenericObjective is only supported by iLQR, and not by DIRCOL. Since iLQR relies on 2nd Order Taylor Series Expansions of the cost, the user may specify analytical functions for this expansion in order to increase performance; if the user does not specify an analytical expansion it will be generated using ForwardDiff.
+
+```@docs
+QuadraticCost
+LQRCost
+GenericCost
+```
+
+### Creating the Objective
+Once the cost function is specified, the user then creates either an Unconstrained or Constrained Objective. When running iLQR, specifying any ConstrainedObjective will perform outer loop updates using an Augmented Lagrangian method.

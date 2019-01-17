@@ -9,7 +9,7 @@ abstract type CostFunction end
 """
 $(TYPEDEF)
 Cost function of the form
-    xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + q⁠ᵀx + rᵀu ) dt from 0 to tf
+    xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
 mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
@@ -39,6 +39,13 @@ mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
     end
 end
 
+
+"""
+$(SIGNATURES)
+Cost function of the form
+    (xₙ-x_f)ᵀ Qf (xₙ - x_f) ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
+R must be positive definite, Q and Qf must be positive semidefinite
+"""
 function LQRCost(Q,R,Qf,xf)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
