@@ -28,3 +28,19 @@ dt = 0.01
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 dubinscar = [model, obj_uncon]
+
+x0 = [0.0;0.0;0.]
+xf = [0.0;1.0;0.]
+tf =  3.
+Qf = 100.0*Diagonal(I,n)
+Q = (1e-3)*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
+
+obj = LQRObjective(Q, R, Qf, tf, x0, xf)
+
+x_min = [-0.25; -0.001; -Inf]
+x_max = [0.25; 1.001; Inf]
+
+obj_con_box = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
+
+dubinscar_parallelpark = [model, obj_con_box]
