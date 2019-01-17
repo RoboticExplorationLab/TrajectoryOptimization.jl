@@ -1,9 +1,14 @@
 # TrajectoryOptimization.jl
 
+```@meta
+CurrentModule = TrajectoryOptimization
+```
+
 Documentation for TrajectoryOptimization.jl
 
 ```@contents
 ```
+
 
 # Overview
 The purpose of this package is to provide a testbed for state-of-the-art trajectory optimization algorithms. In general, this package focuses on trajectory optimization problems of the form
@@ -90,4 +95,8 @@ This will talk about solve methods
 
 ```math
 \frac{n!}{k!(n - k)!} = \binom{n}{k}
+```
+
+```@docs
+SolverOptions
 ```
