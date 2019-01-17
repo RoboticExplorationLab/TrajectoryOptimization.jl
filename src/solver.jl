@@ -33,7 +33,7 @@ end
 
 """
 $(TYPEDEF)
-    Type for solver
+Responsible for storing all solve-dependent variables and solve parameters.
 """
 struct Solver{M<:Model,O<:Objective}
     model::M             # Dynamics model
@@ -50,6 +50,15 @@ struct Solver{M<:Model,O<:Objective}
     N::Int64             # Number of time steps
     integration::Symbol
 
+    """
+    $(SIGNATURES)
+    Create a Solver from a model and objective. The user should specify either N (number of knot points) or dt (time step), but typically not both.
+
+    Integration specifies the integration method for discretizing the continuous dynamics and must be (:midpoint, :rk3, or :rk4).
+
+    Solver parameters can be passed in using opts.
+
+    """
     function Solver(model::M, obj::O; integration::Symbol=:rk4, dt::Float64=NaN, N::Int=-1, opts::SolverOptions=SolverOptions()) where {M<:Model,O<:Objective}
         state = SolverState()
 

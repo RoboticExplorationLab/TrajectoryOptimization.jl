@@ -14,13 +14,13 @@ the states and u ∈ ℜᵐ are the controls.
 Dynamics function `Model.f` should be in the following forms:
     'f!(ẋ,x,u)' and modify ẋ in place
 """
-struct AbstractModel <:Model
+struct AnalyticalModel <:Model
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
     m::Int # number of controls
 
     # Construct a model from an explicit differential equation
-    function AbstractModel(f::Function, n::Int64, m::Int64)
+    function AnalyticalModel(f::Function, n::Int64, m::Int64)
         # Make dynamics inplace
         if is_inplace_dynamics(f,n,m)
             f! = f
@@ -32,6 +32,13 @@ struct AbstractModel <:Model
     end
 end
 
+""" $(SIGNATURES) Create a Model given an inplace analytical function for the continuous dynamics with n states and m controls"""
+Model(f::Function, n::Int64, m::Int64) = AnalyticalModel(f,n,m)
+
+"""
+$(TYPEDEF)
+RigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism
+"""
 struct RBDModel <: Model
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
@@ -40,7 +47,7 @@ struct RBDModel <: Model
 end
 
 
-Model(f::Function, n::Int64, m::Int64) = AbstractModel(f,n,m)
+
 
 # Construct model from a `Mechanism` type from `RigidBodyDynamics`
 function Model(mech::Mechanism)
@@ -49,8 +56,8 @@ function Model(mech::Mechanism)
 end
 
 """
-    Model(mech::Mechanism, torques::Array{Bool, 1})
-Constructor for an underactuated mechanism, where torques is a binary array
+$(SIGNATURES)
+Model(mech::Mechanism, torques::Array{Bool, 1}) Constructor for an underactuated mechanism, where torques is a binary array
 that specifies whether a joint is actuated.
 """
 function Model(mech::Mechanism, torques::Array)
@@ -86,7 +93,7 @@ function Model(urdf::String)
     Model(mech)
 end
 
-"$(SIGNATURES) Construct a partially actuated model from a string to a urdf file"
+"$(SIGNATURES) Construct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated."
 function Model(urdf::String,torques::Array{Float64,1})
     # underactuated system (potentially)
     mech = parse_urdf(urdf)
