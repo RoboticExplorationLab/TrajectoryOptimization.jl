@@ -7,9 +7,6 @@ function gradient_AuLa(results::SolverIterResults,solver::Solver,bp::BackwardPas
     X = results.X; X_ = results.X_; U = results.U; U_ = results.U_
 
     Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    if results isa ConstrainedIterResults
-        C = results.C; Cu = results.Cu; λ = results.λ; Iμ = results.Iμ
-    end
 
     gradient_norm = 0. # ℓ2-norm
 
@@ -17,10 +14,6 @@ function gradient_AuLa(results::SolverIterResults,solver::Solver,bp::BackwardPas
         δx = X_[k] - X[k]
         δu = U_[k] - U[k]
         tmp = Quu[k]*δu + Qux[k]*δx + Qu[k]
-
-        if results isa ConstrainedIterResults
-            tmp += Cu[k]'*(λ[k] + Iμ[k]*C[k])
-        end
 
         gradient_norm += sum(tmp.^2)
     end
@@ -453,9 +446,15 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
 
     # Stage constraints
     for k = 1:N
-        k == N ? rng = p_N : rng = p
-        for i = 1:rng
-            if k == N ? i <= pI_N : i <= pI
+        if k != N
+            _p = p
+            _pI = pI
+        else
+            _p = p_N
+            _pI = pI_N
+        end
+        for i = 1:_p
+            if i <= _pI
                 if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
                     if use_nesterov
                         y_next = λ[k][i] + μ[k][i].*C[k][i]
@@ -465,7 +464,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                         λ[k][i] = (1-γ_k)*y_next + γ_k*y[k][i]
                         y[k][i] = y_next
                     else
-                        results.λ[k][i] = results.λ[k][i] + results.μ[k][i].*results.C[k][i]
+                        results.λ[k][i] += results.μ[k][i]*results.C[k][i]
                     end
 
                     results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
@@ -484,7 +483,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                         λ[k][i] = (1-γ_k)*y_next + γ_k*y[k][i]
                         y[k][i] = y_next
                     else
-                        results.λ[k][i] = results.λ[k][i] + results.μ[k][i].*results.C[k][i]
+                        results.λ[k][i] += results.μ[k][i]*results.C[k][i]
                     end
                     results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
@@ -536,7 +535,7 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp,k::
     end
 
     ## Store current constraints evaluations for next outer loop update
-    copyto!(results.C_prev,results.C)
+    results.C_prev .= deepcopy(results.C)
 
     return nothing
 end

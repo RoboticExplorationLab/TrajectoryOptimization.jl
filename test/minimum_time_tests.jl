@@ -24,12 +24,12 @@ solver_min.opts.constraint_decrease_ratio = .25
 solver_min.opts.penalty_scaling = 2.0
 solver_min.opts.outer_loop_update_type = :default
 solver_min.opts.iterations = 1000
-solver_min.opts.iterations_outerloop = 25 # 20
+solver_min.opts.iterations_outerloop = 50 # 20
+solver_min.opts.use_gradient_aula = false
 
 U = ones(m,solver_min.N-1)
 results_uncon,stats_uncon = TrajectoryOptimization.solve(solver_uncon,U)
 results_min,stats_min = TrajectoryOptimization.solve(solver_min,U)
-
 # plot(TrajectoryOptimization.to_array(results_min.X)[1:2,:]')
 # plot(TrajectoryOptimization.to_array(results_min.U)[1:2,:]')
 

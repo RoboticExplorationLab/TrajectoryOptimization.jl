@@ -27,7 +27,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev:
             # set trajectories to original trajectory
             copyto!(X_,X)
             copyto!(U_,U)
-            
+
             update_constraints!(res,solver,X_,U_)
             J = cost(solver, res, X_, U_)
 

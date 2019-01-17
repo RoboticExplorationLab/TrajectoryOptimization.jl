@@ -111,7 +111,7 @@ mutable struct SolverOptions
         z_min=1.0e-8,z_max=10.0,max_cost_value=1.0e8,max_state_value=1.0e8,max_control_value=1.0e8,max_dt=1.0,min_dt=1e-3,minimum_time_tf_estimate=0.0,minimum_time_dt_estimate=0.0,gradient_tolerance=1e-5,gradient_tolerance_intermediate=1e-5,cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,
         constraint_tolerance=1e-3, constraint_tolerance_coarse=sqrt(constraint_tolerance),
         iterations=500,iterations_innerloop=150,iterations_outerloop=50,
-        iterations_linesearch=15,R_infeasible=1e3,R_minimum_time=1.0e3,
+        iterations_linesearch=20,R_infeasible=1e3,R_minimum_time=1.0e3,
         benchmark=false,unconstrained_original_problem=false,resolve_feasible=true,dual_min=-1.0e8, dual_max=1.0e8,penalty_max=1.0e8,penalty_initial=1.0,penalty_initial_infeasible=1.0,penalty_initial_minimum_time_inequality=1.0,penalty_initial_minimum_time_equality=1.0,penalty_scaling=10.0,penalty_scaling_infeasible=10.0,penalty_scaling_minimum_time_inequality=10.0,penalty_scaling_minimum_time_equality=10.0,penalty_scaling_no=1.0,constraint_decrease_ratio=0.25,outer_loop_update_type=:default,use_second_order_dual_update=false,
         penalty_update_frequency=1,constraint_tolerance_second_order_dual_update=sqrt(constraint_tolerance), use_nesterov=false, use_penalty_burnin=false,
         bp_reg_initial=0.0,bp_reg_increase_factor=1.6,bp_reg_max=1.0e8,bp_reg_min=1e-6,bp_reg_type=:state,bp_reg_fp=10.0,eigenvalue_scaling=2.0,eigenvalue_threshold=1e-8,use_static=false,live_plotting=false,active_constraint_tolerance=1e-8,dJ_counter_limit=10,use_gradient_aula=false)
