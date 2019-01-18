@@ -1,3 +1,5 @@
+using Test
+
 abstract type BackwardPass end
 
 struct BackwardPassZOH <: BackwardPass
@@ -201,7 +203,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
     # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
 
     # Boundary Conditions
-    lxx,lx = taylor_expansion(costfun, X[N][1:n])
+    lfxx,lfx = taylor_expansion(costfun, X[N][1:n])
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -212,13 +214,13 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Cx = res.Cx; Cu = res.Cu
         Iμ_sqrt = sqrt.(Iμ[N])
 
-        Su[N][1:nn,1:nn] = chol_plus(cholesky(lxx).U,Iμ_sqrt*Cx[N])
-        s[N] = lx + Cx[N]'*(Iμ[N]*C[N] + λ[N])
+        Su[N][1:nn,1:nn] = chol_plus(cholesky(lfxx).U,Iμ_sqrt*Cx[N])
+        s[N] = lfx + Cx[N]'*(Iμ[N]*C[N] + λ[N])
 
-        # @test isapprox(lxx + Cx[N]'*Iμ[N]*Cx[N],Su[N]'*Su[N])
+        @test isapprox(lfxx + Cx[N]'*Iμ[N]*Cx[N],Su[N]'*Su[N])
     else
-        Su[N] = cholesky(lxx).U
-        s[N] = lx
+        Su[N] = cholesky(lfxx).U
+        s[N] = lfx
     end
 
     # Backward pass
@@ -243,8 +245,8 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Wuu = chol_plus(cholesky(dt*luu).U, Su[k+1]*fdu)
         Qux = dt*lux + (fdu'*Su[k+1]')*(Su[k+1]*fdx)
 
-        # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx, Wxx'*Wxx)
-        # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu, Wuu'*Wuu)
+        @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx, Wxx'*Wxx)
+        @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu, Wuu'*Wuu)
         # Constraints
         if res isa ConstrainedIterResults
             Iμ_sqrt = sqrt.(Iμ[k])
@@ -255,10 +257,10 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
             Wuu = chol_plus(Wuu,Iμ_sqrt*Cu[k])
             Qux += Cu[k]'*Iμ[k]*Cx[k]
 
-            # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx + Cx[k]'*Iμ[k]*Cx[k], Wxx'*Wxx)
-            # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu + Cu[k]'*Iμ[k]*Cu[k], Wuu'*Wuu)
+            @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx + Cx[k]'*Iμ[k]*Cx[k], Wxx'*Wxx)
+            @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu + Cu[k]'*Iμ[k]*Cu[k], Wuu'*Wuu)
         end
-        #
+
         if solver.opts.bp_reg_type == :state
             Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*I*fdu)
             Qux_reg = Qux + res.ρ[1]*fdu'*fdx
@@ -288,13 +290,17 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         s[k] = Qx + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu + Qux'*d[k]
 
         tmp1 = (Wxx')\Qux'
-        tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        tmp2 = Wuu'*Wuu - tmp1'*tmp1
+        tmp3 = cholesky(tmp2).U
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
-        Su[k][nn+1:nn+mm,1:nn] = tmp2*K[k]
+        Su[k][nn+1:nn+mm,1:nn] = tmp3*K[k]
 
         # calculated change is cost-to-go over entire trajectory
         Δv[1] += d[k]'*Qu
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
+
+        bp.Quu_reg[k] = Array(Wuu_reg)
+        bp.Quu[k] = Array(Wuu)
 
         k = k - 1;
     end

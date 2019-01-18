@@ -158,6 +158,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     c_max_hist = Vector{Float64}()
     max_cn_hist = Vector{Float64}()
     min_eig_hist = Vector{Float64}()
+    max_cn_S_hist = Vector{Float64}()
     outer_updates = Int[]
     t_solve_start = time_ns()
 
@@ -207,8 +208,13 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                     min_eig = me
                 end
             end
+            cond_n = zeros(N)
+            for k = 1:N
+                cond_n[k] = cond(results.S[k])
+            end
             push!(max_cn_hist,max_cn)
             push!(min_eig_hist,min_eig)
+            push!(max_cn_S_hist,maximum(cond_n))
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
@@ -307,7 +313,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         "c_max"=>c_max_hist,
         "gradient_norm"=>grad_norm_hist,
         "max_condition_number"=>max_cn_hist,
-        "outer_updates"=>outer_updates)
+        "outer_updates"=>outer_updates,
+        "max_condition_number_S"=>max_cn_S_hist)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
