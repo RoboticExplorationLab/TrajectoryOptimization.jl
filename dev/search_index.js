@@ -165,7 +165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.SolverOptions",
     "category": "type",
-    "text": "mutable struct SolverOptions\n\nSpecifies options for Solver.\n\n\n\n\n\n"
+    "text": "mutable struct SolverOptions\n\noptions for Solver\n\n\n\n\n\n"
 },
 
 {
