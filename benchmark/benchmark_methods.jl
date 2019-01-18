@@ -4,13 +4,19 @@ function retune_params(suite)
     BenchmarkTools.save(paramsfile, params(suite))
 end
 
-function save_benchmark(results, stats, tags::Vector{<:Any}=[])
+function run_benchmark(;verbose=true)
+    disable_logging(Logging.Info);
+    res = run(SUITE,verbose=verbose);
+    disable_logging(Logging.Debug)
+    return res
+end
+
+function save_benchmark(results, tags::Vector{<:Any}=[])
     # Add any custom tags (includes date by default)
-    append!(suite.tags, tags)
-    append!(stats.tags, tags)
+    append!(SUITE.tags, tags)
 
     # Load in history
-    suite_history, stats_history = load_benchmark_history()
+    suite_history = load_benchmark_history()
 
     # Add current to history
     key = string(today())
@@ -25,65 +31,72 @@ function save_benchmark(results, stats, tags::Vector{<:Any}=[])
     end
 
     suite_history[key] = results
-    stats_history[key] = stats
 
     # Save to file
     printstyled("Saving to file",color=:blue)
-    BenchmarkTools.save(histfile, suite_history, stats_history)
+    BenchmarkTools.save(histfile, suite_history)
     return nothing
 end
 
 function set_baseline_benchmark(tag::String)
-    suite_history, stats_history = load_benchmark_history()
+    suite_history = load_benchmark_history()
     results = suite_history[tag]
-    stats = stats_history[tag]
-    set_baseline_benchmark(results, stats)
+    set_baseline_benchmark(results)
 end
 
-function set_baseline_benchmark(results::BenchmarkGroup, stats::BenchmarkGroup)
-    suite_history, stats_history = load_benchmark_history()
+function set_baseline_benchmark(results::BenchmarkGroup)
+    suite_history = load_benchmark_history()
     suite_history["baseline"] = results
-    stats_history["baseline"] = stats
-    BenchmarkTools.save(histfile, suite_history, stats_history)
+    BenchmarkTools.save(histfile, suite_history)
     return nothing
 end
 
 function get_last_benchmark(;offset=0)
-    suite_history, stats_history = load_benchmark_history()
+    suite_history = load_benchmark_history()
     tags = collect(keys(suite_history))
     tags = tags[tags .!= "baseline"]
     last = sort(tags)[end-offset]
-    suite_history[last], stats_history[last]
+    suite_history[last]
 end
 
 function get_baseline_benchmark()
-    suite_history, stats_history = load_benchmark_history()
-    suite_history["baseline"], stats_history["baseline"]
+    suite_history = load_benchmark_history()
+    suite_history["baseline"]
 end
 
 function load_benchmark_history()
-    suite_history, stats_history = BenchmarkTools.load(histfile)
+    suite_history = BenchmarkTools.load(histfile)[1]
 end
 
-function prev_benchmark_comparison(results, stats; f=BenchmarkTools.median, styled=true, offset=0)
-    base_res, base_stats = get_last_benchmark(offset=offset)
-    benchmark_comparison(results, stats, base_res, base_stats)
+function prev_benchmark_comparison(results; f=BenchmarkTools.median, styled=true, offset=0)
+    base_res = get_last_benchmark(offset=offset)
+    benchmark_comparison(results, base_res)
 end
 
 function prev_benchmark_comparison(;verbose=false, offset=0)
     results = run(suite,verbose=verbose)
-    prev_benchmark_comparison(results,stats,offset=offset)
+    prev_benchmark_comparison(results,offset=offset)
 end
 
-function baseline_comparison(results, stats; f=BenchmarkTools.median, styled=true)
-    base_res, base_stats = get_baseline_benchmark()
-    benchmark_comparison(results, stats, base_res, base_stats)
+function baseline_comparison(results; f=BenchmarkTools.median, styled=true)
+    base_res = get_baseline_benchmark()
+    benchmark_comparison(results, base_res)
 end
 
 function baseline_comparison(;verbose=false)
     results = run(suite,verbose=verbose)
-    baseline_comparison(results, stats)
+    baseline_comparison(results)
     results
+end
+
+function benchmark_comparison(r1::BenchmarkGroup,r2::BenchmarkGroup;  f=BenchmarkTools.median)
+    printstyled("Kuka Arm",bold=true,color=:yellow); println()
+    compare_system(r1["kuka"],r2["kuka"],"constrained")
+    compare_system(r1["kuka"],r2["kuka"],"unconstrained")
+    printstyled("Dubins Car",bold=true,color=:yellow); println()
+    compare_system(r1["dubinscar"],r2["dubinscar"],"constrained")
+    compare_system(r1["dubinscar"],r2["dubinscar"],"unconstrained")
+    return nothing
 end
 
 function benchmark_comparison(r1,s1,r2,s2; f=BenchmarkTools.median, styled=true)

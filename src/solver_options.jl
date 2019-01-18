@@ -78,7 +78,7 @@ mutable struct SolverOptions
     penalty_scaling_minimum_time_equality::Float64 # penalty update rate for minimum time equality constraints
     penalty_scaling_no::Float64 # penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)
     constraint_decrease_ratio::Float64 # update term; 0 < constraint_decrease_ratio < 1
-    outer_loop_update_type::Symbol # type of outer loop update (default, individual, accelerated)
+    outer_loop_update_type::Symbol # type of outer loop update (default, momentum, individual, accelerated)
     use_second_order_dual_update::Bool # second order update for Lagrange multipliers once sqrt(cost tolerance | gradient) < desired tolerance
     penalty_update_frequency::Int  # determines how many iterations should pass before the penalty is updated (1 is every iteration)
     constraint_tolerance_second_order_dual_update::Float64 # constraint tolerance for switching to second order dual update

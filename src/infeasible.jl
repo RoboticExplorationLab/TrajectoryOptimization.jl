@@ -53,3 +53,29 @@ function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Ar
     end
     x_traj
 end
+
+
+"""
+$(SIGNATURES)
+Generate a control trajectory that holds a mechanism in the configuration q
+"""
+function hold_trajectory(solver, mech::Mechanism, q)
+    state = MechanismState(mech)
+    nn = num_positions(state)
+    set_configuration!(state, q[1:nn])
+    vd = zero(state.q)
+    u0 = dynamics_bias(state)
+
+    n,m,N = get_sizes(solver)
+    if length(q) > m
+        throw(ArgumentError("system must be fully actuated to hold an arbitrary position ($(length(q)) should be > $m)"))
+    end
+    U0 = zeros(m,N)
+    for k = 1:N
+        U0[:,k] = u0
+    end
+    return U0
+end
+
+hold_trajectory(solver::Solver, q) = hold_trajectory(solver, solver.model.mech, q)
+hold_trajectory(solver::Solver) = hold_trajectory(solver, solver.model.mech, solver.obj.x0)
