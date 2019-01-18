@@ -60,7 +60,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
     copyto!(results.U, results.U_)
 
     # return constrained results if input was constrained
-    if !solver.opts.unconstrained_original_problem
+    if !solver.state.unconstrained_original_problem
         update_constraints!(results,solver,results.X,results.U)
         update_jacobians!(results,solver)
     else

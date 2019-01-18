@@ -36,7 +36,7 @@ solver.opts.verbose = true
 solver.opts.outer_loop_update_type = :feedback
 solver.opts.penalty_update_frequency = 1
 solver.opts.constraint_decrease_ratio = 0.25
-solver.opts.constraint_tolerance_coarse = 1e-6
+solver.opts.constraint_tolerance_intermediate = 1e-6
 solver.opts.use_nesterov
 res_m,stats_m = solve(solver,U0)
 solver.state.penalty_only
@@ -62,7 +62,7 @@ tol = 1e-8
 opts.cost_tolerance = tol
 opts.constraint_tolerance = tol
 opts.cost_tolerance_intermediate = 1e-4
-opts.constraint_tolerance_coarse = 1e-2
+opts.constraint_tolerance_intermediate = 1e-2
 opts.iterations_outerloop = 200
 
 solver = Solver(model,obj_con,N=101,opts=opts)
@@ -128,7 +128,7 @@ solver.state.penalty_only
 solver.opts.outer_loop_update_type = :feedback
 solver.opts.constraint_decrease_ratio = 0.9
 solver.opts.verbose = true
-solver.opts.constraint_tolerance_coarse = 1e-4
+solver.opts.constraint_tolerance_intermediate = 1e-4
 solver.opts.use_nesterov = true
 res_a,stats_a = solve(solver,U0)
 stats_a["iterations"]
@@ -217,7 +217,7 @@ stats["iterations"]
 solver = Solver(model, obj_con_obstacles, dt=dt, opts=opts)
 solver.opts.outer_loop_update_type = :feedback
 solver.opts.use_nesterov = false
-solver.opts.constraint_tolerance_coarse = 1e-4
+solver.opts.constraint_tolerance_intermediate = 1e-4
 res_a, stats_a = solve(solver,X0,U0)
 stats_a["iterations"]
 # w/o nesterov: 128

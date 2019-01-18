@@ -24,7 +24,7 @@ function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat)::Tuple{SolverResults,
 
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
     if isa(solver.obj, UnconstrainedObjective)
-        solver.opts.unconstrained_original_problem = true
+        solver.state.unconstrained_original_problem = true
         solver.state.infeasible = true
         obj_c = ConstrainedObjective(solver.obj)
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
@@ -251,7 +251,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
-                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse) && solver.opts.use_penalty_burnin
+                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_intermediate) && solver.opts.use_penalty_burnin
                     solver.state.penalty_only = false
                     @logmsg InnerLoop "Switching to multipier updates"
                 end
@@ -352,7 +352,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @info "Resolving feasible"
 
             # create unconstrained solver from infeasible solver if problem is unconstrained
-            if solver.opts.unconstrained_original_problem
+            if solver.state.unconstrained_original_problem
                 obj = solver.obj
                 obj_uncon = UnconstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf)
                 solver_feasible = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
@@ -403,9 +403,9 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
     end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
             return true
-        elseif ((solver.state.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
+        elseif ((solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance && c_max < solver.opts.constraint_tolerance))
             return true
         end
 
@@ -425,7 +425,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
     if loop == :outer
         if solver.state.constrained
-            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_norm_tolerance)
                 return true
             end
         end
