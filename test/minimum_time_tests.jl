@@ -25,7 +25,6 @@ solver_min.opts.penalty_scaling = 2.0
 solver_min.opts.outer_loop_update_type = :default
 solver_min.opts.iterations = 1000
 solver_min.opts.iterations_outerloop = 50 # 20
-solver_min.opts.use_gradient_aula = false
 
 U = ones(m,solver_min.N-1)
 results_uncon,stats_uncon = TrajectoryOptimization.solve(solver_uncon,U)

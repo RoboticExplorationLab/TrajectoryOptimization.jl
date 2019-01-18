@@ -221,7 +221,13 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             push!(J_hist,J)
 
             ## Check gradients for convergence ##
-            solver.opts.use_gradient_aula ? gradient = gradient_AuLa(results,solver,bp) : gradient = gradient_todorov(results)
+            if solver.opts.gradient_type == :todorov
+                gradient = gradient_todorov(results)
+            elseif solver.opts.gradient_type == :AuLa
+                gradient = gradient_AuLa(results,solver,bp)
+            elseif solver.opts.gradient_type == :feedforward
+                gradient = gradient_feedforward(results)
+            end
             push!(grad_norm_hist,gradient)
 
             # increment iLQR inner loop counter
@@ -425,52 +431,4 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
         end
     end
     return false
-end
-
-"""
-$(SIGNATURES)
-    Infeasible start solution is run through time varying LQR to track state and control trajectories
-"""
-function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-    remove_infeasible_controls!(results,solver)
-
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_controls(solver)
-
-    # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(nn,mm,N)
-
-    # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results, solver, bp)
-
-    # forward pass
-    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
-
-    # update trajectories
-    copyto!(results.X, results.X_)
-    copyto!(results.U, results.U_)
-
-    # return constrained results if input was constrained
-    if !solver.opts.unconstrained_original_problem
-        update_constraints!(results,solver,results.X,results.U)
-        update_jacobians!(results,solver)
-    else
-        solver.state.constrained = false
-    end
-
-    return results
-end
-
-"""
-$(SIGNATURES)
-    Calculate the problem gradient using heuristic from iLQG (Todorov) solver
-"""
-function gradient_todorov(res::SolverVectorResults)
-    N = length(res.X)
-    maxes = zeros(N)
-    for k = 1:N-1
-        maxes[k] = maximum(abs.(res.d[k])./(abs.(res.U[k]).+1))
-    end
-    mean(maxes)
 end
