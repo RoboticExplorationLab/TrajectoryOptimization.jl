@@ -271,9 +271,17 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Qx[k] += fdx'*s[k+1]
         Qu[k] += fdu'*s[k+1]
         Qux[k] += (fdu'*Su[k+1]')*(Su[k+1]*fdx)
+        try
+            Qxx[k][1:n,1:n] = cholesky(Qxx[k][1:n,1:n]).U
+        catch
+            error("bp Qxx cholesky error")
+        end
+        try
+            Quu[k] = cholesky(Quu[k]).U
+        catch
+            error("bp Quu cholesky error")
+        end
 
-        Qxx[k][1:n,1:n] = cholesky(Qxx[k][1:n,1:n]).U
-        Quu[k] = cholesky(Quu[k]).U
         Wxx = chol_plus(Qxx[k], Su[k+1]*fdx)
         Wuu = chol_plus(Quu[k], Su[k+1]*fdu)
 
@@ -316,33 +324,33 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         # Calculate cost-to-go
         s[k] = Qx[k] + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu[k] + Qux[k]'*d[k]
 
-        # try
-        #     tmp1 = (Wxx')\Qux[k]'
-        # catch SingularException
-        #     solver.opts.bp_reg_min = 1e-6
-        #     iter = 0
-        #     while minimum(eigvals(Wxx)) < 1e-6 && iter < 15
-        #         Wxx += reg*Matrix(I,nn,nn)
-        #         try
-        #             tmp1 = (Wxx')\Qux[k]'
-        #             break
-        #         catch
-        #             reg *= 10
-        #             iter += 1
-        #             if iter > 15
-        #                 error("broken :<")
-        #             end
-        #         end
-        #     end
-        # end
-        # println(tmp1)
-        # try
-        #     tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
-        # catch
-        #     tmp2 = chol_minus(Wuu,tmp1)
-        # end
-        tmp1 = (Wxx')\Qux[k]'
-        tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        tmp1 = []
+        try
+            tmp1 = (Wxx')\Qux[k]'
+        catch SingularException
+            reg = solver.opts.bp_reg_min
+            iter = 0
+            while minimum(eigvals(Wxx)) < 1e-6 && iter < 15
+                Wxx += reg*Matrix(I,nn,nn)
+                try
+                    tmp1 = (Wxx')\Qux[k]'
+                    break
+                catch
+                    reg *= 10
+                    iter += 1
+                    if iter > 15
+                        error("broken :<")
+                    end
+                end
+            end
+        end
+
+        tmp2 = []
+        try
+            tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        catch
+            tmp2 = chol_minus(Wuu,tmp1)
+        end
 
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
         Su[k][nn+1:nn+mm,1:nn] = tmp2*K[k]

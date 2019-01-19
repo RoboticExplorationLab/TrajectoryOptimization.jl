@@ -381,12 +381,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         end
 
         # return feasible results
-        @info "***Solve Complete***"
+        @info "*Solve Complete*"
         return results_feasible, stats
 
     # if feasible solve, return results
     else
-        @info "***Solve Complete***"
+        @info "*Solve Complete*"
         return results, stats
     end
 end

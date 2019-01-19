@@ -91,75 +91,58 @@ TrajectoryOptimization.backwardpass!(results_con_sqrt, solver_con_sqrt,bp_sqrt)
 S_con_sqrt = [results_con_sqrt.S[k]'*results_con_sqrt.S[k] for k = 1:N]
 @test isapprox(to_array(results_con.S),to_array(S_con_sqrt))
 
-# # Minimum Time
-# N = 51
-# obj_mintime = update_objective(obj_c,tf=:min)
-# opts_mintime = TrajectoryOptimization.SolverOptions()
-# opts_mintime.square_root = false
-# opts_mintime_sqrt = TrajectoryOptimization.SolverOptions()
-# opts_mintime_sqrt.square_root = true
-# solver_mintime = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime)
-# solver_mintime_sqrt = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime_sqrt)
-# U0 = ones(solver_mintime.model.m,solver_mintime.N)
-# results_mintime = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
-# results_mintime_sqrt = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
-# TrajectoryOptimization.update_jacobians!(results_mintime, solver_mintime)
-# TrajectoryOptimization.update_jacobians!(results_mintime_sqrt, solver_mintime_sqrt)
-#
-# n,m,N = TrajectoryOptimization.get_sizes(solver_mintime)
-# m̄,mm = TrajectoryOptimization.get_num_controls(solver_mintime)
-# n̄,nn = TrajectoryOptimization.get_num_states(solver_mintime)
-# bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-# bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-# TrajectoryOptimization.backwardpass!(results_mintime, solver_mintime,bp)
-# TrajectoryOptimization.backwardpass!(results_mintime_sqrt, solver_mintime_sqrt,bp_sqrt)
-#
-# fdx = zeros(5,5)
-# fdx[1:4,1:4] = rand(4,4)
-# fdx[5,5] = 1
-# fdx
-# Sxx = Array(Diagonal([1;1;1;1;0]))
-#
-# Wxx = Sxx + fdx'*Sxx*fdx
-# X = lu(Wxx[1:4,1:4])
-# a = 1
-# function temp_func()
-#     z = rand(3,3)
-#     z = z'*z
-#     Z = zeros(4,4)
-#     Z[1:3,1:3] = z
-#     try
-#         tmp1 = Z\rand(4,3)
-#     catch SingularException
-#         reg = 1e-6
-#         iter = 0
-#         while minimum(eigvals(Z)) < 1e-6 && iter < 15
-#             Z += reg*Matrix(I,4,4)
-#             try
-#                 tmp1 = Z\rand(4,3)
-#                 println("success")
-#                 println(reg)
-#                 break
-#             catch
-#                 reg *= 10
-#                 iter += 1
-#                 if iter > 15
-#                     error("broken :<")
-#                 end
-#             end
-#         end
-#     end
-#     return Z
-# end
-# rr = temp_func()
-#
-# cholesky(rr'*rr)
-# @test all(isapprox.(results_mintime.K,results_mintime_sqrt.K))
-# @test all(isapprox.(results_mintime.d,results_mintime_sqrt.d))
-# @test all(isapprox.(results_mintime.s,results_mintime_sqrt.s))
-# S_con_sqrt = [results_mintime_sqrt.S[k]'*results_mintime_sqrt.S[k] for k = 1:N]
-# @test isapprox(to_array(results_mintime.S),to_array(S_mintime_sqrt))
+# Minimum Time
+N = 51
+obj_mintime = update_objective(obj_c,tf=:min)
+opts_mintime = TrajectoryOptimization.SolverOptions()
+opts_mintime.square_root = false
+opts_mintime_sqrt = TrajectoryOptimization.SolverOptions()
+opts_mintime_sqrt.square_root = true
+solver_mintime = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime)
+solver_mintime_sqrt = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime_sqrt)
+U0 = ones(solver_mintime.model.m,solver_mintime.N)
+results_mintime = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
+results_mintime_sqrt = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
+TrajectoryOptimization.update_jacobians!(results_mintime, solver_mintime)
+TrajectoryOptimization.update_jacobians!(results_mintime_sqrt, solver_mintime_sqrt)
 
+n,m,N = TrajectoryOptimization.get_sizes(solver_mintime)
+m̄,mm = TrajectoryOptimization.get_num_controls(solver_mintime)
+n̄,nn = TrajectoryOptimization.get_num_states(solver_mintime)
+bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
+bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
+TrajectoryOptimization.backwardpass!(results_mintime, solver_mintime,bp)
+TrajectoryOptimization.backwardpass!(results_mintime_sqrt, solver_mintime_sqrt,bp_sqrt)
+
+@test all(isapprox.(results_mintime.K,results_mintime_sqrt.K))
+@test all(isapprox.(results_mintime.d,results_mintime_sqrt.d))
+@test all(isapprox.(results_mintime.s,results_mintime_sqrt.s))
+S_mintime_sqrt = [results_mintime_sqrt.S[k]'*results_mintime_sqrt.S[k] for k = 1:N]
+@test isapprox(to_array(results_mintime.S),to_array(S_mintime_sqrt))
+
+# Minimum Time + Infeasible
+N = 51
+
+solver_mintime.state.infeasible = true
+solver_mintime_sqrt.state.infeasible = true
+results_mintime_inf = init_results(solver_mintime,X0,U0)
+results_mintime_inf_sqrt = init_results(solver_mintime,X0,U0)
+TrajectoryOptimization.update_jacobians!(results_mintime_inf, solver_mintime)
+TrajectoryOptimization.update_jacobians!(results_mintime_inf_sqrt, solver_mintime_sqrt)
+
+n,m,N = TrajectoryOptimization.get_sizes(solver_mintime)
+m̄,mm = TrajectoryOptimization.get_num_controls(solver_mintime)
+n̄,nn = TrajectoryOptimization.get_num_states(solver_mintime)
+bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
+bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
+TrajectoryOptimization.backwardpass!(results_mintime_inf, solver_mintime,bp)
+TrajectoryOptimization.backwardpass!(results_mintime_inf_sqrt, solver_mintime_sqrt,bp_sqrt)
+
+@test all(isapprox.(results_mintime_inf.K,results_mintime_inf_sqrt.K))
+@test all(isapprox.(results_mintime_inf.d,results_mintime_inf_sqrt.d))
+@test all(isapprox.(results_mintime_inf.s,results_mintime_inf_sqrt.s))
+S_mintime_inf_sqrt = [results_mintime_inf_sqrt.S[k]'*results_mintime_inf_sqrt.S[k] for k = 1:N]
+@test isapprox(to_array(results_mintime_inf.S),to_array(S_mintime_inf_sqrt))
 
 ## Simple pendulum
 u_bound = 2.
