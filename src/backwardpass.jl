@@ -199,8 +199,10 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     try
         Su[N][1:nn,1:nn] = cholesky(Su[N][1:nn,1:nn]).U # if no terminal cost is provided cholesky will fail gracefully
     catch PosDefException
-        if tr(Su[N][1:nn,1:nn]) != 0.
+        if sum([Su[N][i,i] for i = 1:n]) != 0.
             error("Square root bp not currently implemented with positive semi-definite terminal cost Hessian")
+        elseif tr(Su[N][1:n,1:n]) == 0. && n̄ > n
+            Su[N][n̄,n̄] = sqrt(Su[N][n̄,n̄])
         end
     end
 
@@ -216,7 +218,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
     # Backward pass
     Δv = zeros(2)
-
+    tmp1 = []
+    tmp2 = []
+    
     k = N-1
     while k >= 1
         solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
@@ -259,9 +263,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         try
             Qxx[k][1:nn,1:nn] = cholesky(Qxx[k][1:nn,1:nn]).U
         catch
-            if tr(Qxx[k][1:n,1:n]) != 0.
+            if sum([Qxx[k][i,i] for i = 1:n]) != 0.
                 error("Square root bp not currently implemented with positive semi-definite stage cost Hessian for states")
-            else
+            elseif tr(Qxx[k][1:n,1:n]) == 0. && n̄ > n
                 Qxx[k][n̄,n̄] = sqrt(Qxx[k][n̄,n̄])
             end
         end
@@ -313,7 +317,6 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         # Calculate cost-to-go
         s[k] = Qx[k] + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu[k] + Qux[k]'*d[k]
 
-        tmp1 = []
         try
             tmp1 = (Wxx')\Qux[k]'
         catch SingularException
@@ -334,7 +337,6 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
             end
         end
 
-        tmp2 = []
         try
             tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
         catch
