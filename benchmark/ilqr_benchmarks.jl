@@ -3,7 +3,7 @@ using RigidBodyDynamics
 using Statistics
 using Formatting
 using Logging
-import TrajectoryOptimization: get_num_states, BackwardPassZOH, gradient_todorov, evaluate_convergence, outer_loop_update, update_constraints!, update_jacobians!
+import TrajectoryOptimization: get_num_states, BackwardPass, gradient_todorov, evaluate_convergence, outer_loop_update, update_constraints!, update_jacobians!
 
 function create_benchmarks(solver,X0,U0)
     n,m,N = get_sizes(solver)
@@ -12,7 +12,7 @@ function create_benchmarks(solver,X0,U0)
 
     results = init_results(solver,X0,U0)
     J_prev = cost(solver, results)
-    bp = BackwardPassZOH(nn,mm,N)
+    bp = BackwardPass(nn,mm,N)
     update_jacobians!(results, solver)
     Δv = backwardpass!(results, solver, bp)
     J = forwardpass!(results, solver, Δv, J_prev)

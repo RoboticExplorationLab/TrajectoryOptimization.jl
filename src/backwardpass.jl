@@ -1,31 +1,3 @@
-using Test
-
-abstract type BackwardPass end
-
-struct BackwardPassZOH <: BackwardPass
-    Qx::Vector{Vector{Float64}}
-    Qu::Vector{Vector{Float64}}
-    Qxx::Vector{Matrix{Float64}}
-    Qux::Vector{Matrix{Float64}}
-    Quu::Vector{Matrix{Float64}}
-
-    Qux_reg::Vector{Matrix{Float64}}
-    Quu_reg::Vector{Matrix{Float64}}
-
-    function BackwardPassZOH(n::Int,m::Int,N::Int)
-        Qx = [zeros(n) for i = 1:N-1]
-        Qu = [zeros(m) for i = 1:N-1]
-        Qxx = [zeros(n,n) for i = 1:N-1]
-        Qux = [zeros(m,n) for i = 1:N-1]
-        Quu = [zeros(m,m) for i = 1:N-1]
-
-        Qux_reg = [zeros(m,n) for i = 1:N-1]
-        Quu_reg = [zeros(m,m) for i = 1:N-1]
-
-        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
-    end
-end
-
 """
 $(SIGNATURES)
 Solve the dynamic programming problem, starting from the terminal time step
@@ -34,16 +6,16 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
 Online Trajectory Optimization)
 """
-function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.opts.square_root
-        Δv = _backwardpass_sqrt!(results, solver, bp)
+        Δv = _backwardpass_sqrt!(results, solver)
     else
-        Δv = _backwardpass!(results, solver, bp)
+        Δv = _backwardpass!(results, solver)
     end
     return Δv
 end
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -60,8 +32,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
 
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
 
-    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
 
     # TEMP resets values for now - this will get fixed
     for k = 1:N-1
@@ -152,7 +124,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
-            @logmsg InnerIters "Fixing Quu with regularization"
+            @logmsg InnerIters "Regularizing Quu "
             regularization_update!(res,solver,:increase)
 
             # reset backward pass
@@ -189,7 +161,7 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -206,13 +178,8 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
 
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
 
-    for k = 1:N
-        res.S[k] = zeros(nn+mm,nn)
-    end
-    Su = res.S
-
-    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
 
     # TEMP resets values for now - this will get fixed
     for k = 1:N-1
@@ -381,8 +348,8 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Δv[1] += d[k]'*Qu[k]
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
-        bp.Quu_reg[k] = Array(Wuu_reg)
-        bp.Quu[k] = Array(Wuu)
+        Quu_reg[k] = Array(Wuu_reg)
+        Quu[k] = Array(Wuu)
 
         k = k - 1;
     end
@@ -402,10 +369,24 @@ function chol_plus(A,B)
     return qr(P).R
 end
 
-function chol_minus(A,B::Matrix)
-    AmB = Cholesky(A,:U,0)
-    for i = 1:size(B,1)
-        lowrankdowndate!(AmB,B[i,:])
+function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)
+    max_cn = 0.
+    for k = 1:N-1
+        cn = cond(bp.Quu_reg[k])
+        if cn > max_cn
+            max_cn = cn
+        end
     end
-    U = AmB.U
+    return max_cn
+end
+
+function backwardpass_max_condition_number(results::TrajectoryOptimization.SolverVectorResults)
+    max_cn = 0.
+    for k = 1:N
+        cn = cond(results.S[k])
+        if cn > max_cn && cn < Inf
+            max_cn = cn
+        end
+    end
+    return max_cn
 end

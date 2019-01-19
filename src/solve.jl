@@ -116,9 +116,6 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         results = prevResults
     end
 
-    # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(nn,mm,N)
-
     # Unpack results for convenience
     X = results.X # state trajectory
     U = results.U # control trajectory
@@ -193,28 +190,28 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
             ### BACKWARD PASS ###
             update_jacobians!(results, solver)
-            Δv = backwardpass!(results, solver, bp)
+            Δv = backwardpass!(results, solver)
 
             # condition numbers and min eigen value
             max_cn = 0.
             min_eig = Inf
-            for kkk = 1:N-1
-                cn = cond(bp.Quu_reg[kkk])
-                if cn > max_cn
-                    max_cn = cn
-                end
-                me = minimum(real.(eigvals(bp.Quu_reg[kkk])))
-                if me < min_eig
-                    min_eig = me
-                end
-            end
-            cond_n = zeros(N)
-            for k = 1:N
-                cond_n[k] = cond(results.S[k])
-            end
-            push!(max_cn_hist,max_cn)
-            push!(min_eig_hist,min_eig)
-            push!(max_cn_S_hist,maximum(cond_n))
+            # for kkk = 1:N-1
+            #     cn = cond(bp.Quu_reg[kkk])
+            #     if cn > max_cn
+            #         max_cn = cn
+            #     end
+            #     me = minimum(real.(eigvals(bp.Quu_reg[kkk])))
+            #     if me < min_eig
+            #         min_eig = me
+            #     end
+            # end
+            # cond_n = zeros(N)
+            # for k = 1:N
+            #     cond_n[k] = cond(results.S[k])
+            # end
+            # push!(max_cn_hist,max_cn)
+            # push!(min_eig_hist,min_eig)
+            # push!(max_cn_S_hist,maximum(cond_n))
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
@@ -224,7 +221,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             if solver.opts.gradient_type == :todorov
                 gradient = gradient_todorov(results)
             elseif solver.opts.gradient_type == :AuLa
-                gradient = gradient_AuLa(results,solver,bp)
+                gradient = gradient_AuLa(results,solver)
             elseif solver.opts.gradient_type == :feedforward
                 gradient = gradient_feedforward(results)
             end
@@ -286,7 +283,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,bp,j)
+        outer_loop_update(results,solver,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 

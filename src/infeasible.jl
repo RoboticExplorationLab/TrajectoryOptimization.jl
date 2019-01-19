@@ -42,15 +42,8 @@ $(SIGNATURES)
 function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
     remove_infeasible_controls!(results,solver)
 
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_controls(solver)
-
-    # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(nn,mm,N)
-
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results, solver, bp)
+    Δv = backwardpass!(results, solver)
 
     # forward pass
     forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))

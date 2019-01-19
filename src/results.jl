@@ -1,5 +1,4 @@
 import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length,*,+,IndexStyle,iterate
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILE CONTENTS:
 #     SUMMARY: Results types for storing arrays used during computation
@@ -18,6 +17,36 @@ Trajectory = Vector{T} where T <: AbstractArray
 TrajectoryVectors = Vector{Vector{T}} where T <: Real
 TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
 TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
+
+"""
+$(TYPEDEF)
+    Abstract type for the backward pass expansion terms
+"""
+abstract type AbstractBackwardPass end
+
+struct BackwardPass <: AbstractBackwardPass
+    Qx::Vector{Vector{Float64}}
+    Qu::Vector{Vector{Float64}}
+    Qxx::Vector{Matrix{Float64}}
+    Qux::Vector{Matrix{Float64}}
+    Quu::Vector{Matrix{Float64}}
+
+    Qux_reg::Vector{Matrix{Float64}}
+    Quu_reg::Vector{Matrix{Float64}}
+
+    function BackwardPass(n::Int,m::Int,N::Int)
+        Qx = [zeros(n) for i = 1:N-1]
+        Qu = [zeros(m) for i = 1:N-1]
+        Qxx = [zeros(n,n) for i = 1:N-1]
+        Qux = [zeros(m,n) for i = 1:N-1]
+        Quu = [zeros(m,m) for i = 1:N-1]
+
+        Qux_reg = [zeros(m,n) for i = 1:N-1]
+        Quu_reg = [zeros(m,m) for i = 1:N-1]
+
+        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
+    end
+end
 
 """
 $(TYPEDEF)
@@ -62,8 +91,10 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
-    function UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    bp::BackwardPass
+
+    function UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ,bp)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ,bp)
     end
 end
 
@@ -97,11 +128,13 @@ function UnconstrainedVectorResults(n::Int,m::Int,N::Int)
     ρ = zeros(1)
     dρ = zeros(1)
 
-    UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ)
+    bp = BackwardPass(n,m,N)
+
+    UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ,bp)
 end
 
 function copy(r::UnconstrainedVectorResults)
-    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),copy(r.ρ),copy(r.dρ))
+    UnconstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
 ################################################################################
@@ -140,23 +173,32 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     nesterov::Vector{Float64}
 
-    active_set::Vector{Vector{T}} where T # active set of constraints
+    active_set::Trajectory
 
     ρ::Array{Float64,1}
     dρ::Array{Float64,1}
 
-    function ConstrainedVectorResults(X,U,
-            K,d,X_,U_,S,s,fdx,fdu,
-            C,C_prev,Iμ,λ,μ,
-            Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
+    bp::BackwardPass
+
+    function ConstrainedVectorResults(
+            X,U,
+            K,d,
+            X_,U_,
+            S,s,
+            fdx,fdu,
+            C,C_prev,
+            Iμ,λ,μ,
+            Cx,Cu,
+            t_prev,λ_prev,nesterov,
+            active_set,
+            ρ,dρ,bp)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp)
     end
 end
 
 isempty(res::SolverIterResults) = isempty(res.X) && isempty(res.U)
 
 ConstrainedVectorResults() = ConstrainedVectorResults(0,0,0,0,0)
-
 
 """
 $(SIGNATURES)
@@ -206,14 +248,16 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     ρ = zeros(1)
     dρ = zeros(1)
 
+    bp = BackwardPass(n,m,N)
+
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp)
 end
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
-        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ))
+        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
 #############
@@ -251,6 +295,12 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
         results.μ[k] = results.μ[k][idx]
         results.Iμ[k] = Diagonal(Array(results.Iμ[k])[idx,idx]) # TODO there should be a more efficient way to do this
         results.active_set[k] = results.active_set[k][idx]
+
+        results.bp.Qu[k] = results.bp.Qu[k][1:m̄]
+        results.bp.Quu[k] = results.bp.Quu[k][1:m̄,1:m̄]
+        results.bp.Qux[k] = results.bp.Qux[k][1:m̄,1:nn]
+        results.bp.Quu_reg[k] = results.bp.Quu_reg[k][1:m̄,1:m̄]
+        results.bp.Qux_reg[k] = results.bp.Qux_reg[k][1:m̄,1:nn]
     end
     # Don't need to modify terminal results C,Cx,Cu,λ,μ,Iμ since they are uneffected by u_infeasible
     return nothing
@@ -271,11 +321,11 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
     # Generate initial trajectoy (tacking on infeasible and minimum time controls)
     X_init, U_init = get_initial_trajectory(solver, X, U)
 
-    if solver.state.constrained
-        # Get sizes
-        m̄,mm = get_num_controls(solver)
-        n̄,nn = get_num_states(solver)
+    # Get sizes
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
 
+    if solver.state.constrained
         p,pI,pE = get_num_constraints(solver)
         p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
@@ -310,6 +360,13 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
     else
         results = UnconstrainedVectorResults(n,m,N)
     end
+
+    if solver.opts.square_root
+        for k = 1:N
+            results.S[k] = zeros(nn+mm,nn)
+        end
+    end
+
     copyto!(results.X, X_init)
     copyto!(results.U, U_init)
     return results

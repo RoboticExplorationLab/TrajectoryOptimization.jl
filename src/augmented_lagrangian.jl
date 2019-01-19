@@ -2,11 +2,11 @@
 $(SIGNATURES)
     Gradient of the Augmented Lagrangian: ∂L/∂u = Quuδu + Quxδx + Qu + Cu'λ + Cu'IμC
 """
-function gradient_AuLa(results::SolverIterResults,solver::Solver,bp::BackwardPass)
+function gradient_AuLa(results::SolverIterResults,solver::Solver)
     N = solver.N
     X = results.X; X_ = results.X_; U = results.U; U_ = results.U_
 
-    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
 
     gradient_norm = 0. # ℓ2-norm
 
@@ -132,7 +132,7 @@ $(SIGNATURES)
     Second order dual update - Buys Update
     -UNDER DEVELOPMENT -
 """
-function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,bp::BackwardPass)
+function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
@@ -526,13 +526,13 @@ end
 $(SIGNATURES)
     Updates penalty (μ) and Lagrange multiplier (λ) parameters for Augmented Lagrangian method
 """
-function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp,k::Int=0)::Nothing
+function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int=0)::Nothing
 
     if solver.opts.outer_loop_update_type == :default
         if solver.opts.use_nesterov
             λ_update_nesterov!(results,solver)
         else
-            solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,bp) : λ_update_default!(results,solver)
+            solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update_default!(results,solver)
         end
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
 
@@ -562,6 +562,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,bp,k::
     return nothing
 end
 
-function outer_loop_update(results::UnconstrainedIterResults,solver::Solver, bp, k::Int=0)::Nothing
+function outer_loop_update(results::UnconstrainedIterResults,solver::Solver, k::Int=0)::Nothing
     return nothing
 end

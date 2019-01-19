@@ -2,36 +2,33 @@ model,obj = TrajectoryOptimization.Dynamics.dubinscar
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+solver_sqrt = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+solver_sqrt.opts.square_root = true
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
-results_sqrt = init_results(solver,Array{Float64}(undef,0,0),U0)
+results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
 results.X[1] = solver.obj.x0
 copyto!(results.U, ones(model.m,solver.N-1))
-results_sqrt.X[1] = solver.obj.x0
-copyto!(results_sqrt.U, ones(model.m,solver.N-1))
+results_sqrt.X[1] = solver_sqrt.obj.x0
+copyto!(results_sqrt.U, ones(model.m,solver_sqrt.N-1))
 
 TrajectoryOptimization.rollout!(results,solver)
-TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.rollout!(results_sqrt,solver_sqrt)
 TrajectoryOptimization.update_jacobians!(results,solver)
-TrajectoryOptimization.update_jacobians!(results_sqrt,solver)
+TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
 
-n,m,N = TrajectoryOptimization.get_sizes(solver)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-n̄,nn = TrajectoryOptimization.get_num_states(solver)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-ΔV = TrajectoryOptimization.backwardpass!(results,solver,bp)
-solver.opts.square_root = true
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver,bp_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results,solver)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
 @test isapprox(ΔV,ΔV_sqrt)
 @test all(isapprox.(results.K,results_sqrt.K))
 @test isapprox(to_array(results.d),to_array(results_sqrt.d))
-S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
+S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:solver.N]
 @test isapprox(to_array(results.S),to_array(S_sqrt))
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results.bp)
 max_cn_S = backwardpass_max_condition_number(results)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_sqrt.bp)
+results_sqrt.bp
 max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
 @test max_cn_Quu_sqrt < max_cn_Quu
 @test max_cn_S_sqrt < max_cn_S
@@ -41,35 +38,27 @@ u_min = -10
 u_max = 10
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min,u_max=u_max) # constrained objective
 opts_con = TrajectoryOptimization.SolverOptions()
-opts_con.square_root = false
 opts_con_sqrt = TrajectoryOptimization.SolverOptions()
 opts_con_sqrt.square_root = true
 solver_con = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con)
 solver_con_sqrt = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con_sqrt)
 U0 = ones(solver_con.model.m,solver_con.N)
 results_con = init_results(solver_con,Array{Float64}(undef,0,0),U0)
-results_con_sqrt = init_results(solver_con,Array{Float64}(undef,0,0),U0)
+results_con_sqrt = init_results(solver_con_sqrt,Array{Float64}(undef,0,0),U0)
 TrajectoryOptimization.update_jacobians!(results_con, solver_con)
 TrajectoryOptimization.update_jacobians!(results_con_sqrt, solver_con_sqrt)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver_con)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver_con)
-n̄,nn = TrajectoryOptimization.get_num_states(solver_con)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_con.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_con.N)
-ΔV = TrajectoryOptimization.backwardpass!(results_con, solver_con,bp)
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_con_sqrt, solver_con_sqrt,bp_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results_con, solver_con)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_con_sqrt, solver_con_sqrt)
 
 @test isapprox(ΔV,ΔV_sqrt)
 @test all(isapprox.(results_con.K,results_con_sqrt.K))
 @test all(isapprox.(results_con.d,results_con_sqrt.d))
 @test all(isapprox.(results_con.s,results_con_sqrt.s))
-S_con_sqrt = [results_con_sqrt.S[k]'*results_con_sqrt.S[k] for k = 1:N]
+S_con_sqrt = [results_con_sqrt.S[k]'*results_con_sqrt.S[k] for k = 1:solver_con.N]
 @test isapprox(to_array(results_con.S),to_array(S_con_sqrt))
-
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results_con.bp)
 max_cn_S = backwardpass_max_condition_number(results_con)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_con_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_con_sqrt)
 @test max_cn_Quu_sqrt < max_cn_Quu
 @test max_cn_S_sqrt < max_cn_S
@@ -83,28 +72,18 @@ results_con = init_results(solver_con,X0,U0)
 results_con_sqrt = init_results(solver_con_sqrt,X0,U0)
 TrajectoryOptimization.update_jacobians!(results_con, solver_con)
 TrajectoryOptimization.update_jacobians!(results_con_sqrt, solver_con_sqrt)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver_con)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver_con)
-n̄,nn = TrajectoryOptimization.get_num_states(solver_con)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_con.N)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver_con_sqrt)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver_con_sqrt)
-n̄,nn = TrajectoryOptimization.get_num_states(solver_con_sqrt)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_con.N)
-ΔV = TrajectoryOptimization.backwardpass!(results_con, solver_con,bp)
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_con_sqrt, solver_con_sqrt,bp_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results_con, solver_con)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_con_sqrt, solver_con_sqrt)
 
 @test isapprox(ΔV,ΔV_sqrt)
 @test all(isapprox.(results_con.K,results_con_sqrt.K))
 @test all(isapprox.(results_con.d,results_con_sqrt.d))
 @test all(isapprox.(results_con.s,results_con_sqrt.s))
-S_con_sqrt = [results_con_sqrt.S[k]'*results_con_sqrt.S[k] for k = 1:N]
+S_con_sqrt = [results_con_sqrt.S[k]'*results_con_sqrt.S[k] for k = 1:solver_con.N]
 @test isapprox(to_array(results_con.S),to_array(S_con_sqrt))
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results_con.bp)
 max_cn_S = backwardpass_max_condition_number(results_con)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_con_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_con_sqrt)
 @test max_cn_Quu_sqrt < max_cn_Quu
 @test max_cn_S_sqrt < max_cn_S
@@ -113,58 +92,40 @@ max_cn_S_sqrt = backwardpass_max_condition_number(results_con_sqrt)
 N = 51
 obj_mintime = update_objective(obj_c,tf=:min)
 opts_mintime = TrajectoryOptimization.SolverOptions()
-opts_mintime.square_root = false
 opts_mintime_sqrt = TrajectoryOptimization.SolverOptions()
 opts_mintime_sqrt.square_root = true
 solver_mintime = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime)
 solver_mintime_sqrt = TrajectoryOptimization.Solver(model,obj_mintime,N=N,opts=opts_mintime_sqrt)
 U0 = ones(solver_mintime.model.m,solver_mintime.N)
 results_mintime = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
-results_mintime_sqrt = init_results(solver_mintime,Array{Float64}(undef,0,0),U0)
+results_mintime_sqrt = init_results(solver_mintime_sqrt,Array{Float64}(undef,0,0),U0)
 TrajectoryOptimization.update_jacobians!(results_mintime, solver_mintime)
 TrajectoryOptimization.update_jacobians!(results_mintime_sqrt, solver_mintime_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results_mintime, solver_mintime)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_mintime_sqrt, solver_mintime_sqrt)
 
-n,m,N = TrajectoryOptimization.get_sizes(solver_mintime)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver_mintime)
-n̄,nn = TrajectoryOptimization.get_num_states(solver_mintime)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-ΔV = TrajectoryOptimization.backwardpass!(results_mintime, solver_mintime,bp)
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_mintime_sqrt, solver_mintime_sqrt,bp_sqrt)
-
-results_mintime
 @test all(isapprox.(results_mintime.K,results_mintime_sqrt.K))
 @test all(isapprox.(results_mintime.d,results_mintime_sqrt.d))
 @test all(isapprox.(results_mintime.s,results_mintime_sqrt.s))
-S_mintime_sqrt = [results_mintime_sqrt.S[k]'*results_mintime_sqrt.S[k] for k = 1:N]
+S_mintime_sqrt = [results_mintime_sqrt.S[k]'*results_mintime_sqrt.S[k] for k = 1:solver_mintime.N]
 @test isapprox(to_array(results_mintime.S),to_array(S_mintime_sqrt))
-max_cn_Quu = backwardpass_max_condition_number(bp)
-results_mintime
+max_cn_Quu = backwardpass_max_condition_number(results_mintime.bp)
 max_cn_S = backwardpass_max_condition_number(results_mintime)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
-max_cn_S_sqrt = backwardpass_max_condition_number(results_con_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_mintime_sqrt.bp)
+max_cn_S_sqrt = backwardpass_max_condition_number(results_mintime_sqrt)
 @test max_cn_Quu_sqrt < max_cn_Quu
 @test max_cn_S_sqrt < max_cn_S
-
-results
-results_mintime_sqrt.S[N]'*results_mintime_sqrt.S[N]
 
 # Minimum Time + Infeasible
 N = 51
 solver_mintime.state.infeasible = true
 solver_mintime_sqrt.state.infeasible = true
 results_mintime_inf = init_results(solver_mintime,X0,U0)
-results_mintime_inf_sqrt = init_results(solver_mintime,X0,U0)
+results_mintime_inf_sqrt = init_results(solver_mintime_sqrt,X0,U0)
 TrajectoryOptimization.update_jacobians!(results_mintime_inf, solver_mintime)
 TrajectoryOptimization.update_jacobians!(results_mintime_inf_sqrt, solver_mintime_sqrt)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver_mintime)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver_mintime)
-n̄,nn = TrajectoryOptimization.get_num_states(solver_mintime)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
-ΔV = TrajectoryOptimization.backwardpass!(results_mintime_inf, solver_mintime,bp)
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_mintime_inf_sqrt, solver_mintime_sqrt,bp_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results_mintime_inf, solver_mintime)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_mintime_inf_sqrt, solver_mintime_sqrt)
 
 @test isapprox(ΔV,ΔV_sqrt)
 @test all(isapprox.(results_mintime_inf.K,results_mintime_inf_sqrt.K))
@@ -172,9 +133,9 @@ bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver_mintime.N)
 @test all(isapprox.(results_mintime_inf.s,results_mintime_inf_sqrt.s))
 S_mintime_inf_sqrt = [results_mintime_inf_sqrt.S[k]'*results_mintime_inf_sqrt.S[k] for k = 1:N]
 @test isapprox(to_array(results_mintime_inf.S),to_array(S_mintime_inf_sqrt))
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results_mintime_inf.bp)
 max_cn_S = backwardpass_max_condition_number(results_mintime_inf)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_mintime_inf_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_mintime_inf_sqrt)
 
 @test max_cn_Quu_sqrt < max_cn_Quu
@@ -186,30 +147,23 @@ obj_.cost.Qf .= 0.
 obj_.cost.qf .= 0.
 
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 solver = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt.opts.square_root = true
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
-results_sqrt = init_results(solver,Array{Float64}(undef,0,0),U0)
+results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
 results.X[1] = solver.obj.x0
 copyto!(results.U, ones(model.m,solver.N-1))
 results_sqrt.X[1] = solver.obj.x0
 copyto!(results_sqrt.U, ones(model.m,solver.N-1))
 
 TrajectoryOptimization.rollout!(results,solver)
-TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.rollout!(results_sqrt,solver_sqrt)
 TrajectoryOptimization.update_jacobians!(results,solver)
-TrajectoryOptimization.update_jacobians!(results_sqrt,solver)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-n̄,nn = TrajectoryOptimization.get_num_states(solver)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-
-ΔV = TrajectoryOptimization.backwardpass!(results,solver,bp)
-solver.opts.square_root = true
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver,bp_sqrt)
+TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results,solver)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
 # test that results from square root backward pass are the same as backward pass
 @test isapprox(ΔV,ΔV_sqrt)
@@ -218,9 +172,9 @@ solver.opts.square_root = true
 S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
 @test isapprox(to_array(results.S),to_array(S_sqrt))
 
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results.bp)
 max_cn_S = backwardpass_max_condition_number(results)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
 
 @test max_cn_Quu_sqrt < max_cn_Quu
@@ -231,29 +185,23 @@ obj_ = copy(obj)
 obj_.cost.Q .= 0.
 obj_.cost.q .= 0.
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 solver = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt.opts.square_root = true
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
-results_sqrt = init_results(solver,Array{Float64}(undef,0,0),U0)
+results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
 results.X[1] = solver.obj.x0
 copyto!(results.U, ones(model.m,solver.N-1))
 results_sqrt.X[1] = solver.obj.x0
 copyto!(results_sqrt.U, ones(model.m,solver.N-1))
 
 TrajectoryOptimization.rollout!(results,solver)
-TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.rollout!(results_sqrt,solver_sqrt)
 TrajectoryOptimization.update_jacobians!(results,solver)
-TrajectoryOptimization.update_jacobians!(results_sqrt,solver)
-
-n,m,N = TrajectoryOptimization.get_sizes(solver)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-n̄,nn = TrajectoryOptimization.get_num_states(solver)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-ΔV = TrajectoryOptimization.backwardpass!(results,solver,bp)
-solver.opts.square_root = true
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver,bp_sqrt)
+TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results,solver)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
 # test that results from square root backward pass are the same as backward pass
 @test isapprox(ΔV,ΔV_sqrt)
@@ -262,9 +210,9 @@ solver.opts.square_root = true
 S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
 @test isapprox(to_array(results.S),to_array(S_sqrt))
 
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results.bp)
 max_cn_S = backwardpass_max_condition_number(results)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
 
 @test max_cn_Quu_sqrt < max_cn_Quu
@@ -277,39 +225,34 @@ obj_.cost.q .= 0.
 obj_.cost.Qf .= 0.
 obj_.cost.qf .= 0.
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 solver = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
+solver_sqrt.opts.square_root = true
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
-results_sqrt = init_results(solver,Array{Float64}(undef,0,0),U0)
+results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
 results.X[1] = solver.obj.x0
 copyto!(results.U, ones(model.m,solver.N-1))
 results_sqrt.X[1] = solver.obj.x0
 copyto!(results_sqrt.U, ones(model.m,solver.N-1))
 
 TrajectoryOptimization.rollout!(results,solver)
-TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.rollout!(results_sqrt,solver_sqrt)
 TrajectoryOptimization.update_jacobians!(results,solver)
-TrajectoryOptimization.update_jacobians!(results_sqrt,solver)
+TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results,solver)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
-n,m,N = TrajectoryOptimization.get_sizes(solver)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-n̄,nn = TrajectoryOptimization.get_num_states(solver)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-
-ΔV = TrajectoryOptimization.backwardpass!(results,solver,bp)
-solver.opts.square_root = true
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver,bp_sqrt)
+# test that results from square root backward pass are the same as backward pass
 @test isapprox(ΔV,ΔV_sqrt)
-@test norm(to_array(results.K).-to_array(results_sqrt.K)) < 1e-12
-@test isapprox(to_array(results.d),to_array(results_sqrt.d))
+@test norm(to_array(results.K) .- to_array(results_sqrt.K)) < 1e-12
+@test norm(to_array(results.d) .- to_array(results_sqrt.d)) < 1e-12
 S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
-@test norm(to_array(results.S).-to_array(S_sqrt)) < 1e-12
+@test norm(to_array(results.S) .- to_array(S_sqrt)) < 1e-12
 
-max_cn_Quu = backwardpass_max_condition_number(bp)
+max_cn_Quu = backwardpass_max_condition_number(results.bp)
 max_cn_S = backwardpass_max_condition_number(results)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
 
 # NOTE: If you have not state stage costs or state terminal cost the square root method may not be more numerical well conditioned
@@ -318,41 +261,38 @@ max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
 
 # w/ regularization
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 opts.bp_reg_initial = 10.0
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+solver_sqrt = TrajectoryOptimization.Solver(model,obj,dt=0.1,opts=opts)
+solver_sqrt.opts.square_root = true
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
-results_sqrt = init_results(solver,Array{Float64}(undef,0,0),U0)
+results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
 results.X[1] = solver.obj.x0
 copyto!(results.U, ones(model.m,solver.N-1))
 results_sqrt.X[1] = solver.obj.x0
 copyto!(results_sqrt.U, ones(model.m,solver.N-1))
 
 TrajectoryOptimization.rollout!(results,solver)
-TrajectoryOptimization.rollout!(results_sqrt,solver)
+TrajectoryOptimization.rollout!(results_sqrt,solver_sqrt)
 TrajectoryOptimization.update_jacobians!(results,solver)
-TrajectoryOptimization.update_jacobians!(results_sqrt,solver)
+TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
+ΔV = TrajectoryOptimization.backwardpass!(results,solver)
+ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
-n,m,N = TrajectoryOptimization.get_sizes(solver)
-m̄,mm = TrajectoryOptimization.get_num_controls(solver)
-n̄,nn = TrajectoryOptimization.get_num_states(solver)
-bp = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-bp_sqrt = TrajectoryOptimization.BackwardPassZOH(nn,mm,solver.N)
-ΔV = TrajectoryOptimization.backwardpass!(results,solver,bp)
-solver.opts.square_root = true
-ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver,bp_sqrt)
-
+# test that results from square root backward pass are the same as backward pass
 @test isapprox(ΔV,ΔV_sqrt)
 @test all(isapprox.(results.K,results_sqrt.K))
 @test isapprox(to_array(results.d),to_array(results_sqrt.d))
 S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
 @test isapprox(to_array(results.S),to_array(S_sqrt))
-max_cn_Quu = backwardpass_max_condition_number(bp)
+
+max_cn_Quu = backwardpass_max_condition_number(results.bp)
 max_cn_S = backwardpass_max_condition_number(results)
-max_cn_Quu_sqrt = backwardpass_max_condition_number(bp_sqrt)
+max_cn_Quu_sqrt = backwardpass_max_condition_number(results_sqrt.bp)
 max_cn_S_sqrt = backwardpass_max_condition_number(results_sqrt)
-@test max_cn_Quu_sqrt <= max_cn_Quu
+
+@test max_cn_Quu_sqrt < max_cn_Quu
 @test max_cn_S_sqrt < max_cn_S
 
 ## Simple pendulum
