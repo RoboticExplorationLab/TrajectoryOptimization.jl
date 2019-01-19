@@ -190,6 +190,10 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
     # Objective
     costfun = solver.obj.cost
 
+    # Minimum time and infeasible options
+    solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
     dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
@@ -198,16 +202,25 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         res.S[k] = zeros(nn+mm,nn)
     end
     Su = res.S
-    # # for now just re-instantiate
-    # bp = BackwardPassZOH(nn,mm,N)
-    # Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+
+    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
+    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+
+    # TEMP resets values for now - this will get fixed
+    for k = 1:N-1
+        Qx[k] = zeros(nn); Qu[k] = zeros(mm); Qxx[k] = zeros(nn,nn); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,nn)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,nn)
+    end
 
     # Boundary Conditions
-    lfxx,lfx = taylor_expansion(costfun, X[N][1:n])
+    Su[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
-    # Initialize expected change in cost-to-go
-    Δv = zeros(2)
+    # Take square root (via cholesky)
+    try
+        Su[N][1:n,1:n] = cholesky(Su[N][1:n,1:n]).U # if no terminal cost is provided cholesky will fail gracefully
+    catch PosDefException
+        nothing
+    end
 
     # Terminal constraints
     if res isa ConstrainedIterResults
@@ -215,59 +228,72 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Cx = res.Cx; Cu = res.Cu
         Iμ_sqrt = sqrt.(Iμ[N])
 
-        Su[N][1:nn,1:nn] = chol_plus(cholesky(lfxx).U,Iμ_sqrt*Cx[N])
-        s[N] = lfx + Cx[N]'*(Iμ[N]*C[N] + λ[N])
-
-        @test isapprox(lfxx + Cx[N]'*Iμ[N]*Cx[N],Su[N]'*Su[N])
-    else
-        Su[N] = cholesky(lfxx).U
-        s[N] = lfx
+        Su[N][1:nn,1:nn] = chol_plus(Su[N],Iμ_sqrt*Cx[N])
+        s[N] += Cx[N]'*(Iμ[N]*C[N] + λ[N])
     end
 
     # Backward pass
+    Δv = zeros(2)
+
     k = N-1
     while k >= 1
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
 
         x = X[k][1:n]
         u = U[k][1:m]
-        h = sqrt(dt)
 
         expansion = taylor_expansion(costfun,x,u)
-        lxx,luu,lux,lx,_lu = expansion
+        Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* dt
 
+        # Minimum time expansion components
+        if solver.state.minimum_time
+            ℓ1 = stage_cost(costfun,x,u)
+            h = U[k][m̄]
+            tmp = 2*h*expansion[5]
+
+            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Qux[k][m̄,1:n] = 2*h*expansion[4]'
+        end
+
+        # Infeasible expansion components
+        if solver.state.infeasible
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
+        end
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = dt*lx + fdx'*s[k+1]
-        Qu = dt*_lu + fdu'*s[k+1]
-        Wxx = chol_plus(cholesky(dt*lxx).U, Su[k+1]*fdx)
-        Wuu = chol_plus(cholesky(dt*luu).U, Su[k+1]*fdu)
-        Qux = dt*lux + (fdu'*Su[k+1]')*(Su[k+1]*fdx)
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qux[k] += (fdu'*Su[k+1]')*(Su[k+1]*fdx)
 
-        @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx, Wxx'*Wxx)
-        @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu, Wuu'*Wuu)
+        Qxx[k][1:n,1:n] = cholesky(Qxx[k][1:n,1:n]).U
+        Quu[k] = cholesky(Quu[k]).U
+        Wxx = chol_plus(Qxx[k], Su[k+1]*fdx)
+        Wuu = chol_plus(Quu[k], Su[k+1]*fdu)
+
         # Constraints
         if res isa ConstrainedIterResults
             Iμ_sqrt = sqrt.(Iμ[k])
 
-            Qx += Cx[k]'*(Iμ[k]*C[k] + λ[k])
-            Qu += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
             Wxx = chol_plus(Wxx,Iμ_sqrt*Cx[k])
             Wuu = chol_plus(Wuu,Iμ_sqrt*Cu[k])
-            Qux += Cu[k]'*Iμ[k]*Cx[k]
-
-            @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx + Cx[k]'*Iμ[k]*Cx[k], Wxx'*Wxx)
-            @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu + Cu[k]'*Iμ[k]*Cu[k], Wuu'*Wuu)
+            Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
         end
 
         if solver.opts.bp_reg_type == :state
-            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*I*fdu)
-            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*fdu)
+            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
-            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*Matrix(I,m,m))
-            Qux_reg = Qux
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*Matrix(I,mm,mm))
+            Qux_reg[k] = Qux[k]
         end
 
         #TODO find better PD check for Wuu_reg
@@ -284,20 +310,45 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         # end
 
         # Compute gains
-        K[k] = -Wuu_reg\(Wuu_reg'\Qux_reg)
-        d[k] = -Wuu_reg\(Wuu_reg'\Qu)
+        K[k] = -Wuu_reg\(Wuu_reg'\Qux_reg[k])
+        d[k] = -Wuu_reg\(Wuu_reg'\Qu[k])
 
         # Calculate cost-to-go
-        s[k] = Qx + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu + Qux'*d[k]
+        s[k] = Qx[k] + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu[k] + Qux[k]'*d[k]
 
-        tmp1 = (Wxx')\Qux'
-        tmp2 = Wuu'*Wuu - tmp1'*tmp1
-        tmp3 = cholesky(tmp2).U
+        # try
+        #     tmp1 = (Wxx')\Qux[k]'
+        # catch SingularException
+        #     solver.opts.bp_reg_min = 1e-6
+        #     iter = 0
+        #     while minimum(eigvals(Wxx)) < 1e-6 && iter < 15
+        #         Wxx += reg*Matrix(I,nn,nn)
+        #         try
+        #             tmp1 = (Wxx')\Qux[k]'
+        #             break
+        #         catch
+        #             reg *= 10
+        #             iter += 1
+        #             if iter > 15
+        #                 error("broken :<")
+        #             end
+        #         end
+        #     end
+        # end
+        # println(tmp1)
+        # try
+        #     tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        # catch
+        #     tmp2 = chol_minus(Wuu,tmp1)
+        # end
+        tmp1 = (Wxx')\Qux[k]'
+        tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
-        Su[k][nn+1:nn+mm,1:nn] = tmp3*K[k]
+        Su[k][nn+1:nn+mm,1:nn] = tmp2*K[k]
 
         # calculated change is cost-to-go over entire trajectory
-        Δv[1] += d[k]'*Qu
+        Δv[1] += d[k]'*Qu[k]
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
         bp.Quu_reg[k] = Array(Wuu_reg)
@@ -319,4 +370,12 @@ function chol_plus(A,B)
     P[1:n1,:] = A
     P[n1+1:end,:] = B
     return qr(P).R
+end
+
+function chol_minus(A,B::Matrix)
+    AmB = Cholesky(A,:U,0)
+    for i = 1:size(B,1)
+        lowrankdowndate!(AmB,B[i,:])
+    end
+    U = AmB.U
 end

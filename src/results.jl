@@ -284,14 +284,14 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
         # Set initial penalty term values
         copyto!(results.μ, results.μ*solver.opts.penalty_initial) # TODO change to assign, not multiply: μ_initial needs to be initialized as an array instead of float
 
-        # Special penalty initializations
-        if solver.state.minimum_time
-            for k = 1:N-1
-                k != 1 ? results.μ[k][p] = solver.opts.penalty_initial_minimum_time_equality : nothing
-                results.μ[k][m̄] = solver.opts.penalty_initial_minimum_time_inequality
-                results.μ[k][m̄+m̄] = solver.opts.penalty_initial_minimum_time_inequality
-            end
-        end
+        # Special penalty initializations #TODO indexing needs to be fixed here to account for less control constraints than controls
+        # if solver.state.minimum_time
+        #     for k = 1:N-1
+        #         k != 1 ? results.μ[k][p] = solver.opts.penalty_initial_minimum_time_equality : nothing
+        #         results.μ[k][m̄] = solver.opts.penalty_initial_minimum_time_inequality
+        #         results.μ[k][m̄+m̄] = solver.opts.penalty_initial_minimum_time_inequality
+        #     end
+        # end
         if solver.state.infeasible
             nothing #TODO
         end
