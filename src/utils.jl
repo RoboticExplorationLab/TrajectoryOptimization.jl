@@ -2,6 +2,28 @@ import Base: convert, copyto!, Array
 import LinearAlgebra: norm
 import Plots: plot, plot!
 
+function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)
+    max_cn = 0.
+    for k = 1:N-1
+        cn = cond(bp.Quu_reg[k])
+        if cn > max_cn
+            max_cn = cn
+        end
+    end
+    return max_cn
+end
+
+function backwardpass_max_condition_number(results::TrajectoryOptimization.SolverVectorResults)
+    max_cn = 0.
+    for k = 1:N
+        cn = cond(results.S[k])
+        if cn > max_cn && cn < Inf
+            max_cn = cn
+        end
+    end
+    return max_cn
+end
+
 function get_cost_matrices(solver::Solver)
     solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
 end

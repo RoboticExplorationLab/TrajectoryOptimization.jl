@@ -72,6 +72,11 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
     # Boundary Conditions
     S[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
+    if solver.state.minimum_time
+        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
+        S[N][n̄,n̄] = 0.5*R_minimum_time
+    end
+
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
 
@@ -101,11 +106,14 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
             h = U[k][m̄]
             tmp = 2*h*expansion[5]
 
-            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Qu[k][m̄] = h*(2*ℓ1 + R_minimum_time)
             Quu[k][1:m,m̄] = tmp
             Quu[k][m̄,1:m] = tmp'
-            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Quu[k][m̄,m̄] = (2*ℓ1 + R_minimum_time)
             Qux[k][m̄,1:n] = 2*h*expansion[4]'
+
+            Qx[k][n̄] = R_minimum_time*X[k][n̄]
+            Qxx[k][n̄,n̄] = R_minimum_time
         end
 
         # Infeasible expansion components
@@ -215,11 +223,16 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
     # Boundary Conditions
     Su[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
+    if solver.state.minimum_time
+        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
+        Su[N][n̄,n̄] = 0.5*R_minimum_time
+    end
+
     # Take square root (via cholesky)
     try
-        Su[N][1:n,1:n] = cholesky(Su[N][1:n,1:n]).U # if no terminal cost is provided cholesky will fail gracefully
+        Su[N][1:nn,1:nn] = cholesky(Su[N][1:nn,1:nn]).U # if no terminal cost is provided cholesky will fail gracefully
     catch PosDefException
-        if tr(Su[N][1:n,1:n]) != 0.
+        if tr(Su[N][1:nn,1:nn]) != 0.
             error("Square root bp not currently implemented with positive semi-definite terminal cost Hessian")
         end
     end
@@ -253,11 +266,14 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
             h = U[k][m̄]
             tmp = 2*h*expansion[5]
 
-            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Qu[k][m̄] = h*(2*ℓ1 + R_minimum_time)
             Quu[k][1:m,m̄] = tmp
             Quu[k][m̄,1:m] = tmp'
-            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Quu[k][m̄,m̄] = (2*ℓ1 + R_minimum_time)
             Qux[k][m̄,1:n] = 2*h*expansion[4]'
+
+            Qx[k][n̄] = R_minimum_time*X[k][n̄]
+            Qxx[k][n̄,n̄] = R_minimum_time
         end
 
         # Infeasible expansion components
@@ -274,10 +290,12 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Qu[k] += fdu'*s[k+1]
         Qux[k] += (fdu'*Su[k+1]')*(Su[k+1]*fdx)
         try
-            Qxx[k][1:n,1:n] = cholesky(Qxx[k][1:n,1:n]).U
+            Qxx[k][1:nn,1:nn] = cholesky(Qxx[k][1:nn,1:nn]).U
         catch
             if tr(Qxx[k][1:n,1:n]) != 0.
                 error("Square root bp not currently implemented with positive semi-definite stage cost Hessian for states")
+            else
+                Qxx[k][n̄,n̄] = sqrt(Qxx[k][n̄,n̄])
             end
         end
         try
