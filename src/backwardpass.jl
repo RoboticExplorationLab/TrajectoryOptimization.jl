@@ -219,7 +219,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
     try
         Su[N][1:n,1:n] = cholesky(Su[N][1:n,1:n]).U # if no terminal cost is provided cholesky will fail gracefully
     catch PosDefException
-        nothing
+        if tr(Su[N][1:n,1:n]) != 0.
+            error("Square root bp not currently implemented with positive semi-definite terminal cost Hessian")
+        end
     end
 
     # Terminal constraints
@@ -274,12 +276,14 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         try
             Qxx[k][1:n,1:n] = cholesky(Qxx[k][1:n,1:n]).U
         catch
-            error("bp Qxx cholesky error")
+            if tr(Qxx[k][1:n,1:n]) != 0.
+                error("Square root bp not currently implemented with positive semi-definite stage cost Hessian for states")
+            end
         end
         try
             Quu[k] = cholesky(Quu[k]).U
         catch
-            error("bp Quu cholesky error")
+            error("Control Cost Hessian is not Positive Definite")
         end
 
         Wxx = chol_plus(Qxx[k], Su[k+1]*fdx)

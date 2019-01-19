@@ -18,4 +18,5 @@ This package solves optimal control problems using:
   * IPOPT, SNOPT
 
 -Autodifferentiation of nonlinear dynamics and constraint functions via ForwardDiff.jl
+
 -Dynamics directly from a URDF via RigidBodyDynamics.jl
