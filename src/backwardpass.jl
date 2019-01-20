@@ -220,7 +220,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     Δv = zeros(2)
     tmp1 = []
     tmp2 = []
-    
+
     k = N-1
     while k >= 1
         solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
@@ -320,18 +320,16 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         try
             tmp1 = (Wxx')\Qux[k]'
         catch SingularException
-            reg = solver.opts.bp_reg_min
-            iter = 0
-            while minimum(eigvals(Wxx)) < 1e-6 && iter < 15
+            reg = solver.opts.bp_reg_sqrt_initial
+            while minimum(eigvals(Wxx)) < 1e-6
                 Wxx += reg*Matrix(I,nn,nn)
                 try
                     tmp1 = (Wxx')\Qux[k]'
                     break
                 catch
-                    reg *= 10
-                    iter += 1
-                    if iter > 15
-                        error("broken :<")
+                    reg *= solver.opts.bp_reg_sqrt_increase_factor
+                    if reg >= solver.opts.bp_reg_max
+                        error("Square root regularization exceded")
                     end
                 end
             end
@@ -372,6 +370,7 @@ function chol_plus(A,B)
 end
 
 function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)
+    N = length(bp.Quu)
     max_cn = 0.
     for k = 1:N-1
         cn = cond(bp.Quu_reg[k])
@@ -383,6 +382,7 @@ function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPa
 end
 
 function backwardpass_max_condition_number(results::TrajectoryOptimization.SolverVectorResults)
+    N = length(results.S)
     max_cn = 0.
     for k = 1:N
         cn = cond(results.S[k])

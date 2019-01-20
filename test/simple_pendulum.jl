@@ -1,8 +1,8 @@
 # Set up models and objective
-model, obj = TrajectoryOptimization.Dynamics.pendulum!
+model, obj = TrajectoryOptimization.Dynamics.pendulum
 obj_c = Dynamics.pendulum_constrained[2]
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = true
+opts.verbose = false
 opts.cost_tolerance = 1e-5
 opts.constraint_tolerance = 1e-5
 
@@ -61,13 +61,15 @@ max_c = TrajectoryOptimization.max_violation(results_inf)
 @test max_c < 1e-5
 
 # test linear interpolation for state trajectory
+using Plots
+plot(X_interp')
 @test norm(X_interp[:,1] - solver.obj.x0) < 1e-8
 @test norm(X_interp[:,end] - solver.obj.xf) < 1e-8
 @test all(X_interp[1,2:end-1] .<= max(solver.obj.x0[1],solver.obj.xf[1]))
 @test all(X_interp[2,2:end-1] .<= max(solver.obj.x0[2],solver.obj.xf[2]))
 
 # test that additional augmented controls can achieve an infeasible state trajectory
-solver = TrajectoryOptimization.Solver(model, obj_inf, dt=0.1, opts=opts)
+solver = TrajectoryOptimization.Solver(model, obj_c, dt=0.1, opts=opts)
 U_infeasible = ones(solver.model.m,solver.N-1)
 X_infeasible = ones(solver.model.n,solver.N)
 solver.obj.x0[:] = ones(solver.model.n)

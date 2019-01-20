@@ -1,5 +1,5 @@
 # Pendulum
-model,obj = TrajectoryOptimization.Dynamics.pendulum!
+model,obj = TrajectoryOptimization.Dynamics.pendulum
 n,m = model.n, model.m
 
 u_bound = 5.

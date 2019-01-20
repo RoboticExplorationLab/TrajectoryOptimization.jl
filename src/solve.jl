@@ -193,25 +193,25 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             Δv = backwardpass!(results, solver)
 
             # condition numbers and min eigen value
-            max_cn = 0.
-            min_eig = Inf
-            for kkk = 1:N-1
-                cn = cond(results.bp.Quu_reg[kkk])
-                if cn > max_cn
-                    max_cn = cn
-                end
-                me = minimum(real.(eigvals(results.bp.Quu_reg[kkk])))
-                if me < min_eig
-                    min_eig = me
-                end
-            end
-            cond_n = zeros(N)
-            for k = 1:N
-                cond_n[k] = cond(results.S[k])
-            end
-            push!(max_cn_hist,max_cn)
-            push!(min_eig_hist,min_eig)
-            push!(max_cn_S_hist,maximum(cond_n))
+            # max_cn = 0.
+            # min_eig = Inf
+            # for kkk = 1:N-1
+            #     cn = cond(results.bp.Quu_reg[kkk])
+            #     if cn > max_cn
+            #         max_cn = cn
+            #     end
+            #     me = minimum(real.(eigvals(results.bp.Quu_reg[kkk])))
+            #     if me < min_eig
+            #         min_eig = me
+            #     end
+            # end
+            # cond_n = zeros(N)
+            # for k = 1:N
+            #     cond_n[k] = cond(results.S[k])
+            # end
+            # push!(max_cn_hist,max_cn)
+            # push!(min_eig_hist,min_eig)
+            # push!(max_cn_S_hist,maximum(cond_n))
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
@@ -263,9 +263,9 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :j value=j
-            @logmsg InnerLoop :max_cn value=max_cn
-            @logmsg InnerLoop :min_eig value=min_eig
-            @logmsg InnerLoop :zero_count value=dJ_zero_counter
+            # @logmsg InnerLoop :max_cn value=max_cn
+            # @logmsg InnerLoop :min_eig value=min_eig
+            # @logmsg InnerLoop :zero_count value=dJ_zero_counter
 
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing

@@ -20,9 +20,9 @@ x0 = [0; 0.]
 xf = [pi; 0] # (ie, swing up)
 
 # costs
-Q = 1e-3*Diagonal(I,n)
-Qf = 100.0*Diagonal(I,n)
-R = 1e-2*Diagonal(I,m)
+Q = 1e-3*Matrix(I,n,n)
+Qf = 100.0*Matrix(I,n,n)
+R = 1e-2*Matrix(I,m,m)
 
 # simulation
 tf = 5.

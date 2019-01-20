@@ -12,6 +12,12 @@ disable_logging(Logging.Info)
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")
 end
+@testset "Dubins Car" begin
+    include("dubins_car_tests.jl")
+end
+@testset "Quadrotor" begin
+    include("quadrotor_tests.jl")
+end
 @testset "Constrained Objective" begin
     include("objective_tests.jl")
 end

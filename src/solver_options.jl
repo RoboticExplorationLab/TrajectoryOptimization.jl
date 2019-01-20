@@ -47,6 +47,8 @@ mutable struct SolverOptions
     bp_reg_fp::Float64 # additive regularization when forward pass reaches max iterations
     eigenvalue_scaling::Float64 # add this multiple of the magnitude of the most negative eigenvalue to Quu decomposition to make positive definite
     eigenvalue_threshold::Float64 # eigenvalues less than this threshold will be increased using the additive eigenvalue scaling
+    bp_reg_sqrt_initial::Float64 # initial regularization for square root method
+    bp_reg_sqrt_increase_factor::Float64 # regularization scaling factor for square root method
 
     ##########################
     ## Augmented Lagrangian ##
@@ -119,6 +121,8 @@ mutable struct SolverOptions
         bp_reg_fp=10.0,
         eigenvalue_scaling=2.0,
         eigenvalue_threshold=1e-8,
+        bp_reg_sqrt_initial=1.0e-6,
+        bp_reg_sqrt_increase_factor=10.0,
         iterations_outerloop=30,
         dual_min=-1.0e8,
         dual_max=1.0e8,
@@ -176,6 +180,8 @@ mutable struct SolverOptions
             bp_reg_fp,
             eigenvalue_scaling,
             eigenvalue_threshold,
+            bp_reg_sqrt_initial,
+            bp_reg_sqrt_increase_factor,
             iterations_outerloop,
             dual_min,
             dual_max,
