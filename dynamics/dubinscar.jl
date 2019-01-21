@@ -11,7 +11,11 @@ n,m = 3,2
 
 model = Model(dubins_dynamics!,n,m)
 
-## Unconstrained Parallel Park
+##########################
+## Constrained Examples ##
+##########################
+
+# Unconstrained Parallel Park
 # initial and goal states
 x0 = [0.;0.;0.]
 xf = [0.;1.;0.]
@@ -73,7 +77,7 @@ function cI_3obs(c,x,u)
 end
 
 obj_con_obstacles = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max,cI=cI_3obs)
-obj_con_obstacles_control = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min, u_max=u_max,x_min=x_min,x_max=x_max,cI=cI_3obs)
+obj_con_obstacles_control = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max,cI=cI_3obs)
 
 dubinscar_obstacles = [model, obj_con_obstacles,circles_3obs]
 dubinscar_obstacles_control_limits = [model, obj_con_obstacles_control,circles_3obs]
@@ -85,8 +89,8 @@ tf =  3.0
 Qf = 100.0*Diagonal(I,n)
 Q = (1e-3)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
-u_min = [-10.; -10.]
-u_max = [10.; 10.]
+u_min = [-5.; -5.]
+u_max = [5.; 5.]
 
 obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 
@@ -121,6 +125,6 @@ function cI_escape(c,x,u)
     c
 end
 
-obj_escape = TrajectoryOptimization.ConstrainedObjective(obj,cI=cI_escape,u_min=-10,u_max=10)
+obj_escape = TrajectoryOptimization.ConstrainedObjective(obj,cI=cI_escape,u_min=u_min,u_max=u_max)
 
 dubinscar_escape = [model,obj_escape,circles_escape]
