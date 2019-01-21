@@ -33,7 +33,7 @@ end
 @testset "Infeasible Start" begin
     include("infeasible_start_tests.jl")
 end
-@testset "Minimum Time Tests" begin
+@testset "Minimum Time" begin
     include("minimum_time_tests.jl")
 end
 # @testset "Direct Collocation" begin

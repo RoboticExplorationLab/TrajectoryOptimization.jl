@@ -61,18 +61,17 @@ max_c = TrajectoryOptimization.max_violation(results_inf)
 @test max_c < 1e-5
 
 # test linear interpolation for state trajectory
-using Plots
-plot(X_interp')
-@test norm(X_interp[:,1] - solver.obj.x0) < 1e-8
+@test norm(X_interp[:,1] - solver_inf.obj.x0) < 1e-8
 @test norm(X_interp[:,end] - solver.obj.xf) < 1e-8
 @test all(X_interp[1,2:end-1] .<= max(solver.obj.x0[1],solver.obj.xf[1]))
 @test all(X_interp[2,2:end-1] .<= max(solver.obj.x0[2],solver.obj.xf[2]))
 
 # test that additional augmented controls can achieve an infeasible state trajectory
-solver = TrajectoryOptimization.Solver(model, obj_c, dt=0.1, opts=opts)
+obj_c_2 = copy(obj_c)
+obj_c_2.x0[:] = ones(solver.model.n)
+solver = TrajectoryOptimization.Solver(model, obj_c_2, dt=0.1, opts=opts)
 U_infeasible = ones(solver.model.m,solver.N-1)
 X_infeasible = ones(solver.model.n,solver.N)
-solver.obj.x0[:] = ones(solver.model.n)
 solver.state.infeasible = true  # solver needs to know to use an infeasible rollout
 p, pI, pE = TrajectoryOptimization.get_num_constraints(solver::Solver)
 p_N, pI_N, pE_N = TrajectoryOptimization.get_num_constraints(solver::Solver)
