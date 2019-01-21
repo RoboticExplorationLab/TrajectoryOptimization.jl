@@ -122,7 +122,7 @@ mutable struct SolverOptions
         bp_reg_fp=10.0,
         eigenvalue_scaling=2.0,
         eigenvalue_threshold=1e-8,
-        bp_sqrt_inv_type=:reg,
+        bp_sqrt_inv_type=:pseudo,
         bp_reg_sqrt_initial=1.0e-6,
         bp_reg_sqrt_increase_factor=10.0,
         iterations_outerloop=30,

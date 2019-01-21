@@ -228,6 +228,7 @@ opts = TrajectoryOptimization.SolverOptions()
 solver = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
 solver_sqrt = TrajectoryOptimization.Solver(model,obj_,dt=0.1,opts=opts)
 solver_sqrt.opts.square_root = true
+solver_sqrt.opts.bp_sqrt_inv_type = :pseudo
 U0 = ones(solver.model.m,solver.N)
 results = init_results(solver,Array{Float64}(undef,0,0),U0)
 results_sqrt = init_results(solver_sqrt,Array{Float64}(undef,0,0),U0)
@@ -244,20 +245,20 @@ TrajectoryOptimization.update_jacobians!(results_sqrt,solver_sqrt)
 ΔV_sqrt = TrajectoryOptimization.backwardpass!(results_sqrt,solver_sqrt)
 
 # test that results from square root backward pass are the same as backward pass
-# @test isapprox(ΔV,ΔV_sqrt)
-# @test norm(to_array(results.K) .- to_array(results_sqrt.K)) < 1e-12
-# @test norm(to_array(results.d) .- to_array(results_sqrt.d)) < 1e-12
-# S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
-# @test norm(to_array(results.S) .- to_array(S_sqrt)) < 1e-12
+@test isapprox(ΔV,ΔV_sqrt)
+@test norm(to_array(results.K) .- to_array(results_sqrt.K)) < 1e-12
+@test norm(to_array(results.d) .- to_array(results_sqrt.d)) < 1e-12
+S_sqrt = [results_sqrt.S[k]'*results_sqrt.S[k] for k = 1:N]
+@test norm(to_array(results.S) .- to_array(S_sqrt)) < 1e-12
 #
-# max_cn_Quu = TrajectoryOptimization.backwardpass_max_condition_number(results.bp)
-# max_cn_S = TrajectoryOptimization.backwardpass_max_condition_number(results)
-# max_cn_Quu_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results_sqrt.bp)
-# max_cn_S_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results_sqrt)
+max_cn_Quu = TrajectoryOptimization.backwardpass_max_condition_number(results.bp)
+max_cn_S = TrajectoryOptimization.backwardpass_max_condition_number(results)
+max_cn_Quu_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results_sqrt.bp)
+max_cn_S_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results_sqrt)
 
-# NOTE: If you have not state stage costs or state terminal cost the square root method may not be more numerical well conditioned
-# @test max_cn_Quu_sqrt max_cn_Quu
-# @test max_cn_S_sqrt < max_cn_S # this test fails but that may be ok
+# NOTE: If you have not state stage costs or state terminal cost the square root method may not be better numerically conditioned
+@test max_cn_Quu_sqrt <= max_cn_Quu
+@test max_cn_S_sqrt <= max_cn_S # this test fails but that may be ok
 
 # w/ regularization
 opts = TrajectoryOptimization.SolverOptions()

@@ -337,7 +337,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
                     end
                 end
             elseif solver.opts.bp_sqrt_inv_type == :pseudo
-                tmp1 = pinv(Wxx')\Qux[k]'
+                tmp1 = pinv(Array(Wxx'))*Qux[k]'
             end
         end
 
