@@ -199,8 +199,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     try
         Su[N][1:nn,1:nn] = cholesky(Su[N][1:nn,1:nn]).U # if no terminal cost is provided cholesky will fail gracefully
     catch PosDefException
-        if sum([Su[N][i,i] for i = 1:n]) != 0.
-            error("Square root bp not currently implemented with positive semi-definite terminal cost Hessian")
+        if sum([Su[N][i,i] for i = 1:n]) != 0. # TODO there may be something faster here, but lu fails for this case
+            tmp = svd(Su[N])
+            Su[N] = Diagonal(sqrt.(tmp.S))*tmp.V'
         elseif tr(Su[N][1:n,1:n]) == 0. && n̄ > n
             Su[N][n̄,n̄] = sqrt(Su[N][n̄,n̄])
         end
@@ -263,8 +264,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         try
             Qxx[k][1:nn,1:nn] = cholesky(Qxx[k][1:nn,1:nn]).U
         catch
-            if sum([Qxx[k][i,i] for i = 1:n]) != 0.
-                error("Square root bp not currently implemented with positive semi-definite stage cost Hessian for states")
+            if sum([Qxx[k][i,i] for i = 1:n]) != 0. #TODO lu fails, there may be something faster than svd...
+                tmp = svd(Qxx[k])
+                Qxx[k] = Diagonal(sqrt.(tmp.S))*tmp.V'
             elseif tr(Qxx[k][1:n,1:n]) == 0. && n̄ > n
                 Qxx[k][n̄,n̄] = sqrt(Qxx[k][n̄,n̄])
             end
@@ -320,25 +322,31 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         try
             tmp1 = (Wxx')\Qux[k]'
         catch SingularException
-            reg = solver.opts.bp_reg_sqrt_initial
-            while minimum(eigvals(Wxx)) < 1e-6
-                Wxx += reg*Matrix(I,nn,nn)
-                try
-                    tmp1 = (Wxx')\Qux[k]'
-                    break
-                catch
-                    reg *= solver.opts.bp_reg_sqrt_increase_factor
-                    if reg >= solver.opts.bp_reg_max
-                        error("Square root regularization exceded")
+            if solver.opts.bp_sqrt_inv_type == :reg
+                reg = solver.opts.bp_reg_sqrt_initial
+                while minimum(eigvals(Wxx)) < 1e-6
+                    Wxx += reg*Matrix(I,nn,nn)
+                    try
+                        tmp1 = (Wxx')\Qux[k]'
+                        break
+                    catch
+                        reg *= solver.opts.bp_reg_sqrt_increase_factor
+                        if reg >= solver.opts.bp_reg_max
+                            error("Square root regularization exceded")
+                        end
                     end
                 end
+            elseif solver.opts.bp_sqrt_inv_type == :pseudo
+                tmp1 = pinv(Wxx')\Qux[k]'
             end
         end
 
         try
             tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
         catch
-            tmp2 = chol_minus(Wuu,tmp1)
+            # tmp2 = chol_minus(Wuu,tmp1)
+            tmp = svd(Wuu'*Wuu - tmp1'*tmp1)
+            tmp2 = Diagonal(sqrt.(tmp.S))*tmp.V'
         end
 
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
