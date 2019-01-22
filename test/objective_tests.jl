@@ -2,9 +2,9 @@ using TrajectoryOptimization: generate_general_constraint_jacobian, is_inplace_f
 using Test
 
 """ Simple Pendulum """
-pendulum = Dynamics.pendulum[1]
-n = pendulum.n
-m = pendulum.m
+model, = TrajectoryOptimization.Dynamics.pendulum
+n = model.n
+m = model.m
 x0 = [0; 0.];
 xf = [pi; 0]; # (ie, swing up)
 u0 = [1]

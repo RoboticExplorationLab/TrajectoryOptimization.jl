@@ -1,7 +1,7 @@
 Random.seed!(123)
 
 # Solver options
-N = 101
+N = 201
 integration = :rk4
 opts = SolverOptions()
 opts.verbose = false
@@ -22,40 +22,25 @@ U0 = ones(solver_uncon.model.m, solver_uncon.N-1)
 results_uncon, stats_uncon = solve(solver_uncon,U0)
 @test norm(results_uncon.X[end]-obj.xf) < 5e-3
 
-# Constrained
-r_quad = 3.0
-r_sphere = 3.0
-spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
-n_spheres = 3
+# Unit quaternion
+model, obj_uq = TrajectoryOptimization.Dynamics.quadrotor_unit_quaternion
 
-# -control limits
-u_min = 0.0
-u_max = 100.0
+solver_uq = Solver(model,obj_uq,integration=integration,N=N,opts=opts)
+results_uq, stats_uq = solve(solver_uq,U0)
 
-# 3 sphere obstacles
-function cI_3obs_quad(c,x,u)
-    for i = 1:n_spheres
-        c[i] = TrajectoryOptimization.sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
-    end
-    c
-end
+@test norm(results_uq.X[end]-obj_uq.xf) < 1e-5
+@test norm(max_violation(results_uq)) < 1e-5
 
-# unit quaternion constraint
-function unit_quaternion(c,x,u)
-    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
+# 3 sphere obstacles + unit quaternion
+model, obj_obs = TrajectoryOptimization.Dynamics.quadrotor_3obs
 
-obj_uq = TrajectoryOptimization.ConstrainedObjective(obj,cE=unit_quaternion)
+solver_obs = Solver(model,obj_obs,integration=integration,N=N,opts=opts)
+solver_obs.opts.square_root = true
+solver_obs.opts.outer_loop_update_type = :feedback
+results_obs, stats_obs = solve(solver_obs,U0)
 
-solver = Solver(model,obj_uq,integration=integration,N=N,opts=opts)
-results, stats = solve(solver,U0)
+@test norm(results_obs.X[end]-obj_obs.xf) < 1e-5
+@test norm(max_violation(results_obs)) < 1e-5
 
-@test norm(results.X[end]-obj_uq.xf) < 1e-5
-@test norm(max_violation(results)) < 1e-5
-
-# obj_obs = TrajectoryOptimization.ConstrainedObjective(obj,cE=unit_quaternion,cI=cI_3obs_quad)
-# solver = Solver(model,obj_obs,integration=integration,N=N,opts=opts)
-# results, stats = solve(solver,U0)
-#
-# @test norm(results.X[end]-obj_obs.xf) < 1e-5
-# @test norm(max_violation(results)) < 1e-5
+# plot(to_array(results_obs.X)[1:3,:]')
+# plot(to_array(results_obs.U[1:solver_obs.N-1])')

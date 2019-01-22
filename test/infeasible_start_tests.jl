@@ -12,7 +12,7 @@ solver = Solver(model,obj,dt=0.1,opts=opts)
 X_interp = line_trajectory(solver)
 U = ones(solver.model.m,solver.N-1)
 
-results, stats = solve(solver_uncon,X_interp,U)
+results, stats = solve(solver,X_interp,U)
 
 @test norm(results.X[end] - solver.obj.xf) < 1e-5
 @test max_violation(results) < 1e-5
