@@ -140,4 +140,4 @@ obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max
 obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad,cE=unit_quaternion)
 
 quadrotor_unit_quaternion = [model, obj_uq]
-quadrotor_3obs = [model, obj_3obs]
+quadrotor_3obs = [model, obj_3obs, spheres]

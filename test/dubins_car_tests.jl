@@ -72,7 +72,7 @@ N_escape = 101
 model, obj_escape, circles_escape = TrajectoryOptimization.Dynamics.dubinscar_escape
 solver_escape = Solver(model, obj_escape, integration=integration, N=N_escape, opts=opts)
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
-X0 = TrajectoryOptimization.interp_rows(solver_escape.N,tf,Array(X_guess'))
+X0 = TrajectoryOptimization.interp_rows(solver_escape.N,solver_escape.obj.tf,Array(X_guess'))
 U0 = ones(solver_escape.model.m,solver_escape.N-1)
 
 solver_escape.opts.R_infeasible = 1e-1

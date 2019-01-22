@@ -12,7 +12,6 @@ opts.constraint_tolerance = 1e-5
 
 # Set up model, objective, solver
 model, obj = TrajectoryOptimization.Dynamics.quadrotor
-obj_c = TrajectoryOptimization.Dynamics.quadrotor_constrained[2]
 n = model.n
 m = model.m
 

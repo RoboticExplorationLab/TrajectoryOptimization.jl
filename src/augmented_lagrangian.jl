@@ -559,6 +559,8 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= deepcopy(results.C)
 
+    # reset regularization
+    results.ρ[1] = 0.
     return nothing
 end
 
