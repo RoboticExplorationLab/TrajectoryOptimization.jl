@@ -153,9 +153,9 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     J_hist = Vector{Float64}()
     grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
-    max_cn_hist = Vector{Float64}()
-    min_eig_hist = Vector{Float64}()
-    max_cn_S_hist = Vector{Float64}()
+    c_l2_norm_hist = Vector{Float64}()
+    cn_Quu_hist = Vector{Float64}()
+    cn_S_hist = Vector{Float64}()
     outer_updates = Int[]
     t_solve_start = time_ns()
 
@@ -192,32 +192,11 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             update_jacobians!(results, solver)
             Δv = backwardpass!(results, solver)
 
-            # condition numbers and min eigen value
-            # max_cn = 0.
-            # min_eig = Inf
-            # for kkk = 1:N-1
-            #     cn = cond(results.bp.Quu_reg[kkk])
-            #     if cn > max_cn
-            #         max_cn = cn
-            #     end
-            #     me = minimum(real.(eigvals(results.bp.Quu_reg[kkk])))
-            #     if me < min_eig
-            #         min_eig = me
-            #     end
-            # end
-            # cond_n = zeros(N)
-            # for k = 1:N
-            #     cond_n[k] = cond(results.S[k])
-            # end
-            # push!(max_cn_hist,max_cn)
-            # push!(min_eig_hist,min_eig)
-            # push!(max_cn_S_hist,maximum(cond_n))
-
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
-            ## Check gradients for convergence ##
+            # gradients
             if solver.opts.gradient_type == :todorov
                 gradient = gradient_todorov(results)
             elseif solver.opts.gradient_type == :AuLa
@@ -226,6 +205,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 gradient = gradient_feedforward(results)
             end
             push!(grad_norm_hist,gradient)
+
+            # condition numbers
+            cn_Quu = backwardpass_max_condition_number(results.bp)
+            cn_S = backwardpass_max_condition_number(results)
+            push!(cn_Quu_hist,cn_Quu)
+            push!(cn_S_hist,cn_S)
 
             # increment iLQR inner loop counter
             iter += 1
@@ -242,7 +227,10 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
             if solver.state.constrained
                 c_max = max_violation(results)
+                c_ℓ2_norm = constraint_ℓ2_norm(results)
                 push!(c_max_hist, c_max)
+                push!(c_l2_norm_hist, c_ℓ2_norm)
+
                 @logmsg InnerLoop :c_max value=c_max
 
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
@@ -258,16 +246,11 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 end
             end
 
-            grad2 = maximum(norm.(results.d,Inf))
-
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :grad value=gradient
-            @logmsg InnerLoop :grad2 value=grad2
-            # @logmsg InnerLoop :j value=j
-            @logmsg InnerLoop :max_cn value=max_cn
-            # @logmsg InnerLoop :min_eig value=min_eig
+            @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_count value=dJ_zero_counter
 
 
@@ -312,15 +295,16 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
     # Run Stats
     stats = Dict("iterations"=>iter,
-        "major iterations"=>iter_outer,
+        "outer loop iterations"=>iter_outer,
         "runtime"=>float(time_ns() - t_solve_start)/1e9,
         "setup_time"=>float(time_setup)/1e9,
         "cost"=>J_hist,
         "c_max"=>c_max_hist,
-        "gradient_norm"=>grad_norm_hist,
-        "max_condition_number"=>max_cn_hist,
-        "outer_updates"=>outer_updates,
-        "max_condition_number_S"=>max_cn_S_hist)
+        "c_l2_norm"=>c_l2_norm_hist,
+        "gradient norm"=>grad_norm_hist,
+        "outer loop iteration index"=>outer_updates,
+        "S condition number"=>cn_S_hist,
+        "Quu condition number"=>cn_Quu_hist,)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
@@ -371,13 +355,15 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 stats[key * " (infeasible)"] = stats[key]
             end
             stats["iterations"] += stats_feasible["iterations"]
-            stats["major iterations"] += stats_feasible["major iterations"]
+            stats["outer loop iterations"] += stats_feasible["major iterations"]
             stats["runtime"] += stats_feasible["runtime"]
             stats["setup_time"] += stats_feasible["setup_time"]
             append!(stats["cost"], stats_feasible["cost"])
             append!(stats["c_max"], stats_feasible["c_max"])
-            append!(stats["gradient_norm"], stats_feasible["gradient_norm"])
-            append!(stats["max_condition_number"], stats_feasible["max_condition_number"])
+            append!(stats["c_l2_norm"], stats_feasible["c_l2_norm"])
+            append!(stats["gradient norm"], stats_feasible["gradient norm"])
+            append!(stats["Quu condition number"], stats_feasible["Quu condition number"])
+            append!(stats["S condition number"], stats_feasible["S condition number"])
         end
 
         # return feasible results

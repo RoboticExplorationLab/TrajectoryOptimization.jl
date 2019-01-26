@@ -67,7 +67,7 @@ n_spheres = length(spheres)
 
 solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
-
+solver_con.opts.square_root = true
 U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
 X_hover = rollout(solver_uncon,U_hover)
 
@@ -77,6 +77,23 @@ X_hover = rollout(solver_uncon,U_hover)
 plot(to_array(results_con.U)[:,1:solver_con.N-1]')
 plot(to_array(results_con.X)[1:3,:]')
 max_violation(results_con) < opts.constraint_tolerance
+
+
+# Constraint Convergence Plot
+plot(log.(stats_con["c_max"]),title="Constrained Quadrotor",label="c_max",xlabel="iteration",ylabel="log()")
+plot!(log.(stats_con["c_l2_norm"]),label="||c||_2",legend=:bottomleft)
+
+y = range(minimum(log.(stats_con["c_max"])), stop=maximum(log.(stats_con["c_l2_norm"])),length=100)
+for i = 1:length(stats_con["outer loop iteration index"])
+    plt=plot!(stats_con["outer loop iteration index"][i]*ones(100),y,label="",color=:black,linestyle=:dash)
+    display(plt)
+end
+
+stats_con["iterations"]
+stats_con["outer loop iterations"]
+stats_con["c_max"][end]
+
+stats_con
 
 obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 

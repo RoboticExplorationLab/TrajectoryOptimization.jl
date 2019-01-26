@@ -412,6 +412,19 @@ $(SIGNATURES)
 Compute the maximum constraint violation. Inactive inequality constraints are
 not counted (masked by the Iμ matrix).
 """
+function constraint_ℓ2_norm(results::ConstrainedIterResults)
+    return norm(map((x)->x.>0, results.Iμ) .* results.C)
+end
+
+function contraint_ℓ2_norm(results::UnconstrainedIterResults)
+    return 0.0
+end
+
+"""
+$(SIGNATURES)
+Compute the ℓ2-norm over entire constraint trajectory. Inactive inequality constraints are
+not counted (masked by the Iμ matrix).
+"""
 function max_violation(results::ConstrainedIterResults)
     return maximum(norm.(map((x)->x.>0, results.Iμ) .* results.C, Inf))
 end
@@ -420,8 +433,9 @@ function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
 
-## Simple constraint primitives
 
+
+## Simple constraint primitives
 """
 $(SIGNATURES)
 Circle constraint function (c ⩽ 0, negative is satisfying constraint)
