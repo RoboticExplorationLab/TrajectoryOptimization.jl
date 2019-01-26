@@ -159,11 +159,11 @@ for i = 1:N
     sleep(solver_con.dt*2)
 end
 
-for i = 1:N
-    settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
-    solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
-    sleep(dt)
-end
+# for i = 1:N
+#     settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
+#     solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
+#     sleep(dt)
+# end
 
 ##########
 ## Maze ##
@@ -185,19 +185,23 @@ xf[4:7] = q0
 
 # -control limits
 u_min = 0.0
-u_max = 100.0
+u_max = 25.0
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 x_max[1:3] = [25.0; Inf; 6.]
 x_min[1:3] = [-25.0; -Inf; 0.]
 
+# Q = (1e-1)*Matrix(I,model.n,model.n)
+# Q[4,4] = 1.0
+# Q[5,5] = 1.0
+# Q[6,6] = 1.0
+# Q[7,7] = 1.0
+# R = (1.0)*Matrix(I,model.m,model.m)
+# Qf = (100.0)*Matrix(I,model.n,model.n)
 Q = (1e-1)*Matrix(I,model.n,model.n)
-Q[4,4] = 1.0
-Q[5,5] = 1.0
-Q[6,6] = 1.0
-Q[7,7] = 1.0
-R = (1.0)*Matrix(I,model.m,model.m)
-Qf = (100.0)*Matrix(I,model.n,model.n)
+
+R = (1e-2)*Matrix(I,model.m,model.m)
+Qf = (1000.0)*Matrix(I,model.n,model.n)
 
 # obstacles constraint
 # -obstacles
@@ -285,8 +289,10 @@ plot(X0[1:3,:]')
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
 plot(to_array(results_uncon.U)')
 
+U_line = to_array(results_uncon.U)
+
 solver_con.opts.square_root = true
-solver_con.opts.R_infeasible = 10.0
+solver_con.opts.R_infeasible = 1.0
 solver_con.opts.resolve_feasible = false
 solver_con.opts.cost_tolerance = 1e-6
 solver_con.opts.cost_tolerance_intermediate = 1e-4
@@ -295,7 +301,9 @@ solver_con.opts.constraint_tolerance_intermediate = 0.01
 solver_con.opts.penalty_scaling = 10.0
 solver_con.opts.penalty_initial = 1.0
 solver_con.opts.outer_loop_update_type = :feedback
-solver_con.opts.iterations_outerloop = 25
+solver_con.opts.iterations_outerloop = 50
+solver_con.opts.iterations = 500
+solver_con.opts.iterations_innerloop = 250
 solver_con.opts.use_penalty_burnin = false
 solver_con.opts.verbose = false
 solver_con.opts.live_plotting = false
@@ -312,7 +320,7 @@ plot(to_array(results_con.X)[1:3,:]')
 max_violation(results_con)
 total_time(solver_con,results_con)
 
-obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
+# obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 
 # Set camera location
 settransform!(vis["/Cameras/default"], compose(Translation(0., 75., 50.),LinearMap(RotX(pi/10)*RotZ(pi/2))))
@@ -333,10 +341,10 @@ for i = 1:N
     setobject!(vis["traj"]["t$i"],sphere_small,blue_)
     settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
 end
-for i = 1:N
-    setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
-    settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
-end
+# for i = 1:N
+#     setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
+#     settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
+# end
 #
 # Create and place initial position
 setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
@@ -359,22 +367,20 @@ for i = 1:N
     sleep(solver_con.dt)
 end
 
-for i = 1:N
-    settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
-    solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
-    sleep(dt)
-end
+# for i = 1:N
+#     settransform!(vis["robot_mintime"], compose(Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]),LinearMap(quat2rot(results_mintime.X[i][4:7]))))
+#     solver_mintime.state.minimum_time && i != N ? dt = results_mintime.U[i][m+1]^2 : dt = solver_con.dt
+#     sleep(dt)
+# end
+#
+#
+# plot(X0[1:3,:]')
+#
+# for i = 1:N
+#     setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
+#     settransform!(vis["traj_uncon"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
+# end
 
-#
-#
-plot(X0[1:3,:]')
-#
-for i = 1:N
-    setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
-    settransform!(vis["traj_uncon"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
-end
-
-a = 1
 
 # for i in 1:
 #     for j = range(0,stop=,length=)
