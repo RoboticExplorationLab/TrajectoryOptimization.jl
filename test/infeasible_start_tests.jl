@@ -17,7 +17,7 @@ results, stats = solve(solver,X_interp,U)
 @test norm(results.X[end] - solver.obj.xf) < 1e-5
 @test max_violation(results) < 1e-5
 @test 0.5*(stats["iterations"] - stats["iterations (infeasible)"]) < stats["iterations (infeasible)"]
-@test 0.5*(stats["major iterations"] - stats["major iterations (infeasible)"]) < stats["major iterations (infeasible)"]
+@test 0.5*(stats["outer loop iterations"] - stats["outer loop iterations (infeasible)"]) < stats["outer loop iterations (infeasible)"]
 
 # Constraints
 u_min = -2
@@ -36,4 +36,4 @@ results_con, stats_con = solve(solver_con,X_interp,U)
 @test norm(results_con.X[end] - solver_con.obj.xf) < 1e-5
 @test max_violation(results_con) < 1e-5
 @test 0.5*(stats_con["iterations"] - stats_con["iterations (infeasible)"]) < stats_con["iterations (infeasible)"]
-@test 0.5*(stats_con["major iterations"] - stats_con["major iterations (infeasible)"]) < stats_con["major iterations (infeasible)"]
+@test 0.5*(stats_con["outer loop iterations"] - stats_con["outer loop iterations (infeasible)"]) < stats_con["outer loop iterations (infeasible)"]

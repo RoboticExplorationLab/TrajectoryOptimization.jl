@@ -361,7 +361,9 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
         Quu_reg[k] = Array(Wuu_reg)
+    
         Quu[k] = Array(Wuu)
+        Qxx[k] = Array(Wxx)
 
         k = k - 1;
     end

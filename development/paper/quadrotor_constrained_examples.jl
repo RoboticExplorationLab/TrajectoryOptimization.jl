@@ -56,8 +56,12 @@ opts.square_root = true
 opts.cost_tolerance = 1e-6
 opts.cost_tolerance_intermediate = 1e-5
 opts.constraint_tolerance = 1e-5
+opts.constraint_tolerance_intermediate = 1e-3
 opts.use_penalty_burnin = false
 opts.outer_loop_update_type = :feedback
+
+opts.constraint_tolerance_second_order_dual_update = sqrt(opts.constraint_tolerance)
+opts.use_second_order_dual_update = false
 
 # Set up model, objective, solver
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
@@ -67,7 +71,6 @@ n_spheres = length(spheres)
 
 solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
-solver_con.opts.square_root = true
 U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
 X_hover = rollout(solver_uncon,U_hover)
 
@@ -80,7 +83,7 @@ max_violation(results_con) < opts.constraint_tolerance
 
 
 # Constraint Convergence Plot
-plot(log.(stats_con["c_max"]),title="Constrained Quadrotor",label="c_max",xlabel="iteration",ylabel="log()")
+plot!(log.(stats_con["c_max"]),title="Constrained Quadrotor",label="c_max",xlabel="iteration",ylabel="log()")
 plot!(log.(stats_con["c_l2_norm"]),label="||c||_2",legend=:bottomleft)
 
 y = range(minimum(log.(stats_con["c_max"])), stop=maximum(log.(stats_con["c_l2_norm"])),length=100)

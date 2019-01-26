@@ -197,13 +197,14 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             push!(J_hist,J)
 
             # gradients
-            if solver.opts.gradient_type == :todorov
-                gradient = gradient_todorov(results)
-            elseif solver.opts.gradient_type == :AuLa
-                gradient = gradient_AuLa(results,solver)
-            elseif solver.opts.gradient_type == :feedforward
-                gradient = gradient_feedforward(results)
-            end
+            # if solver.opts.gradient_type == :todorov
+            #     gradient = gradient_todorov(results)
+            # elseif solver.opts.gradient_type == :AuLa
+            #     gradient = gradient_AuLa(results,solver)
+            # elseif solver.opts.gradient_type == :feedforward
+            #     gradient = gradient_feedforward(results)
+            # end
+            gradient = update_gradient(results,solver)
             push!(grad_norm_hist,gradient)
 
             # condition numbers
@@ -355,7 +356,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 stats[key * " (infeasible)"] = stats[key]
             end
             stats["iterations"] += stats_feasible["iterations"]
-            stats["outer loop iterations"] += stats_feasible["major iterations"]
+            stats["outer loop iterations"] += stats_feasible["outer loop iterations"]
             stats["runtime"] += stats_feasible["runtime"]
             stats["setup_time"] += stats_feasible["setup_time"]
             append!(stats["cost"], stats_feasible["cost"])

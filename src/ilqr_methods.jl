@@ -317,3 +317,37 @@ function gradient_feedforward(res::SolverVectorResults)
     end
     return sqrt(gradient_norm)
 end
+
+"""
+$(SIGNATURES)
+    Gradient of the Augmented Lagrangian: ∂L/∂u = Quuδu + Quxδx + Qu + Cu'λ + Cu'IμC
+"""
+function gradient_AuLa(results::SolverIterResults,solver::Solver)
+    N = solver.N
+    X = results.X; X_ = results.X_; U = results.U; U_ = results.U_
+
+    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
+
+    gradient_norm = 0. # ℓ2-norm
+
+    for k = 1:N-1
+        δx = X_[k] - X[k]
+        δu = U_[k] - U[k]
+        tmp = Quu[k]*δu + Qux[k]*δx + Qu[k]
+
+        gradient_norm += sum(tmp.^2)
+    end
+
+    return sqrt(gradient_norm)
+end
+
+function update_gradient(results,solver)
+    if solver.opts.gradient_type == :todorov
+        gradient = gradient_todorov(results)
+    elseif solver.opts.gradient_type == :AuLa
+        gradient = gradient_AuLa(results,solver)
+    elseif solver.opts.gradient_type == :feedforward
+        gradient = gradient_feedforward(results)
+    end
+    return gradient
+end
