@@ -161,19 +161,51 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "#TrajectoryOptimization.SolverOptions",
-    "page": "TrajectoryOptimization.jl",
-    "title": "TrajectoryOptimization.SolverOptions",
-    "category": "type",
-    "text": "mutable struct SolverOptions\n\noptions for Solver\n\n\n\n\n\n"
-},
-
-{
     "location": "#Solve-Methods-1",
     "page": "TrajectoryOptimization.jl",
     "title": "Solve Methods",
     "category": "section",
-    "text": "This will talk about solve methodsfracnk(n - k) = binomnkSolverOptions"
+    "text": "With a Solver instantiated, the user can then choose to solve the problem using iLQR (solve function) or DIRCOL (solve_dircol function), where are detailed below"
+},
+
+{
+    "location": "#iLQR-Methods-1",
+    "page": "TrajectoryOptimization.jl",
+    "title": "iLQR Methods",
+    "category": "section",
+    "text": ""
+},
+
+{
+    "location": "#Unconstrained-Problem-1",
+    "page": "TrajectoryOptimization.jl",
+    "title": "Unconstrained Problem",
+    "category": "section",
+    "text": "For unconstrained problems the user doesn\'t have any options. iLQR can usually solve unconstrained problems without any modification. Simply call the solve method, passing in a initial guess for the control trajectory:solve(solver,U0)where U0 is a Matrix of size (m,N-1) (although a trajectory of N points will also be accepted)."
+},
+
+{
+    "location": "#Constrained-Problem-1",
+    "page": "TrajectoryOptimization.jl",
+    "title": "Constrained Problem",
+    "category": "section",
+    "text": "The default constrained iLQR method uses an Augmented Lagrangian approach to handle the constraints. Nearly all of the options in SolverOptions determine parameters used by the Augmented Lagrangian method. Other than now having more parameters to tune for better performance (see another section for tips), the user solves a constrained problem using the exact same method for solving an unconstrained problem."
+},
+
+{
+    "location": "#Constrained-Problem-with-Infeasible-Start-1",
+    "page": "TrajectoryOptimization.jl",
+    "title": "Constrained Problem with Infeasible Start",
+    "category": "section",
+    "text": "One of the primary disadvantages of iLQR (and most indirect methods) is that the user must specify an initial input trajectory. Specifying a good initial guess can often be difficult in practice, whereas specifying a guess for the state trajectory is typically more straightforward. To overcome this limitation, TrajectoryOptimization adds artificial controls to the discrete dynamics $x{k+1} = fd(xk,uk) + \\diag{(\\tidle{u}1,\\hdots,\\tidle{u}n)} such that the system is fully-actuated (technically over-actuated), so that an arbitrary state trajectory can be achieved. These artificial controls are then constrained to be zero using the Augmented Lagrangian method. This results in an algorithm similar to that of DIRCOL: initial solutions are dynamically infeasible but become dynamically infeasible at convergence. To solve the problem using \"infeasible start\", simply pass in an initial guess for the state and control:solve(solver,X0,U0)"
+},
+
+{
+    "location": "#DIRCOL-Method-1",
+    "page": "TrajectoryOptimization.jl",
+    "title": "DIRCOL Method",
+    "category": "section",
+    "text": "Problems can be solved using DIRCOL by simply callingsolve_dircol(solver,X0,U0)"
 },
 
 ]}
