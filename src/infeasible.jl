@@ -37,6 +37,34 @@ end
 
 """
 $(SIGNATURES)
+    Infeasible start solution is run through time varying LQR to track state and control trajectories
+"""
+function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
+    remove_infeasible_controls!(results,solver)
+
+    # backward pass - project infeasible trajectory into feasible space using time varying lqr
+    Δv = backwardpass!(results, solver)
+
+    # forward pass
+    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
+
+    # update trajectories
+    copyto!(results.X, results.X_)
+    copyto!(results.U, results.U_)
+
+    # return constrained results if input was constrained
+    if !solver.state.unconstrained_original_problem
+        update_constraints!(results,solver,results.X,results.U)
+        update_jacobians!(results,solver)
+    else
+        solver.state.constrained = false
+    end
+
+    return results
+end
+
+"""
+$(SIGNATURES)
 Linear interpolation trajectory between initial and final state(s)
 """
 function line_trajectory(solver::Solver, method=:trapezoid)::Array{Float64,2}
@@ -76,6 +104,8 @@ function hold_trajectory(solver, mech::Mechanism, q)
     end
     return U0
 end
+
+
 
 hold_trajectory(solver::Solver, q) = hold_trajectory(solver, solver.model.mech, q)
 hold_trajectory(solver::Solver) = hold_trajectory(solver, solver.model.mech, solver.obj.x0)

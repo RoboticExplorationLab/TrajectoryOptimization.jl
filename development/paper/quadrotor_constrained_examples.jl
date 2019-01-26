@@ -48,75 +48,35 @@ robot_mintime = vis["robot_mintime"]
 ###
 
 # Solver options
-tf = 5.0
-dt = 0.05
-N = 51
+N = 201
 integration = :rk4
 opts = SolverOptions()
 opts.verbose = false
+opts.square_root = true
+opts.cost_tolerance = 1e-6
+opts.cost_tolerance_intermediate = 1e-5
+opts.constraint_tolerance = 1e-5
+opts.use_penalty_burnin = false
+opts.outer_loop_update_type = :feedback
 
 # Set up model, objective, solver
-model, = TrajectoryOptimization.Dynamics.quadrotor
-n = model.n
-m = model.m
-
-# -initial state
-x0 = zeros(n)
-x0[1:3] = [0.; 0.; 0.]
-q0 = [1.;0.;0.;0.]
-x0[4:7] = q0
-
-# -final state
-xf = copy(x0)
-xf[1:3] = [0.;40.;0.] # xyz position
-xf[4:7] = q0
-
-# -control limits
-u_min = 0.0
-u_max = 5.0
-
-Q = (1e-1)*Matrix(I,n,n)
-Q[4,4] = 1.0
-Q[5,5] = 1.0
-Q[6,6] = 1.0
-Q[7,7] = 1.0
-R = (1.0)*Matrix(I,m,m)
-Qf = (1000.0)*Matrix(I,n,n)
-# obstacles constraint
-r_sphere = 3.0
-spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
-n_spheres = 3
-
-function cI(c,x,u)
-    for i = 1:n_spheres
-        c[i] = sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
-    end
-    c
-end
-
-# unit quaternion constraint
-function cE(c,x,u)
-    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI,cE=cE)
+model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+obj_con = TrajectoryOptimization.Dynamics.quadrotor_3obs[2]
+spheres = TrajectoryOptimization.Dynamics.quadrotor_3obs[3]
+n_spheres = length(spheres)
 
 solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 
-U0 = zeros(solver_uncon.model.m, solver_uncon.N-1)
-@time results_uncon, stats_uncon = solve(solver_uncon,U0)
+U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
+X_hover = rollout(solver_uncon,U_hover)
 
-
-solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
-
-@time results_con, stats_con = solve(solver_con,U0)
+@time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
+@time results_con, stats_con = solve(solver_con,U_hover)
 
 plot(to_array(results_con.U)[:,1:solver_con.N-1]')
 plot(to_array(results_con.X)[1:3,:]')
-max_violation(results_con)
-total_time(solver_con,results_con)
+max_violation(results_con) < opts.constraint_tolerance
 
 obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 
@@ -131,25 +91,25 @@ obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 # opts.iterations = 1000
 # opts.iterations_outerloop = 30 # 20
 
-opts.max_dt = 0.2
-opts.min_dt = 1e-3
-opts.minimum_time_dt_estimate = .05#tf/(N-1)
-opts.constraint_tolerance = 0.001
-opts.R_minimum_time = 1.0
-opts.constraint_decrease_ratio = .25
-opts.penalty_scaling = 3.0
-opts.outer_loop_update_type = :individual
-opts.iterations = 1000
-opts.iterations_outerloop = 30 # 20
-
-solver_mintime = Solver(model,obj_mintime,integration=integration,N=N,opts=opts)
-
-@time results_mintime, stats_mintime = solve(solver_mintime,to_array(results_con.U))
-
-plot(to_array(results_mintime.U)[:,1:solver_con.N-1]')
-plot(to_array(results_mintime.X)[1:3,1:solver_mintime.N]')
-max_violation(results_mintime)
-total_time(solver_mintime,results_mintime)
+# opts.max_dt = 0.2
+# opts.min_dt = 1e-3
+# opts.minimum_time_dt_estimate = .05#tf/(N-1)
+# opts.constraint_tolerance = 0.001
+# opts.R_minimum_time = 1.0
+# opts.constraint_decrease_ratio = .25
+# opts.penalty_scaling = 3.0
+# opts.outer_loop_update_type = :individual
+# opts.iterations = 1000
+# opts.iterations_outerloop = 30 # 20
+#
+# solver_mintime = Solver(model,obj_mintime,integration=integration,N=N,opts=opts)
+#
+# @time results_mintime, stats_mintime = solve(solver_mintime,to_array(results_con.U))
+#
+# plot(to_array(results_mintime.U)[:,1:solver_con.N-1]')
+# plot(to_array(results_mintime.X)[1:3,1:solver_mintime.N]')
+# max_violation(results_mintime)
+# total_time(solver_mintime,results_mintime)
 
 # ################################################
 # ## Visualizer using MeshCat and GeometryTypes ##
@@ -173,10 +133,10 @@ for i = 1:N
     setobject!(vis["traj"]["t$i"],sphere_small,blue_)
     settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
 end
-for i = 1:N
-    setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
-    settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
-end
+# for i = 1:N
+#     setobject!(vis["traj_mintime"]["t$i"],sphere_small,green_)
+#     settransform!(vis["traj_mintime"]["t$i"], Translation(results_mintime.X[i][1], results_mintime.X[i][2], results_mintime.X[i][3]))
+# end
 #
 # Create and place initial position
 setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
@@ -196,7 +156,7 @@ end
 
 for i = 1:N
     settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
-    sleep(solver_con.dt)
+    sleep(solver_con.dt*2)
 end
 
 for i = 1:N
@@ -208,22 +168,11 @@ end
 ##########
 ## Maze ##
 ##########
-
-# Set up quadrotor
+N = 201
 tf = 5.0
-dt = 0.05
-N = 51
-integration = :rk4
-opts = SolverOptions()
-opts.verbose = false
-
-# Set up model, objective, solver
-model, = TrajectoryOptimization.Dynamics.quadrotor
-n = model.n
-m = model.m
-
+q0 = [1.;0.;0.;0.]
 # -initial state
-x0 = zeros(n)
+x0 = zeros(model.n)
 x0[1:3] = [0.; 0.; 3.]
 q0 = [1.;0.;0.;0.]
 x0[4:7] = q0
@@ -235,20 +184,20 @@ xf[1:3] = [0.;60.;3.] # xyz position
 xf[4:7] = q0
 
 # -control limits
-u_min = -100.0
+u_min = 0.0
 u_max = 100.0
-x_max = Inf*ones(n)
-x_min = -Inf*ones(n)
+x_max = Inf*ones(model.n)
+x_min = -Inf*ones(model.n)
 x_max[1:3] = [25.0; Inf; 6.]
 x_min[1:3] = [-25.0; -Inf; 0.]
 
-Q = (1e-1)*Matrix(I,n,n)
+Q = (1e-1)*Matrix(I,model.n,model.n)
 Q[4,4] = 1.0
 Q[5,5] = 1.0
 Q[6,6] = 1.0
 Q[7,7] = 1.0
-R = (1.0)*Matrix(I,m,m)
-Qf = (100.0)*Matrix(I,n,n)
+R = (1.0)*Matrix(I,model.m,model.m)
+Qf = (100.0)*Matrix(I,model.n,model.n)
 
 # obstacles constraint
 # -obstacles
@@ -303,11 +252,6 @@ for i = range(10+2*r_sphere,stop=50-2*r_sphere,length=l4)
 end
 n_spheres = length(spheres)
 
-for i = 1:n_spheres
-    setobject!(vis["obs"]["s$i"],HyperSphere(Point3f0(0), convert(Float32,spheres[i][4])),red_)
-    settransform!(vis["obs"]["s$i"], Translation(spheres[i][1], spheres[i][2], spheres[i][3]))
-end
-
 function cI(c,x,u)
     for i = 1:n_spheres
         c[i] = sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
@@ -320,32 +264,49 @@ function cE(c,x,u)
     c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 end
 
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,x_min=x_min,x_max=x_max,u_min=u_min,u_max=u_max,cI=cI,cE=cE)
-
-solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
+opts = SolverOptions()
+obj_uncon_maze = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon_maze,x_min=x_min,x_max=x_max,u_min=u_min,u_max=u_max,cI=cI,cE=cE)
+solver_uncon = Solver(model,obj_uncon_maze,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 
 # Initial control trajectory
-U0 = ones(solver_uncon.model.m, solver_uncon.N-1)
+U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
 
 # Initial infeasible state trajectory
-X_guess = zeros(n,9)
+X_guess = zeros(model.n,9)
 X_guess[:,1] = x0
 X_guess[:,9] = xf
 X_guess[1:3,2:8] .= [0 -12.5 -20 -20 -20 -12.5 0; 10 20 20 30 40 40 50; 3 3 3 3 3 3 3]
 X_guess[4:7,:] .= q0
-X0 = TrajectoryOptimization.interp_rows(N,tf,X_guess)
+X0 = TrajectoryOptimization.interp_rows(N,solver_uncon.obj.tf,X_guess)
 
-@time results_uncon, stats_uncon = solve(solver_uncon,U0)
+plot(X0[1:3,:]')
+@time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
+plot(to_array(results_uncon.U)')
+
+solver_con.opts.square_root = true
 solver_con.opts.R_infeasible = 10.0
-solver_con.opts.penalty_initial = 1.0
-solver_con.opts.iterations = 300
-solver_con.opts.verbose = false
 solver_con.opts.resolve_feasible = false
-solver_con
-@time results_con, stats_con = solve(solver_con,X0,U0)
+solver_con.opts.cost_tolerance = 1e-6
+solver_con.opts.cost_tolerance_intermediate = 1e-4
+solver_con.opts.constraint_tolerance = 1e-5
+solver_con.opts.constraint_tolerance_intermediate = 0.01
+solver_con.opts.penalty_scaling = 10.0
+solver_con.opts.penalty_initial = 1.0
+solver_con.opts.outer_loop_update_type = :feedback
+solver_con.opts.iterations_outerloop = 25
+solver_con.opts.use_penalty_burnin = false
+solver_con.opts.verbose = false
+solver_con.opts.live_plotting = false
+results_con, stats_con = solve(solver_con,X0,U_hover)
 
+# solver_con.opts.R_infeasible = 1e-1
+# solver_con.opts.penalty_initial = 10.0
+# solver_con.opts.iterations = 250
+# solver_con.opts.verbose = false
+# solver_con.opts.resolve_feasible = false
+# @time results_con, stats_con = solve(solver_con,X0,U_hover)
 plot(to_array(results_con.U)[:,1:solver_con.N-1]')
 plot(to_array(results_con.X)[1:3,:]')
 max_violation(results_con)
@@ -354,7 +315,8 @@ total_time(solver_con,results_con)
 obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 
 # Set camera location
-settransform!(vis["/Cameras/default"], compose(Translation(25., 15., 20.),LinearMap(RotY(-pi/12))))
+settransform!(vis["/Cameras/default"], compose(Translation(0., 75., 50.),LinearMap(RotX(pi/10)*RotZ(pi/2))))
+
 
 # Create and place obstacles
 for i = 1:n_spheres
@@ -407,10 +369,12 @@ end
 #
 plot(X0[1:3,:]')
 #
-# for i = 1:N
-#     setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
-#     settransform!(vis["traj_uncon"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
-# end
+for i = 1:N
+    setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
+    settransform!(vis["traj_uncon"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
+end
+
+a = 1
 
 # for i in 1:
 #     for j = range(0,stop=,length=)

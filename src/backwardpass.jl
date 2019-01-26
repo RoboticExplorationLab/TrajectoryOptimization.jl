@@ -1,29 +1,3 @@
-abstract type BackwardPass end
-
-struct BackwardPassZOH <: BackwardPass
-    Qx::Vector{Vector{Float64}}
-    Qu::Vector{Vector{Float64}}
-    Qxx::Vector{Matrix{Float64}}
-    Qux::Vector{Matrix{Float64}}
-    Quu::Vector{Matrix{Float64}}
-
-    Qux_reg::Vector{Matrix{Float64}}
-    Quu_reg::Vector{Matrix{Float64}}
-
-    function BackwardPassZOH(n::Int,m::Int,N::Int)
-        Qx = [zeros(n) for i = 1:N-1]
-        Qu = [zeros(m) for i = 1:N-1]
-        Qxx = [zeros(n,n) for i = 1:N-1]
-        Qux = [zeros(m,n) for i = 1:N-1]
-        Quu = [zeros(m,m) for i = 1:N-1]
-
-        Qux_reg = [zeros(m,n) for i = 1:N-1]
-        Quu_reg = [zeros(m,m) for i = 1:N-1]
-
-        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
-    end
-end
-
 """
 $(SIGNATURES)
 Solve the dynamic programming problem, starting from the terminal time step
@@ -32,16 +6,16 @@ each time step, solving for the gradient (s) and Hessian (S) of the cost-to-go
 function. Also returns parameters Δv for line search (see Synthesis and Stabilization of Complex Behaviors through
 Online Trajectory Optimization)
 """
-function backwardpass!(results::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.opts.square_root
-        Δv = _backwardpass_sqrt!(results, solver, bp)
+        Δv = _backwardpass_sqrt!(results, solver)
     else
-        Δv = _backwardpass!(results, solver, bp)
+        Δv = _backwardpass!(results, solver)
     end
     return Δv
 end
 
-function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function _backwardpass!(res::SolverVectorResults,solver::Solver)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -58,8 +32,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
 
     X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
 
-    Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
 
     # TEMP resets values for now - this will get fixed
     for k = 1:N-1
@@ -69,6 +43,11 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
 
     # Boundary Conditions
     S[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
+
+    if solver.state.minimum_time
+        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
+        S[N][n̄,n̄] = 0.5*R_minimum_time
+    end
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -99,11 +78,14 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
             h = U[k][m̄]
             tmp = 2*h*expansion[5]
 
-            Qu[k][m̄] = 2*h*(ℓ1 + R_minimum_time)
+            Qu[k][m̄] = h*(2*ℓ1 + R_minimum_time)
             Quu[k][1:m,m̄] = tmp
             Quu[k][m̄,1:m] = tmp'
-            Quu[k][m̄,m̄] = 2*(ℓ1 + R_minimum_time)
+            Quu[k][m̄,m̄] = (2*ℓ1 + R_minimum_time)
             Qux[k][m̄,1:n] = 2*h*expansion[4]'
+
+            Qx[k][n̄] = R_minimum_time*X[k][n̄]
+            Qxx[k][n̄,n̄] = R_minimum_time
         end
 
         # Infeasible expansion components
@@ -142,7 +124,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver,bp::BackwardPass
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
-            @logmsg InnerIters "Fixing Quu with regularization"
+            @logmsg InnerIters "Regularizing Quu "
             regularization_update!(res,solver,:increase)
 
             # reset backward pass
@@ -179,7 +161,7 @@ $(SIGNATURES)
 Perform a backwards pass with Cholesky Factorizations of the Cost-to-Go to
 avoid ill-conditioning.
 """
-function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::BackwardPass)
+function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     # Get problem sizes
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
@@ -188,24 +170,44 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
     # Objective
     costfun = solver.obj.cost
 
+    # Minimum time and infeasible options
+    solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
     dt = solver.dt
 
     X = res.X; U = res.U; K = res.K; d = res.d; Su = res.S; s = res.s
 
-    for k = 1:N
-        res.S[k] = zeros(nn+mm,nn)
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
+
+    # TEMP resets values for now - this will get fixed
+    for k = 1:N-1
+        Qx[k] = zeros(nn); Qu[k] = zeros(mm); Qxx[k] = zeros(nn,nn); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,nn)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,nn)
     end
-    Su = res.S
-    # # for now just re-instantiate
-    # bp = BackwardPassZOH(nn,mm,N)
-    # Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
-    # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
 
     # Boundary Conditions
-    lxx,lx = taylor_expansion(costfun, X[N][1:n])
+    Su[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
-    # Initialize expected change in cost-to-go
-    Δv = zeros(2)
+    if solver.state.minimum_time
+        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
+        Su[N][n̄,n̄] = 0.5*R_minimum_time
+    end
+
+    # Take square root (via cholesky)
+    try
+        Su[N][1:nn,1:nn] = cholesky(Su[N][1:nn,1:nn]).U # if no terminal cost is provided cholesky will fail gracefully
+    catch PosDefException
+        if sum([Su[N][i,i] for i = 1:n]) != 0. # TODO there may be something faster here, but lu fails for this case
+            # tmp = svd(Su[N])
+            # Su[N] = Diagonal(sqrt.(tmp.S))*tmp.V'
+            tmp = eigen(Su[N])
+            Su[N] = Diagonal(sqrt.(tmp.values))*tmp.vectors'
+        elseif tr(Su[N][1:n,1:n]) == 0. && n̄ > n
+            Su[N][n̄,n̄] = sqrt(Su[N][n̄,n̄])
+        end
+    end
 
     # Terminal constraints
     if res isa ConstrainedIterResults
@@ -213,59 +215,92 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         Cx = res.Cx; Cu = res.Cu
         Iμ_sqrt = sqrt.(Iμ[N])
 
-        Su[N][1:nn,1:nn] = chol_plus(cholesky(lxx).U,Iμ_sqrt*Cx[N])
-        s[N] = lx + Cx[N]'*(Iμ[N]*C[N] + λ[N])
-
-        # @test isapprox(lxx + Cx[N]'*Iμ[N]*Cx[N],Su[N]'*Su[N])
-    else
-        Su[N] = cholesky(lxx).U
-        s[N] = lx
+        Su[N][1:nn,1:nn] = chol_plus(Su[N],Iμ_sqrt*Cx[N])
+        s[N] += Cx[N]'*(Iμ[N]*C[N] + λ[N])
     end
 
     # Backward pass
+    Δv = zeros(2)
+    tmp1 = []
+    tmp2 = []
+
     k = N-1
     while k >= 1
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
 
         x = X[k][1:n]
         u = U[k][1:m]
-        h = sqrt(dt)
 
         expansion = taylor_expansion(costfun,x,u)
-        lxx,luu,lux,lx,_lu = expansion
+        Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* dt
 
+        # Minimum time expansion components
+        if solver.state.minimum_time
+            ℓ1 = stage_cost(costfun,x,u)
+            h = U[k][m̄]
+            tmp = 2*h*expansion[5]
+
+            Qu[k][m̄] = h*(2*ℓ1 + R_minimum_time)
+            Quu[k][1:m,m̄] = tmp
+            Quu[k][m̄,1:m] = tmp'
+            Quu[k][m̄,m̄] = (2*ℓ1 + R_minimum_time)
+            Qux[k][m̄,1:n] = 2*h*expansion[4]'
+
+            Qx[k][n̄] = R_minimum_time*X[k][n̄]
+            Qxx[k][n̄,n̄] = R_minimum_time
+        end
+
+        # Infeasible expansion components
+        if solver.state.infeasible
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible
+        end
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k], res.fdu[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
-        Qx = dt*lx + fdx'*s[k+1]
-        Qu = dt*_lu + fdu'*s[k+1]
-        Wxx = chol_plus(cholesky(dt*lxx).U, Su[k+1]*fdx)
-        Wuu = chol_plus(cholesky(dt*luu).U, Su[k+1]*fdu)
-        Qux = dt*lux + (fdu'*Su[k+1]')*(Su[k+1]*fdx)
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qux[k] += (fdu'*Su[k+1]')*(Su[k+1]*fdx)
+        try
+            Qxx[k][1:nn,1:nn] = cholesky(Qxx[k][1:nn,1:nn]).U
+        catch
+            if sum([Qxx[k][i,i] for i = 1:n]) != 0. #TODO faster
+                # tmp = svd(Qxx[k])
+                # Qxx[k] = Diagonal(sqrt.(tmp.S))*tmp.V'
+                tmp = eigen(Qxx[k])
+                Qxx[k] = Diagonal(sqrt.(tmp.values))*tmp.vectors'
+            elseif tr(Qxx[k][1:n,1:n]) == 0. && n̄ > n
+                Qxx[k][n̄,n̄] = sqrt(Qxx[k][n̄,n̄])
+            end
+        end
+        try
+            Quu[k] = cholesky(Quu[k]).U
+        catch
+            error("Control Cost Hessian is not Positive Definite")
+        end
 
-        # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx, Wxx'*Wxx)
-        # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu, Wuu'*Wuu)
+        Wxx = chol_plus(Qxx[k], Su[k+1]*fdx)
+        Wuu = chol_plus(Quu[k], Su[k+1]*fdu)
+
         # Constraints
         if res isa ConstrainedIterResults
             Iμ_sqrt = sqrt.(Iμ[k])
 
-            Qx += Cx[k]'*(Iμ[k]*C[k] + λ[k])
-            Qu += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
             Wxx = chol_plus(Wxx,Iμ_sqrt*Cx[k])
             Wuu = chol_plus(Wuu,Iμ_sqrt*Cu[k])
-            Qux += Cu[k]'*Iμ[k]*Cx[k]
-
-            # @test isapprox(dt*lxx + fdx'*Su[k+1]'*Su[k+1]*fdx + Cx[k]'*Iμ[k]*Cx[k], Wxx'*Wxx)
-            # @test isapprox(dt*luu + fdu'*Su[k+1]'*Su[k+1]*fdu + Cu[k]'*Iμ[k]*Cu[k], Wuu'*Wuu)
+            Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
         end
-        #
+
         if solver.opts.bp_reg_type == :state
-            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*I*fdu)
-            Qux_reg = Qux + res.ρ[1]*fdu'*fdx
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*fdu)
+            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
-            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*Matrix(I,m,m))
-            Qux_reg = Qux
+            Wuu_reg = chol_plus(Wuu,sqrt(res.ρ[1])*Matrix(I,mm,mm))
+            Qux_reg[k] = Qux[k]
         end
 
         #TODO find better PD check for Wuu_reg
@@ -282,20 +317,51 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver,bp::Backwar
         # end
 
         # Compute gains
-        K[k] = -Wuu_reg\(Wuu_reg'\Qux_reg)
-        d[k] = -Wuu_reg\(Wuu_reg'\Qu)
+        K[k] = -Wuu_reg\(Wuu_reg'\Qux_reg[k])
+        d[k] = -Wuu_reg\(Wuu_reg'\Qu[k])
 
         # Calculate cost-to-go
-        s[k] = Qx + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu + Qux'*d[k]
+        s[k] = Qx[k] + (K[k]'*Wuu')*(Wuu*d[k]) + K[k]'*Qu[k] + Qux[k]'*d[k]
 
-        tmp1 = (Wxx')\Qux'
-        tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        try
+            tmp1 = (Wxx')\Qux[k]'
+        catch SingularException
+            # if solver.opts.bp_sqrt_inv_type == :reg
+            #     reg = solver.opts.bp_reg_sqrt_initial
+            #     while minimum(eigvals(Wxx)) < 1e-6
+            #         Wxx += reg*Matrix(I,nn,nn)
+            #         try
+            #             tmp1 = (Wxx')\Qux[k]'
+            #             break
+            #         catch
+            #             reg *= solver.opts.bp_reg_sqrt_increase_factor
+            #             if reg >= solver.opts.bp_reg_max
+            #                 error("Square root regularization exceded")
+            #             end
+            #         end
+            #     end
+            # elseif solver.opts.bp_sqrt_inv_type == :pseudo
+            tmp1 = pinv(Array(Wxx'))*Qux[k]'
+            # end
+        end
+
+        try
+            tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+        catch
+            # tmp2 = chol_minus(Wuu,tmp1)
+            tmp = svd(Wuu'*Wuu - tmp1'*tmp1)
+            tmp2 = Diagonal(sqrt.(tmp.S))*tmp.V'
+        end
+
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
         Su[k][nn+1:nn+mm,1:nn] = tmp2*K[k]
 
         # calculated change is cost-to-go over entire trajectory
-        Δv[1] += d[k]'*Qu
+        Δv[1] += d[k]'*Qu[k]
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
+
+        Quu_reg[k] = Array(Wuu_reg)
+        Quu[k] = Array(Wuu)
 
         k = k - 1;
     end
@@ -313,4 +379,28 @@ function chol_plus(A,B)
     P[1:n1,:] = A
     P[n1+1:end,:] = B
     return qr(P).R
+end
+
+function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)
+    N = length(bp.Quu)
+    max_cn = 0.
+    for k = 1:N-1
+        cn = cond(bp.Quu_reg[k])
+        if cn > max_cn
+            max_cn = cn
+        end
+    end
+    return max_cn
+end
+
+function backwardpass_max_condition_number(results::TrajectoryOptimization.SolverVectorResults)
+    N = length(results.S)
+    max_cn = 0.
+    for k = 1:N
+        cn = cond(results.S[k])
+        if cn > max_cn && cn < Inf
+            max_cn = cn
+        end
+    end
+    return max_cn
 end

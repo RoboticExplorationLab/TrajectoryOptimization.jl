@@ -24,7 +24,7 @@ function solve(solver::Solver, X0::VecOrMat, U0::VecOrMat)::Tuple{SolverResults,
 
     # Unconstrained original problem with infeasible start: convert to a constrained problem for solver
     if isa(solver.obj, UnconstrainedObjective)
-        solver.opts.unconstrained_original_problem = true
+        solver.state.unconstrained_original_problem = true
         solver.state.infeasible = true
         obj_c = ConstrainedObjective(solver.obj)
         solver = Solver(solver.model, obj_c, integration=solver.integration, dt=solver.dt, opts=solver.opts)
@@ -116,9 +116,6 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         results = prevResults
     end
 
-    # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(nn,mm,N)
-
     # Unpack results for convenience
     X = results.X # state trajectory
     U = results.U # control trajectory
@@ -158,6 +155,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     c_max_hist = Vector{Float64}()
     max_cn_hist = Vector{Float64}()
     min_eig_hist = Vector{Float64}()
+    max_cn_S_hist = Vector{Float64}()
     outer_updates = Int[]
     t_solve_start = time_ns()
 
@@ -192,30 +190,41 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
             ### BACKWARD PASS ###
             update_jacobians!(results, solver)
-            Δv = backwardpass!(results, solver, bp)
+            Δv = backwardpass!(results, solver)
 
             # condition numbers and min eigen value
-            max_cn = 0.
-            min_eig = Inf
-            for kkk = 1:N-1
-                cn = cond(bp.Quu_reg[kkk])
-                if cn > max_cn
-                    max_cn = cn
-                end
-                me = minimum(real.(eigvals(bp.Quu_reg[kkk])))
-                if me < min_eig
-                    min_eig = me
-                end
-            end
-            push!(max_cn_hist,max_cn)
-            push!(min_eig_hist,min_eig)
+            # max_cn = 0.
+            # min_eig = Inf
+            # for kkk = 1:N-1
+            #     cn = cond(results.bp.Quu_reg[kkk])
+            #     if cn > max_cn
+            #         max_cn = cn
+            #     end
+            #     me = minimum(real.(eigvals(results.bp.Quu_reg[kkk])))
+            #     if me < min_eig
+            #         min_eig = me
+            #     end
+            # end
+            # cond_n = zeros(N)
+            # for k = 1:N
+            #     cond_n[k] = cond(results.S[k])
+            # end
+            # push!(max_cn_hist,max_cn)
+            # push!(min_eig_hist,min_eig)
+            # push!(max_cn_S_hist,maximum(cond_n))
 
             ### FORWARDS PASS ###
             J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
             ## Check gradients for convergence ##
-            solver.opts.use_gradient_aula ? gradient = gradient_AuLa(results,solver,bp) : gradient = gradient_todorov(results)
+            if solver.opts.gradient_type == :todorov
+                gradient = gradient_todorov(results)
+            elseif solver.opts.gradient_type == :AuLa
+                gradient = gradient_AuLa(results,solver)
+            elseif solver.opts.gradient_type == :feedforward
+                gradient = gradient_feedforward(results)
+            end
             push!(grad_norm_hist,gradient)
 
             # increment iLQR inner loop counter
@@ -239,7 +248,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
-                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_coarse) && solver.opts.use_penalty_burnin
+                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_intermediate) && solver.opts.use_penalty_burnin
                     solver.state.penalty_only = false
                     @logmsg InnerLoop "Switching to multipier updates"
                 end
@@ -277,7 +286,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         #****************************#
 
         # update multiplier and penalty terms
-        outer_loop_update(results,solver,bp,j)
+        outer_loop_update(results,solver,j)
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
@@ -310,7 +319,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         "c_max"=>c_max_hist,
         "gradient_norm"=>grad_norm_hist,
         "max_condition_number"=>max_cn_hist,
-        "outer_updates"=>outer_updates)
+        "outer_updates"=>outer_updates,
+        "max_condition_number_S"=>max_cn_S_hist)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
@@ -342,7 +352,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @info "Resolving feasible"
 
             # create unconstrained solver from infeasible solver if problem is unconstrained
-            if solver.opts.unconstrained_original_problem
+            if solver.state.unconstrained_original_problem
                 obj = solver.obj
                 obj_uncon = UnconstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf)
                 solver_feasible = Solver(solver.model,obj_uncon,integration=solver.integration,dt=solver.dt,opts=solver.opts)
@@ -371,12 +381,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         end
 
         # return feasible results
-        @info "***Solve Complete***"
+        @info "*Solve Complete*"
         return results_feasible, stats
 
     # if feasible solve, return results
     else
-        @info "***Solve Complete***"
+        @info "*Solve Complete*"
         return results, stats
     end
 end
@@ -393,9 +403,9 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
     end
     if loop == :inner
         # Check for gradient convergence
-        if ((~solver.state.constrained && gradient < solver.opts.gradient_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
+        if ((~solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance) || (solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance_intermediate && iter_outerloop != solver.opts.iterations_outerloop))
             return true
-        elseif ((solver.state.constrained && gradient < solver.opts.gradient_tolerance && c_max < solver.opts.constraint_tolerance))
+        elseif ((solver.state.constrained && gradient < solver.opts.gradient_norm_tolerance && c_max < solver.opts.constraint_tolerance))
             return true
         end
 
@@ -415,58 +425,10 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
     if loop == :outer
         if solver.state.constrained
-            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_norm_tolerance)
                 return true
             end
         end
     end
     return false
-end
-
-"""
-$(SIGNATURES)
-    Infeasible start solution is run through time varying LQR to track state and control trajectories
-"""
-function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
-    remove_infeasible_controls!(results,solver)
-
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_controls(solver)
-
-    # Initialized backward pass expansion terms
-    bp = BackwardPassZOH(nn,mm,N)
-
-    # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results, solver, bp)
-
-    # forward pass
-    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
-
-    # update trajectories
-    copyto!(results.X, results.X_)
-    copyto!(results.U, results.U_)
-
-    # return constrained results if input was constrained
-    if !solver.opts.unconstrained_original_problem
-        update_constraints!(results,solver,results.X,results.U)
-        update_jacobians!(results,solver)
-    else
-        solver.state.constrained = false
-    end
-
-    return results
-end
-
-"""
-$(SIGNATURES)
-    Calculate the problem gradient using heuristic from iLQG (Todorov) solver
-"""
-function gradient_todorov(res::SolverVectorResults)
-    N = length(res.X)
-    maxes = zeros(N)
-    for k = 1:N-1
-        maxes[k] = maximum(abs.(res.d[k])./(abs.(res.U[k]).+1))
-    end
-    mean(maxes)
 end

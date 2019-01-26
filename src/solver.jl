@@ -10,13 +10,14 @@ mutable struct SolverState
     minimum_time::Bool # Minimum time solve
     infeasible::Bool # Infeasible solve
 
+    unconstrained_original_problem::Bool # Original problem is unconstrained but Solve converts to constrained for Infeasible or Minimum Time problem
     second_order_dual_update::Bool # Second order update for dual variables (Lagrange multipliers)
     fixed_constraint_jacobians::Bool # If no custom constraints are provided, all constraint Jacobians are fixed and only need to be updated once
     fixed_terminal_constraint_jacobian::Bool
     penalty_only::Bool  # initial phase where only penalty term is updated each outer loop
 
     function SolverState()
-        new(false,false,false,false,false,false,true)
+        new(false,false,false,false,false,false,false,true)
     end
 end
 
@@ -24,6 +25,7 @@ function reset_SolverState(state::SolverState)
     state.constrained = false
     state.minimum_time = false
     state.infeasible = false
+    state.unconstrained_original_problem = false
     state.second_order_dual_update = false
     state.fixed_constraint_jacobians = false
     state.fixed_terminal_constraint_jacobian = false

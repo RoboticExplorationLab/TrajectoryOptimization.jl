@@ -19,7 +19,7 @@ function test_backwardpass_sqrt!(res::SolverIterResults,solver::Solver,bp::Backw
     end
     Su = res.S
     # # for now just re-instantiate
-    # bp = BackwardPassZOH(nn,mm,N)
+    # bp = BackwardPass(nn,mm,N)
     # Qx = bp.Qx; Qu = bp.Qu; Qxx = bp.Qxx; Quu = bp.Quu; Qux = bp.Qux
     # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
 
@@ -221,7 +221,7 @@ update_jacobians!(results2, solver)
 n,m,N = get_sizes(solver)
 m̄,mm = get_num_controls(solver)
 n̄,nn = get_num_states(solver)
-bp = BackwardPassZOH(nn,mm,solver.N)
+bp = BackwardPass(nn,mm,solver.N)
 
 v1 = _backwardpass!(results1,solver,bp)
 v2 = test_backwardpass_sqrt!(results2,solver,bp)

@@ -291,3 +291,29 @@ function regularization_update!(results::SolverResults,solver::Solver,status::Sy
         results.ρ[1] = results.ρ[1]*results.dρ[1]*(results.ρ[1]*results.dρ[1]>solver.opts.bp_reg_min)
     end
 end
+
+"""
+$(SIGNATURES)
+    Calculate the problem gradient using heuristic from iLQG (Todorov) solver
+"""
+function gradient_todorov(res::SolverVectorResults)
+    N = length(res.X)
+    maxes = zeros(N)
+    for k = 1:N-1
+        maxes[k] = maximum(abs.(res.d[k])./(abs.(res.U[k]).+1))
+    end
+    mean(maxes)
+end
+
+"""
+$(SIGNATURES)
+    Calculate the problem gradient using feedforward term d (from δu = Kδx + d)
+"""
+function gradient_feedforward(res::SolverVectorResults)
+    N = length(res.X)
+    gradient_norm = 0.
+    for k = 1:N-1
+        gradient_norm += res.d[k]'*res.d[k]
+    end
+    return sqrt(gradient_norm)
+end

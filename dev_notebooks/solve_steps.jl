@@ -46,7 +46,7 @@ results_new.ρ[1] = 0
 X,U = results.X, results.U
 X_,U_ = results.X_, results.U_
 
-bp = TrajectoryOptimization.BackwardPassZOH(n,mm,N)
+bp = TrajectoryOptimization.BackwardPass(n,mm,N)
 #****************************#
 #           SOLVER           #
 #****************************#

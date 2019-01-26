@@ -419,3 +419,25 @@ end
 function max_violation(results::UnconstrainedIterResults)
     return 0.0
 end
+
+## Simple constraint primitives
+
+"""
+$(SIGNATURES)
+Circle constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function circle_constraint(x,x0,y0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2  - r^2)
+end
+
+"""
+$(SIGNATURES)
+Sphere constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function sphere_constraint(x,x0,y0,z0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2 + (x[3]-z0)^2  - r^2)
+end
+
+function sphere_constraint(x,x0,r)
+	return -((x[1]-x0[1])^2 + (x[2]-x0[2])^2 + (x[3]-x0[3])^2-r^2)
+end

@@ -2,50 +2,38 @@
 opts = SolverOptions()
 opts.square_root = false
 opts.verbose=false
-opts.constraint_tolerance = 1e-3
-opts.constraint_decrease_ratio = 0.25
-# opts.cost_tolerance = 1e-5
-# opts.iterations_outerloop = 250
-# opts.iterations = 1000
-######################
+opts.constraint_tolerance = 1e-5
+opts.cost_tolerance = 1e-6
 
-### Pendulum ###
-n = 2 # number of pendulum states
-m = 1 # number of pendulum controls
-model! = Model(Dynamics.pendulum_dynamics!,n,m) # inplace dynamics model
-################
-
-## Unconstrained (infeasible)
-obj_uncon = Dynamics.pendulum[2]
-# obj_uncon.R[:] = [1e-2]
-# obj_uncon.tf = 3.0
-solver_uncon = Solver(model!,obj_uncon,dt=0.1,opts=opts)
+model, obj = TrajectoryOptimization.Dynamics.pendulum
+solver = Solver(model,obj,dt=0.1,opts=opts)
 
 # -Initial state and control trajectories
-X_interp = line_trajectory(solver_uncon.obj.x0,solver_uncon.obj.xf,solver_uncon.N)
-U = ones(solver_uncon.model.m,solver_uncon.N-1)
+X_interp = line_trajectory(solver)
+U = ones(solver.model.m,solver.N-1)
 
-results, stats = solve(solver_uncon,X_interp,U)
+results, stats = solve(solver,X_interp,U)
 
-@test norm(results.X[end] - solver_uncon.obj.xf) < 1e-3
-#############################
+@test norm(results.X[end] - solver.obj.xf) < 1e-5
+@test max_violation(results) < 1e-5
+@test 0.5*(stats["iterations"] - stats["iterations (infeasible)"]) < stats["iterations (infeasible)"]
+@test 0.5*(stats["major iterations"] - stats["major iterations (infeasible)"]) < stats["major iterations (infeasible)"]
 
-## Constraints ##
+# Constraints
 u_min = -2
 u_max = 2
 x_min = [-10;-10]
 x_max = [10; 10]
-obj_uncon = Dynamics.pendulum[2]
-obj_uncon.cost.R[:] = [1e-2]
-obj = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
+obj_c = ConstrainedObjective(obj, u_min=u_min, u_max=u_max, x_min=x_min, x_max=x_max)
 
-solver = Solver(model!,obj,dt=0.1,opts=opts)
+solver_con = Solver(model,obj_c,dt=0.1,opts=opts)
 
 # Linear interpolation for state trajectory
-X_interp = line_trajectory(solver.obj.x0,solver.obj.xf,solver.N)
-U = ones(solver.model.m,solver.N-1)
+X_interp = line_trajectory(solver_con)
+U = ones(solver_con.model.m,solver_con.N-1)
 
-results, = solve(solver,X_interp,U)
-
-@test norm(results.X[end] - solver.obj.xf) < 1e-3
-##################
+results_con, stats_con = solve(solver_con,X_interp,U)
+@test norm(results_con.X[end] - solver_con.obj.xf) < 1e-5
+@test max_violation(results_con) < 1e-5
+@test 0.5*(stats_con["iterations"] - stats_con["iterations (infeasible)"]) < stats_con["iterations (infeasible)"]
+@test 0.5*(stats_con["major iterations"] - stats_con["major iterations (infeasible)"]) < stats_con["major iterations (infeasible)"]

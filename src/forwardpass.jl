@@ -20,7 +20,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev:
     @logmsg InnerIters :iter value=0
     @logmsg InnerIters :cost value=J_prev
     # print_row(logger,InnerIters) #TODO: fix, same issue
-    while (z ≤ solver.opts.z_min || z > solver.opts.z_max) && J >= J_prev
+    while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
 
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
