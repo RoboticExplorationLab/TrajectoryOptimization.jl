@@ -91,12 +91,27 @@ Solver
 Once the solver is created, the user must create an initial guess for the control trajectory, and optionally a state trajectory. For simple problems a initialization of random values, ones, or zeros works well. For more complicated systems it is usually recommended to feed trim conditions, i.e. controls that maintain the initial state values. For convenience, the function [`get_sizes`](@ref) returns n,m,N from the solver. Note that for trajectory optimization the control trajectory should be length N-1 since there are no controls at the final time step. However, DIRCOL uses controls at the final time step, and iLQR will simply discard any controls at the time step. Therefore, an initial control trajectory of size (m,N) is valid (but be aware that iLQR will return the correctly-sized control trajectory). Once the initial state and control trajectories are specified, they are passed with the solver to one of the [`solve`](@ref) methods.
 
 ## Solve Methods
-This will talk about solve methods
+With a Solver instantiated, the user can then choose to solve the problem using iLQR (`solve` function) or DIRCOL (`solve_dircol` function), where are detailed below
 
-```math
-\frac{n!}{k!(n - k)!} = \binom{n}{k}
+### iLQR Methods
+#### Unconstrained Problem
+For unconstrained problems the user doesn't have any options. iLQR can usually solve unconstrained problems without any modification. Simply call the `solve` method, passing in a initial guess for the control trajectory:
+```
+solve(solver,U0)
+```
+where `U0` is a Matrix of size `(m,N-1)` (although a trajectory of N points will also be accepted).
+
+### Constrained Problem
+The default constrained iLQR method uses an Augmented Lagrangian approach to handle the constraints. Nearly all of the options in [SolverOptions](@ref) determine parameters used by the Augmented Lagrangian method. Other than now having more parameters to tune for better performance (see another section for tips), the user solves a constrained problem using the exact same method for solving an unconstrained problem.
+
+### Constrained Problem with Infeasible Start
+One of the primary disadvantages of iLQR (and most indirect methods) is that the user must specify an initial input trajectory. Specifying a good initial guess can often be difficult in practice, whereas specifying a guess for the state trajectory is typically more straightforward. To overcome this limitation, TrajectoryOptimization adds artificial controls to the discrete dynamics $$x_{k+1} = f_d(x_k,u_k) + \diag{(\tidle{u}_1,\hdots,\tidle{u}_n)} such that the system is fully-actuated (technically over-actuated), so that an arbitrary state trajectory can be achieved. These artificial controls are then constrained to be zero using the Augmented Lagrangian method. This results in an algorithm similar to that of DIRCOL: initial solutions are dynamically infeasible but become dynamically infeasible at convergence. To solve the problem using "infeasible start", simply pass in an initial guess for the state and control:
+```
+solve(solver,X0,U0)
 ```
 
-```@docs
-SolverOptions
+## DIRCOL Method
+Problems can be solved using DIRCOL by simply calling
 ```
+solve_dircol(solver,X0,U0)
+``` 

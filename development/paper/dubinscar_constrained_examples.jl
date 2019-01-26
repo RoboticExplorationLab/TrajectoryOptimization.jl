@@ -1,4 +1,4 @@
-import TrajectoryOptimization: gen_usrfun_ipopt,
+import TrajectoryOptimization: gen_usrfun_ipopt
 using Random, LinearAlgebra, Plots
 using BenchmarkTools, Statistics
 Random.seed!(7)
@@ -63,6 +63,7 @@ X0_rollout = rollout(solver_uncon, U0)
 
 solver_con = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
 solver_con.opts.use_nesterov = false
+solver_con.opts.square_root = false
 solver_con.opts.penalty_scaling = 100
 solver_con.opts.penalty_initial = 0.01
 solver_con.opts.outer_loop_update_type = :feedback
@@ -71,9 +72,15 @@ solver_con.opts.constraint_tolerance_coarse = 1
 solver_con.opts.use_penalty_burnin = false
 solver_con.opts.verbose = false
 @time results_con_box, stats_con_box = solve(solver_con,U0)
+stats_con_box["c_max"][end]
+
 solver_con_n = Solver(solver_con)
 solver_con_n.opts.use_nesterov = true
+solver_con_n.opts.square_root = true
 results_n, stats_n = solve(solver_con_n,U0)
+
+plot(stats_con_box["c_max"],yscale=:log10)
+plot!(stats_n["c_max"])
 
 solver_inf = Solver(model, obj_con_box, integration=integration, dt=dt, opts=opts)
 solver_inf.opts.use_nesterov = false
@@ -215,7 +222,7 @@ solver_con_obstacles.opts.penalty_scaling = 10
 solver_con_obstacles.opts.use_nesterov = false
 
 # -Initial state and control trajectories
-U0 = rand(solver_uncon.model.m,solver_uncon.N)
+U0 = rand(solver_uncon.model.m,solver_uncon_obstacles.N)
 X0 = line_trajectory(solver_con_obstacles)
 X0_rollout = rollout(solver_con_obstacles,U0)
 
@@ -351,12 +358,13 @@ n,m,N = get_sizes(solver_con_obstacles)
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
 X0 = TrajectoryOptimization.interp_rows(N,tf,Array(X_guess'))
 # X0 = line_trajectory(solver_uncon)
-U0 = rand(m,N)
+U0 = ones(m,N)
 
-@time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
-@time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
+# @time results_uncon_obstacles, stats_uncon_obstacles = TrajectoryOptimization.solve(solver_uncon_obstacles,U0)
+# @time results_con_obstacles, stats_con_obstacles = TrajectoryOptimization.solve(solver_con_obstacles,U0)
 solver = Solver(model, obj_con_obstacles, N=101, opts=SolverOptions())
 solver.opts.R_infeasible = 1
+solver.opts.square_root
 solver.opts.resolve_feasible = false
 solver.opts.cost_tolerance = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-3
@@ -364,11 +372,11 @@ solver.opts.constraint_tolerance = 1e-5
 solver.opts.constraint_tolerance_coarse = 0.01
 solver.opts.penalty_scaling = 50
 solver.opts.penalty_initial = 10
-solver.opts.outer_loop_update_type = :feedback
+solver.opts.outer_loop_update_type = :default
 solver.opts.use_penalty_burnin = false
-solver.opts.use_nesterov = true
-solver.opts.live_plotting = false
-solver.opts.verbose = false
+solver.opts.use_nesterov = false
+solver.opts.live_plotting = true
+solver.opts.verbose = true
 @time res_inf, stats_inf = solve(solver,X0,U0)
 stats_inf["iterations"]
 
@@ -377,9 +385,9 @@ res_d,stats_d = solve_dircol(solver,X0,U0,options=dircol_options)
 # Escape
 plt = plot(title="Escape",aspect_ratio=:equal)
 plot_obstacles(circles)
-plot_trajectory!(to_array(results_uncon_obstacles.X),width=2,color=:blue,label="Unconstrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
-plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:green,label="Constrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
-plot_trajectory!(to_array(results_con_obstacles_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+# plot_trajectory!(to_array(results_uncon_obstacles.X),width=2,color=:blue,label="Unconstrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+# plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:green,label="Constrained",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
+plot_trajectory!(to_array(res_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 plot_trajectory!(res_d.X,width=2,color=:yellow,label="DIRCOL",aspect_ratio=:equal,xlim=[-1,11],ylim=[-1,11])
 plot!(X0[1,:],X0[2,:],label="Infeasible Initialization",width=1,color=:purple,linestyle=:dash)
 display(plt)
