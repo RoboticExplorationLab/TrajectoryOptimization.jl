@@ -93,6 +93,8 @@ struct UnconstrainedVectorResults <: UnconstrainedIterResults
 
     bp::BackwardPass
 
+
+
     function UnconstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ,bp)
         new(X,U,K,d,X_,U_,S,s,fdx,fdu,ρ,dρ,bp)
     end
@@ -180,6 +182,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
 
     bp::BackwardPass
 
+    μ_prev::Trajectory
+    H::Trajectory
     function ConstrainedVectorResults(
             X,U,
             K,d,
@@ -191,8 +195,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
             Cx,Cu,
             t_prev,λ_prev,nesterov,
             active_set,
-            ρ,dρ,bp)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp)
+            ρ,dρ,bp,μ_prev,H)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H)
     end
 end
 
@@ -249,15 +253,17 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     dρ = zeros(1)
 
     bp = BackwardPass(n,m,N)
+    μ_prev = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+    H = [i != N ? Array(Diagonal(ones(p))) : Array(Diagonal(ones(p_N)))  for i = 1:N]
 
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H)
 end
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
-        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp))
+        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp),copy(r.μ_prev),copy(r.H))
 end
 
 #############

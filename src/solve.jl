@@ -174,6 +174,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
         if solver.state.constrained && j == 1
             copyto!(results.C_prev,results.C)
+            copyto!(results.λ_prev,results.λ)
+            copyto!(results.μ_prev,results.μ)
         end
         c_max = 0.  # Init max constraint violation to increase scope
         dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful

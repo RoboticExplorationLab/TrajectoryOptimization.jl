@@ -61,7 +61,7 @@ opts.use_penalty_burnin = false
 opts.outer_loop_update_type = :feedback
 
 opts.constraint_tolerance_second_order_dual_update = sqrt(opts.constraint_tolerance)
-opts.use_second_order_dual_update = false
+opts.use_second_order_dual_update = true
 
 # Set up model, objective, solver
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
@@ -96,7 +96,7 @@ stats_con["iterations"]
 stats_con["outer loop iterations"]
 stats_con["c_max"][end]
 
-stats_con
+results_con
 
 obj_mintime = update_objective(obj_con,tf=:min, u_min=u_min, u_max=u_max)
 

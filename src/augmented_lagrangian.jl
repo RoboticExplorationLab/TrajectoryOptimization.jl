@@ -2,12 +2,39 @@
 $(SIGNATURES)
 BFGS multiplier update
 """
-function BFGS(Hinv,ρ,y,s)
-    p = size(y)
-    ρ = inv(y'*s)
-    Hinv = (1.0*Matrix(I,p,p) - ρ*y*s')*Hinv*(1.0*Matrix(I,p,p) - ρ*s*y') + ρ*s*s'
-    return Hinv
+function λ_update_BFGS!(results::SolverIterResults,solver::Solver)
+    n,m,N = get_sizes(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    for k = 1:solver.N
+        k != N ? idx_pI = pI : idx_pI = pI_N
+
+        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+
+        # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
+        # s = (results.λ[k] - results.λ_prev[k])
+        # ρ = inv(y'*s)
+        # results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+    end
 end
+
+"""
+$(SIGNATURES)
+BFGS multiplier update
+"""
+function λ_update_BFGS!(results::SolverIterResults,solver::Solver,i::Int,k::Int)
+    n,m,N = get_sizes(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    k != N ? idx_pI = pI : idx_pI = pI_N
+
+    TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+    i <= idx_pI ? results.λ[k][i] = max.(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
+end
+
 
 """
 $(SIGNATURES)
@@ -571,7 +598,8 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
     return nothing
 end
 
-λ_second_order_update! = Buys_λ_second_order_update!
+# λ_second_order_update! = Buys_λ_second_order_update!
+λ_second_order_update! = λ_update_BFGS!
 
 """
 $(SIGNATURES)
@@ -608,10 +636,22 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
     end
 
     ## Store current constraints evaluations for next outer loop update
+    for k = 1:solver.N
+        y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
+        # y = (results.C[k] - results.C_prev[k])
+
+        s = (results.λ[k] - results.λ_prev[k])
+        ρ = inv(y'*s)
+        results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+    end
+
     results.C_prev .= deepcopy(results.C)
+    results.λ_prev .= deepcopy(results.λ)
+    results.μ_prev .= deepcopy(results.μ)
 
     # reset regularization
     results.ρ[1] = 0.
+
     return nothing
 end
 
