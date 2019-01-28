@@ -61,7 +61,7 @@ opts.use_penalty_burnin = false
 opts.outer_loop_update_type = :feedback
 
 opts.constraint_tolerance_second_order_dual_update = sqrt(opts.constraint_tolerance)
-opts.use_second_order_dual_update = true
+opts.use_second_order_dual_update = false
 
 # Set up model, objective, solver
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor

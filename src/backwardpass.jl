@@ -347,6 +347,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
 
         try
             tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
+            # tmp2 = chol_minus(Wuu,tmp1)
         catch
             # tmp2 = chol_minus(Wuu,tmp1)
             tmp = svd(Wuu'*Wuu - tmp1'*tmp1)
@@ -361,7 +362,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
         Quu_reg[k] = Array(Wuu_reg)
-    
+
         Quu[k] = Array(Wuu)
         Qxx[k] = Array(Wxx)
 
@@ -381,6 +382,18 @@ function chol_plus(A,B)
     P[1:n1,:] = A
     P[n1+1:end,:] = B
     return qr(P).R
+end
+
+"""
+$(SIGNATURES)
+Perform the operation sqrt(A-B), where A and B are Symmetric Matrices
+"""
+function chol_minus(A,B::Matrix)
+    AmB = Cholesky(A,:U,0)
+    for i = 1:size(B,1)
+        lowrankdowndate!(AmB,B[i,:])
+    end
+    U = AmB.U
 end
 
 function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)

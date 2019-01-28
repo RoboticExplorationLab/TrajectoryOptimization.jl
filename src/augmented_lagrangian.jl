@@ -32,7 +32,7 @@ function λ_update_BFGS!(results::SolverIterResults,solver::Solver,i::Int,k::Int
     k != N ? idx_pI = pI : idx_pI = pI_N
 
     TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
-    i <= idx_pI ? results.λ[k][i] = max.(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
+    i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
 end
 
 
@@ -62,7 +62,7 @@ function λ_update_default!(results::ConstrainedIterResults,solver::Solver,i::In
 
     k != N ? idx_pI = pI : idx_pI = pI_N
 
-    results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i] + results.μ[k][i].*results.C[k][i]))
+    results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i] + results.μ[k][i]*results.C[k][i]))
     i <= idx_pI ? results.λ[k][i] = max.(0.0,results.λ[k][i]) : nothing
 end
 
@@ -636,13 +636,28 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
     end
 
     ## Store current constraints evaluations for next outer loop update
-    for k = 1:solver.N
-        y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
-        # y = (results.C[k] - results.C_prev[k])
+    if solver.state.second_order_dual_update
+        p,pI,pE = get_num_constraints(solver)
+        p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-        s = (results.λ[k] - results.λ_prev[k])
-        ρ = inv(y'*s)
-        results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+        for k = 1:solver.N
+            # y = (map((x)->x.>0,results.Iμ[k])*results.C[k] - map((x)->x.>0,results.Iμ[k])*results.C_prev[k])
+            y = (results.Iμ[k]*results.C[k] - results.Iμ_prev[k]*results.C_prev[k])
+
+            # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
+
+            # y = (results.C[k] - results.C_prev[k])
+
+            s = (results.λ[k] - results.λ_prev[k])
+
+            if y'*s != 0.0
+                ρ = 1.0/(y'*s)
+            else
+                ρ = 0.0
+            end
+
+            results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+        end
     end
 
     results.C_prev .= deepcopy(results.C)
