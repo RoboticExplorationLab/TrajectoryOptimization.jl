@@ -185,6 +185,9 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     μ_prev::Trajectory
     H::Trajectory
     Iμ_prev::Trajectory
+    y::Trajectory
+    ss::Trajectory
+
     function ConstrainedVectorResults(
             X,U,
             K,d,
@@ -196,8 +199,8 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
             Cx,Cu,
             t_prev,λ_prev,nesterov,
             active_set,
-            ρ,dρ,bp,μ_prev,H,Iμ_prev)
-        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H,Iμ_prev)
+            ρ,dρ,bp,μ_prev,H,Iμ_prev,y,ss)
+        new(X,U,K,d,X_,U_,S,s,fdx,fdu,C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H,Iμ_prev,y,ss)
     end
 end
 
@@ -257,15 +260,17 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
     μ_prev = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
     H = [i != N ? Array(Diagonal(ones(p))) : Array(Diagonal(ones(p_N)))  for i = 1:N]
     Iμ_prev    = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
+    y = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
+    ss = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
 
     ConstrainedVectorResults(X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H,Iμ_prev)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp,μ_prev,H,Iμ_prev,y,ss)
 end
 
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
-        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp),copy(r.μ_prev),copy(r.H),copy(r.Iμ_prev))
+        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp),copy(r.μ_prev),copy(r.H),copy(r.Iμ_prev),copy(r.y),copy(r.ss))
 end
 
 #############

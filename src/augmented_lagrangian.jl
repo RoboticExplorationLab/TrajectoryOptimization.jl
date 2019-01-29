@@ -10,7 +10,11 @@ function λ_update_BFGS!(results::SolverIterResults,solver::Solver)
     for k = 1:solver.N
         k != N ? idx_pI = pI : idx_pI = pI_N
 
-        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+        # if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
+            results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+        # else
+        #     results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
+        # end
         results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
 
         # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
@@ -31,7 +35,11 @@ function λ_update_BFGS!(results::SolverIterResults,solver::Solver,i::Int,k::Int
 
     k != N ? idx_pI = pI : idx_pI = pI_N
 
-    TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+    # if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
+        TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+    # else
+    #     TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
+    # end
     i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
 end
 
@@ -549,7 +557,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
         for i = 1:_p
             if i <= _pI
                 if max(0.0,results.C[k][i]) <= constraint_decrease_ratio*max(0.0,results.C_prev[k][i])
-                    if use_nesterov
+                    if use_nesterov #&& max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
                         y_next = λ[k][i] + μ[k][i].*C[k][i]
                         y_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, y_next))
                         y_next = max.(0.0,y_next)
@@ -570,7 +578,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                 end
             else
                 if abs(results.C[k][i]) <= constraint_decrease_ratio*abs(results.C_prev[k][i])
-                    if use_nesterov
+                    if use_nesterov #&& max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
                         y_next = λ[k][i] + μ[k][i].*C[k][i]
                         y_next = max.(solver.opts.dual_min, min.(solver.opts.dual_max, y_next))
 
@@ -591,7 +599,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
             end
         end
     end
-    if use_nesterov
+    if use_nesterov #&& max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
         results.nesterov[1] = α
         results.nesterov[2] = α_next
     end
@@ -636,17 +644,22 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
     end
 
     ## Store current constraints evaluations for next outer loop update
-    if solver.state.second_order_dual_update
+    n,m,N = get_sizes(solver)
+    if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
+        nothing
+    end
+
+    if solver.state.second_order_dual_update# && max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
         p,pI,pE = get_num_constraints(solver)
         p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
         for k = 1:solver.N
             # y = (map((x)->x.>0,results.Iμ[k])*results.C[k] - map((x)->x.>0,results.Iμ[k])*results.C_prev[k])
-            y = (results.Iμ[k]*results.C[k] - results.Iμ_prev[k]*results.C_prev[k])
+            # y = (results.Iμ[k]*results.C[k] - results.Iμ_prev[k]*results.C_prev[k])
 
             # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
 
-            # y = (results.C[k] - results.C_prev[k])
+            y = (results.C[k] - results.C_prev[k])
 
             s = (results.λ[k] - results.λ_prev[k])
 

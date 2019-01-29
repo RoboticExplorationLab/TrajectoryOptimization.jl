@@ -19,7 +19,7 @@ solver_min.opts.verbose = false
 solver_min.opts.max_dt = 0.15
 solver_min.opts.min_dt = 1e-3
 solver_min.opts.constraint_tolerance = 0.001 # 0.005
-solver_min.opts.R_minimum_time = 10.0 #15.0 #13.5 # 12.0
+solver_min.opts.R_minimum_time = 15.0 #15.0 #13.5 # 12.0
 solver_min.opts.constraint_decrease_ratio = .25
 solver_min.opts.penalty_scaling = 2.0
 solver_min.opts.outer_loop_update_type = :default
@@ -30,7 +30,7 @@ U = ones(m,solver_min.N-1)
 results_uncon,stats_uncon = TrajectoryOptimization.solve(solver_uncon,U)
 results_min,stats_min = TrajectoryOptimization.solve(solver_min,U)
 # plot(TrajectoryOptimization.to_array(results_min.X)[1:2,:]')
-# plot(TrajectoryOptimization.to_array(results_min.U)[1:2,:]')
+plot(TrajectoryOptimization.to_array(results_min.U)[1:2,:]')
 
 T_uncon = TrajectoryOptimization.total_time(solver_uncon,results_uncon)
 T_min_time = TrajectoryOptimization.total_time(solver_min,results_min)
