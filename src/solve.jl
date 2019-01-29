@@ -264,7 +264,19 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             if J > solver.opts.max_cost_value
                 # error("Cost exceded maximum allowable cost")
                 println("Cost exceded maximum allowable cost")
-                return results
+                stats = Dict("iterations"=>iter,
+                    "outer loop iterations"=>iter_outer,
+                    "runtime"=>float(time_ns() - t_solve_start)/1e9,
+                    "setup_time"=>float(time_setup)/1e9,
+                    "cost"=>J_hist,
+                    "c_max"=>c_max_hist,
+                    "c_l2_norm"=>c_l2_norm_hist,
+                    "gradient norm"=>grad_norm_hist,
+                    "outer loop iteration index"=>outer_updates,
+                    "S condition number"=>cn_S_hist,
+                    "Quu condition number"=>cn_Quu_hist,)
+
+                return results,stats
 
             end
         end

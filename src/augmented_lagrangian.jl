@@ -538,6 +538,10 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
         γ_k = -(1-α)/α_next
     end
 
+    if solver.state.second_order_dual_update
+        λ_step = results.H*vcat(results.C...)
+    end
+
     # Stage constraints
     for k = 1:N
         if k != N
@@ -560,10 +564,12 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                     # else
                     #     results.λ[k][i] += results.μ[k][i]*results.C[k][i]
                     end
-                    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,i,k) : λ_update_default!(results,solver,i,k)
-
-                    # results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
-                    # results.λ[k][i] = max.(0.0,results.λ[k][i])
+                    if !solver.state.second_order_dual_update
+                        λ_update_default!(results,solver,i,k)
+                    else
+                        results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_step[(k-1)*p+i]))
+                        results.λ[k][i] = max.(0.0,results.λ[k][i])
+                    end
 
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
@@ -583,7 +589,11 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
 
                     # results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
 
-                    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,i,k) : λ_update_default!(results,solver,i,k)
+                    if solver.state.second_order_dual_update
+                        λ_update_default!(results,solver,i,k)
+                    else
+                        results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_step[(k-1)*p+i]))
+                    end
 
                     results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
                 else
