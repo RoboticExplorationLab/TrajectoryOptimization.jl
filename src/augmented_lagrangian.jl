@@ -7,41 +7,34 @@ function λ_update_BFGS!(results::SolverIterResults,solver::Solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-    for k = 1:solver.N
-        k != N ? idx_pI = pI : idx_pI = pI_N
+    λ_step = results.H*vcat(results.C...)
 
-        # if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
-            results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
-        # else
-        #     results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
-        # end
-        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
-
-        # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
-        # s = (results.λ[k] - results.λ_prev[k])
-        # ρ = inv(y'*s)
-        # results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+    for k = 1:(solver.N-1)
+        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + λ_step[(k-1)*p+1:k*p]))
+        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
     end
+    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[N] + λ_step[(N-1)*p+1:end]))
+    results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
 end
 
-"""
-$(SIGNATURES)
-BFGS multiplier update
-"""
-function λ_update_BFGS!(results::SolverIterResults,solver::Solver,i::Int,k::Int)
-    n,m,N = get_sizes(solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-
-    k != N ? idx_pI = pI : idx_pI = pI_N
-
-    # if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
-        TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
-    # else
-    #     TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
-    # end
-    i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
-end
+# """
+# $(SIGNATURES)
+# BFGS multiplier update
+# """
+# function λ_update_BFGS!(results::SolverIterResults,solver::Solver,i::Int,k::Int)
+#     n,m,N = get_sizes(solver)
+#     p,pI,pE = get_num_constraints(solver)
+#     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+#
+#     k != N ? idx_pI = pI : idx_pI = pI_N
+#
+#     # if max(norm(to_array(results.μ[1:N-1]),Inf),maximum(results.μ[N])) >= solver.opts.penalty_max
+#         TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.H[k]*results.C[k]))
+#     # else
+#     #     TMP = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k] + results.μ[k].*results.C[k]))
+#     # end
+#     i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
+# end
 
 
 """
@@ -653,24 +646,14 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
         p,pI,pE = get_num_constraints(solver)
         p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-        for k = 1:solver.N
-            # y = (map((x)->x.>0,results.Iμ[k])*results.C[k] - map((x)->x.>0,results.Iμ[k])*results.C_prev[k])
-            # y = (results.Iμ[k]*results.C[k] - results.Iμ_prev[k]*results.C_prev[k])
-
-            # y = (results.μ[k].*results.C[k] - results.μ_prev[k].*results.C_prev[k])
-
-            y = (results.C[k] - results.C_prev[k])
-
-            s = (results.λ[k] - results.λ_prev[k])
-
-            if y'*s != 0.0
-                ρ = 1.0/(y'*s)
-            else
-                ρ = 0.0
-            end
-
-            results.H[k] = (I - ρ*s*y')*results.H[k]*(I - ρ*y*s') + ρ*s*s'
+        y = vcat((results.C - results.C_prev)...);
+        s = vcat((results.λ - results.λ_prev)...);
+        if y'*s != 0.0
+            ρ = 1.0/(y'*s)
+        else
+            ρ = 0.0
         end
+        results.H .= (I - ρ*s*y')*results.H*(I - ρ*y*s') + ρ*s*s'
     end
 
     results.C_prev .= deepcopy(results.C)

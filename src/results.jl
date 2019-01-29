@@ -183,7 +183,7 @@ struct ConstrainedVectorResults <: ConstrainedIterResults
     bp::BackwardPass
 
     μ_prev::Trajectory
-    H::Trajectory
+    H::Array{Float64,2}
     Iμ_prev::Trajectory
     y::Trajectory
     ss::Trajectory
@@ -258,7 +258,7 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
 
     bp = BackwardPass(n,m,N)
     μ_prev = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
-    H = [i != N ? Array(Diagonal(ones(p))) : Array(Diagonal(ones(p_N)))  for i = 1:N]
+    H = Array(Diagonal(ones(p*(N-1) + p_N)))
     Iμ_prev    = [i != N ? Diagonal(ones(p)) : Diagonal(ones(p_N)) for i = 1:N]
     y = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
     ss = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
