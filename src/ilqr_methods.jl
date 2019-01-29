@@ -307,15 +307,10 @@ end
 
 """
 $(SIGNATURES)
-    Calculate the problem gradient using feedforward term d (from δu = Kδx + d)
+    Calculate the infinity norm of the gradient using feedforward term d (from δu = Kδx + d)
 """
 function gradient_feedforward(res::SolverVectorResults)
-    N = length(res.X)
-    gradient_norm = 0.
-    for k = 1:N-1
-        gradient_norm += res.d[k]'*res.d[k]
-    end
-    return sqrt(gradient_norm)
+    norm(res.d,Inf)
 end
 
 """

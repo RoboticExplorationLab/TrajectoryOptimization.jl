@@ -6,8 +6,8 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev:
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
 
-    update_constraints!(res,solver,X,U)
-    J_prev = cost(solver, res, X, U)
+    # update_constraints!(res,solver,X,U)
+    # J_prev = cost(solver, res, X, U)
 
     J = Inf
     alpha = 1.0

@@ -196,14 +196,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             J = forwardpass!(results, solver, Δv, J_prev)
             push!(J_hist,J)
 
-            # gradients
-            # if solver.opts.gradient_type == :todorov
-            #     gradient = gradient_todorov(results)
-            # elseif solver.opts.gradient_type == :AuLa
-            #     gradient = gradient_AuLa(results,solver)
-            # elseif solver.opts.gradient_type == :feedforward
-            #     gradient = gradient_feedforward(results)
-            # end
+            # gradient
             gradient = update_gradient(results,solver)
             push!(grad_norm_hist,gradient)
 

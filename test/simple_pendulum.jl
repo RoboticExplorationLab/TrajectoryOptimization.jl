@@ -2,9 +2,9 @@
 model, obj = TrajectoryOptimization.Dynamics.pendulum
 obj_c = Dynamics.pendulum_constrained[2]
 opts = TrajectoryOptimization.SolverOptions()
-opts.verbose = false
 opts.cost_tolerance = 1e-5
 opts.constraint_tolerance = 1e-5
+
 
 ### UNCONSTRAINED ###
 # rk4
@@ -19,6 +19,7 @@ results, = TrajectoryOptimization.solve(solver,U)
 @test norm(results.X[end]-obj.xf) < 1e-3
 
 # random control initialization
+solver.opts
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.1)
 results, =TrajectoryOptimization.solve(solver) # Test random init
 @test norm(results.X[end]-obj.xf) < 1e-3
