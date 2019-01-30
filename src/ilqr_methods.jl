@@ -197,6 +197,8 @@ function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matri
     return X2, U2
 end
 
+interp_traj(N::Int,tf::Float64,X::Trajectory,U::Trajectory) = interp_traj(N,tf,to_array(X),to_array(U))
+
 """
 $(SIGNATURES)
 Interpolate the rows of a matrix using cubic interpolation
