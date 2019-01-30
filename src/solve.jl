@@ -266,7 +266,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :grad2 value=grad2
             # @logmsg InnerLoop :j value=j
-            @logmsg InnerLoop :max_cn value=max_cn
+            # @logmsg InnerLoop :max_cn value=max_cn
             # @logmsg InnerLoop :min_eig value=min_eig
             @logmsg InnerLoop :zero_count value=dJ_zero_counter
 
