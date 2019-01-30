@@ -10,7 +10,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
-        Δv = _backwardpass_new!(results, solver)
+        Δv = _backwardpass!(results, solver)
     end
     return Δv
 end
@@ -543,7 +543,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         Δv[2] += 0.5*d[k]'*Wuu'*Wuu*d[k]
 
         Quu_reg[k] = Array(Wuu_reg)
-    
+
         Quu[k] = Array(Wuu)
         Qxx[k] = Array(Wxx)
 
