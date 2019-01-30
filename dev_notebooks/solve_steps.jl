@@ -22,31 +22,30 @@ x_max = [0.25; 1.001; Inf]
 obj_con = ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
 solver = Solver(model,obj_con,N=N)
-solver.opts.restype = Matrix
-solver_new = Solver(model,obj_con,N=N)
-# solver_new.opts.restype = TrajectoryVariable
 solver.opts.verbose = true
 solver.state.infeasible
 n,m = get_sizes(solver)
 
+solver2 = Solver(model,obj_con,N=N)
+solver2.opts.al_type = :algencan
+
 X0 = Array{Float64,2}(undef,0,0)
 U0 = ones(m,N)
 
-solver.opts.constrained
-solver_new.opts.constrained
+logger = default_logger(solver)
+global_logger(logger)
 
 #****************************#
 #       INITIALIZATION       #
 #****************************#
 mbar,mm = get_num_controls(solver)
 results = init_results(solver, X0, U0)
-results_new = init_results(solver_new, X0, U0)
+results2 = init_results(solver2, X0, U0)
 results.ρ[1] = 0
-results_new.ρ[1] = 0
+results2.ρ[1] = 0
 X,U = results.X, results.U
 X_,U_ = results.X_, results.U_
 
-bp = TrajectoryOptimization.BackwardPass(n,mm,N)
 #****************************#
 #           SOLVER           #
 #****************************#
@@ -54,7 +53,7 @@ bp = TrajectoryOptimization.BackwardPass(n,mm,N)
 if !solver.state.infeasible
     X[1] = solver.obj.x0
     flag = rollout!(results,solver) # rollout new state trajectoy
-    rollout!(results_new,solver_new)
+    rollout!(results2,solver2)
 
     if !flag
         @info "Bad initial control sequence, setting initial control to zero"
@@ -75,37 +74,42 @@ end
 # plot_trajectory!(results)
 # plot(to_array(results.X)')
 
-results.X == results_new.X.x
-results.μ == results_new.μ.x
+# results.X == results_new.X.x
+# results.μ == results_new.μ.x
 
 
 
 J_prev = cost(solver, results)
 TrajectoryOptimization.update_jacobians!(results, solver)
 Δv = backwardpass!(results, solver)
-J = forwardpass!(results, solver, Δv)
-forwardpass!(results_new, solver_new, Δv)
-
-b1 = @benchmark backwardpass!($results, $solver, $bp)
-b2 = @benchmark backwardpass!($results_new, $solver_new, $bp)
-judge(median(b2),median(b1))
-
-b1 = @benchmark forwardpass!($results, $solver, $Δv)
-b2 = @benchmark forwardpass!($results_new, $solver_new, $Δv)
-judge(median(b2),median(b1))
-
-
+J = forwardpass!(results, solver, Δv, J_prev)
+c_max = max_violation(results)
 results.X .= deepcopy(results.X_)
 results.U .= deepcopy(results.U_)
-copyto!(results_new.X,results_new.X_)
-copyto!(results_new.U,results_new.U_)
+
+print_header(logger, InnerLoop)
+J_prev = cost(solver2, results2)
+update_jacobians!(results2, solver2)
+Δv = _backwardpass_new!(results2, solver2)
+J = forwardpass!(results2, solver2, Δv, J_prev)
+c_max = max_violation(results2)
+print_row(logger, InnerLoop)
+
+copyto!(results2.X,results2.X_)
+copyto!(results2.U,results2.U_)
 
 
-b2 = @benchmark copyto!(results_new.X,results_new.X_)
-b1 = @benchmark results.X .= deepcopy(results.X_)
-judge(median(b2),median(b1))
+outer_loop_update(results2, solver2)
+
+
+#
+# b2 = @benchmark copyto!(results_new.X,results_new.X_)
+# b1 = @benchmark results.X .= deepcopy(results.X_)
+# judge(median(b2),median(b1))
 
 outer_loop_update(results,solver)
+cost(solver,results)
+max_violation(results)
 update_constraints!(results, solver)
 
 outer_loop_update(results_new,solver_new)
