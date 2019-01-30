@@ -242,6 +242,8 @@ function get_initial_trajectory(solver::Solver, X0::Matrix{Float64}, U0::Matrix{
         # Initialize controls with sqrt(dt)
         if size(U0,1) == m
             U_init = [U0; ones(1,N-1)*sqrt(get_initial_dt(solver))]
+        else
+            U_init = copy(U0)
         end
     else
         solve_string = "..."
