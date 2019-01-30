@@ -2,8 +2,9 @@ using MeshCatMechanisms
 using LinearAlgebra
 using RigidBodyDynamics
 using Plots
-import TrajectoryOptimization.rollout
-include("N_plots.jl")
+import TrajectoryOptimization: hold_trajectory, Trajectory, total_time
+import RigidBodyDynamics: transform
+include("N_plots.jl")?
 include("../kuka_visualizer.jl")
 model, obj = Dynamics.kuka
 n,m = model.n, model.m
@@ -11,6 +12,11 @@ nn = m   # Number of positions
 
 function plot_sphere(frame::CartesianFrame3D,center,radius,mat,name="")
     geom = HyperSphere(Point3f0(center), convert(Float32,radius))
+    setelement!(vis,frame,geom,mat,name)
+end
+
+function plot_cylinder(frame::CartesianFrame3D,c1,c2,radius,mat,name="")
+    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
     setelement!(vis,frame,geom,mat,name)
 end
 
@@ -44,6 +50,8 @@ xf[1] = pi/4
 Q = 1e-4*Diagonal(I,n)*10
 Qf = 250.0*Diagonal(I,n)
 R = 1e-5*Diagonal(I,m)/100
+Rd = 1e-6
+R = Diagonal([1e-8,1e-8,Rd,Rd,Rd,Rd,Rd])
 tf = 5.0
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
@@ -66,6 +74,7 @@ res, stats = solve(solver,U0_hold)
 stats["iterations"]
 J = stats["cost"][end]
 norm(res.X[N]-xf)
+plot(res.U)
 
 res_d, stats_d = solve_dircol(solver,X0_hold,U0_hold,options=dircol_options)
 eval_f = gen_usrfun_ipopt(solver::Solver,:hermite_simpson)[1]
@@ -75,13 +84,50 @@ set_configuration!(vis, x0[1:7])
 animate_trajectory(vis, res.X)
 set_configuration!(vis, xf[1:7])
 animate_trajectory(vis, res_d.X)
-plot(to_array(res.U)')
 
 plot(stats["cost"],yscale=:log10)
 plot!(stats_d["cost"])
 
-plot(res.U)
+u_bnd = [50,100,30,50,30,30,30]
+obj_con = ConstrainedObjective(obj_uncon, u_min=-u_bnd, u_max=u_bnd)
+solver_con = Solver(model, obj_con, N=N, opts=opts)
+res_con, stats_con = solve(solver_con, U0_hold)
 
+
+opts = SolverOptions()
+opts.square_root = true
+opts.R_minimum_time = 40
+opts.minimum_time_tf_estimate = 0.6
+opts.penalty_initial = 1
+opts.penalty_scaling = 20
+opts.penalty_initial_minimum_time_equality = 10
+opts.penalty_initial_minimum_time_inequality = 10
+opts.outer_loop_update_type = :default
+opts.cost_tolerance = 1e-4
+opts.constraint_tolerance = 1e-3
+opts.cost_tolerance_intermediate = 1e-2
+opts.use_nesterov = false
+
+obj_min = update_objective(obj_con, tf=:min)
+solver_min = Solver(model, obj_min, N=N, opts=opts)
+solver_min.opts.verbose = true
+res_min, stats_min = solve(solver_min,to_array(res_con.U))
+stats_min["iterations"]
+TrajectoryOptimization.total_time(solver,res)
+TrajectoryOptimization.total_time(solver_min,res_min)
+plot(res_min.X,legend=:none)
+plot(res_min.U)
+plot(res_min.X, 1:6)
+plot(res.U)
+plot!(res_min.U)
+
+
+dt = [u[end] for u in res_min.U]
+set_configuration!(vis, x0[1:7])
+animate_trajectory(vis, res.X, solver.dt)
+animate_trajectory(vis, res_min.X, mean(dt)^2)
+
+plot(dt)
 
 #####################################
 #        WITH TORQUE LIMITS         #
@@ -279,16 +325,16 @@ function calc_kuka_points(x::Vector{T},points) where T
 end
 
 function collision_constraint(c,obstacle,kuka_points,radii) where T
-    for (i,kuka_point) in enumerate(kuka_points)
-        c[i] = sphere_constraint(obstacle,kuka_point,radii[i]+obstacle[4])
-    end
+
 end
 
-function generate_collision_constraint(kuka::Mechanism, circles)
+function generate_collision_constraint(kuka::Mechanism, circles, cylinders=[])
     # Specify points along the arm
     points, radii = kuka_points(kuka)
     num_points = length(points)
-    num_obstacles = length(circles)
+    nCircle = length(circles)
+    nCylinder = length(cylinders)
+    num_obstacles = nCircle + nCylinder
 
     function cI_obstacles(c,x,u)
         nn = length(u)
@@ -297,45 +343,87 @@ function generate_collision_constraint(kuka::Mechanism, circles)
         arm_points = calc_kuka_points(x[1:nn],points)
 
         C = reshape(view(c,1:num_points*num_obstacles),num_points,num_obstacles)
-        for i = 1:num_obstacles
+        for i = 1:nCircle
             c_obstacle = view(C,1:num_points,i)
-            collision_constraint(c_obstacle,circles[i],arm_points,radii)
+            for (p,kuka_point) in enumerate(arm_points)
+                c_obstacle[p] = sphere_constraint(circles[i],kuka_point,radii[p]+circles[i][4])
+            end
         end
-
+        for j = 1:nCylinder
+            i = j + nCircle
+            c_obstacle = view(C,1:num_points,i)
+            for (p,kuka_point) in enumerate(arm_points)
+                c_obstacle[p] = circle_constraint(cylinders[j],kuka_point,radii[p]+cylinders[j][3])
+            end
+        end
     end
 end
 
+function addcylinders!(vis,cylinders,height=1.5)
+    for (i,cyl) in enumerate(cylinders)
+        plot_cylinder(world,[cyl[1],cyl[2],0],[0,0,height],cyl[3],blue_,"cyl_$i")
+    end
+end
+
+# Define objective
+x0 = zeros(n)
+x0[2] = pi/2
+x0[3] = pi/2
+x0[4] = pi/2
+xf = zeros(n)
+xf[1] = pi/2
+xf[4] = pi/2
+set_configuration!(vis, xf[1:7])
+Q = 1e-4*Diagonal(I,n)*10
+Qf = 250.0*Diagonal(I,n)
+R = 1e-5*Diagonal(I,m)/100
+Rd = 1e-6
+R = Diagonal([1e-8,1e-8,Rd,Rd,Rd,Rd,Rd])
+tf = 5.0
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+
+
+set_configuration!(vis, x0[1:7])
+
 # Add more obstacles
+d = 0.25
 circles2 = copy(circles)
-push!(circles2,[-0.3,0.5,0.7,0.2])
-push!(circles2,[0.3,0.3,1.2,0.1])
-push!(circles2,[0.3,-0.5,0.5,0.15])
+circles2 = Vector{Float64}[]
+push!(circles2,[d,0.0,1.2,0.2])
+push!(circles2,[0,-d,0.4,0.2])
+push!(circles2,[0,-d,1.2,0.2])
 addcircles!(vis,circles2)
+
+cylinders = [[d,-d,0.1],[d,d,0.1],[-d,-d,0.1]]
+addcylinders!(vis,cylinders)
 
 points,radii,frames = kuka_points(kuka,true)
 
 
 # Generate constraint function
-c = zeros(length(points)*length(circles2))
-cI_arm_obstacles = generate_collision_constraint(kuka,circles2)
+num_obstacles = length(circles2)+length(cylinders)
+c = zeros(length(points)*num_obstacles)
+cI_arm_obstacles = generate_collision_constraint(kuka,circles2,cylinders)
 cI_arm_obstacles(c,x0,zeros(m))
+c
 
 # Formulate and solve problem
 costfun = LQRCost(Q,R,Qf,xf)
-obj_obs_arm = ConstrainedObjective(obj_ik,cI=cI_arm_obstacles,u_min=-80,u_max=80)
+obj_obs_arm = ConstrainedObjective(costfun,tf,x0,xf,cI=cI_arm_obstacles,u_min=-80,u_max=80)
 obj_obs_arm.cost.Q = Q
 obj_obs_arm.cost.R = R*1e-8
 
 solver = Solver(model, obj_obs_arm, N=41)
 solver.opts.verbose = true
-solver.opts.penalty_scaling = 150
-solver.opts.penalty_initial = 0.0005
+solver.opts.penalty_scaling = 10
+solver.opts.penalty_initial = 0.05
 # solver.opts.cost_tolerance = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-2
 solver.opts.cost_tolerance = 1e-7
 # solver.opts.iterations = 200
 solver.opts.bp_reg_initial = 0
-solver.opts.outer_loop_update_type = :accelerated
+solver.opts.outer_loop_update_type = :default
+U0_hold = hold_trajectory(solver, kuka, x0[1:7])
 res_obs, stats_obs = solve(solver,U0_hold)
 X = res_obs.X
 U = res_obs.U
@@ -345,8 +433,13 @@ U0_warm = to_array(U)
 
 # Visualize
 set_configuration!(vis, x0[1:7])
-animate_trajectory(vis, res_ik.X.x)
-animate_trajectory(vis, res_obs.X.x, 0.2)
+animate_trajectory(vis, res_ik.X)
+animate_trajectory(vis, res_obs.X, 0.2)
+
+X_interp, U_interp = TrajectoryOptimization.interp_traj(201,5.,res_obs.X,res_obs.U)
+animate_trajectory(vis, X_interp, 0.05)
+
+interpolate_trajectory
 
 plot(to_array(res_obs.U)',legend=:none)
 
@@ -375,6 +468,64 @@ c
 c = zeros(5*5)
 cI_arm_obstacles(c,res_obs.X[5],res_obs.U[5])
 
+
+
+obj_min = update_objective(obj_obs_arm,tf=0.6)
+solver_min = Solver(model,obj_min,N=N,opts=opts)
+solver_min.opts.penalty_scaling = 150
+solver_min.opts.penalty_initial = 0.0005
+# solver.opts.cost_tolerance = 1e-6
+solver_min.opts.cost_tolerance_intermediate = 1e-2
+solver_min.opts.cost_tolerance = 1e-4
+solver_min.opts.constraint_tolerance = 1e-3
+# solver.opts.iterations = 200
+solver.opts.bp_reg_initial = 0
+
+solver_min.opts.verbose = true
+res_min0,stats_min0 = solve(solver_min,U0_hold)
+
+X_interp, U_interp = TrajectoryOptimization.interp_traj(201,5.,res_min.X,res_min.U)
+animate_trajectory(vis, X_interp, solver_min.dt)
+
+
+obj_min = update_objective(obj_obs_arm,tf=:min)
+obj_min.cost.Q .= Diagonal([ones(nn)*1e-4; ones(nn)*1e-1])
+obj_min.cost.R .= Diagonal(I,m)*1e-6
+
+solver_min = Solver(model,obj_min,N=N,opts=opts)
+solver_min.opts.penalty_scaling = 10
+solver_min.opts.penalty_initial = 0.0005
+# solver.opts.cost_tolerance = 1e-6
+solver_min.opts.cost_tolerance_intermediate = 1e-3
+solver_min.opts.cost_tolerance = 1e-4
+solver_min.opts.constraint_tolerance = 1e-3
+solver_min.opts.minimum_time_tf_estimate = 0.6
+solver_min.opts.penalty_initial_minimum_time_equality = 10
+solver_min.opts.penalty_initial_minimum_time_inequality = 10
+solver_min.opts.penalty_scaling_minimum_time_equality = 100
+solver_min.opts.R_minimum_time = 1
+solver_min.opts.square_root = true
+solver_min.opts.use_nesterov = false
+solver_min.opts.iterations = 1000
+
+solver_min.opts.verbose = true
+U0 = hold_trajectory(solver_min, kuka, x0[1:7])
+U_warm = to_array(res_min0.U)
+res_min,stats_min = solve(solver_min, U_warm)
+total_time(solver_min,res_min)
+
+U_guess = to_array(res_min.U)
+res_min,stats_min = solve(solver_min, U_guess)
+
+dt = [u[end] for u in res_min.U]
+plot(dt)
+plot(res_min.U)
+plot(res_min.X,1:6,legend=:bottom)
+
+
+X_interp, U_interp = TrajectoryOptimization.interp_traj(201,5.,res_min.X,res_min.U)
+animate_trajectory(vis, X_interp, 0.01)
+solver_min.dt
 
 
 ##########################################################

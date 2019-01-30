@@ -277,11 +277,11 @@ function plot_obstacles(circles,clr=:red)
     end
 end
 
-function plot_trajectory!(X;kwargs...)
+function plot_trajectory!(X::AbstractMatrix;kwargs...)
     plot!(X[1,:],X[2,:];kwargs...)
 end
 
-function plot_trajectory!(res::SolverVectorResults; kwargs...)
+function plot_trajectory!(res::TrajectoryOptimization.SolverVectorResults; kwargs...)
 	plot_trajectory!(to_array(res.X); kwargs...)
 end
 
@@ -357,3 +357,4 @@ end
 
 plot(X::Trajectory; kwargs...) = plot(to_array(X)'; kwargs...)
 plot!(X::Trajectory; kwargs...) = plot!(to_array(X)'; kwargs...)
+plot(X::Trajectory, inds::UnitRange; kwargs...) = plot(to_array(X)[inds,:]'; kwargs...)

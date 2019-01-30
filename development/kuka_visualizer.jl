@@ -18,7 +18,7 @@ using MeshCat
 
 
 function animate_trajectory(vis, X::AbstractMatrix{Float64}, dt=0.1)
-    animate_trajectory(vis, TrajectoryOptimization.to_dvecs(X))
+    animate_trajectory(vis, TrajectoryOptimization.to_dvecs(X), dt)
 end
 
 function animate_trajectory(vis, X::Trajectory, dt=0.1)

@@ -35,9 +35,9 @@ struct BackwardPass <: AbstractBackwardPass
     Quu_reg::Vector{Matrix{Float64}}
 
     function BackwardPass(n::Int,m::Int,N::Int)
-        Qx = [zeros(n) for i = 1:N-1]
+        Qx = [zeros(n) for i = 1:N]
         Qu = [zeros(m) for i = 1:N-1]
-        Qxx = [zeros(n,n) for i = 1:N-1]
+        Qxx = [zeros(n,n) for i = 1:N]
         Qux = [zeros(m,n) for i = 1:N-1]
         Quu = [zeros(m,m) for i = 1:N-1]
 

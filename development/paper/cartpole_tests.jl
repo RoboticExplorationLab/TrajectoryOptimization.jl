@@ -6,14 +6,15 @@ include("N_plots.jl")
 model, obj0 = Dynamics.cartpole_analytical
 n,m = model.n, model.m
 
-obj = copy(obj0)
-obj.x0 = [0;0;0;0.]
-obj.xf = [0.5;pi;0;0]
-obj.tf = 2.0
+x0 = zeros(n)
+xf = [0.5;pi;0;0]
+tf = 2.0
+obj = LQRObjective(obj0.cost.Q, obj0.cost.R, obj0.cost.Qf, tf, x0, xf)
 u_bnd = 20
 x_bnd = [0.6,Inf,Inf,Inf]
+
 obj_c = ConstrainedObjective(obj,u_min=-u_bnd, u_max=u_bnd)
-obj_min = update_objective(obj_c,tf=:min,c=1.,Q = obj.Q*0., Qf = obj.Qf*1)
+obj_min = update_objective(obj_c,tf=:min)
 dt = 0.1
 
 # Params
@@ -29,9 +30,9 @@ solver = Solver(model,obj_c,N=N)
 rollout!(X0_rollout,U0,solver)
 
 # Dircol functions
-eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
+# eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
 
-function comparison_plot(results,sol_ipopt;kwargs...)
+function comparison_plot(results,sol_ipopt; kwargs...)
     n = size(results.X,1)
     if n == 2 # pendulum
         state_labels = ["pos" "vel"]
@@ -43,7 +44,7 @@ function comparison_plot(results,sol_ipopt;kwargs...)
 
     colors = [:blue :red]
 
-    p_u = plot(time_ilqr,to_array(results.U)',width=2,label="iLQR",color=colors)
+    p_u = plot(time_ilqr[1:end-1],to_array(results.U)',width=2,label="iLQR",color=colors)
     plot!(time_dircol,sol_ipopt.U',width=2, label="IPOPT",color=colors,style=:dashdot,ylabel="control")
 
     p_x = plot(time_ilqr,to_array(results.X)[1:2,:]',width=2,label=state_labels,color=colors)
@@ -67,13 +68,13 @@ colors_X = [:red :blue :orange :green]
 
 # Solver Options
 opts = SolverOptions()
-opts.use_static = false
 opts.cost_tolerance = 1e-6
 opts.outer_loop_update_type = :default
 opts.constraint_decrease_ratio = 0.75
 
 # iLQR
-solver = Solver(model,obj,N=N,opts=opts,integration=:rk3_foh)
+solver = Solver(model,obj,N=N,opts=opts,integration=:rk3)
+solver.opts.verbose = true
 res_i, stat_i = solve(solver,U0)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
@@ -95,11 +96,6 @@ stat_d["iterations"]
 comparison_plot(res_i,res_d)
 convergence_plot(stat_i,stat_d)
 
-eval_f(var_i.Z)
-eval_f(res_d.Z)
-
-stat_i["cost"][50]
-stat_d["cost"][50]
 
 time_per_iter = stat_i["runtime"]/stat_i["iterations"]
 time_per_iter = stat_d["runtime"]/stat_d["iterations"]
@@ -118,13 +114,12 @@ opts.outer_loop_update_type = :individual
 opts.constraint_decrease_ratio = .85
 
 # iLQR
-solver = Solver(model,obj_c,N=N,opts=opts,integration=:rk3_foh)
+obj_c2 = update_objective(obj_c,tf=1.45)
+solver = Solver(model,obj_c2,N=N,opts=opts,integration=:rk3)
 res_i, stat_i = solve(solver,U0)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
-max_violation(res_i)
-cost(solver, res_i)
-_cost(solver, res_i)
+stat_i["c_max"][end]
 stat_i["runtime"]
 stat_i["iterations"]
 
@@ -140,11 +135,8 @@ stat_d["iterations"]
 comparison_plot(res_i,res_d)
 convergence_plot(stat_i,stat_d)
 
-eval_f(var_i.Z)
-eval_f(res_d.Z)
-
-stat_i["cost"][40]
-stat_d["cost"][40]
+cost(solver,res_i)
+cost(solver,res_d)
 
 time_per_iter = stat_i["runtime"]/stat_i["iterations"]
 time_per_iter = stat_d["runtime"]/stat_d["iterations"]
@@ -157,19 +149,25 @@ time_per_iter = stat_d["runtime"]/stat_d["iterations"]
 # Solver Options
 opts = SolverOptions()
 opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-1
-# opts.constraint_tolerance = 1e-3
-opts.outer_loop_update_type = :default
-opts.constraint_decrease_ratio = .85
+opts.cost_tolerance_intermediate = 5e-1
+opts.constraint_tolerance = 1e-4
+opts.outer_loop_update_type = :feedback
+opts.constraint_decrease_ratio
 opts.resolve_feasible = false
+opts.square_root = true  # this makes a big difference!
+opts.R_infeasible = 1
+opts.penalty_initial = 1
+opts.penalty_scaling = 10
+opts.use_nesterov = false
+opts.al_type = :default
 
 # iLQR
 solver = Solver(model,obj_c,N=N,opts=opts,integration=:rk3)
 res_i, stat_i = solve(solver,X0,U0)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
-max_violation(res_i)
-_cost(solver, res_i)
+stat_i["c_max"][end]
+stat_i["cost"][end]
 stat_i["runtime"]
 stat_i["iterations"]
 var_i = DircolVars(res_i)
@@ -188,11 +186,8 @@ stat_d["cost"]
 comparison_plot(res_i,res_d)
 convergence_plot(stat_i,stat_d)
 
-eval_f(var_i.Z)
-eval_f(res_d.Z)
-
-stat_i["cost"][30]
-stat_d["cost"][30]
+cost(solver,res_i)
+cost(solver,res_d)
 
 time_per_iter = stat_i["runtime"]/stat_i["iterations"]
 time_per_iter = stat_d["runtime"]/stat_d["iterations"]
@@ -202,24 +197,38 @@ time_per_iter = stat_d["runtime"]/stat_d["iterations"]
 #          MINIMUM TIME             #
 #####################################
 
+X0_warm = to_array(res_i.X)
+U0_warm = to_array(res_i.U)
 
 # Solver Options
 opts = SolverOptions()
-opts.use_static = false
-opts.max_dt = 0.25
+opts.max_dt = 0.7
 opts.verbose = false
-opts.cost_tolerance = 1e-4
-opts.cost_tolerance_intermediate = 1e-3
-opts.constraint_tolerance = 0.05
+opts.cost_tolerance = 1e-6
+opts.cost_tolerance_intermediate = 1e-5
+opts.constraint_tolerance = 0.01
+opts.R_minimum_time = 100
+opts.penalty_initial_minimum_time_equality = 100.
+opts.penalty_scaling_minimum_time_equality = 10
+
+
 opts.outer_loop_update_type = :default
-opts.R_minimum_time = 500
+opts.constraint_decrease_ratio
 opts.resolve_feasible = false
-opts.penalty_initial_minimum_time_equality = 50.
-opts.penalty_scaling_minimum_time_equality = 15
+opts.square_root = true  # this makes a big difference!
+opts.penalty_initial = 1
+opts.penalty_scaling = 10
+opts.use_nesterov = false
+opts.al_type = :default
+opts.live_plotting = true
+opts.resolve_feasible = false
+opts.R_infeasible = 1
+opts.minimum_time_tf_estimate = 1.5
 
 # iLQR
-solver = Solver(model,obj_min,N=N,opts=opts,integration=:rk3)
-res_i, stat_i = solve(solver,U0)
+solver_mintime = Solver(model,obj_min,N=N,opts=opts,integration=:rk3)
+solver_mintime.opts.verbose = true
+res_i, stat_i = solve(solver_mintime,X0_warm,U0_warm)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
 max_violation(res_i)
@@ -227,6 +236,7 @@ _cost(solver, res_i)
 stat_i["runtime"]
 stat_i["iterations"]
 total_time(solver, res_i)
+plot(stat_i["c_max"],yscale=:log10)
 
 # DIRCOL
 solver.opts.verbose = false

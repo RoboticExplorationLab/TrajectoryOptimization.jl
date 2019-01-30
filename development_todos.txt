@@ -2,15 +2,22 @@ LQR simulator
 Solution polishing
 2nd order multiplier update
 Active set for tail convergence
-Square root method
 Handle different U sizes
-Output condition numbers
 Scaling problem
 Allow settings file
 Slack for constraints
 Log-barrier constraint on controls
 Analytical Jacobians
-Trajectory type
 Model/solver tests
-DIRCOL/iLQR intergration
+DIRCOL/iLQR integration
+
+# Performance speedups
+Look into storing constraints as a big vector (20x speedup on cost calculation)
+Look into calculating Quadratic costs as one large matrix multiplication
+
+
+# Completed
+Trajectory type
 General cost functions | full quadratic expansion of cost
+Output condition numbers
+Square root method

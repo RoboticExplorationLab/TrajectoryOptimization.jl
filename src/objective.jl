@@ -451,6 +451,8 @@ end
 
 null_constraint(c,x,u) = nothing
 null_constraint(c,x) = nothing
+null_constraint_jacobian(cx,cu,x,u) = nothing
+null_constraint_jacobian(cx,x) = nothing
 
 get_sizes(obj::Objective) = get_sizes(obj.cost)
 
