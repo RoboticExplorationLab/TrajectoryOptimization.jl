@@ -69,6 +69,7 @@ mutable struct SolverOptions
     active_constraint_tolerance::Float64 # numerical tolerance for constraint violation
     use_nesterov::Bool # accelerated gradient descent for dual variables
     use_penalty_burnin::Bool # perform only penalty updates (no dual updates) until constraint_tolerance_intermediate < ϵ_int
+    al_type::Symbol  # [:default, :algencan] pick which Augmented Lagrangian formulation to use. ALGENCAN uses a slightly different check for inactive constraints.
 
     ######################
     ## Infeasible Start ##
@@ -140,6 +141,7 @@ mutable struct SolverOptions
         active_constraint_tolerance=0.0,
         use_nesterov=false,
         use_penalty_burnin=false,
+        al_type=:default,
         R_infeasible=1.0,
         resolve_feasible=true,
         penalty_initial_infeasible=1.0,
@@ -200,6 +202,7 @@ mutable struct SolverOptions
             active_constraint_tolerance,
             use_nesterov,
             use_penalty_burnin,
+            al_type,
             R_infeasible,
             resolve_feasible,
             penalty_initial_infeasible,

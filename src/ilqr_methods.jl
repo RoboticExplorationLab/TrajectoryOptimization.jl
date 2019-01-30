@@ -95,10 +95,18 @@ $(SIGNATURES)
 function cost_constraints(solver::Solver, res::ConstrainedIterResults)
     N = solver.N
     J = 0.0
-    for k = 1:N
-        J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
+    if solver.opts.al_type == :default
+        for k = 1:N
+            J += 0.5*res.C[k]'*res.Iμ[k]*res.C[k] + res.λ[k]'*res.C[k]
+        end
+    elseif solver.opts.al_type == :algencan
+        C,λ = res.C, res.λ
+        for k = 1:N
+            Iμk = Diagonal(res.μ[k])
+            Ia = Diagonal(res.active_set[k])
+            J += C[k]'Ia*(λ[k] + 0.5*Iμk*C[k]) - 0.5λ[k]'*(Iμk\(I-Ia))*λ[k]
+        end
     end
-
     return J
 end
 

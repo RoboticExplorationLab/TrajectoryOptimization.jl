@@ -97,7 +97,7 @@ $(SIGNATURES)
 function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,pI::Int,k::Int)
     # Inequality constraints
     for j = 1:pI
-        if results.C[k][j] > -solver.opts.active_constraint_tolerance || results.λ[k][j] > 0.0
+        if active_set_criteria(solver,results.C[k][j], results.λ[k][j], results.μ[k][j])
             results.active_set[k][j] = 1
         else
             results.active_set[k][j] = 0
@@ -108,6 +108,18 @@ function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,p
         results.active_set[k][j] = 1
     end
     return nothing
+end
+
+function active_set_criteria(solver::Solver,c,λ,μ)::Bool
+    if solver.opts.al_type == :default
+        c > -solver.opts.active_constraint_tolerance || λ > 0.0
+    elseif solver.opts.al_type == :algencan
+        λ > 0
+        c > -solver.opts.active_constraint_tolerance || λ > 0.0
+        λ + μ*c > 0
+    else
+        error("al_type $(solver.opts.al_type) not recognized")
+    end
 end
 
 """
