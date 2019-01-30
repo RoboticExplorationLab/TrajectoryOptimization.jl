@@ -10,7 +10,7 @@ function backwardpass!(results::SolverVectorResults,solver::Solver)
     if solver.opts.square_root
         Δv = _backwardpass_sqrt!(results, solver)
     else
-        Δv = _backwardpass!(results, solver)
+        Δv = _backwardpass_new!(results, solver)
     end
     return Δv
 end
@@ -154,6 +154,188 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     regularization_update!(res,solver,:decrease)
 
     return Δv
+end
+
+function _backwardpass_new!(res::SolverVectorResults,solver::Solver)
+    # Get problem sizes
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
+    # Objective
+    costfun = solver.obj.cost
+
+    # Minimum time and infeasible options
+    solver.state.minimum_time ? R_minimum_time = solver.opts.R_minimum_time : nothing
+    solver.state.infeasible ? R_infeasible = solver.opts.R_infeasible*Matrix(I,n,n) : nothing
+
+    dt = solver.dt
+
+    X = res.X; U = res.U; K = res.K; d = res.d; S = res.S; s = res.s
+
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
+
+    # TEMP resets values for now - this will get fixed
+    for k = 1:N-1
+        Qx[k] = zeros(nn); Qu[k] = zeros(mm); Qxx[k] = zeros(nn,nn); Quu[k] = zeros(mm,mm); Qux[k] = zeros(mm,nn)
+        Quu_reg[k] = zeros(mm,mm); Qux_reg[k] = zeros(mm,nn)
+    end
+
+    # Boundary Conditions
+    al_expansion!(res,solver,N)
+    S[N][1:n,1:n], s[N][1:n] = Qxx[N][1:n,1:n], Qx[N][1:n]
+
+    # Initialize expected change in cost-to-go
+    Δv = zeros(2)
+
+    # Backward pass
+    k = N-1
+    while k >= 1
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        x = X[k][1:n]
+        u = U[k][1:m]
+
+        al_expansion!(res,solver,k)
+
+        # Compute gradients of the dynamics
+        fdx, fdu = res.fdx[k], res.fdu[k]
+
+        # Gradients and Hessians of Taylor Series Expansion of Q
+        Qx[k] += fdx'*s[k+1]
+        Qu[k] += fdu'*s[k+1]
+        Qxx[k] += fdx'*S[k+1]*fdx
+        Quu[k] += fdu'*S[k+1]*fdu
+        Qux[k] += fdu'*S[k+1]*fdx
+
+        if solver.opts.bp_reg_type == :state
+            Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
+            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
+        elseif solver.opts.bp_reg_type == :control
+            Quu_reg[k] = Quu[k] + res.ρ[1]*I
+            Qux_reg[k] = Qux[k]
+        end
+
+        # Regularization
+        if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
+            # increase regularization
+            @logmsg InnerIters "Regularizing Quu "
+            regularization_update!(res,solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            Δv[1] = 0.
+            Δv[2] = 0.
+            continue
+        end
+
+        # Compute gains
+        K[k] = -Quu_reg[k]\Qux_reg[k]
+        d[k] = -Quu_reg[k]\Qu[k]
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
+        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
+        S[k] = 0.5*(S[k] + S[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        Δv[1] += d[k]'*Qu[k]
+        Δv[2] += 0.5*d[k]'*Quu[k]*d[k]
+
+        k = k - 1;
+    end
+
+    # decrease regularization after backward pass
+    regularization_update!(res,solver,:decrease)
+
+    return Δv
+end
+
+function al_expansion!(res::SolverIterResults, solver::Solver, k::Int)
+    X = res.X; U = res.U
+    costfun = solver.obj.cost
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+    R_infeasible = solver.opts.R_infeasible
+
+    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
+
+    x = X[k][1:n]
+
+    if k == N
+        Qxx[k][1:n,1:n],Qx[k][1:n] = taylor_expansion(costfun,x)
+    else
+        u = U[k][1:m]
+        expansion = taylor_expansion(costfun,x,u)
+        Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* solver.dt
+    end
+
+
+    if solver.state.constrained
+        C = res.C; Iμ = res.Iμ; λ = res.λ; μ = res.μ
+        Cx = res.Cx; Cu = res.Cu
+
+        if solver.opts.al_type == :default
+            Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            Qxx[k] += Cx[k]'*Iμ[k]*Cx[k]
+            if k < solver.N
+                Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+                Quu[k] += Cu[k]'*Iμ[k]*Cu[k]
+                Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
+            end
+        elseif solver.opts.al_type == :algencan
+            a = res.active_set[k]
+            Ia = Diagonal(a)
+            Iμk = Diagonal(μ[k])
+
+            # Declare some temp variables that are re-used
+            gg = Ia*Iμk
+            g = Ia*(λ[k] + Iμk*C[k])
+
+            # Expansion
+            Qx[k] += Cx[k]'g
+            Qxx[k] += Cx[k]'gg*Cx[k]
+            if k < solver.N
+                Qu[k] += Cu[k]'g
+                Quu[k] += Cu[k]'gg*Cu[k]
+                Qux[k] += Cu[k]'gg*Cx[k]
+            end
+
+            # Qx[k] += Cx[k]'*(Iμ[k]*C[k] + λ[k])
+            # Qxx[k] += Cx[k]'*Iμ[k]*Cx[k]
+            # if k < solver.N
+            #     Qu[k] += Cu[k]'*(Iμ[k]*C[k] + λ[k])
+            #     Quu[k] += Cu[k]'*Iμ[k]*Cu[k]
+            #     Qux[k] += Cu[k]'*Iμ[k]*Cx[k]
+            # end
+        end
+
+        # Minimum time expansion components
+        if solver.state.minimum_time
+            R_minimum_time = solver.opts.R_minimum_time
+            Qx[k][n̄] = R_minimum_time*X[k][n̄]
+            Qxx[k][n̄,n̄] = R_minimum_time
+            if k < N
+                ℓ1 = stage_cost(costfun,x,u)
+                h = U[k][m̄]
+                tmp = 2*h*expansion[5]
+
+                Qu[k][m̄] = h*(2*ℓ1 + R_minimum_time)
+                Quu[k][1:m,m̄] = tmp
+                Quu[k][m̄,1:m] = tmp'
+                Quu[k][m̄,m̄] = (2*ℓ1 + R_minimum_time)
+                Qux[k][m̄,1:n] = 2*h*expansion[4]'
+            end
+        end
+
+        # Infeasible expansion components
+        if solver.state.infeasible && k < N
+            Qu[k][m̄+1:mm] = R_infeasible*U[k][m̄+1:m̄+n]
+            Quu[k][m̄+1:mm,m̄+1:mm] = R_infeasible*Diagonal(I,n)
+        end
+    end
 end
 
 """
