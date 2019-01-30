@@ -1,5 +1,5 @@
 include("solver_options.jl")
-import Base: copy, length, size
+import Base: copy, length, size, reset
 
 """
 $(TYPEDEF)
@@ -21,7 +21,7 @@ mutable struct SolverState
     end
 end
 
-function reset_SolverState(state::SolverState)
+function reset(state::SolverState)
     state.constrained = false
     state.minimum_time = false
     state.infeasible = false
@@ -50,6 +50,7 @@ struct Solver{M<:Model,O<:Objective}
     c_jacobian::Function
     c_labels::Vector{String}  # Constraint labels
     N::Int64             # Number of time steps
+    evals::Vector{Int}   # Evaluation counts
     integration::Symbol
 
     """
@@ -106,7 +107,12 @@ struct Solver{M<:Model,O<:Objective}
             state.constrained = true
         end
 
-        f! = model.f
+        # Evaluation counts
+        evals = zeros(Int,4)  # [Fd,Fc,c,C]
+        reset(model)
+
+        # The dynamics function increments an eval counter each time it's called
+        f!(xdot,x,u) = dynamics(model,xdot,x,u)
 
         n, m = model.n, model.m
 
@@ -197,7 +203,7 @@ struct Solver{M<:Model,O<:Objective}
         # Copy solver options so any changes don't modify the options passed in
         options = copy(opts)
 
-        new{M,O}(model, obj, options, state, dt, fd!, fd_jacobians!, fc_jacobians!, c!, c_jacobian!, c_labels, N, integration)
+        new{M,O}(model, obj, options, state, dt, fd!, fd_jacobians!, fc_jacobians!, c!, c_jacobian!, c_labels, N, evals, integration)
     end
 end
 
@@ -236,4 +242,69 @@ function calc_N(tf::Float64, dt::Float64)::Tuple
     N = convert(Int64,floor(tf/dt)) + 1
     dt = tf/(N-1)
     return N, dt
+end
+
+
+"""$(SIGNATURES) Reset the number of function evaluations and solver state"""
+reset(solver::Solver) = begin reset(solver.state); reset_evals(solver) end
+reset_evals(solver::Solver) = begin solver.evals .= zeros(4); reset(solver.model) end
+
+"""$(SIGNATURES) Get the number of function evaluations for a given function """
+function evals(solver::Solver, fun::Symbol)
+    if fun in [:Fd, :discrete_dynamics_jacobian]
+        return solver.evals[1]
+    elseif fun in [:Fc, :continuous_dynamics_jacobian, :dynamics_jacobian]
+        return solver.evals[2]
+    elseif fun in [:c, :C, :constraints, :constraint_function, :c_fun]
+        return solver.evals[3]
+    elseif fun in [:∇c, :constraint_jacobian, :c_jacob, :c_jacobian]
+        return solver.evals[4]
+    elseif fun in [:f, :dynamics, :continuous_dynamics]
+        return evals(solver.model)
+    end
+end
+
+# Get functions from Solver (incrementing evals)
+""" $(SIGNATURES) Return the constraint function, and optionally count the evaluations """
+function constraint_function(solver::Solver, count::Bool=true)
+    function c_fun_count!(c,x,u)
+        solver.c_fun(c,x,u)
+        count ? solver.evals[3] += 1 : nothing
+    end
+    function c_fun_count!(c,x)
+        solver.c_fun(c,x)
+        count ? solver.evals[3] += 1 : nothing
+    end
+    return c_fun_count!
+end
+
+""" $(SIGNATURES) Return the discrete dynamics jacobian function, and optionally count the evaluations """
+function discrete_dynamics_jacobian(solver::Solver, count::Bool=true)
+    function Fd!(A,B,x,u)
+        solver.Fd(A,B,x,u)
+        count ? solver.evals[1] += 1 : nothing
+    end
+    return Fd!
+end
+
+""" $(SIGNATURES) Return the constraint jacobian function, and optionally count the evaluations """
+function constraint_jacobian(solver::Solver, count::Bool=true)
+    function c_jacob!(Cx,Cu,x,u)
+        solver.c_jacobian(Cx,Cu,x,u)
+        count ? solver.evals[4] += 1 : nothing
+    end
+    function c_jacob!(Cx,x)
+        solver.c_jacobian(Cx,x)
+        count ? solver.evals[4] += 1 : nothing
+    end
+    return c_jacob!
+end
+
+""" $(SIGNATURES) Return the continuous dynamics jacobian function, and optionally count the evaluations """
+function dynamics_jacobian(solver::Solver, count::Bool=true)
+    function Fc!(x,u)
+        count ? solver.evals[2] += 1 : nothing
+        solver.Fc(x,u)
+    end
+    return Fc!
 end

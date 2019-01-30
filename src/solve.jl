@@ -77,11 +77,11 @@ $(SIGNATURES)
 * λ::Vector{Vector} (optional) - initial Lagrange multipliers for warm starts. Must be passed in as a N+1 Vector of Vector{Float64}, with the N+1th entry the Lagrange multipliers for the terminal constraint.
 """
 function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2}=Array{Float64}(undef,0,0); λ::Vector=[], μ::Vector=[], prevResults=ConstrainedVectorResults(), bmark_stats::BenchmarkGroup=BenchmarkGroup())::Tuple{SolverResults,Dict} where {M<:Model,Obj<:Objective}
+    # Reset the solver (evals and state)
+    reset(solver)
+
     # Start timer
     t_start = time_ns()
-
-    # Reset solver state
-    reset_SolverState(solver.state)
 
     # Check for penalty burn-in mode
     if !solver.opts.use_penalty_burnin

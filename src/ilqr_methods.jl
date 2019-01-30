@@ -130,16 +130,19 @@ function update_jacobians!(res::ConstrainedIterResults, solver::Solver, jacobian
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
+    ∇f = discrete_dynamics_jacobian(solver)
+    ∇c = constraint_jacobian(solver)
+
     dt = solver.dt
 
     for k = 1:N-1
         # Update discrete dynamics Jacobians
-        jacobians in [:dynamics,:both] ? solver.Fd(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k]) : nothing
+        jacobians in [:dynamics,:both] ? ∇f(res.fdx[k],res.fdu[k], res.X[k][1:n], res.U[k]) : nothing
 
         # Update constraint Jacobians
         if !solver.state.fixed_constraint_jacobians && jacobians in [:constraints,:both]
 
-             solver.c_jacobian(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
+            ∇c(res.Cx[k], res.Cu[k], res.X[k],res.U[k])
 
             # Minimum time special case
             if solver.state.minimum_time
@@ -155,7 +158,7 @@ function update_jacobians!(res::ConstrainedIterResults, solver::Solver, jacobian
     end
 
     # Update terminal constraint Jacobian
-    (!solver.state.fixed_terminal_constraint_jacobian && jacobians in [:constraints,:both]) ? solver.c_jacobian(view(res.Cx[N],1:p_N,1:n), res.X[N][1:n]) : nothing
+    (!solver.state.fixed_terminal_constraint_jacobian && jacobians in [:constraints,:both]) ? ∇c(view(res.Cx[N], 1:p_N,1:n), res.X[N][1:n]) : nothing
 
     return nothing
 end

@@ -57,7 +57,8 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     n̄,nn = get_num_states(solver)
 
 
-    c_fun = solver.c_fun
+    # c_fun = solver.c_fun
+    c_fun = constraint_function(solver)
 
     for k = 1:N-1
         # Update constraints
@@ -455,6 +456,8 @@ Circle constraint function (c ⩽ 0, negative is satisfying constraint)
 function circle_constraint(x,x0,y0,r)
 	return -((x[1]-x0)^2 + (x[2]-y0)^2  - r^2)
 end
+
+circle_constraint(x,c,r) = circle_constraint(x,c[1],c[2],r)
 
 """
 $(SIGNATURES)

@@ -1,4 +1,4 @@
-import Base.copy
+import Base: copy, reset
 
 abstract type Model end
 
@@ -18,22 +18,38 @@ struct AnalyticalModel <:Model
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
     m::Int # number of controls
+    evals::Vector{Int}
+    info::Dict{Symbol,Any}
 
     # Construct a model from an explicit differential equation
-    function AnalyticalModel(f::Function, n::Int64, m::Int64)
+    function AnalyticalModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())
+        d[:evals] = 0
+        evals = [0,]
         # Make dynamics inplace
         if is_inplace_dynamics(f,n,m)
             f! = f
         else
             f! = wrap_inplace(f)
         end
-
-        new(f!,n,m)
+        new(f!,n,m,evals,d)
     end
 end
 
+
+
+
 """ $(SIGNATURES) Create a Model given an inplace analytical function for the continuous dynamics with n states and m controls"""
-Model(f::Function, n::Int64, m::Int64) = AnalyticalModel(f,n,m)
+Model(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = AnalyticalModel(f,n,m,d)
+
+
+
+evals(model::Model) = model.evals[1]
+reset(model::Model) = begin model.evals[1] = 0; return nothing end
+
+function dynamics(model::Model,xdot,x,u)
+    model.f(xdot,x,u)
+    model.evals[1] += 1
+end
 
 """
 $(TYPEDEF)
@@ -44,6 +60,8 @@ struct RBDModel <: Model
     n::Int # number of states
     m::Int # number of controls
     mech::Mechanism  # RigidBodyDynamics Mechanism
+    evals::Vector{Int}
+    info::Dict{Symbol,Any}
 end
 
 
@@ -85,8 +103,10 @@ function Model(mech::Mechanism, torques::Array)
         dynamics!(view(ẋ,1:n), dyn, state, x, torque_matrix*u)
         return nothing
     end
+    d = Dict{Symbol,Any}()
 
-    RBDModel(f, n, m, mech)
+    evals = [0,]
+    RBDModel(f, n, m, mech, evals, d)
 end
 
 """$(SIGNATURES) Construct a fully actuated model from a string to a urdf file"""

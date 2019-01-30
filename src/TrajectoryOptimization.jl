@@ -72,7 +72,8 @@ export
     convergence_rate,
     plot_obstacles,
     generate_controller,
-    lqr
+    lqr,
+    evals
 
 include("objective.jl")
 include("model.jl")
