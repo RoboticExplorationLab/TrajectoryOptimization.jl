@@ -45,7 +45,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.Model",
     "category": "method",
-    "text": "Model(f, n, m)\n\n\nCreate a Model given an inplace analytical function for the continuous dynamics with n states and m controls\n\n\n\n\n\n"
+    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a Model given an inplace analytical function for the continuous dynamics with n states and m controls\n\n\n\n\n\n"
 },
 
 {
