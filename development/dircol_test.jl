@@ -24,12 +24,51 @@ dt = 0.05
 
 # Check Jacobians
 method = :hermite_simpson
-solver = Solver(model,ConstrainedObjective(obj),dt=dt,integration=:rk3)
+solver = Solver(model,ConstrainedObjective(obj),N=101,integration=:rk3)
 N = solver.N
 NN = (n+m)N
 nG, = get_nG(solver,method)
 U0 = ones(1,N)*1
 X0 = line_trajectory(obj.x0, obj.xf, N)
+Z0 = packZ(X0,U0)
+
+eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
+x_L, x_U, g_L, g_U = get_bounds(solver,method)
+P = length(g_L)  # Total number of constraints
+
+g = zeros(P)
+grad_f = zeros(NN)
+rows = zeros(nG)
+cols = zeros(nG)
+vals = zeros(nG)
+
+reset_evals(solver)
+eval_f(Z0)
+evals(solver,:f)
+
+reset_evals(solver)
+eval_g(Z0,g)
+evals(solver,:f)
+evals(solver,:c)
+
+reset_evals(solver)
+eval_grad_f(Z0,grad_f)
+evals(solver,:f)
+evals(solver,:Fc)
+
+reset_evals(solver)
+eval_jac_g(Z0,:Structure,rows,cols,vals)
+evals(solver,:f)
+evals(solver,:Fc)
+evals(solver,:c)
+eval_jac_g(Z0,:vals,rows,cols,vals)
+evals(solver,:f)
+evals(solver,:Fc)
+evals(solver,:c)
+
+grad_f == grad_f2
+grad_f2 = copy(grad_f)
+
 solver.opts.verbose = false
 sol,stats = solve_dircol(solver,X0,U0, method=method)
 @test norm(sol.X[:,end] - obj.xf) < 1e-6

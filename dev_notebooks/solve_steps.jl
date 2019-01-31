@@ -1,9 +1,10 @@
 using Juno
 using Profile
 using BenchmarkTools
+import TrajectoryOptimization: reset_evals, dynamics_jacobian, outer_loop_update
 
 # Set up
-N = 51
+N = 101
 model, obj = Dynamics.dubinscar
 n,m = model.n, model.m
 
@@ -39,6 +40,8 @@ global_logger(logger)
 #       INITIALIZATION       #
 #****************************#
 mbar,mm = get_num_controls(solver)
+get_num_constraints(solver)
+
 results = init_results(solver, X0, U0)
 results2 = init_results(solver2, X0, U0)
 results.ρ[1] = 0
@@ -53,7 +56,7 @@ X_,U_ = results.X_, results.U_
 if !solver.state.infeasible
     X[1] = solver.obj.x0
     flag = rollout!(results,solver) # rollout new state trajectoy
-    rollout!(results2,solver2)
+    # rollout!(results2,solver2)
 
     if !flag
         @info "Bad initial control sequence, setting initial control to zero"
@@ -77,10 +80,18 @@ end
 # results.X == results_new.X.x
 # results.μ == results_new.μ.x
 
+reset_evals(solver)
+Fc = dynamics_jacobian(solver)
+x = rand(n)
+u = rand(m)
+Fc(x,u)
+evals(solver,:f)
+
 
 
 J_prev = cost(solver, results)
 TrajectoryOptimization.update_jacobians!(results, solver)
+reset_evals(solver)
 Δv = backwardpass!(results, solver)
 J = forwardpass!(results, solver, Δv, J_prev)
 c_max = max_violation(results)

@@ -594,24 +594,26 @@ function update_derivatives!(solver::Solver,X::AbstractArray,U::AbstractArray,fV
     n,m = get_sizes(solver)
     N = size(X,2)
     for k = 1:N
-        solver.model.f(view(fVal,:,k),X[:,k],U[1:m,k])
+        dynamics(model,view(fVal,:,k),X[:,k],U[1:m,k])
+        # solver.model.f(view(fVal,:,k),X[:,k],U[1:m,k])
     end
 end
 
 function update_jacobians!(solver::Solver,X,U,A,B,method::Symbol,cost_only::Bool=false)
     n,m = get_sizes(solver)
     N,N_ = get_N(solver,method)
+    Fc = dynamics_jacobian(solver)
     if ~cost_only || method == :hermite_simpson
         if method == :hermite_simpson || method == :midpoint
             inds = cost_only ? (1:2:N_) : (1:N_)  # HS only needs jacobians at knot points for cost gradient
             for k = inds
-                A[:,:,k], B[:,:,k] = solver.Fc(X[:,k],U[1:m,k])
+                A[:,:,k], B[:,:,k] = Fc(X[:,k],U[1:m,k])
             end
         else
             # Z = packZ(X,U)
             # z = reshape(Z,n+m,N)
             for k = 1:N_
-                tA,tB = solver.Fc(X[:,k],U[:,k])
+                tA,tB = Fc(X[:,k],U[:,k])
                 A[:,:,k] = [tA tB]
             end
         end

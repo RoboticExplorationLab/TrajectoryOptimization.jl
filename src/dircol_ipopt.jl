@@ -114,7 +114,7 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
         # X,U = vars.X,vars.U
         X,U = unpackZ(Z,(n,m̄,N))
         X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
-        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+        # get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
         update_jacobians!(solver,X_,U_,A,B,method,true)
         cost_gradient!(solver, X_, U_, fVal, A, B, weights, grad_f, method)
         return nothing
