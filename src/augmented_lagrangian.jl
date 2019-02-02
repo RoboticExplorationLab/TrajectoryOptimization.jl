@@ -132,74 +132,60 @@ $(SIGNATURES)
     -UNDER DEVELOPMENT -
 """
 function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver)
+    bp = results.bp
     n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
+    m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
+    nm = nn + mm
+    Nz = nn*N + mm*(N-1)
+    Np = p*(N-1) + p_N
+    ∇²L = zeros(Nz,Nz)
+    ∇c = zeros(Np,Nz)
 
     for k = 1:N
-        if k != N
-            if solver.opts.square_root
-                ∇L = [Qxx[k]'*Qxx[k] Qux[k]'; Qux[k] Quu[k]'*Quu[k]]
-            else
-                ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
-            end
-            G = [results.Cx[k] results.Cu[k]]
-            idx_pI = pI
-        else
-            if solver.opts.square_root
-                ∇L = results.S[k]'*results.S[k]
-            else
-                ∇L = results.S[k]
-            end
-            G = results.Cx[k]
-            idx_pI = pI_N
-        end
-        tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
+        if k < N
+            idx = ((k-1)*nm + 1):k*nm
+            solver.opts.square_root ? Q = [bp.Qxx[k]'*bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]'*bp.Quu[k]] : Q = [bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]]
+            ∇²L[idx,idx] = Q
 
-        results.λ[k][results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
+            idx2 = ((k-1)*p + 1):k*p
+            ∇c[idx2,idx] = [results.Cx[k] results.Cu[k]]
+        else
+            idx = ((k-1)*nm + 1):Nz
+            solver.opts.square_root ? Q = results.S[N]'*results.S[N] : Q = results.S[N]
+            ∇²L[idx,idx] = Q
+
+            idx2 = ((k-1)*p + 1):Np
+            ∇c[idx2,idx] = results.Cx[N]
+        end
+    end
+
+    C = vcat(results.C...)
+    λ = vcat(results.λ...)
+    active_set = vcat(results.active_set...)
+
+    ∇c̄ = ∇c[active_set,:]
+
+    tmp = (∇c̄*(∇²L\∇c̄'))
+    λ[active_set] += tmp\C[active_set]
+
+    # update the results
+    for k = 1:N
+        if k != N
+            idx_pI = pI
+            idx = (k-1)*p+1:k*p
+        else
+            idx_pI = pI_N
+            idx = (k-1)*p+1:Np
+        end
+        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[idx]))
         results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
     end
+
 end
-
-function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,i::Int,k::Int)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-
-    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
-
-    if k != N
-        TMP = zeros(p)
-        if solver.opts.square_root
-            ∇L = [Qxx[k]'*Qxx[k] Qux[k]'; Qux[k] Quu[k]'*Quu[k]]
-        else
-            ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
-        end
-        G = [results.Cx[k] results.Cu[k]]
-        idx_pI = pI
-    else
-        TMP = zeros(p_N)
-        if solver.opts.square_root
-            ∇L = results.S[k]'*results.S[k]
-        else
-            ∇L = results.S[k]
-        end
-        G = results.Cx[k]
-        idx_pI = pI_N
-    end
-    tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
-
-    TMP[results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
-
-    i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
-end
-
 
 
 """
@@ -585,7 +571,9 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
         else
             solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update_default!(results,solver)
         end
-        k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
+        if !solver.state.second_order_dual_update
+            k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
+        end
 
     elseif solver.opts.outer_loop_update_type == :individual
         λ_update_default!(results,solver)

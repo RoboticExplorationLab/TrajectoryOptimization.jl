@@ -316,13 +316,14 @@ end
 # ∇²L(x,λ,μ) = ∇²f(x) + ∇g(x)'*Iμ(x,λ,μ)*∇g(x)
 x0 = zeros(n)
 mdl = Objective(n,p,pI,f,P,q,∇f,∇²f,L,∇L,∇²L,g,A,b,∇g)
-opts = Opts(30,1e-8,1e-8,10,0.25,10)
+opts = Opts(20,1e-8,1e-8,10,0.25,10)
 
 results = Results(n,p)
-val_hist, grad_hist, c_max_hist, λ_hist, outer_iter = solve_AuLa(x0,results,mdl,opts,:default,:buys)
+val_hist, grad_hist, c_max_hist, λ_hist, outer_iter = solve_AuLa(x0,results,mdl,opts,:feedback,:buys)
 @show outer_iter
 # plot(val_hist,xlabel="iteration",ylabel="Cost")
 # plot(grad_hist,xlabel="iteration",ylabel="Gradient l2-norm")
 plot(c_max_hist,xlabel="iteration",ylabel="max violation")
+c_max_hist[end]
 
 val_hist
