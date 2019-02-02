@@ -2,18 +2,48 @@ using LinearAlgebra
 using Plots
 
 using JuMP, Ipopt
-# Augmented Lagrangian
-n = 2
-P = [2.0 0.0; 0.0 2.0]
-q = [-2.0; -5.0]
-r = 7.25
 
-A = [1.0 -2.0;
-     -1.0 -2.0;
-     -1.0 2.0;
-     1.0 0.0;
-     0.0 1.0]
-b = [-2.0; -6.0; -2.0; 0.0; 0.0]
+# large random qp test
+n = 20
+m = 10
+p = 5
+P = rand(n,n)
+P = P'*P
+@show isposdef(P)
+q = rand(n)
+r = rand(1)[1]
+
+A = rand(m,n)
+b = rand(m)
+C = rand(p,n)
+d = rand(p)
+
+# Validate model with JuMP
+model = JuMP.Model(solver=IpoptSolver(print_level=0))
+
+@variable(model, x[1:n])
+@objective(model, Min, 0.5*x'*P*x + x'*q + r)
+@constraint(model, con, A*x .>= b)
+@constraint(model, con2, C*x .== d)
+print(model)
+status = JuMP.solve(model)
+println("Objective value: ", getobjectivevalue(model))
+println("x = ", getvalue(x))
+println("λ = ", getdual(con),getdual(con2))
+
+
+# Augmented Lagrangian
+# n = 2
+# P = [2.0 0.0; 0.0 2.0]
+# q = [-2.0; -5.0]
+# r = 7.25
+#
+# A = [1.0 -2.0;
+#      -1.0 -2.0;
+#      -1.0 2.0;
+#      1.0 0.0;
+#      0.0 1.0]
+# b = [-2.0; -6.0; -2.0; 0.0; 0.0]
 
 
 # n = 3
@@ -37,6 +67,9 @@ b = [-2.0; -6.0; -2.0; 0.0; 0.0]
 # println("λ = ", getdual(con))#,getdual(con2))
 
 ##
+b = [b;d]
+A = [A;C]
+
 f(x) = 0.5*x'*P*x + q'*x + r
 ∇f(x) = P*x + q
 ∇²f(x) = P
@@ -47,8 +80,9 @@ L(x,λ,Iμ) = 0.5*x'*P*x + q'*x + r + λ'*(b - A*x) + 0.5*(b - A*x)'*Iμ*(b - A*
 
 g(x) = b - A*x
 ∇g(x) = -A
-pI = 5
-pE = 0
+
+pI = m
+pE = p
 p = pI + pE
 
 mutable struct Results
@@ -127,22 +161,25 @@ function solve_AuLa(x0,results,model,opts,p_update=:default,d_update=:first)
     grad_hist = []
     c_max_hist = []
     λ_hist = []
-
+    c_max = 0
+    outer_iter = 0
     for i = 1:opts.iterations_outer
         iter = 0
-        while iter < 3
+        while iter < 10 && norm(mdl.∇L(x,λ,Iμ)) > opts.ϵ_gradient_norm
             x[:] = -(mdl.P + mdl.A'*Iμ*A)\(mdl.q - mdl.A'*λ - mdl.A'*Iμ*mdl.b)
             c[:] = mdl.g(x)
             Iμ_update!(results,mdl)
             val[1] = mdl.L(x,λ,Iμ)
             grad[1] = norm(mdl.∇L(x,λ,Iμ))
+
+            c_max = max_violation(results,model)
+            push!(val_hist,val[1])
+            push!(grad_hist,norm(grad))
+            push!(c_max_hist,c_max)
+
             iter += 1
         end
-        c_max = max_violation(results,model)
-        push!(val_hist,val[1])
-        push!(grad_hist,norm(grad))
-        push!(c_max_hist,c_max)
-
+        outer_iter = i
         if norm(grad) < opts.ϵ_gradient_norm && c_max < opts.ϵ_constraint_max
             println("*Solved*")
             break
@@ -164,7 +201,7 @@ function solve_AuLa(x0,results,model,opts,p_update=:default,d_update=:first)
     @show c_prev
     @show L(x,λ,Iμ)
     @show f(x)
-    return val_hist, grad_hist, c_max_hist, λ_hist
+    return val_hist, grad_hist, c_max_hist, λ_hist, outer_iter
 end
 
 function Iμ_update!(results,model)
@@ -277,16 +314,15 @@ end
 # L(x,λ,μ) = f(x) + λ'*g(x) + 0.5*g(x)'*Iμ(x,λ,μ)*g(x)
 # ∇L(x,λ,μ) = ∇f(x) + ∇g(x)'*(λ +Iμ(x,λ,μ)*g(x))
 # ∇²L(x,λ,μ) = ∇²f(x) + ∇g(x)'*Iμ(x,λ,μ)*∇g(x)
+x0 = zeros(n)
+mdl = Objective(n,p,pI,f,P,q,∇f,∇²f,L,∇L,∇²L,g,A,b,∇g)
+opts = Opts(30,1e-8,1e-8,10,0.25,10)
 
 results = Results(n,p)
-mdl = Objective(n,p,pI,f,P,q,∇f,∇²f,L,∇L,∇²L,g,A,b,∇g)
-opts = Opts(20,1e-8,1e-8,10,0.5,1e0)
-x0 = [2;0]
-# x0 = zeros(n)
-val_hist, grad_hist, c_max_hist, λ_hist = solve_AuLa(x0,results,mdl,opts,:feedback,:bfgs)
-
-plot(val_hist,xlabel="iteration",ylabel="Cost")
-plot(grad_hist,xlabel="iteration",ylabel="Gradient l2-norm")
+val_hist, grad_hist, c_max_hist, λ_hist, outer_iter = solve_AuLa(x0,results,mdl,opts,:default,:buys)
+@show outer_iter
+# plot(val_hist,xlabel="iteration",ylabel="Cost")
+# plot(grad_hist,xlabel="iteration",ylabel="Gradient l2-norm")
 plot(c_max_hist,xlabel="iteration",ylabel="max violation")
 
 val_hist
