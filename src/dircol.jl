@@ -417,6 +417,10 @@ end
 """
 Gradient of Objective
 """
+function cost_gradient!(grad_f, solver::Solver, res::DircolResults, method::Symbol)
+    cost_gradient!(solver,res.X_,res.U_,res.fVal_,res.A,res.B,res.weights,grad_f,method)
+end
+
 function cost_gradient!(solver::Solver, X, U, fVal, A, B, weights, vals, method::Symbol)
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)
@@ -511,6 +515,10 @@ end
 $(SIGNATURES)
 Return all the trajectory points used to evaluate integrals
 """
+function get_traj_points!(solver::Solver,res::DircolResults,method::Symbol)
+    get_traj_points!(solver,res.X,res.U,res.X_,res.U_,res.fVal,method)
+end
+
 function get_traj_points!(solver::Solver,X,U,X_,U_,method::Symbol)
     fVal = zeros(X)
     fVal_ = zeros(X_)
@@ -577,6 +585,10 @@ function get_traj_points(solver,X,U,gfVal,gX_,gU_,method::Symbol,cost_only::Bool
     return X_, U_
 end
 
+function get_traj_points_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
+    get_traj_points_derivatives!(solver::Solver,res.X_,res.U_,res.fVal_,res.fVal,method::Symbol)
+end
+
 function get_traj_points_derivatives!(solver::Solver,X_,U_,fVal_,fVal,method::Symbol)
     if method == :hermite_simpson
         N_ = size(X_,2)
@@ -590,6 +602,13 @@ function get_traj_points_derivatives!(solver::Solver,X_,U_,fVal_,fVal,method::Sy
     end
 end
 
+function update_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
+    # Calculate derivative
+    if method != :midpoint
+        update_derivatives!(solver,res.X,res.U,res.fVal)
+    end
+end
+
 function update_derivatives!(solver::Solver,X::AbstractArray,U::AbstractArray,fVal::AbstractArray)
     n,m = get_sizes(solver)
     N = size(X,2)
@@ -597,6 +616,10 @@ function update_derivatives!(solver::Solver,X::AbstractArray,U::AbstractArray,fV
         dynamics(model,view(fVal,:,k),X[:,k],U[1:m,k])
         # solver.model.f(view(fVal,:,k),X[:,k],U[1:m,k])
     end
+end
+
+function update_jacobians!(solver::Solver,res::DircolResults,method::Symbol,cost_only::Bool=false)
+    update_jacobians!(solver,res.X_,res.U_,res.A,res.B,method,cost_only) # TODO: pass in DircolVar
 end
 
 function update_jacobians!(solver::Solver,X,U,A,B,method::Symbol,cost_only::Bool=false)
@@ -634,6 +657,13 @@ Evaluate constraint values
 [           ...                 ]
 [ dt*(f(xN-1)+f(xN))/2 - xN + xN-1 ]
 """
+function collocation_constraints!(c_colloc, solver::Solver, res::DircolResults, method::Symbol)
+    n,m = get_sizes(solver)
+    N,N_ = get_N(solver,method)
+    # g = zeros(eltype(res.X),(N-1)*n)
+    collocation_constraints!(solver,res.X_,res.U_,res.fVal_,c_colloc,method)
+end
+
 function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::Symbol)
     # X,U need to be the "trajectory points", or X_,U_
     N,N_ = get_N(solver,method)
@@ -706,6 +736,12 @@ end
 """
 Constraint Jacobian
 """
+function constraint_jacobian!(c_jacob, solver::Solver, res::DircolResults, method::Symbol)
+    N,N_ = get_N(solver,method)
+    n,m = get_sizes(solver)
+    collocation_constraint_jacobian!(solver,res.X_,res.U_, res.fVal_, res.A,res.B, c_jacob, method)
+end
+
 function collocation_constraint_jacobian!(solver::Solver, X, U, fVal, A::Array{Float64,3}, B::Array{Float64,3}, vals, method::Symbol)
     # X and U are X_, U_ trajectory points
     N,N_ = get_N(solver,method)
