@@ -81,24 +81,13 @@ function cost_gradient!(solver::Solver, vars::DircolVars, weights::Vector{Float6
     return nothing
 end
 
-function get_traj_points!(solver::Solver,res::DircolResults,method::Symbol)
-    get_traj_points!(solver,res.X,res.U,res.X_,res.U_,res.fVal,method)
-end
 
-function get_traj_points_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
-    get_traj_points_derivatives!(solver::Solver,res.X_,res.U_,res.fVal_,res.fVal,method::Symbol)
-end
 
-function update_derivatives!(solver::Solver,res::DircolResults,method::Symbol)
-    # Calculate derivative
-    if method != :midpoint
-        update_derivatives!(solver,res.X,res.U,res.fVal)
-    end
-end
 
-function update_jacobians!(solver::Solver,res::DircolResults,method::Symbol,cost_only::Bool=false)
-    update_jacobians!(solver,res.X_,res.U_,res.A,res.B,method,cost_only) # TODO: pass in DircolVar
-end
+
+
+
+
 
 function collocation_constraints(solver::Solver, res::DircolResults, method::Symbol)
     n,m = get_sizes(solver)
@@ -161,7 +150,7 @@ end
 function constraint_jacobian(solver::Solver, res::DircolResults, method::Symbol)
     N,N_ = get_N(solver,method)
     n,m = get_sizes(solver)
-    jacob_g = spzeros((N-1)*n,N*(n+m))
+    # jacob_g = spzeros((N-1)*n,N*(n+m))
     jacob_g = constraint_jacobian(solver,res.X_,res.U_,res.A,res.B,method)
     return jacob_g
 end

@@ -187,10 +187,11 @@ struct SolverLogger <: Logging.AbstractLogger
     min_level::LogLevel
     default_width::Int
     leveldata::Dict{LogLevel,LogData}
+    default_logger::ConsoleLogger
 end
 
 function SolverLogger(min_level::LogLevel=Logging.Info; default_width=10, io::IO=stderr)
-    SolverLogger(io,min_level,default_width,Dict{LogLevel,LogData}())
+    SolverLogger(io,min_level,default_width,Dict{LogLevel,LogData}(),ConsoleLogger())
 end
 
 """ $(SIGNATURES)
@@ -248,7 +249,7 @@ function Logging.handle_message(logger::SolverLogger, level, message::Symbol, _m
         logger.leveldata[level].data[message] = value
     else
         # Pass off to global logger
-        Logging.handle_message(global_logger(), level, message, _module, group, id, file, line)
+        Logging.handle_message(logger.default_logger, level, message, _module, group, id, file, line)
     end
 end
 
@@ -264,8 +265,10 @@ function Logging.handle_message(logger::SolverLogger, level, message::String, _m
         push!(ldata.data[:info], message)
     else
         # Pass off to global logger
-        Logging.handle_message(global_logger(), level, message, _module, group, id, file, line)
+        println("passing to default")
+        Logging.handle_message(logger.default_logger, level, message, _module, group, id, file, line)
     end
+    println("received")
 end
 
 function Logging.shouldlog(logger::SolverLogger, level, _module, group, id)
