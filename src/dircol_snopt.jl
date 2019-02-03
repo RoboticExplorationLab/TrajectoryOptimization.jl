@@ -71,13 +71,15 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
     # Allocate Arrays
     c = zeros(pI)
     ceq = zeros(pE)
+    grad_f = zeros((n+m)N)
+    jacob_ceq = spzeros((N-1)*n,N*(n+m))
 
     g_colloc = view(ceq,1:p_colloc)
-    gE = reshape(view(ceq,p_colloc+(1:pI_c*(N-1))),pI_c,N-1)
-    gE_N = view(ceq,p_colloc+pI_c*(N-1)+(1:pE_N_c))
+    gE = reshape(view(ceq,p_colloc .+ (1:pI_c*(N-1))),pI_c,N-1)
+    gE_N = view(ceq,p_colloc+pI_c*(N-1) .+ (1:pE_N_c))
 
     gI = reshape(view(c,1:pI_c*(N-1)),pI_c,N-1)
-    gI_N = view(c,pE_c+(1:pI_N_c))
+    gI_N = view(c,pE_c .+ (1:pI_N_c))
 
     # User defined function passed to SNOPT (via Snopt.jl)
     function usrfun(Z::Vector{Float64})
@@ -94,7 +96,7 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
         J = cost(solver,results)
 
         # Collocation Constraints
-        g_colloc .= collocation_constraints(solver, results, method)
+        collocation_constraints!(g_colloc, solver, results, method)
         eval_ceq!(gE,gE_N,solver,results) # No inequality constraints for now
         eval_c!(gI,gI_N,solver,results)
 
@@ -111,10 +113,11 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
             update_jacobians!(solver,results,method)
 
             # Gradient of Objective
-            grad_f = cost_gradient(solver,results,method)
+            cost_gradient!(grad_f, solver,results,method)
 
             # Constraint Jacobian
-            jacob_ceq = constraint_jacobian(solver,results,method)
+            # constraint_jacobian!(jacob_ceq, solver,results,method)
+            jacob_ceq = constraint_jacobian(solver, results, method::Symbol)
             jacob_c = Float64[]
 
             return J, c, ceq, grad_f, jacob_c, jacob_ceq, fail
@@ -155,6 +158,15 @@ function gen_usrfun(solver::Solver, results::DircolResults, method::Symbol; grad
     # end
 
     return usrfun
+end
+
+function constraint_jacobian_sparsity(solver::Solver, method::Symbol)
+    sparsity = collocation_constraint_jacobian_sparsity(solver, method)
+    r,c,inds = findnz(sparsity)
+    v = sortperm(inds)
+    rows = r[v]
+    cols = c[v]
+    return rows, cols
 end
 
 
@@ -200,9 +212,11 @@ function solve_snopt(solver::Solver,X0::Matrix,U0::Matrix;
     options = Dict{String, Any}()
     options["Derivative option"] = 0
     options["Verify level"] = 1
-    options["Minor feasibility tol"] = solver.opts.eps_constraint
+    options["Minor feasibility tol"] = solver.opts.constraint_tolerance
     # options["Minor optimality  tol"] = solver.opts.eps_intermediate
-    options["Major optimality  tol"] = solver.opts.eps
+    options["Major optimality  tol"] = solver.opts.cost_tolerance
+    sumfile = "logs/snopt-summary.out"
+    printfile = "logs/snopt-print.out"
 
     # Solve the problem
     if solver.opts.verbose
@@ -210,10 +224,11 @@ function solve_snopt(solver::Solver,X0::Matrix,U0::Matrix;
         println("Passing Problem to SNOPT...")
     end
     row,col = constraint_jacobian_sparsity(solver,method)
-    prob = Snopt.createProblem(usrfun, Z0, lb, ub, iE=row, jE=col)
+    # prob = Snopt.createProblem(usrfun, Z0, lb, ub, iE=row, jE=col)
     # prob = Snopt.createProblem(usrfun, Z0, lb, ub)
-    prob.x = Z0
-    t_eval = @elapsed z_opt, fopt, info = snopt(prob, options, start=start)
+    # prob.x = Z0
+    t_eval = @elapsed z_opt, fopt, info = snopt(usrfun, Z0, lb, ub, options,
+        printfile=printfile, sumfile=sumfile)
     stats = parse_snopt_summary()
     stats["info"] = info
     stats["runtime"] = t_eval
@@ -224,7 +239,7 @@ function solve_snopt(solver::Solver,X0::Matrix,U0::Matrix;
     if solver.opts.verbose
         println(info)
     end
-    return sol, stats, prob
+    return sol, stats
 end
 
 """
@@ -284,22 +299,28 @@ end
 $(SIGNATURES)
 Extract important information from the SNOPT output file(s)
 """
-function parse_snopt_summary(file="snopt-summary.out")
+function parse_snopt_summary(file="logs/snopt-summary.out")
     props = Dict()
 
-    function stash_prop(ln::String,prop::String,prop_name::String=prop)
-        if contains(ln, prop)
-            loc = search(ln,prop)
-            val = Int(float(split(ln[loc[end]+1:end])[1]))
-            props[prop_name] = val
+    function stash_prop(ln::String,prop::String,prop_name::String=prop,vartype::Type=Float64)
+        if occursin(prop,ln)
+            loc = findfirst(prop,ln)
+            if vartype <: Real
+                val = split(ln[loc[end]+1:end])[1]
+                val = convert(vartype,parse(Float64,val))
+                props[prop_name] = val
+                return true
+            end
         end
+        return false
     end
+
 
     open(file) do f
         for ln in eachline(f)
-            stash_prop(ln,"No. of iterations","iterations")
-            stash_prop(ln,"No. of major iterations","major iterations")
-            stash_prop(ln,"No. of calls to funobj","objective calls")
+            stash_prop(ln,"No. of iterations","iterations",Int64)
+            stash_prop(ln,"No. of major iterations","major iterations",Int64)
+            stash_prop(ln,"No. of calls to funobj","objective calls",Int64)
         end
     end
     return props
