@@ -209,7 +209,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             # increment iLQR inner loop counter
             iter += 1
 
-            solver.opts.live_plotting ? display(plot(to_array(results.U)')) : nothing
+            solver.opts.live_plotting ? display(plot(to_array(results.U)',labels="",ylabel="control",xlabel="iteration")) : nothing
 
             ### UPDATE RESULTS ###
             copyto!(X,X_)

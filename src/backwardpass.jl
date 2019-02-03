@@ -45,8 +45,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     S[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
     if solver.state.minimum_time
-        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
-        S[N][n̄,n̄] = 0.5*R_minimum_time
+        s[N][n̄] = R_minimum_time*X[N][n̄]
+        S[N][n̄,n̄] = R_minimum_time
     end
 
     # Initialize expected change in cost-to-go
@@ -64,7 +64,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     # Backward pass
     k = N-1
     while k >= 1
-        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
 
         x = X[k][1:n]
         u = U[k][1:m]
@@ -373,8 +373,8 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     Su[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
 
     if solver.state.minimum_time
-        s[N][n̄] = 0.5*R_minimum_time*X[N][n̄]
-        Su[N][n̄,n̄] = 0.5*R_minimum_time
+        s[N][n̄] = R_minimum_time*X[N][n̄]
+        Su[N][n̄,n̄] = R_minimum_time
     end
 
     # Take square root (via cholesky)
@@ -449,8 +449,6 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
             Qxx[k][1:nn,1:nn] = cholesky(Qxx[k][1:nn,1:nn]).U
         catch
             if sum([Qxx[k][i,i] for i = 1:n]) != 0. #TODO faster
-                # tmp = svd(Qxx[k])
-                # Qxx[k] = Diagonal(sqrt.(tmp.S))*tmp.V'
                 tmp = eigen(Qxx[k])
                 Qxx[k] = Diagonal(sqrt.(tmp.values))*tmp.vectors'
             elseif tr(Qxx[k][1:n,1:n]) == 0. && n̄ > n
@@ -459,12 +457,18 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         end
         try
             Quu[k] = cholesky(Quu[k]).U
-        catch
-            error("Control Cost Hessian is not Positive Definite")
-        end
+        catch #TODO fix this...
+            error("problem with sqrt bp Quu...")
+            # tmp = svd(Quu[k])
+            # Quu[k] = Diagonal(sqrt.(tmp.S))*tmp.V'
 
+            # tmp = eigen(Quu[k] + fdu'*Su[k+1]'*Su[k+1]*fdu)
+            # Wuu = Diagonal(sqrt.(tmp.values))*tmp.vectors'
+        end
         Wxx = chol_plus(Qxx[k], Su[k+1]*fdx)
         Wuu = chol_plus(Quu[k], Su[k+1]*fdu)
+
+
 
         # Constraints
         if res isa ConstrainedIterResults
@@ -530,9 +534,10 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         try
             tmp2 = cholesky(Wuu'*Wuu - tmp1'*tmp1).U
         catch
-            # tmp2 = chol_minus(Wuu,tmp1)
-            tmp = svd(Wuu'*Wuu - tmp1'*tmp1)
-            tmp2 = Diagonal(sqrt.(tmp.S))*tmp.V'
+            tmp = eigen(Wuu'*Wuu - tmp1'*tmp1)
+            tmp2 = Diagonal(sqrt.(tmp.values))*tmp.vectors'
+            # tmp = svd(Wuu'*Wuu - tmp1'*tmp1)
+            # tmp2 = Diagonal(sqrt.(tmp.S))*tmp.V'
         end
 
         Su[k][1:nn,1:nn] = Wxx + tmp1*K[k]
