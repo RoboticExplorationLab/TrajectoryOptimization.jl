@@ -1,13 +1,13 @@
-"""
-$(SIGNATURES)
-BFGS multiplier update
-"""
-function BFGS(Hinv,ρ,y,s)
-    p = size(y)
-    ρ = inv(y'*s)
-    Hinv = (1.0*Matrix(I,p,p) - ρ*y*s')*Hinv*(1.0*Matrix(I,p,p) - ρ*s*y') + ρ*s*s'
-    return Hinv
-end
+# """
+# $(SIGNATURES)
+# BFGS multiplier update
+# """
+# function BFGS(Hinv,ρ,y,s)
+#     p = size(y)
+#     ρ = inv(y'*s)
+#     Hinv = (1.0*Matrix(I,p,p) - ρ*y*s')*Hinv*(1.0*Matrix(I,p,p) - ρ*s*y') + ρ*s*s'
+#     return Hinv
+# end
 
 """
 $(SIGNATURES)
@@ -39,34 +39,34 @@ function λ_update_default!(results::ConstrainedIterResults,solver::Solver,i::In
     i <= idx_pI ? results.λ[k][i] = max.(0.0,results.λ[k][i]) : nothing
 end
 
-function λ_update_accel!(results::ConstrainedIterResults,solver::Solver)
-    n,m,N = get_sizes(solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-
-    λ,μ,C = results.λ, results.μ, results.C
-    t,λ_tilde_prev = results.t_prev, results.λ_prev
-    for k = 1:N-1
-        t_prime = @. (1+sqrt(1+4t[k]^2))/2
-        λ_tilde = λ[k] + μ[k].*C[k]
-        λ_prime = @. λ_tilde + ((t[k]-1)/t_prime)*(λ_tilde - λ_tilde_prev[k])
-
-        results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
-        results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
-
-        λ_tilde_prev[k] = λ_tilde
-        t[k] = t_prime
-    end
-    t_prime = @. (1+sqrt(1+4t[N]^2))
-    λ_tilde = λ[N] + μ[N].*C[N]
-    λ_prime = @. λ_tilde + ((t[N]-1)/t_prime)*(λ_tilde - λ_tilde_prev[N])
-
-    results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
-    results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
-
-    λ_tilde_prev[N] = λ_tilde
-    t[N] = t_prime
-end
+# function λ_update_accel!(results::ConstrainedIterResults,solver::Solver)
+#     n,m,N = get_sizes(solver)
+#     p,pI,pE = get_num_constraints(solver)
+#     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+#
+#     λ,μ,C = results.λ, results.μ, results.C
+#     t,λ_tilde_prev = results.t_prev, results.λ_prev
+#     for k = 1:N-1
+#         t_prime = @. (1+sqrt(1+4t[k]^2))/2
+#         λ_tilde = λ[k] + μ[k].*C[k]
+#         λ_prime = @. λ_tilde + ((t[k]-1)/t_prime)*(λ_tilde - λ_tilde_prev[k])
+#
+#         results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
+#         results.λ[k][1:pI] = max.(0.0,results.λ[k][1:pI])
+#
+#         λ_tilde_prev[k] = λ_tilde
+#         t[k] = t_prime
+#     end
+#     t_prime = @. (1+sqrt(1+4t[N]^2))
+#     λ_tilde = λ[N] + μ[N].*C[N]
+#     λ_prime = @. λ_tilde + ((t[N]-1)/t_prime)*(λ_tilde - λ_tilde_prev[N])
+#
+#     results.λ[N] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ_prime))
+#     results.λ[N][1:pI_N] = max.(0.0,results.λ[N][1:pI_N])
+#
+#     λ_tilde_prev[N] = λ_tilde
+#     t[N] = t_prime
+# end
 
 function λ_update_momentum!(results::ConstrainedIterResults,solver::Solver)
     n,m,N = get_sizes(solver)
@@ -131,75 +131,65 @@ $(SIGNATURES)
     Second order dual update - Buys Update
     -UNDER DEVELOPMENT -
 """
-function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver)
+function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,update::Bool=true)
+    bp = results.bp
     n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
+    m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
-    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
+    nm = nn + mm
+    Nz = nn*N + mm*(N-1)
+    Np = p*(N-1) + p_N
+    ∇²L = zeros(Nz,Nz)
+    ∇c = zeros(Np,Nz)
 
     for k = 1:N
-        if k != N
-            if solver.opts.square_root
-                ∇L = [Qxx[k]'*Qxx[k] Qux[k]'; Qux[k] Quu[k]'*Quu[k]]
-            else
-                ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
-            end
-            G = [results.Cx[k] results.Cu[k]]
-            idx_pI = pI
-        else
-            if solver.opts.square_root
-                ∇L = results.S[k]'*results.S[k]
-            else
-                ∇L = results.S[k]
-            end
-            G = results.Cx[k]
-            idx_pI = pI_N
-        end
-        tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
+        if k < N
+            idx = ((k-1)*nm + 1):k*nm
+            solver.opts.square_root ? Q = [bp.Qxx[k]'*bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]'*bp.Quu[k]] : Q = [bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]]
+            ∇²L[idx,idx] = Q
 
-        results.λ[k][results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
-        results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+            idx2 = ((k-1)*p + 1):k*p
+            ∇c[idx2,idx] = [results.Cx[k] results.Cu[k]]
+        else
+            idx = ((k-1)*nm + 1):Nz
+            solver.opts.square_root ? Q = results.S[N]'*results.S[N] : Q = results.S[N]
+            ∇²L[idx,idx] = Q
+
+            idx2 = ((k-1)*p + 1):Np
+            ∇c[idx2,idx] = results.Cx[N]
+        end
     end
-end
 
-function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,i::Int,k::Int)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    C = vcat(results.C...)
+    λ = vcat(results.λ...)
+    active_set = vcat(results.active_set...)
 
-    Qx = results.bp.Qx; Qu = results.bp.Qu; Qxx = results.bp.Qxx; Quu = results.bp.Quu; Qux = results.bp.Qux
+    ∇c̄ = ∇c[active_set,:]
 
-    if k != N
-        TMP = zeros(p)
-        if solver.opts.square_root
-            ∇L = [Qxx[k]'*Qxx[k] Qux[k]'; Qux[k] Quu[k]'*Quu[k]]
-        else
-            ∇L = [Qxx[k] Qux[k]'; Qux[k] Quu[k]]
+    tmp = (∇c̄*(∇²L\∇c̄'))
+    λ[active_set] += tmp\C[active_set]
+
+    if update
+        # update the results
+        for k = 1:N
+            if k != N
+                idx_pI = pI
+                idx = (k-1)*p+1:k*p
+            else
+                idx_pI = pI_N
+                idx = (k-1)*p+1:Np
+            end
+            results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[idx]))
+            results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
         end
-        G = [results.Cx[k] results.Cu[k]]
-        idx_pI = pI
+        return nothing
     else
-        TMP = zeros(p_N)
-        if solver.opts.square_root
-            ∇L = results.S[k]'*results.S[k]
-        else
-            ∇L = results.S[k]
-        end
-        G = results.Cx[k]
-        idx_pI = pI_N
+        return λ
     end
-    tmp = (G*(∇L\G'))[results.active_set[k],results.active_set[k]]
-
-    TMP[results.active_set[k]] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][results.active_set[k]] + tmp\results.C[k][results.active_set[k]]))
-
-    i <= idx_pI ? results.λ[k][i] = max(0.0,TMP[i]) : results.λ[k][i] = TMP[i]
 end
-
 
 
 """
@@ -510,6 +500,10 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
         γ_k = -(1-α)/α_next
     end
 
+    if solver.state.second_order_dual_update
+        λ = Buys_λ_second_order_update!(results,solver,false)
+    end
+
     # Stage constraints
     for k = 1:N
         if k != N
@@ -532,14 +526,23 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
                     # else
                     #     results.λ[k][i] += results.μ[k][i]*results.C[k][i]
                     end
-                    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,i,k) : λ_update_default!(results,solver,i,k)
+                    if solver.state.second_order_dual_update
+                        # λ_second_order_update!(results,solver,i,k)
+
+
+                        idx = (k-1)*p+i
+
+                        results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[idx]))
+                        results.λ[k][i] = max.(0.0,results.λ[k][i])
+                    else
+                        λ_update_default!(results,solver,i,k)
+                    end
 
                     # results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
                     # results.λ[k][i] = max.(0.0,results.λ[k][i])
-
-                    results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
+                    !solver.state.second_order_dual_update ? results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i]) : nothing
                 else
-                    results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
+                    !solver.state.second_order_dual_update ? results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i]) : nothing
                 end
             else
                 if abs(results.C[k][i]) <= constraint_decrease_ratio*abs(results.C_prev[k][i])
@@ -555,11 +558,16 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
 
                     # results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, results.λ[k][i]))
 
-                    solver.state.second_order_dual_update ? λ_second_order_update!(results,solver,i,k) : λ_update_default!(results,solver,i,k)
+                    if solver.state.second_order_dual_update
+                        idx = (k-1)*p+i
+                        results.λ[k][i] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[idx]))
+                    else
+                        λ_update_default!(results,solver,i,k)
+                    end
 
-                    results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i])
+                    !solver.state.second_order_dual_update ? results.μ[k][i] = min(penalty_max, penalty_scaling_no*results.μ[k][i]) : nothing
                 else
-                    results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i])
+                    !solver.state.second_order_dual_update ? results.μ[k][i] = min(penalty_max, penalty_scaling*results.μ[k][i]) : nothing
                 end
             end
         end
@@ -585,15 +593,17 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
         else
             solver.state.second_order_dual_update ? λ_second_order_update!(results,solver) : λ_update_default!(results,solver)
         end
-        k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
+        if !solver.state.second_order_dual_update
+            k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
+        end
 
     elseif solver.opts.outer_loop_update_type == :individual
         λ_update_default!(results,solver)
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_individual!(results,solver) : nothing
 
-    elseif solver.opts.outer_loop_update_type == :accelerated
-        λ_update_accel!(results,solver)
-        k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
+    # elseif solver.opts.outer_loop_update_type == :accelerated
+    #     λ_update_accel!(results,solver)
+    #     k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
 
     elseif solver.opts.outer_loop_update_type == :momentum
         λ_update_momentum!(results,solver)

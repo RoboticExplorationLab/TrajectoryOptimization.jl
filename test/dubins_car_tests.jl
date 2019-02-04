@@ -10,9 +10,9 @@ integration = :rk4
 
 opts = SolverOptions()
 opts.verbose = false
-opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-5
-opts.constraint_tolerance = 1e-5
+opts.cost_tolerance = 1e-8
+opts.cost_tolerance_intermediate = 1e-8
+opts.constraint_tolerance = 1e-8
 opts.resolve_feasible = true
 opts.outer_loop_update_type = :default
 opts.R_infeasible = 10
