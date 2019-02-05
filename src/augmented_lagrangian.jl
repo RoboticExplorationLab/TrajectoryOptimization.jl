@@ -228,7 +228,7 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
             Q,R,H,q,r = expansion .* dt
 
             idx = ((k-1)*nm + 1):k*nm
-            Q̄[idx,idx] = [Q H'; H R] #+ [Cx[k]'*Iμ[k]*Cx[k] Cx[k]'*Iμ[k]*Cu[k]; Cu[k]'*Iμ[k]*Cx[k] Cu[k]'*Iμ[k]*Cu[k]]
+            Q̄[idx,idx] = [Q H'; H R] + [Cx[k]'*Iμ[k]*Cx[k] Cx[k]'*Iμ[k]*Cu[k]; Cu[k]'*Iμ[k]*Cx[k] Cu[k]'*Iμ[k]*Cu[k]]
 
             idx2 = ((k-1)*p + 1):k*p
             C̄[idx2,idx] = [results.Cx[k] results.Cu[k]]
@@ -264,28 +264,28 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
         end
     end
 
-    ū = vcat(results.U...)
-    z = B̄*ū + Ā*x0
-
-    x̄ = [zeros(n) for i = 1:solver.N]
-    x̄[1] = x0
-    for k = 1:N-1
-        x̄[k+1] = results.fdx[k]*x̄[k] + results.fdu[k]*results.U[k]
-    end
-    x̂ = [zeros(n) for i = 1:solver.N]
-    for k = 1:N
-        k != N ? idx = ((k-1)*nm+1:(k-1)*nm+n) : idx = ((k-1)*nm+1:Nz)
-        x̂[k] = z[idx]
-    end
-
-    @test isapprox(to_array(x̄),to_array(x̂))
-    @test B̄[1:n,1:n] == zeros(n,n)
-    @test B̄[n+1:nm,1:m] == 1.0*Matrix(I,m,m)
-    @test B̄[nm+1:nm+n,1:m] == results.fdu[1][1:n,1:m]
-    @test B̄[nm+n+1:2*nm,m+1:2*m] == 1.0*Matrix(I,m,m)
-    @test B̄[(N-1)*nm+1:Nz,1:m] == prod(results.fdx[2:N-1])*results.fdu[1]
-    @test B̄[(N-1)*nm+1:Nz,m+1:2*m] == prod(results.fdx[3:N-1])*results.fdu[2]
-    @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
+    # ū = vcat(results.U...)
+    # z = B̄*ū + Ā*x0
+    #
+    # x̄ = [zeros(n) for i = 1:solver.N]
+    # x̄[1] = x0
+    # for k = 1:N-1
+    #     x̄[k+1] = results.fdx[k]*x̄[k] + results.fdu[k]*results.U[k]
+    # end
+    # x̂ = [zeros(n) for i = 1:solver.N]
+    # for k = 1:N
+    #     k != N ? idx = ((k-1)*nm+1:(k-1)*nm+n) : idx = ((k-1)*nm+1:Nz)
+    #     x̂[k] = z[idx]
+    # end
+    #
+    # @test isapprox(to_array(x̄),to_array(x̂))
+    # @test B̄[1:n,1:n] == zeros(n,n)
+    # @test B̄[n+1:nm,1:m] == 1.0*Matrix(I,m,m)
+    # @test B̄[nm+1:nm+n,1:m] == results.fdu[1][1:n,1:m]
+    # @test B̄[nm+n+1:2*nm,m+1:2*m] == 1.0*Matrix(I,m,m)
+    # @test B̄[(N-1)*nm+1:Nz,1:m] == prod(results.fdx[2:N-1])*results.fdu[1]
+    # @test B̄[(N-1)*nm+1:Nz,m+1:2*m] == prod(results.fdx[3:N-1])*results.fdu[2]
+    # @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
 
     ∇²L = B̄'*Q̄*B̄
     println("cond(∇²L): $(cond(∇²L))")
@@ -300,7 +300,6 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
     tmp = (∇ḡ*(∇²L\∇ḡ'))
     println("cond tmp: $(cond(tmp))")
     λ[active_set] += tmp\C[active_set]
-    println(maximum(λ))
     # λ += tmp\C
 
     if update
@@ -366,9 +365,9 @@ function qp_λ_second_order_update!(results::SolverIterResults,solver::Solver)
 
         if k != N
             u = results.U[k]
-            Q,R,H,q,r = taylor_expansion(costfun,x,u)
+            Q,R,H,q,r = taylor_expansion(costfun,x,u) .* solver.dt
         else
-            Qf,qf = taylor_expansion(costfun,x)
+            Qf,qf = taylor_expansion(costfun,x) .* solver.dt
         end
 
         # Indices
@@ -711,7 +710,7 @@ function feedback_outer_loop_update!(results::ConstrainedIterResults,solver::Sol
     return nothing
 end
 
-λ_second_order_update! = Buys_λ_second_order_update!
+λ_second_order_update! = qp_λ_second_order_update!#Buys_λ_second_order_update!
 
 """
 $(SIGNATURES)
@@ -728,7 +727,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
         if !solver.state.second_order_dual_update
             k % solver.opts.penalty_update_frequency == 0 ? μ_update_default!(results,solver) : nothing
         end
-
     elseif solver.opts.outer_loop_update_type == :individual
         λ_update_default!(results,solver)
         k % solver.opts.penalty_update_frequency == 0 ? μ_update_individual!(results,solver) : nothing
@@ -751,8 +749,6 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
 
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= deepcopy(results.C)
-
-    display(plot(to_array(results.λ[1:solver.N-1])',labels="",ylabel="dual",xlabel="iteration"))
 
     # reset regularization
     results.ρ[1] = 0.

@@ -33,19 +33,23 @@ struct BackwardPass <: AbstractBackwardPass
 
     Qux_reg::Vector{Matrix{Float64}}
     Quu_reg::Vector{Matrix{Float64}}
+end
 
-    function BackwardPass(n::Int,m::Int,N::Int)
-        Qx = [zeros(n) for i = 1:N]
-        Qu = [zeros(m) for i = 1:N-1]
-        Qxx = [zeros(n,n) for i = 1:N]
-        Qux = [zeros(m,n) for i = 1:N-1]
-        Quu = [zeros(m,m) for i = 1:N-1]
+function BackwardPass(n::Int,m::Int,N::Int)
+    Qx = [zeros(n) for i = 1:N]
+    Qu = [zeros(m) for i = 1:N-1]
+    Qxx = [zeros(n,n) for i = 1:N]
+    Qux = [zeros(m,n) for i = 1:N-1]
+    Quu = [zeros(m,m) for i = 1:N-1]
 
-        Qux_reg = [zeros(m,n) for i = 1:N-1]
-        Quu_reg = [zeros(m,m) for i = 1:N-1]
+    Qux_reg = [zeros(m,n) for i = 1:N-1]
+    Quu_reg = [zeros(m,m) for i = 1:N-1]
 
-        new(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
-    end
+    BackwardPass(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
+end
+
+function copy(bp::BackwardPass)
+    BackwardPass(deepcopy(bp.Qx),deepcopy(bp.Qu),deepcopy(bp.Qxx),deepcopy(bp.Qux),deepcopy(bp.Quu),deepcopy(bp.Qux_reg),deepcopy(bp.Quu_reg))
 end
 
 """
