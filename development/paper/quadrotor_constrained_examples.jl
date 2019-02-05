@@ -55,16 +55,61 @@ end
 @show stats_con["c_max"][end]
 
 # Minimum time
-obj_mintime = update_objective(obj_con,tf=:min)
+# Unconstrained
+Q = (1e-5)*Matrix(I,n,n)
+R = (1e-5)*Matrix(I,m,m)
+Qf = (0.0)*Matrix(I,n,n)
+tf = 5.0
+dt = 0.05
 
+# -initial state
+x0 = zeros(n)
+x0[1:3] = [0.; 0.; 0.]
+q0 = [1.;0.;0.;0.]
+x0[4:7] = q0
+
+# -final state
+xf = copy(x0)
+xf[1:3] = [0.;40.;0.] # xyz position
+xf[4:7] = q0
+
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+# -control limits
+r_quad = 3.0
+r_sphere = 3.0
+spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
+n_spheres = 3
+
+# -control limits
+u_min = 0.0
+u_max = 10.0
+
+# 3 sphere obstacles
+function cI_3obs_quad(c,x,u)
+    for i = 1:n_spheres
+        c[i] = TrajectoryOptimization.sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
+    end
+    c
+end
+
+# unit quaternion constraint
+function unit_quaternion(c,x,u)
+    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
+end
+
+obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cE=unit_quaternion)
+obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad,cE=unit_quaternion)
+
+
+obj_mintime = update_objective(obj_3obs,tf=:min)
 opts.square_root = true
 opts.max_dt = 0.1
 opts.min_dt = 1e-3
 opts.minimum_time_dt_estimate = obj_con.tf/(N-1)
 opts.constraint_tolerance = 1e-3
-opts.R_minimum_time = 250.0 #100
+opts.R_minimum_time = 1e-1#250.0 #100
 opts.constraint_decrease_ratio = .25
-opts.penalty_scaling = 100.0
+opts.penalty_scaling = 10.0
 opts.outer_loop_update_type = :feedback
 opts.iterations = 1000
 opts.iterations_outerloop = 20
@@ -72,8 +117,8 @@ opts.verbose = true
 opts.live_plotting = true
 
 solver_mintime = Solver(model,obj_mintime,integration=integration,N=N,opts=opts)
-@time results_mintime, stats_mintime = solve(solver_mintime,to_array(results_con.U))
-
+@time results_mintime, stats_mintime = solve(solver_mintime,U_hover)#to_array(results_con.U))
+cost(solver_mintime,results_mintime)
 plot(t_array[1:end-1],to_array(results_mintime.U)',title="Quadrotor Obstacle Avoidance (Minimum Time)",xlabel="time",ylabel="control",labels="")
 plot(t_array,to_array(results_mintime.X)[1:3,:]',title="Quadrotor Obstacle Avoidance (Minimum Time)",xlabel="time",ylabel="position",legend=:topleft,labels=["x";"y";"z"])
 @assert max_violation(results_mintime) <= opts.constraint_tolerance

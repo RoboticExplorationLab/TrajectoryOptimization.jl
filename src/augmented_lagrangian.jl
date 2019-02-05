@@ -126,51 +126,182 @@ function λ_update_nesterov!(results::ConstrainedIterResults,solver::Solver)
 end
 
 
-"""
-$(SIGNATURES)
-    Second order dual update - Buys Update
-    -UNDER DEVELOPMENT -
-"""
+# """
+# $(SIGNATURES)
+#     Second order dual update - Buys Update
+#     -UNDER DEVELOPMENT -
+# """
+# function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,update::Bool=true)
+#     bp = results.bp
+#     n,m,N = get_sizes(solver)
+#     n̄,nn = get_num_states(solver)
+#     m̄,mm = get_num_controls(solver)
+#     p,pI,pE = get_num_constraints(solver)
+#     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+#
+#     nm = nn + mm
+#     Nz = nn*N + mm*(N-1)
+#     Np = p*(N-1) + p_N
+#     ∇²L = zeros(Nz,Nz)
+#     ∇c = zeros(Np,Nz)
+#
+#     for k = 1:N
+#         if k < N
+#             idx = ((k-1)*nm + 1):k*nm
+#             solver.opts.square_root ? Q = [bp.Qxx[k]'*bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]'*bp.Quu[k]] : Q = [bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]]
+#             ∇²L[idx,idx] = Q
+#
+#             idx2 = ((k-1)*p + 1):k*p
+#             ∇c[idx2,idx] = [results.Cx[k] results.Cu[k]]
+#         else
+#             idx = ((k-1)*nm + 1):Nz
+#             solver.opts.square_root ? Q = results.S[N]'*results.S[N] : Q = results.S[N]
+#             ∇²L[idx,idx] = Q
+#
+#             idx2 = ((k-1)*p + 1):Np
+#             ∇c[idx2,idx] = results.Cx[N]
+#         end
+#     end
+#
+#     C = vcat(results.C...)
+#     λ = vcat(results.λ...)
+#     active_set = vcat(results.active_set...)
+#
+#     ∇c̄ = ∇c[active_set,:]
+#
+#     tmp = (∇c̄*(∇²L\∇c̄'))
+#     λ[active_set] += tmp\C[active_set]
+#
+#     if update
+#         # update the results
+#         for k = 1:N
+#             if k != N
+#                 idx_pI = pI
+#                 idx = (k-1)*p+1:k*p
+#             else
+#                 idx_pI = pI_N
+#                 idx = (k-1)*p+1:Np
+#             end
+#             results.λ[k] = max.(solver.opts.dual_min, min.(solver.opts.dual_max, λ[idx]))
+#             results.λ[k][1:idx_pI] = max.(0.0,results.λ[k][1:idx_pI])
+#         end
+#         return nothing
+#     else
+#         return λ
+#     end
+# end
+using Test
+
 function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,update::Bool=true)
-    bp = results.bp
     n,m,N = get_sizes(solver)
     n̄,nn = get_num_states(solver)
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    update_constraints!(results,solver)
 
+    X = results.X
+    U = results.U
+    Iμ = results.Iμ
+    Cx = results.Cx
+    Cu = results.Cu
+
+    x0 = solver.obj.x0
     nm = nn + mm
     Nz = nn*N + mm*(N-1)
     Np = p*(N-1) + p_N
-    ∇²L = zeros(Nz,Nz)
-    ∇c = zeros(Np,Nz)
+    Nu = mm*(N-1) # number of control decision variables u
+    Ā = zeros(Nz,nn)
+    B̄ = zeros(Nz,Nu)
+    Q̄ = zeros(Nz,Nz)
+    C̄ = zeros(Np,Nz)
 
     for k = 1:N
+        # Calculate Ā
+        k == 1 ? Ā[((k-1)*nm + 1):((k-1)*nm + nn),1:nn] = 1.0*Matrix(I,nn,nn) : Ā[((k-1)*nm + 1):((k-1)*nm + nn),1:nn] = prod(results.fdx[1:k-1])
+
         if k < N
+            x = X[k][1:n]
+            u = U[k][1:m]
+            solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
+            expansion = taylor_expansion(solver.obj.cost,x,u)
+            Q,R,H,q,r = expansion .* dt
+
             idx = ((k-1)*nm + 1):k*nm
-            solver.opts.square_root ? Q = [bp.Qxx[k]'*bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]'*bp.Quu[k]] : Q = [bp.Qxx[k] bp.Qux[k]'; bp.Qux[k] bp.Quu[k]]
-            ∇²L[idx,idx] = Q
+            Q̄[idx,idx] = [Q H'; H R] #+ [Cx[k]'*Iμ[k]*Cx[k] Cx[k]'*Iμ[k]*Cu[k]; Cu[k]'*Iμ[k]*Cx[k] Cu[k]'*Iμ[k]*Cu[k]]
 
             idx2 = ((k-1)*p + 1):k*p
-            ∇c[idx2,idx] = [results.Cx[k] results.Cu[k]]
+            C̄[idx2,idx] = [results.Cx[k] results.Cu[k]]
         else
+            x = X[N][1:n]
+            expansion = taylor_expansion(solver.obj.cost,x)
+            Qf,qf = expansion
+
             idx = ((k-1)*nm + 1):Nz
-            solver.opts.square_root ? Q = results.S[N]'*results.S[N] : Q = results.S[N]
-            ∇²L[idx,idx] = Q
+            Q̄[idx,idx] = Qf + Cx[N]'*Iμ[N]*Cx[N]
 
             idx2 = ((k-1)*p + 1):Np
-            ∇c[idx2,idx] = results.Cx[N]
+            C̄[idx2,idx] = results.Cx[N]
         end
     end
+
+    for k = 1:N
+        # Indices
+        idx3 = ((k-1)*nm + 1):((k-1)*nm + n)
+        idx4 = ((k-1)*nm + n + 1):k*nm
+        idx5 = ((k-1)*m + 1):k*m
+
+        # Calculate B̄
+        if k > 1
+            for j = 1:k-1
+                idx7 = ((j-1)*m + 1):j*m
+                j == k-1 ? B̄[idx3,idx7] = results.fdu[j][1:n,1:m] : B̄[idx3,idx7] = prod(results.fdx[j+1:(k-1)])*results.fdu[j][1:n,1:m]
+            end
+        end
+
+        if k != N
+            B̄[idx4,idx5] = 1.0*Matrix(I,m,m)
+        end
+    end
+
+    ū = vcat(results.U...)
+    z = B̄*ū + Ā*x0
+
+    x̄ = [zeros(n) for i = 1:solver.N]
+    x̄[1] = x0
+    for k = 1:N-1
+        x̄[k+1] = results.fdx[k]*x̄[k] + results.fdu[k]*results.U[k]
+    end
+    x̂ = [zeros(n) for i = 1:solver.N]
+    for k = 1:N
+        k != N ? idx = ((k-1)*nm+1:(k-1)*nm+n) : idx = ((k-1)*nm+1:Nz)
+        x̂[k] = z[idx]
+    end
+
+    @test isapprox(to_array(x̄),to_array(x̂))
+    @test B̄[1:n,1:n] == zeros(n,n)
+    @test B̄[n+1:nm,1:m] == 1.0*Matrix(I,m,m)
+    @test B̄[nm+1:nm+n,1:m] == results.fdu[1][1:n,1:m]
+    @test B̄[nm+n+1:2*nm,m+1:2*m] == 1.0*Matrix(I,m,m)
+    @test B̄[(N-1)*nm+1:Nz,1:m] == prod(results.fdx[2:N-1])*results.fdu[1]
+    @test B̄[(N-1)*nm+1:Nz,m+1:2*m] == prod(results.fdx[3:N-1])*results.fdu[2]
+    @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
+
+    ∇²L = B̄'*Q̄*B̄
+    println("cond(∇²L): $(cond(∇²L))")
+    ∇g = C̄*B̄
 
     C = vcat(results.C...)
     λ = vcat(results.λ...)
     active_set = vcat(results.active_set...)
 
-    ∇c̄ = ∇c[active_set,:]
-
-    tmp = (∇c̄*(∇²L\∇c̄'))
+    ∇ḡ = ∇g[active_set,:]
+    #
+    tmp = (∇ḡ*(∇²L\∇ḡ'))
+    println("cond tmp: $(cond(tmp))")
     λ[active_set] += tmp\C[active_set]
+    println(maximum(λ))
+    # λ += tmp\C
 
     if update
         # update the results
@@ -190,6 +321,7 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
         return λ
     end
 end
+
 
 
 """
@@ -619,6 +751,8 @@ function outer_loop_update(results::ConstrainedIterResults,solver::Solver,k::Int
 
     ## Store current constraints evaluations for next outer loop update
     results.C_prev .= deepcopy(results.C)
+
+    display(plot(to_array(results.λ[1:solver.N-1])',labels="",ylabel="dual",xlabel="iteration"))
 
     # reset regularization
     results.ρ[1] = 0.
