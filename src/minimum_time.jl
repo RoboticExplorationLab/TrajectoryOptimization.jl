@@ -43,6 +43,7 @@ function total_time(solver::Solver, results::SolverVectorResults)
 end
 
 function total_time(solver::Solver, results::DircolVars)
+    N = solver.N
     if is_min_time(solver)
         m̄, = get_num_controls(solver)
         T = sum(results.U[m̄,1:N-1])
@@ -53,4 +54,12 @@ end
 
 function get_time(solver::Solver)
     range(0,stop=solver.obj.tf,length=solver.N)
+end
+
+function get_time(solver::Solver, results)
+    if solver.state.minimum_time
+        cumsum([u[end]^2 for u in results.U])
+    else
+        get_time(solver)
+    end
 end

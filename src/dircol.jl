@@ -997,6 +997,7 @@ function constraint_jacobian(solver::Solver, X, U, A, B, method::Symbol)
 end
 
 function time_step_constraint_jacobian!(vals, solver::Solver)
+    N = solver.N
     if solver.state.minimum_time
         vals[1:2:2(N-2)] .= 1
         vals[2:2:2(N-2)+1] .= -1

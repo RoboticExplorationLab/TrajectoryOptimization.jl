@@ -285,6 +285,11 @@ function plot_trajectory!(res::TrajectoryOptimization.SolverVectorResults; kwarg
 	plot_trajectory!(to_array(res.X); kwargs...)
 end
 
+function plot_trajectory!(res::DircolVars;kwargs...)
+    plot_trajectory!(res.X; kwargs...)
+end
+
+
 """
 $(SIGNATURES)
     Skew-symmetric cross-product matrix (a.k.a. hat map)
