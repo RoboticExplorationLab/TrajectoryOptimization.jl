@@ -23,9 +23,55 @@ plot(results.U,title="Block push to origin",xlabel="time step",ylabel="control")
 stats["cost"][end]
 stats["c_max"][end]
 
+struct NewtonResults
+    z̄::Vector
+    λ_::Vector
+    ν_::Vector
+    Q̄::Matrix
+    q̄::Vector
+    C̄::Matrix
+    c̄::Vector
+    D̄::Matrix
+    d̄::Vector
+end
+
+function NewtonResults(Nz::Int,Np::Int,Nx::Int)
+    z̄ = zeros(Nz)
+    λ_ = zeros(Np)
+    ν_ = zeros(Nx)
+
+    Q̄ = zeros(Nz,Nz)
+    q̄ = zeros(Nz)
+
+    C̄ = zeros(Np,Nz)
+    c̄ = zeros(Np)
+
+    D̄ = zeros(N*n,Nz)
+    d̄ = zeros(N*n)
+
+    z̄ = zeros(Nz)
+
+    NewtonResults(z̄,λ_,ν_,Q̄,q̄,C̄,c̄,D̄,d̄)
+end
+
+function NewtonResults(solver::Solver)
+    n,m,N = get_sizes(solver)
+    n̄,nn = get_num_states(solver)
+    m̄,mm = get_num_controls(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    # batch problem dimensions
+    nm = nn + mm
+    Nz = nn*N + mm*(N-1)
+    Np = p*(N-1) + p_N
+    Nx = N*n
+
+    NewtonResults(Nz,Np,Nx)
+end
 
 ## Newton solve
-function update_batch_problem(results::SolverIterResults,solver::Solver,z̄::Vector=Vector{Float64}(undef,0),λ_::Vector=Vector{Float64}(undef,0),ν_::Vector=Vector{Float64}(undef,0))
+function update_newton_results!(newton_results::NewtonResults,results::SolverIterResults,solver::Solver)
     # get problem dimensions
     n,m,N = get_sizes(solver)
     n̄,nn = get_num_states(solver)
@@ -37,14 +83,11 @@ function update_batch_problem(results::SolverIterResults,solver::Solver,z̄::Vec
     nm = nn + mm
     Nz = nn*N + mm*(N-1)
     Np = p*(N-1) + p_N
+    Nx = N*n
     Nu = mm*(N-1) # number of control decision variables u
 
     # update results with stack vector
-    if !isempty(z̄) || !isempty(λ_)
-        update_results_from_batch!(results,solver,z̄,λ_,ν_)
-    else
-        @warn "using previous results"
-    end
+    update_results_from_newton_results!(results,newton_results,solver)
 
     # update constraints and Jacobians
     update_constraints!(results,solver)
@@ -61,17 +104,17 @@ function update_batch_problem(results::SolverIterResults,solver::Solver,z̄::Vec
     fdu = results.fdu
     x0 = solver.obj.x0
 
-    # initialize batch matrices
-    Q̄ = zeros(Nz,Nz)
-    q̄ = zeros(Nz)
+    # pull out newton results for convenience
+    Q̄ = newton_results.Q̄
+    q̄ = newton_results.q̄
 
-    C̄ = zeros(Np,Nz)
-    c̄ = zeros(Np)
+    C̄ = newton_results.C̄
+    c̄ = newton_results.c̄
 
-    D̄ = zeros(N*n,Nz)
-    d̄ = zeros(N*n)
+    D̄ = newton_results.D̄
+    d̄ = newton_results.d̄
 
-    z̄ = zeros(Nz)
+    z̄ = newton_results.z̄
 
     # update batch matrices
     for k = 1:N
@@ -125,13 +168,15 @@ function update_batch_problem(results::SolverIterResults,solver::Solver,z̄::Vec
             d̄[idx7] = X[k] - tmp
         end
     end
-    λ_ = vcat(results.λ...)
-    ν_ = vcat(results.s...)
 
-    return z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄
+    newton_results.λ_ .= vcat(results.λ...)
+    newton_results.ν_ .= vcat(results.s...)
+
+
+    return nothing
 end
 
-function update_results_from_batch!(results::SolverIterResults,solver::Solver,z̄::Vector,λ_::Vector,ν_::Vector)
+function update_results_from_newton_results!(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
     n,m,N = get_sizes(solver)
     n̄,nn = get_num_states(solver)
     m̄,mm = get_num_controls(solver)
@@ -143,6 +188,9 @@ function update_results_from_batch!(results::SolverIterResults,solver::Solver,z�
     Nz = nn*N + mm*(N-1)
     Np = p*(N-1) + p_N
     Nu = mm*(N-1) # number of control decision variables u
+
+    z̄ = newton_results.z̄
+    λ_ = newton_results.λ_
 
     # update results with stack vector
     for k = 1:N
@@ -163,7 +211,20 @@ function update_results_from_batch!(results::SolverIterResults,solver::Solver,z�
     return nothing
 end
 
-function solve_KKT(z̄::Vector, λ_::Vector, ν_::Vector, Q̄::Matrix, q̄::Vector, C̄::Matrix, c̄::Vector, D̄::Matrix, d̄::Vector)
+function solve_KKT!(newton_results::NewtonResults)
+    Q̄ = newton_results.Q̄
+    q̄ = newton_results.q̄
+
+    C̄ = newton_results.C̄
+    c̄ = newton_results.c̄
+
+    D̄ = newton_results.D̄
+    d̄ = newton_results.d̄
+
+    z̄ = newton_results.z̄
+    λ_ = newton_results.λ_
+    ν_ = newton_results.ν_
+
     # get batch problem sizes
     Nz = size(Q̄,1)
     Np = size(C̄,1)
@@ -191,12 +252,14 @@ function solve_KKT(z̄::Vector, λ_::Vector, ν_::Vector, Q̄::Matrix, q̄::Vect
     α = 1.0
     tmp_new = tmp + α*δ
 
-    println(norm(tmp_new - tmp))
+    z̄ .= tmp_new[1:Nz]
+    λ_ .= tmp_new[Nz+1:Nz+Np]
+    ν_ .= tmp_new[Nz+Np+1:Nz+Np+Nx]
 
-    return tmp_new[1:Nz], tmp_new[Nz+1:Nz+Np], tmp_new[Nz+Np+1:Nz+Np+Nx] # z,λ,ν
+    return nothing
 end
 
-function cost_newton(results::SolverIterResults,solver::Solver,ν_::Vector)
+function cost_newton(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
     results = copy(results)
 
     # get problem dimensions
@@ -206,6 +269,7 @@ function cost_newton(results::SolverIterResults,solver::Solver,ν_::Vector)
 
     # add dynamics constraint costs
     tmp = zeros(n)
+    ν_ = newton_results.ν_
     for k = 1:N
         if k == 1
             J += ν_[1:n]'*(X[1] - solver.obj.x0)
@@ -220,17 +284,19 @@ end
 
 function newton_solve(results::SolverIterResults,solver::Solver)
     results = copy(results)
-    z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄ = update_batch_problem(results,solver)
-    z̄_new,λ_new,ν_new = solve_KKT(z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄)
-    update_results_from_batch!(results,solver,z̄_new,λ_new,ν_new)
+    newton_results = NewtonResults(solver)
+    update_newton_results!(newton_results,results,solver)
+    solve_KKT!(newton_results)
+    update_results_from_newton_results!(results,newton_results,solver)
 
-    J = cost_newton(results,solver,ν_new)
+    J = cost_newton(results,newton_results,solver)
     c_max = max_violation(results)
-
     return results, J, c_max
 end
 
 results_newton, J_newton, c_max_newton = newton_solve(results,solver)
+
+a = 1
 
 
 
