@@ -259,9 +259,9 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
 end
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
-        copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
-        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp))
+    ConstrainedVectorResults(deepcopy(r.X),deepcopy(r.U),deepcopy(r.K),deepcopy(r.d),deepcopy(r.X_),deepcopy(r.U_),deepcopy(r.S),deepcopy(r.s),deepcopy(r.fdx),deepcopy(r.fdu),
+        deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.Iμ),deepcopy(r.λ),deepcopy(r.μ),
+        deepcopy(r.Cx),deepcopy(r.Cu),deepcopy(r.t_prev),deepcopy(r.λ_prev),copy(r.nesterov),deepcopy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
 #############
