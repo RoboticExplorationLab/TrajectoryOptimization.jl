@@ -11,3 +11,4 @@ StaticArrays
 Formatting
 Plots
 HDF5
+Pkg
