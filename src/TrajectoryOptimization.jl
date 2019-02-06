@@ -74,7 +74,9 @@ export
     plot_obstacles,
     generate_controller,
     lqr,
-    evals
+    evals,
+    reset,
+    reset_evals
 
 include("objective.jl")
 include("model.jl")

@@ -27,6 +27,8 @@ function solve_dircol(solver::Solver,X0::Matrix,U0::Matrix;
         # solver.state.constrained = false
     end
 
+    reset_evals(solver)
+
     obj = solver.obj
     model = solver.model
 
