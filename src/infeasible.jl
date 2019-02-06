@@ -39,7 +39,15 @@ end
 $(SIGNATURES)
     Infeasible start solution is run through time varying LQR to track state and control trajectories
 """
-function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::SolverIterResults
+function get_feasible_trajectory(results0::SolverIterResults,solver::Solver)::SolverIterResults
+    # Need to copy to avoid writing over original results
+    results = copy(results0)
+
+    get_feasible_trajectory!(results,solver)
+    return results
+end
+
+function get_feasible_trajectory!(results::SolverIterResults,solver::Solver)::Nothing
     remove_infeasible_controls!(results,solver)
 
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
@@ -60,7 +68,7 @@ function get_feasible_trajectory(results::SolverIterResults,solver::Solver)::Sol
         solver.state.constrained = false
     end
 
-    return results
+    return nothing
 end
 
 """

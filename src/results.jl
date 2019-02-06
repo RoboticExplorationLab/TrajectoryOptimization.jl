@@ -259,9 +259,11 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
 end
 
 function copy(r::ConstrainedVectorResults)
-    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
+    ConstrainedVectorResults(copy(r.X),copy(r.U),copy(r.K),copy(r.d),copy(r.X_),copy(r.U_),
+        copy(r.S),copy(r.s),copy(r.fdx),copy(r.fdu),
         copy(r.C),copy(r.C_prev),copy(r.Iμ),copy(r.λ),copy(r.μ),
-        copy(r.Cx),copy(r.Cu),copy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp))
+        copy(r.Cx),copy(r.Cu),copy(r.t_prev),copy(r.λ_prev),copy(r.nesterov),copy(r.active_set),
+        copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
 #############
@@ -293,9 +295,11 @@ function remove_infeasible_controls!(results::SolverIterResults,solver::Solver)
         results.fdu[k] = results.fdu[k][1:nn,1:m̄]
 
         results.C[k] = results.C[k][idx]
+        results.C_prev[k] = results.C_prev[k][idx]
         results.Cx[k] = results.Cx[k][idx,1:nn]
         results.Cu[k] = results.Cu[k][idx,1:m̄]
         results.λ[k] = results.λ[k][idx]
+        results.λ_prev[k] = results.λ_prev[k][idx]
         results.μ[k] = results.μ[k][idx]
         results.Iμ[k] = Diagonal(Array(results.Iμ[k])[idx,idx]) # TODO there should be a more efficient way to do this
         results.active_set[k] = results.active_set[k][idx]
@@ -355,7 +359,8 @@ function init_results(solver::Solver,X::AbstractArray,U::AbstractArray; λ=Array
             copy_λ!(solver, results, λ)
         end
         if ~isempty(μ)
-            error("penalty warm start not implemented")
+            # error("penalty warm start not implemented")
+            copyto!(results.μ,μ)
         end
 
         # Set initial regularization

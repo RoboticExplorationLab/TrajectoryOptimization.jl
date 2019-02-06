@@ -130,13 +130,13 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     #           SOLVER           #
     #****************************#
     ## Initial rollout
-    if !solver.state.infeasible #&& isempty(prevResults)
+    if !solver.state.infeasible && isempty(prevResults)
         X[1][1:n] = solver.obj.x0
         flag = rollout!(results,solver) # rollout new state trajectoy
         !flag ? error("Bad initial control sequence") : nothing
     end
 
-    if solver.state.constrained
+    if solver.state.constrained && isempty(prevResults)
         update_constraints!(results, solver)
 
         # Update constraints Jacobians; if fixed (ie, no custom constraints) set solver state to not update
@@ -285,6 +285,13 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         update_constraints!(results, solver)
         J_prev = cost(solver, results, results.X, results.U)
 
+        #****************************#
+        #    TERMINATION CRITERIA    #
+        #****************************#
+        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
+        converged = evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter)
+
+
         # Logger output
         @logmsg OuterLoop :outeriter value=j
         @logmsg OuterLoop :iter value=iter
@@ -294,11 +301,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
         push!(outer_updates,iter)
 
-        #****************************#
-        #    TERMINATION CRITERIA    #
-        #****************************#
-        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter) ? break : nothing
+        if converged; break end
     end
     end
     ### END OUTER LOOP ###
@@ -341,10 +344,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         @info "Infeasible solve complete"
 
         # run single backward pass/forward pass to get dynamically feasible solution (ie, remove infeasible controls)
-        results_feasible = get_feasible_trajectory(results,solver)
+        results_feasible = results
+        get_feasible_trajectory!(results_feasible,solver)
 
         # resolve feasible solution if necessary (should be fast)
-        if solver.opts.resolve_feasible
+        if solver.opts.resolve_feasible  # TODO: This should be done in an outside function that calls solve
+
             @info "Resolving feasible"
 
             # create unconstrained solver from infeasible solver if problem is unconstrained
@@ -360,7 +365,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             solver_feasible.state.second_order_dual_update = false
 
             # Resolve feasible problem with warm start
-            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))
+            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
 
             # Merge stats
             for key in keys(stats_feasible)
@@ -376,11 +381,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             append!(stats["gradient norm"], stats_feasible["gradient norm"])
             append!(stats["Quu condition number"], stats_feasible["Quu condition number"])
             append!(stats["S condition number"], stats_feasible["S condition number"])
+            return results_feasible, stats
         end
 
         # return feasible results
         @info "*Solve Complete*"
-        return results_feasible, stats
+        return results, stats
 
     # if feasible solve, return results
     else
@@ -426,6 +432,12 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
             if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_norm_tolerance)
                 return true
             end
+        end
+
+        # Kick out of infeasible solve early if the solution will be passed to another (feasible) solve
+        if solver.opts.resolve_feasible && solver.state.infeasible && dJ < solver.opts.cost_tolerance_infeasible
+            @logmsg OuterLoop "Converged on Infeasible Cost Tol."
+            return true
         end
     end
     return false
