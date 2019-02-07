@@ -153,6 +153,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     J_hist = Vector{Float64}()
     grad_norm_hist = Vector{Float64}()
     c_max_hist = Vector{Float64}()
+    c_max_increase = 0
+    Δc_max = Inf
     c_l2_norm_hist = Vector{Float64}()
     cn_Quu_hist = Vector{Float64}()
     cn_S_hist = Vector{Float64}()
@@ -209,7 +211,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             # increment iLQR inner loop counter
             iter += 1
 
-            solver.opts.live_plotting ? display(plot(to_array(results.U)',labels="",ylabel="control",xlabel="iteration")) : nothing
+            if solver.opts.live_plotting
+                # display(plot(to_array(results.U)'))
+                p = plot()
+                plot_trajectory!(results)
+                display(p)
+            end
 
             ### UPDATE RESULTS ###
             copyto!(X,X_)
@@ -222,6 +229,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             if solver.state.constrained
                 c_max = max_violation(results)
                 c_ℓ2_norm = constraint_ℓ2_norm(results)
+                iter > 1 ? Δc_max = c_max_hist[end] - c_max : nothing
                 push!(c_max_hist, c_max)
                 push!(c_l2_norm_hist, c_ℓ2_norm)
 
@@ -240,12 +248,22 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 end
             end
 
+            if solver.opts.use_nesterov && Δc_max < 0
+                c_max_increase += 1
+                if c_max_increase > 1000
+                    results.nesterov .= [0.,1.]
+                    @logmsg InnerLoop "Reset Nesterov"
+                    c_max_increase = 0
+                end
+            end
+
             @logmsg InnerLoop :iter value=iter
             @logmsg InnerLoop :cost value=J
             @logmsg InnerLoop :dJ value=dJ loc=3
             @logmsg InnerLoop :grad value=gradient
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_count value=dJ_zero_counter
+            @logmsg InnerLoop :Δc value=Δc_max
 
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing

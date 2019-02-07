@@ -212,7 +212,7 @@ function solve_snopt(solver::Solver,X0::Matrix,U0::Matrix;
     options = Dict{String, Any}()
     options["Derivative option"] = 0
     options["Verify level"] = 1
-    options["Minor feasibility tol"] = solver.opts.constraint_tolerance
+    options["Major feasibility tol"] = solver.opts.constraint_tolerance
     # options["Minor optimality  tol"] = solver.opts.eps_intermediate
     options["Major optimality  tol"] = solver.opts.cost_tolerance
     sumfile = "logs/snopt-summary.out"
@@ -321,6 +321,7 @@ function parse_snopt_summary(file="logs/snopt-summary.out")
             stash_prop(ln,"No. of iterations","iterations",Int64)
             stash_prop(ln,"No. of major iterations","major iterations",Int64)
             stash_prop(ln,"No. of calls to funobj","objective calls",Int64)
+            stash_prop(ln,"Nonlinear constraint violn","c_max")
         end
     end
     return props

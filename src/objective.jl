@@ -373,6 +373,9 @@ function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     end
 end
 
+"""$(SIGNATURES) Convert a ConstrainedObjective to an Unconstrained Objective """
+UnconstrainedObjective(obj::ConstrainedObjective) = UnconstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf)
+
 """
 $(SIGNATURES)
 

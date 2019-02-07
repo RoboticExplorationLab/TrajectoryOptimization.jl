@@ -23,6 +23,7 @@ using Logging
 using Formatting
 using Plots
 using BenchmarkTools
+using Pkg
 
 
 export
@@ -73,7 +74,9 @@ export
     plot_obstacles,
     generate_controller,
     lqr,
-    evals
+    evals,
+    reset,
+    reset_evals
 
 include("objective.jl")
 include("model.jl")
@@ -120,10 +123,10 @@ unpackZ
 include("dircol.jl")
 include("dircol_ipopt.jl")
 write_ipopt_options()
-#
-# if check_snopt_installation()
-#     # using Snopt # not safe for precompilation
-#     include("dircol_snopt.jl")
-# end
+
+if "Snopt" in keys(Pkg.installed())
+    using Snopt # not safe for precompilation
+    include("dircol_snopt.jl")
+end
 
 end

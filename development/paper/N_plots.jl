@@ -1,8 +1,9 @@
-using HDF5, Logging, BenchmarkTools
+using HDF5, Logging, BenchmarkTools, LinearAlgebra, Statistics
 import TrajectoryOptimization: get_time
 # High-Accuracy DIRCOL
 
-function run_step_size_comparison(model, obj, U0, group::String, Ns; integrations::Vector{Symbol}=[:midpoint,:rk3, :hermite_simpson],
+function run_step_size_comparison(model, obj, U0, group::String, Ns;
+        integrations::Vector{Symbol}=[:rk3,:snopt,:ipopt],
         dt_truth=1e-3,opts=opts,infeasible=false,X0=Matrix{Float64}(undef,0,1),benchmark=false)
     solver = Solver(model, obj, integration=:rk3, N=size(U0,2))
     if isempty(X0)
@@ -36,6 +37,7 @@ function run_step_size_comparison(model, obj, U0, group::String, Ns; integration
         println("Starting Integration :$integration")
         run_Ns(model, obj, X0, U0, Ns, integration, interp, group, opts=opts, infeasible=infeasible, benchmark=benchmark)
     end
+
 end
 
 function get_dircol_truth(solver::Solver,X0,U0,group)#::Tuple{Solver, Matrix{Float64}, Matrix{Float64}}
@@ -92,6 +94,12 @@ function run_dircol_truth(solver::Solver, X0, U0, group::String)
     return solver_truth, res_truth, stat_truth
 end
 
+function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions(), benchmark=false)
+    err, err_final, stats = run_Ns(model, obj, X0, U0, Ns, interp, integration=integration, infeasible=infeasible, opts=opts, benchmark=benchmark)
+    save_Ns(err, err_final, stats, group, String(integration))
+
+    return err, err_final, stats
+end
 
 function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=false, opts=SolverOptions(),benchmark=false)
     num_N = length(Ns)
@@ -103,10 +111,10 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
     for (i,N) in enumerate(Ns)
         println("Solving with $N knot points")
 
-        if integration == :hermite_simpson
+        if integration in [:snopt, :ipopt]
             solver = Solver(model, obj, N=N, opts=opts)
             dircol_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constraint_tolerance)
-            res,stat = solve_dircol(solver, X0, U0, method=integration, options=dircol_options)
+            res,stat = solve_dircol(solver, X0, U0, method=:hermite_simpson, options=dircol_options, nlp=integration)
             if benchmark
                 b = @benchmark solve_dircol($solver, $X0, $U0, method=:hermite_simpson, options=$dircol_options)
                 stat["runtime"] = time(median(b))/1e9
@@ -171,19 +179,14 @@ function save_Ns(err, err_final, stats, group::String, name::String)
     end
 end
 
-function run_Ns(model, obj, X0, U0, Ns, integration, interp::Function, group::String; infeasible=false, opts=SolverOptions(), benchmark=false)
-    err, err_final, stats = run_Ns(model, obj, X0, U0, Ns, interp, integration=integration, infeasible=infeasible, opts=opts, benchmark=benchmark)
-    save_Ns(err, err_final, stats, group, String(integration))
 
-    return err, err_final, stats
-end
 
 function plot_stat(stat::String, group, plot_names::Vector{Symbol}; kwargs...)
     plot_names = [string(name) for name in plot_names]
     plot_stat(stat, group, plot_names; kwargs...)
 end
 
-function plot_stat(stat::String, group, plot_names::Vector{String}=["midpoint", "rk3", "rk3_foh", "rk4", "hermite_simpson"]; kwargs...)
+function plot_stat(stat::String, group, plot_names::Vector{String}=["midpoint", "rk3", "rk3_foh", "rk4", "ipopt", "snopt"]; kwargs...)
     fid = h5open("data.h5","r")
     file_names = names(fid[group * "/N_plots"])
     use_names = intersect(file_names, plot_names)
@@ -259,4 +262,39 @@ function load_data(stat::String, name::String, group)
         data = read(g_parent[name], stat)
         return vec(Ns), data
     end
+end
+
+
+function constraint_plot(solver,U0; kwargs...)
+    solver.opts.verbose = false
+    solver.opts.square_root = false
+    solver.opts.use_nesterov = false
+    res0, stats0 = solve(solver,U0)
+
+    solver.opts.square_root = true
+    res1, stats1 = solve(solver,U0)
+
+    solver.opts.use_nesterov = true
+    res2, stats2 = solve(solver,U0)
+
+    plot(stats0["c_max"],yscale=:log10,label="normal",ylabel="max constraint violation",xlabel="iteration",linewidth=2)
+    plot!(stats1["c_max"],label="square root",linewidth=2)
+    plot!(stats2["c_max"],label="nesterov",linewidth=2; kwargs...)
+end
+
+function constraint_plot(solver,X0,U0; kwargs...)
+    solver.opts.verbose = false
+    solver.opts.square_root = false
+    solver.opts.use_nesterov = false
+    res0, stats0 = solve(solver,X0,U0)
+
+    solver.opts.square_root = true
+    res1, stats1 = solve(solver,X0,U0)
+
+    solver.opts.use_nesterov = true
+    res2, stats2 = solve(solver,X0,U0)
+
+    plot(stats0["c_max"],yscale=:log10,label="normal",ylabel="max constraint violation",xlabel="iteration",linewidth=2)
+    plot!(stats1["c_max"],label="square root",linewidth=2)
+    plot!(stats2["c_max"],label="nesterov",linewidth=2; kwargs...)
 end
