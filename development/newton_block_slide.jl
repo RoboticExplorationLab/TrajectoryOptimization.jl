@@ -10,9 +10,9 @@ opts.square_root = true
 opts.outer_loop_update_type = :default
 opts.live_plotting = false
 model, obj = TrajectoryOptimization.Dynamics.double_integrator
-u_min = -10
-u_max = 10
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj, tf=5.0,use_xf_equality_constraint=true)#, u_min=u_min, u_max=u_max)#, x_min=x_min, x_max=x_max)
+u_min = -0.2
+u_max = 0.2
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj, tf=5.0,use_xf_equality_constraint=true, u_min=u_min, u_max=u_max)#, x_min=x_min, x_max=x_max)
 solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,N=10,opts=opts)
 U = rand(solver.model.m, solver.N)
 
@@ -33,6 +33,7 @@ struct NewtonResults
     c̄::Vector
     D̄::Matrix
     d̄::Vector
+    active_set::Vector
 end
 
 function NewtonResults(Nz::Int,Np::Int,Nx::Int)
@@ -46,12 +47,14 @@ function NewtonResults(Nz::Int,Np::Int,Nx::Int)
     C̄ = zeros(Np,Nz)
     c̄ = zeros(Np)
 
-    D̄ = zeros(N*n,Nz)
-    d̄ = zeros(N*n)
+    D̄ = zeros(Nx,Nz)
+    d̄ = zeros(Nx)
 
     z̄ = zeros(Nz)
 
-    NewtonResults(z̄,λ_,ν_,Q̄,q̄,C̄,c̄,D̄,d̄)
+    active_set = zeros(Bool,Np)
+
+    NewtonResults(z̄,λ_,ν_,Q̄,q̄,C̄,c̄,D̄,d̄,active_set)
 end
 
 function NewtonResults(solver::Solver)
@@ -86,12 +89,9 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
     Nx = N*n
     Nu = mm*(N-1) # number of control decision variables u
 
-    # update results with stack vector
-    update_results_from_newton_results!(results,newton_results,solver)
-
-    # update constraints and Jacobians
-    update_constraints!(results,solver)
-    update_jacobians!(results,solver)
+    newton_results.λ_ .= vcat(results.λ...)
+    newton_results.ν_ .= vcat(results.s...)
+    newton_results.active_set .= vcat(results.active_set...)
 
     # pull out results for convenience
     X = results.X
@@ -169,10 +169,6 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
         end
     end
 
-    newton_results.λ_ .= vcat(results.λ...)
-    newton_results.ν_ .= vcat(results.s...)
-
-
     return nothing
 end
 
@@ -191,6 +187,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
 
     z̄ = newton_results.z̄
     λ_ = newton_results.λ_
+    active_set = newton_results.active_set
 
     # update results with stack vector
     for k = 1:N
@@ -204,6 +201,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
         results.X[k] = z̄[idx3]
         k != N ? results.U[k] = z̄[idx4] : nothing
         results.λ[k] = λ_[idx2]
+        results.active_set[k] = active_set[idx2]
     end
     update_constraints!(results,solver)
     update_jacobians!(results,solver)
@@ -211,7 +209,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
     return nothing
 end
 
-function solve_KKT!(newton_results::NewtonResults)
+function solve_KKT!(newton_results::NewtonResults,alpha::Float64=1.0)
     Q̄ = newton_results.Q̄
     q̄ = newton_results.q̄
 
@@ -230,31 +228,34 @@ function solve_KKT!(newton_results::NewtonResults)
     Np = size(C̄,1)
     Nx = size(D̄,1)
 
+    active_set = newton_results.active_set
+
+    Np_as = sum(active_set)
+
     # initialize KKT matrix/vector
-    A = zeros(Nz+Np+Nx,Nz+Np+Nx)
-    b = zeros(Nz+Np+Nx)
+    A = zeros(Nz+Np_as+Nx,Nz+Np_as+Nx)
+    b = zeros(Nz+Np_as+Nx)
 
     # assemble KKT matrix/vector
     A[1:Nz,1:Nz] = Q̄
-    A[1:Nz,Nz+1:Nz+Np] = C̄'
-    A[1:Nz,Nz+Np+1:Nz+Np+Nx] = D̄'
-    A[Nz+1:Nz+Np,1:Nz] = C̄
-    A[Nz+Np+1:Nz+Np+Nx,1:Nz] = D̄
+    A[1:Nz,Nz+1:Nz+Np_as] = C̄[active_set,:]'
+    A[1:Nz,Nz+Np_as+1:Nz+Np_as+Nx] = D̄'
+    A[Nz+1:Nz+Np_as,1:Nz] = C̄[active_set,:]
+    A[Nz+Np_as+1:Nz+Np_as+Nx,1:Nz] = D̄
 
     b[1:Nz] = -q̄
-    b[Nz+1:Nz+Np] = -c̄
-    b[Nz+Np+1:Nz+Np+Nx] = -d̄
+    b[Nz+1:Nz+Np_as] = -c̄[active_set]
+    b[Nz+Np_as+1:Nz+Np_as+Nx] = -d̄
 
     δ = A\b
 
-    tmp = [z̄;λ_;ν_]
+    tmp = [z̄;λ_[active_set];ν_]
 
-    α = 1.0
-    tmp_new = tmp + α*δ
+    tmp_new = tmp + alpha*δ
 
     z̄ .= tmp_new[1:Nz]
-    λ_ .= tmp_new[Nz+1:Nz+Np]
-    ν_ .= tmp_new[Nz+Np+1:Nz+Np+Nx]
+    λ_[active_set] = tmp_new[Nz+1:Nz+Np_as]
+    ν_ .= tmp_new[Nz+Np_as+1:Nz+Np_as+Nx]
 
     return nothing
 end
@@ -269,68 +270,35 @@ function cost_newton(results::SolverIterResults,newton_results::NewtonResults,so
 
     # add dynamics constraint costs
     tmp = zeros(n)
+    X = results.X
+    U = results.U
     ν_ = newton_results.ν_
     for k = 1:N
         if k == 1
             J += ν_[1:n]'*(X[1] - solver.obj.x0)
         else
             idx = ((k-1)*n+1):k*n
-            solver.fd(tmp,results.X[k-1][1:n],results.U[k-1][1:m])
+            solver.fd(tmp,X[k-1][1:n],U[k-1][1:m])
             J += ν_[idx]'*(X[k] - tmp)
         end
     end
     return J
 end
 
-function newton_solve(results::SolverIterResults,solver::Solver)
-    results = copy(results)
+function newton_solve(results::SolverIterResults,solver::Solver,alpha::Float64=1.0)
+    results_new = copy(results)
     newton_results = NewtonResults(solver)
     update_newton_results!(newton_results,results,solver)
-    solve_KKT!(newton_results)
-    update_results_from_newton_results!(results,newton_results,solver)
+    newton_results
+    solve_KKT!(newton_results,alpha)
+    update_results_from_newton_results!(results_new,newton_results,solver)
 
-    J = cost_newton(results,newton_results,solver)
-    c_max = max_violation(results)
+    J = cost_newton(results_new,newton_results,solver)
+    c_max = max_violation(results_new)
     return results, J, c_max
 end
 
-results_newton, J_newton, c_max_newton = newton_solve(results,solver)
+results_newton, J_newton, c_max_newton = newton_solve(results,solver,1.0)
 
-a = 1
-
-
-
-
-# results_newton = copy(results)
-# norm(vcat(results.X...)-vcat(results_newton.X...))
-#
-# z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄ = update_batch_problem(results_newton,solver)
-# cost_newton(results_newton,solver,ν_)
-#
-# z̄a,λ_a,ν_a = solve_KKT(z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄)
-# norm(z̄-z̄a)
-# norm(λ_-λ_a)
-# norm(ν_ -ν_a)
-# results_newton_update = copy(results_newton)
-# update_results_from_batch!(results_newton_update,solver,z̄a,λ_a,ν_a)
-# norm(vcat(results_newton_update.C...)-vcat(results_newton.C...))
-# cost_newton(results_newton_update,solver,ν_a) - cost_newton(results_newton,solver,ν_)
-# max_violation(results_newton_update)
-# max_violation(results_newton)
-#
-# results_newton_update.C
-# plot(results_newton_update.U)
-# plot!(results_newton.U)
-# results_newton_update.X[1]
-#
-# z̄, λ_, ν_, Q̄, q̄, C̄, c̄, D̄, d̄ = update_batch_problem(results_newton,solver)
-#
-#
-# J = cost_newton(z̄,λ_,ν_,results_newton,solver)
-# max_violation(results_newton)
-#
-#
-# norm(vcat(results.X...) - vcat(results_newton.X...))
-#
-# vcat(results.C...)
-# vcat(results_newton)
+plot(results_newton.U)
+plot!(results.U)
