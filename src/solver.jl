@@ -17,7 +17,7 @@ mutable struct SolverState
     penalty_only::Bool  # initial phase where only penalty term is updated each outer loop
 
     function SolverState()
-        new(false,false,false,false,false,false,false,true)
+        new(false,false,false,false,false,false,false,false)
     end
 end
 
@@ -29,7 +29,7 @@ function reset(state::SolverState)
     state.second_order_dual_update = false
     state.fixed_constraint_jacobians = false
     state.fixed_terminal_constraint_jacobian = false
-    state.penalty_only = true
+    state.penalty_only = false
     return nothing
 end
 

@@ -76,10 +76,10 @@ X0 = TrajectoryOptimization.interp_rows(solver_escape.N,solver_escape.obj.tf,Arr
 U0 = ones(solver_escape.model.m,solver_escape.N-1)
 
 solver_escape.opts.R_infeasible = 1e-1
-solver_escape.opts.resolve_feasible = true
+solver_escape.opts.resolve_feasible = false
 solver_escape.opts.cost_tolerance = 1e-6
 solver_escape.opts.cost_tolerance_intermediate = 1e-3
-solver_escape.opts.constraint_tolerance = 1e-5
+solver_escape.opts.constraint_tolerance = 1e-2#1e-5
 solver_escape.opts.constraint_tolerance_intermediate = 0.01
 solver_escape.opts.penalty_scaling = 100.0
 solver_escape.opts.penalty_initial = 100.0
