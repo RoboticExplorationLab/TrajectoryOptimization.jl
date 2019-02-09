@@ -23,8 +23,6 @@ using Logging
 using Formatting
 using Plots
 using BenchmarkTools
-using Pkg
-
 
 export
     Dynamics
@@ -124,9 +122,9 @@ include("dircol.jl")
 include("dircol_ipopt.jl")
 write_ipopt_options()
 
-if "Snopt" in keys(Pkg.installed())
-    using Snopt # not safe for precompilation
-    include("dircol_snopt.jl")
-end
+# if "Snopt" in keys(Pkg.installed())
+#     using Snopt # not safe for precompilation
+#     include("dircol_snopt.jl")
+# end
 
 end
