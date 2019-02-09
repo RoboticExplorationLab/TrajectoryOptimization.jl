@@ -74,7 +74,7 @@ opts.constraint_decrease_ratio = 0.75
 
 # iLQR
 solver = Solver(model,obj,N=N,opts=opts,integration=:rk3)
-solver.opts.verbose = true
+solver.opts.verbose = false
 res_i, stat_i = solve(solver,U0)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
@@ -107,21 +107,26 @@ time_per_iter = stat_d["runtime"]/stat_d["iterations"]
 
 # Solver Options
 opts = SolverOptions()
-opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-1
-opts.constraint_tolerance = 1e-3
-opts.outer_loop_update_type = :individual
-opts.constraint_decrease_ratio = .85
+opts.cost_tolerance = 1e-8
+opts.cost_tolerance_intermediate = 1e-2
+opts.constraint_tolerance = 1e-8
+opts.outer_loop_update_type = :feedback
+opts.constraint_decrease_ratio = .25
+opts.square_root = true
+opts.penalty_initial = 1
+opts.penalty_scaling = 50
 
 # iLQR
-obj_c2 = update_objective(obj_c,tf=1.45)
+obj_c2 = update_objective(obj_c,tf=2)
 solver = Solver(model,obj_c2,N=N,opts=opts,integration=:rk3)
 res_i, stat_i = solve(solver,U0)
+stat_i["iterations"]
+comparison_plot(res_i,res_d)
 plot(to_array(res_i.X)')
 plot(to_array(res_i.U)')
 stat_i["c_max"][end]
 stat_i["runtime"]
-stat_i["iterations"]
+constraint_plot(solver,U0)
 
 # DIRCOL
 res_d, stat_d = solve_dircol(solver, X0_rollout, U0; method=:hermite_simpson)
@@ -132,7 +137,6 @@ stat_d["cost"][end]
 stat_d["runtime"]
 stat_d["iterations"]
 
-comparison_plot(res_i,res_d)
 convergence_plot(stat_i,stat_d)
 
 cost(solver,res_i)

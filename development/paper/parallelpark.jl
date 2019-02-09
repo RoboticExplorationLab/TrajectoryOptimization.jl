@@ -1,4 +1,5 @@
 using Plots
+pyplot()
 include("N_plots.jl")
 
 # Model and Objective
@@ -47,7 +48,7 @@ opts = SolverOptions()
 opts.verbose = false
 opts.cost_tolerance = 1e-6
 opts.cost_tolerance_intermediate = 1e-2
-opts.constraint_tolerance = 1e-5
+opts.constraint_tolerance = 1e-6
 opts.outer_loop_update_type = :default
 opts.use_nesterov = true
 opts.penalty_scaling = 100
@@ -55,27 +56,27 @@ opts.penalty_initial = .01
 opts.square_root = true
 opts.iterations_outerloop = 50
 
-solver = Solver(model, obj, N=101, opts=opts)
+solver = Solver(model, obj, N=151, opts=opts)
 n,m,N = get_sizes(solver)
 U0 = ones(m,N)
 X0 = line_trajectory(solver)
 X0_rollout = rollout(solver,U0)
 
+constraint_plot(solver,U0,false)
 
 @time res_i, stats_i = solve(solver,U0)
 @time res_p, stats_p = solve_dircol(solver,X0_rollout,U0)
 res_s, stats_s = solve_dircol(solver,X0_rollout,U0,nlp=:snopt,grads=:none)
 
-constraint_plot(solver,U0,title=)
-
 Ns = [51,101,201,301]
 group = "parallelpark/constrained"
 run_step_size_comparison(model, obj, U0, group, Ns, opts=opts, integrations=[:rk3,:ipopt,:snopt],benchmark=false)
 plot_stat("runtime",group,legend=:bottomright,["rk3","ipopt",""],title="Constrained Parallel Park")
-plot_stat("iterations",group,legend=:bottom,["rk3","ipopt","snopt"],title="Constrained Parallel Park")
-plot_stat("error",group,yscale=:log10,legend=:right,["rk3","ipopt","snopt"],title="Constrained Parallel Park")
-
-
+savefig(joinpath(IMAGE_DIR,"ppark_runtime.eps"))
+plot_stat("iterations",group,legend=:bottom,["rk3","ipopt"],title="Constrained Parallel Park")
+savefig(joinpath(IMAGE_DIR,"ppark_iterations.eps"))
+plot_stat("error",group,yscale=:log10,legend=:right,["rk3","ipopt"],title="Constrained Parallel Park")
+Plots.eps(joinpath(IMAGE_DIR,"ppark_runtime"))
 
 #### INFEASIBLE ####
 opts = SolverOptions()
