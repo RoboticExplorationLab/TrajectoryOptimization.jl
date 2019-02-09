@@ -12,6 +12,7 @@ struct NewtonResults
     b::Vector
     active_set::Vector
     x_eval::Vector
+    δ::Vector
 end
 
 function NewtonResults(Nz::Int,Np::Int,Nx::Int)
@@ -34,7 +35,9 @@ function NewtonResults(Nz::Int,Np::Int,Nx::Int)
     active_set = zeros(Bool,Np)
     x_eval = zeros(Nx)
 
-    NewtonResults(z,λ,ν,W,w,G,g,D,d,A,b,active_set,x_eval)
+    δ = zeros(Nz+Np+Nx)
+
+    NewtonResults(z,λ,ν,W,w,G,g,D,d,A,b,active_set,x_eval,δ)
 end
 
 function NewtonResults(solver::Solver)
@@ -178,7 +181,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
         # assemble λ, ν, active_set
         λ[idx2] = results.λ[k]
-        ν[idx7] = results.s[k]
+        # ν[idx7] = results.s[k]
         active_set[idx2] = results.active_set[k]
 
     end
@@ -224,7 +227,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
     return nothing
 end
 
-function solve_KKT!(newton_results::NewtonResults,alpha::Float64=1.0)
+function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     W = newton_results.W
     w = newton_results.w
 
@@ -241,6 +244,8 @@ function solve_KKT!(newton_results::NewtonResults,alpha::Float64=1.0)
     λ = newton_results.λ
     ν = newton_results.ν
 
+    δ = newton_results.δ
+
     # get batch problem sizes
     Nz = size(W,1)
     Np = size(G,1)
@@ -251,33 +256,39 @@ function solve_KKT!(newton_results::NewtonResults,alpha::Float64=1.0)
     Np_as = sum(active_set)
 
     # assemble KKT matrix/vector
-    idx1 = 1:Nz
-    idx2 = Nz+1:Nz+Np_as
-    idx3 = Nz+Np_as+1:Nz+Np_as+Nx
-    idx4 = 1:Nz+Np_as+Nx
+    # _idx1 = 1:Nz
+    # _idx2 = Nz+1:Nz+Np_as
+    # _idx3 = Nz+Np_as+1:Nz+Np_as+Nx
+    # _idx4 = 1:Nz+Np_as+Nx
 
-    A[idx1,idx1] = W
-    A[idx1,idx2] = G[active_set,:]'
-    A[idx1,idx3] = D'
-    A[idx2,idx1] = G[active_set,:]
-    A[idx3,idx1] = D
+    _idx1 = Array(1:Nz)
+    _idx2 = Array((1:Np) .+ Nz)[active_set]
+    _idx3 = Array((1:Nx) .+ (Nz + Np))
+    _idx4 = [_idx1;_idx2;_idx3]
 
-    b[idx1] = -w
-    b[idx2] = -g[active_set]
-    b[idx3] = -d
+    A[_idx1,_idx1] = W
+    A[_idx1,_idx2] = G[active_set,:]'
+    A[_idx1,_idx3] = D'
+    A[_idx2,_idx1] = G[active_set,:]
+    A[_idx3,_idx1] = D
 
-    δ = A[idx4,idx4]\b[idx4]
+    b[_idx1] = -w
+    b[_idx2] = -g[active_set]
+    b[_idx3] = -d
 
-    z .+= alpha*δ[idx1]
-    λ[active_set] += δ[idx2]
-    ν .+= δ[idx3]
+    ## indexing
+
+    δ[_idx4] = A[_idx4,_idx4]\b[_idx4]
+    # δ = A[_idx4,_idx4]\b[_idx4]
+
+    z .+= alpha*δ[_idx1]
+    λ[active_set] += δ[_idx2]
+    ν .+= δ[_idx3]
 
     return nothing
 end
 
 function cost_newton(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
-    results = copy(results)
-
     # get problem dimensions
     n,m,N = get_sizes(solver)
 
@@ -301,14 +312,76 @@ function cost_newton(results::SolverIterResults,newton_results::NewtonResults,so
     return J
 end
 
-function newton_solve(results::SolverIterResults,newton_results::NewtonResults,solver::Solver,alpha::Float64=1.0)
-    results_new = copy(results)
-    update_newton_results!(newton_results,results_new,solver)
-    solve_KKT!(newton_results,alpha)
-    update_results_from_newton_results!(results_new,newton_results,solver)
+function newton_step!(results::SolverIterResults,newton_results::NewtonResults,solver::Solver,alpha::Float64=1.0)
+    update_newton_results!(newton_results,results,solver)
+    solve_kkt!(newton_results,alpha)
+    update_results_from_newton_results!(results,newton_results,solver)
+    return nothing
+end
 
-    J = cost_newton(results_new,newton_results,solver)
+function newton_solve!(results::SolverIterResults,solver::Solver)
+    # instantiate Newton Results
+    newton_results = NewtonResults(solver)
+
+    # copy current results
+    results_new = copy(results)
+
+    # get initial cost and max constraint violation
+    update_newton_results!(newton_results,results_new,solver)
+    J_prev = cost_newton(results_new,newton_results,solver)
     c_max = max_violation(results_new)
-    
-    return results_new, J, c_max
+
+    println("Newton initialization")
+    println("Cost: $J_prev")
+    println("c_max: $c_max")
+
+    α = 1.0
+    max_iter = 10
+    max_c = 1e-8
+    iter = 1
+    ls_param = 0.01
+
+    while c_max > max_c && iter <= max_iter
+        println("$α")
+        newton_step!(results_new,newton_results,solver,α)
+        J = cost_newton(results_new,newton_results,solver)
+        c_max = max_violation(results_new)
+        println("Newton step: $iter")
+        println("Cost: $J \n    prev. Cost: $J_prev")
+        println("c_max: $c_max")
+
+        if J <= J_prev + ls_param*newton_results.b'*α*newton_results.δ
+            results = copy(results_new)
+            J_prev = copy(J)
+            println("improved")
+            α = 1.0
+        else
+            println("what??")
+            results_new = copy(results)
+            α = 0.5*α
+        # else
+        #     results_new = copy(results)
+        #     update_newton_results!(newton_results,results_new,solver)
+        #
+        #     α = 0.5*α
+        #     if iter == max_iter
+        #         error("Newton Solve Failed")
+        #     end
+        end
+        # if J > J_prev
+        #     results_new = copy(results)
+        #     update_newton_results!(newton_results,results_new,solver)
+        #
+        #     α = 0.5*α
+        #     if iter == max_iter
+        #         error("Newton Solve Failed")
+        #     end
+        # else
+        #     J_prev = copy(J)
+        #     results = copy(results_new)
+        # end
+        iter += 1
+    end
+    println("Newton solver end")
+    println("c_max: $c_max")
 end

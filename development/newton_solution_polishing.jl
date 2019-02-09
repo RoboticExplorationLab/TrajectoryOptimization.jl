@@ -38,10 +38,32 @@ results, stats = TrajectoryOptimization.solve(solver,U)
 stats["cost"][end]
 stats["c_max"][end]
 
+_alpha = 1.0
+results_new = copy(results)
 newton_results = NewtonResults(solver)
-results_newton, J_newton, c_max_newton = newton_solve(results,newton_results,solver,1.0)
+update_newton_results!(newton_results,results_new,solver)
+J_prev = cost_newton(results_new,newton_results,solver)
+max_violation(results_new)
 
-@benchmark newton_solve($results,$newton_results,$solver,$1.0)
+newton_step!(results_new,newton_results,solver,1.0)
+J = cost_newton(results_new,newton_results,solver)
+max_violation(results_new)
+sum(vcat(results.active_set...) - vcat(results_new.active_set...))
+
+results = copy(results_new)
+
+if J <= J_prev + 0.01*newton_results.b'*_alpha*newton_results.δ
+    results = copy(results_new)
+    J_prev = copy(J)
+    _alpha = 1.0;
+else
+    results_new = copy(results)
+    _alpha /= 2.0;
+end
+
+newton_solve!(results,solver)
+
+# @benchmark newton_solve($results,$newton_results,$solver,$1.0)
 
 # plot(results_newton.U,title="Pendulum",xlabel="time step",ylabel="control",label="Newton",legend=:bottomright)
 # plot!(results.U,label="AuLa")

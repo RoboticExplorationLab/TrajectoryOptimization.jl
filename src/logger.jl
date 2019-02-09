@@ -265,10 +265,8 @@ function Logging.handle_message(logger::SolverLogger, level, message::String, _m
         push!(ldata.data[:info], message)
     else
         # Pass off to global logger
-        println("passing to default")
         Logging.handle_message(logger.default_logger, level, message, _module, group, id, file, line)
     end
-    println("received")
 end
 
 function Logging.shouldlog(logger::SolverLogger, level, _module, group, id)
