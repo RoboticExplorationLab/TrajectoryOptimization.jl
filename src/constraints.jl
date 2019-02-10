@@ -99,14 +99,14 @@ function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,p
     # Inequality constraints
     for j = 1:pI
         if active_set_criteria(solver,results.C[k][j], results.λ[k][j], results.μ[k][j])
-            results.active_set[k][j] = 1
+            results.active_set[k][j] = true
         else
-            results.active_set[k][j] = 0
+            results.active_set[k][j] = false
         end
     end
     # Equality constraints
     for j = pI+1:p
-        results.active_set[k][j] = 1
+        results.active_set[k][j] = true
     end
     return nothing
 end

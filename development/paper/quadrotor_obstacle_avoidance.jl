@@ -12,11 +12,11 @@ Random.seed!(123)
 N = 201
 integration = :rk4
 opts = SolverOptions()
-opts.verbose = true
+opts.verbose = false
 opts.square_root = true
 opts.cost_tolerance = 1e-5
 opts.cost_tolerance_intermediate = 1e-5
-opts.constraint_tolerance = 1e-4
+opts.constraint_tolerance = 1e-2
 opts.outer_loop_update_type = :feedback
 
 # Obstacle Avoidance
