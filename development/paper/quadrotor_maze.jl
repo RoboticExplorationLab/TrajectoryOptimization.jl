@@ -6,38 +6,20 @@ using FileIO
 using MeshIO
 using Random
 
-Random.seed!(123)
-
-# Solver options
-N = 201
-integration = :rk4
-opts = SolverOptions()
-opts.verbose = false
-opts.square_root = true
-opts.cost_tolerance = 1e-6
-opts.cost_tolerance_intermediate = 1e-5
-opts.constraint_tolerance = 1e-5
-opts.constraint_tolerance_intermediate = 1e-3
-opts.outer_loop_update_type = :feedback
-
-# Obstacle Avoidance
-model, = TrajectoryOptimization.Dynamics.quadrotor
-r_quad = 3.0
-n = model.n
-m = model.m
-
 ##########
 ## Maze ##
 ##########
+model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+
 N = 201
 tf = 5.0
 q0 = [1.;0.;0.;0.]
-
 # -initial state
 x0 = zeros(model.n)
 x0[1:3] = [0.; 0.; 3.]
 q0 = [1.;0.;0.;0.]
 x0[4:7] = q0
+
 
 # -final state
 xf = copy(x0)
@@ -57,6 +39,7 @@ R = (1e-2)*Matrix(I,model.m,model.m)
 Qf = (1000.0)*Matrix(I,model.n,model.n)
 
 # obstacles constraint
+# -obstacles
 r_sphere = 2.
 spheres = []
 zh = 2
@@ -139,10 +122,9 @@ X0 = TrajectoryOptimization.interp_rows(N,solver_uncon.obj.tf,X_guess)
 
 plot(X0[1:3,:]')
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
+plot(to_array(results_uncon.U)')
 
-t_array = range(0,stop=solver_uncon.obj.tf,length=solver_uncon.N)
-plot(t_array[1:N-1],to_array(results_uncon.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="")
-plot(t_array,to_array(results_uncon.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
+U_line = to_array(results_uncon.U)
 
 solver_con.opts.square_root = true
 solver_con.opts.R_infeasible = 1.0
@@ -155,12 +137,16 @@ solver_con.opts.penalty_scaling = 10.0
 solver_con.opts.penalty_initial = 1.0
 solver_con.opts.outer_loop_update_type = :feedback
 solver_con.opts.iterations_outerloop = 50
-solver_con.opts.iterations = 500
-solver_con.opts.iterations_innerloop = 250
+solver_con.opts.iterations = 750
+solver_con.opts.iterations_innerloop = 300
 solver_con.opts.use_penalty_burnin = false
 solver_con.opts.verbose = false
 solver_con.opts.live_plotting = false
-results_con, stats_con = solve(solver_con,X0,U_hover)
+@time results_con, stats_con = solve(solver_con,X0,U_hover)
+
+t_array = range(0,stop=solver_uncon.obj.tf,length=solver_uncon.N)
+plot(t_array[1:N-1],to_array(results_uncon.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="")
+plot(t_array,to_array(results_uncon.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
 
 t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
 plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="")
@@ -177,6 +163,7 @@ end
 @show stats_con["iterations"]
 @show stats_con["outer loop iterations"]
 @show stats_con["c_max"][end]
+@show stats_con["cost"][end]
 
 #################
 # Visualization #
@@ -194,21 +181,25 @@ obj = joinpath(urdf_folder, "quadrotor_base.obj")
 green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
 green_transparent = MeshPhongMaterial(color=RGBA(0, 1, 0, 0.1))
 red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
+red_transparent = MeshPhongMaterial(color=RGBA(1, 0, 0, 0.1))
 blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
 blue_transparent = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.1))
+blue_semi = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.5))
 
 orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
 orange_transparent = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 0.1))
 black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
 black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
+black_semi = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.5))
 
 # geometries
 robot_obj = FileIO.load(obj)
 sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.1*r_quad)) # trajectory points
-sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
+sphere_medium = HyperSphere(Point3f0(0), convert(Float32,0.25*r_quad))
 
 obstacles = vis["obs"]
 traj = vis["traj"]
+traj_x0 = vis["traj_x0"]
 traj_uncon = vis["traj_uncon"]
 target = vis["target"]
 robot = vis["robot"]
@@ -224,28 +215,50 @@ for i = 1:n_spheres
 end
 
 # Create and place trajectory
-for i = 1:N
-    setobject!(vis["traj_uncon"]["t$i"],sphere_small,orange_)
-    settransform!(vis["traj_uncon"]["t$i"], Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]))
+# for i = 1:N
+#     setobject!(vis["traj_uncon"]["t$i"],sphere_small,blue_)
+#     settransform!(vis["traj_uncon"]["t$i"], Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]))
+# end
+
+# for i = 1:N
+#     setobject!(vis["traj_x0"]["t$i"],sphere_small,blue_)
+#     settransform!(vis["traj_x0"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
+# end
+for i = 1:size(X_guess,2)
+    setobject!(vis["traj_x0"]["t$i"],sphere_medium,blue_semi)
+        settransform!(vis["traj_x0"]["t$i"], Translation(X_guess[1,i], X_guess[2,i], X_guess[3,i]))
 end
 for i = 1:N
-    setobject!(vis["traj"]["t$i"],sphere_small,blue_)
+    setobject!(vis["traj"]["t$i"],sphere_small,green_)
     settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
 end
 
-setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
-setobject!(vis["robot_uncon"]["quad"],robot_obj,orange_)
+# setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
+# setobject!(vis["robot_uncon"]["quad"],robot_obj,black_)
 
-setobject!(vis["robot"]["ball"],sphere_medium,blue_transparent)
-setobject!(vis["robot"]["quad"],robot_obj,blue_)
+# setobject!(vis["robot"]["ball"],sphere_medium,green_transparent)
+setobject!(vis["robot"]["quad"],robot_obj,black_)
 
 # Animate quadrotor
+# for i = 1:N
+#     settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
+#     sleep(solver_uncon.dt)
+# end
+
+# anim = Animation()
 for i = 1:N
-    settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
-    sleep(solver_uncon.dt)
+    # atframe(anim,vis,i) do frame
+    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
+        # sleep(solver_con.dt*2)
+    # end
 end
 
-for i = 1:N
-    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
-    sleep(solver_con.dt)
+
+# Ghose quadrotor
+traj_idx = [1;20;40;60;85;N]
+n_robots = length(traj_idx)
+for i = 1:n_robots
+    robot = vis["robot_$i"]
+    setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
+    settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
 end

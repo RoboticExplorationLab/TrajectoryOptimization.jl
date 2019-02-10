@@ -9,14 +9,14 @@ using Random
 Random.seed!(123)
 
 # Solver options
-N = 201
+N = 201 # 201
 integration = :rk4
 opts = SolverOptions()
 opts.verbose = false
 opts.square_root = true
 opts.cost_tolerance = 1e-5
 opts.cost_tolerance_intermediate = 1e-5
-opts.constraint_tolerance = 1e-2
+opts.constraint_tolerance = 1e-5
 opts.outer_loop_update_type = :feedback
 
 # Obstacle Avoidance
@@ -33,7 +33,6 @@ solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 
 U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
 X_hover = rollout(solver_uncon,U_hover)
-solver_con.state
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
 @time results_con, stats_con = solve(solver_con,U_hover)
 
@@ -54,22 +53,6 @@ end
 @show stats_con["c_max"][end]
 @show stats_con["cost"][end]
 
-
-results_new = copy(results_con)
-newton_results = NewtonResults(solver_con)
-update_newton_results!(newton_results,results_new,solver_con)
-J_prev = cost_newton(results_new,newton_results,solver_con)
-max_violation(results_new)
-
-newton_step!(results_new,newton_results,solver_con,1.0)
-J = cost_newton(results_new,newton_results,solver_con)
-max_violation(results_new)
-
-newton_solve!(results_new,solver_con)
-
-plot(vcat(results_con.active_set...))
-plot!(vcat(results_new.active_set...))
-a = (vcat(results_con.active_set...) - vcat(results_new.active_set...))
 #################
 # Visualization #
 #################
@@ -106,7 +89,6 @@ traj_mintime = vis["traj_mintime"]
 target = vis["target"]
 robot = vis["robot"]
 robot_uncon = vis["robot_uncon"]
-robot_mintime = vis["robot_mintime"]
 
 # Set camera location
 settransform!(vis["/Cameras/default"], compose(Translation(25., 15., 20.),LinearMap(RotY(-pi/12))))
@@ -128,11 +110,11 @@ for i = 1:N
 end
 
 # Create and place initial position
-setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
-setobject!(vis["robot_uncon"]["quad"],robot_obj,orange_)
+# setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
+setobject!(vis["robot_uncon"]["quad"],robot_obj,black_)
 
-setobject!(vis["robot"]["ball"],sphere_medium,blue_transparent)
-setobject!(vis["robot"]["quad"],robot_obj,blue_)
+# setobject!(vis["robot"]["ball"],sphere_medium,blue_transparent)
+setobject!(vis["robot"]["quad"],robot_obj,black_)
 
 # Animate quadrotor
 for i = 1:N

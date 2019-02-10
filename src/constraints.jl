@@ -56,7 +56,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
 
-
     # c_fun = solver.c_fun
     c_fun = constraint_function(solver)
 
