@@ -113,6 +113,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     if isempty(prevResults)
         results = init_results(solver, X0, U0, λ=λ, μ=μ)
     else
+        println("using previous results as warm start")
         results = prevResults
     end
 
@@ -271,7 +272,21 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
 
             evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
             if J > solver.opts.max_cost_value
-                error("Cost exceded maximum allowable cost")
+                @warn "Cost exceded maximum allowable cost - solve terminated"
+
+                stats = Dict("iterations"=>iter,
+                    "outer loop iterations"=>iter_outer,
+                    "runtime"=>float(time_ns() - t_solve_start)/1e9,
+                    "setup_time"=>float(time_setup)/1e9,
+                    "cost"=>J_hist,
+                    "c_max"=>c_max_hist,
+                    "c_l2_norm"=>c_l2_norm_hist,
+                    "gradient norm"=>grad_norm_hist,
+                    "outer loop iteration index"=>outer_updates,
+                    "S condition number"=>cn_S_hist,
+                    "Quu condition number"=>cn_Quu_hist,)
+
+                return results, stats
             end
         end
         ### END INNER LOOP ###
@@ -360,7 +375,9 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             solver_feasible.state.second_order_dual_update = false
 
             # Resolve feasible problem with warm start
-            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))
+            # results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))
+            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
+
 
             # Merge stats
             for key in keys(stats_feasible)
@@ -423,7 +440,7 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
 
     if loop == :outer
         if solver.state.constrained
-            if c_max < solver.opts.constraint_tolerance && ((0.0 < dJ < solver.opts.cost_tolerance) || gradient < solver.opts.gradient_norm_tolerance)
+            if c_max < solver.opts.constraint_tolerance && ((0.0 <= dJ < solver.opts.cost_tolerance) || gradient <= solver.opts.gradient_norm_tolerance)
                 return true
             end
         end
