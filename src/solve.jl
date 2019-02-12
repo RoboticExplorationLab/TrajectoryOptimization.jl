@@ -12,7 +12,6 @@ import Base.println
 #         _solve: lower-level method for setting and solving iLQR problem
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
 """
 $(SIGNATURES)
 Solve the trajectory optimization problem defined by `solver`, with `U0` as the
@@ -213,10 +212,10 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             iter += 1
 
             if solver.opts.live_plotting
-                # display(plot(to_array(results.U)'))
-                p = plot()
-                plot_trajectory!(results)
-                display(p)
+                display(plot(to_array(results.U)'))
+                # p = plot()
+                # plot_trajectory!(results.U)
+                # display(p)
             end
 
             ### UPDATE RESULTS ###
@@ -292,6 +291,12 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         ### END INNER LOOP ###
 
         #****************************#
+        #    TERMINATION CRITERIA    #
+        #****************************#
+        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
+        evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter) ? break : nothing
+
+        #****************************#
         #      OUTER LOOP UPDATE     #
         #****************************#
 
@@ -308,12 +313,6 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         print_row(logger,OuterLoop)
 
         push!(outer_updates,iter)
-
-        #****************************#
-        #    TERMINATION CRITERIA    #
-        #****************************#
-        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter) ? break : nothing
     end
     end
     ### END OUTER LOOP ###
@@ -375,8 +374,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             solver_feasible.state.second_order_dual_update = false
 
             # Resolve feasible problem with warm start
-            # results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))
-            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
+            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))#,λ=results_feasible.λ)
+            # results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
 
 
             # Merge stats
