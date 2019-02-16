@@ -126,23 +126,20 @@ setobject!(vis["robot"]["quad"],robot_obj,black_)
 
 # Animate quadrotor
 for i = 1:N
-    settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
+    settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1:3]...),LinearMap(Quat(results_uncon.X[i][4:7]...))))
     sleep(solver_uncon.dt)
 end
 
 for i = 1:N
-    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
+    settransform!(vis["robot"], compose(Translation(results_con.X[i][1:3]...),LinearMap(Quat(results_con.X[i][4:7]...))))
     sleep(solver_con.dt)
 end
 
-i = 50
-settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
-
 # Ghose quadrotor scene
-traj_idx = [1;15;25;35;50;N]
-n_robots = length(traj_idx)
-for i = 1:n_robots
-    robot = vis["robot_$i"]
-    setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
-    settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
-end
+# traj_idx = [1;15;25;35;50;N]
+# n_robots = length(traj_idx)
+# for i = 1:n_robots
+#     robot = vis["robot_$i"]
+#     setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
+#     settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1:3]...),LinearMap(Quat(results_con.X[traj_idx[i]][4:7]...))))
+# end

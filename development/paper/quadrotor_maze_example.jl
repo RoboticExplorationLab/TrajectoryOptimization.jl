@@ -9,7 +9,7 @@ using Random
 ##########
 ## Maze ##
 ##########
-integration = :rk4
+ integration = :rk4
 r_quad = 3.0 # based on size of mesh file
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
 N = 101
@@ -231,12 +231,12 @@ addcylinders!(vis,cylinders,16.0)
 # end
 for i = 1:size(X_guess,2)
     setobject!(vis["traj_x0"]["t$i"],sphere_medium,blue_semi)
-        settransform!(vis["traj_x0"]["t$i"], Translation(X_guess[1,i], X_guess[2,i], X_guess[3,i]))
+        settransform!(vis["traj_x0"]["t$i"], Translation(X_guess[1:3,i]...))
 end
 
 for i = 1:N
     setobject!(vis["traj"]["t$i"],sphere_small,green_)
-    settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]))
+    settransform!(vis["traj"]["t$i"], Translation(results_con.X[i][1:3]...))
 end
 
 # setobject!(vis["robot_uncon"]["ball"],sphere_medium,orange_transparent)
@@ -247,23 +247,30 @@ setobject!(vis["robot"]["quad"],robot_obj,black_)
 
 # Animate quadrotor
 # for i = 1:N
-#     settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(quat2rot(results_uncon.X[i][4:7]))))
+#     settransform!(vis["robot_uncon"], compose(Translation(results_uncon.X[i][1], results_uncon.X[i][2], results_uncon.X[i][3]),LinearMap(Quat(results_uncon.X[i][4:7]...))))
 #     sleep(solver_uncon.dt)
 # end
 
 for i = 1:N
-    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
+    settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(Quat(results_con.X[i][4:7]...))))
     sleep(solver_con.dt)
 end
 
-i = N
-settransform!(vis["robot"], compose(Translation(results_con.X[i][1], results_con.X[i][2], results_con.X[i][3]),LinearMap(quat2rot(results_con.X[i][4:7]))))
-
 # Ghose quadrotor scene
-traj_idx = [1;12;20;30;40;50;N]
-n_robots = length(traj_idx)
-for i = 1:n_robots
-    robot = vis["robot_$i"]
-    setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
-    settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
-end
+# traj_idx = [1;12;20;30;40;50;N]
+# n_robots = length(traj_idx)
+# for i = 1:n_robots
+#     robot = vis["robot_$i"]
+#     setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
+#     settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
+# end
+
+# Animation
+# (N-1)/tf
+# anim = MeshCat.Animation(20)
+# for i = 1:N
+#     MeshCat.atframe(anim,vis,i) do frame
+#         settransform!(frame["robot"], compose(Translation(results_con.X[i][1:3]...),LinearMap(Quat(results_con.X[i][4:7]...))))
+#     end
+# end
+# MeshCat.setanimation!(vis,anim)
