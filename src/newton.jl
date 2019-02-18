@@ -2,6 +2,7 @@ struct NewtonResults
     z::Vector
     λ::Vector
     ν::Vector
+
     W::SparseMatrixCSC
     w::Vector
     G::SparseMatrixCSC
@@ -181,7 +182,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
         # assemble λ, ν, active_set
         λ[idx2] = results.λ[k]
-        # ν[idx7] = results.s[k]
+        ν[idx7] = results.s[k] # TODO is this still ok for penalty method?
         active_set[idx2] = results.active_set[k]
 
     end
@@ -197,16 +198,13 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 
     # batch problem dimensions
-    nm = nn + mm
-    Nz = nn*N + mm*(N-1)
-    Np = p*(N-1) + p_N
-    Nu = mm*(N-1) # number of control decision variables u
+    Nz,Np,Nx,Nu,nm = get_batch_sizes(solver)
 
     z = newton_results.z
     λ = newton_results.λ
     active_set = newton_results.active_set
 
-    # update results with stack vector
+    # update results with stacked vector from NewtonResults
     for k = 1:N
         idx = ((k-1)*nm + 1):k*nm # index over x and u
         k != N ? idx2 = (((k-1)*p + 1):k*p) : idx2 = (((k-1)*p + 1):Np) # index over p
@@ -218,7 +216,6 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
         results.X[k] = z[idx3]
         k != N ? results.U[k] = z[idx4] : nothing
         results.λ[k] = λ[idx2]
-        results.active_set[k] = active_set[idx2]
     end
 
     update_constraints!(results,solver)
@@ -227,7 +224,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
     return nothing
 end
 
-function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
+function newton_step!(newton_results::NewtonResults,alpha::Float64=1.0)
     W = newton_results.W
     w = newton_results.w
 
@@ -256,11 +253,6 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     Np_as = sum(active_set)
 
     # assemble KKT matrix/vector
-    # _idx1 = 1:Nz
-    # _idx2 = Nz+1:Nz+Np_as
-    # _idx3 = Nz+Np_as+1:Nz+Np_as+Nx
-    # _idx4 = 1:Nz+Np_as+Nx
-
     _idx1 = Array(1:Nz)
     _idx2 = Array((1:Np) .+ Nz)[active_set]
     _idx3 = Array((1:Nx) .+ (Nz + Np))
@@ -276,14 +268,13 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     b[_idx2] = -g[active_set]
     b[_idx3] = -d
 
-    ## indexing
-
+    # solve
     δ[_idx4] = A[_idx4,_idx4]\b[_idx4]
-    # δ = A[_idx4,_idx4]\b[_idx4]
 
-    z .+= alpha*δ[_idx1]
-    λ[active_set] += δ[_idx2]
-    ν .+= δ[_idx3]
+    # update
+    z .+= alpha*δ[1:Nz]
+    λ .+= alpha*δ[(1:Np) .+ Nz]
+    ν .+= alpha*δ[(1:Nx) .+ (Nz+Np)]
 
     return nothing
 end
@@ -314,7 +305,7 @@ end
 
 function newton_step!(results::SolverIterResults,newton_results::NewtonResults,solver::Solver,alpha::Float64=1.0)
     update_newton_results!(newton_results,results,solver)
-    solve_kkt!(newton_results,alpha)
+    newton_step!(newton_results,alpha)
     update_results_from_newton_results!(results,newton_results,solver)
     return nothing
 end
@@ -359,27 +350,7 @@ function newton_solve!(results::SolverIterResults,solver::Solver)
             println("what??")
             results_new = copy(results)
             α = 0.5*α
-        # else
-        #     results_new = copy(results)
-        #     update_newton_results!(newton_results,results_new,solver)
-        #
-        #     α = 0.5*α
-        #     if iter == max_iter
-        #         error("Newton Solve Failed")
-        #     end
         end
-        # if J > J_prev
-        #     results_new = copy(results)
-        #     update_newton_results!(newton_results,results_new,solver)
-        #
-        #     α = 0.5*α
-        #     if iter == max_iter
-        #         error("Newton Solve Failed")
-        #     end
-        # else
-        #     J_prev = copy(J)
-        #     results = copy(results_new)
-        # end
         iter += 1
     end
     println("Newton solver end")

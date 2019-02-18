@@ -56,7 +56,6 @@ function update_constraints!(res::ConstrainedIterResults, solver::Solver, X=res.
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
 
-
     # c_fun = solver.c_fun
     c_fun = constraint_function(solver)
 
@@ -99,14 +98,14 @@ function get_active_set!(results::ConstrainedIterResults,solver::Solver,p::Int,p
     # Inequality constraints
     for j = 1:pI
         if active_set_criteria(solver,results.C[k][j], results.λ[k][j], results.μ[k][j])
-            results.active_set[k][j] = 1
+            results.active_set[k][j] = true
         else
-            results.active_set[k][j] = 0
+            results.active_set[k][j] = false
         end
     end
     # Equality constraints
     for j = pI+1:p
-        results.active_set[k][j] = 1
+        results.active_set[k][j] = true
     end
     return nothing
 end

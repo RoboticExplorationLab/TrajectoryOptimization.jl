@@ -133,11 +133,11 @@ end
 
 # unit quaternion constraint
 function unit_quaternion(c,x,u)
-    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
+    c[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
 end
 
 obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cE=unit_quaternion)
-obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad,cE=unit_quaternion)
+obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad)#,cE=unit_quaternion)
 
 quadrotor_unit_quaternion = [model, obj_uq]
 quadrotor_3obs = [model, obj_3obs, spheres]
