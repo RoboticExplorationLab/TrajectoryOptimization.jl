@@ -3,7 +3,7 @@ import LinearAlgebra: norm
 import Plots: plot, plot!
 
 function get_cost_matrices(solver::Solver)
-    solver.obj.Q, solver.obj.R, solver.obj.Qf, solver.obj.xf
+    solver.obj.cost.Q, solver.obj.cost.R, solver.obj.cost.Qf
 end
 
 function get_sizes(solver::Solver)

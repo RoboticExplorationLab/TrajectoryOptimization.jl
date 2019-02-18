@@ -160,6 +160,20 @@ plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Maze",xlabel="iteration",
 @show stats_con["c_max"][end]
 @show stats_con["cost"][end]
 
+# DIRCOL results
+@show stats_dircol["iterations"]
+@show stats_dircol["c_max"][end]
+@show stats_dircol["cost"][end]
+
+# Comparison plots
+t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
+plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="iLQR")
+plot!(t_array[1:end-1],results_dircol.U[:,1:end-1]',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="DIRCOL")
+
+plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
+plot!(t_array,results_con.X[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
+
+
 #################
 # Visualization #
 #################

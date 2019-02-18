@@ -13,8 +13,6 @@ struct NewtonResults
     ∇d::SparseMatrixCSC # Jacobian of dynamics constraints
     d::Vector # dynamics constraints
 
-    r::Vector # λs constraint
-
     A::SparseMatrixCSC # KKT Hessian matrix
     b::Vector # KKT gradient matrix
 
@@ -24,6 +22,10 @@ struct NewtonResults
     x_eval::Vector
 
     δ::Vector
+
+    Nz::Int
+    Np::Int
+    Nx::Int
 end
 
 function NewtonResults(Nz::Int,Np::Int,Nx::Int)
@@ -41,8 +43,6 @@ function NewtonResults(Nz::Int,Np::Int,Nx::Int)
     ∇d = spzeros(Nx,Nz)
     d = zeros(Nx)
 
-    r = zeros(Np)
-
     A = spzeros(Nz+Np+Nx+Np,Nz+Np+Nx+Np)
     b = spzeros(Nz+Np+Nx+Np)
 
@@ -52,7 +52,15 @@ function NewtonResults(Nz::Int,Np::Int,Nx::Int)
 
     δ = zeros(Nz+Np+Nx+Np)
 
-    NewtonResults(z,λ,ν,s,∇²J,∇J,∇c,c,∇d,d,r,A,b,active_set,active_set_ineq,x_eval,δ)
+    Nz = Nz
+    Np = Np
+    Nx = Nx
+
+    NewtonResults(z,λ,ν,s,∇²J,∇J,∇c,c,∇d,d,A,b,active_set,active_set_ineq,x_eval,δ,Nz,Np,Nx)
+end
+
+function copy(r::NewtonResults)
+    NewtonResults(copy(r.z),copy(r.λ),copy(r.ν),copy(r.s),copy(r.∇²J),copy(r.∇J),copy(r.∇c),copy(r.c),copy(r.∇d),copy(r.d),copy(r.A),copy(r.b),copy(r.active_set),copy(r.active_set_ineq),copy(r.x_eval),copy(r.δ),copy(r.Nz),copy(r.Np),copy(r.Nx))
 end
 
 function NewtonResults(solver::Solver)
@@ -88,7 +96,7 @@ function get_batch_sizes(solver::Solver)
     return Nz,Np,Nx,Nu,nm
 end
 
-function newton_active_set!(newton_results::NewtonResults,results::SolverIterResults,solver::Solver,tolerance::Float64=1e-8,slacks::Bool=true)
+function newton_active_set!(newton_results::NewtonResults,results::SolverIterResults,solver::Solver,tolerance::Float64=1.0e3,slacks::Bool=true)
     # get problem dimensions
     n,m,N = get_sizes(solver)
     n̄,nn = get_num_states(solver)
@@ -102,24 +110,24 @@ function newton_active_set!(newton_results::NewtonResults,results::SolverIterRes
 
     s = newton_results.s
 
+    active_set .= copy(vcat(results.active_set...))
+    active_set_ineq .= 0 # reset
+
     for k = 1:N
         k != N ? p_idx = p : p_idx = p_N
         k != N ? pI_idx = pI : pI_idx = pI_N
 
         for i = 1:p_idx
             idx = (k-1)*p + i
-            if i <= pI_idx && results.C[k][i] > -tolerance
-                active_set[idx] = 1
-                active_set_ineq[idx] = 1
 
-                if slacks
-                    s[idx] = sqrt(2.0*max(0.0,-results.C[k][i]))
+            if i <= pI_idx
+                if results.C[k][i] > -tolerance || results.λ[k][i] > 0.0
+                    active_set[idx] = 1
+                    active_set_ineq[idx] = 1
+                    s[idx] == 0.0 ? s[idx] = sqrt(2.0*max(0.0,-results.C[k][i])) : nothing
                 end
-            elseif i > pI_idx
-                active_set[idx] = 1
             else
-                active_set[idx] = 0
-                active_set_ineq[idx] = 0
+                active_set[idx] = 1
             end
         end
     end
@@ -160,8 +168,6 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
     ∇d = newton_results.∇d
     d = newton_results.d
 
-    r = newton_results.r
-
     active_set = newton_results.active_set
     active_set_ineq = newton_results.active_set_ineq
 
@@ -175,7 +181,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
         if k != N
             u = results.U[k]
-            Q,R,H,q,r̄ = taylor_expansion(solver.obj.cost,x,u) .* solver.dt
+            Q,R,H,q,r = taylor_expansion(solver.obj.cost,x,u) .* solver.dt
         else
             Qf,qf = taylor_expansion(solver.obj.cost,x)
         end
@@ -202,13 +208,13 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
             ∇²J[idx4,idx4] = R + Cu[k]'*Iμ[k]*Cu[k]
 
             ∇J[idx3] = q + Cx[k]'*Iμ[k]*C[k]
-            ∇J[idx4] = r̄ + Cu[k]'*Iμ[k]*C[k]
+            ∇J[idx4] = r + Cu[k]'*Iμ[k]*C[k]
 
             ∇c[idx2,idx3] = Cx[k]
             ∇c[idx2,idx4] = Cu[k]
 
             c[idx2] = C[k]
-            c[idx6] += 0.5*s[idx6].^2
+            # c[idx6] += 0.5*s[idx6].^2
 
             z[idx] = [x;u]
         else
@@ -217,7 +223,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
             ∇c[idx2,idx] = results.Cx[N]
             c[idx2] = results.C[N]
-            c[idx6] += 0.5*s[idx6] .^2
+            # c[idx6] += 0.5*s[idx6] .^2
 
             z[idx] = x
         end
@@ -235,16 +241,16 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
             d[idx7] = X[k] - x_eval[idx7]
         end
 
-        # assemble λ, ν, ϕ
+        # assemble λ, ν
         λ[idx2] = results.λ[k]
-        ν[idx7] = results.s[k] #TODO confirm that penalty isn't breaking this
+        ν[idx7] = results.s[k]
 
         # assembly active set indices
-        idx_as_pI = idx6[active_set_ineq[idx6]] #indices of active set for inequality constraints
+        idx_as_pI = idx6[active_set_ineq[idx6]] # indices of active set for inequality constraints
 
-        # assemble r
-        r[idx_as_pI] = (s[idx6] .* results.λ[k][1:pI_idx])[active_set_ineq[idx6]]
     end
+
+    c[active_set_ineq] += 0.5*s[active_set_ineq].^2
 
     return nothing
 end
@@ -285,7 +291,7 @@ function update_results_from_newton_results!(results::SolverIterResults,newton_r
     return nothing
 end
 
-function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
+function solve_kkt!(newton_results::NewtonResults)
     z = newton_results.z
     λ = newton_results.λ
     ν = newton_results.ν
@@ -300,8 +306,6 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     ∇d = newton_results.∇d
     d = newton_results.d
 
-    r = newton_results.r
-
     A = newton_results.A
     b = newton_results.b
 
@@ -311,14 +315,13 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     δ = newton_results.δ
 
     # get batch problem sizes
-    Nz = size(∇²J,1)
-    Np = size(∇c,1)
-    Nx = size(∇d,1)
+    Nz = newton_results.Nz
+    Np = newton_results.Np
+    Nx = newton_results.Nx
 
     Np_as = sum(active_set)
 
     # assemble KKT matrix,vector
-
     _idx1 = Array(1:Nz)
     _idx2 = Array((1:Np) .+ Nz)[active_set]
     _idx3 = Array((1:Nx) .+ (Nz + Np))
@@ -336,24 +339,25 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     A[_idx4,_idx2] = Diagonal(s)[active_set_ineq,active_set]
     A[_idx4,_idx4] = Diagonal(λ)[active_set_ineq,active_set_ineq]
 
-
     b[_idx1] = -(∇J + ∇c[active_set,:]'*λ[active_set] + ∇d'*ν)
     b[_idx2] = -c[active_set]
     b[_idx3] = -d
-    b[_idx4] = -r[active_set_ineq]
+    b[_idx4] = -(λ .* s)[active_set_ineq]
 
     ## indexing
-    println("A:")
-    println(rank(Array(A)))
-    println(size(A))
+    # println("A:")
+    # println(rank(Array(A)))
+    # println(size(A))
     println("Active set A:")
-    println(rank(Array(A[_idx5,_idx5])))
-    println(size(A[_idx5,_idx5]))
+    println("rank: $(rank(Array(A[_idx5,_idx5])))")
+    println("size: $(size(A[_idx5,_idx5]))")
     println("Nz: $Nz")
     println("Np: $Np")
     println("Nx: $Nx")
     println("active set: $(sum(active_set))")
     println("active set (ineq.): $(sum(active_set_ineq))")
+    # println(rank(Array(A[[_idx1;_idx2;_idx3],[_idx1;_idx2;_idx3]])))
+    # println(length([_idx1;_idx2;_idx3]))
     # println("No slack A:")
     # println(rank(Array(A[_idx_tmp,_idx_tmp])))
     # println(size(A[_idx_tmp,_idx_tmp]))
@@ -361,91 +365,83 @@ function solve_kkt!(newton_results::NewtonResults,alpha::Float64=1.0)
     # println(sum(active_set))
     # println("reg.")
     # println(rank(Array(A)+Matrix(I,Nz+Np+Nx+Np,Nz+Np+Nx+Np)))
-    println("KKT size: $(length(_idx5))")
+    # println("KKT size: $(length(_idx5))")
 
     δ[_idx5] = A[_idx5,_idx5]\b[_idx5]
 
-    z .+= alpha*δ[(1:Nz)]
-    λ .+= alpha*δ[(1:Np) .+ Nz]
-    ν .+= alpha*δ[(1:Nx) .+ (Nz + Np)]
-    s .+= alpha*δ[(1:Np) .+ (Nz + Np + Nx)]
+    # z .+= alpha*δ[_idx1]
+    # λ[active_set] += alpha*δ[_idx2]
+    # ν .+= alpha*δ[_idx3]
+    # s[active_set_ineq] += alpha*δ[_idx4]
 
     return nothing
-end
-
-function cost_newton(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
-    # get problem dimensions
-    n,m,N = get_sizes(solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-
-    s = newton_results.s
-    λ = newton_results.λ
-    # results_new = copy(results)
-    # for k = 1:N
-    #     k != N ? idx = (((k-1)*p + 1):k*p) : idx = (((k-1)*p+1):(k-1)*p+p_N)
-    #     results_new.C[k] += 0.5*(s[idx].^2)
-    # end
-    J = cost(solver,results)#_new)
-    J += sum(0.5*(λ .* s.^2)[newton_results.active_set_ineq])
-
-    # add dynamics constraint costs
-    X = results.X
-    U = results.U
-    ν = newton_results.ν
-    x_eval = newton_results.x_eval
-
-    for k = 1:N
-        if k == 1
-            J += ν[1:n]'*(X[1] - solver.obj.x0)
-        else
-            idx = ((k-1)*n+1):k*n
-            solver.fd(view(x_eval,idx),X[k-1][1:n],U[k-1][1:m])
-            J += ν[idx]'*(X[k] - x_eval[idx])
-        end
-    end
-
-    return J
 end
 
 function newton_step!(results::SolverIterResults,newton_results::NewtonResults,solver::Solver,alpha::Float64=1.0)
     update_newton_results!(newton_results,results,solver)
-    solve_kkt!(newton_results,alpha)
+    solve_kkt!(newton_results)
+
+    ###
+    _idx1 = Array(1:newton_results.Nz)
+    _idx2 = Array((1:newton_results.Np) .+ newton_results.Nz)[newton_results.active_set]
+    _idx3 = Array((1:newton_results.Nx) .+ (newton_results.Nz + newton_results.Np))
+    _idx4 = Array((1:newton_results.Np) .+ (newton_results.Nz + newton_results.Np + newton_results.Nx))[newton_results.active_set_ineq]
+
+    newton_results.z .+= alpha*newton_results.δ[_idx1]
+    newton_results.λ[newton_results.active_set] += alpha*newton_results.δ[_idx2]
+    newton_results.λ[newton_results.active_set_ineq] = max.(0,newton_results.λ[newton_results.active_set_ineq])
+    newton_results.ν .+= alpha*newton_results.δ[_idx3]
+    newton_results.s[newton_results.active_set_ineq] += alpha*newton_results.δ[_idx4]
+    ###
+
     update_results_from_newton_results!(results,newton_results,solver)
+    newton_active_set!(newton_results,results,solver)
     return nothing
 end
 
 function newton_solve!(results::SolverIterResults,solver::Solver)
+    # copy current results
+    results = copy(results)
+    results_new = copy(results)
+
     # instantiate Newton Results
     newton_results = NewtonResults(solver)
 
-    # copy current results
-    results_new = copy(results)
-
     # get initial cost and max constraint violation
-    newton_active_set!(newton_results,results,solver)
+    newton_active_set!(newton_results,results_new,solver)
     update_newton_results!(newton_results,results_new,solver)
-    J_prev = cost_newton(results_new,newton_results,solver)
+    J_prev = cost(solver,results_new)
     c_max = max_violation(results_new)
 
     println("Newton initialization")
     println("Cost: $J_prev")
     println("c_max: $c_max")
+    println("\n")
 
     α = 1.0
-    max_iter = 10
+    max_iter = 100
     max_c = 1e-8
     iter = 1
     ls_param = 0.01
+    J = Inf
 
-    while c_max > max_c && iter <= max_iter
-        println("$α")
+    while (c_max > max_c) && iter <= max_iter
         newton_step!(results_new,newton_results,solver,α)
-        J = cost_newton(results_new,newton_results,solver)
+        backwardpass!(results_new,solver)
+        rollout!(results_new,solver,1.0)
+        results_new.X .= deepcopy(results_new.X_)
+        results_new.U .= deepcopy(results_new.U_)
+        update_constraints!(results_new,solver)
+        J = cost(solver,results_new)
         c_max = max_violation(results_new)
-        println("Newton step: $iter")
+
+        println("*Newton step: $iter")
+        println("α = $α")
         println("Cost: $J \n    prev. Cost: $J_prev")
+        println("ΔJ = $(J-J_prev)")
         println("c_max: $c_max")
+
+        iter == 1 ? J_prev = J : nothing
 
         if J <= J_prev + ls_param*newton_results.b'*α*newton_results.δ
             results = copy(results_new)
@@ -453,12 +449,47 @@ function newton_solve!(results::SolverIterResults,solver::Solver)
             println("improved")
             α = 1.0
         else
-            println("what??")
+            println("α = $α increased cost")
             results_new = copy(results)
+            newton_results = NewtonResults(solver)
+            newton_active_set!(newton_results,results_new,solver)
+            update_newton_results!(newton_results,results_new,solver)
             α = 0.5*α
         end
+        println("-----\n")
         iter += 1
     end
-    println("Newton solver end")
+    println("Newton solve complete")
+    println("J: $J")
     println("c_max: $c_max")
 end
+
+# """
+# $(SIGNATURES)
+#     Time Varying Discrete Linear Quadratic Regulator (TVLQR)
+# """
+# function lqr(A::Array, B::Array, Q::AbstractMatrix, R::AbstractMatrix, Qf::AbstractMatrix)::Array
+#     n,m = size(B[1])
+#     N_ = length(B)
+#     K = [zeros(m,n) for k = 1:N_]
+#     S = zeros(n,n)
+#
+#     # Boundary condition
+#     S .= Qf
+#
+#     # Riccati
+#     for k = 1:N_
+#         # Compute control gains
+#         K[k] = -(R + B[k]'*S*B[k])\(B[k]'*S*A[k])
+#
+#         # Calculate cost-to-go for backward propagation
+#         S .= Q + A[k]'*S*A[k] - A[k]'*S*B[k]*K[k]
+#     end
+#     return K
+# end
+#
+# function lqr(results::SolverResults, solver::Solver)::Array
+#     Q, R, Qf = get_cost_matrices(solver)
+#     A, B = results.fdx, results.fdu
+#     return lqr(A,B,Q,R,Qf)
+# end
