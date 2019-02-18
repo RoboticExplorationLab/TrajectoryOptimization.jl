@@ -149,6 +149,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     iter = 0 # counter for total number of iLQR iterations
     iter_outer = 1
     iter_inner = 1
+    iter_max_mu = Inf
     time_setup = time_ns() - t_start
     J_hist = Vector{Float64}()
     grad_norm_hist = Vector{Float64}()
@@ -233,6 +234,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 push!(c_max_hist, c_max)
                 push!(c_l2_norm_hist, c_ℓ2_norm)
 
+                μ_max = maximum(maximum.(results.μ))
+
                 @logmsg InnerLoop :c_max value=c_max
 
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
@@ -246,6 +249,11 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 if solver.state.second_order_dual_update
                     @logmsg InnerLoop "λ 2-update"
                 end
+
+                if μ_max == solver.opts.penalty_max && iter_max_mu > iter
+                    iter_max_mu = iter
+                end
+
             end
 
             if solver.opts.use_nesterov && Δc_max < 0
@@ -264,6 +272,10 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_count value=dJ_zero_counter
             @logmsg InnerLoop :Δc value=Δc_max
+            @logmsg InnerLoop :maxmu value=μ_max
+            musat = sum(count.(map(x->x.>=solver.opts.penalty_max,results.μ))) / sum(length.(results.μ))
+            @logmsg InnerLoop :musat value=musat
+            @logmsg InnerLoop :cn value=cn_S
 
 
             ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
@@ -319,7 +331,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         "gradient norm"=>grad_norm_hist,
         "outer loop iteration index"=>outer_updates,
         "S condition number"=>cn_S_hist,
-        "Quu condition number"=>cn_Quu_hist,)
+        "Quu condition number"=>cn_Quu_hist,
+        "max_mu_iteration"=>iter_max_mu)
 
     if !isempty(bmark_stats)
         for key in intersect(keys(bmark_stats), keys(stats))
