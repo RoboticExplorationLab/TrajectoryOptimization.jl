@@ -24,6 +24,7 @@ obj_con = ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
 solver = Solver(model,obj_con,N=N)
 solver.opts.verbose = true
+solver.opts.square_root = true
 solver.state.infeasible
 n,m = get_sizes(solver)
 
@@ -87,12 +88,29 @@ u = rand(m)
 Fc(x,u)
 evals(solver,:f)
 
-
-
+results.S
 J_prev = cost(solver, results)
 TrajectoryOptimization.update_jacobians!(results, solver)
 reset_evals(solver)
-Δv = backwardpass!(results, solver)
+results.ρ[1]
+Δv = _backwardpass_sqrt!(results, solver)
+S1 = copy(results.S[1])
+Sfull = S1'S1
+S2 = qr(S1).R
+S2'S2 ≈ Sfull
+
+A = rand(4,4)
+B = rand(6,4)
+P = zeros(10,4)
+@btime chol_plus($A,$B)
+@btime chol_plus!(P,A,B)
+
+K1 = copy(results.K[1])
+_backwardpass_sqrt_noqr!(results, solver)
+
+@btime _backwardpass_sqrt_noqr!(results, solver)
+@btime _backwardpass_sqrt!(results, solver)
+
 J = forwardpass!(results, solver, Δv, J_prev)
 c_max = max_violation(results)
 results.X .= deepcopy(results.X_)
