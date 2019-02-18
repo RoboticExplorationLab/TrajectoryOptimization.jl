@@ -281,6 +281,18 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     lbl_cI = ["custom inequality" for i = 1:pI_c]
     lbl_cE = ["custom equality" for i = 1:pE_c]
 
+    function cI!(c,x)
+        if pI_x_max > 0
+            c[1:pI_x_max] = (x[1:n] - obj.x_max )[x_max_active]
+        end
+        if pI_x_min > 0
+            c[pI_x_max+1:pI_x_max+pI_x_min] = (obj.x_min - x[1:n])[x_min_active]
+        end
+        if obj.pI_N_custom > 0
+            c[pI_x .+ (1:obj.pI_N_custom)] = obj.cI_N(c,x[1:n])
+        end
+    end
+
     # Construct labels
     c_labels = [lbl_u_max; lbl_u_min; lbl_x_max; lbl_x_min; lbl_cI; lbl_cE]
 
@@ -413,8 +425,16 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
             cE_N_custom_jacobian!(view(j,(obj.pI_N_custom + pI_x) .+ (1:pE_N),1:n),x[1:n])
         end
     end
+    cE!(c,x,u) = obj.cE(c,x,u)
+    function cE!(c,x)
+        if obj.use_xf_equality_constraint
+            c[1:n] = x - obj.xf
+        elseif obj.pE_N_custom > 0
+            c[1:pE_N] = obj.cE_N(c,x[1:n])
+        end
+    end
 
-    return c_function!, c_jacobian!, c_labels
+    return c_function!, c_jacobian!, c_labels, cI!, cE!
 end
 
 generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = null_constraint, null_constraint_jacobian, String[]

@@ -46,7 +46,7 @@ function gen_newton_functions(solver::Solver)
 
     function d(V)
         X,U,λ,μ,ν,s = unpackV(V)
-        D = zeros(n,N)
+        D = zeros(eltype(V),n,N)
         D[:,1] = X[:,1] - obj.x0
         for k = 2:N
             f(view(D,1:n,k),X[:,k-1],U[:,k-1])
@@ -54,6 +54,17 @@ function gen_newton_functions(solver::Solver)
         end
         return vec(D)
     end
+
+    function active_set(V,eps=1e-2)
+        X,U,λ,μ,ν,s = unpackV(V)
+        a = trues(length(V))
+        ci = cI(V)
+        c_inds = ci .>= -eps
+        a[sze.μ] = c_inds
+        a[sze.s] = c_inds
+        return a
+    end
+
 
     function packV(X,U,λ,μ,ν,s)
         V = [vec(X);vec(U);λ;μ;ν;s]
@@ -68,7 +79,7 @@ function gen_newton_functions(solver::Solver)
         s = V[sze.s]
         return X,U,λ,μ,ν,s
     end
-    return newton_cost, packV, unpackV, cI, cE, d
+    return newton_cost, packV, unpackV, cI, cE, d, active_set
 end
 
 model,obj = Dynamics.dubinscar_parallelpark
@@ -96,5 +107,60 @@ V = packV(X,U,λ,μ,ν,s)
 d(V)
 X[:,N]
 
-cE(V) == X[:,N] - obj.xf
-cI(V)[end-3:end]
+
+g = ForwardDiff.gradient(newton_cost,V)
+H = ForwardDiff.hessian(newton_cost,V)
+Hreg = H+10I
+isposdef(Hreg)
+V1 = V + Hreg\g
+newton_cost(V1)
+
+
+# Block move
+opts = TrajectoryOptimization.SolverOptions()
+opts.verbose = false
+opts.cost_tolerance = 1e-4
+opts.cost_tolerance_intermediate = 1e-4
+opts.constraint_tolerance = 1e-4
+opts.square_root = false
+opts.active_constraint_tolerance = 0.0
+opts.outer_loop_update_type = :default
+opts.live_plotting = false
+
+# Block move
+model, obj = TrajectoryOptimization.Dynamics.double_integrator
+u_min = -0.2
+u_max = 0.2
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj, tf=5.0,use_xf_equality_constraint=true, u_min=u_min, u_max=u_max)#, x_max=x_max)
+
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,N=11,opts=opts)
+U = rand(solver.model.m, solver.N)
+
+res, stats = TrajectoryOptimization.solve(solver,U)
+@assert max_violation(res) < opts.constraint_tolerance
+max_violation(res)
+
+newton_cost, packV, unpackV, cI, cE, d, active_set = gen_newton_functions(solver)
+max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf))
+
+X = to_array(res.X)
+U = to_array(res.U)
+μ = vec(to_array(res.λ[1:N-1]))
+λ = vec(res.λ[N])
+ν = vec(to_array(res.s))
+s = sqrt.(2.0*max.(0.0,vec(-to_array(res.C[1:N-1]))))
+V = packV(X,U,λ,μ,ν,s)
+
+cost(solver,res)
+max_c(V)
+newton_cost(V)
+g = ForwardDiff.gradient(newton_cost,V)
+H = ForwardDiff.hessian(newton_cost,V)
+V[a] = V[a] - H[a,a]\g[a]
+# V = V - H\g
+newton_cost(V)
+max_c(V)
+
+
+X,U,λ,μ,ν,s == unpackV(V)
+μ
