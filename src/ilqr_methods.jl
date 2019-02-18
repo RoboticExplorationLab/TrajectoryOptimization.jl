@@ -190,7 +190,7 @@ end
 $(SIGNATURES)
 Interpolate a trajectory using cubic interpolation
 """
-function interp_traj(N::Int,tf::Float64,X::Matrix,U::Matrix)::Tuple{Matrix,Matrix}
+function interp_traj(N::Int,tf::Float64,X::AbstractMatrix,U::AbstractMatrix)::Tuple{Matrix,Matrix}
     if isempty(X)
         X2 = X
     else
@@ -206,7 +206,7 @@ interp_traj(N::Int,tf::Float64,X::Trajectory,U::Trajectory) = interp_traj(N,tf,t
 $(SIGNATURES)
 Interpolate the rows of a matrix using cubic interpolation
 """
-function interp_rows(N::Int,tf::Float64,X::Matrix)::Matrix
+function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
     n,N1 = size(X)
     t1 = range(0,stop=tf,length=N1)
     t2 = collect(range(0,stop=tf,length=N))
