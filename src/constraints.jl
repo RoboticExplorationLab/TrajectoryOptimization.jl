@@ -437,7 +437,7 @@ function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float6
     return c_function!, c_jacobian!, c_labels, cI!, cE!
 end
 
-generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = null_constraint, null_constraint_jacobian, String[]
+generate_constraint_functions(obj::UnconstrainedObjective; max_dt::Float64=1.0,min_dt=1.0e-2) = null_constraint, null_constraint_jacobian, String[], null_constraint, null_constraint
 
 """
 $(SIGNATURES)

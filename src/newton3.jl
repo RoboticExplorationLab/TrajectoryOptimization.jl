@@ -79,42 +79,79 @@ function gen_newton_functions(solver::Solver)
         s = V[sze.s]
         return X,U,λ,μ,ν,s
     end
-    return newton_cost, packV, unpackV, cI, cE, d, active_set
+    return newton_cost, packV, unpackV, cI, cE, d, active_set, sze
 end
 
-model,obj = Dynamics.dubinscar_parallelpark
-solver = Solver(model,obj,N=11)
+model,obj = Dynamics.dubinscar
+solver = Solver(model,obj,N=31)
 n,m,N = get_sizes(solver)
+U0 = rand(m,N-1)
+res,stats = solve(solver,U0)
+λ_update_default!(res,solver);
 
-newton_cost, packV, unpackV, cI, cE, d = gen_newton_functions(solver)
+newton_cost, packV, unpackV, cI, cE, d, active_set = gen_newton_functions(solver)
+max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf))
 p,pI,pE = get_num_constraints(solver)
 pN,pI_N,pE_N = get_num_terminal_constraints(solver)
-X = rand(n,N)
-U = rand(m,N-1)
-λ = rand(pE*(N-1)+pE_N)
-μ = rand(pI*(N-1)+pI_N)
-ν = rand(N*n)
-s = rand(size(μ)...)
+nZ  = 2N*n + (N-1)*m
+X = to_array(res.X)
+U = to_array(res.U)
+μ = vcat([k < N ? res.λ[k][1:pI] : res.λ[k][1:pI_N] for k = 1:N]...)
+λ = vcat([k < N ? res.λ[k][pI .+ (1:pE)] : res.λ[k][pI_N .+ (1:pE_N)] for k = 1:N]...)
+ν = vec(to_array(res.s))*0
+s = vcat([k < N ? res.C[k][1:pI] : res.C[k][1:pI_N] for k = 1:N]...)
+s = sqrt.(2*max.(0,-s))
 
+μ = zeros(0)
+λ = zeros(0)
+s = zeros(0)
 V = packV(X,U,λ,μ,ν,s)
+
+unpackV(V)
 (X,U,λ,μ,ν,s) == unpackV(V)
-
-newton_cost(V)
-cost(solver,X,U) +μ'*(cI(V) + 0.5*s.^2) + ν'd(V)
-
-X = rollout(solver,U)
-V = packV(X,U,λ,μ,ν,s)
 d(V)
-X[:,N]
+cE(V)
+cI(V)
 
+V = packV(X,U,λ,μ,ν,s)
 
+J1 = newton_cost(V)
 g = ForwardDiff.gradient(newton_cost,V)
 H = ForwardDiff.hessian(newton_cost,V)
-Hreg = H+10I
-isposdef(Hreg)
-V1 = V + Hreg\g
-newton_cost(V1)
+V = line_search(V,H,g)
+newton_cost(V)
+d(V)
+norm(d(V),Inf)
+X,U,λ,μ,ν,s == unpackV(V)
+d(V)
 
+function line_search(V,H,g)
+    J0 = newton_cost(V)
+    α = 1.
+    V_ = V - α*(H\g)
+    J = newton_cost(V_)
+    iter = 1
+    while J > J0
+        α /= 2
+        V_ = V - α*(H\g)
+        J = newton_cost(V_)
+        iter += 1
+        @show J, α
+        iter > 10 ? break : nothing
+    end
+    @show J0-J
+    return V_
+end
+
+
+
+max_c(V)
+findmax(cI(V))
+cI(V)
+X,U,λ,μ,ν,s == unpackV(V)
+μ[8]
+norm(μ.*s,Inf)
+d(V)
 
 # Block move
 opts = TrajectoryOptimization.SolverOptions()
@@ -163,4 +200,3 @@ max_c(V)
 
 
 X,U,λ,μ,ν,s == unpackV(V)
-μ

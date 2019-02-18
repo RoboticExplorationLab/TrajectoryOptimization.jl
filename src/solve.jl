@@ -234,7 +234,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 push!(c_max_hist, c_max)
                 push!(c_l2_norm_hist, c_ℓ2_norm)
 
-                μ_max = maximum(maximum.(results.μ))
+                # μ_max = maximum(maximum.(results.μ))
+                μ_max = 1
 
                 @logmsg InnerLoop :c_max value=c_max
 
@@ -254,6 +255,10 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                     iter_max_mu = iter
                 end
 
+                @logmsg InnerLoop :maxmu value=μ_max
+                musat = sum(count.(map(x->x.>=solver.opts.penalty_max,results.μ))) / sum(length.(results.μ))
+                @logmsg InnerLoop :musat value=musat
+
             end
 
             if solver.opts.use_nesterov && Δc_max < 0
@@ -272,9 +277,6 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             @logmsg InnerLoop :j value=j
             @logmsg InnerLoop :zero_count value=dJ_zero_counter
             @logmsg InnerLoop :Δc value=Δc_max
-            @logmsg InnerLoop :maxmu value=μ_max
-            musat = sum(count.(map(x->x.>=solver.opts.penalty_max,results.μ))) / sum(length.(results.μ))
-            @logmsg InnerLoop :musat value=musat
             @logmsg InnerLoop :cn value=cn_S
 
 
@@ -302,11 +304,6 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         end
         ### END INNER LOOP ###
 
-        #****************************#
-        #    TERMINATION CRITERIA    #
-        #****************************#
-        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-        evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter) ? break : nothing
 
         #****************************#
         #      OUTER LOOP UPDATE     #
