@@ -4,7 +4,7 @@ using RigidBodyDynamics
 using Plots
 import TrajectoryOptimization: hold_trajectory, Trajectory, total_time
 import RigidBodyDynamics: transform
-include("N_plots.jl")?
+include("N_plots.jl")
 include("../kuka_visualizer.jl")
 model, obj = Dynamics.kuka
 n,m = model.n, model.m

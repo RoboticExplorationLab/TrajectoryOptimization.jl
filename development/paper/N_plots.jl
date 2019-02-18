@@ -193,15 +193,26 @@ function plot_stat(stat::String, group, plot_names::Vector{String}=["midpoint", 
     use_names = intersect(file_names, plot_names)
     close(fid)
 
+    if :label in keys(kwargs) && length(kwargs[:label]) == length(use_names)
+        label = kwargs[:label]
+    else
+        label = use_names
+    end
+
     Ns, data = load_data(stat, use_names, group)
-    plot_vals(Ns, data, use_names, stat; kwargs...)
+    plot_vals(Ns, data, label, stat; kwargs...)
 end
 
 function plot_vals(Ns,vals,labels,name::String; kwargs...)
-    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points"; kwargs...)
-    for (val,label) in zip(vals[2:end],labels[2:end])
+    if :color in keys(kwargs) && length(kwargs[:color]) == length(vals)
+        colors = kwargs[:color]
+    else
+        colors = 1:length(vals)
+    end
+    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points", color=colors[1]; kwargs...)
+    for (val,label,color) in zip(vals[2:end],labels[2:end],colors[2:end],labels[2:end])
         if ~isempty(val)
-            plot!(Ns,val,label=label,marker=:circle)
+            plot!(Ns,val,label=label,marker=:circle,color=color)
         end
     end
     p

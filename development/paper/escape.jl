@@ -1,5 +1,6 @@
 using Plots
 using Random
+pyplot()
 include("N_plots.jl")
 model, obj = Dynamics.dubinscar_escape
 circles = Dynamics.circles_escape
@@ -53,26 +54,30 @@ X0 = TrajectoryOptimization.interp_rows(N,obj.tf,Array(X_guess'))
 solver.opts.verbose = false
 res_inf, stats_inf = solve(solver,X0,U0)
 stats_inf["iterations"]
+stats_inf["runtime"]
 evals(solver,:f)/stats_inf["iterations"]
 res_i, stats_i = solve_dircol(solver,X0,U0, options=ipopt_options)
 evals(solver,:f)/stats_i["iterations"]
+stats_i["runtime"]
 
-constraint_plot(solver,X0,U0)
+# constraint_plot(solver,X0,U0)
 
-plt = plot(title="Escape",aspect_ratio=:equal,size=(500,400),xlim=[-1,11],ylim=[-1,8])
-plot_obstacles(circles)
-plot_trajectory!(to_array(res.X),width=2,color=:blue,label="iLQR",aspect_ratio=:equal,legend=:topleft)
-plot_trajectory!(to_array(res_inf.X),width=2,color=:purple,label="Infeasible",aspect_ratio=:equal)
-plot_trajectory!(res_i.X,width=2,color=:yellow,label="Ipopt",linestyle=:dash)
-savefig(joinpath(IMAGE_DIR,"escape_traj.svg"))
+plt = plot(title="Escape",aspect_ratio=:equal,size=(500,300),xlim=[-0.5,10.5],ylim=[-0.5,6])
+plot_obstacles(circles,:grey30)
+plot_trajectory!(res_i.X,width=3,color=:blue,label="Ipopt")
+plot_trajectory!(to_array(res.X),width=2,color=:darkorange2,label="iLQR",aspect_ratio=:equal,legend=:bottomleft)
+plot_trajectory!(to_array(res_inf.X),width=2,color=:darkorange2,style=:dash,label="Infeasible",aspect_ratio=:equal)
+scatter!([obj.x0[1]],[obj.x0[2]],label=:start,color=:red,markerstrokecolor=:red,markersize=6)
+scatter!([obj.xf[1]],[obj.xf[2]],label=:goal,color=:green,markerstrokecolor=:green,markersize=6)
+savefig(joinpath(IMAGE_DIR,"escape_traj.eps"))
 
 solver_truth = Solver(model, obj, N=601)
 
-Ns = [101,161,201,251,301]
+Ns = [101,161,201,241,301]
 group = "escape"
 run_step_size_comparison(model, obj, U0, group, Ns, opts=opts, integrations=[:rk3,:ipopt],benchmark=false, infeasible=true, X0=X0, dt_truth=solver_truth.dt)
-plot_stat("runtime",group,legend=:topleft,["rk3","ipopt"],title="Escape")
+plot_stat("runtime",group,legend=:topleft,["rk3","ipopt"],title="Escape",color=[:blue :darkorange2],size=(500,250))
 savefig(joinpath(IMAGE_DIR,"escape_runtime.eps"))
-plot_stat("iterations",group,legend=:topleft,["rk3","ipopt"],title="Escape")
+plot_stat("iterations",group,legend=:topleft,["rk3","ipopt"],title="Escape",size=(500,250))
 savefig(joinpath(IMAGE_DIR,"escape_iters.eps"))
 plot_stat("error",group,yscale=:log10,legend=:right,["rk3","ipopt"],title="Escape")
