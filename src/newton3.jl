@@ -47,7 +47,7 @@ function gen_newton_functions(solver::Solver)
     function d(V)
         X,U,λ,μ,ν,s = unpackV(V)
         D = zeros(eltype(V),n,N)
-        D[:,1] = X[:,1] - obj.x0
+        D[:,1] = X[:,1] - solver.obj.x0
         for k = 2:N
             f(view(D,1:n,k),X[:,k-1],U[:,k-1])
             D[:,k] -= X[:,k]
@@ -87,7 +87,7 @@ solver = Solver(model,obj,N=31)
 n,m,N = get_sizes(solver)
 U0 = rand(m,N-1)
 res,stats = solve(solver,U0)
-λ_update_default!(res,solver);
+# λ_update_default!(res,solver);
 
 newton_cost, packV, unpackV, cI, cE, d, active_set = gen_newton_functions(solver)
 max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf))
@@ -98,7 +98,7 @@ X = to_array(res.X)
 U = to_array(res.U)
 μ = vcat([k < N ? res.λ[k][1:pI] : res.λ[k][1:pI_N] for k = 1:N]...)
 λ = vcat([k < N ? res.λ[k][pI .+ (1:pE)] : res.λ[k][pI_N .+ (1:pE_N)] for k = 1:N]...)
-ν = vec(to_array(res.s))*0
+ν = vec(to_array(res.s))
 s = vcat([k < N ? res.C[k][1:pI] : res.C[k][1:pI_N] for k = 1:N]...)
 s = sqrt.(2*max.(0,-s))
 
@@ -118,12 +118,15 @@ V = packV(X,U,λ,μ,ν,s)
 J1 = newton_cost(V)
 g = ForwardDiff.gradient(newton_cost,V)
 H = ForwardDiff.hessian(newton_cost,V)
-V = line_search(V,H,g)
-newton_cost(V)
-d(V)
-norm(d(V),Inf)
-X,U,λ,μ,ν,s == unpackV(V)
-d(V)
+V_ = line_search(V,H+I,g)
+newton_cost(V_)
+d(V_)
+norm(d(V_),Inf)
+X_,U_,λ_,μ_,ν_,s_ = unpackV(V_)
+ν_
+V = copy(V_)
+
+
 
 function line_search(V,H,g)
     J0 = newton_cost(V)
