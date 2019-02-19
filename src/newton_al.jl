@@ -173,8 +173,8 @@ maximum(vcat(res.C...) .* vcat(res.active_set...))
 newton_cost, packV, unpackV, cI, cE, d, active_set = gen_newton_al_functions(solver)
 mycost(V) = newton_cost(V,1e4)
 max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf),norm(d(V),Inf))
-c_all = [cI(V); abs.(cE(V)); abs.(d(V))]
-argmax(c_all)
+# c_all = [cI(V); abs.(cE(V)); abs.(d(V))]
+# argmax(c_all)
 V = init_newton_results(res,solver)
 
 cost(solver,res)
@@ -187,6 +187,7 @@ a = active_set(V,1e-3)
 rank(H)
 rank(H[a,a])
 size(H[a,a])
+minimum(abs.(eigvals(H)))
 # V[a] - H[a,a]\g[a]
 V1 = line_search(V,H+1000I*0,g,a)
 # V = V - H\g
@@ -196,6 +197,91 @@ ForwardDiff.gradient(mycost,V1)
 copyto!(V,V1)
 max_c(V1)
 
+J = Float64[]
+c_max = Float64[]
+
+
+## quadrotor
+model,obj = Dynamics.quadrotor
+n = 13
+m = 4
+
+# Unconstrained
+Q = (1e-3)*Matrix(I,n,n)
+R = (1e-2)*Matrix(I,m,m)
+# R = (1e-1)*Matrix(I,m,m)
+Qf = (1000.0)*Matrix(I,n,n)
+tf = 1.0
+dt = 0.1
+
+# -initial state
+x0 = zeros(n)
+x0[1:3] = [0.; 0.; 0.]
+q0 = [1.;0.;0.;0.]
+x0[4:7] = q0
+
+# -final state
+xf = copy(x0)
+xf[1:3] = [0.;10.;0.] # xyz position
+xf[4:7] = q0
+u_max = 10.0
+u_min = 0.0
+
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max)#,u_min=u_min)
+solver = Solver(model,obj_con,N=10)
+
+solver.obj
+solver.opts.cost_tolerance = 1e-5
+solver.opts.constraint_tolerance = 1e-4
+solver.opts.penalty_max = 1e5
+n,m,N = get_sizes(solver)
+Random.seed!(1)
+U = 0.5*9.81/4.0*ones(solver.model.m, solver.N-1)
+res,stats = solve(solver,U)
+plot(res.U)
+plot(res.X)
+cost(solver,res)
+λ_update_default!(res,solver);
+update_constraints!(res,solver)
+max_violation(res)
+@assert max_violation(res) < solver.opts.constraint_tolerance
+ρ = maximum(maximum.(res.μ))
+maximum(vcat(res.C...) .* vcat(res.active_set...))
+
+newton_cost, packV, unpackV, cI, cE, d, active_set = gen_newton_al_functions(solver)
+mycost(V) = newton_cost(V,ρ)
+max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf),norm(d(V),Inf))
+# max_c(V) = max(maximum(cE(V)),norm(d(V),Inf))
+
+# c_all = [cI(V); abs.(cE(V)); abs.(d(V))]
+# argmax(c_all)
+V = init_newton_results(res,solver)
+
+cost(solver,res)
+mycost(V)
+max_violation(res)
+max_c(V)
+g = ForwardDiff.gradient(mycost,V)
+H = ForwardDiff.hessian(mycost,V)
+a = active_set(V,1e-3)
+X,U,λ,μ,ν,s = unpackV(V)
+13*10 + 4*9 + length(λ) + length(ν)# + 36*2
+sum(a)
+rank(H)
+size(H)
+rank(H[a,a])
+size(H[a,a])
+rank(H[1:309,1:309])
+# V[a] - H[a,a]\g[a]
+V1 = line_search(V,H,g)
+# V = V - H\g
+mycost(V1)
+max_c(V1)
+ForwardDiff.gradient(mycost,V1)
+copyto!(V,V1)
+max_c(V1)
+minimum(abs.(eigvals(H)))
 J = Float64[]
 c_max = Float64[]
 for i = 1:10

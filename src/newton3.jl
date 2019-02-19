@@ -107,19 +107,8 @@ U = to_array(res.U)
 ν = vec(to_array(res.s))
 s = vcat([k < N ? res.C[k][1:pI] : res.C[k][1:pI_N] for k = 1:N]...)
 s = sqrt.(2*max.(0,-s))
-μ
-# μ = zeros(0)
-# λ = zeros(0)
-# s = zeros(0)
-V = packV(X,U,λ,μ,ν,s)
 
-# unpackV(V)
-# (X,U,λ,μ,ν,s) == unpackV(V)
-# d(V)
-# cE(V)
-# cI(V)
-#
-# V = packV(X,U,λ,μ,ν,s)
+V = packV(X,U,λ,μ,ν,s)
 
 J1 = newton_cost(V)
 g = ForwardDiff.gradient(newton_cost,V)
@@ -127,12 +116,13 @@ H = ForwardDiff.hessian(newton_cost,V)
 # V = line_search(V,H,g)
 
 a = active_set(V,1e-3)
+rank(H)
+size(H)
 rank(H[a,a])
 size(H[a,a])
-V[a] = V[a] - (H[a,a] + I)\g[a]
-# V = V - H\g
-newton_cost(V)
-max_c(V)
+ρ = 1.0
+newton_cost(V - (H + ρ*I)\g)
+max_c(V - (H + ρ*I)\g)
 
 
 X,U,λ,μ,ν,s == unpackV(V)
