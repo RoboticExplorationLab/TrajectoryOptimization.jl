@@ -177,25 +177,23 @@ c_all = [cI(V); abs.(cE(V)); abs.(d(V))]
 argmax(c_all)
 V = init_newton_results(res,solver)
 
-cost(solver,res)
-mycost(V)
-max_violation(res)
-max_c(V)
-g = ForwardDiff.gradient(mycost,V)
-H = ForwardDiff.hessian(mycost,V)
-a = active_set(V,1e-3)
-rank(H)
-rank(H[a,a])
-size(H[a,a])
-# V[a] - H[a,a]\g[a]
-V1 = line_search(V,H+1000I*0,g,a)
-# V = V - H\g
-mycost(V1)
-max_c(V1)
-ForwardDiff.gradient(mycost,V1)
-copyto!(V,V1)
-max_c(V1)
-
 J = Float64[]
 c_max = Float64[]
+grad = Float64[]
 for i = 1:10
+    g = ForwardDiff.gradient(mycost,V)
+    H = ForwardDiff.hessian(mycost,V)
+    a = active_set(V,1e-3)
+    V1 = line_search(V,H+0I,g,a)
+
+    push!(J,mycost(V1))
+    push!(c_max,max_c(V1))
+    push!(grad, norm(ForwardDiff.gradient(mycost,V1)))
+    copyto!(V,V1)
+end
+
+plot(-diff(J),yscale=:log10)
+
+plot(c_max,yscale=:log10)
+plot(c_max,yscale=:log10,label="reg")
+plot(grad,yscale=:log10)
