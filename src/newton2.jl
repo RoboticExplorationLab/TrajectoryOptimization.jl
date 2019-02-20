@@ -23,12 +23,15 @@ struct NewtonResults
 
     δ::Vector
 
+    ρ::Vector
+
     Nz::Int
     Np::Int
     Nx::Int
+    NpI::Int
 end
 
-function NewtonResults(Nz::Int,Np::Int,Nx::Int)
+function NewtonResults(Nz::Int,Np::Int,Nx::Int,NpI::Int)
     z = zeros(Nz)
     λ = zeros(Np)
     ν = zeros(Nx)
@@ -52,15 +55,18 @@ function NewtonResults(Nz::Int,Np::Int,Nx::Int)
 
     δ = zeros(Nz+Np+Nx+Np)
 
+    ρ = zeros(1)
+
     Nz = Nz
     Np = Np
     Nx = Nx
+    NpI = NpI
 
-    NewtonResults(z,λ,ν,s,∇²J,∇J,∇c,c,∇d,d,A,b,active_set,active_set_ineq,x_eval,δ,Nz,Np,Nx)
+    NewtonResults(z,λ,ν,s,∇²J,∇J,∇c,c,∇d,d,A,b,active_set,active_set_ineq,x_eval,δ,ρ,Nz,Np,Nx,NpI)
 end
 
 function copy(r::NewtonResults)
-    NewtonResults(copy(r.z),copy(r.λ),copy(r.ν),copy(r.s),copy(r.∇²J),copy(r.∇J),copy(r.∇c),copy(r.c),copy(r.∇d),copy(r.d),copy(r.A),copy(r.b),copy(r.active_set),copy(r.active_set_ineq),copy(r.x_eval),copy(r.δ),copy(r.Nz),copy(r.Np),copy(r.Nx))
+    NewtonResults(copy(r.z),copy(r.λ),copy(r.ν),copy(r.s),copy(r.∇²J),copy(r.∇J),copy(r.∇c),copy(r.c),copy(r.∇d),copy(r.d),copy(r.A),copy(r.b),copy(r.active_set),copy(r.active_set_ineq),copy(r.x_eval),copy(r.δ),copy(r.ρ),copy(r.Nz),copy(r.Np),copy(r.Nx),copy(r.NpI))
 end
 
 function NewtonResults(solver::Solver)
@@ -75,8 +81,9 @@ function NewtonResults(solver::Solver)
     Nz = nn*N + mm*(N-1)
     Np = p*(N-1) + p_N
     Nx = N*nn
+    NpI = pI*(N-1) + pI_N
 
-    NewtonResults(Nz,Np,Nx)
+    NewtonResults(Nz,Np,Nx,NpI)
 end
 
 function get_batch_sizes(solver::Solver)
@@ -92,18 +99,19 @@ function get_batch_sizes(solver::Solver)
     Np = p*(N-1) + p_N
     Nx = N*n
     Nu = mm*(N-1) # number of control decision variables u
+    NpI = pI*(N-1) + pI_N
 
-    return Nz,Np,Nx,Nu,nm
+    return Nz,Np,Nx,Nu,nm,NpI
 end
 
-function newton_active_set!(newton_results::NewtonResults,results::SolverIterResults,solver::Solver,tolerance::Float64=1.0e3,slacks::Bool=true)
+function newton_active_set!(newton_results::NewtonResults,results::SolverIterResults,solver::Solver,tolerance::Float64=1.0e-3,slacks::Bool=true)
     # get problem dimensions
     n,m,N = get_sizes(solver)
     n̄,nn = get_num_states(solver)
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-    Nz,Np,Nx,Nu,nm = get_batch_sizes(solver)
+    Nz,Np,Nx,Nu,nm,NpI = get_batch_sizes(solver)
 
     active_set = newton_results.active_set
     active_set_ineq = newton_results.active_set_ineq
@@ -121,13 +129,13 @@ function newton_active_set!(newton_results::NewtonResults,results::SolverIterRes
             idx = (k-1)*p + i
 
             if i <= pI_idx
-                if results.C[k][i] > -tolerance || results.λ[k][i] > 0.0
+                if results.C[k][i] > -tolerance
                     active_set[idx] = 1
                     active_set_ineq[idx] = 1
                     s[idx] == 0.0 ? s[idx] = sqrt(2.0*max(0.0,-results.C[k][i])) : nothing
                 end
-            else
-                active_set[idx] = 1
+            # else
+            #     active_set[idx] = 1
             end
         end
     end
@@ -140,7 +148,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
     m̄,mm = get_num_controls(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-    Nz,Np,Nx,Nu,nm = get_batch_sizes(solver)
+    Nz,Np,Nx,Nu,nm,NpI = get_batch_sizes(solver)
 
     # pull out results for convenience
     X = results.X
@@ -246,11 +254,14 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
         ν[idx7] = results.s[k]
 
         # assembly active set indices
-        idx_as_pI = idx6[active_set_ineq[idx6]] # indices of active set for inequality constraints
+        # idx_as_pI = idx6[active_set_ineq[idx6]] # indices of active set for inequality constraints
 
     end
 
-    c[active_set_ineq] += 0.5*s[active_set_ineq].^2
+    # c[active_set_ineq] += 0.5*s[active_set_ineq].^2
+    c .+= 0.5*s.^2
+
+    newton_results.ρ[1] = maximum(vcat(results.μ...))
 
     return nothing
 end
@@ -313,6 +324,8 @@ function solve_kkt!(newton_results::NewtonResults)
     active_set_ineq = newton_results.active_set_ineq
 
     δ = newton_results.δ
+    ρ = newton_results.ρ[1]
+
 
     # get batch problem sizes
     Nz = newton_results.Nz
@@ -337,17 +350,20 @@ function solve_kkt!(newton_results::NewtonResults)
 
     A[_idx2,_idx4] = Diagonal(s)[active_set_ineq,active_set]'
     A[_idx4,_idx2] = Diagonal(s)[active_set_ineq,active_set]
-    A[_idx4,_idx4] = Diagonal(λ)[active_set_ineq,active_set_ineq]
+    A[_idx4,_idx4] = Diagonal(λ[active_set_ineq]) + ρ*Diagonal(c[active_set_ineq]) + 12.0*ρ*Diagonal(s[active_set_ineq].^2)
 
-    b[_idx1] = -(∇J + ∇c[active_set,:]'*λ[active_set] + ∇d'*ν)
+    A[_idx1,_idx4] = ρ*∇c[active_set_ineq,:]'*Diagonal(s[active_set_ineq])
+    A[_idx4,_idx1] = ρ*Diagonal(s[active_set_ineq])*∇c[active_set_ineq,:]
+
+    b[_idx1] = -(∇J + ∇c[active_set,:]'*λ[active_set] + ∇d'*ν + ρ*∇c[active_set,:]'*c[active_set] +  ρ*∇c[active_set_ineq,:]'*0.5*s[active_set_ineq].^2 + ρ*∇d'*d)
     b[_idx2] = -c[active_set]
     b[_idx3] = -d
-    b[_idx4] = -(λ .* s)[active_set_ineq]
+    b[_idx4] = -(λ[active_set_ineq] .* s[active_set_ineq] + ρ*c[active_set_ineq] .* s[active_set_ineq] + ρ*4*s[active_set_ineq].^3)
 
     ## indexing
-    # println("A:")
-    # println(rank(Array(A)))
-    # println(size(A))
+    println("A:")
+    println("rank: $(rank(Array(A)))")
+    println("size: $(size(A))")
     println("Active set A:")
     println("rank: $(rank(Array(A[_idx5,_idx5])))")
     println("size: $(size(A[_idx5,_idx5]))")
@@ -462,6 +478,17 @@ function newton_solve!(results::SolverIterResults,solver::Solver)
     println("Newton solve complete")
     println("J: $J")
     println("c_max: $c_max")
+end
+
+function newton_cost(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
+    ρ = newton_results.ρ[1]
+    J = cost(solver,results)
+    # J += newton_results.λ'*(0.5*newton_results.s.^2)
+    # J += newton_results.ν'*newton_results.d
+    # J += ρ*vcat(results.C...)'*(0.5*newton_results.s.^2)
+    # J += 0.5*ρ*(0.5*newton_results.s.^2)'*(0.5*newton_results.s.^2)
+    # J += 0.5*ρ*newton_results.d'*newton_results.d
+    return J
 end
 
 # """
