@@ -61,3 +61,5 @@ update_newton_results!(newton_results,results_new,solver)
 newton_step!(results_new,newton_results,solver,1.0)
 max_violation(results_new)
 newton_cost(res,newton_results,solver)
+
+newton_solve!(res,solver)

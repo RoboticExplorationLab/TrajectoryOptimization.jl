@@ -443,12 +443,13 @@ function newton_solve!(results::SolverIterResults,solver::Solver)
 
     while (c_max > max_c) && iter <= max_iter
         newton_step!(results_new,newton_results,solver,α)
-        backwardpass!(results_new,solver)
-        rollout!(results_new,solver,1.0)
-        results_new.X .= deepcopy(results_new.X_)
-        results_new.U .= deepcopy(results_new.U_)
-        update_constraints!(results_new,solver)
-        J = cost(solver,results_new)
+        # backwardpass!(results_new,solver)
+        # rollout!(results_new,solver,1.0)
+        # results_new.X .= deepcopy(results_new.X_)
+        # results_new.U .= deepcopy(results_new.U_)
+        # update_constraints!(results_new,solver)
+        # J = cost(solver,results_new)
+        J = newton_cost(results_new,newton_results,solver)
         c_max = max_violation(results_new)
 
         println("*Newton step: $iter")
@@ -457,7 +458,7 @@ function newton_solve!(results::SolverIterResults,solver::Solver)
         println("ΔJ = $(J-J_prev)")
         println("c_max: $c_max")
 
-        iter == 1 ? J_prev = J : nothing
+        # iter == 1 ? J_prev = J : nothing
 
         if J <= J_prev + ls_param*newton_results.b'*α*newton_results.δ
             results = copy(results_new)
@@ -483,11 +484,11 @@ end
 function newton_cost(results::SolverIterResults,newton_results::NewtonResults,solver::Solver)
     ρ = newton_results.ρ[1]
     J = cost(solver,results)
-    # J += newton_results.λ'*(0.5*newton_results.s.^2)
-    # J += newton_results.ν'*newton_results.d
-    # J += ρ*vcat(results.C...)'*(0.5*newton_results.s.^2)
-    # J += 0.5*ρ*(0.5*newton_results.s.^2)'*(0.5*newton_results.s.^2)
-    # J += 0.5*ρ*newton_results.d'*newton_results.d
+    J += newton_results.λ'*(0.5*newton_results.s.^2)
+    J += newton_results.ν'*newton_results.d
+    J += ρ*vcat(results.C...)'*(0.5*newton_results.s.^2)
+    J += 0.5*ρ*(0.5*newton_results.s.^2)'*(0.5*newton_results.s.^2)
+    J += 0.5*ρ*newton_results.d'*newton_results.d
     return J
 end
 
