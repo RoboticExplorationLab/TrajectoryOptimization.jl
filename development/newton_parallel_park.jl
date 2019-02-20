@@ -7,11 +7,11 @@ opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
 opts.cost_tolerance = 1e-5
 opts.cost_tolerance_intermediate = 1e-5
-opts.constraint_tolerance = 1e-5
+opts.constraint_tolerance = 1e-4
 opts.square_root = false
 opts.active_constraint_tolerance = 0.0
 opts.outer_loop_update_type = :default
-opts.penalty_max = 1e8
+opts.penalty_max = 1e3
 opts.live_plotting = false
 
 # Parallel Park

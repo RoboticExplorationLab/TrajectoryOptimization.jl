@@ -5,9 +5,9 @@ using SparseArrays
 
 opts = TrajectoryOptimization.SolverOptions()
 opts.verbose = false
-opts.cost_tolerance = 1e-1
-opts.cost_tolerance_intermediate = 1e-1
-opts.constraint_tolerance = 1.0
+opts.cost_tolerance = 1e-4
+opts.cost_tolerance_intermediate = 1e-4
+opts.constraint_tolerance = 1e-3
 opts.square_root = false
 opts.active_constraint_tolerance = 0.0
 opts.outer_loop_update_type = :default
@@ -34,21 +34,21 @@ c_max_prev = stats["c_max"][end]
 results_new = copy(results)
 newton_solve!(results_new,solver)
 
-#
 # # newton_solve!(results_new,solver)
 # @assert results_new.X == results.X
 # @assert results_new.U == results.U
 # @assert results_new.C == results.C
 # @assert results_new.λ == results.λ
-#
+
 newton_results = NewtonResults(solver)
 newton_active_set!(newton_results,results_new,solver)
 update_newton_results!(newton_results,results_new,solver)
 newton_step!(results_new,newton_results,solver,1.0)
 c_max = max_violation(results_new)
 J = cost(solver,results_new)
+
 J-J_prev
-c_max-c_max_prev
+# c_max-c_max_prev
 #
 # cost_constraints(solver,results_new) - cost_constraints(solver,results)
 # _cost(solver,results_new) - _cost(solver,results)

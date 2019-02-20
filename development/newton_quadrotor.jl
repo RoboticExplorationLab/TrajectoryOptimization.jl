@@ -4,6 +4,40 @@ using Plots
 using SparseArrays
 
 model,obj = Dynamics.quadrotor
+model,obj_con = Dynamics.quadrotor_3obs
+##########
+N = 101 # 201
+integration = :rk4
+opts = SolverOptions()
+opts.verbose = false
+opts.square_root = false
+opts.cost_tolerance = 1e-5
+opts.cost_tolerance_intermediate = 1e-5
+opts.constraint_tolerance = 1e-4
+opts.outer_loop_update_type = :feedback
+
+
+# Obstacle Avoidance
+model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+r_quad = 3.0
+n = model.n
+m = model.m
+obj_con = TrajectoryOptimization.Dynamics.quadrotor_3obs[2]
+spheres = TrajectoryOptimization.Dynamics.quadrotor_3obs[3]
+n_spheres = length(spheres)
+
+solver_uncon = Solver(model,obj_uncon,integration=integration,N=N,opts=opts)
+solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
+
+U_hover = 0.5*9.81/4.0*ones(solver_uncon.model.m, solver_uncon.N-1)
+X_hover = rollout(solver_uncon,U_hover)
+# @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
+# @time results_uncon_dircol, stats_uncon_dircol = TrajectoryOptimization.solve_dircol(solver_uncon, X_hover, U_hover, options=dircol_options)
+
+@time res, stats_con = solve(solver_con,U_hover)
+solver = solver_con
+#########
+
 n = 13
 m = 4
 
@@ -30,18 +64,20 @@ u_min = 0.0
 
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max)#,u_min=u_min)
-solver = Solver(model,obj_con,N=50)
+solver = Solver(model,obj_con,N=101)
 
 solver.obj
 solver.opts.cost_tolerance = 1e-5
 solver.opts.constraint_tolerance = 1e-4
-solver.opts.penalty_max = 1e4
+solver.opts.penalty_max = 1e8
 n,m,N = get_sizes(solver)
 Random.seed!(1)
 U = 0.5*9.81/4.0*ones(solver.model.m, solver.N-1)
 res,stats = solve(solver,U)
 plot(res.U)
 plot(res.X)
+
+
 cost(solver,res)
 λ_update_default!(res,solver);
 update_constraints!(res,solver)
@@ -62,4 +98,4 @@ newton_step!(results_new,newton_results,solver,1.0)
 max_violation(results_new)
 newton_cost(res,newton_results,solver)
 
-newton_solve!(res,solver)
+# newton_solve!(res,solver)
