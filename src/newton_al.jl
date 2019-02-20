@@ -102,7 +102,7 @@ end
 function line_search(V,H,g,a=trues(length(V)))
     J0 = mycost(V)
     α = 1.
-    V_ = copy(V)
+    V_ = copy(V)5.17, 6.2 & A5.1, 6.9 & A5.2, A3.18, A3.20, A11.4, and A13.2.
     delta = (H[a,a]\g[a])
     V_[a] = V[a] - α*delta
     J = mycost(V_)
@@ -285,3 +285,17 @@ minimum(abs.(eigvals(H)))
 J = Float64[]
 c_max = Float64[]
 for i = 1:10
+    g = ForwardDiff.gradient(mycost,V)
+    H = ForwardDiff.hessian(mycost,V)
+    a = active_set(V,1e-3)
+    V1 = line_search(V,H+0I,g,a)
+
+    push!(J,mycost(V1))
+    push!(c_max,max_c(V1))
+    push!(grad, norm(ForwardDiff.gradient(mycost,V1)))
+    copyto!(V,V1)
+end
+
+plot(-diff(J),yscale=:log10)
+plot(c_max,yscale=:log10)
+plot(grad,yscale=:log10)
