@@ -35,7 +35,7 @@ obj = LQRObjective(Q, R, Qf, tf, x0, xf)
 x_min = [-0.25; -0.001; -Inf]
 x_max = [0.25; 1.001; Inf]
 
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj)#,x_min=x_min,x_max=x_max)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
 
 solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,N=31,opts=opts)
@@ -54,19 +54,21 @@ p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 ## Newton 2 ###############
 results_new = copy(results)
 
-newton_solve!(results_new,solver)
+# newton_solve!(results_new,solver)
 
-# newton_results = NewtonResults(solver)
-# newton_active_set!(newton_results,results_new,solver,0.0)
+newton_results = NewtonResults(solver)
+newton_active_set!(newton_results,results_new,solver)
 # sum(newton_results.active_set)
 # sum(vcat(results_new.active_set...))
 # sum(newton_results.active_set_ineq)
 # newton_results.s[findall(x->x != 0.0, newton_results.s)]
 # findall(x->x < 0.0, vcat(results.C...)[newton_results.active_set_ineq])
-# update_newton_results!(newton_results,results_new,solver)
-# newton_step!(results_new,newton_results,solver,1.0)
-# max_violation(results_new)
-#
+update_newton_results!(newton_results,results_new,solver)
+newton_step!(results_new,newton_results,solver,1.0)
+max_violation(results_new)
+
+
+a = 1
 # # project into feasible space
 # backwardpass!(results_new,solver)
 # rollout!(results_new,solver,1.0)

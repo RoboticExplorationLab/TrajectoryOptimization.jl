@@ -19,7 +19,7 @@ u_min = -0.2
 u_max = 0.2
 obj_con = TrajectoryOptimization.ConstrainedObjective(obj, tf=5.0,use_xf_equality_constraint=true, u_min=u_min, u_max=u_max)#, x_min=x_min, x_max=x_max)
 
-solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,N=100,opts=opts)
+solver = TrajectoryOptimization.Solver(model,obj_con,integration=:rk4,N=7,opts=opts)
 U = rand(solver.model.m, solver.N)
 
 results, stats = TrajectoryOptimization.solve(solver,U)
@@ -41,14 +41,14 @@ newton_solve!(results_new,solver)
 # @assert results_new.C == results.C
 # @assert results_new.λ == results.λ
 #
-# newton_results = NewtonResults(solver)
-# newton_active_set!(newton_results,results_new,solver,0.0)
-# update_newton_results!(newton_results,results_new,solver)
-# newton_step!(results_new,newton_results,solver,0.001)
-# c_max = max_violation(results_new)
-# J = cost(solver,results_new)
-# J-J_prev
-# c_max-c_max_prev
+newton_results = NewtonResults(solver)
+newton_active_set!(newton_results,results_new,solver)
+update_newton_results!(newton_results,results_new,solver)
+newton_step!(results_new,newton_results,solver,1.0)
+c_max = max_violation(results_new)
+J = cost(solver,results_new)
+J-J_prev
+c_max-c_max_prev
 #
 # cost_constraints(solver,results_new) - cost_constraints(solver,results)
 # _cost(solver,results_new) - _cost(solver,results)
