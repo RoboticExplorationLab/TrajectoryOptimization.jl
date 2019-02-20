@@ -2,6 +2,7 @@ using MeshCatMechanisms
 using LinearAlgebra
 using RigidBodyDynamics
 using Plots
+using GeometryTypes
 import TrajectoryOptimization: hold_trajectory, Trajectory, total_time
 import RigidBodyDynamics: transform
 include("N_plots.jl")
@@ -47,11 +48,12 @@ x0 = zeros(n)
 x0[2] = -pi/2
 xf = copy(x0)
 xf[1] = pi/4
-Q = 1e-4*Diagonal(I,n)*10
+Q = 1.0*Diagonal(I,n)
+Q = Diagonal([ones(7); ones(7)*20])
 Qf = 250.0*Diagonal(I,n)
-R = 1e-5*Diagonal(I,m)/100
-Rd = 1e-6
-R = Diagonal([1e-8,1e-8,Rd,Rd,Rd,Rd,Rd])
+R = 1e-3*Diagonal(I,m)
+# Rd = 1e-2
+# R = Diagonal([1e-2,1e-2,Rd,Rd,Rd,Rd,Rd])
 tf = 5.0
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
@@ -150,6 +152,7 @@ solver.opts.bp_reg_initial = 0
 # iLQR
 res_con, stats_con = solve(solver,U0_hold)
 stats_con["iterations"]
+plot(res_con.U)
 cost(solver,res_con)
 
 # DIRCOL
@@ -190,6 +193,7 @@ xf[1:nn] = configuration(ik_res)
 
 # Define objective with new final configuration
 obj_ik = LQRObjective(Q, R, Qf, tf, x0, xf)
+obj_ik = ConstrainedObjective(obj_ik)
 
 # Solve
 solver_ik = Solver(model,obj_ik,N=N)
