@@ -1,3 +1,4 @@
+using IterativeSolvers
 struct NewtonResults
     z::Vector # z = [x1;u1;...;xN]
     λ::Vector # constraint multipliers
@@ -382,7 +383,9 @@ function solve_kkt!(newton_results::NewtonResults)
     # println(rank(Array(A)+Matrix(I,Nz+Np+Nx+Np,Nz+Np+Nx+Np)))
     # println("KKT size: $(length(_idx5))")
 
-    δ[_idx5] = A[_idx5,_idx5]\b[_idx5]
+    # δ[_idx5] = A[_idx5,_idx5]\b[_idx5]
+    δ[_idx5] = minres(A[_idx5,_idx5],b[_idx5])
+
 
     # z .+= alpha*δ[_idx1]
     # λ[active_set] += alpha*δ[_idx2]
