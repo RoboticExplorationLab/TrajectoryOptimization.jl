@@ -32,7 +32,7 @@ c_max_prev = stats["c_max"][end]
 
 # Newton 2
 results_new = copy(results)
-newton_solve!(results_new,solver)
+# newton_solve!(results_new,solver)
 
 # # newton_solve!(results_new,solver)
 # @assert results_new.X == results.X

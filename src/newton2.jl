@@ -132,7 +132,7 @@ function newton_active_set!(newton_results::NewtonResults,results::SolverIterRes
                 if results.C[k][i] > -tolerance
                     active_set[idx] = 1
                     active_set_ineq[idx] = 1
-                    s[idx] == 0.0 ? s[idx] = sqrt(2.0*max(0.0,-results.C[k][i])) : nothing
+                    s[idx] = sqrt(2.0*max(0.0,-results.C[k][i]))
                 end
             # else
             #     active_set[idx] = 1
@@ -183,6 +183,9 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
     Inn = sparse(Matrix(I,nn,nn))
 
+    newton_results.ρ[1] = maximum(vcat(results.μ...))
+    ρ = newton_results.ρ[1]
+
     # update batch matrices
     for k = 1:N
         x = results.X[k]
@@ -208,30 +211,30 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
         k != N ? pI_idx = pI : pI_idx = pI_N
 
+        as = active_set[idx2]
+
         # Assemble ∇²J, ∇J, ∇c, c, z
         if k != N
-            ∇²J[idx3,idx3] = Q + Cx[k]'*Iμ[k]*Cx[k]
-            ∇²J[idx3,idx4] = H' + Cx[k]'*Iμ[k]*Cu[k]
-            ∇²J[idx4,idx3] = H + Cu[k]'*Iμ[k]*Cx[k]
-            ∇²J[idx4,idx4] = R + Cu[k]'*Iμ[k]*Cu[k]
+            ∇²J[idx3,idx3] = Q + ρ*Cx[k][as,:]'*Cx[k][as,:]
+            ∇²J[idx3,idx4] = H' + ρ*Cx[k][as,:]'*Cu[k][as,:]
+            ∇²J[idx4,idx3] = H + ρ*Cu[k][as,:]'*Cx[k][as,:]
+            ∇²J[idx4,idx4] = R + ρ*Cu[k][as,:]'*Cu[k][as,:]
 
-            ∇J[idx3] = q + Cx[k]'*Iμ[k]*C[k]
-            ∇J[idx4] = r + Cu[k]'*Iμ[k]*C[k]
+            ∇J[idx3] = q #+ ρ*Cx[k][as,:]'*C[k][as]
+            ∇J[idx4] = r #+ ρ*Cu[k][as,:]'*C[k][as]
 
             ∇c[idx2,idx3] = Cx[k]
             ∇c[idx2,idx4] = Cu[k]
 
             c[idx2] = C[k]
-            # c[idx6] += 0.5*s[idx6].^2
 
             z[idx] = [x;u]
         else
-            ∇²J[idx,idx] = Qf + Cx[N]'*Iμ[N]*Cx[N]
-            ∇J[idx] = qf + Cx[N]'*Iμ[N]*C[N]
+            ∇²J[idx,idx] = Qf #+ ρ*Cx[N][as,:]'*Cx[N][as,:]
+            ∇J[idx] = qf #+ ρ*Cx[N][as,:]'C[N][as,:]
 
             ∇c[idx2,idx] = results.Cx[N]
             c[idx2] = results.C[N]
-            # c[idx6] += 0.5*s[idx6] .^2
 
             z[idx] = x
         end
@@ -253,15 +256,7 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
         λ[idx2] = results.λ[k]
         ν[idx7] = results.s[k]
 
-        # assembly active set indices
-        # idx_as_pI = idx6[active_set_ineq[idx6]] # indices of active set for inequality constraints
-
     end
-
-    # c[active_set_ineq] += 0.5*s[active_set_ineq].^2
-    c .+= 0.5*s.^2
-
-    newton_results.ρ[1] = maximum(vcat(results.μ...))
 
     return nothing
 end
@@ -337,6 +332,7 @@ function solve_kkt!(newton_results::NewtonResults)
     # assemble KKT matrix,vector
     _idx1 = Array(1:Nz)
     _idx2 = Array((1:Np) .+ Nz)[active_set]
+    _idx22 = Array((1:Np) .+ Nz)[active_set_ineq]
     _idx3 = Array((1:Nx) .+ (Nz + Np))
     _idx4 = Array((1:Np) .+ (Nz + Np + Nx))[active_set_ineq]
 
@@ -355,8 +351,9 @@ function solve_kkt!(newton_results::NewtonResults)
     A[_idx1,_idx4] = ρ*∇c[active_set_ineq,:]'*Diagonal(s[active_set_ineq])
     A[_idx4,_idx1] = ρ*Diagonal(s[active_set_ineq])*∇c[active_set_ineq,:]
 
-    b[_idx1] = -(∇J + ∇c[active_set,:]'*λ[active_set] + ∇d'*ν + ρ*∇c[active_set,:]'*c[active_set] +  ρ*∇c[active_set_ineq,:]'*0.5*s[active_set_ineq].^2 + ρ*∇d'*d)
+    b[_idx1] = -(∇J + ∇c[active_set,:]'*λ[active_set] + ∇d'*ν + ρ*∇c[active_set_ineq,:]'*0.5*s[active_set_ineq].^2 + ρ*∇d'*d)
     b[_idx2] = -c[active_set]
+    b[_idx22] -= 0.5*s[active_set_ineq].^2
     b[_idx3] = -d
     b[_idx4] = -(λ[active_set_ineq] .* s[active_set_ineq] + ρ*c[active_set_ineq] .* s[active_set_ineq] + 0.5*ρ*s[active_set_ineq].^3)
 

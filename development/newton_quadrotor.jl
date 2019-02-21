@@ -5,8 +5,9 @@ using SparseArrays
 
 model,obj = Dynamics.quadrotor
 model,obj_con = Dynamics.quadrotor_3obs
+
 ##########
-N = 101 # 201
+N = 50 # 201
 integration = :rk4
 opts = SolverOptions()
 opts.verbose = false
