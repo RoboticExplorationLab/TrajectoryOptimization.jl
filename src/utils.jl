@@ -1,4 +1,4 @@
-import Base: convert, copyto!, Array
+import Base: convert, copyto!, Array, vec
 import LinearAlgebra: norm
 import Plots: plot, plot!
 
@@ -113,6 +113,11 @@ function to_array(A::Vector{D} where {D<:Diagonal})
     end
     return B
 end
+
+function vec(A::Trajectory)
+	vec(to_array(A))
+end
+
 
 function to_dvecs(X::AbstractArray)
     N = size(X)[end]
