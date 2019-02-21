@@ -108,6 +108,8 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N, = get_num_terminal_constraints(solver)
 
     if isempty(prevResults)
         results = init_results(solver, X0, U0, λ=λ, μ=μ)
@@ -234,8 +236,10 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 push!(c_max_hist, c_max)
                 push!(c_l2_norm_hist, c_ℓ2_norm)
 
-                # μ_max = maximum(maximum.(results.μ))
-                μ_max = 1
+                p > 0 ? m1 = maximum(maximum.(results.μ[1:N-1])) : m1 = 0
+                p_N > 0 ? m2 = maximum(results.μ[N]) : m2 = 0
+                μ_max = max(m1,m2)
+                # μ_max = 1
 
                 @logmsg InnerLoop :c_max value=c_max
 
