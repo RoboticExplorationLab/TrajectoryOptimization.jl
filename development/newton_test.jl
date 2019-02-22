@@ -1,20 +1,30 @@
 using ForwardDiff
 using LinearAlgebra
 using Plots
+using Formatting
 import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
 
 model,obj = Dynamics.pendulum
 obj.cost.Q .= Diagonal(I,2)*1
 obj.cost.R .= Diagonal(I,1)*1
+obj.cost.Qf .= Diagonal(I,2)*100
 obj = ConstrainedObjective(obj,u_max=3)
 obj = update_objective(obj,tf=5)
-obj.cost.Qf .= Diagonal(I,2)*1
 
 model,obj = Dynamics.dubinscar
-obj = ConstrainedObjective(obj,u_max=0.75,u_min=-0.75)#,x_min=[-0.5;-0.01;-Inf])
+obj.cost.Q .= Diagonal(I,3)*1e-1
+obj.cost.R .= Diagonal(I,2)*1e-1
+obj.cost.Qf .= Diagonal(I,3)*100
+obj_c = ConstrainedObjective(obj,u_max=0.75,u_min=-0.75,x_min=[-0.5;-0.1;-Inf],x_max=[0.5,1.1,Inf])
+
+model,obj = Dynamics.quadrotor
+obj_c = ConstrainedObjective(obj,u_max=4,u_min=0)
+
+model,obj = Dynamics.double_integrator
+obj_c = ConstrainedObjective(obj)
 
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
-solver = Solver(model,obj,N=11)
+solver = Solver(model,obj_c,N=25)
 n,m,N = get_sizes(solver)
 p,pI,pE = get_num_constraints(solver)
 p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
@@ -23,10 +33,13 @@ dt = solver.dt
 U0 = ones(m,N-1)
 solver.opts.verbose = true
 solver.opts.penalty_initial = 0.01
-solver.opts.cost_tolerance_intermediate = 1e-3
+solver.opts.cost_tolerance_intermediate = 1e-2
+solver.opts.cost_tolerance = 1e-2
+solver.opts.constraint_tolerance = 1e-3
 res,stats = solve(solver,U0)
 plot()
 plot_trajectory!(res)
+plot(res.X)
 plot(res.U)
 
 
@@ -46,11 +59,13 @@ function lagrangian(V)
 end
 
 function al_lagrangian(V,ρ)
+    eps = 1e-4
     Z = V[1:Nz]
     d = dynamics(Z)
     h = cE(Z)
     g = cI(Z)
-    lagrangian(V) + ρ/2*(d'd + h'h + g'g)
+    a = g .> eps
+    lagrangian(V) + ρ/2*sqrt(d'd + h'h + g[a]'g[a])
 end
 
 function cE(Z)
@@ -214,6 +229,135 @@ function viewmatrix(A::Matrix,filename="logs/viewer.txt")
     close(io)
 end
 
+function create_results_from_newton(V)
+    results = ConstrainedVectorResults(n,m,p,N,p_N)
+    Z = V[1:Nz]
+    X = reshape(Z[1:Nx],n,N)
+    U = reshape(Z[Nx+1:end],m,N-1)
+    nu = V[Nz.+(1:Nx)]
+    λ = V[(Nz + Nx) .+ (1:Nh)]
+    μ = V[(Nz + Nx + Nh) .+ (1:Ng)]
+    copyto!(results.X,X)
+    copyto!(results.U,U)
+
+    lambda = reshape(view(λ,1:(N-1)*pE),pE,N-1)
+    mu = reshape(view(μ,1:(N-1)*pI),pI,N-1)
+    copyto!(results.λ,[mu; lambda])
+    results.λ[N] = [μ[end-pI_N+1:end]; λ[end-pE_N+1:end]]
+    return results
+end
+
+function newton_step(V,ρ,type;
+    eps=1e-2, verbose=false, iters_linesearch=10, projection=:none, reg=Diagonal(zero(V)), meritfun=al_lagrangian(V,ρ))
+
+    # Define constraint violation functions
+    max_c2(V) = max(Ng > 0 ? maximum(cI(V)) : 0, norm(cE(V),Inf))
+    max_c(V) = max(norm(dynamics(V),Inf),max_c2(V))
+
+    # Initial cost
+    J0 = meritfun(V)
+    V_ = copy(V)
+    verbose ? println("Initial Cost: $J0") : nothing
+
+    # Build and solve KKT
+    A,b = buildKKT(V_,ρ,type)
+    a = active_set(V_,1e-3)
+    amu = a[ind1.μ]
+    δV = zero(V)
+    Ā = A[a,a] + reg[a,a]
+    δV[a] = -Ā\b[a]
+
+    if projection == :jacobian
+        V1 = V + δV
+        Z1 = V1[ind1.z]
+        Z = V[ind1.z]
+        D = ForwardDiff.jacobian(dynamics,Z)
+        H = ForwardDiff.jacobian(cE,Z)
+        G = ForwardDiff.jacobian(cI,Z)
+        Y = [D;H;G[amu,:]]
+        d1 = dynamics(Z1)
+        h1 = cE(Z1)
+        g1 = cI(Z1)
+        y = [d1;h1;g1[amu]]
+        # dv̂ = -D'*((D*D')\d1)
+        δV̂ = -Y'*((Y*Y')\y)
+        δV[ind1.z] += δV̂
+    elseif projection == :constraints
+        b̂ = copy(b)
+        for j = 1:5
+            V1 = V_ + δV
+            d1 = dynamics(V1)
+            h1 = cE(V1)
+            g1 = cI(V1)
+            b̂[ind1.ν] = d1
+            b̂[ind1.λ] = h1
+            b̂[ind1.μ] = g1
+            δV[a] = -Ā\b̂[a]
+            V_ = V_ + δV
+        end
+    end
+
+    # Line Search
+    α = armijo_line_search(meritfun,V,δV,b, max_iter=iters_linesearch)
+    V_ = V_ + α*δV
+    J = meritfun(V_)
+    cost = J
+    grad = norm(b)
+    c_max = max_c(V_)
+
+    change(x,x0) = format((x0-x)/x0*100,precision=2) * "%"
+    println()
+    println("  cost: $J $(change(J,J0))")
+    println("  grad: $(grad)")
+    println("  c_max: $(c_max)")
+    println("  c_max2: $(max_c2(V_))")
+    println("  α: $α")
+    println("  rank: $(rank(Ā))")
+    println("  cond: $(cond(Ā))")
+    stats = Dict("cost"=>cost,"grad"=>grad,"c_max"=>c_max)
+    return V_
+end
+
+
+function createV(res)
+    x = vec(res.X)
+    u = vec(res.U)
+    nu = zeros(Nx)
+
+
+    if res isa ConstrainedVectorResults
+        s = zeros(pI,N-1)
+        μ = zeros(pI,N-1)
+        λ = zeros(pE,N-1)
+        ineq = 1:pI
+        eq = pI .+ (1:pE)
+        for k = 1:N-1
+            s[:,k] = sqrt.(2.0*max.(0,-res.C[k][ineq]))
+            μ[:,k] = res.λ[k][ineq]
+            λ[:,k] = res.λ[k][eq]
+        end
+        s = vec(s)
+        μ = vec(μ)
+        λ = vec(λ)
+        append!(s, sqrt.(2.0*max.(0,-res.C[N][1:pI_N])))
+        append!(μ, res.λ[N][1:pI_N])
+        append!(λ, res.λ[N][pI_N .+ (1:pE_N)])
+    else
+        λ = Float64[]
+        μ = Float64[]
+    end
+    return [x;u; nu; λ; μ]
+end
+
+function KKT_reg(;z=0,ν=0,λ=0,μ=0)
+    r = ones(NN)
+    r[ind1.z] .= z
+    r[ind1.ν] .= -ν
+    r[ind1.λ] .= -λ
+    r[ind1.μ] .= -μ
+    Diagonal(r)
+end
+
 isfullrank(A) = rank(A) == minimum(size(A))
 
 
@@ -227,72 +371,83 @@ names = (:z,:ν,:λ,:μ)
 ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
 ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng],names)
 
-x = vec(res.X)
-u = vec(res.U)
-nu = zeros(Nx)
-
-s = zeros(pI,N-1)
-μ = zeros(pI,N-1)
-λ = zeros(pE,N-1)
-
-ineq = 1:pI
-eq = pI .+ (1:pE)
-for k = 1:N-1
-    s[:,k] = sqrt.(2.0*max.(0,-res.C[k][ineq]))
-    μ[:,k] = res.λ[k][ineq]
-    λ[:,k] = res.λ[k][eq]
-end
-s = vec(s)
-μ = vec(μ)
-λ = vec(λ)
-append!(s, sqrt.(2.0*max.(0,-res.C[N][1:pI_N])))
-append!(μ, res.λ[N][1:pI_N])
-append!(λ, res.λ[N][pI_N .+ (1:pE_N)])
-
 inds = (z=1:Nz, ν=Nz.+(1:Nx), λ=(Nz+Nx) .+ (1:Nh), μ=(Nz+Nx+Nh) .+ (1:Ng))
 
 # Build KKT System
-ρ = 100
-Z = [x;u]
-V = [x;u; nu; λ; μ]
+V = createV(res)
+Z = V[ind1.z]
 
-J0 = al_lagrangian(V,ρ)
+J0 = meritfun(V)
 dynamics(V)
 g0 = cI(V)
 
+
+ρ = 1000
+meritfun(V) = al_lagrangian(V,1)
+
+V = createV(res)
+reg = KKT_reg(z=0,ν=1,λ=1,μ=1)
+V = newton_step(V,0,:kkt,projection=:none,eps=1e-2,meritfun=meritfun)
+d = dynamics(V)
+nu = V[ind1.ν]
+sign.(d) == sign.(nu)
+d .* nu
+
+
+
 # Build KKT
-A,b = buildKKT(V,ρ,:penalty)
+# A,b = buildKKT(V,ρ,:penalty)
 A_,b_ = buildKKT(V,ρ,:kkt)
 a = active_set(Z,1e-2)
 n_active = Ng - (length(a) - count(a))
 amu = a[inds.μ]
-
-D = ForwardDiff.jacobian(dynamics,Z)
-H = ForwardDiff.jacobian(cE,Z)
-G = ForwardDiff.jacobian(cI,Z)
-isfullrank(D)
-isfullrank(H)
-isfullrank(G[amu,:])
+reg = 0
+A = A_[a,a] + KKT_reg(z=0,ν=reg,λ=reg,μ=reg)[a,a]
+b = b_[a]
 
 # Take Step
 dv = zero(V)
-dv[a] = -A_[a,a]\b_[a]
-A2 = A_[a,a]
-Ga = A2[ind1.z,Nz+Nx+Nh+1:end]
-Ga == G[amu,:]'
-isfullrank(A_[ind2.zμ])
-rank(A_[a,a])
+dv[a] = -A\b
+# dv[a] = -A[a,a]\b[a]
 rank(A)
+isfullrank(A)
 cond(A)
+r = A*dv[a] + b
+norm(r)
 # dv[a] = -A[a,a]\b[a]
 
-α = armijo_line_search(lagrangian,V,dv,b_)
+α = armijo_line_search(meritfun,V,dv,b_)
+
+# Projection corection
+V1 = V + dv
+Z1 = V1[ind1.z]
+∇J = ForwardDiff.gradient(mycost,Z)
+D = ForwardDiff.jacobian(dynamics,Z)
+H = ForwardDiff.jacobian(cE,Z)
+G = ForwardDiff.jacobian(cI,Z)
+Y = [D;H;G[amu,:]]
+d1 = dynamics(Z1)
+h1 = cE(Z1)
+g1 = cI(Z1)
+y = [d1;h1;g1[amu]]
+# dv̂ = -D'*((D*D')\d1)
+dv̂ = -Y'*((Y*Y')\y)
+dv[ind1.z] += dv̂
+b̂ = [∇J + D'nu + H'λ + G'μ; d1; h1; g1]
+
+# Resolve for constraints
+_,b1 = buildKKT(V1,ρ,:kkt)
+meritfun(V)
+dv2[a] = A_[a,a]\b1[a]
+α = armijo_line_search(meritfun,V,dv2,b1)
+
 V1 = V + dv*α
 
-# Evaluate
+# Evaluatex
 dJ = J0 - lagrangian(V1)
-norm(dynamics(V1))
-norm(dynamics(V1),Inf)
+d = dynamics(V1)
+norm(d)
+norm(d,Inf)
 argmax(abs.(dynamics(V1)))
 norm(cE(V1))
 norm(b_)
@@ -302,16 +457,39 @@ maximum(g[amu])
 maximum(g)
 amu[argmax(g)] == false
 
-mu1 = V1[inds.μ]
-mu1[amu]
-
 # Cap multipier
 mu1 .= max.(0,mu1)
 V1[inds.μ] = mu1
 V = copy(V1)
 
+results = create_results_from_newton(V)
+copyto!(results.μ,res.μ)
+TrajectoryOptimization.update_constraints!(results,solver)
+TrajectoryOptimization.update_jacobians!(results,solver)
+max_violation(results)
+plot()
+plot_trajectory!(results)
 
+J0 = cost(solver,results)
+copyto!(results.U_,results.U)
+rollout!(results.X_,results.U_,solver)
+TrajectoryOptimization.update_constraints!(results,solver,results.X_,results.U_)
+max_violation(results)
+plot_trajectory!(to_array(results.X_))
+results.X_
 
+∇v = backwardpass!(results,solver)
+rollout!(results,solver,0.0)
+max_violation(results)
+J = cost(solver,results,results.X_,results.U_)
+J0 - J
+max_violation(res)
+
+copyto!(results.X,results.X_)
+copyto!(results.U,results.U_)
+plot_trajectory!(to_array(results.X_))
+Vnew = createV(results)
+norm(dynamics(Vnew),Inf)
 
 ForwardDiff.gradient(lagrangian,V1)
 Z = V1[1:Nz]
