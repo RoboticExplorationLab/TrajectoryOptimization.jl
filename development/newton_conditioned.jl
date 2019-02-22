@@ -1,5 +1,16 @@
 include("partitioning.jl")
-function gen_newton_functions(solver::Solver)
+
+struct NewtonSolver
+    buildKKT::Function
+    cost::Function
+    cI::Function
+    cE::Function
+    d::Function
+    active_set::Function
+    build_results::Function
+end
+
+function get_conditioned_newton_solver(solver::Solver)
     n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
@@ -172,7 +183,6 @@ function gen_newton_functions(solver::Solver)
             b[ind1.μ] = g+s.^2/2
             b[ind1.λ] = h
             b[ind1.ν] = dd
-
         end
 
         return A,b
@@ -182,34 +192,38 @@ function gen_newton_functions(solver::Solver)
         X = to_array(results.X)
         U = to_array(results.U)
 
+        ν = zeros(n,N-1)
         s = zeros(pI,N-1)
         μ = zeros(pI,N-1)
         λ = zeros(pE,N-1)
-        ν = zeros(n,N-1)
 
         ineq = 1:pI
         eq = pI .+ (1:pE)
 
+        if results isa ConstrainedIterResults
+            for k = 1:N-1
+                s[:,k] = sqrt.(2.0*max.(0,-results.C[k][ineq]))
+                μ[:,k] = results.λ[k][ineq]
+                λ[:,k] = results.λ[k][eq]
+            end
+            append!(s, sqrt.(2.0*max.(0,-results.C[N][1:pI_N])))
+            append!(μ, results.λ[N][1:pI_N])
+            append!(λ, results.λ[N][pI_N .+ (1:pE_N)])
+        end
         for k = 1:N-1
-            s[:,k] = sqrt.(2.0*max.(0,-results.C[k][ineq]))
-            μ[:,k] = results.λ[k][ineq]
-            λ[:,k] = results.λ[k][eq]
             ν[:,k] = results.s[k]
         end
         s = vec(s)
         μ = vec(μ)
         λ = vec(λ)
         ν = vec(ν)
-        append!(s, sqrt.(2.0*max.(0,-results.C[N][1:pI_N])))
-        append!(μ, results.λ[N][1:pI_N])
-        append!(λ, results.λ[N][pI_N .+ (1:pE_N)])
         append!(ν, results.s[N])
-        @show length(s), length(μ), length(λ), length(ν)
 
         V = packV(X,U,s,μ,λ,ν)
     end
 
-    return buildKKT, getV, packV, unpackV, packZZ, unpackZZ, al_cost, cI, cE, d, active_set, calculate_jacobians, ind1, ind2
+    # return buildKKT, getV, packV, unpackV, packZZ, unpackZZ, al_cost, cI, cE, d, active_set, calculate_jacobians, ind1, ind2
+    NewtonSolver(buildKKT,al_cost,cI,cE,d,active_set,getV)
 end
 
 function get_batch_sizes2(solver::Solver)
@@ -241,7 +255,7 @@ function armijo_line_search(merit::Function,V,d,grad; max_iter=10, ϕ=0.01)
     return α
 end
 
-model,obj = Dynamics.dubinscar_parallelpark
+model,obj = Dynamics.dubinscar
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
 solver = Solver(model,obj,N=21)
 n,m,N = get_sizes(solver)
@@ -252,18 +266,19 @@ cost(solver,res)
 max_violation(res)
 λ_update_default!(res,solver)
 
-buildKKT, getV, packV, unpackV, packZZ, unpackZZ, al_cost, cI, cE, d, active_set, calculate_jacobians, ind1, ind2 = gen_newton_functions(solver::Solver)
+n_solver = get_conditioned_newton_solver(solver)
+cI = n_solver.cI; cE = n_solver.cE; d = n_solver.d
 max_c(V) = max(maximum(cI(V)),norm(cE(V),Inf),norm(d(V),Inf))
 
 ρ = 1e6
-merit(V) = al_cost(V,ρ)
-V = getV(res)
+merit(V) = n_solver.cost(V,ρ)
+V = n_solver.build_results(res)
 J0 = merit(V)
 c_max0 = max_c(V)
 
 J_prev = merit(V)
-A,b = buildKKT(V,ρ,:new)
-a = active_set(V,1)
+A,b = n_solver.buildKKT(V,ρ)
+a = n_solver.active_set(V,1)
 rank(Array(A))
 cond(Array(A))
 
@@ -273,6 +288,7 @@ reg = 1
 δV = (A+reg*I)\b
 α = armijo_line_search(merit,V,δV,b)
 V1 = V - δV*α
+merit(V1)
 @show J_prev - merit(V1)
 @show max_c(V) / max_c(V1)
 max_c(V1)
