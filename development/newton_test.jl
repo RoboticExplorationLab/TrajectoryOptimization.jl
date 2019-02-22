@@ -4,12 +4,14 @@ using Plots
 import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
 
 model,obj = Dynamics.pendulum
-obj.cost.Q .= Diagonal(I,2)
-obj = ConstrainedObjective(obj)
+obj.cost.Q .= Diagonal(I,2)*1
+obj.cost.R .= Diagonal(I,1)*1
+obj = ConstrainedObjective(obj,u_max=3)
+obj = update_objective(obj,tf=5)
 obj.cost.Qf .= Diagonal(I,2)*1
 
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
-solver = Solver(model,obj,N=11)
+solver = Solver(model,obj,N=51)
 n,m,N = get_sizes(solver)
 p,pI,pE = get_num_constraints(solver)
 p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
@@ -17,8 +19,11 @@ c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(sol
 dt = solver.dt
 U0 = ones(m,N-1)
 solver.opts.verbose = true
+solver.opts.penalty_initial = 0.01
+solver.opts.cost_tolerance_intermediate = 1e-3
 res,stats = solve(solver,U0)
 plot(res.X)
+plot(res.U)
 
 
 function mycost(Z)
@@ -30,15 +35,17 @@ end
 function lagrangian(V)
     nu = V[Nz .+ (1:Nx)]
     λ = V[(Nz + Nx) .+ (1:Nh)]
+    μ = V[(Nz + Nx + Nh) .+ (1:Ng)]
     Z = V[1:Nz]
-    J = mycost(Z) + nu'dynamics(Z) + λ'cE(Z)
+    J = mycost(Z) + nu'dynamics(Z) + λ'cE(Z) + μ'cI(Z)
 end
 
 function al_lagrangian(V,ρ)
     Z = V[1:Nz]
     d = dynamics(Z)
     h = cE(Z)
-    lagrangian(V) + ρ/2*(d'd + h'h)
+    g = cI(Z)
+    lagrangian(V) + ρ/2*(d'd + h'h + g'g)
 end
 
 function cE(Z)
@@ -55,6 +62,20 @@ function cE(Z)
     return CE
 end
 
+function cI(Z)
+    X = reshape(Z[1:Nx],n,N)
+    U = reshape(Z[Nx.+(1:Nu)],m,N-1)
+
+    C = zeros(eltype(Z),pI,N-1)
+    for k = 1:N-1
+        cI!(view(C,1:pI,k),X[:,k],U[:,k])
+    end
+    CN = zeros(eltype(Z),pI_N)
+    cI!(CN,X[:,N])
+    CI = [vec(C); CN]
+    return CI
+end
+
 function dynamics(Z)
     X = reshape(Z[1:Nx],n,N)
     U = reshape(Z[Nx.+(1:Nu)],m,N-1)
@@ -66,6 +87,20 @@ function dynamics(Z)
         D[:,k] -= X[:,k]
     end
     return vec(D)
+end
+
+function active_set(Z,eps=0)
+    X = reshape(Z[1:Nx],n,N)
+    U = reshape(Z[Nx.+(1:Nu)],m,N-1)
+
+    a = ones(Bool,NN)
+    ci = cI(Z)
+    c_inds = ones(Bool,length(ci))
+    c_inds = ci .>= -eps
+
+    a[(Nz + Nx + Nh) .+ (1:Ng)] = c_inds
+    # a[ind1.s] = c_inds
+    return a
 end
 
 function armijo_line_search(merit::Function,V,d,grad; max_iter=10, ϕ=0.01)
@@ -130,25 +165,30 @@ function buildKKT(V,ρ,type=:penalty)
     X = reshape(Z[1:Nx],n,N)
     U = reshape(Z[Nx+1:end],m,N-1)
     nu = V[Nz.+(1:Nx)]
-    λ = V[Nz+Nx+1:end]
+    λ = V[(Nz + Nx) .+ (1:Nh)]
+    μ = V[(Nz + Nx + Nh) .+ (1:Ng)]
 
     ∇²J = ForwardDiff.hessian(mycost,Z)
     ∇J = ForwardDiff.gradient(mycost,Z)
     D = ForwardDiff.jacobian(dynamics,Z)
     H = ForwardDiff.jacobian(cE,Z)
+    G = ForwardDiff.jacobian(cI,Z)
     d = dynamics(Z)
     h = cE(Z)
+    g = cI(Z)
 
     if type == :penalty
-        A = [∇²J   D'    H';
-             D   -1/ρ*I zeros(Nx,Nh);
-             H   zeros(Nh,Nx) -1/ρ*I]
-        b = [∇J + D'nu + H'λ; d; h]
+        A = [∇²J   D'         H'      G';
+             D   -1/ρ*I       zeros(Nx,Nh+Ng) ;
+             H   zeros(Nh,Nx) -1/ρ*I zeros(Nh,Ng);
+             G   zeros(Ng,Nx) zeros(Ng,Nh) -1/ρ*I]
+        b = [∇J + D'nu + H'λ + G'μ; d; h; g]
     elseif type == :kkt
-        A = [∇²J   D'    H';
-             D   zeros(Nx,Nx) zeros(Nx,Nh);
-             H   zeros(Nh,Nx) zeros(Nh,Nh)]
-        b = [∇J + D'nu + H'λ; d; h]
+        A = [∇²J   D'    H'                G';
+             D   zeros(Nx,Nx) zeros(Nx,Nh) zeros(Nx,Ng);
+             H   zeros(Nh,Nx) zeros(Nh,Nh) zeros(Nh,Ng);
+             G   zeros(Ng,Nx) zeros(Ng,Nh) zeros(Ng,Ng)]
+        b = [∇J + D'nu + H'λ + G'μ; d; h; g]
     elseif type == :ad_lagrangian
         A = ForwardDiff.hessian(lagrangian,V)
         b = ForwardDiff.gradient(lagrangian,V)
@@ -166,30 +206,63 @@ end
 Nx = N*n
 Nu = (N-1)*m
 Nz = Nx + Nu
-Nh = pE_N
-NN = 2Nx + Nu
+Nh = (N-1)*pE + pE_N
+Ng = (N-1)*pI + pI_N
+NN = 2Nx + Nu + Nh + Ng
 x = vec(res.X)
 u = vec(res.U)
 nu = zeros(Nx)
-λ = res.λ[N]
+
+s = zeros(pI,N-1)
+μ = zeros(pI,N-1)
+λ = zeros(pE,N-1)
+
+ineq = 1:pI
+eq = pI .+ (1:pE)
+for k = 1:N-1
+    s[:,k] = sqrt.(2.0*max.(0,-res.C[k][ineq]))
+    μ[:,k] = res.λ[k][ineq]
+    λ[:,k] = res.λ[k][eq]
+end
+s = vec(s)
+μ = vec(μ)
+λ = vec(λ)
+append!(s, sqrt.(2.0*max.(0,-res.C[N][1:pI_N])))
+append!(μ, res.λ[N][1:pI_N])
+append!(λ, res.λ[N][pI_N .+ (1:pE_N)])
+
+inds = (z=1:Nz, nu=Nz.+(1:Nx), λ=(Nz+Nx) .+ (1:Nh), μ=(Nz+Nx+Nh) .+ (1:Ng))
+
 
 # Build KKT System
 ρ = 0
 Z = [x;u]
-V = [x;u;nu;λ]
+V = [x;u; nu; λ; μ]
 
 J0 = al_lagrangian(V,ρ)
 dynamics(V)
+g0 = cI(V)
+
 
 A,b = buildKKT(V,ρ,:penalty)
 A_,b_ = buildKKT(V,ρ,:kkt)
-dv = -A_\b_
+a = active_set(Z)
+dv = zero(V)
+dv[a] = -A_[a,a]\b_[a]
 α = armijo_line_search(lagrangian,V,dv,b_)
 
 V1 = V + dv*α
 dynamics(V1)
 lagrangian(V1)
 cE(V1)
+g = cI(V1)
+argmax(g)
+maximum(cI(V1))
+
+amu = a[inds.μ]
+amu[34]
+Z1 = V[1:Nz]
+
 
 
 ForwardDiff.gradient(lagrangian,V1)
