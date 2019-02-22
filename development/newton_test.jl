@@ -1,14 +1,19 @@
 using ForwardDiff
 using LinearAlgebra
 using Plots
+import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
 
 model,obj = Dynamics.pendulum
 obj.cost.Q .= Diagonal(I,2)
-# obj = ConstrainedObjective(obj)x
+obj = ConstrainedObjective(obj)
+obj.cost.Qf .= Diagonal(I,2)*1
 
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
-solver = Solver(model,obj,N=21)
+solver = Solver(model,obj,N=11)
 n,m,N = get_sizes(solver)
+p,pI,pE = get_num_constraints(solver)
+p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(solver.obj)
 dt = solver.dt
 U0 = ones(m,N-1)
 solver.opts.verbose = true
@@ -23,17 +28,32 @@ function mycost(Z)
 end
 
 function lagrangian(V)
-    nu = V[Nz+1:end]
+    nu = V[Nz .+ (1:Nx)]
+    λ = V[(Nz + Nx) .+ (1:Nh)]
     Z = V[1:Nz]
-    J = mycost(Z) + nu'dynamics(Z)
+    J = mycost(Z) + nu'dynamics(Z) + λ'cE(Z)
 end
 
 function al_lagrangian(V,ρ)
     Z = V[1:Nz]
     d = dynamics(Z)
-    lagrangian(V) + ρ/2*(d'd)
+    h = cE(Z)
+    lagrangian(V) + ρ/2*(d'd + h'h)
 end
 
+function cE(Z)
+    X = reshape(Z[1:Nx],n,N)
+    U = reshape(Z[Nx.+(1:Nu)],m,N-1)
+
+    C = zeros(eltype(Z),pE,N-1)
+    for k = 1:N-1
+        cE!(view(C,1:pE,k),X[:,k],U[:,k])
+    end
+    CN = zeros(eltype(Z),pE_N)
+    cE!(CN,X[:,N])
+    CE = [vec(C); CN]
+    return CE
+end
 
 function dynamics(Z)
     X = reshape(Z[1:Nx],n,N)
@@ -109,21 +129,26 @@ function buildKKT(V,ρ,type=:penalty)
     Z = V[1:Nz]
     X = reshape(Z[1:Nx],n,N)
     U = reshape(Z[Nx+1:end],m,N-1)
-    nu = V[Nz+1:end]
+    nu = V[Nz.+(1:Nx)]
+    λ = V[Nz+Nx+1:end]
 
     ∇²J = ForwardDiff.hessian(mycost,Z)
     ∇J = ForwardDiff.gradient(mycost,Z)
     D = ForwardDiff.jacobian(dynamics,Z)
+    H = ForwardDiff.jacobian(cE,Z)
     d = dynamics(Z)
+    h = cE(Z)
 
     if type == :penalty
-        A = [∇²J   D';
-             D   -1/ρ*I]
-        b = [∇J + D'nu; d]
+        A = [∇²J   D'    H';
+             D   -1/ρ*I zeros(Nx,Nh);
+             H   zeros(Nh,Nx) -1/ρ*I]
+        b = [∇J + D'nu + H'λ; d; h]
     elseif type == :kkt
-        A = [∇²J   D';
-             D   zeros(Nx,Nx)]
-        b = [∇J + D'nu; d]
+        A = [∇²J   D'    H';
+             D   zeros(Nx,Nx) zeros(Nx,Nh);
+             H   zeros(Nh,Nx) zeros(Nh,Nh)]
+        b = [∇J + D'nu + H'λ; d; h]
     elseif type == :ad_lagrangian
         A = ForwardDiff.hessian(lagrangian,V)
         b = ForwardDiff.gradient(lagrangian,V)
@@ -141,19 +166,17 @@ end
 Nx = N*n
 Nu = (N-1)*m
 Nz = Nx + Nu
+Nh = pE_N
 NN = 2Nx + Nu
 x = vec(res.X)
 u = vec(res.U)
 nu = zeros(Nx)
-
-x = vec(rollout(solver,U0))
-u = vec(U0)
-
+λ = res.λ[N]
 
 # Build KKT System
 ρ = 0
 Z = [x;u]
-V = [x;u;nu]
+V = [x;u;nu;λ]
 
 J0 = al_lagrangian(V,ρ)
 dynamics(V)
@@ -166,6 +189,7 @@ dv = -A_\b_
 V1 = V + dv*α
 dynamics(V1)
 lagrangian(V1)
+cE(V1)
 
 
 ForwardDiff.gradient(lagrangian,V1)
@@ -188,12 +212,12 @@ norm(bfd-b_)
 
 
 
-ρ = 1e8
+ρ = 1e10
 V_pen, stats_pen = solve_newton(V,ρ,:penalty,verbose=true)
 V_kkt, stats_kkt = solve_newton(V,ρ,:kkt,verbose=true)
 V_fd, stats_fd = solve_newton(V,ρ,:ad_lagrangian,verbose=true)
 V_fda, stats_fda = solve_newton(V,ρ,:ad_aulag)
-V_grd, stats_grd = solve_newton(V,ρ,:gradient_descent,iters_linesearch=40)
+
 
 mycost(V_pen[1:Nz])
 val = "c_max"
@@ -201,4 +225,3 @@ plot(stats_pen[val],label="penalty",title=val,xlabel="iteration",yscale=:log10)
 plot!(stats_kkt[val],label="kkt")
 plot!(stats_fd[val],label="fd-lagrangian")
 plot!(stats_fda[val],label="fd-aug lagrangian")
-plot!(stats_grd[val],label="gradient descent")
