@@ -323,13 +323,23 @@ Z = [X1,U1,X2,U2,..,] (all transposed)
 function packZ(X,U)
     n, N = size(X)
     m = size(U,1)
-    if size(U,2) == N-1
-        U = [U U[:,end]]
+    Nx = length(X)
+    Nu = length(U)
+    Nz = Nx+Nu
+
+    if Nz == Nu
+        Z = zeros(n+m,N)
+        Z[1:n,:] = X
+        Z[1+n:n+m,:] = U
+        Z = vec(Z)
+    else
+        Z = zeros(Nz)
+        Z_k = reshape(view(Z,1:Nz-n),n+m,N-1)
+        Z_k[1:n,:] = X[:,1:N-1]
+        Z_k[1+n:n+m,:] = U[:,1:N-1]
+        Z[Nz-n+1:Nz] = X[:,N]
     end
-    Z = zeros(n+m,N)
-    Z[1:n,:] .= X
-    Z[n+1:end,1:end] .= U
-    Z = vec(Z)
+    return Z
 end
 
 function unpackZ(Z, sze)
