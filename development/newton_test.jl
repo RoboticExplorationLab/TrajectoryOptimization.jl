@@ -45,7 +45,7 @@ plot(res.U)
 
 function mycost(Z)
     X = reshape(Z[1:Nx],n,N)
-    U = reshape(Z[Nx+1:end],m,N-1)
+    U = reshape(Z[Nx .+ (1:Nu)],m,N-1)
     cost(solver,X,U)
 
 end
@@ -377,11 +377,6 @@ inds = (z=1:Nz, ν=Nz.+(1:Nx), λ=(Nz+Nx) .+ (1:Nh), μ=(Nz+Nx+Nh) .+ (1:Ng))
 V = createV(res)
 Z = V[ind1.z]
 
-J0 = meritfun(V)
-dynamics(V)
-g0 = cI(V)
-
-
 ρ = 1000
 meritfun(V) = al_lagrangian(V,1)
 
@@ -394,6 +389,19 @@ sign.(d) == sign.(nu)
 d .* nu
 
 
+
+import TrajectoryOptimization: NewtonSolver, gen_newton_functions, create_V
+nsolver = NewtonSolver(solver)
+Vn = create_V(nsolver,res)
+newton_step2,buildAb,act_set = gen_newton_functions(nsolver)
+solve(nsolver,res)
+An,bn = buildAb(Vn,1000,:kkt)
+nsolver.dynamics(V) == dynamics(V)
+nsolver.cE(V) == cE(V)
+nsolver.cI(Vn) == cI(V)
+nsolver.cost(V) == mycost(V)
+A_ == An
+b_ == bn
 
 # Build KKT
 # A,b = buildKKT(V,ρ,:penalty)
