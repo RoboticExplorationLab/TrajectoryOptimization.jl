@@ -238,49 +238,54 @@ function gen_newton_functions(solver::NewtonSolver)
         return a
     end
 
-    function newton_step(V,ρ,meritfun::Function,type=:kkt; refinement=:none,
+    function newton_step(V,ρ,meritfun::Function,type=:kkt; projection=:none,
         reg=Diagonal(zero(V)), η=solver.opts[:η])
 
         # Initial cost
         J0 = meritfun(V)
         V_ = copy(V)
 
-        # Compute Direction
-        A,b = buildKKT(V,ρ,type)
-        a = active_set(V_,solver.opts[:ϵ_as])
-        a_μ = a[ind1.μ]
+        # Build and solve KKT
+        A,b = buildKKT(V_,ρ,type)
+        a = active_set(V_,1e-3)
+        amu = a[ind1.μ]
         δV = zero(V)
         Ā = A[a,a] + reg[a,a]
         δV[a] = -Ā\b[a]
 
-        grad = b[a]'δV
-        α = 1
-        if meritfun(V+δV) <= J0 + η*grad
-            α = 1
-        else
-            if refinement == :projection
-                V1 = V + δV
-                Z1 = V1[ind1.z]
-                Z = V[ind1.z]
-                D = ForwardDiff.jacobian(dynamics,Z)
-                H = ForwardDiff.jacobian(cE,Z)
-                G = ForwardDiff.jacobian(cI,Z)
-                Y = [D;H;G[amu,:]]
-                d1 = dynamics(Z1)
-                h1 = cE(Z1)
-                g1 = cI(Z1)
-                y = [d1;h1;g1[amu]]
-                # dv̂ = -D'*((D*D')\d1)
-                δV̂ = -Y'*((Y*Y')\y)
-                δV[ind1.z] += δV̂
-            elseif refinement == :update_constraints
+        if projection == :jacobian
+            V1 = V + δV
+            Z1 = V1[ind1.z]
+            Z = V[ind1.z]
+            D = ForwardDiff.jacobian(dynamics,Z)
+            H = ForwardDiff.jacobian(cE,Z)
+            G = ForwardDiff.jacobian(cI,Z)
+            Y = [D;H;G[amu,:]]
+            d1 = dynamics(Z1)
+            h1 = cE(Z1)
+            g1 = cI(Z1)
+            y = [d1;h1;g1[amu]]
+            # dv̂ = -D'*((D*D')\d1)
+            δV̂ = -Y'*((Y*Y')\y)
+            δV[ind1.z] += δV̂
+        elseif projection == :constraints
+            b̂ = copy(b)
+            for j = 1:5
+                V1 = V_ + δV
+                d1 = dynamics(V1)
+                h1 = cE(V1)
+                g1 = cI(V1)
+                b̂[ind1.ν] = d1
+                b̂[ind1.λ] = h1
+                b̂[ind1.μ] = g1
+                δV[a] = -Ā\b̂[a]
+                V_ = V_ + δV
             end
-
-            α = armijo_line_search(meritfun,V,δV,b, max_iter=solver.opts[:iters_linesearch])
         end
 
-        # Update variables
-        V_ = V + α*δV
+        # Line Search
+        α = armijo_line_search(meritfun,V,δV,b, max_iter=solver.opts[:iters_linesearch])
+        V_ = V_ + α*δV
 
         stats = (α=α,condnum=cond(Ā),grad=norm(b))
         return V_, stats
@@ -317,7 +322,7 @@ function meritfunction(solver::NewtonSolver,V,ρ)
     solver.cost(Z) + ν'd + λ'h + μ'g + ρ/2*sqrt(d'd + h'h + g[a]'g[a])
 end
 
-function solve(solver::NewtonSolver,V::Vector, ρ=0; iters=1, verbose=true, meritfun=V->meritfunction(solver,V,ρ))
+function solve(solver::NewtonSolver,V::Vector, ρ=0; iters=1, verbose=true, meritfun=V->meritfunction(solver,V,ρ), projection=:none)
 
     newton_step, buildKKT, active_set = gen_newton_functions(solver)
     change(x,x0) = format((x0-x)/x0*100,precision=2) * "%"
@@ -330,7 +335,7 @@ function solve(solver::NewtonSolver,V::Vector, ρ=0; iters=1, verbose=true, meri
 
     J_prev = meritfun(V)
     for i = 1:iters
-        V, step_stats = newton_step(V,ρ,meritfun)
+        V, step_stats = newton_step(V,ρ,meritfun,projection=projection)
         J = meritfun(V)
         grad[i] = step_stats.grad
         c_max[i] = max_violation(solver,V)
@@ -341,7 +346,7 @@ function solve(solver::NewtonSolver,V::Vector, ρ=0; iters=1, verbose=true, meri
             println("  cost: $J $(change(J,J_prev))")
             println("  grad: $(grad[i])")
             println("  c_max: $(c_max[i])")
-            println("  c_max0: $(c_max[i]))")
+            println("  c_max0: $(c_max0[i]))")
             println("  α: $(step_stats.α)")
             println("  cond: $(step_stats.condnum)")
             println()
@@ -358,10 +363,10 @@ end
 
 
 
-model, obj = Dynamics.pendulum
-solver = Solver(model, obj, N=21)
-res, stats = solve(solver)
-
-nsolver = NewtonSolver(solver)
-meritfun(V) = meritfunction(nsolver,V,0)
-solve(nsolver,res,iters=2,meritfun=meritfun)
+# model, obj = Dynamics.pendulum
+# solver = Solver(model, obj, N=21)
+# res, stats = solve(solver)
+#
+# nsolver = NewtonSolver(solver)
+# meritfun(V) = meritfunction(nsolver,V,0)
+# solve(nsolver,res,iters=2,meritfun=meritfun)

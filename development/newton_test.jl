@@ -322,8 +322,12 @@ end
 function createV(res)
     x = vec(res.X)
     u = vec(res.U)
-    nu = zeros(Nx)
+    nu = zeros(n,N)
 
+    for k = 1:N
+        nu[:,k] = res.s[k]*0
+    end
+    nu = vec(nu)
 
     if res isa ConstrainedVectorResults
         s = zeros(pI,N-1)
@@ -332,7 +336,6 @@ function createV(res)
         ineq = 1:pI
         eq = pI .+ (1:pE)
         for k = 1:N-1
-            s[:,k] = sqrt.(2.0*max.(0,-res.C[k][ineq]))
             μ[:,k] = res.λ[k][ineq]
             λ[:,k] = res.λ[k][eq]
         end
@@ -381,8 +384,8 @@ Z = V[ind1.z]
 meritfun(V) = al_lagrangian(V,1)
 
 V = createV(res)
-reg = KKT_reg(z=0,ν=1,λ=1,μ=1)
-V = newton_step(V,0,:kkt,projection=:none,eps=1e-2,meritfun=meritfun)
+reg = KKT_reg(z=1,ν=1,λ=1,μ=10)
+V = newton_step(V,1,:kkt,projection=:none,eps=1e-2,meritfun=meritfun)
 d = dynamics(V)
 nu = V[ind1.ν]
 sign.(d) == sign.(nu)
@@ -392,16 +395,46 @@ d .* nu
 
 import TrajectoryOptimization: NewtonSolver, gen_newton_functions, create_V
 nsolver = NewtonSolver(solver)
+nsolver.opts[:ϵ_as] = 1e-2
 Vn = create_V(nsolver,res)
-newton_step2,buildAb,act_set = gen_newton_functions(nsolver)
+solve(nsolver,Vn,ρ,meritfun=meritfun)
 solve(nsolver,res)
-An,bn = buildAb(Vn,1000,:kkt)
-nsolver.dynamics(V) == dynamics(V)
-nsolver.cE(V) == cE(V)
-nsolver.cI(Vn) == cI(V)
-nsolver.cost(V) == mycost(V)
-A_ == An
-b_ == bn
+newton_step2,buildAb,act_set = gen_newton_functions(nsolver)
+
+
+# Comparison
+max_c2(V) = max(Ng > 0 ? maximum(cI(V)) : 0, norm(cE(V),Inf))
+max_c(V) = max(norm(dynamics(V),Inf),max_c2(V))
+
+ρ = 1
+meritfun(V) = al_lagrangian(V,ρ)
+V = createV(res)
+Vn = create_V(nsolver,res)
+V == Vn
+
+A,b = buildKKT(V,ρ,:kkt)
+An,bn = buildAb(Vn,ρ,:kkt)
+A == An
+b == bn
+
+a = active_set(V,1e-2)
+an = act_set(V,1e-2)
+a == an
+
+dv = dvn = zero(V)
+dv[a] = -A[a,a]\b[a]
+dvn[a] = -An[a,a]\bn[a]
+dv == dvn
+
+armijo_line_search(meritfun,V,dv,b)
+armijo_line_search(meritfun,Vn,dvn,bn)
+
+V1 = V + dv
+V1n = Vn + dvn
+V1 == V1n
+
+max_c(V1)
+max_c2(V1)
 
 # Build KKT
 # A,b = buildKKT(V,ρ,:penalty)
