@@ -258,6 +258,26 @@ function ConstrainedVectorResults(n::Int,m::Int,p::Int,N::Int,p_N::Int)
         C,C_prev,Iμ,λ,μ,Cx,Cu,t_prev,λ_prev,nesterov,active_set,ρ,dρ,bp)
 end
 
+function ConstrainedVectorResults(solver::Solver,X::Trajectory,U::Trajectory)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    n,m,N = get_sizes(solver)
+    results = ConstrainedVectorResults(n,m,p,N,p_N)
+    copyto!(results.X,X)
+    copyto!(results.U,U)
+    update_constraints!(results,solver)
+    update_jacobians!(results,solver)
+    return results
+end
+
+function ConstrainedVectorResults(solver::Solver,X::AbstractMatrix,U::AbstractMatrix)
+    if size(U,2) == solver.N
+        U = U[:,1:N-1]
+    end
+    ConstrainedVectorResults(solver,to_dvecs(X),to_dvecs(U))
+end
+
+
 function copy(r::ConstrainedVectorResults)
     ConstrainedVectorResults(deepcopy(r.X),deepcopy(r.U),deepcopy(r.K),deepcopy(r.d),deepcopy(r.X_),deepcopy(r.U_),deepcopy(r.S),deepcopy(r.s),deepcopy(r.fdx),deepcopy(r.fdu),
         deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.Iμ),deepcopy(r.λ),deepcopy(r.μ),

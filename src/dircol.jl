@@ -327,7 +327,7 @@ function packZ(X,U)
     Nu = length(U)
     Nz = Nx+Nu
 
-    if Nz == Nu
+    if size(X,2) == size(U,2)
         Z = zeros(n+m,N)
         Z[1:n,:] = X
         Z[1+n:n+m,:] = U

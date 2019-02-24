@@ -1,4 +1,5 @@
 import Base.getindex
+using Snopt
 
 struct PrimalVars{T}
     Z::Vector{T}
@@ -37,6 +38,9 @@ function PrimalVars(res::SolverIterResults)
     PrimalVars(to_array(res.X), to_array(res.U))
 end
 
+function ConstrainedVectorResults(Z::PrimalVars)
+
+
 get_sizes(Z::PrimalVars) = size(Z.X,1), size(Z.U,1), size(Z.X,2)
 
 function getindex(Z::PrimalVars,k::Int)
@@ -73,6 +77,18 @@ function get_primal_inds(n,m,N)
     return ind_x, ind_u
 end
 
+function get_batch_sizes(solver::Solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    n,m,N = get_sizes(solver)
+
+    Nx = N*n
+    Nu = (N-1)*m
+    Nh = (N-1)*pE + pE_N
+    Ng = (N-1)*pI + pI_N
+    NN = 2Nx + Nu + Nh + Ng
+    return Nx,Nu,Nh,Ng,NN
+end
 
 function gen_usrfun_newton(solver::Solver)
     p,pI,pE = get_num_constraints(solver)
@@ -80,14 +96,11 @@ function gen_usrfun_newton(solver::Solver)
     n,m,N = get_sizes(solver)
 
     c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(solver.obj)
-    costfun = solver.obj.cost
+    obj = solver.obj
+    costfun = obj.cost
 
-    Nx = N*n
-    Nu = (N-1)*m
-    Nz = Nx + Nu
-    Nh = (N-1)*pE + pE_N
-    Ng = (N-1)*pI + pI_N
-    NN = 2Nx + Nu + Nh + Ng
+
+    Nx,Nu,Nh,Ng,NN = get_batch_sizes(solver)
 
     names = (:z,:ν,:λ,:μ)
     ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
@@ -108,17 +121,26 @@ function gen_usrfun_newton(solver::Solver)
         error("Not yet implemented for non-Quadratic cost functions")
     end
 
-
-    # Get integration scheme
-    if isdefined(TrajectoryOptimization,solver.integration)
-        discretizer = eval(solver.integration)
-    else
-        throw(ArgumentError("$integration is not a defined integration scheme"))
-    end
+    # Set up jacobians (fast for this application)
+    discretizer = eval(solver.integration)
     f!(xdot,x,u) = TrajectoryOptimization.dynamics(solver.model,xdot,x,u)
     fd! = rk4(f!,solver.dt)
     fd_aug!(xdot,z) = fd!(xdot,view(z,ind_z.x),view(z,ind_z.u))
     Fd!(dz,xdot,z) = ForwardDiff.jacobian!(dz,fd_aug!,xdot,z)
+
+    # Bounds
+    z_L,z_U = get_bounds(solver,false)
+    x_bnd = [isfinite.(obj.x_max); -isfinite.(obj.x_min)]
+    u_bnd = [isfinite.(obj.u_max); -isfinite.(obj.u_min)]
+    z_bnd = [x_bnd; u_bnd]
+    active_bnd = z_bnd .!= 0
+    jac_x_bnd= [Diagonal(isfinite.(obj.x_max));
+               -Diagonal(isfinite.(obj.x_min))]
+    jac_u_bnd = [Diagonal(isfinite.(obj.u_max));
+                -Diagonal(isfinite.(obj.u_min))]
+    jac_bnd_k = blockdiag(jac_x_bnd,jac_u_bnd)[active_bnd,:]
+    jac_bnd = blockdiag([jac_bnd_k for k = 1:N-1]...)
+    jac_bnd = blockdiag(jac_bnd,jac_x_bnd[active_bnd[1:2n],:])
 
     function mycost(Z)
         Z̄ = PrimalVars(Z,ind_x,ind_u)
@@ -185,7 +207,7 @@ function gen_usrfun_newton(solver::Solver)
     hess_J(hess,Z) = copyto!(hess,∇²J)
     hess_J(Z) = ∇²J
 
-    function jacob_c(jacob,Z)
+    function jacob_dynamics(jacob,Z)
         Z̄ = PrimalVars(Z,ind_x,ind_u)
         xdot = zeros(n)
         jacob[1:n,1:n] = Diagonal(I,n)
@@ -197,16 +219,34 @@ function gen_usrfun_newton(solver::Solver)
             jacob[off1 .+ (1:n),(off2+n+m) .+ (1:n)] = -Diagonal(I,n)
         end
     end
-    function jacob_c(Z)
+    function jacob_dynamics(Z)
         jacob = spzeros(Nx,Nz)
-        jacob_c(jacob,Z)
+        jacob_dynamics(jacob,Z)
         return jacob
     end
 
-    return mycost, dynamics, cI, cE, grad_J, hess_J, jacob_c
+    function jacob_cE(jacob,Z)
+        if obj.use_xf_equality_constraint
+            jacob[:,Nz-n+1:Nz] = Diagonal(I,n)
+        end
+    end
+    function jacob_cE(Z)
+        jacob = spzeros(Nh,Nz)
+        jacob_cE(jacob,Z)
+        return jacob
+    end
+
+    # Assume only bound constraints right now
+    jacob_cI(jacob,Z) = copyto(jacob,jac_bnd)
+    jacob_cI(Z) = jac_bnd
+
+    c = (E=cE, I=cI, d=dynamics)
+    jacob_c = (E=jacob_cE, I=jacob_cI, d=jacob_dynamics)
+
+    return mycost, c, grad_J, hess_J, jacob_c
 end
 
-"""SIGNATURES)
+"""$(SIGNATURES)
 Full 2nd order taylor expansion of a Quadratic Cost with respect to Z = [X;U]
 """
 function taylor_expansion(solver::Solver,Z::PrimalVars)
@@ -275,64 +315,129 @@ function gradient(solver::Solver,Z::PrimalVars)
     Nu = (N-1)*m
     Nz = Nx + Nu
     grad = spzeros(Nx+Nu)
-    @show size(grad)
     gradient!(grad,solver,Z)
     return grad
 end
 
+function get_bounds(solver::Solver, equalities::Bool=true)
+    Nx,Nu,Nh,Ng,NN = get_batch_sizes(solver)
+    n,m,N = get_sizes(solver)
+    obj = solver.obj
 
-model,obj = Dynamics.dubinscar_parallelpark
-solver = Solver(model,obj,N=21)
+    x_L = repeat(obj.x_min,1,N)
+    x_U = repeat(obj.x_max,1,N)
+    u_L = repeat(obj.u_min,1,N-1)
+    u_U = repeat(obj.u_max,1,N-1)
+
+    if equalities
+        # Initial Condition
+        x_L[1:n,1] .= obj.x0
+        x_U[1:n,1] .= obj.x0
+
+        # Terminal Constraint
+        if obj.use_xf_equality_constraint
+            x_L[1:n,N] .= obj.xf
+            x_U[1:n,N] .= obj.xf
+        end
+    end
+
+    # Pack them together
+    z_L = PrimalVars(x_L,u_L).Z
+    z_U = PrimalVars(x_U,u_U).Z
+
+    return z_L, z_U
+end
+
+# Set up Problem
+model,obj = Dynamics.dubinscar
+obj.cost.Q .= Diagonal(I,3)*1e-1
+obj.cost.R .= Diagonal(I,2)*1e-1
+obj.cost.Qf .= Diagonal(I,3)*100
+obj_c = ConstrainedObjective(obj,u_max=0.75,u_min=-0.75,x_min=[-0.5;-0.1;-Inf],x_max=[0.5,1.1,Inf])
+
+# iLQR Solution
+solver = Solver(model,obj_c,N=21)
 n,m,N = get_sizes(solver)
-p,pI,pE = get_num_constraints(solver)
-p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
-obj.cost.Q .= Diagonal(I,n)
-obj.cost.R .= Diagonal(I,m)*2
-obj.cost.H .= ones(m,n)
+U0 = ones(m,N-1)
+solver.opts.verbose = true
+res,stats = solve(solver,U0)
+plot()
+plot_trajectory!(res)
+plot(res.X)
 
-Nx = N*n
-Nu = (N-1)*m
-Nz = Nx+Nu
-X = rand(n,N)
-U = rand(m,N-1)
-Z = packZ(X,U)
 
-V = [Z; rand(21)]
-P = PrimalVars(V,n,m,N)
-P.Z == Z
-P.X == X
-P.U == U
-get_sizes(P) == (n,m,N)
-P[3] == [X[:,3]; U[:,3]]
+# Newton Polishing
+P = PrimalVars(res)
 
-Nx = N*n
-Nu = (N-1)*m
-Nz = Nx + Nu
-Nh = (N-1)*pE + pE_N
-Ng = (N-1)*pI + pI_N
-NN = 2Nx + Nu + Nh + Ng
+function newton_snopt(solver::Solver, res::SolverIterResults)
+end
+mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
+Z = PrimalVars(res)
 
-names = (:z,:ν,:λ,:μ)
-ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
-ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng],names)
+function usrfun(Z)
+    J = mycost(Z)
+    gJ = grad_J(Z)
 
-ind_x, ind_u = get_primal_inds(n,m,N)
-ind_z = TrajectoryOptimization.create_partition([Nx,Nu],(:x,:u))
-ind_h = create_partition([(N-1)*pE,pE_N],(:k,:N))
-ind_g = create_partition([(N-1)*pI,pI_N],(:k,:N))
-ind_h = (k=ind_h.k, N=ind_h.N, k_mat=reshape(ind_h.k,pE,N-1))
-ind_g = (k=ind_g.k, N=ind_g.N, k_mat=reshape(ind_g.k,pI,N-1))
+    cineq = Float64[]
+    gcineq = Float64[]
 
-CE = zeros(Nh)
-CE[ind_h.k_mat]
-CI = zeros(Ng)
-CI[ind_g.k_mat]
+    ceq = c.d(Z)
+    gceq = jacob_c.d(Z)
 
-Z = packZ(X,U)
-mycost, dyn, cI, cE, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
-mycost(Z)
-dyn(Z)
-cI(Z)
-cE(Z)
-grad_J(Z) == ForwardDiff.gradient(mycost,Z)
-Array(jacob_c(Z)) == ForwardDiff.jacobian(dyn,Z)
+    fail = false
+    # return J, cineq, ceq, fail
+    return J, cineq, ceq, gJ, gcineq, gceq, fail
+end
+
+lb,ub = get_bounds(solver)
+convertInf!(lb)
+convertInf!(ub)
+lb
+ub
+get_bounds(solver,:hermite_simpson)
+
+options = Dict{String, Any}()
+options["Derivative option"] = 0
+options["Verify level"] = 1
+options["Major feasibility tol"] = 1e-10
+# options["Minor optimality  tol"] = solver.opts.eps_intermediate
+options["Major optimality  tol"] = 1e-10
+sumfile = "logs/snopt-summary.out"
+printfile = "logs/snopt-print.out"
+
+usrfun(Z.Z)
+Z.Z
+
+
+@time Zopt,optval,status = snopt(usrfun, Z.Z, lb, ub, options)
+usrfun(Zopt)
+Zopt = PrimalVars(Zopt,n,m,N)
+res_snopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
+cost(solver,res_snopt)
+plot(res_snopt.X)
+max_violation(res_snopt)
+backwardpass!(res_snopt,solver)
+rollout!(res_snopt,solver,0.0)
+max_violation(res_snopt)
+
+# Snopt DIRCOL
+method = :hermite_simpson
+results = DircolResults(n,m,solver.N,method)
+X0 = to_array(res.X)
+U0 = [to_array(res.U) res.U[N-1]]
+U0 = ones(m,N)
+X0 = rollout(solver,U0)
+var0 = DircolVars(X0,U0)
+Z0 = var0.Z
+
+# Generate the objective/constraint function and its gradients
+usrfun_snopt = gen_usrfun(solver, results, method, grads=:quadratic)
+results.Z
+
+# Set up the problem
+lb2,ub2 = get_bounds(solver,method)
+
+usrfun_snopt(Z0)
+Zopt,optval,status = snopt(usrfun_snopt, Z0, lb, ub, options)
+
+ConstrainedVectorResults(solver,)
