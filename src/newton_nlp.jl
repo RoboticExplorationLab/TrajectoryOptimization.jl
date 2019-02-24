@@ -201,7 +201,7 @@ function gen_usrfun_newton(solver::Solver)
         return D
     end
 
-    grad_J(grad,Z) = gradient!(grad,solver,PrimalVars(Z))
+    grad_J(grad,Z) = gradient!(grad,solver,PrimalVars(Z,ind_x,ind_u))
     grad_J(Z) = gradient(solver,PrimalVars(Z,ind_x,ind_u))
 
     hess_J(hess,Z) = copyto!(hess,∇²J)
@@ -222,6 +222,19 @@ function gen_usrfun_newton(solver::Solver)
     function jacob_dynamics(Z)
         jacob = spzeros(Nx,Nz)
         jacob_dynamics(jacob,Z)
+        return jacob
+    end
+    # Sparsity structure (1s in all non-zero elements)
+    function jacob_dynamics()
+        jacob = spzeros(Nx,Nz)
+        jacob[1:n,1:n] = Diagonal(I,n)
+        for k = 1:N-1
+            off1 = k*n
+            off2 = (k-1)*(n+m)
+            block = view(jacob,off1 .+ (1:n),off2 .+ (1:n+m))
+            block .= 1
+            jacob[off1 .+ (1:n),(off2+n+m) .+ (1:n)] = Diagonal(I,n)
+        end
         return jacob
     end
 
@@ -367,77 +380,118 @@ plot(res.X)
 
 
 # Newton Polishing
-P = PrimalVars(res)
-
 function newton_snopt(solver::Solver, res::SolverIterResults)
+    mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
+    Z = PrimalVars(res)
+
+    function usrfun(Z)
+        J = mycost(Z)
+        gJ = grad_J(Z)
+
+        cineq = Float64[]
+        gcineq = Float64[]
+
+        ceq = c.d(Z)
+        gceq = jacob_c.d(Z)
+
+        fail = false
+        # return J, cineq, ceq, fail
+        return J, cineq, ceq, gJ, gcineq, gceq, fail
+    end
+
+    lb,ub = get_bounds(solver)
+    convertInf!(lb)
+    convertInf!(ub)
+
+    options = Dict{String, Any}()
+    options["Derivative option"] = 0
+    options["Verify level"] = 1
+    options["Major feasibility tol"] = 1e-10
+    # options["Minor optimality  tol"] = solver.opts.eps_intermediate
+    options["Major optimality  tol"] = 1e-10
+    sumfile = "logs/snopt-summary.out"
+    printfile = "logs/snopt-print.out"
+
+    Zopt,optval,status = snopt(usrfun, Z.Z, lb, ub, options)
+    Zopt = PrimalVars(Zopt,n,m,N)
+    res_snopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
+    backwardpass!(res_snopt,solver)
+    rollout!(res_snopt,solver,0.0)
+    return res_snopt
 end
+res_snopt = newton_snopt(solver,res)
+max_violation(res_snopt)
+
 mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
-Z = PrimalVars(res)
+∇c = jacob_c.d()
+jacob_c.d(∇c,Z.Z)
+∇c
+nonzeros(∇c)
 
-function usrfun(Z)
-    J = mycost(Z)
-    gJ = grad_J(Z)
+function newton_ipopt(solver::Solver,res::SolverIterResults)
+    # Convert to PrimalVar
+    Z = PrimalVars(res)
 
-    cineq = Float64[]
-    gcineq = Float64[]
+    # Get Constants
+    n,m,N = get_sizes(solver)
+    Nz = length(Z.Z)   # Number of decision variables
+    Nx = N*n           # Number of collocation constraints
+    nH = 0             # Number of entries in cost hessian
 
-    ceq = c.d(Z)
-    gceq = jacob_c.d(Z)
+    # Generate functions
+    eval_f, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
 
-    fail = false
-    # return J, cineq, ceq, fail
-    return J, cineq, ceq, gJ, gcineq, gceq, fail
+    # Pre-allocate jacobian
+    ∇c = jacob_c.d()
+    row,col,v = findnz(∇c)
+    nG = length(v)  # Number of entries in constraint jacobian
+
+    # Set up functions for Ipopt
+    eval_g(Z,g) = c.d(g,Z)
+    eval_grad_f(Z, grad_f) = grad_J(grad_f,Z)
+    function eval_jac_g(Z, mode, rows, cols, vals)
+        if mode == :Structure
+            copyto!(rows,row)
+            copyto!(cols,col)
+        else
+            jacob_c.d(∇c,Z)
+            copyto!(vals,nonzeros(∇c))
+        end
+    end
+
+    # Get bounds
+    lb,ub = get_bounds(solver)
+    convertInf!(lb)
+    convertInf!(ub)
+
+    g_L = zeros(Nx)
+    g_U = zeros(Nx)
+    P = length(g_L)
+
+    # Create Problem
+    prob = Ipopt.createProblem(Nz, lb, ub, P,g_L, g_U, nG, nH,
+        eval_f, eval_g, eval_grad_f, eval_jac_g)
+    prob.x = Z.Z
+
+    # Set options
+    dir = root_dir()
+    opt_file = joinpath(dir,"ipopt.opt")
+    addOption(prob,"option_file_name",opt_file)
+    if solver.opts.verbose == false
+        addOption(prob,"print_level",0)
+    end
+
+    # Solve
+    t_eval = @elapsed status = solveProblem(prob)
+
+    # Convert back to feasible trajectory
+    vars = PrimalVars(prob.x,n,m,N)
+    res_ipopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
+    backwardpass!(res_snopt,solver)
+    rollout!(res_snopt,solver,0.0)
+    return res_ipopt
 end
 
-lb,ub = get_bounds(solver)
-convertInf!(lb)
-convertInf!(ub)
-lb
-ub
-get_bounds(solver,:hermite_simpson)
-
-options = Dict{String, Any}()
-options["Derivative option"] = 0
-options["Verify level"] = 1
-options["Major feasibility tol"] = 1e-10
-# options["Minor optimality  tol"] = solver.opts.eps_intermediate
-options["Major optimality  tol"] = 1e-10
-sumfile = "logs/snopt-summary.out"
-printfile = "logs/snopt-print.out"
-
-usrfun(Z.Z)
-Z.Z
-
-
-@time Zopt,optval,status = snopt(usrfun, Z.Z, lb, ub, options)
-usrfun(Zopt)
-Zopt = PrimalVars(Zopt,n,m,N)
-res_snopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
-cost(solver,res_snopt)
-plot(res_snopt.X)
-max_violation(res_snopt)
-backwardpass!(res_snopt,solver)
-rollout!(res_snopt,solver,0.0)
-max_violation(res_snopt)
-
-# Snopt DIRCOL
-method = :hermite_simpson
-results = DircolResults(n,m,solver.N,method)
-X0 = to_array(res.X)
-U0 = [to_array(res.U) res.U[N-1]]
-U0 = ones(m,N)
-X0 = rollout(solver,U0)
-var0 = DircolVars(X0,U0)
-Z0 = var0.Z
-
-# Generate the objective/constraint function and its gradients
-usrfun_snopt = gen_usrfun(solver, results, method, grads=:quadratic)
-results.Z
-
-# Set up the problem
-lb2,ub2 = get_bounds(solver,method)
-
-usrfun_snopt(Z0)
-Zopt,optval,status = snopt(usrfun_snopt, Z0, lb, ub, options)
-
-ConstrainedVectorResults(solver,)
+solver.opts.verbose = false
+res_ipopt = newton_ipopt(solver,res)
+max_violation(res_ipopt)
