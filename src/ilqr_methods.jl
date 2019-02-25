@@ -361,3 +361,18 @@ function update_gradient(results,solver)
     end
     return gradient
 end
+
+
+function max_penalty(res::ConstrainedIterResults)
+    N = length(res.X)
+    val = 0
+    if length(res.μ[1]) > 0
+        val = maximum(maximum.(res.μ[1:N-1]))
+    end
+    if length(res.μ[N]) > 0
+        val = max(val,maximum(res.μ[N]))
+    end
+    return val
+end
+
+max_penalty(res::UnconstrainedIterResults) = 0

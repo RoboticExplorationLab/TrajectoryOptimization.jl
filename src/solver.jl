@@ -196,6 +196,12 @@ struct Solver{M<:Model,O<:Objective}
             end
 
         end
+        # Discrete dynamics Jacobian for stacked variables
+        function fd_jacobians!(dz,z)
+            Sd[1:n+m] = z
+            Fd!(Jd,Sdotd,Sd)
+            copyto!(dz,Jd[1:n,1:n+m])
+        end
 
         # Generate constraint functions
         c!, c_jacobian!, c_labels = generate_constraint_functions(obj, max_dt = opts.max_dt, min_dt = opts.min_dt)

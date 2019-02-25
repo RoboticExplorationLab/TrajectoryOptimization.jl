@@ -65,6 +65,9 @@ function taylor_expansion(cost::QuadraticCost, xN::AbstractVector{Float64})
     return cost.Qf, cost.Qf*xN + cost.qf
 end
 
+gradient(cost::QuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}) = cost.Q*x + cost.q, cost.R*u + cost.r
+gradient(cost::QuadraticCost, xN::AbstractVector{Float64}) = cost.Qf*xN + cost.qf
+
 function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
@@ -179,6 +182,8 @@ end
 function taylor_expansion(cost::GenericCost, xN::AbstractVector{Float64})
     cost.expansion(xN)
 end
+
+# TODO: Split gradient and hessian calculations
 
 stage_cost(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}) = cost.ℓ(x,u)
 stage_cost(cost::GenericCost, xN::AbstractVector{Float64}) = cost.ℓf(xN)

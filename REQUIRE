@@ -11,3 +11,5 @@ StaticArrays
 Formatting
 Plots
 HDF5
+Combinatorics
+IterTools
