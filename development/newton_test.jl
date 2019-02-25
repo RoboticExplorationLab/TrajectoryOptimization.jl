@@ -2,14 +2,15 @@ using ForwardDiff
 using LinearAlgebra
 using Plots
 using Formatting
+using TrajectoryOptimization
 import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
 
 model,obj = Dynamics.pendulum
 obj.cost.Q .= Diagonal(I,2)*1
 obj.cost.R .= Diagonal(I,1)*1
 obj.cost.Qf .= Diagonal(I,2)*100
-obj = ConstrainedObjective(obj,u_max=3)
-obj = update_objective(obj,tf=5)
+obj_c = ConstrainedObjective(obj,u_max=3)
+obj_c = update_objective(obj_c,tf=5)
 
 model,obj = Dynamics.dubinscar
 obj.cost.Q .= Diagonal(I,3)*1e-1
@@ -24,7 +25,7 @@ model,obj = Dynamics.double_integrator
 obj_c = ConstrainedObjective(obj)
 
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
-solver = Solver(model,obj_c,N=25)
+solver = Solver(model,obj_c,N=31)
 n,m,N = get_sizes(solver)
 p,pI,pE = get_num_constraints(solver)
 p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
@@ -254,68 +255,104 @@ function newton_step(V,ρ,type;
     max_c2(V) = max(Ng > 0 ? maximum(cI(V)) : 0, norm(cE(V),Inf))
     max_c(V) = max(norm(dynamics(V),Inf),max_c2(V))
 
-    # Initial cost
-    J0 = meritfun(V)
     V_ = copy(V)
-    verbose ? println("Initial Cost: $J0") : nothing
+    a = active_set(V_,eps)
+    amu = a[ind1.μ]
+    Z = V_[ind1.z]
+    ∇²J = ForwardDiff.hessian(mycost,Z)
+    d1 = dynamics(Z)
+    h1 = cE(Z)
+    g1 = cI(Z)
+    y = [d1;h1;g1[amu]]
+    println("max y: $(maximum(abs.(y)))")
+    while maximum(abs.(y)) > 1e-6
+        D = ForwardDiff.jacobian(dynamics,Z)
+        H = ForwardDiff.jacobian(cE,Z)
+        G = ForwardDiff.jacobian(cI,Z)
+        Y = [D;H;G[amu,:]]
+
+        #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
+        δV̂ = -Y'*((Y*Y')\y)
+        V_[ind1.z] += δV̂
+        Z = V_[ind1.z]
+
+        d1 = dynamics(Z)
+        h1 = cE(Z)
+        g1 = cI(Z)
+        y = [d1;h1;g1[amu]]
+        println("max y: $(maximum(abs.(y)))")
+    end
+
+    # Initial cost
+    J0 = meritfun(V_)
+    println("Initial Cost: $J0")
 
     # Build and solve KKT
     A,b = buildKKT(V_,ρ,type)
-    a = active_set(V_,1e-3)
+    a = active_set(V_,eps)
     amu = a[ind1.μ]
     δV = zero(V)
     Ā = A[a,a] + reg[a,a]
     δV[a] = -Ā\b[a]
 
-    if projection == :jacobian
-        V1 = V + δV
+    # Line Search
+    ϕ=0.01
+    α = 2
+    δV1 = α.*δV
+    J = J0+1e8
+    while J > J0 #+ α*ϕ*b'δV1
+        α *= 0.5
+        δV1 = α.*δV
+        V1 = V_ + δV1
         Z1 = V1[ind1.z]
-        Z = V[ind1.z]
-        D = ForwardDiff.jacobian(dynamics,Z)
-        H = ForwardDiff.jacobian(cE,Z)
-        G = ForwardDiff.jacobian(cI,Z)
-        Y = [D;H;G[amu,:]]
+
         d1 = dynamics(Z1)
         h1 = cE(Z1)
         g1 = cI(Z1)
         y = [d1;h1;g1[amu]]
-        # dv̂ = -D'*((D*D')\d1)
-        δV̂ = -Y'*((Y*Y')\y)
-        δV[ind1.z] += δV̂
-    elseif projection == :constraints
-        b̂ = copy(b)
-        for j = 1:5
-            V1 = V_ + δV
-            d1 = dynamics(V1)
-            h1 = cE(V1)
-            g1 = cI(V1)
-            b̂[ind1.ν] = d1
-            b̂[ind1.λ] = h1
-            b̂[ind1.μ] = g1
-            δV[a] = -Ā\b̂[a]
-            V_ = V_ + δV
+        println("max y: $(maximum(abs.(y)))")
+        while maximum(abs.(y)) > 1e-6
+            D = ForwardDiff.jacobian(dynamics,Z1)
+            H = ForwardDiff.jacobian(cE,Z1)
+            G = ForwardDiff.jacobian(cI,Z1)
+            Y = [D;H;G[amu,:]]
+
+            #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
+            δV̂ = -Y'*((Y*Y')\y)
+            δV1[ind1.z] += δV̂
+
+            V1 = V_ + δV1
+            Z1 = V1[ind1.z]
+
+            d1 = dynamics(Z1)
+            h1 = cE(Z1)
+            g1 = cI(Z1)
+            y = [d1;h1;g1[amu]]
+            println("max y: $(maximum(abs.(y)))")
         end
+
+        J = meritfun(V_ + δV1)
+        println("New Cost: $J")
     end
 
-    # Line Search
-    α = armijo_line_search(meritfun,V,δV,b, max_iter=iters_linesearch)
-    V_ = V_ + α*δV
-    J = meritfun(V_)
     cost = J
-    grad = norm(b)
-    c_max = max_c(V_)
+    A,b = buildKKT(V_ + δV1,ρ,type)
+    a = active_set(V_ + δV1,eps)
+    grad = norm(b[a])
+    c_max = max_c(V_ + δV1)
 
-    change(x,x0) = format((x0-x)/x0*100,precision=2) * "%"
+    change(x,x0) = format((x0-x)/x0*100,precision=4) * "%"
     println()
     println("  cost: $J $(change(J,J0))")
+    println("  step: $(norm(δV1))")
     println("  grad: $(grad)")
     println("  c_max: $(c_max)")
-    println("  c_max2: $(max_c2(V_))")
+    println("  c_max2: $(max_c2(V + δV1))")
     println("  α: $α")
     println("  rank: $(rank(Ā))")
     println("  cond: $(cond(Ā))")
     stats = Dict("cost"=>cost,"grad"=>grad,"c_max"=>c_max)
-    return V_
+    return V_ + δV1
 end
 
 
@@ -384,8 +421,8 @@ Z = V[ind1.z]
 meritfun(V) = al_lagrangian(V,1)
 
 V = createV(res)
-reg = KKT_reg(z=1,ν=1,λ=1,μ=10)
-V = newton_step(V,1,:kkt,projection=:none,eps=1e-2,meritfun=meritfun)
+reg = KKT_reg(z=1e-5,ν=1e-5,λ=1e-5,μ=1e-5)
+V = newton_step(V,1,:kkt,projection=:jacobian,eps=1e-3,meritfun=meritfun)
 d = dynamics(V)
 nu = V[ind1.ν]
 sign.(d) == sign.(nu)
