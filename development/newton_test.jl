@@ -2,7 +2,8 @@ using ForwardDiff
 using LinearAlgebra
 using Plots
 using Formatting
-import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
+import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions, parse_snopt_summary
+import TrajectoryOptimization: newton_ipopt, newton_snopt, PrimalVars
 
 model,obj = Dynamics.pendulum
 obj.cost.Q .= Diagonal(I,2)*1
@@ -35,12 +36,45 @@ solver.opts.verbose = true
 solver.opts.penalty_initial = 0.01
 solver.opts.cost_tolerance_intermediate = 1e-2
 solver.opts.cost_tolerance = 1e-2
-solver.opts.constraint_tolerance = 1e-3
+solver.opts.constraint_tolerance = 1e-4
 res,stats = solve(solver,U0)
+
+Zopt,optval,stats = newton_snopt(solver,res,1e-8)
+stats["major iterations"]
+Zopt = PrimalVars(Zopt,n,m,N)
+res_snopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
+backwardpass!(res_snopt,solver)
+rollout!(res_snopt,solver,0.0)
+max_violation(res_snopt)
+
+Zopt = newton_ipopt(solver,res)
+Zopt = PrimalVars(Zopt,n,m,N)
+res_ipopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
+backwardpass!(res_ipopt,solver)
+rollout!(res_ipopt,solver,0.0)
+max_violation(res_ipopt)
+
 plot()
 plot_trajectory!(res)
 plot(res.X)
 plot(res.U)
+
+x_L = isfinite.(solver.obj.x_min)
+x_U = isfinite.(solver.obj.x_max)
+u_L = isfinite.(solver.obj.u_min)
+u_U = isfinite.(solver.obj.u_max)
+active = [u_U;u_L;x_U;x_L]
+lambda_ = [-1,-2,1,2,-3,-4,3,4]
+labels = TrajectoryOptimization.get_constraint_labels(solver)
+inds = (x_U=labels .== "state (upper bound)",
+        x_L=labels .== "state (lower bound)",
+        u_U=labels .== "control (upper bound)",
+        u_L=labels .== "control (lower bound)",
+        x=1:n, u=n.+(1:m))
+
+lambda = zeros(n+m,2)
+
+
 
 
 function mycost(Z)

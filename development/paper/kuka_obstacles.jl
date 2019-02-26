@@ -138,16 +138,12 @@ addcylinders!(mvis,cylinders)
 points,radii,frames = kuka_points(kuka,true)
 
 
-# Plot Goal
-plot_sphere(mvis,world,xf_ee,0.04,green_,"goal")
-plot_sphere(mvis,world,x0_ee,0.04,red_,"start")
 
 # Generate constraint function
 state_cache = StateCache(kuka)
 num_obstacles = length(circles2)+length(cylinders)
 c = zeros(length(points)*num_obstacles)
 cI_arm_obstacles = generate_collision_constraint(kuka,circles2,cylinders)
-cI_arm_obstacles(c,x0,zeros(m))
 
 # Build the Objective
 x0 = zeros(n)
@@ -156,7 +152,10 @@ x0[3] = pi/2
 x0[4] = pi/2
 xf = zeros(n)
 xf[1] = pi/2
-xf[4] = pi/2
+xf[4] = deg2rad(90)
+xf[5] = deg2rad(0)
+xf[6] = deg2rad(0)
+set_configuration!(mvis, xf[1:7])
 Q = Diagonal([ones(7); ones(7)*100])
 Qf = 10.0*Diagonal(I,n)
 R = 1e-2*Diagonal(I,m)
@@ -165,8 +164,11 @@ obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 xf_ee = ee_fun(xf)
 x0_ee = ee_fun(x0)
 
+# Plot Goal
+plot_sphere(mvis,world,xf_ee,0.04,green_,"goal")
+plot_sphere(mvis,world,x0_ee,0.04,red_,"start")
+
 set_configuration!(mvis, x0[1:7])
-set_configuration!(mvis, xf[1:7])
 costfun = LQRCost(Q,R,Qf,xf)
 obj_obs_arm = ConstrainedObjective(costfun,tf,x0,xf,cI=cI_arm_obstacles,u_min=-80,u_max=80)
 
@@ -182,13 +184,15 @@ solver.opts.bp_reg_initial = 0
 solver.opts.square_root = true
 solver.opts.use_nesterov = false
 solver.opts.iterations_outerloop = 50
-solver.opts.iterations = 300
+solver.opts.iterations = 400
 solver.opts.penalty_max = 1e8
 solver.opts.outer_loop_update_type = :default
 U0_hold = hold_trajectory(solver, kuka, x0[1:7])
 res_obs, stats_obs = solve(solver,U0_hold)
 stats_obs["iterations"]
 stats_obs["max_mu_iteration"]
+stats_obs["runtime"]
+evals(solver,:f) / stats_obs["iterations"]
 
 # Visualize
 set_configuration!(mvis, x0[1:7])

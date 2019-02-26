@@ -41,6 +41,7 @@ run_step_size_comparison(model, obj_uncon, U0, group, Ns, opts=opts, integration
 plot_stat("runtime",group,legend=:bottomright,["rk3","ipopt"],title="Unconstrained Parallel Park")
 plot_stat("iterations",group,legend=:bottom,["rk3","ipopt"],title="Unconstrained Parallel Park")
 plot_stat("error",group,yscale=:log10,legend=:right,["rk3","ipopt"],title="Unconstrained Parallel Park")
+plot_stat("std",group,yscale=:log10,legend=:right,["rk3","ipopt"],title="Unconstrained Parallel Park")
 
 
 
@@ -86,7 +87,7 @@ opts.verbose = false
 opts.cost_tolerance = 1e-6
 opts.cost_tolerance_intermediate = 1e-3
 opts.cost_tolerance_infeasible = 1e-4
-opts.constraint_tolerance = 1e-5
+opts.constraint_tolerance = 1e-4
 opts.resolve_feasible = false
 opts.outer_loop_update_type = :default
 opts.use_nesterov = true
@@ -97,7 +98,7 @@ opts.square_root = true
 opts.constraint_decrease_ratio = 0.25
 opts.penalty_update_frequency = 2
 
-solver = Solver(model, obj, N=51, opts=opts)
+solver = Solver(model, obj, N=101, opts=opts)
 n,m,N = get_sizes(solver)
 U0 = ones(m,N)
 X0 = line_trajectory(solver)
@@ -105,7 +106,7 @@ X0_rollout = rollout(solver,U0)
 
 solver.opts.verbose = false
 solver.opts.resolve_feasible = true
-solver.opts.cost_tolerance_infeasible = 1e-4
+solver.opts.cost_tolerance_infeasible = 1e-5
 @time res_i, stats_i = solve(solver,X0,U0)
 stats_i["iterations"]
 res_i.U[1]
@@ -140,10 +141,26 @@ plot_stat("error",group,yscale=:log10,legend=:right,["rk3","ipopt"],title="Const
 
 # Combined Plot
 group = "parallelpark/constrained"
-plot_stat("runtime",group,legend=:bottomright,["rk3","ipopt",""],title="Constrained Parallel Park",color=[:blue :darkorange2],label=["" "constrained"])
+Ns, data = load_data("runtime","rk3","parallelpark/constrained")
+Ns, err = load_data("std","rk3","parallelpark/constrained")
+p1 = plot(Ns,data,yerr=err,label="ALTRO",color=:darkorange2,marker=:circle,markerstrokecolor=:darkorange2,markersize=6,ylim=(0,1.9))
+Ns, data = load_data("runtime","ipopt","parallelpark/constrained")
+Ns, err = load_data("std","ipopt","parallelpark/constrained")
+plot!(Ns,data,yerr=err,label="Ipopt",color=:blue,marker=:circle,markerstrokecolor=:blue,ylabel="runtime",markersize=6)
 Ns, data = load_data("runtime","rk3","parallelpark/infeasible")
-plot!(Ns,data,label="infeasible",marker=:utriangle,color=:darkorange2,style=:dash)
+Ns, err = load_data("std","rk3","parallelpark/infeasible")
+plot!(Ns,data,yerr=err,label="ALTRO (inf)",color=:darkorange2,style=:dash,
+    marker=:utriangle,markerstrokecolor=:darkorange2,markersize=8,
+    title="Constrained",titlefontsize=10)
+
+Ns, err = load_data("std","rk3","parallelpark/infeasible")
+
 Ns, data = load_data("runtime",["rk3","ipopt"],"parallelpark/unconstrained")
-plot!(Ns,data[1],color=:darkorange2,style=:dot,label="unconstrained",marker=:square)
-plot!(Ns,data[2],color=:blue,style=:dot,label="",marker=:square,size=(500,250),legend=:topleft)
+Ns, err = load_data("std",["rk3","ipopt"],"parallelpark/unconstrained")
+p2 = plot(Ns,data[1],yerr=err[1],color=:darkorange2,style=:dot,label="ALTRO",
+    marker=:square,markerstrokecolor=:darkorange2,markersize=4,
+    title="Unconstrained",titlefontsize=10)
+plot!(Ns,data[2],yerr=err[2],color=:blue,style=:dot,label="Ipopt",
+    marker=:square,markerstrokecolor=:blue,legend=:topleft,markersize=4,ylim=ylims(p1))
+plot(p1,p2,layout=(1,2),size=(500,300),xlabel="knot points")
 savefig(joinpath(IMAGE_DIR,"ppark_runtime.eps"))
