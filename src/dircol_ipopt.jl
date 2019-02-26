@@ -173,6 +173,9 @@ function solve_ipopt(solver::Solver, X0::Matrix{Float64}, U0::Matrix{Float64}, m
     nH = 0                                              # Number of nonzeros entries in Hessian
 
     # Pack the variables
+    if size(U0,2) == N-1
+        U0 = [U0 U0[:,end]]
+    end
     Z0 = packZ(X0,U0)
     @assert length(Z0) == NN
 

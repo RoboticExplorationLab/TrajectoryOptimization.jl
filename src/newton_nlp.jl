@@ -38,8 +38,6 @@ function PrimalVars(res::SolverIterResults)
     PrimalVars(to_array(res.X), to_array(res.U))
 end
 
-function ConstrainedVectorResults(Z::PrimalVars)
-
 
 get_sizes(Z::PrimalVars) = size(Z.X,1), size(Z.U,1), size(Z.X,2)
 
@@ -101,6 +99,7 @@ function gen_usrfun_newton(solver::Solver)
 
 
     Nx,Nu,Nh,Ng,NN = get_batch_sizes(solver)
+    Nz = Nx+Nu
 
     names = (:z,:ν,:λ,:μ)
     ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
@@ -132,13 +131,13 @@ function gen_usrfun_newton(solver::Solver)
     z_L,z_U = get_bounds(solver,false)
     x_bnd = [isfinite.(obj.x_max); -isfinite.(obj.x_min)]
     u_bnd = [isfinite.(obj.u_max); -isfinite.(obj.u_min)]
-    z_bnd = [x_bnd; u_bnd]
+    z_bnd = [u_bnd; x_bnd]
     active_bnd = z_bnd .!= 0
     jac_x_bnd= [Diagonal(isfinite.(obj.x_max));
                -Diagonal(isfinite.(obj.x_min))]
     jac_u_bnd = [Diagonal(isfinite.(obj.u_max));
                 -Diagonal(isfinite.(obj.u_min))]
-    jac_bnd_k = blockdiag(jac_x_bnd,jac_u_bnd)[active_bnd,:]
+    jac_bnd_k = blockdiag(jac_u_bnd,jac_x_bnd)[active_bnd,:]
     jac_bnd = blockdiag([jac_bnd_k for k = 1:N-1]...)
     jac_bnd = blockdiag(jac_bnd,jac_x_bnd[active_bnd[1:2n],:])
 
@@ -361,26 +360,40 @@ function get_bounds(solver::Solver, equalities::Bool=true)
     return z_L, z_U
 end
 
-# Set up Problem
-model,obj = Dynamics.dubinscar
-obj.cost.Q .= Diagonal(I,3)*1e-1
-obj.cost.R .= Diagonal(I,2)*1e-1
-obj.cost.Qf .= Diagonal(I,3)*100
-obj_c = ConstrainedObjective(obj,u_max=0.75,u_min=-0.75,x_min=[-0.5;-0.1;-Inf],x_max=[0.5,1.1,Inf])
+function get_bound_multipliers(solver::Solver, res::SolverIterResults)
+    n,m,N = get_sizes(solver)
+    λ = zeros(n+m,N-1)
+    x_L = isfinite.(solver.obj.x_min)
+    x_U = isfinite.(solver.obj.x_max)
+    u_L = isfinite.(solver.obj.u_min)
+    u_U = isfinite.(solver.obj.x_min)
+    labels = get_constraint_labels(solver)
+    inds = (x_U=labels .== "state (upper bound)",
+            x_L=labels .== "state (lower bound)",
+            u_U=labels .== "control (upper bound)",
+            u_L=labels .== "control (lower bound)",
+            x=1:n, u=n.+(1:m))
+    for k = 1:N-1
+        lambda_ = res.λ[k]
+        lambda = zeros(n+m,2)
+        lambda[inds.x[x_L],1] = lambda_[inds.x_L]
+        lambda[inds.x[x_U],2] = lambda_[inds.x_U]
+        lambda[inds.u[u_L],1] = lambda_[inds.u_L]
+        lambda[inds.u[u_U],2] = lambda_[inds.u_U]
+        for i = 1:n+m
+            if lambda[i,1] > 0
+                λ[i] = -lambda[i,1]
+            elseif lambda[i,2] > 0
+                λ[i] = lambda[i,2]
+            end
+        end
+    end
+end
 
-# iLQR Solution
-solver = Solver(model,obj_c,N=21)
-n,m,N = get_sizes(solver)
-U0 = ones(m,N-1)
-solver.opts.verbose = true
-res,stats = solve(solver,U0)
-plot()
-plot_trajectory!(res)
-plot(res.X)
 
 
 # Newton Polishing
-function newton_snopt(solver::Solver, res::SolverIterResults)
+function newton_snopt(solver::Solver, res::SolverIterResults,tol=1e-10)
     mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
     Z = PrimalVars(res)
 
@@ -406,27 +419,25 @@ function newton_snopt(solver::Solver, res::SolverIterResults)
     options = Dict{String, Any}()
     options["Derivative option"] = 0
     options["Verify level"] = 1
-    options["Major feasibility tol"] = 1e-10
+    options["Major feasibility tol"] = tol
     # options["Minor optimality  tol"] = solver.opts.eps_intermediate
-    options["Major optimality  tol"] = 1e-10
+    options["Major optimality  tol"] = tol
     sumfile = "logs/snopt-summary.out"
     printfile = "logs/snopt-print.out"
 
-    Zopt,optval,status = snopt(usrfun, Z.Z, lb, ub, options)
+    problem = SnoptProblem(usrfun, Z.Z, lb, ub, options)
+    t_eval = @elapsed Zopt,optval,status = Snopt.solve(problem)
+    stats = parse_snopt_summary()
+    stats["info"] = status
+    stats["runtime"] = t_eval
+
+    return Zopt,optval,stats
     Zopt = PrimalVars(Zopt,n,m,N)
     res_snopt = ConstrainedVectorResults(solver,Zopt.X,Zopt.U)
     backwardpass!(res_snopt,solver)
     rollout!(res_snopt,solver,0.0)
     return res_snopt
 end
-res_snopt = newton_snopt(solver,res)
-max_violation(res_snopt)
-
-mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
-∇c = jacob_c.d()
-jacob_c.d(∇c,Z.Z)
-∇c
-nonzeros(∇c)
 
 function newton_ipopt(solver::Solver,res::SolverIterResults)
     # Convert to PrimalVar
@@ -483,6 +494,10 @@ function newton_ipopt(solver::Solver,res::SolverIterResults)
 
     # Solve
     t_eval = @elapsed status = solveProblem(prob)
+    stats = parse_ipopt_summary()
+    stats["info"] = Ipopt.ApplicationReturnStatus[status]
+    stats["runtime"] = t_eval
+    return prob.x, stats
 
     # Convert back to feasible trajectory
     vars = PrimalVars(prob.x,n,m,N)
@@ -491,7 +506,3 @@ function newton_ipopt(solver::Solver,res::SolverIterResults)
     rollout!(res_snopt,solver,0.0)
     return res_ipopt
 end
-
-solver.opts.verbose = false
-res_ipopt = newton_ipopt(solver,res)
-max_violation(res_ipopt)
