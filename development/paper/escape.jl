@@ -5,7 +5,6 @@ include("N_plots.jl")
 model, obj = Dynamics.dubinscar_escape
 circles = Dynamics.circles_escape
 
-
 # Constrained
 opts = SolverOptions()
 opts.verbose = false
@@ -14,7 +13,7 @@ opts.cost_tolerance_intermediate = 1e-5
 opts.constraint_tolerance = 1e-5
 opts.resolve_feasible = false
 opts.outer_loop_update_type = :default
-opts.use_nesterov = true
+opts.use_nesterov = false
 opts.penalty_scaling = 200
 opts.penalty_initial = .1
 opts.R_infeasible = 20
@@ -36,7 +35,7 @@ opts.cost_tolerance_intermediate = 0.01
 opts.constraint_tolerance = 1e-4
 opts.resolve_feasible = true
 opts.outer_loop_update_type = :default
-opts.use_nesterov = true
+opts.use_nesterov = false
 opts.penalty_scaling = 50
 opts.penalty_initial = 10
 opts.R_infeasible = 1
@@ -68,7 +67,7 @@ stats_i["runtime"]
 # constraint_plot(solver,X0,U0)
 
 plt = plot(title="",aspect_ratio=:equal,size=(500,300),xlim=[-0.5,10.5],ylim=[-0.5,6.6],grid=:off,bg=:white)
-plot_obstacles(circles,:forestgreen)
+plot_obstacles(circles,:grey60)
 plot_trajectory!(X0,style=:dash,color=:black,width=2,label="Initial Guess")
 plot_trajectory!(res_i.X,width=3,color=:blue,label="Ipopt")
 plot_trajectory!(to_array(res.X),width=2,color=:darkorange2,label="ALTRO",aspect_ratio=:equal,legend=:topleft)
