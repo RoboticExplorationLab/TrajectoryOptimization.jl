@@ -399,7 +399,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
             solver_feasible.state.second_order_dual_update = false
 
             # Resolve feasible problem with warm start
-            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U),prevResults=results_feasible)
+            results_feasible, stats_feasible = _solve(solver_feasible,to_array(results_feasible.U))#TODO,prevResults=results_feasible)
 
             # Merge stats
             for key in keys(stats_feasible)

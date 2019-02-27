@@ -336,20 +336,27 @@ struct ConstrainedObjective{C} <: Objective
         p = pI + pE
 
         # Terminal Constraints
-        pI_N = pI_N_custom
-        pI_N += count(isfinite, x_min)
-        pI_N += count(isfinite, x_max)
+        # pI_N = pI_N_custom
+        # pI_N += count(isfinite, x_min)
+        # pI_N += count(isfinite, x_max)
 
         if use_xf_equality_constraint
-            if pE_N_custom > 0
-                throw(ArgumentError("Can't specify custom terminal constraints AND xf constraint -- set use_xf_equality_constraint=false"))
+            if pE_N_custom > 0 || pI_N_custom > 0
+                throw(ArgumentError("Can't specify custom terminal constraints AND xf equality constraint -- set use_xf_equality_constraint=false"))
             else
                 pE_N = n
+                pI_N = 0
             end
-        elseif pE_N_custom > 0
-            pE_N = pE_N_custom
         else
-            pE_N = 0
+            pI_N = pI_N_custom # add custom constraints
+            pI_N += count(isfinite, x_min) # add x_max constraints
+            pI_N += count(isfinite, x_max) # add x_min constraints
+
+            if pE_N_custom > 0
+                pE_N = pE_N_custom
+            else
+                pE_N = 0
+            end
         end
 
         p_N = pI_N + pE_N
