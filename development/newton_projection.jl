@@ -5,6 +5,8 @@ using Formatting
 using TrajectoryOptimization
 import TrajectoryOptimization: get_num_terminal_constraints, generate_constraint_functions
 
+opts = SolverOptions()
+
 model,obj = Dynamics.pendulum
 obj.cost.Q .= Diagonal(I,2)*1
 obj.cost.R .= Diagonal(I,1)*1
@@ -18,25 +20,46 @@ obj.cost.R .= Diagonal(I,2)*1e-1
 obj.cost.Qf .= Diagonal(I,3)*100
 obj_c = ConstrainedObjective(obj,u_max=0.75,u_min=-0.75,x_min=[-0.5;-0.1;-Inf],x_max=[0.5,1.1,Inf])
 
+opts = SolverOptions()
+opts.verbose = false
+opts.cost_tolerance = 1e-6
+opts.cost_tolerance_intermediate = 0.01
+opts.constraint_tolerance = 1e-4
+opts.resolve_feasible = true
+opts.outer_loop_update_type = :default
+opts.use_nesterov = true
+opts.penalty_scaling = 50
+opts.penalty_initial = 10
+opts.R_infeasible = 1
+opts.square_root = true
+opts.cost_tolerance_infeasible = 1e-6
+model,obj_c,circles = Dynamics.dubinscar_escape
+X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
+
 model,obj = Dynamics.quadrotor
 obj_c = ConstrainedObjective(obj,u_max=4,u_min=0)
+
+opts = SolverOptions()
+opts.penalty_initial = 0.01
+model,obj_c = Dynamics.quadrotor_3obs
 
 model,obj = Dynamics.double_integrator
 obj_c = ConstrainedObjective(obj)
 
 # obj_c = ConstrainedObjective(obj,u_min=-0.3,u_max=0.4)
-solver = Solver(model,obj_c,N=31)
+solver = Solver(model,obj_c,N=21,opts=opts)
 n,m,N = get_sizes(solver)
 p,pI,pE = get_num_constraints(solver)
 p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
 c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(solver.obj)
 dt = solver.dt
 U0 = ones(m,N-1)
+# X0 = TrajectoryOptimization.interp_rows(N,obj.tf,Array(X_guess'))
 solver.opts.verbose = true
-solver.opts.penalty_initial = 0.01
-solver.opts.cost_tolerance_intermediate = 1e-2
-solver.opts.cost_tolerance = 1e-2
+solver.opts.cost_tolerance_infeasible = 1e-3
+solver.opts.cost_tolerance = 1e-3
 solver.opts.constraint_tolerance = 1e-3
+solver.opts.resolve_feasible = false
 res,stats = solve(solver,U0)
 plot()
 plot_trajectory!(res)
@@ -47,8 +70,12 @@ plot(res.U)
 function mycost(Z)
     X = reshape(Z[1:Nx],n,N)
     U = reshape(Z[Nx .+ (1:Nu)],m,N-1)
-    cost(solver,X,U)
-
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(costfun,X[:,k],U[:,k])*solver.dt
+    end
+    J += stage_cost(costfun,X[:,N])
+    return J
 end
 
 function lagrangian(V)
@@ -461,12 +488,17 @@ Z = V[ind1.z]
 meritfun(V) = al_lagrangian(V,1)
 
 V = createV(res)
-reg = KKT_reg(z=1e-5,ν=1e-5,λ=1e-5,μ=1e-5)
+reg = KKT_reg(z=1e-2,ν=1e-2,λ=1e-2,μ=1e-2)
 V = newton_step(V,1,:kkt,projection=:jacobian,eps=1e-3,meritfun=meritfun)
-d = dynamics(V)
-nu = V[ind1.ν]
-sign.(d) == sign.(nu)
-d .* nu
+Z = V[ind1.z]
+cI(Z)
+
+gen_usrfun_newton(solver)
+newton_step2, = gen_newton_functions(solver)
+V2 = NewtonVars(res)
+
+newton_step2(V2,1,eps=1e-3)
+
 
 
 
