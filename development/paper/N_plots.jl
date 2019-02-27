@@ -119,6 +119,11 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
             if benchmark
                 b = @benchmark solve_dircol($solver, $X0, $U0, method=:hermite_simpson, options=$dircol_options)
                 stat["runtime"] = time(median(b))/1e9
+                stat["std"] = std(b.times)/1e9
+                stat["samples"] = length(b.times)
+            else
+                stats["std"] = 0
+                stats["samples"] = 1
             end
             t = get_time(solver)
             Xi,Ui = interp(t)
@@ -132,12 +137,22 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
                 if benchmark
                     b = @benchmark solve($solver,$X0,$U0)
                     stat["runtime"] = time(median(b))/1e9
+                    stat["std"] = std(b.times)/1e9
+                    stat["samples"] = length(b.times)
+                else
+                    stats["std"] = 0
+                    stats["samples"] = 1
                 end
             else
                 res,stat = solve(solver,U0)
                 if benchmark
                     b = @benchmark solve($solver,$U0)
                     stat["runtime"] = time(median(b))/1e9
+                    stat["std"] = std(b.times)/1e9
+                    stat["samples"] = length(b.times)
+                else
+                    stats["std"] = 0
+                    stats["samples"] = 1
                 end
             end
             X = to_array(res.X)
@@ -174,6 +189,8 @@ function save_Ns(err, err_final, stats, group::String, name::String)
         g["error"] = err
         g["error_final"] = err_final
         g["iterations"] = [stat["iterations"] for stat in stats]
+        g["std"] = [stat["std"] for stat in stats]
+        g["samples"] = [stat["samples"] for stat in stats]
         if ~isempty(stats[1]["c_max"])
             g["c_max"] = [stat["c_max"][end] for stat in stats]
         end
