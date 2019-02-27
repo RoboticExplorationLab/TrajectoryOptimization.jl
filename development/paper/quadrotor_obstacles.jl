@@ -5,6 +5,7 @@ using CoordinateTransformations
 using FileIO
 using MeshIO
 using Random
+IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"development","paper","images")
 
 Random.seed!(123)
 
@@ -43,19 +44,27 @@ X_hover = rollout(solver_uncon,U_hover)
 
 # Trajectory plots
 t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
-plot(t_array[1:end-1],to_array(results_uncon.U)',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="")
+plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="")
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_control_traj.eps"))
 plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_pos_traj.eps"))
 
 plot(t_array[1:end-1],Array(results_uncon_dircol.U)[:,1:end-1]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="dircol")
 plot(t_array,Array(results_uncon_dircol.X)[1:3,:]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="dircol")
 
 t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
-plot(t_array[1:end-1],Array(results_dircol.U)[:,1:end-1]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="dircol")
+plot(t_array[1:end-1],Array(results_dircol.U)[:,1:end-1]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="control",labels="")
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_control_traj_dircol.eps"))
 plot(t_array,Array(results_dircol.X)[1:3,:]',title="Quadrotor Obstacle Avoidance",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_pos_traj_dircol.eps"))
+
 @assert max_violation(results_con) <= opts.constraint_tolerance
 
 # Constraint convergence plot
-plot(log.(stats_con["c_max"]),title="Quadrotor Obstacle Avoidance",xlabel="iteration",ylabel="log(max constraint violation)",label="")
+plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Obstacle Avoidance",xlabel="iteration",ylabel="max constraint violation",label="ALTRO")
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_constraint_convergence.eps"))
+plot(stats_dircol["c_max"],yscale=:log10,title="Quadrotor Obstacle Avoidance",xlabel="iteration",ylabel="log(max constraint violation)",label="DIRCOL")
+savefig(joinpath(IMAGE_DIR,"quadrotor_obstacles_constraint_convergence_dircol.eps"))
 
 @show stats_con["iterations"]
 @show stats_con["outer loop iterations"]
@@ -136,10 +145,10 @@ for i = 1:N
 end
 
 # Ghose quadrotor scene
-# traj_idx = [1;15;25;35;50;N]
-# n_robots = length(traj_idx)
-# for i = 1:n_robots
-#     robot = vis["robot_$i"]
-#     setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
-#     settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1:3]...),LinearMap(Quat(results_con.X[traj_idx[i]][4:7]...))))
-# end
+traj_idx = [1;15;25;35;50;N]
+n_robots = length(traj_idx)
+for i = 1:n_robots
+    robot = vis["robot_$i"]
+    setobject!(vis["robot_$i"]["quad"],robot_obj,black_)
+    settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1:3]...),LinearMap(Quat(results_con.X[traj_idx[i]][4:7]...))))
+end
