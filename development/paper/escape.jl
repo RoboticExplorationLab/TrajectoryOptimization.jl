@@ -40,9 +40,10 @@ opts.penalty_scaling = 50
 opts.penalty_initial = 10
 opts.R_infeasible = 1
 opts.square_root = true
+opts.cost_tolerance_infeasible = 1e-6
 ipopt_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constraint_tolerance)
 
-N = 101
+N = 251
 solver = Solver(model, obj, N=N, opts=opts)
 n,m,N = get_sizes(solver)
 Random.seed!(2);
@@ -52,11 +53,11 @@ X0 = TrajectoryOptimization.interp_rows(N,obj.tf,Array(X_guess'))
 
 solver.opts.verbose = false
 solver.opts.cost_tolerance_infeasible = 1e-6
-@btime solve(solver,X0,U0)
 res_inf, stats_inf = solve(solver,X0,U0)
 stats_inf["iterations"]
 stats_inf["runtime"]
 evals(solver,:f) / stats_inf["iterations"]
+@btime solve(solver,X0,U0)
 
 @btime solve_dircol(solver,X0,U0, options=ipopt_options)
 res_i, stats_i = solve_dircol(solver,X0,U0, options=ipopt_options)
@@ -78,10 +79,10 @@ savefig(joinpath(IMAGE_DIR,"escape_traj.eps"))
 
 solver_truth = Solver(model, obj, N=601)
 
-Ns = [101,161,201,241,301]
+Ns = [101,145,201,251,281]
 group = "escape"
-run_step_size_comparison(model, obj, U0, group, Ns, opts=opts, integrations=[:rk3,:ipopt],benchmark=true, infeasible=true, X0=X0, dt_truth=solver_truth.dt)
-plot_stat("runtime",group,legend=:topleft,["rk3","ipopt"],title="Escape",color=[:blue :darkorange2],size=(500,250))
+run_step_size_comparison(model, obj, U0, group, Ns, opts=opts, integrations=[:rk3,:ipopt],benchmark=false, infeasible=true, X0=X0, dt_truth=solver_truth.dt)
+plot_stat("runtime",group,legend=:topleft,["rk3","ipopt"],title="Escape",color=[:blue :darkorange2],size=(500,250),ylim=(0,50))
 savefig(joinpath(IMAGE_DIR,"escape_runtime.eps"))
 plot_stat("iterations",group,legend=:topleft,["rk3","ipopt"],title="Escape",size=(500,250))
 savefig(joinpath(IMAGE_DIR,"escape_iters.eps"))

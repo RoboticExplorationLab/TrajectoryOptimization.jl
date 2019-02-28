@@ -2,6 +2,7 @@ using Plots
 using MeshCat
 using GeometryTypes
 using CoordinateTransformations
+using LinearAlgebra
 using FileIO
 using MeshIO
 using Random
@@ -135,11 +136,17 @@ plot(X_guess[1:3,:]')
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
 
 # Constrained solve
-@time results_con, stats_con = solve(solver_con,X0,U_hover)
+solver_con.opts.verbose = false
+@btime results_con, stats_con = solve(solver_con,X0,U_hover)
+results_con, stats_con = solve(solver_con,X0,U_hover)
+stats_con["iterations"]
+evals(solver_con,:f) / stats_con["iterations"]
 
 # Dircol solve
-# dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
-# @time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
+dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance,
+    "max_iter"=>5000)
+@time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
+evals(solver_con,:f) / stats_dircol["iterations"]
 
 # Trajectory Plots
 plot(to_array(results_uncon.U)',title="Quadrotor Unconstrained",xlabel="time",ylabel="control",labels="")

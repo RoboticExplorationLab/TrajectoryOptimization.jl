@@ -118,12 +118,13 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
             res,stat = solve_dircol(solver, X0, U0, method=:hermite_simpson, options=dircol_options, nlp=integration)
             if benchmark
                 b = @benchmark solve_dircol($solver, $X0, $U0, method=:hermite_simpson, options=$dircol_options)
+                times = filter(isfinite,b.times)
                 stat["runtime"] = time(median(b))/1e9
-                stat["std"] = std(b.times)/1e9
-                stat["samples"] = length(b.times)
+                stat["std"] = std(times)/1e9
+                stat["samples"] = length(times)
             else
-                stats["std"] = 0
-                stats["samples"] = 1
+                stat["std"] = 0
+                stat["samples"] = 1
             end
             t = get_time(solver)
             Xi,Ui = interp(t)
@@ -136,23 +137,25 @@ function run_Ns(model, obj, X0, U0, Ns, interp; integration=:rk3, infeasible=fal
                 res,stat = solve(solver,X0,U0)
                 if benchmark
                     b = @benchmark solve($solver,$X0,$U0)
+                    times = filter(isfinite,b.times)
                     stat["runtime"] = time(median(b))/1e9
-                    stat["std"] = std(b.times)/1e9
-                    stat["samples"] = length(b.times)
+                    stat["std"] = std(times)/1e9
+                    stat["samples"] = length(times)
                 else
-                    stats["std"] = 0
-                    stats["samples"] = 1
+                    stat["std"] = 0
+                    stat["samples"] = 1
                 end
             else
                 res,stat = solve(solver,U0)
                 if benchmark
                     b = @benchmark solve($solver,$U0)
+                    times = filter(isfinite,b.times)
                     stat["runtime"] = time(median(b))/1e9
-                    stat["std"] = std(b.times)/1e9
-                    stat["samples"] = length(b.times)
+                    stat["std"] = std(times)/1e9
+                    stat["samples"] = length(times)
                 else
-                    stats["std"] = 0
-                    stats["samples"] = 1
+                    stat["std"] = 0
+                    stat["samples"] = 1
                 end
             end
             X = to_array(res.X)
@@ -226,10 +229,11 @@ function plot_vals(Ns,vals,labels,name::String; kwargs...)
     else
         colors = 1:length(vals)
     end
-    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points", color=colors[1]; kwargs...)
+    p = plot(Ns,vals[1], label=labels[1], marker=:circle, ylabel=name, xlabel="Number of Knot Points",
+        color=colors[1],markerstrokecolor=colors[1]; kwargs...)
     for (val,label,color) in zip(vals[2:end],labels[2:end],colors[2:end],labels[2:end])
         if ~isempty(val)
-            plot!(Ns,val,label=label,marker=:circle,color=color)
+            plot!(Ns,val,label=label,marker=:circle,color=color,markerstrokecolor=color)
         end
     end
     p
