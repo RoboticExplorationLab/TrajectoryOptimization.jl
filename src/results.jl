@@ -263,6 +263,11 @@ function ConstrainedVectorResults(solver::Solver,X::Trajectory,U::Trajectory)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
     n,m,N = get_sizes(solver)
     results = ConstrainedVectorResults(n,m,p,N,p_N)
+    if solver.opts.square_root
+        for k = 1:N
+            results.S[k] = zeros(n+m,n)
+        end
+    end
     copyto!(results.X,X)
     copyto!(results.U,U)
     update_constraints!(results,solver)

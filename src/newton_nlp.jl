@@ -1,23 +1,25 @@
 import Base.getindex
 using Snopt
 
-struct PrimalVars{T}
-    Z::Vector{T}
+struct PrimalVars{V,T}
+    Z::V
     X::SubArray{T}
     U::SubArray{T}
 end
 
-function PrimalVars(Z::Vector,ind_x::Matrix{Int},ind_u::Matrix{Int})
+function PrimalVars(Z::AbstractVector,ind_x::Matrix{Int},ind_u::Matrix{Int})
     n,N = size(ind_x)
     m = size(ind_u,1)
     Nz = N*n + (N-1)*m
-    Z = Z[1:Nz]
+    if length(Z) > Nz
+        Z = Z[1:Nz]
+    end
     X = view(Z,ind_x)
     U = view(Z,ind_u)
     PrimalVars(Z,X,U)
 end
 
-function PrimalVars(Z::Vector,n::Int,m::Int,N::Int)
+function PrimalVars(Z::AbstractVector,n::Int,m::Int,N::Int)
     ind_x, ind_u = get_primal_inds(n,m,N)
     PrimalVars(Z,ind_x,ind_u)
 end
@@ -40,6 +42,7 @@ end
 
 
 get_sizes(Z::PrimalVars) = size(Z.X,1), size(Z.U,1), size(Z.X,2)
+Base.length(Z::PrimalVars) = length(Z.Z)
 
 function getindex(Z::PrimalVars,k::Int)
     n,m,N = get_sizes(Z)
@@ -53,10 +56,76 @@ function getindex(Z::PrimalVars,k::Int)
 end
 
 struct NewtonVars{T}
-    Z::PrimalVars{T}
-    ν::Vector{T}
-    λ::Vector{T}
-    μ::Vector{T}
+    V::Vector{T}
+    Z::PrimalVars{V,T} where V
+    ν::SubArray{T}
+    λ::SubArray{T}
+    μ::SubArray{T}
+    a::Vector{Bool}  # Active set
+    dualinds::UnitRange{Int}
+end
+
+function NewtonVars(Z::PrimalVars,ν::T,λ::T,μ::T) where T <: AbstractVector
+    Nz = length(Z)
+    Nx = length(ν)
+    Nh = length(λ)
+    Ng = length(μ)
+    n,m,N = get_sizes(Z)
+    part = create_partition([Nz,Nx,Nh,Ng],(:z,:ν,:λ,:μ))
+    V = [Z.Z;ν;λ;μ]
+    Z = PrimalVars(view(V,part.z),n,m,N)
+    ν = view(V,part.ν)
+    λ = view(V,part.λ)
+    μ = view(V,part.μ)
+    a = ones(Bool,length(V))
+    dualinds = Nz .+ (1:Nx+Nh+Ng)
+    NewtonVars(V,Z,ν,λ,μ,a,dualinds)
+end
+
+primals(V::NewtonVars) = V.Z.Z
+duals(V::NewtonVars) = view(V.V,V.dualinds)
+duals(V::NewtonVars, a::Vector{Bool}) = view(duals(V),a[V.dualinds])
+Base.copy(V::NewtonVars) = NewtonVars(V.Z,V.ν,V.λ,V.μ)
++(V::NewtonVars,A::Vector) = begin V1 = copy(V); V1.V .+= A; return V1 end
+Base.length(V::NewtonVars) = length(V.V)
+
+function NewtonVars(solver::Solver, res::SolverIterResults)
+    n,m,N = get_sizes(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
+    X = to_array(res.X)
+    U = to_array(res.U)
+    m = size(U,1)
+    ν = zeros(n,N)
+
+    for k = 1:N
+        ν[:,k] = res.s[k]*0
+    end
+    ν = vec(ν)
+
+    if res isa ConstrainedVectorResults
+        s = zeros(pI,N-1)
+        μ = zeros(pI,N-1)
+        λ = zeros(pE,N-1)
+        ineq = 1:pI
+        eq = pI .+ (1:pE)
+        for k = 1:N-1
+            μ[:,k] = res.λ[k][ineq]
+            λ[:,k] = res.λ[k][eq]
+        end
+        s = vec(s)
+        μ = vec(μ)
+        λ = vec(λ)
+        append!(s, sqrt.(2.0*max.(0,-res.C[N][1:pI_N])))
+        append!(μ, res.λ[N][1:pI_N])
+        append!(λ, res.λ[N][pI_N .+ (1:pE_N)])
+    else
+        λ = Float64[]
+        μ = Float64[]
+    end
+    Z = PrimalVars(X,U)
+    NewtonVars(Z,ν,λ,μ)
 end
 
 function get_primal_inds(n,m,N)
@@ -113,6 +182,8 @@ function gen_usrfun_newton(solver::Solver)
     ind_h = (k=ind_h.k, N=ind_h.N, k_mat=reshape(ind_h.k,pE,N-1))
     ind_g = (k=ind_g.k, N=ind_g.N, k_mat=reshape(ind_g.k,pI,N-1))
 
+    ind_v = create_partition([Nz,Nx,Nh,Ng],(:z,:ν,:λ,:μ))
+
     if solver.obj.cost isa QuadraticCost
         Z0 = PrimalVars(n,m,N)
         ∇²J, = taylor_expansion(solver,Z0)
@@ -137,15 +208,25 @@ function gen_usrfun_newton(solver::Solver)
                -Diagonal(isfinite.(obj.x_min))]
     jac_u_bnd = [Diagonal(isfinite.(obj.u_max));
                 -Diagonal(isfinite.(obj.u_min))]
-    jac_bnd_k = blockdiag(jac_u_bnd,jac_x_bnd)[active_bnd,:]
+    jac_bnd_k = [spzeros(2m,n) jac_u_bnd;
+                 jac_x_bnd spzeros(2n,m)][active_bnd,:]
+    # jac_bnd_k = blockdiag(jac_x_bnd,jac_u_bnd)[active_bnd,:]
     jac_bnd = blockdiag([jac_bnd_k for k = 1:N-1]...)
-    jac_bnd = blockdiag(jac_bnd,jac_x_bnd[active_bnd[1:2n],:])
+    # jac_bnd = blockdiag(jac_bnd,jac_x_bnd[active_bnd[2m+1:end],:])
+    jac_bnd = [jac_bnd spzeros(Ng,n)]
 
-    function mycost(Z)
-        Z̄ = PrimalVars(Z,ind_x,ind_u)
-        X,U = Z̄.X, Z̄.U
-        cost(solver,X,U)
+
+    function mycost(Z::PrimalVars)
+        X,U = Z.X, Z.U
+        J = 0.0
+        for k = 1:N-1
+            J += stage_cost(costfun,X[:,k],U[:,k])*solver.dt
+        end
+        J += stage_cost(costfun,X[:,N])
+        return J
     end
+    mycost(Z::AbstractVector) = mycost(PrimalVars(Z,ind_x,ind_u))
+    mycost(V::NewtonVars) = mycost(V.Z)
 
     function cE(C,Z)
         Z̄ = PrimalVars(Z,ind_x,ind_u)
@@ -247,9 +328,8 @@ function gen_usrfun_newton(solver::Solver)
         jacob_cE(jacob,Z)
         return jacob
     end
-
     # Assume only bound constraints right now
-    jacob_cI(jacob,Z) = copyto(jacob,jac_bnd)
+    jacob_cI(jacob,Z) = copyto!(jacob,jac_bnd)
     jacob_cI(Z) = jac_bnd
 
     c = (E=cE, I=cI, d=dynamics)
@@ -257,6 +337,7 @@ function gen_usrfun_newton(solver::Solver)
 
     return mycost, c, grad_J, hess_J, jacob_c
 end
+
 
 """$(SIGNATURES)
 Full 2nd order taylor expansion of a Quadratic Cost with respect to Z = [X;U]
@@ -505,4 +586,240 @@ function newton_ipopt(solver::Solver,res::SolverIterResults)
     backwardpass!(res_snopt,solver)
     rollout!(res_snopt,solver,0.0)
     return res_ipopt
+end
+
+
+function gen_newton_functions(solver::Solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    n,m,N = get_sizes(solver)
+
+    obj = solver.obj
+    costfun = obj.cost
+
+
+    Nx,Nu,Nh,Ng,NN = get_batch_sizes(solver)
+    Nz = Nx+Nu
+
+    ind_x, ind_u = get_primal_inds(n,m,N)
+
+    names = (:z,:ν,:λ,:μ)
+    ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
+    ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng],names)
+    ind1 = merge(ind1,create_partition([Nx,Nu],(:x,:u)))
+    ind1 = merge(ind1,create_partition([Nz,Nx+Nh+Ng],(:z,:y)))
+    ind2 = merge(ind2,create_partition2([Nz,Nx+Nh+Ng],(:z,:y)))
+
+    mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
+
+    Z0 = PrimalVars(n,m,N)
+    ∇²J = hess_J(Z0.Z)
+
+    function active_set(Z,eps=1e-3)
+        a = ones(Bool,NN)
+        ci = c.I(Z)
+        c_inds = ones(Bool,length(ci))
+        c_inds = ci .>= -eps
+        a[ind_v.μ] = c_inds
+        return a
+    end
+
+    function active_set(V::NewtonVars,eps=1e-3)
+        ci = c.I(primals(V))
+        c_inds = ones(Bool,length(ci))
+        c_inds = ci .>= -eps
+        V.a[ind1.μ] = c_inds
+    end
+
+    function buildKKT(V::NewtonVars,ρ,type=:kkt)
+        Z = primals(V)
+        A = spzeros(NN,NN)
+        A[ind2.zz...] = ∇²J
+        D = view(A,ind2.νz...)
+        H = view(A,ind2.λz...)
+        G = view(A,ind2.μz...)
+        jacob_c.d(D,Z)
+        jacob_c.E(H,Z)
+        jacob_c.I(G,Z)
+        A = Symmetric(A')
+
+        b = zeros(NN)
+        d = view(b,ind1.ν)
+        h = view(b,ind1.λ)
+        g = view(b,ind1.μ)
+        c.d(d,Z)
+        c.E(h,Z)
+        c.I(g,Z)
+        return A,b
+    end
+
+    #
+    # function constraint_projection!(A,b,V::NewtonVars)
+    #     Z = primals(V)
+    #     D = view(A,ind2.νz)
+    #     H = view(A,ind2.λz)
+    #     G = view(A,ind2.μz)
+    #     jacob_c.d(D,Z)
+    #     jacob_c.E(H,Z)
+    #     jacob_c.I(G,Z)
+    #
+    #     d = view(b,ind1.ν)
+    #     h = view(b,ind1.λ)
+    #     g = view(b,ind1.μ)
+    #     c.d(d,Z)
+    #     c.E(h,Z)
+    #     c.I(g,Z)
+    #
+    #     y = view(b,ind1.y)
+    #     Y = view(A,ind2.yz)
+    #     δV̂ = -Y'*((Y*Y')\y)
+    #     return δV̂
+    # end
+    #
+    function newton_step(V::NewtonVars,ρ; type=:kkt, eps=1e-2, reg=Diagonal(zeros(length(V))),verbose=solver.opts.verbose)
+        max_c2(V) = max(Ng > 0 ? maximum(c.I(V.V)) : 0, norm(c.E(V.V),Inf))
+        max_c(V) = max(norm(c.d(V.V),Inf),max_c2(V))
+
+        meritfun = mycost
+
+        V_ = copy(V)
+        active_set(V,eps)
+        amu = V.a[ind1.μ]
+        Z_ = primals(V_)
+
+        d1 = c.d(Z_)
+        h1 = c.E(Z_)
+        g1 = c.I(Z_)
+        y = [d1;h1;g1[amu]]
+        δz = zero(ind1.z)
+        if verbose; println("max y: $(maximum(abs.(y)))") end
+        while norm(y,Inf) > 1e-6
+            D = jacob_c.d(Z_)
+            H = jacob_c.E(Z_)
+            G = jacob_c.I(Z_)
+            Y = [D;H;G[amu,:]]
+
+            #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
+            δZ = -Y'*((Y*Y')\y)
+            Z_ .+= δZ
+
+            d1 = c.d(Z_)
+            h1 = c.E(Z_)
+            g1 = c.I(Z_)
+            y = [d1;h1;g1[amu]]
+            if verbose; println("max y: $(maximum(abs.(y)))") end
+        end
+
+        J0 = mycost(V_)
+        if verbose; println("Initial Cost: $J0") end
+
+        # Build and solve KKT
+        A,b = buildKKT(V_,ρ,type)
+        active_set(V_,eps)
+        a = V_.a
+        amu = a[ind1.μ]
+        δV = zero(V.V)
+        Ā = A[a,a] + reg[a,a]
+        δV[a] = -Ā\b[a]
+
+        # Line Search
+        ϕ=0.01
+        α = 2
+        V1 = copy(V_)
+        Z1 = primals(V1)
+        δV1 = α.*δV
+        J = J0+1e8
+        while J > J0 #+ α*ϕ*b'δV1
+            α *= 0.5
+            δV1 = α.*δV
+            V1.V  .= V_.V + δV1
+
+            d1 = c.d(Z1)
+            h1 = c.E(Z1)
+            g1 = c.I(Z1)
+            y = [d1;h1;g1[amu]]
+            if verbose; println("max y: $(maximum(abs.(y)))") end
+            while norm(y,Inf) > 1e-6
+                D = jacob_c.d(Z1)
+                H = jacob_c.E(Z1)
+                G = jacob_c.I(Z1)
+                Y = [D;H;G[amu,:]]
+
+                #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
+                δZ = -Y'*((Y*Y')\y)
+                Z1 .+= δZ
+
+                d1 = c.d(Z1)
+                h1 = c.E(Z1)
+                g1 = c.I(Z1)
+                y = [d1;h1;g1[amu]]
+                if verbose; println("max y: $(maximum(abs.(y)))") end
+            end
+
+            J = meritfun(V1)
+            if verbose; println("New Cost: $J") end
+        end
+
+        # Multiplier projection
+        ∇J = grad_J(Z1)
+        d1 = c.d(Z1)
+        h1 = c.E(Z1)
+        g1 = c.I(Z1)
+        y = [d1;h1;g1[amu]]
+        D = jacob_c.d(Z1)
+        H = jacob_c.E(Z1)
+        G = jacob_c.I(Z1)
+        Y = Array([D;H;G[amu,:]])
+
+        ν = V1.ν
+        μ = V1.μ
+        λ = V1.λ
+        lambda = [ν;λ;μ[amu]]
+        r = ∇J + Y'lambda
+        δlambda = zero(lambda)
+        if verbose; println("max residual before: $(norm(r,Inf))") end
+        δlambda -= (Y*Y')\(Y*r)
+        lambda1 = lambda + δlambda
+        r = ∇J + Y'lambda1
+        if verbose; println("max residual after: $(norm(r,Inf))") end
+        ν1 = lambda1[1:Nx]
+        λ1 = lambda1[Nx .+ (1:Nh)]
+        μ1 = lambda1[(Nx+Nh) .+ (1:count(amu))]
+        V1.ν .= ν1
+        V1.λ .= λ1
+        V1.μ[amu] = μ1
+        J = meritfun(V1)
+        if verbose; println("New Cost: $J") end
+
+        # Take KKT Step
+        cost = J
+        A,b = buildKKT(V1,ρ,type)
+        active_set(V1,eps)
+        a = V1.a
+        grad = norm(b[a])
+        c_max = max_c(V1)
+
+        change(x,x0) = format((x0-x)/x0*100,precision=4) * "%"
+        if verbose
+            println()
+            println("  cost: $J $(change(J,J0))")
+            println("  step: $(norm(δV1))")
+            println("  grad: $(grad)")
+            println("  c_max: $(c_max)")
+            println("  c_max2: $(max_c2(V1))")
+            println("  α: $α")
+            # println("  rank: $(rank(Ā))")
+            # println("  cond: $(cond(Ā))")
+        end
+        stats = Dict("cost"=>cost,"grad"=>grad,"c_max"=>c_max)
+        return V1
+    end
+
+    return newton_step, buildKKT, active_set
+end
+
+function newton_projection(solver::Solver,res::SolverIterResults; kwargs...)
+    V = NewtonVars(solver,res)
+    newton_step, = gen_newton_functions(solver)
+    V_ = newton_step(V,0; kwargs...)
 end

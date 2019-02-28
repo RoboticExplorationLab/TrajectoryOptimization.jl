@@ -11,10 +11,12 @@ function create_partition(lengths::Vector{Int})
 end
 
 function create_partition(lengths::Vector{Int}, names::NTuple{N,Symbol} where N)
-    if length(lengths) == length(names)
+    N = length(names)
+    M = names
+    if length(lengths) == N
         partition = create_partition(lengths)
         named_part = NamedTuple{names}(partition)
-        return named_part
+        return named_part::NamedTuple{M,NTuple{N,UnitRange{Int}}}
     else
         throw(ArgumentError("lengths must be the same"))
     end
@@ -33,10 +35,14 @@ end
 function create_partition2(lengths::Vector{Int})
     part1 = create_partition(lengths)
     partition = NTuple{2,UnitRange{Int}}[]
+    N = sum(lengths)
     for (rng1,rng2) in Iterators.product(part1,part1)
         push!(partition, (rng1,rng2))
     end
-    return CartesianIndices.(partition)
+    # linds = LinearIndices((N,N))
+    # return [linds[id[1],id[2]] for id in partition]
+    # return CartesianIndices.(partition)
+    return partition
 end
 
 function create_partition2(lengths::Vector{Int}, names::NTuple{N,Symbol} where N)
