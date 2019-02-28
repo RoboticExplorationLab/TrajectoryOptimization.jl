@@ -135,7 +135,7 @@ addcircles!(mvis,circles2)
 cylinders = [[d,-d,0.08],[d,d,0.08],[-d,-d,0.08]]
 addcylinders!(mvis,cylinders)
 
-points,radii,frames = kuka_points(kuka,true)
+points,radii,frames = kuka_points(kuka,false)
 
 
 
@@ -193,6 +193,7 @@ stats_obs["iterations"]
 stats_obs["max_mu_iteration"]
 stats_obs["runtime"]
 evals(solver,:f) / stats_obs["iterations"]
+res = res_obs
 
 # Visualize
 set_configuration!(mvis, x0[1:7])
@@ -243,10 +244,16 @@ plot_ghost_trajectory(Dynamics.urdf_kuka,10,solver.N,0.0)
 
 # Solve Dircol
 X0 = rollout(solver,U0_hold)
-dircol_options = Dict("tol"=>1e-3,"constr_viol_tol"=>1e-2,"max_iter"=>5000,"mu_init"=>0.1)
+dircol_options = Dict("tol"=>1e-3,"constr_viol_tol"=>1e-2,"max_iter"=>20000,"mu_init"=>0.1)
 X0 = line_trajectory(solver)
 res_d, stats_d = solve_dircol(solver,to_array(res_obs.X),to_array(res_obs.U),options=dircol_options)
-
+solver.opts.verbose = false
+res_d, stats_d = solve_dircol(solver,X0,U0_hold,options=dircol_options)
+evals(solver,:f) / stats_d["iterations"]
 
 X_d, U_d = TrajectoryOptimization.interp_traj(201,5.,res_d.X,res_d.U)
-animate_trajectory(mvis, X_d, 0.05)
+animate_trajectory(mvis, X_d, 0.01)
+res_d0 = copy(res_d)
+X_d0 = copy(Array(res_d.X))
+U_d0 = copy(Array(res_d.U))
+stats_d0 = copy(stats_d)
