@@ -89,10 +89,13 @@ Base.copy(V::NewtonVars) = NewtonVars(V.Z,V.ν,V.λ,V.μ)
 +(V::NewtonVars,A::Vector) = begin V1 = copy(V); V1.V .+= A; return V1 end
 Base.length(V::NewtonVars) = length(V.V)
 
-function NewtonVars(res::SolverIterResults)
+function NewtonVars(solver::Solver, res::SolverIterResults)
+    n,m,N = get_sizes(solver)
+    p,pI,pE = get_num_constraints(solver)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+
     X = to_array(res.X)
     U = to_array(res.U)
-    n,N = size(X)
     m = size(U,1)
     ν = zeros(n,N)
 
@@ -673,7 +676,7 @@ function gen_newton_functions(solver::Solver)
     #     return δV̂
     # end
     #
-    function newton_step(V::NewtonVars,ρ; type=:kkt, eps=1e-2, reg=Diagonal(zeros(length(V))))
+    function newton_step(V::NewtonVars,ρ; type=:kkt, eps=1e-2, reg=Diagonal(zeros(length(V))),verbose=solver.opts.verbose)
         max_c2(V) = max(Ng > 0 ? maximum(c.I(V.V)) : 0, norm(c.E(V.V),Inf))
         max_c(V) = max(norm(c.d(V.V),Inf),max_c2(V))
 
@@ -689,7 +692,7 @@ function gen_newton_functions(solver::Solver)
         g1 = c.I(Z_)
         y = [d1;h1;g1[amu]]
         δz = zero(ind1.z)
-        println("max y: $(maximum(abs.(y)))")
+        if verbose; println("max y: $(maximum(abs.(y)))") end
         while norm(y,Inf) > 1e-6
             D = jacob_c.d(Z_)
             H = jacob_c.E(Z_)
@@ -704,11 +707,11 @@ function gen_newton_functions(solver::Solver)
             h1 = c.E(Z_)
             g1 = c.I(Z_)
             y = [d1;h1;g1[amu]]
-            println("max y: $(maximum(abs.(y)))")
+            if verbose; println("max y: $(maximum(abs.(y)))") end
         end
 
         J0 = mycost(V_)
-        println("Initial Cost: $J0")
+        if verbose; println("Initial Cost: $J0") end
 
         # Build and solve KKT
         A,b = buildKKT(V_,ρ,type)
@@ -735,7 +738,7 @@ function gen_newton_functions(solver::Solver)
             h1 = c.E(Z1)
             g1 = c.I(Z1)
             y = [d1;h1;g1[amu]]
-            println("max y: $(maximum(abs.(y)))")
+            if verbose; println("max y: $(maximum(abs.(y)))") end
             while norm(y,Inf) > 1e-6
                 D = jacob_c.d(Z1)
                 H = jacob_c.E(Z1)
@@ -750,11 +753,11 @@ function gen_newton_functions(solver::Solver)
                 h1 = c.E(Z1)
                 g1 = c.I(Z1)
                 y = [d1;h1;g1[amu]]
-                println("max y: $(maximum(abs.(y)))")
+                if verbose; println("max y: $(maximum(abs.(y)))") end
             end
 
             J = meritfun(V1)
-            println("New Cost: $J")
+            if verbose; println("New Cost: $J") end
         end
 
         # Multiplier projection
@@ -774,11 +777,11 @@ function gen_newton_functions(solver::Solver)
         lambda = [ν;λ;μ[amu]]
         r = ∇J + Y'lambda
         δlambda = zero(lambda)
-        println("max residual before: $(norm(r,Inf))")
+        if verbose; println("max residual before: $(norm(r,Inf))") end
         δlambda -= (Y*Y')\(Y*r)
         lambda1 = lambda + δlambda
         r = ∇J + Y'lambda1
-        println("max residual after: $(norm(r,Inf))")
+        if verbose; println("max residual after: $(norm(r,Inf))") end
         ν1 = lambda1[1:Nx]
         λ1 = lambda1[Nx .+ (1:Nh)]
         μ1 = lambda1[(Nx+Nh) .+ (1:count(amu))]
@@ -786,7 +789,7 @@ function gen_newton_functions(solver::Solver)
         V1.λ .= λ1
         V1.μ[amu] = μ1
         J = meritfun(V1)
-        println("New Cost: $J")
+        if verbose; println("New Cost: $J") end
 
         # Take KKT Step
         cost = J
@@ -797,18 +800,26 @@ function gen_newton_functions(solver::Solver)
         c_max = max_c(V1)
 
         change(x,x0) = format((x0-x)/x0*100,precision=4) * "%"
-        println()
-        println("  cost: $J $(change(J,J0))")
-        println("  step: $(norm(δV1))")
-        println("  grad: $(grad)")
-        println("  c_max: $(c_max)")
-        println("  c_max2: $(max_c2(V1))")
-        println("  α: $α")
-        # println("  rank: $(rank(Ā))")
-        # println("  cond: $(cond(Ā))")
+        if verbose
+            println()
+            println("  cost: $J $(change(J,J0))")
+            println("  step: $(norm(δV1))")
+            println("  grad: $(grad)")
+            println("  c_max: $(c_max)")
+            println("  c_max2: $(max_c2(V1))")
+            println("  α: $α")
+            # println("  rank: $(rank(Ā))")
+            # println("  cond: $(cond(Ā))")
+        end
         stats = Dict("cost"=>cost,"grad"=>grad,"c_max"=>c_max)
         return V1
     end
 
     return newton_step, buildKKT, active_set
+end
+
+function newton_projection(solver::Solver,res::SolverIterResults; kwargs...)
+    V = NewtonVars(solver,res)
+    newton_step, = gen_newton_functions(solver)
+    V_ = newton_step(V,0; kwargs...)
 end
