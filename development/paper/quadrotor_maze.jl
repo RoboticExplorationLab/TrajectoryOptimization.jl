@@ -130,9 +130,10 @@ plot(X_guess[1:3,:]')
 
 # Constrained solve
 @time results_con, stats_con = solve(solver_con,X0,U_hover)
+@btime solve($solver_con,$X0,$U_hover)
 
 # Dircol solve
-dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
+dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance,"max_iter"=>6000)
 @time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, to_array(results_con.X), [to_array(results_con.U) zeros(m)], options=dircol_options)
 
 stats_con["iterations"]

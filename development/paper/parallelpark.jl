@@ -54,6 +54,8 @@ X0_rollout = rollout(solver,U0)
 
 res_i, stats_i = solve(solver,U0)
 res_p, stats_p = solve_dircol(solver,X0_rollout,U0)
+@btime solve($solver,$U0)
+@btime solve_dircol($solver,$X0_rollout,$U0)
 
 stats_i["iterations"]
 stats_i["runtime"]
