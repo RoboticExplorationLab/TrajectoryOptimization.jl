@@ -1,5 +1,5 @@
 import Base.getindex
-using Snopt
+# using Snopt
 
 struct PrimalVars{V,T}
     Z::V

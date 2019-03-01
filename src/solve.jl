@@ -245,7 +245,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
                 if c_max <= solver.opts.constraint_tolerance_second_order_dual_update && solver.opts.use_second_order_dual_update
                     solver.state.second_order_dual_update = true
                 end
-                if (solver.state.penalty_only && c_max < solver.opts.constraint_tolerance_intermediate) && solver.opts.use_penalty_burnin
+                if (solver.state.penalty_only && c_max < solver.opts.mediate) && solver.opts.use_penalty_burnin
                     solver.state.penalty_only = false
                     @logmsg InnerLoop "Switching to multipier updates"
                 end
@@ -467,11 +467,11 @@ function evaluate_convergence(solver::Solver, loop::Symbol, dJ::Float64, c_max::
             end
         end
 
-        # Kick out of infeasible solve early if the solution will be passed to another (feasible) solve
-        if solver.opts.resolve_feasible && solver.state.infeasible && dJ < solver.opts.cost_tolerance_infeasible
-            @logmsg OuterLoop "Converged on Infeasible Cost Tol."
-            return true
-        end
+        #TODO End infeasible solve when constraint tolerance is met
+        # if solver.opts.resolve_feasible && solver.state.infeasible && c_max_infeasible < solver.opts.constraint_tolerance_infeasible
+        #     @logmsg OuterLoop "Converged on Infeasible Cost Tol."
+        #     return true
+        # end
     end
     return false
 end

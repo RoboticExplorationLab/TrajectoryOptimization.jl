@@ -2,18 +2,14 @@ using Plots
 using MeshCat
 using GeometryTypes
 using CoordinateTransformations
-using LinearAlgebra
 using FileIO
 using MeshIO
 using Random
-pyplot()
-
-IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"development","paper","images")
 
 ##########
 ## Maze ##
 ##########
-integration = :rk4
+ integration = :rk4
 r_quad = 3.0 # based on size of mesh file
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
 N = 101
@@ -90,20 +86,15 @@ function cI(c,x,u)
     c
 end
 
-# unit quaternion constraint
-function cE(c,x,u)
-    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
 opts = SolverOptions()
 obj_uncon_maze = LQRObjective(Q, R, Qf, tf, x0, xf)
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon_maze,x_min=x_min,x_max=x_max,u_max=u_max,u_min=u_min,cE=cE,cI=cI)
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon_maze,x_min=x_min,x_max=x_max,u_max=u_max,u_min=u_min,cI=cI)
 
 solver_uncon = Solver(model,obj_uncon_maze,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 solver_con.opts.square_root = true
 solver_con.opts.R_infeasible = 0.01
-solver_con.opts.resolve_feasible = false #TODO run Newton or use prevResults in resolve
+solver_con.opts.resolve_feasible = true
 solver_con.opts.cost_tolerance = 1e-4
 solver_con.opts.cost_tolerance_intermediate = 1e-4
 solver_con.opts.constraint_tolerance = 1e-4
@@ -134,19 +125,13 @@ plot(X_guess[1:3,:]')
 
 # Unconstrained solve
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
-
 # Constrained solve
-solver_con.opts.verbose = false
-@btime results_con, stats_con = solve(solver_con,X0,U_hover)
-results_con, stats_con = solve(solver_con,X0,U_hover)
-stats_con["iterations"]
-evals(solver_con,:f) / stats_con["iterations"]
+@time results_con, stats_con = solve(solver_con,X0,U_hover)
+max_violation(results_con)
 
 # Dircol solve
-dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance,
-    "max_iter"=>5000)
-@time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
-evals(solver_con,:f) / stats_dircol["iterations"]
+# dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
+# @time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
 
 # Trajectory Plots
 plot(to_array(results_uncon.U)',title="Quadrotor Unconstrained",xlabel="time",ylabel="control",labels="")
@@ -158,36 +143,17 @@ plot(t_array,to_array(results_uncon.X)[1:3,:]',title="Quadrotor Maze",xlabel="ti
 
 t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
 plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="")
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_controls.eps"))
-
-plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels="",legend=:topleft)
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_pos_traj.eps"))
-
+plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
 @assert max_violation(results_con) <= opts.constraint_tolerance
 
 # Constraint convergence plot
-plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Maze",xlabel="iteration",ylabel="max constraint violation",label="")
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_constraint_convergence.eps"))
+plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Maze",xlabel="iteration",ylabel="log(max constraint violation)",label="sqrt",legend=:bottomleft)
 
 # Constrained results
 @show stats_con["iterations"]
 @show stats_con["outer loop iterations"]
 @show stats_con["c_max"][end]
 @show stats_con["cost"][end]
-
-# DIRCOL results
-@show stats_dircol["iterations"]
-@show stats_dircol["c_max"][end]
-@show stats_dircol["cost"][end]
-
-# Comparison plots
-t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
-plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="iLQR")
-plot!(t_array[1:end-1],results_dircol.U[:,1:end-1]',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="DIRCOL")
-
-plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
-plot!(t_array,results_con.X[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
-
 
 #################
 # Visualization #
