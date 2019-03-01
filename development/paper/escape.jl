@@ -5,7 +5,6 @@ include("N_plots.jl")
 model, obj = Dynamics.dubinscar_escape
 circles = Dynamics.circles_escape
 
-
 # Constrained
 opts = SolverOptions()
 opts.verbose = false

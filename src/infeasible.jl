@@ -53,8 +53,8 @@ function get_feasible_trajectory!(results::SolverIterResults,solver::Solver)::No
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     Δv = backwardpass!(results, solver)
 
-    # forward pass
-    forwardpass!(results,solver,Δv,cost(solver, results, results.X, results.U))
+    # rollout
+    rollout!(results,solver,0.0)
 
     # update trajectories
     copyto!(results.X, results.X_)
