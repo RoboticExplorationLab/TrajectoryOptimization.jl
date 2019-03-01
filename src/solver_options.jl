@@ -77,6 +77,7 @@ mutable struct SolverOptions
     ######################
     R_infeasible::Float64 # regularization term for infeasible controls
     resolve_feasible::Bool # resolve feasible problem after infeasible solve
+    feasible_projection::Bool # project infeasible solution into feasible space w/ BP, rollout
     penalty_initial_infeasible::Float64 # initial penalty term for infeasible controls
     penalty_scaling_infeasible::Float64 # penalty update rate for infeasible controls
 
@@ -146,6 +147,7 @@ mutable struct SolverOptions
         al_type=:default,
         R_infeasible=1.0,
         resolve_feasible=true,
+        feasible_projection=true,
         penalty_initial_infeasible=1.0,
         penalty_scaling_infeasible=10.0,
         R_minimum_time=1.0,
@@ -208,6 +210,7 @@ mutable struct SolverOptions
             al_type,
             R_infeasible,
             resolve_feasible,
+            feasible_projection,
             penalty_initial_infeasible,
             penalty_scaling_infeasible,
             R_minimum_time,

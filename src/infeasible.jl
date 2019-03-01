@@ -50,11 +50,13 @@ end
 function get_feasible_trajectory!(results::SolverIterResults,solver::Solver)::Nothing
     remove_infeasible_controls!(results,solver)
 
-    # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    Δv = backwardpass!(results, solver)
+    if solver.opts.feasible_projection
+        # backward pass - project infeasible trajectory into feasible space using time varying lqr
+        Δv = backwardpass!(results, solver)
 
-    # rollout
-    rollout!(results,solver,0.0)
+        # rollout
+        rollout!(results,solver,0.0)
+    end
 
     # update trajectories
     copyto!(results.X, results.X_)

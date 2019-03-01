@@ -379,6 +379,7 @@ function _solve(solver::Solver{M,Obj}, U0::Array{Float64,2}, X0::Array{Float64,2
         # run single backward pass/forward pass to get dynamically feasible solution (ie, remove infeasible controls)
         results_feasible = results
         get_feasible_trajectory!(results_feasible,solver)
+        # stats["c_max"][end] = max_violation(results_feasible)
 
         # resolve feasible solution if necessary (should be fast)
         if solver.opts.resolve_feasible  # TODO: This should be done in an outside function that calls solve

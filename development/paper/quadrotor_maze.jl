@@ -139,9 +139,9 @@ stats_con["iterations"]
 stats_con["runtime"]
 evals(solver_con,:f) / stats_con["iterations"]
 
-# stats_dircol["iterations"]
-# evals(solver,:f)/stats_dircol["iterations"]
-# stats_dircol["runtime"]
+stats_dircol["iterations"]
+evals(solver,:f)/stats_dircol["iterations"]
+stats_dircol["runtime"]
 
 # Trajectory Plots
 plot(to_array(results_uncon.U)',title="Quadrotor Unconstrained",xlabel="time",ylabel="control",labels="")
