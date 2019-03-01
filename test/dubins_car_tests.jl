@@ -10,9 +10,9 @@ integration = :rk4
 
 opts = SolverOptions()
 opts.verbose = false
-opts.cost_tolerance = 1e-8
-opts.cost_tolerance_intermediate = 1e-8
-opts.constraint_tolerance = 1e-8
+opts.cost_tolerance = 1e-6
+opts.cost_tolerance_intermediate = 1e-5
+opts.constraint_tolerance = 1e-4
 opts.resolve_feasible = true
 opts.outer_loop_update_type = :default
 opts.R_infeasible = 10
@@ -26,10 +26,10 @@ X0 = line_trajectory(solver)
 results, stats = TrajectoryOptimization.solve(solver,U0)
 results_inf, stats_inf = TrajectoryOptimization.solve(solver,X0,U0)
 
-@test norm(results.X[end]-obj.xf) < 1e-5
-@test TrajectoryOptimization.max_violation(results) < 1e-5
-@test norm(results_inf.X[end]-obj.xf) < 1e-5
-@test TrajectoryOptimization.max_violation(results_inf) < 1e-5
+@test norm(results.X[end]-obj.xf) < 1e-4
+@test TrajectoryOptimization.max_violation(results) < 1e-4
+@test norm(results_inf.X[end]-obj.xf) < 1e-4
+@test TrajectoryOptimization.max_violation(results_inf) < 1e-4
 
 # # Parallel Park (boxed)
 # x_min = obj.x_min
@@ -61,8 +61,8 @@ results_inf, stats_inf = TrajectoryOptimization.solve(solver_con_obstacles,X0,U0
 # plot_trajectory!(to_array(results_con_obstacles.X),width=2,color=:orange,label="Infeasible")
 # plot(to_array(results.U)')
 
-@test norm(results_inf.X[end]-obj_con_obstacles.xf) < 1e-5
-@test TrajectoryOptimization.max_violation(results_inf) < 1e-5
+@test norm(results_inf.X[end]-obj_con_obstacles.xf) < 1e-4
+@test TrajectoryOptimization.max_violation(results_inf) < 1e-4
 
 ############
 ## Escape ##
@@ -79,7 +79,7 @@ solver_escape.opts.R_infeasible = 1e-1
 solver_escape.opts.resolve_feasible = false
 solver_escape.opts.cost_tolerance = 1e-6
 solver_escape.opts.cost_tolerance_intermediate = 1e-3
-solver_escape.opts.constraint_tolerance = 1e-2#1e-5
+solver_escape.opts.constraint_tolerance = 1e-4#1e-5
 solver_escape.opts.constraint_tolerance_intermediate = 0.01
 solver_escape.opts.penalty_scaling = 100.0
 solver_escape.opts.penalty_initial = 100.0
@@ -97,5 +97,5 @@ results_escape, stats_escape = solve(solver_escape,X0,U0)
 # display(plt)
 # plot(to_array(results_escape.U[1:solver_escape.N-1])',label="")
 
-@test norm(results_escape.X[end]-solver_escape.obj.xf) < 1e-5
-@test TrajectoryOptimization.max_violation(results_escape) < 1e-5
+@test norm(results_escape.X[end]-solver_escape.obj.xf) < 1e-4
+@test TrajectoryOptimization.max_violation(results_escape) < 1e-4
