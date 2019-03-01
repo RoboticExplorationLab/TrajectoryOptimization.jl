@@ -4,7 +4,6 @@ pyplot()
 include("N_plots.jl")
 model, obj, circles = Dynamics.dubinscar_escape
 Random.seed!(2);
-
 N=101
 opts = SolverOptions()
 opts.verbose = false
@@ -30,12 +29,12 @@ X0 = TrajectoryOptimization.interp_rows(N,obj.tf,Array(X_guess'))
 
 res, stats = solve(solver,U0)
 res_inf, stats_inf = solve(solver,X0,U0)
-res_i, stats_i = solve_dircol(solver,X0,U0, options=ipopt_options)
 
 stats_inf["iterations"]
 stats_inf["runtime"]
 evals(solver,:f) / stats_inf["iterations"]
 
+res_i, stats_i = solve_dircol(solver,X0,U0, options=ipopt_options)
 stats_i["iterations"]
 evals(solver,:f)/stats_i["iterations"]
 stats_i["runtime"]

@@ -9,9 +9,11 @@ using Random
 ##########
 ## Maze ##
 ##########
- integration = :rk4
+integration = :rk4
 r_quad = 3.0 # based on size of mesh file
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+n = model.n
+m = model.m
 N = 101
 tf = 5.0
 q0 = [1.;0.;0.;0.]
@@ -106,7 +108,7 @@ solver_con.opts.iterations_outerloop = 25
 solver_con.opts.iterations = 500
 solver_con.opts.iterations_innerloop = 300
 solver_con.opts.use_penalty_burnin = false
-solver_con.opts.verbose = true
+solver_con.opts.verbose = false
 solver_con.opts.live_plotting = false
 
 # Initial control trajectory
@@ -130,8 +132,16 @@ plot(X_guess[1:3,:]')
 @time results_con, stats_con = solve(solver_con,X0,U_hover)
 
 # Dircol solve
-# dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
-# @time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
+dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
+@time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, to_array(results_con.X), [to_array(results_con.U) zeros(m)], options=dircol_options)
+
+stats_con["iterations"]
+stats_con["runtime"]
+evals(solver_con,:f) / stats_con["iterations"]
+
+# stats_dircol["iterations"]
+# evals(solver,:f)/stats_dircol["iterations"]
+# stats_dircol["runtime"]
 
 # Trajectory Plots
 plot(to_array(results_uncon.U)',title="Quadrotor Unconstrained",xlabel="time",ylabel="control",labels="")
