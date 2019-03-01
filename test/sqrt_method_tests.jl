@@ -89,7 +89,7 @@ max_cn_S_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results
 @test max_cn_S_sqrt < max_cn_S
 
 # Minimum Time
-N = 51
+N = solver_con.N
 obj_mintime = update_objective(obj_c,tf=:min)
 opts_mintime = TrajectoryOptimization.SolverOptions()
 opts_mintime_sqrt = TrajectoryOptimization.SolverOptions()
@@ -117,7 +117,6 @@ max_cn_S_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results
 @test max_cn_S_sqrt < max_cn_S
 
 # Minimum Time + Infeasible
-N = 51
 solver_mintime.state.infeasible = true
 solver_mintime_sqrt.state.infeasible = true
 results_mintime_inf = init_results(solver_mintime,X0,U0)
