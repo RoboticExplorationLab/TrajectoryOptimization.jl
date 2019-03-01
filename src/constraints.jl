@@ -5,36 +5,48 @@ $(SIGNATURES)
     -pI: number of inequality stage constraints (state and control)
     -pE: number of equality stage constraints (stage and control)
 """
-function get_num_constraints(solver::Solver)
+function get_num_constraints(solver::Solver,set::Symbol=:all)
     if solver.state.constrained
-        if solver.obj isa ConstrainedObjective
-            p = solver.obj.p
-            pI = solver.obj.pI
-            pE = p - pI
+        if set == :custom
+            pI = solver.obj.pI_custom
+            pE = solver.obj.pE_custom
+            p = pI + pE
         else
-            p,pI,pE = 0,0,0
+            if solver.obj isa ConstrainedObjective
+                p = solver.obj.p
+                pI = solver.obj.pI
+                pE = p - pI
+            else
+                p,pI,pE = 0,0,0
+            end
+            if is_min_time(solver)
+                pI += 2
+                pE += 1
+            end
+            solver.state.infeasible ? pE += solver.model.n : nothing
+            p = pI + pE
         end
-        if is_min_time(solver)
-            pI += 2
-            pE += 1
-        end
-        solver.state.infeasible ? pE += solver.model.n : nothing
-        p = pI + pE
         return p, pI, pE
     else
         return 0,0,0
     end
 end
 
-function get_num_terminal_constraints(solver::Solver)
+function get_num_terminal_constraints(solver::Solver,set::Symbol=:all)
     if solver.state.constrained
-        if solver.obj isa ConstrainedObjective
-            p_N = solver.obj.p_N
-            pI_N = solver.obj.pI_N
-
-            pE_N = p_N - pI_N
+        if set == :custom
+            pI_N = solver.obj.pI_N_custom
+            pE_N = solver.obj.pE_N_custom
+            p_N = pI_N + pE_N
         else
-            p_N,pI_N,pE_N = 0,0,0
+            if solver.obj isa ConstrainedObjective
+                p_N = solver.obj.p_N
+                pI_N = solver.obj.pI_N
+
+                pE_N = p_N - pI_N
+            else
+                p_N,pI_N,pE_N = 0,0,0
+            end
         end
         return p_N,pI_N,pE_N
     else
