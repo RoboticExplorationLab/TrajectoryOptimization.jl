@@ -68,6 +68,15 @@ stats_i["runtime"]
 
 # constraint_plot(solver,X0,U0)
 
+using TrajectoryOptimization: gen_usrfun_newton, NewtonVars, gen_newton_functions, newton_projection
+t_start = time_ns()
+V_ = newton_projection(solver,res_inf,eps=1e-8,verbose=true)
+res_ = ConstrainedVectorResults(solver,V_.Z.X,V_.Z.U)
+backwardpass!(res_,solver)
+rollout!(res_,solver,0.0)
+max_violation(res_)
+t_newton = float(time_ns()-t_start)/1e9
+
 plt = plot(title="",aspect_ratio=:equal,size=(500,300),xlim=[-0.5,10.5],ylim=[-0.5,6.6],grid=:off,bg=:white)
 plot_obstacles(circles,:forestgreen)
 plot_trajectory!(X0,style=:dash,color=:black,width=2,label="Initial Guess")
