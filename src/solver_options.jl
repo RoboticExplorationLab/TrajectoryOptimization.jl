@@ -17,9 +17,9 @@ mutable struct SolverOptions
     ##########################
     cost_tolerance::Float64 # dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve
     cost_tolerance_intermediate::Float64 # dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve
-    cost_tolerance_infeasible::Float64  # Tolerance to kick into a "feasible" solve
     constraint_tolerance::Float64 # max(constraint) < ϵ, constraint convergence criteria
     constraint_tolerance_intermediate::Float64 # max(constraint) < ϵ_int, intermediate constraint convergence criteria
+    constraint_tolerance_infeasible::Float64  # infeasible control constraint tolerance
     gradient_norm_tolerance::Float64 # gradient_norm < ϵ, gradient norm convergence criteria
     gradient_norm_tolerance_intermediate::Float64 # gradient_norm_int < ϵ, gradient norm intermediate convergence criteria
     gradient_type::Symbol # type of gradient to evaluate: Augmented Lagrangian ∂L/∂u :AuLa, feedfoward Σ|d|^2 :feedforward, Todorov normalized feedforward :todorov
@@ -104,9 +104,9 @@ mutable struct SolverOptions
         live_plotting=false,
         cost_tolerance=1.0e-4,
         cost_tolerance_intermediate=1.0e-3,
-        cost_tolerance_infeasible=1e-3,
         constraint_tolerance=1.0e-3,
         constraint_tolerance_intermediate=sqrt(constraint_tolerance),
+        constraint_tolerance_infeasible=1.0e-5,
         gradient_norm_tolerance=1.0e-5,
         gradient_norm_tolerance_intermediate=1.0e-5,
         gradient_type=:todorov,
@@ -166,9 +166,9 @@ mutable struct SolverOptions
             live_plotting,
             cost_tolerance,
             cost_tolerance_intermediate,
-            cost_tolerance_infeasible,
             constraint_tolerance,
             constraint_tolerance_intermediate,
+            constraint_tolerance_infeasible,
             gradient_norm_tolerance,
             gradient_norm_tolerance_intermediate,
             gradient_type,

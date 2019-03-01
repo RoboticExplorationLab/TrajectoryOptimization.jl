@@ -5,7 +5,6 @@ opts = TrajectoryOptimization.SolverOptions()
 opts.cost_tolerance = 1e-5
 opts.constraint_tolerance = 1e-5
 
-
 ### UNCONSTRAINED ###
 # rk4
 solver = TrajectoryOptimization.Solver(model,obj,dt=0.01,opts=opts)

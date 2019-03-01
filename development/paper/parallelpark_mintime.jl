@@ -48,15 +48,14 @@ ipopt_options = Dict("tol"=>opts.cost_tolerance,"constr_viol_tol"=>opts.constrai
 obj_mintime = update_objective(obj,tf=:min)
 
 solver_mintime = Solver(model, obj_mintime, N=N, opts=opts)
-@btime results_mintime, stats_mintime = solve(solver_mintime,to_array(res.U))
-solve(solver_mintime,to_array(res.U))
+results_mintime, stats_mintime = solve(solver_mintime,to_array(res.U)) 
 stats_mintime["iterations"]
 evals(solver_mintime,:f) / stats_mintime["iterations"]
 
 plot(to_array(results_mintime.U)[1:2,1:solver_mintime.N-1]',linestyle=:solid,color=[1 2],labels=["v" "omega"],linewidth=2)
 
 X0 = rollout(solver,U0)
-@btime res_d, stats_d = solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
+res_d, stats_d = solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
 solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
 stats_d["info"]
 stats_d["iterations"]
@@ -97,7 +96,6 @@ p = plot()
 plot_trajectory!(res,label="original",width=2,xlabel="x",ylabel="y")
 plot_trajectory!(results_mintime,labels="mintime",width=2,legend=:topleft)
 plot_trajectory!(res_d,labels="dircol",width=2,legend=:topleft)
-
 
 # Timing results
 U0 = to_array(res.U)

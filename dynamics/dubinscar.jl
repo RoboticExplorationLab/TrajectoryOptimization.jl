@@ -26,7 +26,7 @@ Qf = 100.0*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
 # simulation
-tf = 5.0
+tf = 3.0
 dt = 0.01
 
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)

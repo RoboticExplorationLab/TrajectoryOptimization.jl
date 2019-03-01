@@ -2,13 +2,9 @@ using Plots
 using MeshCat
 using GeometryTypes
 using CoordinateTransformations
-using LinearAlgebra
 using FileIO
 using MeshIO
 using Random
-pyplot()
-
-IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"development","paper","images")
 
 ##########
 ## Maze ##
@@ -16,6 +12,8 @@ IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"development","paper","im
 integration = :rk4
 r_quad = 3.0 # based on size of mesh file
 model,obj_uncon = TrajectoryOptimization.Dynamics.quadrotor
+n = model.n
+m = model.m
 N = 101
 tf = 5.0
 q0 = [1.;0.;0.;0.]
@@ -90,24 +88,19 @@ function cI(c,x,u)
     c
 end
 
-# unit quaternion constraint
-function cE(c,x,u)
-    c = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
 opts = SolverOptions()
 obj_uncon_maze = LQRObjective(Q, R, Qf, tf, x0, xf)
-obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon_maze,x_min=x_min,x_max=x_max,u_max=u_max,u_min=u_min,cE=cE,cI=cI)
-
+obj_con = TrajectoryOptimization.ConstrainedObjective(obj_uncon_maze,x_min=x_min,x_max=x_max,u_max=u_max,u_min=u_min,cI=cI)
 solver_uncon = Solver(model,obj_uncon_maze,integration=integration,N=N,opts=opts)
 solver_con = Solver(model,obj_con,integration=integration,N=N,opts=opts)
 solver_con.opts.square_root = true
 solver_con.opts.R_infeasible = 0.01
-solver_con.opts.resolve_feasible = false #TODO run Newton or use prevResults in resolve
+solver_con.opts.resolve_feasible = true
 solver_con.opts.cost_tolerance = 1e-4
 solver_con.opts.cost_tolerance_intermediate = 1e-4
 solver_con.opts.constraint_tolerance = 1e-4
 solver_con.opts.constraint_tolerance_intermediate = 0.01
+
 solver_con.opts.penalty_scaling = 10.0
 solver_con.opts.penalty_initial = 1.0
 solver_con.opts.outer_loop_update_type = :feedback
@@ -136,17 +129,19 @@ plot(X_guess[1:3,:]')
 @time results_uncon, stats_uncon = solve(solver_uncon,U_hover)
 
 # Constrained solve
-solver_con.opts.verbose = false
-@btime results_con, stats_con = solve(solver_con,X0,U_hover)
-results_con, stats_con = solve(solver_con,X0,U_hover)
-stats_con["iterations"]
-evals(solver_con,:f) / stats_con["iterations"]
+@time results_con, stats_con = solve(solver_con,X0,U_hover)
 
 # Dircol solve
-dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance,
-    "max_iter"=>5000)
-@time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, X0, U_hover, options=dircol_options)
-evals(solver_con,:f) / stats_dircol["iterations"]
+dircol_options = Dict("tol"=>solver_con.opts.cost_tolerance,"constr_viol_tol"=>solver_con.opts.constraint_tolerance)
+@time results_dircol, stats_dircol = TrajectoryOptimization.solve_dircol(solver_con, to_array(results_con.X), [to_array(results_con.U) zeros(m)], options=dircol_options)
+
+stats_con["iterations"]
+stats_con["runtime"]
+evals(solver_con,:f) / stats_con["iterations"]
+
+# stats_dircol["iterations"]
+# evals(solver,:f)/stats_dircol["iterations"]
+# stats_dircol["runtime"]
 
 # Trajectory Plots
 plot(to_array(results_uncon.U)',title="Quadrotor Unconstrained",xlabel="time",ylabel="control",labels="")
@@ -158,36 +153,17 @@ plot(t_array,to_array(results_uncon.X)[1:3,:]',title="Quadrotor Maze",xlabel="ti
 
 t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
 plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="")
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_controls.eps"))
-
-plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels="",legend=:topleft)
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_pos_traj.eps"))
-
+plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
 @assert max_violation(results_con) <= opts.constraint_tolerance
-
+stats_con["iterations"]
 # Constraint convergence plot
-plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Maze",xlabel="iteration",ylabel="max constraint violation",label="")
-savefig(joinpath(IMAGE_DIR,"quadrotor_maze_constraint_convergence.eps"))
+plot(stats_con["c_max"],yscale=:log10,title="Quadrotor Maze",xlabel="iteration",ylabel="log(max constraint violation)",label="sqrt",legend=:bottomleft)
 
 # Constrained results
 @show stats_con["iterations"]
 @show stats_con["outer loop iterations"]
 @show stats_con["c_max"][end]
 @show stats_con["cost"][end]
-
-# DIRCOL results
-@show stats_dircol["iterations"]
-@show stats_dircol["c_max"][end]
-@show stats_dircol["cost"][end]
-
-# Comparison plots
-t_array = range(0,stop=solver_con.obj.tf,length=solver_con.N)
-plot(t_array[1:end-1],to_array(results_con.U)',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="iLQR")
-plot!(t_array[1:end-1],results_dircol.U[:,1:end-1]',title="Quadrotor Maze",xlabel="time",ylabel="control",labels="DIRCOL")
-
-plot(t_array,to_array(results_con.X)[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
-plot!(t_array,results_con.X[1:3,:]',title="Quadrotor Maze",xlabel="time",ylabel="position",labels=["x";"y";"z"],legend=:topleft)
-
 
 #################
 # Visualization #
@@ -209,6 +185,8 @@ red_transparent = MeshPhongMaterial(color=RGBA(1, 0, 0, 0.1))
 blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
 blue_transparent = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.1))
 blue_semi = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.5))
+yellow_ = MeshPhongMaterial(color=RGBA(1, 1, 0, 1.0))
+yellow_transparent = MeshPhongMaterial(color=RGBA(1, 1, 0, 0.75))
 
 orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
 orange_transparent = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 0.1))
@@ -223,7 +201,8 @@ end
 
 function addcylinders!(vis,cylinders,height=1.5)
     for (i,cyl) in enumerate(cylinders)
-        plot_cylinder([cyl[1],cyl[2],0],[0,0,height],cyl[3],blue_,"cyl_$i")
+        plot_cylinder([cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],blue_,"cyl_$i")
+        # plot_cylinder([cyl[1],cyl[2],0],[0,0,height],cyl[3],blue_,"cyl_$i")
     end
 end
 
@@ -242,7 +221,8 @@ robot = vis["robot"]
 robot_uncon = vis["robot_uncon"]
 
 # Set camera location
-settransform!(vis["/Cameras/default"], compose(Translation(0., 75., 50.),LinearMap(RotX(pi/10)*RotZ(pi/2))))
+settransform!(vis["/Cameras/default"], compose(Translation(0., 72., 60.),LinearMap(RotX(pi/7.5)*RotZ(pi/2))))
+# settransform!(vis["/Cameras/default"], compose(Translation(0., 75., 50.),LinearMap(RotX(pi/10)*RotZ(pi/2))))
 # settransform!(vis["/Cameras/default"], compose(Translation(0., 35., 65.),LinearMap(RotX(pi/3)*RotZ(pi/2))))
 
 # Create and place obstacles
@@ -259,8 +239,8 @@ addcylinders!(vis,cylinders,16.0)
 #     settransform!(vis["traj_x0"]["t$i"], Translation(X0[1,i], X0[2,i], X0[3,i]))
 # end
 for i = 1:size(X_guess,2)
-    setobject!(vis["traj_x0"]["t$i"],sphere_medium,blue_semi)
-        settransform!(vis["traj_x0"]["t$i"], Translation(X_guess[1:3,i]...))
+    setobject!(vis["traj_x0"]["t$i"],sphere_medium,yellow_transparent)
+    settransform!(vis["traj_x0"]["t$i"], Translation(X_guess[1:3,i]...))
 end
 
 for i = 1:N
@@ -286,13 +266,13 @@ for i = 1:N
 end
 
 # Ghose quadrotor scene
-# traj_idx = [1;12;20;30;40;50;N]
-# n_robots = length(traj_idx)
-# for i = 1:n_robots
-#     robot = vis["robot_$i"]
-#     setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
-#     settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
-# end
+traj_idx = [1;12;20;30;40;50;N]
+n_robots = length(traj_idx)
+for i = 1:n_robots
+    robot = vis["robot_$i"]
+    setobject!(vis["robot_$i"]["quad"],robot_obj,black_semi)
+    settransform!(vis["robot_$i"], compose(Translation(results_con.X[traj_idx[i]][1], results_con.X[traj_idx[i]][2], results_con.X[traj_idx[i]][3]),LinearMap(quat2rot(results_con.X[traj_idx[i]][4:7]))))
+end
 
 # Animation
 # (N-1)/tf

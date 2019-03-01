@@ -4,7 +4,6 @@ opts.square_root = false
 opts.verbose=false
 opts.constraint_tolerance = 1e-5
 opts.cost_tolerance = 1e-6
-
 model, obj = TrajectoryOptimization.Dynamics.pendulum
 solver = Solver(model,obj,dt=0.1,opts=opts)
 
