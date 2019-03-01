@@ -83,34 +83,39 @@ stats_i["iterations"]
 evals(solver,:f)/stats_i["iterations"]
 stats_i["runtime"]
 
-
 # Newton results
 solver.opts.resolve_feasible = false
-idx_newton = 31
+solver.opts.feasible_projection = false
+idx_newton = 13
 solver.opts.iterations = idx_newton # cut out at this constraint violation
 res_n, stats_n = solve(solver,X0,U0)
 max_violation(res_n)
+stats_n["c_max"][end]
+
+length(stats_n["c_max"])
 
 using TrajectoryOptimization: gen_usrfun_newton, NewtonVars, gen_newton_functions, newton_projection
 t_start = time_ns()
-V_ = newton_projection(solver,res_n,eps=1e-6,verbose=true)
+V_ = newton_projection(solver,res_n,eps=1e-12,verbose=true)
 res_ = ConstrainedVectorResults(solver,V_.Z.X,V_.Z.U)
 backwardpass!(res_,solver)
 rollout!(res_,solver,0.0)
 max_violation(res_)
 t_newton = float(time_ns()-t_start)/1e9
 
-stats_n["c_max"][end]
-c_max = [stats_n["c_max"];max_violation(res_)]
-
-
+c_max = [stats_n["c_max"]; max_violation(res_)]
+stats_inf["c_max"][31]
 p = plot(stats_i["c_max"],yscale=:log10,label="Ipopt",color=:blue,width=2,markershape=:circle,markerstrokecolor=:blue)
-plot_vertical_lines!(p,[idx_newton])
-
 plot!(stats_inf["c_max"][1:100],yscale=:log10,label="ALTRO",width=2,color=:darkorange2,markershape=:circle,markerstrokecolor=:darkorange2)
 plot!(c_max,yscale=:log10,ylim=[1e-9,1e-1],label="ALTRO*",legend=:topright,xlabel="iterations",ylabel="max constraint violation",color=:green,width=2,markershape=:circle,markerstrokecolor=:green,size=(500,250))
+plot_vertical_lines!(p,[idx_newton])
 
 savefig(p,joinpath(IMAGE_DIR,"escape_newton.eps"))
+
+cost(solver,res_)
+stats_i["cost"][end]
+stats_inf["cost"][end]
+
 # solver_truth = Solver(model, obj, N=601)
 #
 # Ns = [101,145,201,251,281]
