@@ -61,63 +61,65 @@ struct NewtonVars{T}
     ν::SubArray{T}
     λ::SubArray{T}
     μ::SubArray{T}
+    r::SubArray{T}
     a::Vector{Bool}  # Active set
+    part::NamedTuple
     dualinds::UnitRange{Int}
 end
 
-function NewtonVars(Z::PrimalVars,ν::T,λ::T,μ::T) where T <: AbstractVector
+function NewtonVars(Z::PrimalVars,ν::T,λ::T,μ::T,r::T) where T <: AbstractVector
     Nz = length(Z)
     Nx = length(ν)
     Nh = length(λ)
     Ng = length(μ)
     n,m,N = get_sizes(Z)
-    part = create_partition([Nz,Nx,Nh,Ng],(:z,:ν,:λ,:μ))
-    V = [Z.Z;ν;λ;μ]
+    part = create_partition([Nz,Nx,Nh,Ng,2Nz],(:z,:ν,:λ,:μ,:r))
+    V = [Z.Z;ν;λ;μ;r]
     Z = PrimalVars(view(V,part.z),n,m,N)
     ν = view(V,part.ν)
     λ = view(V,part.λ)
     μ = view(V,part.μ)
+    r = view(V,part.r)
     a = ones(Bool,length(V))
-    dualinds = Nz .+ (1:Nx+Nh+Ng)
-    NewtonVars(V,Z,ν,λ,μ,a,dualinds)
+    dualinds = Nz .+ (1:Nx+Nh+Ng+2Nz)
+    NewtonVars(V,Z,ν,λ,μ,r,a,part,dualinds)
 end
 
 primals(V::NewtonVars) = V.Z.Z
 duals(V::NewtonVars) = view(V.V,V.dualinds)
 duals(V::NewtonVars, a::Vector{Bool}) = view(duals(V),a[V.dualinds])
-Base.copy(V::NewtonVars) = NewtonVars(V.Z,V.ν,V.λ,V.μ)
+Base.copy(V::NewtonVars) = NewtonVars(V.Z,V.ν,V.λ,V.μ,V.r)
 +(V::NewtonVars,A::Vector) = begin V1 = copy(V); V1.V .+= A; return V1 end
 Base.length(V::NewtonVars) = length(V.V)
 
 function NewtonVars(solver::Solver, res::SolverIterResults)
     n,m,N = get_sizes(solver)
     p,pI,pE = get_num_constraints(solver)
+    p_c,pI_c,pE_c = get_num_constraints(solver,:custom)
     p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    p_bnd = pI-pI_c  # number of bound constraints
 
     X = to_array(res.X)
     U = to_array(res.U)
     m = size(U,1)
     ν = zeros(n,N)
+    r = vec(get_bound_multipliers(solver,res))
 
     for k = 1:N
         ν[:,k] = res.s[k]*0
     end
     ν = vec(ν)
+    ind = create_partition([p_bnd,pI_c,pE_c],(:bnd,:I,:E))
 
     if res isa ConstrainedVectorResults
-        s = zeros(pI,N-1)
-        μ = zeros(pI,N-1)
-        λ = zeros(pE,N-1)
-        ineq = 1:pI
-        eq = pI .+ (1:pE)
+        μ = zeros(pI_c,N-1)
+        λ = zeros(pE_c,N-1)
         for k = 1:N-1
-            μ[:,k] = res.λ[k][ineq]
-            λ[:,k] = res.λ[k][eq]
+            μ[:,k] = res.λ[k][ind.I]
+            λ[:,k] = res.λ[k][ind.E]
         end
-        s = vec(s)
         μ = vec(μ)
         λ = vec(λ)
-        append!(s, sqrt.(2.0*max.(0,-res.C[N][1:pI_N])))
         append!(μ, res.λ[N][1:pI_N])
         append!(λ, res.λ[N][pI_N .+ (1:pE_N)])
     else
@@ -125,7 +127,7 @@ function NewtonVars(solver::Solver, res::SolverIterResults)
         μ = Float64[]
     end
     Z = PrimalVars(X,U)
-    NewtonVars(Z,ν,λ,μ)
+    NewtonVars(Z,ν,λ,μ,r)
 end
 
 function get_primal_inds(n,m,N)
@@ -145,34 +147,43 @@ function get_primal_inds(n,m,N)
 end
 
 function get_batch_sizes(solver::Solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    p,pI,pE = get_num_constraints(solver,:custom)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver,:custom)
     n,m,N = get_sizes(solver)
+    if solver.obj isa ConstrainedObjective && solver.obj.use_xf_equality_constraint
+        pE_N = n
+        p_N = pI_N + pE_N
+    end
 
     Nx = N*n
     Nu = (N-1)*m
     Nh = (N-1)*pE + pE_N
     Ng = (N-1)*pI + pI_N
-    NN = 2Nx + Nu + Nh + Ng
+    NN = 2Nx + Nu + Nh + Ng + 2(Nx+Nu)
     return Nx,Nu,Nh,Ng,NN
 end
 
 function gen_usrfun_newton(solver::Solver)
-    p,pI,pE = get_num_constraints(solver)
-    p_N,pI_N,pE_N = get_num_terminal_constraints(solver)
+    p,pI,pE = get_num_constraints(solver,:custom)
+    p_N,pI_N,pE_N = get_num_terminal_constraints(solver,:custom)
     n,m,N = get_sizes(solver)
 
-    c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(solver.obj)
+    # c_function!, c_jacobian!, c_labels, cI!, cE! = generate_constraint_functions(solver.obj)
+    cE!,cI! = solver.obj.cE, solver.obj.cI
+    cE_N!,cI_N! = solver.obj.cE_N, solver.obj.cI_N
     obj = solver.obj
     costfun = obj.cost
-
+    if obj.use_xf_equality_constraint
+        pE_N = n
+        p_N = pI_N + pE_N
+    end
 
     Nx,Nu,Nh,Ng,NN = get_batch_sizes(solver)
     Nz = Nx+Nu
 
-    names = (:z,:ν,:λ,:μ)
-    ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
-    ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng],names)
+    names = (:z,:ν,:λ,:μ,:r)
+    ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng,2Nz],names)
+    ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng,2Nz],names)
 
     ind_x, ind_u = get_primal_inds(n,m,N)
     ind_Z = create_partition([Nx,Nu],(:x,:u))
@@ -181,8 +192,6 @@ function gen_usrfun_newton(solver::Solver)
     ind_g = create_partition([(N-1)*pI,pI_N],(:k,:N))
     ind_h = (k=ind_h.k, N=ind_h.N, k_mat=reshape(ind_h.k,pE,N-1))
     ind_g = (k=ind_g.k, N=ind_g.N, k_mat=reshape(ind_g.k,pI,N-1))
-
-    ind_v = create_partition([Nz,Nx,Nh,Ng],(:z,:ν,:λ,:μ))
 
     if solver.obj.cost isa QuadraticCost
         Z0 = PrimalVars(n,m,N)
@@ -199,22 +208,32 @@ function gen_usrfun_newton(solver::Solver)
     Fd!(dz,xdot,z) = ForwardDiff.jacobian!(dz,fd_aug!,xdot,z)
 
     # Bounds
-    z_L,z_U = get_bounds(solver,false)
-    x_bnd = [isfinite.(obj.x_max); -isfinite.(obj.x_min)]
-    u_bnd = [isfinite.(obj.u_max); -isfinite.(obj.u_min)]
-    z_bnd = [u_bnd; x_bnd]
-    active_bnd = z_bnd .!= 0
-    jac_x_bnd= [Diagonal(isfinite.(obj.x_max));
-               -Diagonal(isfinite.(obj.x_min))]
-    jac_u_bnd = [Diagonal(isfinite.(obj.u_max));
-                -Diagonal(isfinite.(obj.u_min))]
-    jac_bnd_k = [spzeros(2m,n) jac_u_bnd;
-                 jac_x_bnd spzeros(2n,m)][active_bnd,:]
-    # jac_bnd_k = blockdiag(jac_x_bnd,jac_u_bnd)[active_bnd,:]
-    jac_bnd = blockdiag([jac_bnd_k for k = 1:N-1]...)
-    # jac_bnd = blockdiag(jac_bnd,jac_x_bnd[active_bnd[2m+1:end],:])
-    jac_bnd = [jac_bnd spzeros(Ng,n)]
+    ind_bnd = create_partition([Nz,Nz],(:U,:L))
+    z_L, z_U = get_bounds(solver,false)
+    bound_constraint(c,Z) = begin copyto!(view(c,ind_bnd.U), Z - z_U);
+                                  copyto!(view(c,ind_bnd.L), z_L - Z); end
+    bound_constraint(Z) = begin c = zeros(eltype(Z),2Nz); bound_constraint(c,Z); return c; end
+    jac_bnd = [Diagonal(I,Nz); -Diagonal(I,Nz)]
 
+    # Custom Constraint jacobians
+    augmenter(f!) = f_aug!(a,z) = f!(a,view(z,ind_z.x),view(z,ind_z.u))
+    cE!,cI! = solver.obj.cE, solver.obj.cI
+    cE_N!,cI_N! = solver.obj.cE_N, solver.obj.cI_N
+    cE_aug = augmenter(cE!)
+    cI_aug = augmenter(cI!)
+    ∇cE(Cz,c,z) = ForwardDiff.jacobian!(Cz,cE_aug,c,z)
+    ∇cI(Cz,c,z) = ForwardDiff.jacobian!(Cz,cI_aug,c,z)
+    ∇cE_N(Cx,c,x) = ForwardDiff.jacobian!(Cx,cE_N!,c,x)
+    ∇cI_N(Cx,c,x) = ForwardDiff.jacobian!(Cx,cI_N!,c,x)
+
+    ∇cE_blocks = [(pE*(i-1) .+ (1:pE),(n+m)*(i-1) .+ (1:n+m)) for i = 1:N-1]
+    push!(∇cE_blocks,(Nh-pE_N+1:Nh, Nz-n+1:Nz))
+    ∇cI_blocks = [(pI*(i-1) .+ (1:pI),(n+m)*(i-1) .+ (1:n+m)) for i = 1:N-1]
+    push!(∇cI_blocks,(Ng-pI_N+1:Ng, Nz-n+1:Nz))
+    if solver.obj.use_xf_equality_constraint
+        cE_N!(c,x) = copyto!(c,x-solver.obj.xf)
+        ∇cE_N(Cx,c,x) = begin copyto!(Cx,I); cE_N!(c,x); end
+    end
 
     function mycost(Z::PrimalVars)
         X,U = Z.X, Z.U
@@ -237,7 +256,7 @@ function gen_usrfun_newton(solver::Solver)
             cE!(view(C_,1:pE,k),X[:,k],U[:,k])
         end
         CN = view(C,ind_h.N)
-        cE!(CN,X[:,N])
+        cE_N!(CN,X[:,N])
         return nothing
     end
     function cE(Z)
@@ -255,7 +274,7 @@ function gen_usrfun_newton(solver::Solver)
             cI!(view(C_,1:pI,k),X[:,k],U[:,k])
         end
         CN = view(C,ind_g.N)
-        cI!(CN,X[:,N])
+        cI_N!(CN,X[:,N])
         return nothing
     end
     function cI(Z)
@@ -319,21 +338,49 @@ function gen_usrfun_newton(solver::Solver)
     end
 
     function jacob_cE(jacob,Z)
-        if obj.use_xf_equality_constraint
-            jacob[:,Nz-n+1:Nz] = Diagonal(I,n)
+        Z̄ = PrimalVars(Z,ind_x,ind_u)
+        X,U = Z̄.X, Z̄.U
+        c = zeros(pE)
+        for k = 1:N-1
+            block = view(jacob,∇cE_blocks[k][1],∇cE_blocks[k][2])
+            ∇cE(block,c,Z̄[k])
         end
+        block = view(jacob,∇cE_blocks[N][1],∇cE_blocks[N][2])
+        c = zeros(pE_N)
+        ∇cE_N(block,c,Z̄[N])
+        return jacob
     end
     function jacob_cE(Z)
         jacob = spzeros(Nh,Nz)
         jacob_cE(jacob,Z)
         return jacob
     end
-    # Assume only bound constraints right now
-    jacob_cI(jacob,Z) = copyto!(jacob,jac_bnd)
-    jacob_cI(Z) = jac_bnd
 
-    c = (E=cE, I=cI, d=dynamics)
-    jacob_c = (E=jacob_cE, I=jacob_cI, d=jacob_dynamics)
+    function jacob_cI(jacob,Z)
+        Z̄ = PrimalVars(Z,ind_x,ind_u)
+        X,U = Z̄.X, Z̄.U
+        c = zeros(pI)
+        for k = 1:N-1
+            block = view(jacob,∇cI_blocks[k][1],∇cI_blocks[k][2])
+            ∇cI(block,c,Z̄[k])
+        end
+        block = view(jacob,∇cI_blocks[N][1],∇cI_blocks[N][2])
+        c = zeros(pI_N)
+        ∇cI_N(block,c,Z̄[N])
+        return jacob
+    end
+    function jacob_cI(Z)
+        jacob = spzeros(Ng,Nz)
+        jacob_cI(jacob,Z)
+        return jacob
+    end
+
+    # Assume only bound constraints right now
+    jacob_bnd(jacob,Z) = copyto!(jacob,jac_bnd)
+    jacob_bnd(Z) = jac_bnd
+
+    c = (E=cE, I=cI, d=dynamics, b=bound_constraint)
+    jacob_c = (E=jacob_cE, I=jacob_cI, d=jacob_dynamics, b=jacob_bnd)
 
     return mycost, c, grad_J, hess_J, jacob_c
 end
@@ -441,19 +488,21 @@ function get_bounds(solver::Solver, equalities::Bool=true)
     return z_L, z_U
 end
 
-function get_bound_multipliers(solver::Solver, res::SolverIterResults)
+function get_bound_multipliers(solver::Solver, res::ConstrainedVectorResults)
     n,m,N = get_sizes(solver)
+    Nz = N*n + (N-1)*m
     λ = zeros(n+m,N-1)
     x_L = isfinite.(solver.obj.x_min)
     x_U = isfinite.(solver.obj.x_max)
     u_L = isfinite.(solver.obj.u_min)
-    u_U = isfinite.(solver.obj.x_min)
+    u_U = isfinite.(solver.obj.u_max)
     labels = get_constraint_labels(solver)
     inds = (x_U=labels .== "state (upper bound)",
             x_L=labels .== "state (lower bound)",
             u_U=labels .== "control (upper bound)",
             u_L=labels .== "control (lower bound)",
             x=1:n, u=n.+(1:m))
+    r = zeros(Nz,2)
     for k = 1:N-1
         lambda_ = res.λ[k]
         lambda = zeros(n+m,2)
@@ -461,16 +510,15 @@ function get_bound_multipliers(solver::Solver, res::SolverIterResults)
         lambda[inds.x[x_U],2] = lambda_[inds.x_U]
         lambda[inds.u[u_L],1] = lambda_[inds.u_L]
         lambda[inds.u[u_U],2] = lambda_[inds.u_U]
-        for i = 1:n+m
-            if lambda[i,1] > 0
-                λ[i] = -lambda[i,1]
-            elseif lambda[i,2] > 0
-                λ[i] = lambda[i,2]
-            end
-        end
+        r[(k-1)*(n+m) .+ (1:n+m),:] = lambda
     end
+    return r
 end
-
+function get_bound_multipliers(solver::Solver, res::UnconstrainedVectorResults)
+    n,m,N = get_sizes(solver)
+    Nz = N*n + (N-1)*m
+    return zeros(Nz,2)
+end
 
 
 # Newton Polishing
@@ -603,12 +651,12 @@ function gen_newton_functions(solver::Solver)
 
     ind_x, ind_u = get_primal_inds(n,m,N)
 
-    names = (:z,:ν,:λ,:μ)
-    ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng],names)
-    ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng],names)
+    names = (:z,:ν,:λ,:μ,:r)
+    ind1 = TrajectoryOptimization.create_partition([Nz,Nx,Nh,Ng,2Nz],names)
+    ind2 = TrajectoryOptimization.create_partition2([Nz,Nx,Nh,Ng,2Nz],names)
     ind1 = merge(ind1,create_partition([Nx,Nu],(:x,:u)))
-    ind1 = merge(ind1,create_partition([Nz,Nx+Nh+Ng],(:z,:y)))
-    ind2 = merge(ind2,create_partition2([Nz,Nx+Nh+Ng],(:z,:y)))
+    ind1 = merge(ind1,create_partition([Nz,Nx+Nh+Ng+2Nz],(:z,:y)))
+    ind2 = merge(ind2,create_partition2([Nz,Nx+Nh+Ng+2Nz],(:z,:y)))
 
     mycost, c, grad_J, hess_J, jacob_c = gen_usrfun_newton(solver)
 
@@ -618,9 +666,13 @@ function gen_newton_functions(solver::Solver)
     function active_set(Z,eps=1e-3)
         a = ones(Bool,NN)
         ci = c.I(Z)
+        bi = c.b(Z)
         c_inds = ones(Bool,length(ci))
         c_inds = ci .>= -eps
-        a[ind_v.μ] = c_inds
+        a[ind1.μ] = c_inds
+        b_inds = ones(Bool,length(bi))
+        b_inds = ci .>= -eps
+        a[ind1.r] = b_inds
         return a
     end
 
@@ -629,6 +681,10 @@ function gen_newton_functions(solver::Solver)
         c_inds = ones(Bool,length(ci))
         c_inds = ci .>= -eps
         V.a[ind1.μ] = c_inds
+        bi = c.b(primals(V))
+        b_inds = ones(Bool,length(bi))
+        b_inds = bi .>= -eps
+        V.a[ind1.r] = b_inds
     end
 
     function buildKKT(V::NewtonVars,ρ,type=:kkt)
@@ -638,18 +694,22 @@ function gen_newton_functions(solver::Solver)
         D = view(A,ind2.νz...)
         H = view(A,ind2.λz...)
         G = view(A,ind2.μz...)
+        B = view(A,ind2.rz...)
         jacob_c.d(D,Z)
         jacob_c.E(H,Z)
         jacob_c.I(G,Z)
+        jacob_c.b(B,Z)
         A = Symmetric(A')
 
         b = zeros(NN)
         d = view(b,ind1.ν)
         h = view(b,ind1.λ)
         g = view(b,ind1.μ)
+        bnd = view(b,ind1.r)
         c.d(d,Z)
         c.E(h,Z)
         c.I(g,Z)
+        c.b(bnd,Z)
         return A,b
     end
 
@@ -685,19 +745,22 @@ function gen_newton_functions(solver::Solver)
         V_ = copy(V)
         active_set(V,eps)
         amu = V.a[ind1.μ]
+        ar = V.a[ind1.r]
         Z_ = primals(V_)
 
         d1 = c.d(Z_)
         h1 = c.E(Z_)
         g1 = c.I(Z_)
-        y = [d1;h1;g1[amu]]
+        b1 = c.b(Z_)
+        y = [d1;h1;g1[amu];b1[ar]]
         δz = zero(ind1.z)
         if verbose; println("max y: $(maximum(abs.(y)))") end
         while norm(y,Inf) > 1e-6
             D = jacob_c.d(Z_)
             H = jacob_c.E(Z_)
             G = jacob_c.I(Z_)
-            Y = [D;H;G[amu,:]]
+            B = jacob_c.b(Z_)
+            Y = [D;H;G[amu,:];B[ar,:]]
 
             #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
             δZ = -Y'*((Y*Y')\y)
@@ -706,7 +769,8 @@ function gen_newton_functions(solver::Solver)
             d1 = c.d(Z_)
             h1 = c.E(Z_)
             g1 = c.I(Z_)
-            y = [d1;h1;g1[amu]]
+            b1 = c.b(Z_)
+            y = [d1;h1;g1[amu];b1[ar]]
             if verbose; println("max y: $(maximum(abs.(y)))") end
         end
 
@@ -718,6 +782,7 @@ function gen_newton_functions(solver::Solver)
         active_set(V_,eps)
         a = V_.a
         amu = a[ind1.μ]
+        ar = a[ind1.r]
         δV = zero(V.V)
         Ā = A[a,a] + reg[a,a]
         δV[a] = -Ā\b[a]
@@ -737,13 +802,15 @@ function gen_newton_functions(solver::Solver)
             d1 = c.d(Z1)
             h1 = c.E(Z1)
             g1 = c.I(Z1)
-            y = [d1;h1;g1[amu]]
+            b1 = c.b(Z1)
+            y = [d1;h1;g1[amu];b1[ar]]
             if verbose; println("max y: $(maximum(abs.(y)))") end
             while norm(y,Inf) > 1e-6
                 D = jacob_c.d(Z1)
                 H = jacob_c.E(Z1)
                 G = jacob_c.I(Z1)
-                Y = [D;H;G[amu,:]]
+                B = jacob_c.b(Z1)
+                Y = [D;H;G[amu,:];B[ar,:]]
 
                 #δV̂ = -(∇²J\(Y'))*(Y*(∇²J\(Y'))\y)
                 δZ = -Y'*((Y*Y')\y)
@@ -752,7 +819,8 @@ function gen_newton_functions(solver::Solver)
                 d1 = c.d(Z1)
                 h1 = c.E(Z1)
                 g1 = c.I(Z1)
-                y = [d1;h1;g1[amu]]
+                b1 = c.b(Z1)
+                y = [d1;h1;g1[amu];b1[ar]]
                 if verbose; println("max y: $(maximum(abs.(y)))") end
             end
 
@@ -765,29 +833,34 @@ function gen_newton_functions(solver::Solver)
         d1 = c.d(Z1)
         h1 = c.E(Z1)
         g1 = c.I(Z1)
-        y = [d1;h1;g1[amu]]
+        b1 = c.b(Z1)
+        y = [d1;h1;g1[amu];b1[ar]]
         D = jacob_c.d(Z1)
         H = jacob_c.E(Z1)
         G = jacob_c.I(Z1)
-        Y = Array([D;H;G[amu,:]])
+        B = jacob_c.b(Z1)
+        Y = Array([D;H;G[amu,:];B[ar,:]])
 
         ν = V1.ν
         μ = V1.μ
         λ = V1.λ
-        lambda = [ν;λ;μ[amu]]
-        r = ∇J + Y'lambda
+        r = V1.r
+        lambda = [ν;λ;μ[amu];r[ar]]
+        res = ∇J + Y'lambda
         δlambda = zero(lambda)
-        if verbose; println("max residual before: $(norm(r,Inf))") end
-        δlambda -= (Y*Y')\(Y*r)
+        if verbose; println("max residual before: $(norm(res,Inf))") end
+        δlambda -= (Y*Y')\(Y*res)
         lambda1 = lambda + δlambda
         r = ∇J + Y'lambda1
-        if verbose; println("max residual after: $(norm(r,Inf))") end
+        if verbose; println("max residual after: $(norm(res,Inf))") end
         ν1 = lambda1[1:Nx]
         λ1 = lambda1[Nx .+ (1:Nh)]
         μ1 = lambda1[(Nx+Nh) .+ (1:count(amu))]
+        r1 = lambda1[(Nx+Nh+count(amu)) .+ (1:count(ar))]
         V1.ν .= ν1
         V1.λ .= λ1
         V1.μ[amu] = μ1
+        V1.r[ar] = r1
         J = meritfun(V1)
         if verbose; println("New Cost: $J") end
 
