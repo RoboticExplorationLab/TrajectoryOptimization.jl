@@ -51,13 +51,12 @@ solver_mintime = Solver(model, obj_mintime, N=N, opts=opts)
 results_mintime, stats_mintime = solve(solver_mintime,to_array(res.U))
 stats_mintime["iterations"]
 evals(solver_mintime,:f) / stats_mintime["iterations"]
-Ures = to_array(res.U)
-@btime solve($solver_mintime,$Ures)
 
 plot(to_array(results_mintime.U)[1:2,1:solver_mintime.N-1]',linestyle=:solid,color=[1 2],labels=["v" "omega"],linewidth=2)
 
 X0 = rollout(solver,U0)
 res_d, stats_d = solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
+solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
 stats_d["info"]
 stats_d["iterations"]
 evals(solver_mintime,:f) / stats_d["iterations"]
@@ -67,26 +66,26 @@ T_min = TrajectoryOptimization.total_time(solver_mintime,results_mintime)
 T_d = TrajectoryOptimization.total_time(solver_mintime,res_d)
 
 x = [get_time(solver),get_time(solver_mintime,results_mintime),get_time(solver_mintime,results_mintime)]
-x = [1:N for i= 1:3]
+# x = [1:N for i= 1:3]
 p1 = plot(x[1],to_array(res.U)[1,1:solver_mintime.N-1],labels=["ALTRO (init)" ""],linewidth=2,linestyle=[:solid],color=[:black :black],
-    xlabel="time (s)",ylabel="linear velocity")
-plot!(x[3],res_d.U[1,1:solver_mintime.N-1],label=["Ipopt (mintime)" ""],linestyle=[:solid],color=[:blue :blue],linewidth=1.5)
+    xlabel="Time (s)",ylabel="Linear velocity")
+plot!(x[3],res_d.U[1,1:solver_mintime.N-1],label=["DIRCOL (mintime)" ""],linestyle=[:solid],color=[:blue :blue],linewidth=1.5)
 plot!(x[2],to_array(results_mintime.U)[1,1:solver_mintime.N-1],label=["ALTRO (mintime)" ""],
     linestyle=[:solid],color=[:darkorange2 :darkorange2],linewidth=2,legend=:none)
 
 p2 = plot(x[1],to_array(res.U)[2,1:solver_mintime.N-1],labels=["ALTRO (init)" ""],linewidth=2,linestyle=[:solid],color=[:black :black],
-    xlabel="time (s)",ylabel="angular velocity")
-plot!(x[3],res_d.U[2,1:solver_mintime.N-1],label=["Ipopt" ""],linestyle=[:solid],color=[:blue :blue],linewidth=2,legend=:topright)
+    xlabel="Time (s)",ylabel="Angular velocity")
+plot!(x[3],res_d.U[2,1:solver_mintime.N-1],label=["DIRCOL" ""],linestyle=[:solid],color=[:blue :blue],linewidth=2,legend=:topright)
 plot!(x[2],to_array(results_mintime.U)[2,1:solver_mintime.N-1],label=["ALTRO" ""],linestyle=[:solid],color=[:darkorange2 :darkorange2],linewidth=2)
-plot(p1,p2,layout=(1,2),size=(500,250))
-savefig(joinpath(IMAGE_DIR,"ppark_mintime_control.eps"))
+plot(p1,p2,layout=(1,2),size=(500,250),dpi=400)
+savefig(joinpath(IMAGE_DIR,"ppark_mintime_control.png"))
 
 
 
-plot(to_array(res.X)[1:3,:]',linewidth=2,linestyle=:dash,xlabel="knot point",ylabel="state",labels=["x" "y" "theta"])
+plot(to_array(res.X)[1:3,:]',linewidth=2,linestyle=:dash,xlabel="Knot point",ylabel="state",labels=["x" "y" "theta"])
 plot!(to_array(results_mintime.X)[1:3,:]',linewidth=2,color=[1 2 3],legend=:topleft,labels="")
-plot!(res_d.X[1:3,:]',linewidth=2,color=[1 2 3],legend=:topleft,labels="",style=:dot)
-savefig(joinpath(IMAGE_DIR,"ppark_mintime_state.eps"))
+plot!(res_d.X[1:3,:]',linewidth=2,color=[1 2 3],legend=:topleft,labels="",style=:dot,dpi=400)
+savefig(joinpath(IMAGE_DIR,"ppark_mintime_state.png"))
 
 t = get_time(solver)
 t_mintime = get_time(solver_mintime,results_mintime)

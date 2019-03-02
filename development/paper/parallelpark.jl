@@ -54,8 +54,6 @@ X0_rollout = rollout(solver,U0)
 
 res_i, stats_i = solve(solver,U0)
 res_p, stats_p = solve_dircol(solver,X0_rollout,U0)
-@btime solve($solver,$U0)
-@btime solve_dircol($solver,$X0_rollout,$U0)
 
 stats_i["iterations"]
 stats_i["runtime"]
@@ -194,28 +192,29 @@ savefig(p,joinpath(IMAGE_DIR,"ppark_newton.eps"))
 #
 #
 #
-# # Combined Plot
-# group = "parallelpark/constrained"
-# Ns, data = load_data("runtime","ipopt","parallelpark/constrained")
-# Ns, err = load_data("std","ipopt","parallelpark/constrained")
-# p1 = plot(Ns,data,yerr=err,label="Ipopt",color=:blue,marker=:circle,markerstrokecolor=:blue,ylabel="runtime",markersize=6)
-# Ns, data = load_data("runtime","rk3","parallelpark/constrained")
-# Ns, err = load_data("std","rk3","parallelpark/constrained")
-# plot!(Ns,data,yerr=err,label="ALTRO",color=:darkorange2,marker=:circle,markerstrokecolor=:darkorange2,markersize=6,ylim=(0,1.9))
-# Ns, data = load_data("runtime","rk3","parallelpark/infeasible")
-# Ns, err = load_data("std","rk3","parallelpark/infeasible")
-# plot!(Ns,data,yerr=err,label="ALTRO (inf)",color=:darkorange2,style=:dash,
-#     marker=:utriangle,markerstrokecolor=:darkorange2,markersize=8,
-#     title="Constrained",titlefontsize=10)
-#
-# Ns, err = load_data("std","rk3","parallelpark/infeasible")
-#
-# Ns, data = load_data("runtime",["rk3","ipopt"],"parallelpark/unconstrained")
-# Ns, err = load_data("std",["rk3","ipopt"],"parallelpark/unconstrained")
-# p2 = plot(Ns,data[2],yerr=err[2],color=:blue,style=:dot,label="Ipopt", width=1.5,
-#     marker=:square,markerstrokecolor=:blue,legend=:topleft,markersize=4,ylim=ylims(p1))
-# plot!(Ns,data[1],yerr=err[1],color=:darkorange2,style=:dot,label="ALTRO",width=1.5,
-#     marker=:square,markerstrokecolor=:darkorange2,markersize=4,
-#     title="Unconstrained",titlefontsize=10)
-# plot(p1,p2,layout=(1,2),size=(500,300),xlabel="knot points")
-# savefig(joinpath(IMAGE_DIR,"ppark_runtime.eps"))
+# Combined Plot
+group = "parallelpark/constrained"
+Ns, data = load_data("runtime","ipopt","parallelpark/constrained")
+Ns, err = load_data("std","ipopt","parallelpark/constrained")
+p1 = plot(Ns,data,yerr=err,label="DIRCOL",color=:blue,marker=:circle,markerstrokecolor=:blue,ylabel="runtime",markersize=6)
+Ns, data = load_data("runtime","rk3","parallelpark/constrained")
+Ns, err = load_data("std","rk3","parallelpark/constrained")
+plot!(Ns,data,yerr=err,label="ALTRO",color=:darkorange2,marker=:circle,markerstrokecolor=:darkorange2,markersize=6,ylim=(0,1.9))
+Ns, data = load_data("runtime","rk3","parallelpark/infeasible")
+Ns, err = load_data("std","rk3","parallelpark/infeasible")
+plot!(Ns,data,yerr=err,label="ALTRO (inf)",color=:darkorange2,style=:dash,
+    marker=:utriangle,markerstrokecolor=:darkorange2,markersize=8,
+    title="Constrained",titlefontsize=10)
+
+Ns, err = load_data("std","rk3","parallelpark/infeasible")
+
+Ns, data = load_data("runtime",["rk3","ipopt"],"parallelpark/unconstrained")
+Ns, err = load_data("std",["rk3","ipopt"],"parallelpark/unconstrained")
+p2 = plot(Ns,data[2],yerr=err[2],color=:blue,style=:dot,label="DIRCOL", width=1.5,
+    marker=:square,markerstrokecolor=:blue,legend=:topleft,markersize=4,ylim=ylims(p1))
+plot!(Ns,data[1],yerr=err[1],color=:darkorange2,style=:dot,label="ALTRO",width=1.5,
+    marker=:square,markerstrokecolor=:darkorange2,markersize=4,
+    title="Unconstrained",titlefontsize=10)
+plot(p1,p2,layout=(1,2),size=(500,300),dpi=400,xlabel="Knot points",ylabel="Runtime")
+
+savefig(joinpath(IMAGE_DIR,"ppark_runtime.png"))

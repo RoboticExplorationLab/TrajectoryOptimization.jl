@@ -42,16 +42,16 @@ stats_i["runtime"]
 
 plt = plot(title="",aspect_ratio=:equal,size=(500,300),xlim=[-0.5,10.5],ylim=[-0.5,6.6],grid=:off,bg=:white)
 plot_obstacles(circles,:grey)
-scatter!(X_guess[:,1],X_guess[:,2],marker=:circle,markersize=7,markerstrokecolor=:yellow,color=:yellow,label="")
-scatter!((X_guess[end,1],X_guess[end,2]),marker=:circle,markersize=10,markerstrokecolor=:yellow,color=:yellow,label="Initial Guess")
+scatter!(X_guess[:,1],X_guess[:,2],marker=:circle,markersize=7,markerstrokecolor=:gold,color=:gold,label="")
+scatter!((X_guess[end,1],X_guess[end,2]),marker=:circle,markersize=7,markerstrokecolor=:gold,color=:gold,label="Initial Guess")
 plot_trajectory!(X0,style=:dot,color=:black,width=2,label="Interpolation")
-plot_trajectory!(res_i.X,width=3,color=:blue,label="Ipopt")
+plot_trajectory!(res_i.X,width=3,color=:blue,label="DIRCOL")
 plot_trajectory!(to_array(res.X),width=2,color=:darkorange2,label="ALTRO",aspect_ratio=:equal,legend=:topleft)
 plot_trajectory!(to_array(res_inf.X),width=2,color=:darkorange2,style=:dash,label="ALTRO (inf)",aspect_ratio=:equal)
 scatter!([obj.x0[1]],[obj.x0[2]],label=:start,color=:red,markerstrokecolor=:red,markersize=12,markershape=:rtriangle)
-scatter!([obj.xf[1]],[obj.xf[2]],label=:goal,color=:green,markerstrokecolor=:green,markersize=12,markershape=:rtriangle)
+scatter!([obj.xf[1]],[obj.xf[2]],label=:goal,color=:green,markerstrokecolor=:green,markersize=12,markershape=:rtriangle,axis=:off)
 
-savefig(joinpath(IMAGE_DIR,"escape_traj.eps"))
+savefig(joinpath(IMAGE_DIR,"escape_traj.svg"))
 
 # Newton solve comparison
 Random.seed!(2);
@@ -134,7 +134,7 @@ plot_vertical_lines!(p,[time_ilqr[stats_inf["max_mu_iteration (infeasible)"]]],l
 savefig(p,joinpath(IMAGE_DIR,"escape_newton.png"))
 
 cost(solver,res_)
-stats_i["cost"][end]
+stats_i["cost"][end-3]
 stats_inf["cost"][end]
 
 # solver_truth = Solver(model, obj, N=601)
