@@ -51,12 +51,13 @@ solver_mintime = Solver(model, obj_mintime, N=N, opts=opts)
 results_mintime, stats_mintime = solve(solver_mintime,to_array(res.U))
 stats_mintime["iterations"]
 evals(solver_mintime,:f) / stats_mintime["iterations"]
+Ures = to_array(res.U)
+@btime solve($solver_mintime,$Ures)
 
 plot(to_array(results_mintime.U)[1:2,1:solver_mintime.N-1]',linestyle=:solid,color=[1 2],labels=["v" "omega"],linewidth=2)
 
 X0 = rollout(solver,U0)
 res_d, stats_d = solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
-solve_dircol(solver_mintime,X0,U0,options=ipopt_options)
 stats_d["info"]
 stats_d["iterations"]
 evals(solver_mintime,:f) / stats_d["iterations"]
