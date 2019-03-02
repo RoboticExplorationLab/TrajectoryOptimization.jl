@@ -54,8 +54,6 @@ X0_rollout = rollout(solver,U0)
 
 res_i, stats_i = solve(solver,U0)
 res_p, stats_p = solve_dircol(solver,X0_rollout,U0)
-@btime solve($solver,$U0)
-@btime solve_dircol($solver,$X0_rollout,$U0)
 
 stats_i["iterations"]
 stats_i["runtime"]
@@ -217,5 +215,6 @@ p2 = plot(Ns,data[2],yerr=err[2],color=:blue,style=:dot,label="DIRCOL", width=1.
 plot!(Ns,data[1],yerr=err[1],color=:darkorange2,style=:dot,label="ALTRO",width=1.5,
     marker=:square,markerstrokecolor=:darkorange2,markersize=4,
     title="Unconstrained",titlefontsize=10)
-plot(p1,p2,layout=(1,2),size=(500,300),xlabel="Knot points",ylabel="Runtime")
-savefig(joinpath(IMAGE_DIR,"ppark_runtime.tiff"))
+plot(p1,p2,layout=(1,2),size=(500,300),dpi=400,xlabel="Knot points",ylabel="Runtime")
+
+savefig(joinpath(IMAGE_DIR,"ppark_runtime.png"))
