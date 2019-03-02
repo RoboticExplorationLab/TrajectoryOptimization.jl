@@ -90,6 +90,7 @@ solver.opts.resolve_feasible = false
 solver.opts.feasible_projection = false
 idx_newton = 13
 solver.opts.iterations = idx_newton # cut out at this constraint violation
+@btime solve(solver,$X0,$U0)
 res_n, stats_n = solve(solver,X0,U0)
 max_violation(res_n)
 stats_n["c_max"][end]
@@ -98,21 +99,39 @@ length(stats_n["c_max"])
 
 using TrajectoryOptimization: gen_usrfun_newton, NewtonVars, gen_newton_functions, newton_projection
 t_start = time_ns()
-V_ = newton_projection(solver,res_n,eps=1e-12,verbose=true)
+V_ = newton_projection(solver,res_n,eps=1e-12,verbose=false)
 res_ = ConstrainedVectorResults(solver,V_.Z.X,V_.Z.U)
 backwardpass!(res_,solver)
 rollout!(res_,solver,0.0)
-max_violation(res_)
+# max_violation(res_)
 t_newton = float(time_ns()-t_start)/1e9
 
+t_ilqr = 0.617336
+t_dircol = 9.08
+t_inf = stats_inf["runtime"]
+time_newton = collect(range(0,t_ilqr,length=stats_n["iterations"]))
+push!(time_newton,t_ilqr + t_newton)
+time_dircol = range(0,t_dircol,length=stats_i["iterations"])
+time_ilqr = range(0,length=stats_inf["iterations"],step=time_newton[2]-time_newton[1])
 c_max = [stats_n["c_max"]; max_violation(res_)]
 stats_inf["c_max"][31]
-p = plot(stats_i["c_max"],yscale=:log10,label="Ipopt",color=:blue,width=2,markershape=:circle,markerstrokecolor=:blue)
-plot!(stats_inf["c_max"][1:100],yscale=:log10,label="ALTRO",width=2,color=:darkorange2,markershape=:circle,markerstrokecolor=:darkorange2)
-plot!(c_max,yscale=:log10,ylim=[1e-9,1e-1],label="ALTRO*",legend=:topright,xlabel="iterations",ylabel="max constraint violation",color=:green,width=2,markershape=:circle,markerstrokecolor=:green,size=(500,250))
-plot_vertical_lines!(p,[idx_newton])
 
-savefig(p,joinpath(IMAGE_DIR,"escape_newton.eps"))
+markersize = 3
+width = 1.5
+fontsize=8
+gr()
+pyplot()
+p = plot(time_dircol,stats_i["c_max"][2:end],yscale=:log10,label="DIRCOL",color=:blue,width=width,
+    markershape=:circle,markerstrokecolor=:blue,markersize=markersize)
+plot!(time_ilqr,stats_inf["c_max"],yscale=:log10,label="ALTRO",width=width,color=:darkorange2,
+    markershape=:circle,markerstrokecolor=:darkorange2,markersize=markersize)
+plot!(time_newton,c_max,yscale=:log10,ylim=[1e-9,1e-1],xlim=[0,10],label="ALTRO*",legend=:topright,xlabel="Time (s)",ylabel="Max Constraint Violation",color=:green,width=width,
+    markershape=:circle,markerstrokecolor=:green,markersize=markersize,dpi=400,size=(500,250))
+plot_vertical_lines!(p,[t_ilqr],label="projected Newton")
+plot_vertical_lines!(p,[time_ilqr[stats_inf["max_mu_iteration (infeasible)"]]],label="max penalty",color=:red,style=:dot,legend=:bottom,
+    tickfontsize=fontsize,legendfontsize=fontsize,guidefontsize=fontsize)
+
+savefig(p,joinpath(IMAGE_DIR,"escape_newton.png"))
 
 cost(solver,res_)
 stats_i["cost"][end]

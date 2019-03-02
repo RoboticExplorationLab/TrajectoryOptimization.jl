@@ -192,6 +192,7 @@ function gen_usrfun_newton(solver::Solver)
     ind_g = create_partition([(N-1)*pI,pI_N],(:k,:N))
     ind_h = (k=ind_h.k, N=ind_h.N, k_mat=reshape(ind_h.k,pE,N-1))
     ind_g = (k=ind_g.k, N=ind_g.N, k_mat=reshape(ind_g.k,pI,N-1))
+    ind_c = create_partition([Nx,Nh,Ng,2Nx],(:d,:E,:I,:b))
 
     if solver.obj.cost isa QuadraticCost
         Z0 = PrimalVars(n,m,N)
@@ -374,6 +375,16 @@ function gen_usrfun_newton(solver::Solver)
         jacob_cI(jacob,Z)
         return jacob
     end
+
+    function constraints(c,Z)
+        dynamics(view(c,ind_c.d),Z)
+        cE(view(c,ind_c.E),Z)
+        cI(view(c,ind_c.I),Z)
+        cb(view(c,ind_c.b),Z)
+    end
+
+    #function constraint_jacobian(jacob,Z)
+    #    jacob_dynamics()
 
     # Assume only bound constraints right now
     jacob_bnd(jacob,Z) = copyto!(jacob,jac_bnd)
@@ -890,6 +901,7 @@ function gen_newton_functions(solver::Solver)
 
     return newton_step, buildKKT, active_set
 end
+
 
 function newton_projection(solver::Solver,res::SolverIterResults; kwargs...)
     V = NewtonVars(solver,res)

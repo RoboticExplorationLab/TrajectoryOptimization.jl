@@ -6,7 +6,10 @@ import TrajectoryOptimization: reset_evals, dynamics_jacobian, outer_loop_update
 # Set up
 N = 101
 model, obj = Dynamics.dubinscar
+model, obj = Dynamics.quadrotor
 n,m = model.n, model.m
+
+
 
 x0 = [0.0;0.0;0.]
 xf = [0.0;1.0;0.]
@@ -22,7 +25,7 @@ x_max = [0.25; 1.001; Inf]
 
 obj_con = ConstrainedObjective(obj,x_min=x_min,x_max=x_max)
 
-solver = Solver(model,obj_con,N=N)
+solver = Solver(model,obj,N=N)
 solver.opts.verbose = true
 solver.opts.square_root = true
 solver.state.infeasible
@@ -83,9 +86,14 @@ end
 
 reset_evals(solver)
 Fc = dynamics_jacobian(solver)
+Fd = discrete_dynamics_jacobian(solver)
 x = rand(n)
 u = rand(m)
+xdot = zero(x)
+A,B = zeros(n,n),zeros(n,m)
+solver.fd(xdot,x,u)
 Fc(x,u)
+Fd(A,B,x,u)
 evals(solver,:f)
 
 results.S
