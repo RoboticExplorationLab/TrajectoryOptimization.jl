@@ -13,3 +13,4 @@ Plots
 HDF5
 Combinatorics
 IterTools
+BlockArrays
