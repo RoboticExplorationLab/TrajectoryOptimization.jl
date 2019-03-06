@@ -3,6 +3,7 @@ module Dynamics
 using TrajectoryOptimization: Model, UnconstrainedObjective, ConstrainedObjective, LQRObjective, Trajectory
 using RigidBodyDynamics
 using LinearAlgebra
+using PartedArrays
 
 export
     pendulum,

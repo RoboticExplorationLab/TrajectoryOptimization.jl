@@ -1,5 +1,3 @@
-
-
 using PartedArrays
 n1,m1 = 4,2
 n2,m2 = 4,0
@@ -71,8 +69,8 @@ ms = (m1,m2)
 p = 1
 N = 11
 res = ADMMResults(bodies,ns,ms,p,N,0);
-
-
+aa = NamedTuple{bodies}(ns)
+bb = NamedTuple{bodies}(ms.+1)
 
 X  = [BlockArray(zeros(sum(ns)),part_x)   for i = 1:N];
 U  = [BlockArray(zeros(sum(ms)),part_u)   for i = 1:N-1];
