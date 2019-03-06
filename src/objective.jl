@@ -85,30 +85,6 @@ function copy(cost::QuadraticCost)
 end
 
 
-struct ADMMCost <: CostFunction
-    costs::NamedTuple{M,NTuple{N,C}} where {M,N,C <: CostFunction}
-    c::Function
-    ∇c::Function
-    q::Int            # Number of bodies
-    b::Vector
-    part_x::NamedTuple  # Partition for the state vectors
-    part_u::NamedTuple  # Partition for the control vectors
-end
-
-function stage_cost(cost::ADMMCost, x::BlockVector, u::BlockVector)
-    J = 0.0
-    for body in keys(cost.costs)
-        J += stage_cost(cost.costs[body],x[body],u[body])
-    end
-    return J
-end
-
-function taylor_expansion(cost::ADMMCost, x::BlockVector, u::BlockVector, body::Symbol)
-    taylor_expansion(cost.costs[body],x[body],u[body])
-end
-
-
-
 
 """
 $(TYPEDEF)

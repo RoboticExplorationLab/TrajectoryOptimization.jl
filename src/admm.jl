@@ -79,12 +79,33 @@ d  =  NamedTuple{bodies}([[zeros(m)   for i = 1:N-1] for m in ms])
 
 testres(X,U,K,d);
 
-struct testres
-    X::Trajectory  # States (n,N)
-    U::Trajectory  # Controls (m,N)
 
-    K::NamedTuple # Feedback (state) gain (m,n,N)
-    d::NamedTuple  # Feedforward gain (m,N)
+struct ADMMCost <: CostFunction
+    costs::NamedTuple{M,NTuple{N,C}} where {M,N,C <: CostFunction}
+    c::Function
+    ∇c::Function
+    q::Int            # Number of bodies
+    b::Vector
+    part_x::NamedTuple  # Partition for the state vectors
+    part_u::NamedTuple  # Partition for the control vectors
+end
+
+function stage_cost(cost::ADMMCost, x::BlockVector, u::BlockVector)
+    J = 0.0
+    for body in keys(cost.costs)
+        J += stage_cost(cost.costs[body],x[body],u[body])
+    end
+    return J
+end
+
+function taylor_expansion(cost::ADMMCost, x::BlockVector, u::BlockVector, body::Symbol)
+    taylor_expansion(cost.costs[body],x[body],u[body])
+end
+
+
+struct ADMMResults2
+    results::Vector{ConstrainedVectorResults}
+    b::Int
 end
 
 struct ADMMResults #<: ConstrainedIterResults
