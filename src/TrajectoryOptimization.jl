@@ -23,6 +23,7 @@ using Logging
 using Formatting
 using Plots
 using BenchmarkTools
+using PartedArrays
 
 export
     Dynamics
@@ -96,7 +97,6 @@ include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
-include("partitioning.jl")
 
 using Ipopt
 
