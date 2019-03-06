@@ -76,6 +76,12 @@ function stage_cost(cost::QuadraticCost, xN::AbstractVector)
     0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 
+function stage_cost_sat_att(x,u,Q::AbstractArray{Float64,2},R::AbstractArray{Float64,2},xf::Vector{Float64},c::Float64=0)::Union{Float64,ForwardDiff.Dual}
+    # 0.5*(x[1:3] - xf[1:3])'*Q[1:3,1:3]*(x[1:3] - xf[1:3]) + 0.5*u'*R*u + Q[4,4]*-(xf[4:7]'*x[4:7])
+    error_quat = [zeros(3,1) Array(1.0*Diagonal(I,3))]*qmult(q_inv(xf[4:7]),x[4:7])
+    0.5*(x[1:3] - xf[1:3])'*Q[1:3,1:3]*(x[1:3] - xf[1:3]) + 0.5*u'*R*u + Q[4,4]*(error_quat'*error_quat) + c
+end
+
 function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
 end
