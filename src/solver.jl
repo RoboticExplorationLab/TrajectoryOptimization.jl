@@ -125,7 +125,9 @@ struct Solver{M<:Model,O<:Objective}
         end
 
         # Get integration scheme
-        if isdefined(TrajectoryOptimization,integration)
+        if integration == :none
+            discretizer = pass_through
+        elseif isdefined(TrajectoryOptimization,integration)
             discretizer = eval(integration)
         else
             throw(ArgumentError("$integration is not a defined integration scheme"))

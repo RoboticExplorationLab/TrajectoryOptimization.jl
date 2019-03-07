@@ -218,7 +218,7 @@ Stacks the constraints as follows:
  (control equalities for infeasible start)
  (dt equality)]
 """
-function generate_constraint_functions(obj::ConstrainedObjective; max_dt::Float64=1.0, min_dt::Float64=1e-2)
+function generate_constraint_functions(obj::ConstrainedObjective{C}; max_dt::Float64=1.0, min_dt::Float64=1e-2) where C
     n,m = get_sizes(obj)
 
     # Key: I=> inequality,   E=> equality

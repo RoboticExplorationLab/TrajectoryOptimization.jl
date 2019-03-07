@@ -29,7 +29,7 @@ double_integrator = [model, obj_uncon]
 # Constrained Double Integrators ()
 n1,m1 = 4,2
 n2,m2 = 4,0
-mf = 1
+mf = 2
 N = n1+n2
 M = m1 + m2 + mf
 
@@ -44,10 +44,10 @@ w0 = zeros(m2)
 f0 = 0
 x0 = [y0;z0]
 d = 1
-u0 = [v0;w0;0]
+u0 = [v0;w0;0;0]
 
+Δt = 0.1
 function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArray,u::AbstractArray)::Nothing
-    Δt = 0.1
 
     m1 = 1 # mass of body 1
     m2 = 1 # mass of mass
@@ -57,7 +57,6 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
 
     M1inv = [1/m1 0; 0 1/m1]
     M2inv = [1/m2 0; 0 1/m2]
-
 
     # body 1
     y = x[part_x.a1][1:2]
@@ -71,7 +70,8 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
     uy = u[1:2]
 
     # constraint force
-    f = u[3]
+    fy = u[3]
+    fz = u[4]
 
     # constraint Jacobians
     jy = 2*(y - z)'
@@ -80,19 +80,25 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
     ## implicit euler
     # body 1 update
     x_[part_x.a1][1:2] = y + Δt*ẏ
-    x_[part_x.a1][3:4] = ẏ + Δt*M1inv*(uy + jy'*f)
+    x_[part_x.a1][3:4] = ẏ + Δt*M1inv*(uy + jy'*fy)
 
     # mass update
     x_[part_x.m][1:2] = z + Δt*ż
-    x_[part_x.m][3:4] = ż + Δt*M2inv*(jz'*f)
+    x_[part_x.m][3:4] = ż + Δt*M2inv*(jz'*fz)
 
     return nothing
 end
 
-# using ForwardDiff
-# f_aug = f_augmented!(double_integrator_constrained_system!, N, M)
-#
-# f_aug(rand(N+M),[x0;rand(M)])
-# ForwardDiff.jacobian(f_aug,rand(n1+n2+M),[x0;rand(M)])
-#
-# double_integrator_constrained_system!(rand(N),x0,rand(M))
+model_admm = Model(double_integrator_constrained_system!,N,M)
+
+x0 = [10;0;0;0
+Q = (1e-2)*Diagonal(I,N)
+Qf = 100.0*Diagonal(I,N)
+R = (1e-2)*Diagonal(I,N)
+
+# simulation
+tf = 5.0
+
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+
+solver = Solver(model_admm,obj,dt=Δt,integration=:none)

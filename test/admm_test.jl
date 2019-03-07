@@ -72,6 +72,9 @@ res = ADMMResults(bodies,ns,ms,p,N,0);
 aa = NamedTuple{bodies}(ns)
 bb = NamedTuple{bodies}(ms.+1)
 
+cc = NamedTuple{bodies}([[1,1],[2,2]])
+cc.a1
+
 X  = [BlockArray(zeros(sum(ns)),part_x)   for i = 1:N];
 U  = [BlockArray(zeros(sum(ms)),part_u)   for i = 1:N-1];
 

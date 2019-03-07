@@ -286,10 +286,8 @@ struct ConstrainedObjective{C} <: Objective
     pI_N_custom::Int # Nubmer of custom terminal inequality constraints
     pE_N_custom::Int # Number of custom terminal equality constraints
 
-    cIx::Function  # inequality constraint Jacobian (inplace)
-    cIu::Function  # inequality constraint Jacobian (inplace)
-    cEx::Function  # equality constraint Jacobian (inplace)
-    cEu::Function  # equality constraint Jacobian (inplace)
+    ∇cI::Function
+    ∇cE::Function
 
     # Terminal Jacobians
     cI_Nx::Function
@@ -301,7 +299,7 @@ struct ConstrainedObjective{C} <: Objective
         cI, cE,
         cI_N, cE_N,
         use_xf_equality_constraint,
-        cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
+        ∇cI,∇cE,cI_Nx,cE_Nx) where {C}
 
         n,m = get_sizes(cost)
         x = rand(n)
@@ -364,7 +362,7 @@ struct ConstrainedObjective{C} <: Objective
         p_N = pI_N + pE_N
 
         new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_xf_equality_constraint,
-            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
+            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom,∇cI,∇cE,cI_Nx,cE_Nx)
     end
 end
 
@@ -373,14 +371,14 @@ function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
     x_min, x_max,
     cI, cE,
     cI_N, cE_N,
-    use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
+    use_xf_equality_constraint,∇cI,∇cE,cI_Nx,cE_Nx) where {C}
     if tf == :min
         ConstrainedObjective(cost,0.0,x0,xf,
             u_min, u_max,
             x_min, x_max,
             cI, cE,
             cI_N, cE_N,
-            use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
+            use_xf_equality_constraint,∇cI,∇cE,cI_Nx,cE_Nx)
     else
         err = ArgumentError(":min is the only recognized Symbol for the final time")
         throw(err)
@@ -417,14 +415,14 @@ function ConstrainedObjective(cost,tf,x0,xf;
     cI=null_constraint, cE=null_constraint,
     cI_N=null_constraint, cE_N=null_constraint,
     use_xf_equality_constraint=true,
-    cIx=null_constraint,cIu=null_constraint,cEx=null_constraint,cEu=null_constraint,cI_Nx=null_constraint,cE_Nx=null_constraint)
+    ∇cI=null_constraint_jacobian,∇cE=null_constraint_jacobian,cI_Nx=null_constraint,cE_Nx=null_constraint)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min, u_max,
         x_min, x_max,
         cI, cE,
         cI_N, cE_N,
-        use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
+        use_xf_equality_constraint,∇cI,∇cE,cI_Nx,cE_Nx)
 end
 
 
@@ -438,7 +436,7 @@ function copy(obj::ConstrainedObjective)
         u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
         cI=obj.cI, cE=obj.cE,
         use_xf_equality_constraint=obj.use_xf_equality_constraint,
-        cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
+        ∇cI=∇cI,∇cE=obj.∇cE,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
 end
 
 """
@@ -453,7 +451,7 @@ function update_objective(obj::ConstrainedObjective;
     u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
     cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
     use_xf_equality_constraint=obj.use_xf_equality_constraint,
-    cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
+    ∇cI=obj.∇cI,∇cE=obj.∇cE, cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
 
     ConstrainedObjective(cost,tf,x0,xf,
         u_min=u_min, u_max=u_max,
@@ -461,7 +459,7 @@ function update_objective(obj::ConstrainedObjective;
         cI=cI, cE=cE,
         cI_N=cI_N, cE_N=cE_N,
         use_xf_equality_constraint=use_xf_equality_constraint,
-        cIx=cIx,cIu=cIu,cEx=cEx,cEu=cEu,cI_Nx=cI_Nx,cE_Nx=cE_Nx)
+        ∇cI=∇cI,∇cE=∇cE,cI_Nx=cI_Nx,cE_Nx=cE_Nx)
 
 end
 

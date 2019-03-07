@@ -5,6 +5,8 @@ struct ADMMCost <: CostFunction
     ∇c::Function
     q::Int              # Number of bodies
     b::Vector
+    n::Int            # joint state
+    m::Int            # joint control
     part_x::NamedTuple  # Partition for the state vectors
     part_u::NamedTuple  # Partition for the control vectors
 end
@@ -17,6 +19,15 @@ function stage_cost(cost::ADMMCost, x::BlockVector, u::BlockVector)
     return J
 end
 
+function stage_cost(cost::ADMMCost, x::BlockVector)
+    J = 0.0
+    for body in keys(cost.costs)
+        J += stage_cost(cost.costs[body],x[body])
+    end
+    return J
+end
+
+
 function taylor_expansion(cost::ADMMCost, x::BlockVector, u::BlockVector, body::Symbol)
     taylor_expansion(cost.costs[body],x[body],u[body])
 end
@@ -25,7 +36,11 @@ function taylor_expansion(cost::ADMMCost, x::BlockVector, body::Symbol)
     taylor_expansion(cost.costs[body],x[body])
 end
 
-struct ADMMResults #<: ConstrainedIterResults
+get_sizes(cost::ADMMCost) = cost.n, cost.m
+
+
+
+struct ADMMResults <: ConstrainedIterResults
     bodies::NTuple{N,Symbol} where N
 
     X::Trajectory  # States (n,N)
@@ -40,8 +55,8 @@ struct ADMMResults #<: ConstrainedIterResults
     S::NamedTuple  # Cost-to-go hessian (n,n)
     s::NamedTuple  # Cost-to-go gradient (n,1)
 
-    fdx::NamedTuple # State jacobian (n,n,N)
-    fdu::NamedTuple # Control (k) jacobian (n,m,N-1)
+    fdx::Trajectory # State jacobian (n,n,N)
+    fdu::Trajectory # Control (k) jacobian (n,m,N-1)
 
     C::Trajectory      # Constraint values (p,N)
     C_prev::Trajectory # Previous constraint values (p,N)
@@ -52,6 +67,7 @@ struct ADMMResults #<: ConstrainedIterResults
     Cx::Trajectory # State jacobian (n,n,N)
     Cu::Trajectory # Control (k) jacobian (n,m,N-1)
 
+    active_set::Trajectory
     ρ::Vector{Float64}
     dρ::Vector{Float64}
 
@@ -64,11 +80,12 @@ end
 """$(SIGNATURES) ADMM Results"""
 function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int},p::Int,N::Int,p_N::Int) where B
     @assert length(bodies) == length(ns) == length(ms)
-    p != p_N ? p_N = p : nothing
     part_x = create_partition(ns,bodies)
     part_u = create_partition(ms,bodies)
     n = sum(ns)
     m = sum(ms)
+
+    p_N = p
 
     X  = [BlockArray(zeros(n),part_x)   for i = 1:N]
     U  = [BlockArray(zeros(m),part_u)   for i = 1:N-1]
@@ -82,8 +99,10 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     S  =  NamedTuple{bodies}([[zeros(n,n) for i = 1:N] for n in ns])
     s  =  NamedTuple{bodies}([[zeros(n)   for i = 1:N] for n in ns])
 
-    fdx = NamedTuple{bodies}([[zeros(n,n) for i = 1:N-1] for n in ns])
-    fdu = NamedTuple{bodies}([[zeros(n,m) for i = 1:N-1] for (n,m) in zip(ns,ms)])
+    part_xx = NamedTuple{bodies}([(r,r) for r in values(part_x)])
+    part_xu = NamedTuple{bodies}([(r1,r2) for (r1,r2) in zip(values(part_x),values(part_u))])
+    fdx = [BlockArray(zeros(n,n), part_xx) for i = 1:N-1]
+    fdu = [BlockArray(zeros(n,m), part_xu) for i = 1:N-1]
 
     # Stage Constraints
     C      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
@@ -92,8 +111,13 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     λ      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
     μ      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
 
-    Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
-    Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
+    part_cx = NamedTuple{bodies}([(1:p,rng) for rng in values(part_x)])
+    part_cu = NamedTuple{bodies}([(1:p,rng) for rng in values(part_u)])
+    part_cx_N = NamedTuple{bodies}([(1:p_N,rng) for rng in values(part_x)])
+    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : Parzeros(p_N,n)  for i = 1:N]
+    Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : zeros(p_N,0)  for i = 1:N]
+
+    active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
 
     ρ = zeros(1)
     dρ = zeros(1)
@@ -105,6 +129,44 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     ADMMResults(bodies,X,U,K,d,X_,U_,S,s,fdx,fdu,
         C,C_prev,Iμ,λ,μ,Cx,Cu,ρ,dρ,bp,n,m)
 end
+
+
+function _cost(solver::Solver{M,Obj},res::ADMMResults,X=res.X,U=res.U) where {M, Obj<:Objective}
+    # pull out solver/objective values
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
+    costfun = solver.obj.cost
+    dt = solver.dt
+
+    J = 0.0
+    for k = 1:N-1
+        # Get dt if minimum time
+        solver.state.minimum_time ? dt = U[k][m̄]^2 : nothing
+
+        # Stage cost
+        J += (stage_cost(costfun,X[k],U[k]))*dt
+
+    end
+
+    # Terminal Cost
+    J += stage_cost(costfun, X[N])
+
+    return J
+end
+
+function  generate_constraint_functions(obj::ConstrainedObjective{ADMMCost}; max_dt::Float64=1.0, min_dt::Float64=1e-2)
+    costfun = obj.cost
+    @assert obj.pI == obj.pI_N == 0
+    c_function!(c,x,u) = obj.cE(c,x,u)
+    c_function!(c,x) = obj.cE_N(c,x)
+    c_labels = ["custom equality" for i = 1:obj.p]
+
+    return c_function!, costfun.∇c, c_labels
+end
+
+get_active_set!(results::ADMMResults,solver::Solver,p::Int,pI::Int,k::Int) = nothing
 
 function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     # Get problem sizes
@@ -123,7 +185,6 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     S[N], s[N] = taylor_expansion(solver.obj.cost::ADMMCost, res.X[N]::BlockVector, b::Symbol)
     S[N] += res.Cx[N][b]'*res.Iμ[N]*res.Cx[N][b]
     s[N] += res.Cx[N][b]'*(res.Iμ[N]*res.C[N] + res.λ[N])
-
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -193,96 +254,4 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     regularization_update!(res,solver,:decrease)
 
     return Δv
-end
-
-"""
-$(SIGNATURES)
-Propagate dynamics with a line search (in-place)
-"""
-function forwardpass_admm!(res::ADMMResults, b::Symbol, solver::Solver, Δv::Array,J_prev::Float64)
-    # Pull out values from results
-    X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
-
-    J = Inf
-    alpha = 1.0
-    iter = 0
-    z = -1.
-    expected = 0.
-
-    logger = current_logger()
-    # print_header(logger,InnerIters) #TODO: fix, this errored out
-    @logmsg InnerIters :iter value=0
-    @logmsg InnerIters :cost value=J_prev
-    # print_row(logger,InnerIters) #TODO: fix, same issue
-    while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
-
-        # Check that maximum number of line search decrements has not occured
-        if iter > solver.opts.iterations_linesearch
-            # set trajectories to original trajectory
-            copyto!(X_,X)
-            copyto!(U_,U)
-
-            update_constraints!(res,solver,X_,U_)
-            J = stage_cost(solver.obj.cost,X_,U_)
-
-            z = 0.
-            alpha = 0.0
-            expected = 0.
-
-            @logmsg InnerLoop "Max iterations (forward pass)"
-            regularization_update!(res,solver,:increase) # increase regularization
-            res.ρ[1] += solver.opts.bp_reg_fp
-            break
-        end
-
-        # Otherwise, rollout a new trajectory for current alpha
-        flag = rollout!(res,solver,alpha)
-
-        # Check if rollout completed
-        if ~flag
-            # Reduce step size if rollout returns non-finite values (NaN or Inf)
-            @logmsg InnerIters "Non-finite values in rollout"
-            iter += 1
-            alpha /= 2.0
-            continue
-        end
-
-        # Calcuate cost
-        J = cost(solver, res, X_, U_)   # Unconstrained cost
-
-        expected = -alpha*(Δv[1] + alpha*Δv[2])
-        if expected > 0
-            z  = (J_prev - J)/expected
-        else
-            @logmsg InnerIters "Non-positive expected decrease"
-            z = -1
-        end
-
-        iter += 1
-        alpha /= 2.0
-
-        # Log messages
-        @logmsg InnerIters :iter value=iter
-        @logmsg InnerIters :α value=2*alpha
-        @logmsg InnerIters :cost value=J
-        @logmsg InnerIters :z value=z
-        # print_row(logger,InnerIters)
-
-    end  # forward pass loop
-
-    if res isa ConstrainedIterResults
-        @logmsg InnerLoop :c_max value=max_violation(res)
-    end
-    @logmsg InnerLoop :cost value=J
-    @logmsg InnerLoop :dJ value=J_prev-J
-    @logmsg InnerLoop :expected value=expected
-    @logmsg InnerLoop :z value=z
-    @logmsg InnerLoop :α value=2*alpha
-    @logmsg InnerLoop :ρ value=res.ρ[1]
-
-    if J > J_prev
-        error("Error: Cost increased during Forward Pass")
-    end
-
-    return J
 end
