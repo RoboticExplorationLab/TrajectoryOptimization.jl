@@ -3,7 +3,7 @@ struct ADMMCost <: CostFunction
     costs::NamedTuple{M,NTuple{N,C}} where {M,N,C <: CostFunction}
     c::Function
     ∇c::Function
-    q::Int            # Number of bodies
+    q::Int              # Number of bodies
     b::Vector
     part_x::NamedTuple  # Partition for the state vectors
     part_u::NamedTuple  # Partition for the control vectors
@@ -22,11 +22,8 @@ function taylor_expansion(cost::ADMMCost, x::BlockVector, u::BlockVector, body::
 end
 
 function taylor_expansion(cost::ADMMCost, x::BlockVector, body::Symbol)
-    error("implement terminal")
     taylor_expansion(cost.costs[body],x[body])
 end
-
-
 
 struct ADMMResults #<: ConstrainedIterResults
     bodies::NTuple{N,Symbol} where N
@@ -64,7 +61,6 @@ struct ADMMResults #<: ConstrainedIterResults
     m::NamedTuple
 end
 
-
 """$(SIGNATURES) ADMM Results"""
 function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int},p::Int,N::Int,p_N::Int) where B
     @assert length(bodies) == length(ns) == length(ms)
@@ -85,7 +81,6 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
 
     S  =  NamedTuple{bodies}([[zeros(n,n) for i = 1:N] for n in ns])
     s  =  NamedTuple{bodies}([[zeros(n)   for i = 1:N] for n in ns])
-
 
     fdx = NamedTuple{bodies}([[zeros(n,n) for i = 1:N-1] for n in ns])
     fdu = NamedTuple{bodies}([[zeros(n,m) for i = 1:N-1] for (n,m) in zip(ns,ms)])
@@ -111,16 +106,6 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
         C,C_prev,Iμ,λ,μ,Cx,Cu,ρ,dρ,bp,n,m)
 end
 
-
-function backwardpass!(res::ADMMResults,solver::Solver)
-    ΔV = []
-    for b in res.bodies
-        Δv = _backwardpass_admm!(res,solver,b)
-        push!(ΔV,Δv)
-    end
-    return NamedTuple{bodies}(ΔV)
-end
-
 function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     # Get problem sizes
     n = res.n[b]
@@ -136,6 +121,9 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
 
     # Boundary Conditions
     S[N], s[N] = taylor_expansion(solver.obj.cost::ADMMCost, res.X[N]::BlockVector, b::Symbol)
+    S[N] += res.Cx[N][b]'*res.Iμ[N]*res.Cx[N][b]
+    s[N] += res.Cx[N][b]'*(res.Iμ[N]*res.C[N] + res.λ[N])
+
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -147,7 +135,9 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
         Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = taylor_expansion(solver.obj.cost::ADMMCost, res.X[k]::BlockVector, res.U[k]::BlockVector, b::Symbol)
 
         # Compute gradients of the dynamics
-        fdx, fdu = res.fdx[b][k], res.fdu[b][k]
+        fdx, fdu = res.fdx[k][b], res.fdu[k][b]
+        C, Cx, Cu = res.C[k],res.Cx[k][b], res.Cu[k][b]
+        λ, Iμ = res.Iμ[k], res.λ[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx[k] += fdx'*s[k+1]
@@ -155,6 +145,12 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
         Qxx[k] += fdx'*S[k+1]*fdx
         Quu[k] += fdu'*S[k+1]*fdu
         Qux[k] += fdu'*S[k+1]*fdx
+
+        Qx[k] += Cx'*(Iμ*C + λ)
+        Qu[k] += Cu'*(Iμ*C + λ)
+        Qxx[k] += Cx'*Iμ*Cx
+        Quu[k] += Cu'*Iμ*Cu
+        Qux[k] += Cu'*Iμ*Cx
 
         if solver.opts.bp_reg_type == :state
             Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
@@ -203,15 +199,9 @@ end
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass_admm!(res::ADMMResults,solver::Solver,)
-
-end
-function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev::Float64)
+function forwardpass_admm!(res::ADMMResults, b::Symbol, solver::Solver, Δv::Array,J_prev::Float64)
     # Pull out values from results
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
-
-    # update_constraints!(res,solver,X,U)
-    # J_prev = cost(solver, res, X, U)
 
     J = Inf
     alpha = 1.0
@@ -233,7 +223,7 @@ function forwardpass!(res::SolverIterResults, solver::Solver, Δv::Array,J_prev:
             copyto!(U_,U)
 
             update_constraints!(res,solver,X_,U_)
-            J = cost(solver, res, X_, U_)
+            J = stage_cost(solver.obj.cost,X_,U_)
 
             z = 0.
             alpha = 0.0
