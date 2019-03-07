@@ -136,7 +136,7 @@ _solve_admm(solver,U0,res)
 acost.∇c
 a = 1
 
-function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64)
+function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
@@ -146,9 +146,6 @@ function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64)
     X = res.X; U = res.U;
     X_ = res.X_; U_ = res.U_
 
-    K = [Array([res.K[:a1][k] zeros(3,4); zeros(1,4) res.K[:m][k]]) for k = 1:solver.N-1]
-    d = [[res.d[:a1][k];res.d[:m][k]] for k = 1:solver.N-1]
-
     X_[1] .= solver.obj.x0;
 
     for k = 2:N
@@ -156,7 +153,7 @@ function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64)
         δx = X_[k-1] - X[k-1]
 
         # Calculate updated control
-        U_[k-1] .= U[k-1] + K[k-1]*δx + alpha*d[k-1]
+        U_[k-1][b] .= U[k-1][b] + K[k-1][b]*δx + alpha*d[k-1][b]
 
         # Propagate dynamics
         solver.fd(X_[k], X_[k-1], U_[k-1], dt)
