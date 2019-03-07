@@ -93,6 +93,15 @@ function to_array(X::Vector{Matrix{Float64}})
     Y
 end
 
+function to_array(X::Vector{PartedArrays.BlockArray{Float64,1}})
+    N = length(X)
+    n = size(X[1])[1]
+    Y = zeros(n,N)
+    for i = 1:N
+        Y[:,i] = X[i]
+    end
+    Y
+end
 
 function to_array(X::Vector{T}) where {T<:MArray}
     N = length(X)
@@ -137,6 +146,14 @@ function copyto!(A::Vector{T}, B::AbstractArray{Float64}) where {T<:Union{MArray
     ax = axes(B)[1:end-1]
     for i = 1:N
         A[i] = B[ax...,i]
+    end
+    A
+end
+
+function copyto!(A::Vector{PartedArrays.BlockArray{Float64,1}}, B::Vector{PartedArrays.BlockArray{Float64,1}})
+    N = length(B)
+    for i = 1:N
+        A[i] .= copy(B[i])
     end
     A
 end

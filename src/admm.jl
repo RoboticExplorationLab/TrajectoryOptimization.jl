@@ -38,8 +38,6 @@ end
 
 get_sizes(cost::ADMMCost) = cost.n, cost.m
 
-
-
 struct ADMMResults <: ConstrainedIterResults
     bodies::NTuple{N,Symbol} where N
 
@@ -114,8 +112,8 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     part_cx = NamedTuple{bodies}([(1:p,rng) for rng in values(part_x)])
     part_cu = NamedTuple{bodies}([(1:p,rng) for rng in values(part_u)])
     part_cx_N = NamedTuple{bodies}([(1:p_N,rng) for rng in values(part_x)])
-    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : zeros(p_N,n)  for i = 1:N]
-    Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : zeros(p_N,0)  for i = 1:N]
+    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : BlockArray(zeros(p_N,n),part_cx_N)  for i = 1:N]
+    Cu  = [BlockArray(zeros(p,m),part_cu) for i = 1:N-1]
 
     active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
 
@@ -198,7 +196,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k][b], res.fdu[k][b]
         C, Cx, Cu = res.C[k],res.Cx[k][b], res.Cu[k][b]
-        λ, Iμ = res.Iμ[k], res.λ[k]
+        λ, Iμ = res.λ[k], res.Iμ[k]
 
         # Gradients and Hessians of Taylor Series Expansion of Q
         Qx[k] += fdx'*s[k+1]
