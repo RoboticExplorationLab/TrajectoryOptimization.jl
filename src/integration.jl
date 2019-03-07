@@ -114,6 +114,9 @@ function rk3(f_aug!::Function)
     end
 end
 
+pass_through(f_aug!::Function) = f_aug!
+pass_through(f!::Function,dt::Float64) = f!
+
 """
 $(SIGNATURES)
 Converts a separated dynamics function into an augmented dynamics function
