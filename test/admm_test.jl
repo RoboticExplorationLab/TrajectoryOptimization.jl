@@ -112,14 +112,52 @@ results, stats = solve(solver,rand(model.m,solver.N-1))
 for i = 1:solver.N-1
     res.U[i] .= U0[:,i]
 end
-rollout!(res,solver)
-plot(to_array(res.X)')
-_backwardpass_admm!(res,solver,:a1)
+update_constraints!(res,solver,res.X_,res.U_)
+rollout_admm!(res,solver,1.0)
+# _backwardpass_admm!(res,solver,:a1)
 _solve_admm(solver,U0,res)
-solver.c_jacobian(rand(2,model.n),rand(2,model.m),rand(model.n),rand(model.m),:a1)
+# solver.c_jacobian(rand(2,model.n),rand(2,model.m),rand(model.n),rand(model.m),:a1)
 
 acost.∇c
 a = 1
+
+function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64)
+    n,m,N = get_sizes(solver)
+    m̄,mm = get_num_controls(solver)
+    n̄,nn = get_num_states(solver)
+
+    dt = solver.dt
+
+    X = res.X; U = res.U;
+    X_ = res.X_; U_ = res.U_
+
+    K = [Array([res.K[:a1][k] zeros(3,4); zeros(1,4) res.K[:m][k]]) for k = 1:solver.N-1]
+    d = [[res.d[:a1][k];res.d[:m][k]] for k = 1:solver.N-1]
+
+    X_[1] .= solver.obj.x0;
+
+    for k = 2:N
+        # Calculate state trajectory difference
+        δx = X_[k-1] - X[k-1]
+
+        # Calculate updated control
+        U_[k-1] .= U[k-1] + K[k-1]*δx + alpha*d[k-1]
+
+        # Propagate dynamics
+        solver.fd(X_[k], X_[k-1], U_[k-1], dt)
+
+        # Check that rollout has not diverged
+        if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
+            return false
+        end
+    end
+
+    # Update constraints
+    update_constraints!(res,solver,X_,U_)
+
+    return true
+end
+
 function _solve_admm(solver, U0::Array{Float64,2}, results::ADMMResults)::Tuple{SolverResults,Dict}
     # Reset the solver (evals and state)
     reset(solver)
