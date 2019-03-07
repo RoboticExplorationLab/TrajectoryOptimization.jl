@@ -1,6 +1,8 @@
 using PartedArrays
 n1,m1 = 4,3
 n2,m2 = 4,1
+n = n1+n2
+m = m1+m2
 
 Q1 = Diagonal(1.0I,n1)
 R1 = Diagonal(1.0I,m1)
@@ -17,64 +19,32 @@ costs.a1
 
 part_x = create_partition((n1,n2),bodies)
 part_u = create_partition((m1,m2),bodies)
-y0 = [0.;0.;1.;0.]
+y0 = [0.;1.;1.;0.]
 v0 = zeros(m1)
-z0 = [0.;0.;0.;0.]
+z0 = [1.;0.;0.;0.]
 w0 = zeros(m2)
 x0 = [y0;z0]
 d = 1
 x = BlockArray(x0,part_x)
 u = BlockArray(zeros(m1+m2),part_u)
-ϕ(x::BlockArray) = norm(x.a1[1:2] - x.m[1:2]) - d^2
-ϕ(x::Vector) = norm(x[part_x.a1][1:2] - x[part_x.m][1:2])^2 - d^2
-function ∇ϕ(grad,x)
+ϕ(c,x::BlockArray,u::BlockArray) = copyto!(c, ϕ(c,x))
+ϕ(c,x::BlockArray) = copyto!(c, norm(x.a1[1:2] - x.m[1:2]) - d^2)
+ϕ(c,x::Vector,u::Vector) = ϕ(c,BlockArray(x,part_x),BlockArray(u,part_u))
+ϕ(c,x::Vector) = ϕ(c,BlockArray(x,part_x))
+function ∇ϕ(cx,cu,x::BlockArray,u::BlockArray)
     y = x.a1[1:2]
     z = x.m[1:2]
-    grad[1:2] = 2(y-z)
-    grad[5:6] = -2(y-z)
-    grad
+    cx[1:2] = 2(y-z)
+    cx[5:6] = -2(y-z)
 end
-∇ϕ(x) = begin grad = zeros(8); ∇ϕ(grad,x); grad end
-function ∇ϕ(grad,x,b::Symbol)
-    y = x.a1[1:2]
-    z = x.m[1:2]
-    if b == :a1
-        grad[1:2] = 2(y-z)
-    elseif b == :m
-        grad[1:2] = -2(y-z)
-    end
-end
-∇ϕ(x,b::Symbol) = begin grad = zeros(4); ∇ϕ(grad,x,b); grad end
-ϕ(x)
-ϕ(x0)
-∇ϕ(x,:m)
-ForwardDiff.gradient(ϕ,x0)
-typeof(acost) <: CostFunction
+∇ϕ(cx,x) = begin y = x.a1[1:2];
+                 z = x.m[1:2]; cx[1:2] = 2(y-z) end
+part_cx = NamedTuple{bodies}([(1:1,rng) for rng in values(part_x)])
+part_cu = NamedTuple{bodies}([(1:1,rng) for rng in values(part_u)])
+cx = BlockArray(zeros(1,n),part_cx)
+cu = BlockArray(zeros(1,m),part_cu)
+∇ϕ(cx,cu,x,u)
 
-acost = ADMMCost(costs,ϕ,∇ϕ,2,[:a1],n1+n2,m1+m2,part_x,part_u)
-stage_cost(acost,x,u)
-stage_cost(cost1,y0,v0)
-stage_cost(cost2,z0,w0)
-
-taylor_expansion(acost,x,u,:m)
-z0 == x.m
-w0 == u.m
-
-taylor_expansion(acost.costs.m,x.m,u.m)
-
-ns = (n1,n2)
-ms = (m1,m2)
-p = 1
-N = 11
-res = ADMMResults(bodies,ns,ms,p,N,0);
-
-# X  = [BlockArray(zeros(sum(ns)),part_x)   for i = 1:N];
-# U  = [BlockArray(zeros(sum(ms)),part_u)   for i = 1:N-1];
-#
-# K  = NamedTuple{bodies}([[zeros(m,n) for i = 1:N-1] for (n,m) in zip(ns,ms)])
-# d  =  NamedTuple{bodies}([[zeros(m)   for i = 1:N-1] for m in ms])
-#
-# testres(X,U,K,d);
 
 ## Test joint solve
 model = Dynamics.model_admm
@@ -103,27 +73,42 @@ cost2 = LQRCost(Q2,R2,Qf2,[zf;żf])#QuadraticCost(Q2,R2,zeros(m2,n2),zeros(n2),
 costs = NamedTuple{bodies}((cost1,cost2))
 acost = ADMMCost(costs,ϕ,∇ϕ,2,[:a1],n1+n2,m1+m2,part_x,part_u)
 
+bodies = (:a1,:m)
+ns = (n1,n2)
+ms = (m1,m2)
+N = 11
+
 # Q = Diagonal(0.0001I,model.n)
 # R = Diagonal(0.0001I,model.m)
 # Qf = Diagonal(100.0I,model.n)
 
-function cE(c,x::AbstractArray,u::AbstractArray)
-    c[1] = norm(x[1:2] - x[5:6])^2 - d^2
-    c[2] = u[3] - u[4]
-end
-function cE(c,x::AbstractArray)
-    c[1] = norm(x[1:2] - x[5:6])^2 - d^2
-end
+# function cE(c,x::AbstractArray,u::AbstractArray)
+#     c[1] = norm(x[1:2] - x[5:6])^2 - d^2
+#     c[2] = u[3] - u[4]
+# end
+# function cE(c,x::AbstractArray)
+#     c[1] = norm(x[1:2] - x[5:6])^2 - d^2
+# end
 
 obj = UnconstrainedObjective(acost,tf,x0,xf)
-obj = ConstrainedObjective(obj,cE=ϕ,use_xf_equality_constraint=false)
+obj = ConstrainedObjective(obj,cE=ϕ,cE_N=ϕ,∇cE=∇ϕ,use_xf_equality_constraint=false)
+p = obj.p
+p_N = obj.p_N
+
 solver = Solver(model,obj,integration=:none,dt=0.1)
+res = ADMMResults(bodies,ns,ms,p,N,p_N);
+U0 = ones(model.m,solver.N-1)
+for k = 1:N-1
+    res.U[k] .= U0[:,k]
+end
+copyto!(res.X,[x for k = 1:N]);
+copyto!(res.U,[u for k = 1:N-1]);
+update_constraints!(res,solver)
+update_jacobians!(res,solver)
+
 solver.opts.verbose = true
 results, stats = solve(solver,rand(model.m,solver.N-1))
 
-res = ADMMResults(bodies,ns,ms,1,N,1);
-
-U0 = ones(model.m,solver.N-1)
 for i = 1:solver.N-1
     res.U[i] .= U0[:,i]
 end
