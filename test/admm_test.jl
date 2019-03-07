@@ -82,15 +82,7 @@ taylor_expansion(acost,x,u,:a1)
 cE(c,x,u) = copyto!(c,ϕ(x,u))
 obj = ConstrainedObjective(acost,tf,x0,xf,cE=cE,∇cE=∇ϕ)
 solver = Solver(model,obj,N=N,integration=:none)
-res = ADMMResults(bodies,ns,ms,p,N,0);
-
-part_x
-
-
-fdx = BlockArray(zeros(n,n),)
-fdu = BlockArray(zeros(n,m),NamedTuple{bodies}([(r1,r2) for (r1,r2) in zip(values(part_x),values(part_u))]))
-solver.Fd(fdx,fdu,x,u)
-fdu.m
+res = ADMMResults(bodies,ns,ms,p,N,obj.p_N);
 
 X = [x for k = 1:N];
 U = [u for k = 1:N-1];
@@ -99,7 +91,8 @@ copyto!(res.U,U);
 _cost(solver,res)
 update_constraints!(res,solver)
 update_jacobians!(res,solver)
-res.fdx.a1
+res.fdx[1][:a1]
+res.Cx[N].a1
 
 X  = [BlockArray(zeros(sum(ns)),part_x)   for i = 1:N];
 U  = [BlockArray(zeros(sum(ms)),part_u)   for i = 1:N-1];

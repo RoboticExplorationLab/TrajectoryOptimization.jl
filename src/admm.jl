@@ -112,8 +112,8 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     part_cx = NamedTuple{bodies}([(1:p,rng) for rng in values(part_x)])
     part_cu = NamedTuple{bodies}([(1:p,rng) for rng in values(part_u)])
     part_cx_N = NamedTuple{bodies}([(1:p_N,rng) for rng in values(part_x)])
-    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : Parzeros(p_N,n)  for i = 1:N]
-    Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : zeros(p_N,0)  for i = 1:N]
+    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : BlockArray(zeros(p_N,n),part_cx_N)  for i = 1:N]
+    Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : BlockArray(zeros(p_N,0),part_cx_N)  for i = 1:N]
 
     t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
     λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]
@@ -165,8 +165,10 @@ function  generate_constraint_functions(obj::ConstrainedObjective{ADMMCost}; max
     c_function!(c,x,u) = obj.cE(c,x,u)
     c_function!(c,x) = obj.cE_N(c,x)
     c_labels = ["custom equality" for i = 1:obj.p]
+    c_jacobian(cx,cu,x,u) = obj.∇cE(cx,cu,x,u)
+    c_jacobian(cx,x) = copyto!(cx,Diagonal(I,length(x)))
 
-    return c_function!, costfun.∇c, c_labels
+    return c_function!, c_jacobian, c_labels
 end
 
 get_active_set!(results::ADMMResults,solver::Solver,p::Int,pI::Int,k::Int) = nothing
