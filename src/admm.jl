@@ -154,16 +154,16 @@ function _cost(solver::Solver{M,Obj},res::ADMMResults,X=res.X,U=res.U) where {M,
     return J
 end
 
-function  generate_constraint_functions(obj::ConstrainedObjective{ADMMCost}; max_dt::Float64=1.0, min_dt::Float64=1e-2)
+function generate_constraint_functions(obj::ConstrainedObjective{ADMMCost}; max_dt::Float64=1.0, min_dt::Float64=1e-2)
     costfun = obj.cost
     @assert obj.pI == obj.pI_N == 0
     c_function!(c,x,u) = obj.cE(c,x,u)
     c_function!(c,x) = obj.cE_N(c,x)
     c_labels = ["custom equality" for i = 1:obj.p]
-    c_jacobian(cx,cu,x,u) = obj.∇cE(cx,cu,x,u)
-    c_jacobian(cx,x) = copyto!(cx,Diagonal(I,length(x)))
+    # c_jacobian(cx,cu,x,u) = obj.∇cE(cx,cu,x,u)
+    # c_jacobian(cx,x) = copyto!(cx,Diagonal(I,length(x)))
 
-    return c_function!, c_jacobian, c_labels
+    return c_function!, obj.∇cE, c_labels
 end
 
 get_active_set!(results::ADMMResults,solver::Solver,p::Int,pI::Int,k::Int) = nothing
