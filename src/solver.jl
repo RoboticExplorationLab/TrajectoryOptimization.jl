@@ -112,7 +112,8 @@ struct Solver{M<:Model,O<:Objective}
         reset(model)
 
         # The dynamics function increments an eval counter each time it's called
-        f!(xdot,x,u) = dynamics(model,xdot,x,u)
+        # f!(xdot,x,u) = dynamics(model,xdot,x,u) # this breaks the dt input for an already discretized dynamics function
+        f! = model.f
 
         n, m = model.n, model.m
 

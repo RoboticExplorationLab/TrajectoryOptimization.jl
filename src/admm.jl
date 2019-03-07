@@ -68,14 +68,16 @@ struct ADMMResults <: ConstrainedIterResults
     Cu::Trajectory # Control (k) jacobian (n,m,N-1)
 
     active_set::Trajectory
-    ρ::Vector{Float64}
-    dρ::Vector{Float64}
+
+    ρ::Array{Float64,1}
+    dρ::Array{Float64,1}
 
     bp::NamedTuple
 
     n::NamedTuple
     m::NamedTuple
 end
+
 
 """$(SIGNATURES) ADMM Results"""
 function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int},p::Int,N::Int,p_N::Int) where B
@@ -84,8 +86,6 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     part_u = create_partition(ms,bodies)
     n = sum(ns)
     m = sum(ms)
-
-    p_N = p
 
     X  = [BlockArray(zeros(n),part_x)   for i = 1:N]
     U  = [BlockArray(zeros(m),part_u)   for i = 1:N-1]
@@ -114,7 +114,7 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
     part_cx = NamedTuple{bodies}([(1:p,rng) for rng in values(part_x)])
     part_cu = NamedTuple{bodies}([(1:p,rng) for rng in values(part_u)])
     part_cx_N = NamedTuple{bodies}([(1:p_N,rng) for rng in values(part_x)])
-    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : Parzeros(p_N,n)  for i = 1:N]
+    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : zeros(p_N,n)  for i = 1:N]
     Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : zeros(p_N,0)  for i = 1:N]
 
     active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
@@ -124,10 +124,10 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
 
     bp = NamedTuple{bodies}([BackwardPass(n,m,N) for (n,m) in zip(ns,ms)])
     n = NamedTuple{bodies}(ns)
-    m = NamedTuple{bodies}(ms.+p)
+    m = NamedTuple{bodies}(ms)
 
     ADMMResults(bodies,X,U,K,d,X_,U_,S,s,fdx,fdu,
-        C,C_prev,Iμ,λ,μ,Cx,Cu,ρ,dρ,bp,n,m)
+        C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ,bp,n,m)
 end
 
 
