@@ -44,6 +44,7 @@ part_cu = NamedTuple{bodies}([(1:1,rng) for rng in values(part_u)])
 cx = BlockArray(zeros(1,n),part_cx)
 cu = BlockArray(zeros(1,m),part_cu)
 ∇ϕ(cx,cu,x,u)
+∇ϕ(cx,x)
 
 
 ## Test joint solve
@@ -97,6 +98,7 @@ p_N = obj.p_N
 
 solver = Solver(model,obj,integration=:none,dt=0.1)
 res = ADMMResults(bodies,ns,ms,p,N,p_N);
+res.Iμ[1]
 U0 = ones(model.m,solver.N-1)
 for k = 1:N-1
     res.U[k] .= U0[:,k]
@@ -105,23 +107,64 @@ copyto!(res.X,[x for k = 1:N]);
 copyto!(res.U,[u for k = 1:N-1]);
 update_constraints!(res,solver)
 update_jacobians!(res,solver)
+max_violation(res)
+res.Iμ[1]
+res.μ[1]
 
 solver.opts.verbose = true
-results, stats = solve(solver,rand(model.m,solver.N-1))
+# results, stats = solve(solver,rand(model.m,solver.N-1))
 
 for i = 1:solver.N-1
     res.U[i] .= U0[:,i]
 end
 update_constraints!(res,solver,res.X_,res.U_)
-rollout_admm!(res,solver,1.0)
-# _backwardpass_admm!(res,solver,:a1)
-_solve_admm(solver,U0,res)
+rollout!(res,solver,1.0,:a1)
+Δv = _backwardpass_admm!(res,solver,:a1)
+max_violation(res)
+J = forwardpass!(res, solver, Δv, 1e6,:a1)
+_solve_admm(solver,U0,res);
 # solver.c_jacobian(rand(2,model.n),rand(2,model.m),rand(model.n),rand(model.m),:a1)
 
 acost.∇c
 a = 1
+J0 = cost(solver,res)
 
-function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
+ilqr_solve(solver,res,:a1)
+cost_constraints(solver::Solver, res::ConstrainedIterResults)
+_cost(solver,res)
+cost(solver,res)
+update_jacobians!(res,solver)
+Δv = _backwardpass_admm!(res,solver,b)
+J = forwardpass!(res, solver, Δv, cost(solver,res), b)
+function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
+    J0 = cost(solver,res)
+    update_jacobians!(res,solver)
+    Δv = _backwardpass_admm!(res,solver,b)
+    J = forwardpass!(res, solver, Δv, J0,b)
+
+    for ii = 1:solver.opts.iterations_innerloop
+        iter_inner = ii
+
+        ### BACKWARD PASS ###
+        update_jacobians!(res, solver)
+        Δv = backwardpass!(res, solver, b)
+
+        ### FORWARDS PASS ###
+        J = forwardpass!(res, solver, Δv, J_prev, b)
+        c_max = max_violation(res)
+        ### UPDATE RESULTS ###
+        copyto!(X,X_)
+        copyto!(U,U_)
+
+        dJ = copy(abs(J-J_prev)) # change in cost
+        J_prev = copy(J)
+
+        evaluate_convergence(solver,:inner,dJ,c_max,Inf,ii,0,0) ? break : nothing
+    end
+end
+
+function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
     n,m,N = get_sizes(solver)
     m̄,mm = get_num_controls(solver)
     n̄,nn = get_num_states(solver)
@@ -131,14 +174,16 @@ function rollout_admm!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
     X = res.X; U = res.U;
     X_ = res.X_; U_ = res.U_
 
+    K = res.K[b]; d = res.d[b]
+
     X_[1] .= solver.obj.x0;
 
     for k = 2:N
         # Calculate state trajectory difference
-        δx = X_[k-1] - X[k-1]
+        δx = X_[k-1][b] - X[k-1][b]
 
         # Calculate updated control
-        U_[k-1][b] .= U[k-1][b] + K[k-1][b]*δx + alpha*d[k-1][b]
+        copyto!(U_[k-1][b], U[k-1][b] + K[k-1]*δx + alpha*d[k-1])
 
         # Propagate dynamics
         solver.fd(X_[k], X_[k-1], U_[k-1], dt)
@@ -230,173 +275,173 @@ function _solve_admm(solver, U0::Array{Float64,2}, results::ADMMResults)::Tuple{
     dJ = Inf
     gradient = Inf
     Δv = [Inf, Inf]
-    #
-    # with_logger(logger) do
-    # for j = 1:solver.opts.iterations_outerloop
-    #     iter_outer = j
-    #     @info "Outer loop $j (begin)"
-    #
-    #     if solver.state.constrained && j == 1
-    #         copyto!(results.C_prev,results.C)
-    #     end
-    #     c_max = 0.  # Init max constraint violation to increase scope
-    #     dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
-    #
-    #     J_prev = cost(solver, results, X, U)
-    #     j == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
-    #
-    #     #****************************#
-    #     #         INNER LOOP         #
-    #     #****************************#
-    #
-    #     for ii = 1:solver.opts.iterations_innerloop
-    #         iter_inner = ii
-    #
-    #         ### BACKWARD PASS ###
-    #         update_jacobians!(results, solver)
-    #         Δv = backwardpass!(results, solver)
-    #
-    #         ### FORWARDS PASS ###
-    #         J = forwardpass!(results, solver, Δv, J_prev)
-    #         push!(J_hist,J)
-    #
-    #         # gradient
-    #         gradient = update_gradient(results,solver)
-    #         push!(grad_norm_hist,gradient)
-    #
-    #         # condition numbers
-    #         cn_Quu = backwardpass_max_condition_number(results.bp)
-    #         cn_S = backwardpass_max_condition_number(results)
-    #         push!(cn_Quu_hist,cn_Quu)
-    #         push!(cn_S_hist,cn_S)
-    #
-    #         # increment iLQR inner loop counter
-    #         iter += 1
-    #
-    #         if solver.opts.live_plotting
-    #             display(plot(to_array(results.U)'))
-    #             # p = plot()
-    #             # plot_trajectory!(results.U)
-    #             # display(p)
-    #         end
-    #
-    #         ### UPDATE RESULTS ###
-    #         copyto!(X,X_)
-    #         copyto!(U,U_)
-    #
-    #         dJ = copy(abs(J-J_prev)) # change in cost
-    #         J_prev = copy(J)
-    #         dJ == 0 ? dJ_zero_counter += 1 : dJ_zero_counter = 0
-    #
-    #         if solver.state.constrained
-    #             c_max = max_violation(results)
-    #             c_ℓ2_norm = constraint_ℓ2_norm(results)
-    #             iter > 1 ? Δc_max = c_max_hist[end] - c_max : nothing
-    #             push!(c_max_hist, c_max)
-    #             push!(c_l2_norm_hist, c_ℓ2_norm)
-    #
-    #             p > 0 ? m1 = maximum(maximum.(results.μ[1:N-1])) : m1 = 0
-    #             p_N > 0 ? m2 = maximum(results.μ[N]) : m2 = 0
-    #             μ_max = max(m1,m2)
-    #             # μ_max = 1
-    #
-    #             @logmsg InnerLoop :c_max value=c_max
-    #
-    #             if μ_max == solver.opts.penalty_max && iter_max_mu > iter
-    #                 iter_max_mu = iter
-    #             end
-    #
-    #             @logmsg InnerLoop :maxmu value=μ_max
-    #             musat = sum(count.(map(x->x.>=solver.opts.penalty_max,results.μ))) / sum(length.(results.μ))
-    #             @logmsg InnerLoop :musat value=musat
-    #
-    #         end
-    #
-    #
-    #         @logmsg InnerLoop :iter value=iter
-    #         @logmsg InnerLoop :cost value=J
-    #         @logmsg InnerLoop :dJ value=dJ loc=3
-    #         @logmsg InnerLoop :grad value=gradient
-    #         @logmsg InnerLoop :j value=j
-    #         @logmsg InnerLoop :zero_count value=dJ_zero_counter
-    #         @logmsg InnerLoop :Δc value=Δc_max
-    #         @logmsg InnerLoop :cn value=cn_S
-    #
-    #
-    #         ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
-    #         print_row(logger,InnerLoop)
-    #
-    #         evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
-    #         if J > solver.opts.max_cost_value
-    #             @warn "Cost exceded maximum allowable cost - solve terminated"
-    #
-    #             stats = Dict("iterations"=>iter,
-    #                 "outer loop iterations"=>iter_outer,
-    #                 "runtime"=>float(time_ns() - t_solve_start)/1e9,
-    #                 "setup_time"=>float(time_setup)/1e9,
-    #                 "cost"=>J_hist,
-    #                 "c_max"=>c_max_hist,
-    #                 "c_l2_norm"=>c_l2_norm_hist,
-    #                 "gradient norm"=>grad_norm_hist,
-    #                 "outer loop iteration index"=>outer_updates,
-    #                 "S condition number"=>cn_S_hist,
-    #                 "Quu condition number"=>cn_Quu_hist,)
-    #
-    #             return results, stats
-    #         end
-    #     end
-    #     ### END INNER LOOP ###
-    #
-    #
-    #     #****************************#
-    #     #      OUTER LOOP UPDATE     #
-    #     #****************************#
-    #
-    #     # update multiplier and penalty terms
-    #     outer_loop_update(results,solver,j)
-    #     update_constraints!(results, solver)
-    #     J_prev = cost(solver, results, results.X, results.U)
-    #
-    #     #****************************#
-    #     #    TERMINATION CRITERIA    #
-    #     #****************************#
-    #     # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
-    #     converged = evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter)
-    #
-    #
-    #     # Logger output
-    #     @logmsg OuterLoop :outeriter value=j
-    #     @logmsg OuterLoop :iter value=iter
-    #     @logmsg OuterLoop :iterations value=iter_inner
-    #     print_header(logger,OuterLoop)
-    #     print_row(logger,OuterLoop)
-    #
-    #     push!(outer_updates,iter)
-    #
-    #     if converged; break end
-    # end
-    # end
-    # ### END OUTER LOOP ###
-    #
-    # solver.state.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
-    #
-    # # Run Stats
-    # stats = Dict("iterations"=>iter,
-    #     "outer loop iterations"=>iter_outer,
-    #     "runtime"=>float(time_ns() - t_solve_start)/1e9,
-    #     "setup_time"=>float(time_setup)/1e9,
-    #     "cost"=>J_hist,
-    #     "c_max"=>c_max_hist,
-    #     "c_l2_norm"=>c_l2_norm_hist,
-    #     "gradient norm"=>grad_norm_hist,
-    #     "outer loop iteration index"=>outer_updates,
-    #     "S condition number"=>cn_S_hist,
-    #     "Quu condition number"=>cn_Quu_hist,
-    #     "max_mu_iteration"=>iter_max_mu)
-    #
-    # if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
-    #     @warn "*Solve reached max iterations*"
-    # end
+
+    with_logger(logger) do
+    for j = 1:solver.opts.iterations_outerloop
+        iter_outer = j
+        @info "Outer loop $j (begin)"
+
+        if solver.state.constrained && j == 1
+            copyto!(results.C_prev,results.C)
+        end
+        c_max = 0.  # Init max constraint violation to increase scope
+        dJ_zero_counter = 0  # Count how many time the forward pass is unsuccessful
+
+        J_prev = cost(solver, results, X, U)
+        j == 1 ? push!(J_hist, J_prev) : nothing  # store the first cost
+
+        #****************************#
+        #         INNER LOOP         #
+        #****************************#
+
+        for ii = 1:solver.opts.iterations_innerloop
+            iter_inner = ii
+
+            ### BACKWARD PASS ###
+            update_jacobians!(results, solver)
+            Δv = backwardpass!(results, solver)
+
+            ### FORWARDS PASS ###
+            J = forwardpass!(results, solver, Δv, J_prev)
+            push!(J_hist,J)
+
+            # gradient
+            gradient = update_gradient(results,solver)
+            push!(grad_norm_hist,gradient)
+
+            # condition numbers
+            cn_Quu = backwardpass_max_condition_number(results.bp)
+            cn_S = backwardpass_max_condition_number(results)
+            push!(cn_Quu_hist,cn_Quu)
+            push!(cn_S_hist,cn_S)
+
+            # increment iLQR inner loop counter
+            iter += 1
+
+            if solver.opts.live_plotting
+                display(plot(to_array(results.U)'))
+                # p = plot()
+                # plot_trajectory!(results.U)
+                # display(p)
+            end
+
+            ### UPDATE RESULTS ###
+            copyto!(X,X_)
+            copyto!(U,U_)
+
+            dJ = copy(abs(J-J_prev)) # change in cost
+            J_prev = copy(J)
+            dJ == 0 ? dJ_zero_counter += 1 : dJ_zero_counter = 0
+
+            if solver.state.constrained
+                c_max = max_violation(results)
+                c_ℓ2_norm = constraint_ℓ2_norm(results)
+                iter > 1 ? Δc_max = c_max_hist[end] - c_max : nothing
+                push!(c_max_hist, c_max)
+                push!(c_l2_norm_hist, c_ℓ2_norm)
+
+                p > 0 ? m1 = maximum(maximum.(results.μ[1:N-1])) : m1 = 0
+                p_N > 0 ? m2 = maximum(results.μ[N]) : m2 = 0
+                μ_max = max(m1,m2)
+                # μ_max = 1
+
+                @logmsg InnerLoop :c_max value=c_max
+
+                if μ_max == solver.opts.penalty_max && iter_max_mu > iter
+                    iter_max_mu = iter
+                end
+
+                @logmsg InnerLoop :maxmu value=μ_max
+                musat = sum(count.(map(x->x.>=solver.opts.penalty_max,results.μ))) / sum(length.(results.μ))
+                @logmsg InnerLoop :musat value=musat
+
+            end
+
+
+            @logmsg InnerLoop :iter value=iter
+            @logmsg InnerLoop :cost value=J
+            @logmsg InnerLoop :dJ value=dJ loc=3
+            @logmsg InnerLoop :grad value=gradient
+            @logmsg InnerLoop :j value=j
+            @logmsg InnerLoop :zero_count value=dJ_zero_counter
+            @logmsg InnerLoop :Δc value=Δc_max
+            @logmsg InnerLoop :cn value=cn_S
+
+
+            ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
+            print_row(logger,InnerLoop)
+
+            evaluate_convergence(solver,:inner,dJ,c_max,gradient,iter,j,dJ_zero_counter) ? break : nothing
+            if J > solver.opts.max_cost_value
+                @warn "Cost exceded maximum allowable cost - solve terminated"
+
+                stats = Dict("iterations"=>iter,
+                    "outer loop iterations"=>iter_outer,
+                    "runtime"=>float(time_ns() - t_solve_start)/1e9,
+                    "setup_time"=>float(time_setup)/1e9,
+                    "cost"=>J_hist,
+                    "c_max"=>c_max_hist,
+                    "c_l2_norm"=>c_l2_norm_hist,
+                    "gradient norm"=>grad_norm_hist,
+                    "outer loop iteration index"=>outer_updates,
+                    "S condition number"=>cn_S_hist,
+                    "Quu condition number"=>cn_Quu_hist,)
+
+                return results, stats
+            end
+        end
+        ### END INNER LOOP ###
+
+
+        #****************************#
+        #      OUTER LOOP UPDATE     #
+        #****************************#
+
+        # update multiplier and penalty terms
+        outer_loop_update(results,solver,j)
+        update_constraints!(results, solver)
+        J_prev = cost(solver, results, results.X, results.U)
+
+        #****************************#
+        #    TERMINATION CRITERIA    #
+        #****************************#
+        # Check if maximum constraint violation satisfies termination criteria AND cost or gradient tolerance convergence
+        converged = evaluate_convergence(solver,:outer,dJ,c_max,gradient,iter,0,dJ_zero_counter)
+
+
+        # Logger output
+        @logmsg OuterLoop :outeriter value=j
+        @logmsg OuterLoop :iter value=iter
+        @logmsg OuterLoop :iterations value=iter_inner
+        print_header(logger,OuterLoop)
+        print_row(logger,OuterLoop)
+
+        push!(outer_updates,iter)
+
+        if converged; break end
+    end
+    end
+    ### END OUTER LOOP ###
+
+    solver.state.constrained ? nothing : solver.opts.iterations_outerloop = iterations_outerloop_original
+
+    # Run Stats
+    stats = Dict("iterations"=>iter,
+        "outer loop iterations"=>iter_outer,
+        "runtime"=>float(time_ns() - t_solve_start)/1e9,
+        "setup_time"=>float(time_setup)/1e9,
+        "cost"=>J_hist,
+        "c_max"=>c_max_hist,
+        "c_l2_norm"=>c_l2_norm_hist,
+        "gradient norm"=>grad_norm_hist,
+        "outer loop iteration index"=>outer_updates,
+        "S condition number"=>cn_S_hist,
+        "Quu condition number"=>cn_Quu_hist,
+        "max_mu_iteration"=>iter_max_mu)
+
+    if ((iter_outer == solver.opts.iterations_outerloop) && (iter_inner == solver.opts.iterations)) && solver.opts.verbose
+        @warn "*Solve reached max iterations*"
+    end
 
     @info "*Solve Complete*"
     return results, stats

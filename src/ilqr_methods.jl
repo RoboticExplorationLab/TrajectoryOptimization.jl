@@ -158,7 +158,7 @@ function update_jacobians!(res::ConstrainedIterResults, solver::Solver, jacobian
     end
 
     # Update terminal constraint Jacobian
-    (!solver.state.fixed_terminal_constraint_jacobian && jacobians in [:constraints,:both]) ? ∇c(view(res.Cx[N], 1:p_N,1:n), res.X[N][1:n]) : nothing
+    ∇c(res.Cx[N], res.X[N])
 
     return nothing
 end
