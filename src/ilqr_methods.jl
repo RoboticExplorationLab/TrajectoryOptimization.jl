@@ -293,7 +293,7 @@ $(SIGNATURES)
     Regularization update scheme
         - see "Synthesis and Stabilization of Complex Behaviors through Online Trajectory Optimization"
 """
-function regularization_update!(results::SolverResults,solver::Solver,status::Symbol=:increase)
+function regularization_update!(results,solver::Solver,status::Symbol=:increase)
     if status == :increase # increase regularization
         # @logmsg InnerLoop "Regularization Increased"
         results.dρ[1] = max(results.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)

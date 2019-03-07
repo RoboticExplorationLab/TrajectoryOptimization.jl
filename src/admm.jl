@@ -111,8 +111,9 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
 
     part_cx = NamedTuple{bodies}([(1:p,rng) for rng in values(part_x)])
     part_cu = NamedTuple{bodies}([(1:p,rng) for rng in values(part_u)])
-    Cx  = [i != N ? zeros(p,n) : zeros(p_N,n)  for i = 1:N]
-    Cu  = [i != N ? zeros(p,m) : zeros(p_N,0)  for i = 1:N]
+    part_cx_N = NamedTuple{bodies}([(1:p_N,rng) for rng in values(part_x)])
+    Cx  = [i != N ? BlockArray(zeros(p,n),part_cx) : Parzeros(p_N,n)  for i = 1:N]
+    Cu  = [i != N ? BlockArray(zeros(p,m),part_cu) : zeros(p_N,0)  for i = 1:N]
 
     t_prev      = [i != N ? ones(p) : ones(p_N)  for i = 1:N]
     λ_prev      = [i != N ? zeros(p) : zeros(p_N)  for i = 1:N]

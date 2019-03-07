@@ -1,3 +1,4 @@
+
 function double_integrator_dynamics!(ẋ,x,u)
     ẋ[1] = x[2]
     ẋ[2] = u[1]
@@ -24,3 +25,74 @@ dt = 0.1
 obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
 
 double_integrator = [model, obj_uncon]
+
+# Constrained Double Integrators ()
+n1,m1 = 4,2
+n2,m2 = 4,0
+mf = 1
+N = n1+n2
+M = m1 + m2 + mf
+
+bodies = (:a1,:m)
+
+part_x = create_partition((n1,n2),bodies)
+part_u = create_partition((m1,m2),bodies)
+y0 = [0,1.,0,0]
+v0 = zeros(m1)
+z0 = [0.5,0,0,0]
+w0 = zeros(m2)
+f0 = 0
+x0 = [y0;z0]
+d = 1
+u0 = [v0;w0;0]
+
+function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArray,u::AbstractArray)::Nothing
+    Δt = 0.1
+
+    m1 = 1 # mass of body 1
+    m2 = 1 # mass of mass
+
+    M1 = [m1 0; 0 m1]
+    M2 = [m2 0; 0 m2]
+
+    M1inv = [1/m1 0; 0 1/m1]
+    M2inv = [1/m2 0; 0 1/m2]
+
+
+    # body 1
+    y = x[part_x.a1][1:2]
+    ẏ = x[part_x.a1][3:4]
+
+    # mass
+    z = x[part_x.m][1:2]
+    ż = x[part_x.m][3:4]
+
+    # body 1 control
+    uy = u[1:2]
+
+    # constraint force
+    f = u[3]
+
+    # constraint Jacobians
+    jy = 2*(y - z)'
+    jz = -2*(y + z)'
+
+    ## implicit euler
+    # body 1 update
+    x_[part_x.a1][1:2] = y + Δt*ẏ
+    x_[part_x.a1][3:4] = ẏ + Δt*M1inv*(uy + jy'*f)
+
+    # mass update
+    x_[part_x.m][1:2] = z + Δt*ż
+    x_[part_x.m][3:4] = ż + Δt*M2inv*(jz'*f)
+
+    return nothing
+end
+
+# using ForwardDiff
+# f_aug = f_augmented!(double_integrator_constrained_system!, N, M)
+#
+# f_aug(rand(N+M),[x0;rand(M)])
+# ForwardDiff.jacobian(f_aug,rand(n1+n2+M),[x0;rand(M)])
+#
+# double_integrator_constrained_system!(rand(N),x0,rand(M))
