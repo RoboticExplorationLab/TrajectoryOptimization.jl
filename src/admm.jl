@@ -347,3 +347,16 @@ function forwardpass!(res::ADMMResults, solver::Solver, Δv::Array,J_prev::Float
 
     return J
 end
+
+
+function admm_plot(res)
+    X1 = to_array(results.X)[part_x.a1,:]
+    X2 = to_array(results.X)[part_x.m,:]
+    for k = 1:solver_b.N
+        p = plot(xlim=(-1,11),ylim=(-5,5),aspectratio=:equal)
+        plot!([X1[1,k],X2[1,k]],[X1[2,k],X2[2,k]],color=:red)
+        scatter!([X1[1,k]],[X1[2,k]],color=:green,markersize=10)
+        scatter!([X2[1,k]],[X2[2,k]],color=:black)
+        display(p)
+    end
+end
