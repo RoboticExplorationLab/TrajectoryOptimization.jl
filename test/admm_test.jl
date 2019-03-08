@@ -99,10 +99,19 @@ p_N = obj.p_N
 solver = Solver(model,obj,integration=:none,dt=0.1)
 res = ADMMResults(bodies,ns,ms,p,N,p_N);
 U0 = rand(model.m,solver.N-1)
+for k = 1:N-1
+    res.U[k] .= U0[:,k]
+end
+solver.fd(res.X[2],res.X[1],res.U[1])
+res.X[2]
+rollout!(res,solver,1.0,:a1)
+res.X_[2]
+copyto!(res.X,res.X_);
+copyto!(res.U,res.U_);
 J0 = initial_admm_rollout!(solver,res,U0);
-plot(to_array(res.X)')
+plot(to_array(res.X_)')
 J = ilqr_loop(solver,res)
-
+J0
 function ilqr_loop(solver::Solver,res::ADMMResults)
     iter = 0
     max_iter = 50
@@ -189,9 +198,7 @@ function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
         copyto!(U_[k-1][b], U[k-1][b] + K[k-1]*δx + alpha*d[k-1])
 
         # Propagate dynamics
-        tmp = zeros(size(X[k]))
         solver.fd(X_[k], X_[k-1], U_[k-1], dt)
-        X_[k] .= tmp
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
