@@ -27,19 +27,48 @@ x0 = [y0;z0]
 d = 1
 x = BlockArray(x0,part_x)
 u = BlockArray(zeros(m1+m2),part_u)
-ϕ(c,x::BlockArray,u::BlockArray) = copyto!(c, ϕ(c,x))
-ϕ(c,x::BlockArray) = copyto!(c, norm(x[1:2] - x.[5:6])^2 - d^2)
-ϕ(c,x::Vector,u::Vector) = ϕ(c,BlockArray(x,part_x),BlockArray(u,part_u))
-ϕ(c,x::Vector) = ϕ(c,BlockArray(x,part_x))
+# ϕ(c,x::BlockArray,u::BlockArray) = copyto!(c, ϕ(c,x))
+# ϕ(c,x::BlockArray) = copyto!(c, norm(x[1:2] - x.[5:6])^2 - d^2)
+# ϕ(c,x::Vector,u::Vector) = ϕ(c,BlockArray(x,part_x),BlockArray(u,part_u))
+# ϕ(c,x::Vector) = ϕ(c,BlockArray(x,part_x))
+#
+# function ∇ϕ(cx,cu,x::BlockArray,u::BlockArray)
+#     y = x.a1[1:2]
+#     z = x.m[1:2]
+#     cx[1:2] = 2(y-z)
+#     cx[5:6] = -2(y-z)
+# end
+# ∇ϕ(cx,x) = begin y = x.a1[1:2];
+#                  z = x.m[1:2]; cx[1:2] = 2(y-z); cx[5:6] = -2(y-z);  end
 
-function ∇ϕ(cx,cu,x::BlockArray,u::BlockArray)
-    y = x.a1[1:2]
-    z = x.m[1:2]
-    cx[1:2] = 2(y-z)
-    cx[5:6] = -2(y-z)
+function cE(c,x::AbstractArray,u)
+    c[1] = norm(x[1:2] - x[5:6])^2 - d^2
+    c[2] = u[3] + u[5]
+    c[3] = u[4] + u[6]
 end
-∇ϕ(cx,x) = begin y = x.a1[1:2];
-                 z = x.m[1:2]; cx[1:2] = 2(y-z); cx[5:6] = -2(y-z);  end
+function cE(c,x)
+    c[1] = norm(x[1:2] - x[5:6])^2 - d^2
+end
+
+function ∇cE(cx,cu,x,u)
+    y = x[1:2]
+    z = x[5:6]
+    cx[1,1:2] = 2(y-z)
+    cx[1,5:6] = -2(y-z)
+
+    cu[2,3] = 1
+    cu[2,5] = 1
+    cu[3,4] = 1
+    cu[3,6] = 1
+end
+
+function ∇cE(cx,x)
+    y = x[1:2]
+    z = x[5:6]
+    cx[1,1:2] = 2(y-z)
+    cx[1,5:6] = -2(y-z)
+end
+
 part_cx = NamedTuple{bodies}([(1:1,rng) for rng in values(part_x)])
 part_cu = NamedTuple{bodies}([(1:1,rng) for rng in values(part_u)])
 cx = BlockArray(zeros(1,n),part_cx)
@@ -49,7 +78,10 @@ cu = BlockArray(zeros(1,m),part_cu)
 
 
 # Test joint solve
-model = Dynamics.model_admm
+model = Dynamics.model_admm2
+n1,m1 = 4,4
+n2,m2 = 4,2
+
 bodies = (:a1,:m)
 ns = (n1,n2)
 ms = (m1,m2)
@@ -69,18 +101,18 @@ xf = [yf;ẏf;zf;żf]
 
 Q1 = Diagonal(0.01I,n1)
 R1 = Diagonal(0.000001I,m1)
-Qf1 = Diagonal(0.0I,n1)
+Qf1 = Diagonal(1000.0I,n1)
 Q2 = Diagonal(0.01I,n2)
 R2 = Diagonal(0.0001I,m2)
-Qf2 = Diagonal(100.0I,n2)
+Qf2 = Diagonal(1000.0I,n2)
 
 cost1 = LQRCost(Q1,R1,Qf1,[yf;ẏf])#QuadraticCost(Q1,R1,zeros(m1,n1),zeros(n1),zeros(m1),0,Qf1,zeros(n1),0)
 cost2 = LQRCost(Q2,R2,Qf2,[zf;żf])#QuadraticCost(Q2,R2,zeros(m2,n2),zeros(n2),zeros(m2),0,Qf2,zeros(n2),0)#LQRCost(Q2,R2,Qf2,[zf;żf])
 costs = NamedTuple{bodies}((cost1,cost2))
-acost = ADMMCost(costs,ϕ,∇ϕ,2,[:a1],n1+n2,m1+m2,part_x,part_u)
-
+acost = ADMMCost(costs,cE,∇cE,2,[:a1],n1+n2,m1+m2,part_x,part_u)
+is_inplace_function(cE,rand(8),rand(6))
 obj = UnconstrainedObjective(acost,tf,x0,xf)
-obj = ConstrainedObjective(obj,cE=ϕ,cE_N=ϕ,∇cE=∇ϕ,use_xf_equality_constraint=false)
+obj = ConstrainedObjective(obj,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
 p = obj.p
 p_N = obj.p_N
 
@@ -93,15 +125,15 @@ U0 = zeros(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
 
 admm_plot(res)
+plot(res.U,3:6)
+plot(res.U,5:6)
 
 function admm_solve(solver,results,U0)
     J0 = initial_admm_rollout!(solver,res,U0);
     J = Inf
     println("J0 = $J0")
-    for i = 1:100
-        for j = 1:3
-            J = ilqr_loop(solver,res)
-        end
+    for i = 1:50
+        J = ilqr_loop(solver,res)
         println("iter: $i, J = $J")
         update_constraints!(res,solver)
         println("c_max: $(max_violation(res))")

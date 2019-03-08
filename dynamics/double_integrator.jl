@@ -188,3 +188,50 @@ xf = [yf;ẏf;zf;żf]
 Q = Diagonal(0.0001I,model_admm.n)
 R = Diagonal(0.0001I,model_admm.m)
 Qf = Diagonal(100.0I,model_admm.n)
+
+function double_integrator_constrained_system2!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
+
+    m1 = 1 # mass of body 1
+    m2 = 1 # mass of mass
+
+    M1 = [m1 0; 0 m1]
+    M2 = [m2 0; 0 m2]
+
+    M1inv = [1/m1 0; 0 1/m1]
+    M2inv = [1/m2 0; 0 1/m2]
+
+    # body 1
+    y = x[1:2]
+    ẏ = x[3:4]
+
+    # mass
+    z = x[5:6]
+    ż = x[7:8]
+
+    # body 1 control
+    uy = u[1:2]
+
+    # constraint force
+    fy = u[3:4]
+    fz = u[5:6]
+
+    # constraint Jacobians
+    jy = (y - 2z)'
+    jz = (-2y + z)'
+
+    ## implicit euler
+    # body 1 update
+    x_[3:4] = ẏ + Δt*M1inv*(uy + fy)
+    x_[1:2] = y + Δt*x_[3:4]
+
+    # mass update
+    x_[7:8] = ż + Δt*M2inv*(fz)
+    x_[5:6] = z + Δt*x_[7:8]
+
+    return nothing
+end
+n1,m1 = 4,4
+n2,m2 = 4,2
+N = n1+n2
+M = m1 + m2
+model_admm2 = Model(double_integrator_constrained_system2!,N,M)
