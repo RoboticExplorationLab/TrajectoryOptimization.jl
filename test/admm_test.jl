@@ -132,21 +132,6 @@ function ilqr_loop(solver::Solver,res::ADMMResults)
     return J
 end
 
-function initial_admm_rollout!(solver::Solver,res::ADMMResults,U0)
-    for k = 1:N-1
-        res.U[k] .= U0[:,k]
-    end
-
-    for b in res.bodies
-        rollout!(res,solver,1.0,b)
-    end
-    copyto!(res.X,res.X_);
-    copyto!(res.U,res.U_);
-
-    J = cost(solver,res)
-    return J
-end
-
 function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
     J0 = cost(solver,res)
@@ -175,40 +160,4 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
         evaluate_convergence(solver,:inner,dJ,c_max,Inf,ii,0,0) ? break : nothing
     end
     return J
-end
-
-function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
-
-    dt = solver.dt
-
-    X = res.X; U = res.U;
-    X_ = res.X_; U_ = res.U_
-
-    K = res.K[b]; d = res.d[b]
-
-    X_[1] .= solver.obj.x0;
-
-    for k = 2:N
-        # Calculate state trajectory difference
-        δx = X_[k-1][b] - X[k-1][b]
-
-        # Calculate updated control
-        copyto!(U_[k-1][b], U[k-1][b] + K[k-1]*δx + alpha*d[k-1])
-
-        # Propagate dynamics
-        solver.fd(X_[k], X_[k-1], U_[k-1], dt)
-
-        # Check that rollout has not diverged
-        if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
-            return false
-        end
-    end
-
-    # Update constraints
-    update_constraints!(res,solver,X_,U_)
-
-    return true
 end
