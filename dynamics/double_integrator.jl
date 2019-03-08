@@ -7,7 +7,7 @@ end
 n = 2
 m = 1
 
-model = Model(double_integrator_dynamics!,n,m)
+model_admm = Model(double_integrator_dynamics!,n,m)
 
 # initial and goal states
 x0 = [1.;0.]

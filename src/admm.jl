@@ -129,7 +129,6 @@ function ADMMResults(bodies::NTuple{B,Symbol},ns::NTuple{B,Int},ms::NTuple{B,Int
         C,C_prev,Iμ,λ,μ,Cx,Cu,active_set,ρ,dρ,bp,n,m)
 end
 
-
 function _cost(solver::Solver{M,Obj},res::ADMMResults,X=res.X,U=res.U) where {M, Obj<:Objective}
     # pull out solver/objective values
     n,m,N = get_sizes(solver)
@@ -346,4 +345,16 @@ function forwardpass!(res::ADMMResults, solver::Solver, Δv::Array,J_prev::Float
     end
 
     return J
+end
+
+function admm_plot(res)
+    X1 = to_array(res.X)[part_x.a1,:]
+    X2 = to_array(res.X)[part_x.m,:]
+    for k = 1:length(res.X)
+        p = plot(xlim=(-1,11),ylim=(-5,5),aspectratio=:equal)
+        plot!([X1[1,k],X2[1,k]],[X1[2,k],X2[2,k]],color=:red)
+        scatter!([X1[1,k]],[X1[2,k]],color=:green,markersize=10)
+        scatter!([X2[1,k]],[X2[2,k]],color=:black)
+        display(p)
+    end
 end
