@@ -172,7 +172,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     # Get problem sizes
     n = res.n[b]
     m = res.m[b]
-
+    N = solver.N
     dt = solver.dt
 
     X = res.X; U = res.U
@@ -359,14 +359,13 @@ function admm_plot(res)
     end
 end
 
-
 function initial_admm_rollout!(solver::Solver,res::ADMMResults,U0)
-    for k = 1:N-1
+    for k = 1:solver.N-1
         res.U[k] .= U0[:,k]
     end
 
     for b in res.bodies
-        rollout!(res,solver,1.0,b)
+        rollout!(res,solver,0.0,b)
     end
     copyto!(res.X,res.X_);
     copyto!(res.U,res.U_);
@@ -377,9 +376,6 @@ end
 
 
 function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
 
     dt = solver.dt
 
@@ -390,7 +386,7 @@ function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
 
     X_[1] .= solver.obj.x0;
 
-    for k = 2:N
+    for k = 2:solver.N
         # Calculate state trajectory difference
         δx = X_[k-1][b] - X[k-1][b]
 
