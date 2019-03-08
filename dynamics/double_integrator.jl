@@ -108,11 +108,10 @@ end
 # A
 # B
 # Constrained Double Integrators ()
-n1,m1 = 4,2
-n2,m2 = 4,0
-mf = 2
+n1,m1 = 4,3
+n2,m2 = 4,1
 N = n1+n2
-M = m1 + m2 + mf
+M = m1 + m2
 
 bodies = (:a1,:m)
 
@@ -171,7 +170,7 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
     return nothing
 end
 
-model_admm = Model(double_integrator_constrained_system!,N,M)
+model = Model(double_integrator_constrained_system!,N,M)
 
 tf = 1.0
 y0 = [0.;1.]
