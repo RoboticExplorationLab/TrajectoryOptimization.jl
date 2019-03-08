@@ -63,7 +63,6 @@ Simulate system dynamics using new control trajectory comprising
 feedback gains K and feedforward gains d from backward pass
 and previous control trajectory.
 Line search option using alpha
-
 flag indicates values are finite for all time steps.
 """
 function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)

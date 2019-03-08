@@ -171,33 +171,33 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
 end
 
 model = Model(double_integrator_constrained_system!,N,M)
-
-tf = 1.0
-y0 = [0.;1.]
-ẏ0 = [0.;0.]
-z0 = [0.;0.]
-ż0 = [0.;0.]
-x0 = [y0;ẏ0;z0;ż0]
-
-yf = [10.;1.]
-ẏf = ẏ0
-zf = [10.;0.]
-żf = ż0
-xf = [yf;ẏf;zf;żf]
-
-Q = Diagonal(0.0001I,model.n)
-R = Diagonal(0.0001I,model.m)
-Qf = Diagonal(100.0I,model.n)
-
-function cE(c,x::AbstractArray,u::AbstractArray)
-    c[1] = norm(x[1:2] - x[5:6])^2 - d^2
-    c[2] = u[3] - u[4]
-end
-
-obj = LQRObjective(Q, R, Qf, tf, x0, xf)
-obj = ConstrainedObjective(obj,cE=cE,use_xf_equality_constraint=false)
-solver = Solver(model,obj,integration=:none,dt=0.1)
-solver.opts.verbose = true
-solver.opts.cost_tolerance = 1e-8
-results, stats = solve(solver,rand(model.m,solver.N-1))
-plot(to_array(results.X)')
+#
+# tf = 1.0
+# y0 = [0.;1.]
+# ẏ0 = [0.;0.]
+# z0 = [0.;0.]
+# ż0 = [0.;0.]
+# x0 = [y0;ẏ0;z0;ż0]
+#
+# yf = [10.;1.]
+# ẏf = ẏ0
+# zf = [10.;0.]
+# żf = ż0
+# xf = [yf;ẏf;zf;żf]
+#
+# Q = Diagonal(0.0001I,model.n)
+# R = Diagonal(0.0001I,model.m)
+# Qf = Diagonal(100.0I,model.n)
+#
+# function cE(c,x::AbstractArray,u::AbstractArray)
+#     c[1] = norm(x[1:2] - x[5:6])^2 - d^2
+#     c[2] = u[3] - u[4]
+# end
+#
+# obj = LQRObjective(Q, R, Qf, tf, x0, xf)
+# obj = ConstrainedObjective(obj,cE=cE,use_xf_equality_constraint=false)
+# solver = Solver(model,obj,integration=:none,dt=0.1)
+# solver.opts.verbose = true
+# solver.opts.cost_tolerance = 1e-8
+# results, stats = solve(solver,rand(model.m,solver.N-1))
+# plot(to_array(results.X)')

@@ -98,44 +98,45 @@ p_N = obj.p_N
 
 solver = Solver(model,obj,integration=:none,dt=0.1)
 res = ADMMResults(bodies,ns,ms,p,N,p_N);
-res.Iμ[1]
-U0 = ones(model.m,solver.N-1)
-for k = 1:N-1
-    res.U[k] .= U0[:,k]
+U0 = rand(model.m,solver.N-1)
+J0 = initial_admm_rollout!(solver,res,U0);
+plot(to_array(res.X)')
+J = ilqr_loop(solver,res)
+
+function ilqr_loop(solver::Solver,res::ADMMResults)
+    iter = 0
+    max_iter = 50
+    ϵ = 1e-3
+    dJ = Inf
+    J0 = cost(solver,res)
+    J = Inf
+
+    while dJ > ϵ && iter < max_iter
+        for b in res.bodies
+            J = ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+        end
+        dJ = abs(J-J0)
+        iter += 1
+    end
+
+    return J
 end
-copyto!(res.X,[x for k = 1:N]);
-copyto!(res.U,[u for k = 1:N-1]);
-update_constraints!(res,solver)
-update_jacobians!(res,solver)
-max_violation(res)
-res.Iμ[1]
-res.μ[1]
 
-solver.opts.verbose = true
-# results, stats = solve(solver,rand(model.m,solver.N-1))
+function initial_admm_rollout!(solver::Solver,res::ADMMResults,U0)
+    for k = 1:N-1
+        res.U[k] .= U0[:,k]
+    end
 
-for i = 1:solver.N-1
-    res.U[i] .= U0[:,i]
+    for b in res.bodies
+        rollout!(res,solver,1.0,b)
+    end
+    copyto!(res.X,res.X_);
+    copyto!(res.U,res.U_);
+
+    J = cost(solver,res)
+    return J
 end
-update_constraints!(res,solver,res.X_,res.U_)
-rollout!(res,solver,1.0,:a1)
-Δv = _backwardpass_admm!(res,solver,:a1)
-max_violation(res)
-J = forwardpass!(res, solver, Δv, 1e6,:a1)
-_solve_admm(solver,U0,res);
-# solver.c_jacobian(rand(2,model.n),rand(2,model.m),rand(model.n),rand(model.m),:a1)
 
-acost.∇c
-a = 1
-J0 = cost(solver,res)
-
-ilqr_solve(solver,res,:a1)
-cost_constraints(solver::Solver, res::ConstrainedIterResults)
-_cost(solver,res)
-cost(solver,res)
-update_jacobians!(res,solver)
-Δv = _backwardpass_admm!(res,solver,b)
-J = forwardpass!(res, solver, Δv, cost(solver,res), b)
 function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
     J0 = cost(solver,res)
@@ -148,20 +149,22 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
 
         ### BACKWARD PASS ###
         update_jacobians!(res, solver)
-        Δv = backwardpass!(res, solver, b)
+        Δv = _backwardpass_admm!(res, solver, b)
 
         ### FORWARDS PASS ###
-        J = forwardpass!(res, solver, Δv, J_prev, b)
+        J = forwardpass!(res, solver, Δv, J0, b)
         c_max = max_violation(res)
+
         ### UPDATE RESULTS ###
         copyto!(X,X_)
         copyto!(U,U_)
 
-        dJ = copy(abs(J-J_prev)) # change in cost
-        J_prev = copy(J)
+        dJ = copy(abs(J-J0)) # change in cost
+        J0 = copy(J)
 
         evaluate_convergence(solver,:inner,dJ,c_max,Inf,ii,0,0) ? break : nothing
     end
+    return J
 end
 
 function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
@@ -186,7 +189,9 @@ function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
         copyto!(U_[k-1][b], U[k-1][b] + K[k-1]*δx + alpha*d[k-1])
 
         # Propagate dynamics
+        tmp = zeros(size(X[k]))
         solver.fd(X_[k], X_[k-1], U_[k-1], dt)
+        X_[k] .= tmp
 
         # Check that rollout has not diverged
         if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
