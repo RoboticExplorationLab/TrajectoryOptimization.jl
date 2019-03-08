@@ -172,7 +172,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     # Get problem sizes
     n = res.n[b]
     m = res.m[b]
-
+    N = solver.N
     dt = solver.dt
 
     X = res.X; U = res.U

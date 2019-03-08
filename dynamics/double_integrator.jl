@@ -170,7 +170,7 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
     return nothing
 end
 
-model = Model(double_integrator_constrained_system!,N,M)
+model_admm = Model(double_integrator_constrained_system!,N,M)
 
 tf = 1.0
 y0 = [0.;1.]
