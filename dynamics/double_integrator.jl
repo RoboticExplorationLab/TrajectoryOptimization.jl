@@ -237,7 +237,7 @@ M = m1 + m2
 model_admm2 = Model(double_integrator_constrained_system2!,N,M)
 
 
-function agents2_mass1!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
+function agents2_mass1_2D!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
     g = [0;9.81]
     mb = 1 # mass of load
     ma1 = 1 # mass of agent 1
@@ -278,11 +278,11 @@ function agents2_mass1!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=
     x_[1:2] = z + Δt*x_[3:4]
 
     # body 1 update
-    x_[7:8] = ẏ1 + Δt*Ma1inv*(uy1 + fy1 -m1*g)
+    x_[7:8] = ẏ1 + Δt*Ma1inv*(uy1 + fy1 -ma1*g)
     x_[5:6] = y1 + Δt*x_[7:8]
 
     #body 2 update
-    x_[11:12] = ẏ2 + Δt*Ma2inv*(uy2 + fy2 -m2*g)
+    x_[11:12] = ẏ2 + Δt*Ma2inv*(uy2 + fy2 -ma2*g)
     x_[9:10] = y2 + Δt*x_[11:12]
 
     return nothing
@@ -293,4 +293,79 @@ na1,ma1 = 4,4
 na2,ma2 = 4,4
 N = nb+na1+na2
 M = mb+ma1+ma2
-model_a2_m1 = Model(agents2_mass1!,N,M)
+model_a2_m1 = Model(agents2_mass1_2D!,N,M)
+
+
+function agents3_mass1_3D!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
+    g = [0.;0.;9.81]
+    mb = 1 # mass of load
+    ma1 = 1 # mass of agent 1
+    ma2 = 1 # mass of agent 2
+    ma3 = 1 # mass of agent 3
+
+    Mbinv = Diagonal(1/mb*ones(3))
+    Ma1inv = Diagonal(1/ma1*ones(3))
+    Ma2inv = Diagonal(1/ma2*ones(3))
+    Ma3inv = Diagonal(1/ma3*ones(3))
+
+    # body 1
+    z = x[1:3]
+    ż = x[4:6]
+
+    # agent 1
+    y1 = x[7:9]
+    ẏ1 = x[10:12]
+
+    # agent 2
+    y2 = x[13:15]
+    ẏ2 = x[16:18]
+
+    # agent 2
+    y3 = x[19:21]
+    ẏ3 = x[22:24]
+
+
+    # constraint force
+    fz1 = u[1:3]
+    fz2 = u[4:6]
+    fz3 = u[7:9]
+
+    # body 1 control
+    uy1 = u[10:12]
+    fy1 = u[13:15]
+
+    # body 2 control
+    uy2 = u[16:18]
+    fy2 = u[19:21]
+
+    # body 3 control
+    uy3 = u[22:24]
+    fy3 = u[25:27]
+
+    ## implicit euler
+    # mass update
+    x_[4:6] = ż + Δt*Mbinv*(fz1 + fz2 -mb*g)
+    x_[1:3] = z + Δt*x_[4:6]
+
+    # body 1 update
+    x_[10:12] = ẏ1 + Δt*Ma1inv*(uy1 + fy1 -ma1*g)
+    x_[7:9] = y1 + Δt*x_[10:12]
+
+    #body 2 update
+    x_[16:18] = ẏ2 + Δt*Ma2inv*(uy2 + fy2 -ma2*g)
+    x_[13:15] = y2 + Δt*x_[16:18]
+
+    #body 3 updat6
+    x_[22:24] = ẏ3 + Δt*Ma3inv*(uy3 + fy3 -ma3*g)
+    x_[19:21] = y3 + Δt*x_[22:24]
+
+    return nothing
+end
+
+nb,mb = 6,9
+na1,ma1 = 6,6
+na2,ma2 = 6,6
+na3,ma3 = 6,6
+N = nb+na1+na2+na3
+M = mb+ma1+ma2+ma3
+model_a3_m1 = Model(agents3_mass1_3D!,N,M)

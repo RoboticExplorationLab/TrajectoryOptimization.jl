@@ -378,6 +378,28 @@ function admm_plot2(res)
     end
 end
 
+function admm_plot3(res)
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    Y3 = to_array(res.X)[part_x.a3,:]
+
+    for k = 1:1length(res.X)
+        p = plot(xlim=(-2,12),ylim=(-5,5),aspectratio=:equal,label="")
+        plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+        plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+        plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
+
+        scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
+        scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
+        scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
+        scatter!([Y3[1,k]],[Y3[2,k]],color=:green,label="")
+
+
+        display(p)
+    end
+end
+
 function admm_solve(solver,results,U0)
     J0 = initial_admm_rollout!(solver,res,U0);
     J = Inf
