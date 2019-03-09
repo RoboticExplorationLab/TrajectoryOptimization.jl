@@ -73,9 +73,6 @@ part_cx = NamedTuple{bodies}([(1:1,rng) for rng in values(part_x)])
 part_cu = NamedTuple{bodies}([(1:1,rng) for rng in values(part_u)])
 cx = BlockArray(zeros(1,n),part_cx)
 cu = BlockArray(zeros(1,m),part_cu)
-# ∇ϕ(cx,cu,x,u)
-# ∇ϕ(cx,x)
-
 
 # Test joint solve
 model = Dynamics.model_admm2
@@ -117,6 +114,7 @@ p = obj.p
 p_N = obj.p_N
 
 solver = Solver(model,obj,integration=:none,dt=0.1)
+n,m,N = get_sizes(solver)
 solver.opts.cost_tolerance = 1e-5
 solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
@@ -124,7 +122,157 @@ solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = zeros(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
+res.Cu[1]
 
 admm_plot(res)
 plot(res.U,3:6)
-plot(res.λ[1:solver.N-1],1:1)
+plot(res.U,5:6)
+
+res0 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+res1 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+res2 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+initial_admm_rollout!(solver,res0,rand(m,N-1)*0);
+initial_admm_rollout!(solver,res1,rand(m,N-1)*0);
+initial_admm_rollout!(solver,res2,rand(m,N-1)*0);
+
+update_constraints!(res0,solver)
+ilqr_solve(solver,res0,:a1)
+ilqr_solve(solver,res0,:m)
+
+update_constraints!(res1,solver)
+ilqr_solve(solver,res1,:a1)
+
+update_constraints!(res2,solver)
+ilqr_solve(solver,res2,:m)
+for k = 1:N
+    copyto!(res2.X[k].a1, res1.X[k].a1)
+    if k < N
+        copyto!(res2.U[k].a1, res1.U[k].a1)
+    end
+end
+copyto!(res2.X_,res2.X);
+copyto!(res2.U_,res2.U);
+
+for k = 1:N
+    copyto!(res1.X[k].m, res2.X[k].m)
+    if k < N
+        copyto!(res1.U[k].m, res2.U[k].m)
+    end
+end
+copyto!(res1.X_,res1.X);
+copyto!(res1.U_,res1.U);
+
+
+update_constraints!(res1,solver)
+update_constraints!(res2,solver)
+λ_update_default!(res0,solver)
+μ_update_default!(res0,solver)
+λ_update_default!(res1,solver)
+μ_update_default!(res1,solver)
+λ_update_default!(res2,solver)
+μ_update_default!(res2,solver)
+@show max_violation(res0)
+@show max_violation(res1)
+@show max_violation(res2)
+
+update_constraints!(res0,solver)
+update_constraints!(res1,solver)
+update_jacobians!(res0,solver)
+update_jacobians!(res1,solver)
+to_array(res0.X) - to_array(res1.X)
+Δv0 = _backwardpass_admm!(res0, solver, :a1)
+Δv1 = _backwardpass_admm!(res1, solver, :a1)
+
+cost(solver,res0)
+cost(solver,res1)
+rollout!(res0,solver,1.0,:a1)
+rollout!(res1,solver,1.0,:a1)
+cost(solver,res0,res0.X_,res0.U_)
+cost(solver,res1,res1.X_,res1.U_)
+J0 = forwardpass!(res0, solver, Δv0, cost(solver,res0), :a1)
+J0 = forwardpass!(res1, solver, Δv1, cost(solver,res1), :a1)
+
+
+to_array(res2.X) ≈ to_array(res0.X)
+to_array(res2.U) ≈ to_array(res0.U)
+update_constraints!(res0,solver)
+update_constraints!(res2,solver)
+update_jacobians!(res0,solver)
+update_jacobians!(res2,solver)
+Δv0 = _backwardpass_admm!(res0, solver, :m)
+Δv2 = _backwardpass_admm!(res2, solver, :m)
+res2.K[:m][1] ≈ res0.K[:m][1]
+res2.d[:m][1] ≈ res0.d[:m][1]
+
+cost(solver,res0)
+cost(solver,res2)
+rollout!(res0,solver,1.0,:m)
+rollout!(res2,solver,1.0,:m)
+to_array(res2.X_) ≈ to_array(res0.X_)
+to_array(res2.U_)
+
+
+to_array(res0.U_)
+cost(solver,res0,res0.X_,res0.U_)
+cost(solver,res2,res2.X_,res2.U_)
+J0 = forwardpass!(res0, solver, Δv0, cost(solver,res0), :m)
+J0 = forwardpass!(res2, solver, Δv2, cost(solver,res2), :m)
+
+
+end
+for i = 1:50
+
+function admm_solve(solver,results,U0)
+    J0 = initial_admm_rollout!(solver,res,U0);
+    J = Inf
+    println("J0 = $J0")
+    for i = 1:50
+        J = ilqr_loop(solver,res)
+        println("iter: $i, J = $J")
+        update_constraints!(res,solver)
+        println("c_max: $(max_violation(res))")
+        λ_update_default!(res,solver)
+        μ_update_default!(res,solver)
+    end
+    return J
+end
+
+function ilqr_loop(solver::Solver,res::ADMMResults)
+    J = Inf
+    for b in res.bodies
+        J = ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    end
+    return J
+end
+
+
+function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
+    J0 = cost(solver,res)
+    J = Inf
+
+    for ii = 1:solver.opts.iterations_innerloop
+        iter_inner = ii
+
+        ### BACKWARD PASS ###
+        update_constraints!(res,solver)
+        update_jacobians!(res, solver)
+        Δv = _backwardpass_admm!(res, solver, b)
+
+        ### FORWARDS PASS ###
+        J = forwardpass!(res, solver, Δv, J0, b)
+        c_max = max_violation(res)
+
+        ### UPDATE RESULTS ###
+        copyto!(X,X_)
+        copyto!(U,U_)
+
+        dJ = copy(abs(J-J0)) # change in cost
+        J0 = copy(J)
+
+        if dJ < solver.opts.cost_tolerance
+            break
+        end
+    end
+    return J
+end

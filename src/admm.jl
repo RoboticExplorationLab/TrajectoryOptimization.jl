@@ -193,7 +193,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     k = N-1
     while k >= 1
 
-        Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = taylor_expansion(solver.obj.cost::ADMMCost, res.X[k]::BlockVector, res.U[k]::BlockVector, b::Symbol)
+        Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = taylor_expansion(solver.obj.cost::ADMMCost, res.X[k]::BlockVector, res.U[k]::BlockVector, b::Symbol) .* dt
 
         # Compute gradients of the dynamics
         fdx, fdu = res.fdx[k][b], res.fdu[k][b]
@@ -224,8 +224,9 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
-            @logmsg InnerIters "Regularizing Quu "
-            regularization_update!(res,solver,:increase)
+            @warn InnerIters "Regularizing Quu "
+
+            # regularization_update!(res,solver,:increase)
 
             # reset backward pass
             k = N-1
@@ -251,7 +252,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
     end
 
     # decrease regularization after backward pass
-    regularization_update!(res,solver,:decrease)
+    # regularization_update!(res,solver,:decrease)
 
     return Δv
 end

@@ -170,7 +170,7 @@ function double_integrator_constrained_system!(x_::AbstractArray,x::AbstractArra
     return nothing
 end
 
-model_admm = Model(double_integrator_constrained_system!,N,M)
+double_integrator_admm = Model(double_integrator_constrained_system!,N,M)
 
 tf = 1.0
 y0 = [0.;1.]
@@ -232,7 +232,7 @@ function double_integrator_constrained_system2!(x_::AbstractArray,x::AbstractArr
 end
 n1,m1 = 4,4
 n2,m2 = 4,2
-N = n1+n2
+N = n1+n2    # Get problem sizes
 M = m1 + m2
 model_admm2 = Model(double_integrator_constrained_system2!,N,M)
 
