@@ -1,12 +1,9 @@
-model = Dynamics.double_integrator_admm
+model = Dynamics.model_admm2
 bodies = (:a1,:m)
-n1,m1 = 4,3
-n2,m2 = 4,1
+n1,m1 = 4,4
+n2,m2 = 4,2
 ns = (n1,n2)
 ms = (m1,m2)
-bodies = (:a1,)
-ns = (model.n,)
-ms = (model.m,)
 n,m = sum(ns),sum(ms)
 part_x = create_partition(ns,bodies)
 part_u = create_partition(ms,bodies)
@@ -103,11 +100,6 @@ res_b.S[N][1:4,1:4] ≈ res_a.S[:a1][N]
 forwardpass!(res_b,solver_b,Δvb,Jb)
 forwardpass!(res_a,solver_a,Δva,Ja,b)
 
-plot(res_b.X,5:6)
-plot(res_a.X,5:6)
-plot(res_a.X_,5:6)
-plot(res_a.U,4:4)
-plot(res_a.U_,4:4)
 copyto!(res_b.X,res_b.X_)
 copyto!(res_b.U,res_b.U_)
 copyto!(res_a.X,res_a.X_);

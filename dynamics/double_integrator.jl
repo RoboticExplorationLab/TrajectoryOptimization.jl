@@ -233,12 +233,5 @@ end
 n1,m1 = 4,4
 n2,m2 = 4,2
 N = n1+n2    # Get problem sizes
-    n = res.n[b]
-    m = res.m[b]
-
-    N = solver.N
-    dt = solver.dt
-
-    X = res.X; U = res.U
 M = m1 + m2
 model_admm2 = Model(double_integrator_constrained_system2!,N,M)
