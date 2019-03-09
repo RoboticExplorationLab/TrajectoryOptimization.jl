@@ -347,6 +347,7 @@ function forwardpass!(res::ADMMResults, solver::Solver, Δv::Array,J_prev::Float
     return J
 end
 
+# plot single agent and mass (2D)
 function admm_plot(res)
     X1 = to_array(res.X)[part_x.a1,:]
     X2 = to_array(res.X)[part_x.m,:]
@@ -355,6 +356,24 @@ function admm_plot(res)
         plot!([X1[1,k],X2[1,k]],[X1[2,k],X2[2,k]],color=:red)
         scatter!([X1[1,k]],[X1[2,k]],color=:green,markersize=10)
         scatter!([X2[1,k]],[X2[2,k]],color=:black)
+        display(p)
+    end
+end
+
+# plot double agent and mass (2D)
+function admm_plot2(res)
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    for k = 1:1length(res.X)
+        p = plot(xlim=(-2,12),ylim=(-5,5),aspectratio=:equal,label="")
+        plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+        plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+
+        scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
+        scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
+        scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
+
         display(p)
     end
 end

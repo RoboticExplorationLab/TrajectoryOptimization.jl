@@ -190,7 +190,7 @@ R = Diagonal(0.0001I,model_admm.m)
 Qf = Diagonal(100.0I,model_admm.n)
 
 function double_integrator_constrained_system2!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
-
+    g = [0;9.81]
     m1 = 1 # mass of body 1
     m2 = 1 # mass of mass
 
@@ -221,11 +221,11 @@ function double_integrator_constrained_system2!(x_::AbstractArray,x::AbstractArr
 
     ## implicit euler
     # body 1 update
-    x_[3:4] = ẏ + Δt*M1inv*(uy + fy)
+    x_[3:4] = ẏ + Δt*M1inv*(uy + fy -m1*g)
     x_[1:2] = y + Δt*x_[3:4]
 
     # mass update
-    x_[7:8] = ż + Δt*M2inv*(fz)
+    x_[7:8] = ż + Δt*M2inv*(fz -m2*g)
     x_[5:6] = z + Δt*x_[7:8]
 
     return nothing
@@ -235,3 +235,62 @@ n2,m2 = 4,2
 N = n1+n2
 M = m1 + m2
 model_admm2 = Model(double_integrator_constrained_system2!,N,M)
+
+
+function agents2_mass1!(x_::AbstractArray,x::AbstractArray,u::AbstractArray,Δt=0.1)::Nothing
+    g = [0;9.81]
+    mb = 1 # mass of load
+    ma1 = 1 # mass of agent 1
+    ma2 = 1 # mass of agent 2
+
+    Mbinv = Diagonal([1/mb; 1/mb])
+    Ma1inv = Diagonal([1/ma1; 1/ma1])
+    Ma2inv = Diagonal([1/ma2; 1/ma2])
+
+    # body 1
+    z = x[1:2]
+    ż = x[3:4]
+
+    # agent 1
+    y1 = x[5:6]
+    ẏ1 = x[7:8]
+
+    # agent 2
+    y2 = x[9:10]
+    ẏ2 = x[11:12]
+
+    # constraint force
+    fz1 = u[1:2]
+    fz2 = u[3:4]
+
+    # body 1 control
+    uy1 = u[5:6]
+    fy1 = u[7:8]
+
+    # body 2 control
+    uy2 = u[9:10]
+    fy2 = u[11:12]
+
+    ## implicit euler
+
+    # mass update
+    x_[3:4] = ż + Δt*Mbinv*(fz1 + fz2 -mb*g)
+    x_[1:2] = z + Δt*x_[3:4]
+
+    # body 1 update
+    x_[7:8] = ẏ1 + Δt*Ma1inv*(uy1 + fy1 -m1*g)
+    x_[5:6] = y1 + Δt*x_[7:8]
+
+    #body 2 update
+    x_[11:12] = ẏ2 + Δt*Ma2inv*(uy2 + fy2 -m2*g)
+    x_[9:10] = y2 + Δt*x_[11:12]
+
+    return nothing
+end
+
+nb,mb = 4,4
+na1,ma1 = 4,4
+na2,ma2 = 4,4
+N = nb+na1+na2
+M = mb+ma1+ma2
+model_a2_m1 = Model(agents2_mass1!,N,M)
