@@ -385,16 +385,25 @@ function admm_plot3(res)
     Y3 = to_array(res.X)[part_x.a3,:]
 
     for k = 1:1length(res.X)
-        p = plot(xlim=(-2,12),ylim=(-5,5),aspectratio=:equal,label="")
-        plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
-        plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
-        plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
+        p1 = plot(xlim=(-2,12),ylim=(-2.5,2.5),aspectratio=:equal,label="")
+        p1 = plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+        p1 = plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+        p1 = plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
+        p1 = scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
+        p1 = scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
+        p1 = scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
+        p1 = scatter!([Y3[1,k]],[Y3[2,k]],color=:green,label="",xlabel="x",ylabel="y")
 
-        scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
-        scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
-        scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
-        scatter!([Y3[1,k]],[Y3[2,k]],color=:green,label="")
+        p2 = plot(xlim=(-2,12),ylim=(-2.5,2.5),aspectratio=:equal,label="")
+        p2 = plot!([Z[1,k],Y1[1,k]],[Z[3,k],Y1[3,k]],color=:red,label="")
+        p2 = plot!([Z[1,k],Y2[1,k]],[Z[3,k],Y2[3,k]],color=:red,label="")
+        p2 = plot!([Z[1,k],Y3[1,k]],[Z[3,k],Y3[3,k]],color=:red,label="")
+        p2 = scatter!([Z[1,k]],[Z[3,k]],color=:black,label="")
+        p2 = scatter!([Y1[1,k]],[Y1[3,k]],color=:green,label="")
+        p2 = scatter!([Y2[1,k]],[Y2[3,k]],color=:green,label="")
+        p2 = scatter!([Y3[1,k]],[Y3[3,k]],color=:green,label="",xlabel="x",ylabel="z")
 
+        p = plot(p1,p2,layout=(2,1),aspectratio=:equal)
 
         display(p)
     end
