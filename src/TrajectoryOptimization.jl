@@ -97,6 +97,7 @@ include("utils.jl")
 include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
+include("admm.jl")
 
 using Ipopt
 

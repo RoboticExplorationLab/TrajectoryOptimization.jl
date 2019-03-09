@@ -358,3 +358,109 @@ function admm_plot(res)
         display(p)
     end
 end
+
+function admm_solve(solver,results,U0)
+    J0 = initial_admm_rollout!(solver,res,U0);
+    J = Inf
+    println("J0 = $J0")
+    for i = 1:solver.opts.iterations_outerloop
+        J = ilqr_loop(solver,res)
+        println("iter: $i, J = $J")
+        update_constraints!(res,solver)
+        c_max = max_violation(res)
+        println("c_max: $(c_max)")
+        λ_update_default!(res,solver)
+        μ_update_default!(res,solver)
+
+        if c_max < solver.opts.constraint_tolerance
+            break
+        end
+    end
+    return J
+end
+
+function ilqr_loop(solver::Solver,res::ADMMResults)
+    J = Inf
+    for b in res.bodies
+        J = ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    end
+    return J
+end
+
+function initial_admm_rollout!(solver::Solver,res::ADMMResults,U0)
+    for k = 1:solver.N-1
+        res.U[k] .= U0[:,k]
+    end
+
+    for b in res.bodies
+        rollout!(res,solver,0.0,b)
+    end
+    copyto!(res.X,res.X_);
+    copyto!(res.U,res.U_);
+
+    J = cost(solver,res)
+    return J
+end
+
+function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
+    J0 = cost(solver,res)
+    J = Inf
+
+    for ii = 1:solver.opts.iterations_innerloop
+        iter_inner = ii
+
+        ### BACKWARD PASS ###
+        update_jacobians!(res, solver)
+        Δv = _backwardpass_admm!(res, solver, b)
+
+        ### FORWARDS PASS ###
+        J = forwardpass!(res, solver, Δv, J0, b)
+        c_max = max_violation(res)
+
+        ### UPDATE RESULTS ###
+        copyto!(X,X_)
+        copyto!(U,U_)
+
+        dJ = copy(abs(J-J0)) # change in cost
+        J0 = copy(J)
+
+        if dJ < solver.opts.cost_tolerance
+            break
+        end
+    end
+    return J
+end
+
+function rollout!(res::ADMMResults,solver::Solver,alpha::Float64,b::Symbol)
+
+    dt = solver.dt
+
+    X = res.X; U = res.U;
+    X_ = res.X_; U_ = res.U_
+
+    K = res.K[b]; d = res.d[b]
+
+    X_[1] .= solver.obj.x0;
+
+    for k = 2:solver.N
+        # Calculate state trajectory difference
+        δx = X_[k-1][b] - X[k-1][b]
+
+        # Calculate updated control
+        copyto!(U_[k-1][b], U[k-1][b] + K[k-1]*δx + alpha*d[k-1])
+
+        # Propagate dynamics
+        solver.fd(X_[k], X_[k-1], U_[k-1], dt)
+
+        # Check that rollout has not diverged
+        if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
+            return false
+        end
+    end
+
+    # Update constraints
+    update_constraints!(res,solver,X_,U_)
+
+    return true
+end
