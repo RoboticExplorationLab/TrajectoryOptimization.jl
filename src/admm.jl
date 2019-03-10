@@ -379,30 +379,30 @@ function admm_plot2(res)
     end
 end
 
-function admm_plot3(res)
+function admm_plot3(res,xlim=(-2,12),ylim=(-2.5,2.5),zlim=(-2.5,2.5))
     Z = to_array(res.X)[part_x.m,:]
     Y1 = to_array(res.X)[part_x.a1,:]
     Y2 = to_array(res.X)[part_x.a2,:]
     Y3 = to_array(res.X)[part_x.a3,:]
 
     for k = 1:1length(res.X)
-        p1 = plot(xlim=(-2,12),ylim=(-2.5,2.5),aspectratio=:equal,label="")
+        p1 = plot(xlim=xlim,ylim=ylim,aspectratio=:equal,label="")
         p1 = plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
         p1 = plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
         p1 = plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
-        p1 = scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
-        p1 = scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
-        p1 = scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
-        p1 = scatter!([Y3[1,k]],[Y3[2,k]],color=:green,label="",xlabel="x",ylabel="y")
+        p1 = scatter!([Z[1,k]],[Z[2,k]],color=:green,label="")
+        p1 = scatter!([Y1[1,k]],[Y1[2,k]],color=:black,label="")
+        p1 = scatter!([Y2[1,k]],[Y2[2,k]],color=:black,label="")
+        p1 = scatter!([Y3[1,k]],[Y3[2,k]],color=:black,label="",xlabel="x",ylabel="y")
 
-        p2 = plot(xlim=(-2,12),ylim=(-2.5,2.5),aspectratio=:equal,label="")
+        p2 = plot(xlim=xlim,ylim=zlim,aspectratio=:equal,label="")
         p2 = plot!([Z[1,k],Y1[1,k]],[Z[3,k],Y1[3,k]],color=:red,label="")
         p2 = plot!([Z[1,k],Y2[1,k]],[Z[3,k],Y2[3,k]],color=:red,label="")
         p2 = plot!([Z[1,k],Y3[1,k]],[Z[3,k],Y3[3,k]],color=:red,label="")
-        p2 = scatter!([Z[1,k]],[Z[3,k]],color=:black,label="")
-        p2 = scatter!([Y1[1,k]],[Y1[3,k]],color=:green,label="")
-        p2 = scatter!([Y2[1,k]],[Y2[3,k]],color=:green,label="")
-        p2 = scatter!([Y3[1,k]],[Y3[3,k]],color=:green,label="",xlabel="x",ylabel="z")
+        p2 = scatter!([Z[1,k]],[Z[3,k]],color=:green,label="")
+        p2 = scatter!([Y1[1,k]],[Y1[3,k]],color=:black,label="")
+        p2 = scatter!([Y2[1,k]],[Y2[3,k]],color=:black,label="")
+        p2 = scatter!([Y3[1,k]],[Y3[3,k]],color=:black,label="",xlabel="x",ylabel="z")
 
         p = plot(p1,p2,layout=(2,1),aspectratio=:equal)
 
