@@ -129,7 +129,6 @@ cost1 = LQRCost(Q1,R1,Qf1,[zf;żf])
 cost2 = LQRCost(Q2,R2,Qf2,[y1f;ẏ1f])
 cost3 = LQRCost(Q3,R3,Qf3,[y2f;ẏ2f])
 cost4 = LQRCost(Q4,R4,Qf4,[y3f;ẏ3f])
-
 costs = NamedTuple{bodies}((cost1,cost2,cost3,cost4))
 part_x = create_partition((nb,na1,na2,na3),bodies)
 part_u = create_partition((mb,ma1,ma2,ma3),bodies)
@@ -146,10 +145,130 @@ solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-U0 = zeros(model.m,solver.N-1)
+U0 = rand(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
+res, J = admm_solve_parallel(solver,res,U0);
 
 admm_plot3(res)
+
+## parallel version
+# initialize
+res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+U0 = rand(model.m,solver.N-1)
+
+# simulate all agents (and mass)
+J0 = initial_admm_rollout!(solver,res,U0);
+
+# replicate joint state results for each agent
+r = []
+for b in bodies
+    push!(r,copy(res));
+end
+
+res_joint = NamedTuple{bodies}(r);
+
+# optimize each agent individually
+for b in bodies
+    J = ilqr_solve(solver,res_joint[:m],b)
+end
+
+# for b in bodies
+#     if b != :m
+#         for k = 1:solver.N
+#             copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
+#             # copyto!(res_joint[:m].X_[k][b], res_joint[b].X_[k][b]); # yeah there is a replication here...
+#
+#             k == solver.N ? continue : nothing
+#             copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
+#             # copyto!(res_joint[:m].U_[k][b], res_joint[b].U_[k][b]) # yeah there is a replication here...
+#         end
+#     end
+# end
+
+update_constraints!(res_joint[:m],solver)
+c_max = max_violation(res_joint[:m])
+λ_update_default!(res_joint[:m],solver)
+μ_update_default!(res_joint[:m],solver)
+
+admm_plot3(res_joint[:m])
+
+res = copy(res_joint[:m]);
+
+function admm_solve_parallel(solver,res,U0)
+    # rollout joint system
+    J0 = initial_admm_rollout!(solver,res,U0);
+    J = Inf
+    c_max = Inf
+    println("J0 = $J0")
+
+    for i = 1:solver.opts.iterations_outerloop
+        r = []
+        for b in bodies
+            push!(r,copy(res));
+        end
+
+        res_joint = NamedTuple{bodies}(r);
+
+        # optimize each agent individually
+        for b in bodies
+            if b != :m
+                J = ilqr_solve(solver,res_joint[:m],b)
+            end
+        end
+
+        # for b in bodies
+        #     if b != :m
+        #         for k = 1:solver.N
+        #             copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
+        #             k == solver.N ? continue : nothing
+        #             copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
+        #         end
+        #     end
+        # end
+
+        J = ilqr_solve(solver,res_joint[:m],:m)
+        J = cost(solver,res_joint[:m])
+        println("cost = $J")
+
+        update_constraints!(res_joint[:m],solver)
+        c_max = max_violation(res_joint[:m])
+        println("c_max = $c_max")
+        λ_update_default!(res_joint[:m],solver)
+        μ_update_default!(res_joint[:m],solver)
+
+        res = copy(res_joint[:m]);
+
+        if c_max < solver.opts.constraint_tolerance
+            break
+        end
+    end
+    return res, J
+end
+
+function ilqr_loop(solver::Solver,res::ADMMResults)
+    J = Inf
+    for b in res.bodies
+        J = ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
+    end
+    return J
+end
+
+function initial_admm_rollout!(solver::Solver,res::ADMMResults,U0)
+    for k = 1:solver.N-1
+        res.U[k] .= U0[:,k]
+    end
+
+    for b in res.bodies
+        rollout!(res,solver,0.0,b)
+    end
+    copyto!(res.X,res.X_);
+    copyto!(res.U,res.U_);
+
+    J = cost(solver,res)
+    return J
+end
+
+
 
 # 3D visualization
 using MeshCat

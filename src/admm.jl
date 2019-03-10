@@ -11,6 +11,14 @@ struct ADMMCost <: CostFunction
     part_u::NamedTuple  # Partition for the control vectors
 end
 
+function copy(c::ADMMCost)
+    ADMMCost(copy(c.costs),c.c,c.∇c,copy(c.q),copy(c.b),copy(c.n),copy(c.m),copy(c.part_x),copy(c.part_u))
+end
+
+function copy(nt::NamedTuple)
+    NamedTuple{keys(nt)}(values(nt))
+end
+
 function stage_cost(cost::ADMMCost, x::BlockVector, u::BlockVector)
     J = 0.0
     for body in keys(cost.costs)
@@ -75,6 +83,13 @@ struct ADMMResults <: ConstrainedIterResults
 
     n::NamedTuple
     m::NamedTuple
+end
+
+function copy(r::ADMMResults)
+    ADMMResults(bodies,deepcopy(r.X),deepcopy(r.U),deepcopy(r.K),deepcopy(r.d),
+    deepcopy(r.X_),deepcopy(r.U_),deepcopy(r.S),deepcopy(r.s),deepcopy(r.fdx),deepcopy(r.fdu),
+    deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.Iμ),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.Cx),
+    deepcopy(r.Cu),deepcopy(r.active_set),copy(r.ρ),copy(r.dρ),copy(r.bp),copy(r.n),copy(r.m))
 end
 
 
@@ -428,6 +443,61 @@ function admm_solve(solver,results,U0)
         end
     end
     return J
+end
+
+function admm_solve_parallel(solver,res,U0)
+    # rollout joint system
+    J0 = initial_admm_rollout!(solver,res,U0);
+    J = Inf
+    c_max = Inf
+    println("J0 = $J0")
+
+    for i = 1:10
+        for i = 1:10
+
+            r = []
+            for b in bodies
+                push!(r,copy(res));
+            end
+
+            res_joint = NamedTuple{bodies}(r);
+
+            # optimize each agent individually
+
+            for b in bodies
+                J = ilqr_solve(solver,res_joint[b],b)
+            end
+
+            for b in bodies
+                if b != :m
+                    for k = 1:solver.N
+                        copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
+                        k == solver.N ? continue : nothing
+                        copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
+                    end
+                end
+            end
+
+            J = ilqr_solve(solver,res_joint[:m],:m)
+            res = copy(res_joint[:m]);
+
+        end
+        J = cost(solver,res_joint[:m])
+        println("cost = $J")
+
+        update_constraints!(res_joint[:m],solver)
+        c_max = max_violation(res_joint[:m])
+        println("c_max = $c_max")
+        λ_update_default!(res_joint[:m],solver)
+        μ_update_default!(res_joint[:m],solver)
+        res = copy(res_joint[:m]);
+
+
+        # if c_max < solver.opts.constraint_tolerance
+        #     break
+        # end
+    end
+    return res, J
 end
 
 function ilqr_loop(solver::Solver,res::ADMMResults)

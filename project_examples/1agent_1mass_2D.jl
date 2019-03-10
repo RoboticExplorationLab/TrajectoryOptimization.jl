@@ -122,7 +122,6 @@ solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = zeros(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
-res.Cu[1]
 
 admm_plot(res)
 plot(res.U,3:6)
@@ -191,7 +190,6 @@ cost(solver,res0,res0.X_,res0.U_)
 cost(solver,res1,res1.X_,res1.U_)
 J0 = forwardpass!(res0, solver, Δv0, cost(solver,res0), :a1)
 J0 = forwardpass!(res1, solver, Δv1, cost(solver,res1), :a1)
-
 
 to_array(res2.X) ≈ to_array(res0.X)
 to_array(res2.U) ≈ to_array(res0.U)
