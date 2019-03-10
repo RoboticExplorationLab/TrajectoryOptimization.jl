@@ -452,36 +452,32 @@ function admm_solve_parallel(solver,res,U0)
     c_max = Inf
     println("J0 = $J0")
 
-    for i = 1:10
-        for i = 1:10
+    for i = 1:solver.opts.iterations_outerloop
+        r = []
+        for b in bodies
+            push!(r,copy(res));
+        end
 
-            r = []
-            for b in bodies
-                push!(r,copy(res));
-            end
+        res_joint = NamedTuple{bodies}(r);
 
-            res_joint = NamedTuple{bodies}(r);
+        # optimize each agent individually
 
-            # optimize each agent individually
+        for b in bodies
+            J = ilqr_solve(solver,res_joint[b],b)
+        end
 
-            for b in bodies
-                J = ilqr_solve(solver,res_joint[b],b)
-            end
-
-            for b in bodies
-                if b != :m
-                    for k = 1:solver.N
-                        copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
-                        k == solver.N ? continue : nothing
-                        copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
-                    end
+        for b in bodies
+            if b != :m
+                for k = 1:solver.N
+                    copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
+                    k == solver.N ? continue : nothing
+                    copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
                 end
             end
-
-            J = ilqr_solve(solver,res_joint[:m],:m)
-            res = copy(res_joint[:m]);
-
         end
+
+        J = ilqr_solve(solver,res_joint[:m],:m)
+
         J = cost(solver,res_joint[:m])
         println("cost = $J")
 
@@ -493,9 +489,9 @@ function admm_solve_parallel(solver,res,U0)
         res = copy(res_joint[:m]);
 
 
-        # if c_max < solver.opts.constraint_tolerance
-        #     break
-        # end
+        if c_max < solver.opts.constraint_tolerance
+            break
+        end
     end
     return res, J
 end
