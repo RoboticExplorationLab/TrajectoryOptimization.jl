@@ -448,52 +448,42 @@ end
 function admm_solve_parallel(solver,res,U0)
     # rollout joint system
     J0 = initial_admm_rollout!(solver,res,U0);
+    agents = res.bodies[2:end]
     J = Inf
     c_max = Inf
     println("J0 = $J0")
 
-    for i = 1:solver.opts.iterations_outerloop
-        r = []
-        for b in bodies
-            push!(r,copy(res));
-        end
+    res_joint =  NamedTuple{res.bodies}([copy(res) for b in res.bodies]);
 
-        res_joint = NamedTuple{bodies}(r);
+    for i = 1:solver.opts.iterations_outerloop
 
         # optimize each agent individually
-
-        for b in bodies
+        for b in agents
             J = ilqr_solve(solver,res_joint[b],b)
+            send_results!(res_joint.m,res_joint[b],b)
         end
 
-        for b in bodies
-            if b != :m
-                for k = 1:solver.N
-                    copyto!(res_joint[:m].X[k][b], res_joint[b].X[k][b]); # yeah there is a replication here...
-                    k == solver.N ? continue : nothing
-                    copyto!(res_joint[:m].U[k][b], res_joint[b].U[k][b]) # yeah there is a replication here...
-                end
-            end
-        end
-
+        # Solve for mass
         J = ilqr_solve(solver,res_joint[:m],:m)
+        for b in agents
+            send_results!(res_joint[b],res_joint.m,:m)
+        end
+        for b in res.bodies
+            update_constraints!(res_joint[b],solver)
+            λ_update_default!(res_joint[b],solver)
+            μ_update_default!(res_joint[b],solver)
+        end
 
-        J = cost(solver,res_joint[:m])
-        println("cost = $J")
-
-        update_constraints!(res_joint[:m],solver)
         c_max = max_violation(res_joint[:m])
-        println("c_max = $c_max")
-        λ_update_default!(res_joint[:m],solver)
-        μ_update_default!(res_joint[:m],solver)
-        res = copy(res_joint[:m]);
 
+        println("cost = $J")
+        println("c_max = $c_max")
 
         if c_max < solver.opts.constraint_tolerance
             break
         end
     end
-    return res, J
+    return res_joint.m, J
 end
 
 function ilqr_loop(solver::Solver,res::ADMMResults)
@@ -524,6 +514,7 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
     J0 = cost(solver,res)
     J = Inf
 
+    update_constraints!(res,solver)
     for ii = 1:solver.opts.iterations_innerloop
         iter_inner = ii
 

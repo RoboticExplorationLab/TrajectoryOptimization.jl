@@ -102,10 +102,11 @@ solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = zeros(model.m,solver.N-1)
-J = admm_solve(solver,res,U0)
-
-admm_plot2(res3)
-
+@time J = admm_solve(solver,res,U0)
+admm_plot2(res)
+res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+@time result, = admm_solve_parallel(solver,res,ones(m,N-1)*5);
+admm_plot2(result)
 
 function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
     N = length(res.X)
@@ -119,6 +120,28 @@ function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
     copyto!(res.U_,res.U);
 end
 
+res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+initial_admm_rollout!(solver,res,ones(m,N-1)*5);
+res.bodies[2:end]
+res_joint =  NamedTuple{res.bodies}([copy(res) for b in res.bodies]);
+agents = res.bodies[2:end]
+
+for b in agents
+    J = ilqr_solve(solver,res_joint[b],b)
+    send_results!(res_joint.m,res_joint[b],b)
+end
+J = ilqr_solve(solver,res_joint[:m],:m)
+for b in agents
+    send_results!(res_joint[b],res_joint.m,:m)
+end
+for b in res.bodies
+    update_constraints!(res_joint[b],solver)
+    λ_update_default!(res_joint[b],solver)
+    μ_update_default!(res_joint[b],solver)
+end
+
+c_max = max_violation(res_joint[:m])
+
 
 # Parallel
 res0 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
@@ -130,24 +153,19 @@ initial_admm_rollout!(solver,res1,ones(m,N-1)*5);
 initial_admm_rollout!(solver,res2,ones(m,N-1)*5);
 initial_admm_rollout!(solver,res3,ones(m,N-1)*5);
 
-update_constraints!(res0,solver)
 ilqr_solve(solver,res0,:a1)
 ilqr_solve(solver,res0,:a2)
 ilqr_solve(solver,res0,:m)
 to_array(res0.X)
 
-update_constraints!(res1,solver)
 ilqr_solve(solver,res1,:a1)
-to_array(res1.X)
 # send_results!(res2,res1,:a1);
 send_results!(res3,res1,:a1);
 
-update_constraints!(res2,solver)
 ilqr_solve(solver,res2,:a2)
 # send_results!(res1,res2,:a2);
 send_results!(res3,res2,:a2);
 
-update_constraints!(res3,solver)
 ilqr_solve(solver,res3,:m)
 send_results!(res1,res3,:m);
 send_results!(res2,res3,:m);
