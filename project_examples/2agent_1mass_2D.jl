@@ -27,15 +27,12 @@ ẏ2f = ẏ20
 
 xf = [zf;żf;y1f;ẏ1f;y2f;ẏ2f]
 
-Q1 = Diagonal(0.01I,nb)
-R1 = Diagonal(0.000001I,mb)
-Qf1 = Diagonal(1000.0I,nb)
-Q2 = Diagonal(0.01I,na1)
-R2 = Diagonal(0.0001I,ma1)
-Qf2 = Diagonal(1000.0I,na1)
-Q3 = Diagonal(0.01I,na2)
-R3 = Diagonal(0.0001I,ma2)
-Qf3 = Diagonal(1000.0I,na2)
+Qa = Diagonal(1e-3I,nb)
+Ra = Diagonal(1e-3I,mb)
+Qfa = Diagonal(1e1I,nb)
+Qm = Diagonal(1e-0I,na2)
+Rm = Diagonal(1e-1I,ma2)
+Qfm = Diagonal(1e3I,na2)
 
 d = 1
 
@@ -51,6 +48,7 @@ end
 function cE(c,x)
     c[1] = norm(x[1:2] - x[5:6])^2 - d^2
     c[2] = norm(x[9:10] - x[1:2])^2 -d^2
+    c[2+1:n+2] = x - xf
 end
 
 function ∇cE(cx,cu,x,u)
@@ -80,11 +78,12 @@ function ∇cE(cx,x)
     cx[1,5:6] = 2(y1 - z)
     cx[2,1:2] = 2(z - y2)
     cx[2,9:10] = 2(y2 - z)
+    cx[2+1:n+2,:] = Diagonal(I,n)
 end
 
-cost1 = LQRCost(Q1,R1,Qf1,[zf;żf])
-cost2 = LQRCost(Q2,R2,Qf2,[y1f;ẏ1f])
-cost3 = LQRCost(Q3,R3,Qf3,[y2f;ẏ2f])
+cost1 = LQRCost(Qm,Rm,Qfm,[zf;żf])
+cost2 = LQRCost(Qa,Ra,Qfa,[y1f;ẏ1f])
+cost3 = LQRCost(Qa,Ra,Qfa,[y2f;ẏ2f])
 
 costs = NamedTuple{bodies}((cost1,cost2,cost3))
 part_x = create_partition((nb,na1,na2),bodies)
@@ -105,4 +104,72 @@ res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = zeros(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
 
-admm_plot2(res)
+admm_plot2(res3)
+
+
+function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
+    N = length(res.X)
+    for k = 1:N
+        copyto!(res.X[k][b], res0.X[k][b])
+        if k < N
+            copyto!(res.U[k][b], res0.U[k][b])
+        end
+    end
+    copyto!(res.X_,res.X);
+    copyto!(res.U_,res.U);
+end
+
+
+# Parallel
+res0 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+res1 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+res2 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+res3 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+initial_admm_rollout!(solver,res0,ones(m,N-1)*5);
+initial_admm_rollout!(solver,res1,ones(m,N-1)*5);
+initial_admm_rollout!(solver,res2,ones(m,N-1)*5);
+initial_admm_rollout!(solver,res3,ones(m,N-1)*5);
+
+update_constraints!(res0,solver)
+ilqr_solve(solver,res0,:a1)
+ilqr_solve(solver,res0,:a2)
+ilqr_solve(solver,res0,:m)
+to_array(res0.X)
+
+update_constraints!(res1,solver)
+ilqr_solve(solver,res1,:a1)
+to_array(res1.X)
+# send_results!(res2,res1,:a1);
+send_results!(res3,res1,:a1);
+
+update_constraints!(res2,solver)
+ilqr_solve(solver,res2,:a2)
+# send_results!(res1,res2,:a2);
+send_results!(res3,res2,:a2);
+
+update_constraints!(res3,solver)
+ilqr_solve(solver,res3,:m)
+send_results!(res1,res3,:m);
+send_results!(res2,res3,:m);
+# send_results!(res1,res3,:a1);
+# send_results!(res2,res3,:a1);
+# send_results!(res1,res3,:a2);
+# send_results!(res2,res3,:a2);
+
+
+update_constraints!(res1,solver)
+update_constraints!(res2,solver)
+update_constraints!(res3,solver)
+λ_update_default!(res0,solver)
+μ_update_default!(res0,solver)
+λ_update_default!(res1,solver)
+μ_update_default!(res1,solver)
+λ_update_default!(res2,solver)
+μ_update_default!(res2,solver)
+λ_update_default!(res3,solver)
+μ_update_default!(res3,solver)
+println()
+@show max_violation(res0)
+@show max_violation(res1)
+@show max_violation(res2)
+@show max_violation(res3)
