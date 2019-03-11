@@ -241,7 +241,7 @@ function _backwardpass_admm!(res::ADMMResults,solver::Solver,b::Symbol)
             # increase regularization
             @warn InnerIters "Regularizing Quu "
 
-            # regularization_update!(res,solver,:increase)
+            regularization_update!(res,solver,:increase)
 
             # reset backward pass
             k = N-1

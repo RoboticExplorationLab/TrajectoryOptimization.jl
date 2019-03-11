@@ -25,19 +25,20 @@ y20[1:3] = scaling*[-sqrt(2/9);sqrt(2/3);4/3]
 y20[4] = 1.0
 y30 = zeros(13)
 y30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
+y30[4] = 1.0
 x0 = [z0;ż0;y10;y20;y30]
 
 norm(z0-y10[1:3])
 norm(z0-y20[1:3])
-norm(z0-y30[1:3])
+d = norm(z0-y30[1:3])
 
 zf = z0 + _shift
 żf = [0.;0.;0.]
-y1f = y10
+y1f = copy(y10)
 y1f[1:3] += _shift
-y2f = y20
+y2f = copy(y20)
 y2f[1:3] += _shift
-y3f = y30
+y3f = copy(y30)
 y3f[1:3] += _shift
 xf = [zf;żf;y1f;y2f;y3f]
 
@@ -145,9 +146,7 @@ U0[17:20,:] .= 0.5*9.81/4.0
 U0[24:27,:] .= 0.5*9.81/4.0
 X = rollout(solver,U0)
 J = admm_solve(solver,res,U0)
-xx = zeros(13)
-Dynamics.quadrotor_modified!(xx,y10,U0[24:30,:])
-xx
+
 # 3D visualization
 using MeshCat
 using GeometryTypes
@@ -188,26 +187,39 @@ robot_obj.vertices .= robot_obj.vertices .* quad_scaling
 sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.15)) # trajectory points
 sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
 
+
 agent1 = vis["agent1"]
+agent2 = vis["agent2"]
+agent3 = vis["agent3"]
 mass1 = vis["mass1"]
 
 Z = to_array(res.X)[part_x.m,:]
 Y1 = to_array(res.X)[part_x.a1,:]
-Z[:,end]
-Y1[:,end]
+Y2 = to_array(res.X)[part_x.a2,:]
+Y3 = to_array(res.X)[part_x.a3,:]
+
 # Set camera location
 settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 setobject!(vis["agent1"],robot_obj,black_)
+setobject!(vis["agent2"],robot_obj,black_)
+setobject!(vis["agent3"],robot_obj,black_)
 setobject!(vis["mass1"],sphere_small,green_)
+
 
 for i = 1:solver.N
     # cables
     geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
     setobject!(vis["cable"]["1"],geom,red_)
+    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y2[1,i],Y2[2,i],Y2[3,i]]),convert(Float32,0.01))
+    setobject!(vis["cable"]["2"],geom,red_)
+    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y3[1,i],Y3[2,i],Y3[3,i]]),convert(Float32,0.01))
+    setobject!(vis["cable"]["3"],geom,red_)
 
     # agents + load
-    settransform!(vis["agent1"], Translation(Y1[1:3,i]...))
+    settransform!(vis["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+    settransform!(vis["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+    settransform!(vis["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
     settransform!(vis["mass1"], Translation(Z[1:3,i]...))
 
-    sleep(solver.dt)
+    sleep(solver.dt*3)
 end

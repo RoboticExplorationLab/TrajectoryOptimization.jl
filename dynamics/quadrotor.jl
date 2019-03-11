@@ -173,9 +173,9 @@ function quad3_mass1!(ẋ,x,u)
       ẋ[1:3] = ż
       ẋ[4:6] = mbinv*(fz1 + fz2 + fz3)
 
-      quadrotor_modified!(view(ẋ,7:19),y1,uy1);
-      quadrotor_modified!(view(ẋ,20:32),y2,uy2);
-      quadrotor_modified!(view(ẋ,33:45),y3,uy3);
+      quadrotor_modified!(view(ẋ,7:19),y1,uy1)
+      quadrotor_modified!(view(ẋ,20:32),y2,uy2)
+      quadrotor_modified!(view(ẋ,33:45),y3,uy3)
 
       return nothing
 end
