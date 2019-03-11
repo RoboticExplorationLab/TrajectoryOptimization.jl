@@ -112,7 +112,7 @@ function quadrotor_modified!(ẋ,X,u)
       ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
 end
 
-function quad2_mass1!(ẋ,x,u)
+function quad1_mass1!(ẋ,x,u)
       g = [0.;0.;9.81]
       mb = 1 # mass of load
 
@@ -133,9 +133,57 @@ function quad2_mass1!(ẋ,x,u)
       ẋ[1:3] = ż
       ẋ[4:6] = mbinv*fz1
 
-      quadrotor_modified!(view(ẋ,7:19),y,uy1)
-
+      quadrotor_modified!(view(ẋ,7:19),y,uy1);
+      return nothing
 end
+
+# Model
+model_1quad_1mass = Model(quad1_mass1!,19,10)
+
+
+
+function quad3_mass1!(ẋ,x,u)
+      g = [0.;0.;9.81]
+      mb = 1 # mass of load
+
+      mbinv = Diagonal(1/mb*ones(3))
+
+      # body 1
+      z = x[1:3]
+      ż = x[4:6]
+
+      # quad 1
+      y1 = x[7:19]
+
+      # quad 2
+      y2 = x[20:32]
+
+      # quad 3
+      y3 = x[33:45]
+
+      # constraint force
+      fz1 = u[1:3]
+      fz2 = u[4:6]
+      fz3 = u[7:9]
+
+      uy1 = u[10:16]
+      uy2 = u[17:23]
+      uy3 = u[24:30]
+
+      ẋ[1:3] = ż
+      ẋ[4:6] = mbinv*(fz1 + fz2 + fz3)
+
+      quadrotor_modified!(view(ẋ,7:19),y1,uy1);
+      quadrotor_modified!(view(ẋ,20:32),y2,uy2);
+      quadrotor_modified!(view(ẋ,33:45),y3,uy3);
+
+      return nothing
+end
+
+quad3_mass1!(rand(45),rand(45),rand(30))
+
+# Model
+model_3quad_1mass = Model(quad3_mass1!,45,30)
 
 function quadrotor_dynamics(X,u)
       ẋ = zeros(13,1)

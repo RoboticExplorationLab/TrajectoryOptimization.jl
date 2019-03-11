@@ -1,31 +1,45 @@
-model = Dynamics.model_2quad_1mass
-nb,mb = 6,3
+model = Dynamics.model_3quad_1mass
+nb,mb = 6,9
 na1,ma1 = 13,7
+na2,ma2 = 13,7
+na3,ma3 = 13,7
 
-N = nb+na1
-M = mb+ma1
 
-bodies = (:m,:a1)
-ns = (nb,na1)
-ms = (mb,ma1)
+N = nb+na1+na2+na3
+M = mb+ma1+ma2+ma3
+
+bodies = (:m,:a1,:a2,:a3)
+ns = (nb,na1,na2,na3)
+ms = (mb,ma1,ma2,ma3)
 tf = 1.0
+scaling = 1.0
 _shift = [10.0;0.0;0.0]
 
 z0 = scaling*[0.;0.;0]
 ż0 = [0.;0.;0.]
 y10 = zeros(13)
-y10[1:3] = [0.;0.;1.]
-y10[4:7] = [1.;0.;0.;0.]
+y10[1:3] = scaling*[sqrt(8/9);0.;4/3]
+y10[4] = 1.0
+y20 = zeros(13)
+y20[1:3] = scaling*[-sqrt(2/9);sqrt(2/3);4/3]
+y20[4] = 1.0
+y30 = zeros(13)
+y30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
+x0 = [z0;ż0;y10;y20;y30]
 
-x0 = [z0;ż0;y10]
+norm(z0-y10[1:3])
+norm(z0-y20[1:3])
+norm(z0-y30[1:3])
+
 zf = z0 + _shift
 żf = [0.;0.;0.]
-y1f = copy(y10)
+y1f = y10
 y1f[1:3] += _shift
-
-xf = [zf;żf;y1f]
-
-d = 1
+y2f = y20
+y2f[1:3] += _shift
+y3f = y30
+y3f[1:3] += _shift
+xf = [zf;żf;y1f;y2f;y3f]
 
 Q1 = Diagonal(0.01I,nb)
 R1 = Diagonal(0.00001I,mb)
@@ -33,53 +47,92 @@ Qf1 = Diagonal(10000.0I,nb)
 Q2 = Diagonal(0.01I,na1)
 R2 = Diagonal(0.0001I,ma1)
 Qf2 = Diagonal(1000.0I,na1)
+Q3 = Diagonal(0.01I,na2)
+R3 = Diagonal(0.0001I,ma2)
+Qf3 = Diagonal(1000.0I,na2)
+Q4 = Diagonal(0.01I,na3)
+R4 = Diagonal(0.0001I,ma3)
+Qf4 = Diagonal(1000.0I,na3)
 
 function cE(c,x::AbstractArray,u)
     c[1] = norm(x[7:9] - x[1:3])^2 - d^2
-    c[2] = u[1] + u[8]
-    c[3] = u[2] + u[9]
-    c[4] = u[3] + u[10]
+    c[2] = norm(x[20:22] - x[1:3])^2 -d^2
+    c[3] = norm(x[33:35] - x[1:3])^2 -d^2
+    c[4] = u[1] + u[14]
+    c[5] = u[2] + u[15]
+    c[6] = u[3] + u[16]
+    c[7] = u[4] + u[21]
+    c[8] = u[5] + u[22]
+    c[9] = u[6] + u[23]
+    c[10] = u[7] + u[28]
+    c[11] = u[8] + u[29]
+    c[12] = u[9] + u[30]
 end
 
 function cE(c,x)
     c[1] = norm(x[7:9] - x[1:3])^2 - d^2
+    c[2] = norm(x[20:22] - x[1:3])^2 -d^2
+    c[3] = norm(x[33:35] - x[1:3])^2 -d^2
 end
 
 function ∇cE(cx,cu,x,u)
     z = x[1:3]
     y1 = x[7:9]
-
+    y2 = x[20:22]
+    y3 = x[33:35]
     cx[1,1:3] = 2(z - y1)
     cx[1,7:9] = 2(y1 - z)
+    cx[2,1:3] = 2(z - y2)
+    cx[2,20:22] = 2(y2 - z)
+    cx[3,1:3] = 2(z - y3)
+    cx[3,33:35] = 2(y3 - z)
 
-    cu[2,1] = 1
-    cu[2,8] = 1
-    cu[3,2] = 1
-    cu[3,9] = 1
-    cu[4,3] = 1
-    cu[4,10] = 1
+    cu[4,1] = 1
+    cu[4,14] = 1
+    cu[5,2] = 1
+    cu[5,15] = 1
+    cu[6,3] = 1
+    cu[6,16] = 1
+    cu[7,4] = 1
+    cu[7,21] = 1
+    cu[8,5] = 1
+    cu[8,22] = 1
+    cu[9,6] = 1
+    cu[9,23] = 1
+    cu[10,7] = 1
+    cu[10,28] = 1
+    cu[11,8] = 1
+    cu[11,29] = 1
+    cu[12,9] = 1
+    cu[12,30] = 1
 end
 
 function ∇cE(cx,x)
     z = x[1:3]
     y1 = x[7:9]
+    y2 = x[20:22]
+    y3 = x[33:35]
     cx[1,1:3] = 2(z - y1)
     cx[1,7:9] = 2(y1 - z)
+    cx[2,1:3] = 2(z - y2)
+    cx[2,20:22] = 2(y2 - z)
+    cx[3,1:3] = 2(z - y3)
+    cx[3,33:35] = 2(y3 - z)
 end
 
 cost1 = LQRCost(Q1,R1,Qf1,[zf;żf])
 cost2 = LQRCost(Q2,R2,Qf2,y1f)
+cost3 = LQRCost(Q3,R3,Qf3,y2f)
+cost4 = LQRCost(Q4,R4,Qf4,y3f)
+costs = NamedTuple{bodies}((cost1,cost2,cost3,cost4))
+part_x = create_partition((nb,na1,na2,na3),bodies)
+part_u = create_partition((mb,ma1,ma2,ma3),bodies)
 
-costs = NamedTuple{bodies}((cost1,cost2))
-part_x = create_partition((nb,na1),bodies)
-part_u = create_partition((mb,ma1),bodies)
-
-acost = ADMMCost(costs,cE,∇cE,2,[:a1],N,M,part_x,part_u)
+acost = ADMMCost(costs,cE,∇cE,4,[:a1],N,M,part_x,part_u)
 obj = UnconstrainedObjective(acost,tf,x0,xf)
 obj = ConstrainedObjective(obj,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
 p = obj.p
 p_N = obj.p_N
-
 solver = Solver(model,obj,integration=:rk3,dt=0.05)
 solver.opts.cost_tolerance = 1e-8
 solver.opts.cost_tolerance_intermediate = 1e-8
@@ -87,10 +140,14 @@ solver.opts.constraint_tolerance = 1e-6
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
-U0[4:7,:] .= 0.5*9.81/4.0
-
+U0[10:13,:] .= 0.5*9.81/4.0
+U0[17:20,:] .= 0.5*9.81/4.0
+U0[24:27,:] .= 0.5*9.81/4.0
+X = rollout(solver,U0)
 J = admm_solve(solver,res,U0)
-
+xx = zeros(13)
+Dynamics.quadrotor_modified!(xx,y10,U0[24:30,:])
+xx
 # 3D visualization
 using MeshCat
 using GeometryTypes
