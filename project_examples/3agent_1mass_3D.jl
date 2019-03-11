@@ -147,7 +147,7 @@ solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
-res, J = admm_solve_parallel(solver,res,U0);
+# res, J = admm_solve_parallel(solver,res,U0);
 
 admm_plot3(res)
 
@@ -189,7 +189,7 @@ robot_obj = FileIO.load(obj_quad)
 robot_obj.vertices .= robot_obj.vertices .* quad_scaling
 
 sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.15)) # trajectory points
-sphere_medium = HyperSphere(Point3f0(0), convert(Float32,r_quad))
+sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
 
 agent1 = vis["agent1"]
 agent2 = vis["agent2"]

@@ -57,6 +57,86 @@ function quadrotor_dynamics!(ẋ,X,u)
       ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
 end
 
+function quadrotor_modified!(ẋ,X,u)
+      ## States: X ∈ R^13; q = [s;v]
+      # x
+      # y
+      # z
+      # q0
+      # q1
+      # q2
+      # q3
+      # xdot
+      # ydot
+      # zdot
+      # omega1
+      # omega2
+      # omega3
+
+      x = X[1:3]
+      q = X[4:7]./norm(X[4:7]) #normalize quaternion
+      v = X[8:10]
+      omega = X[11:13]
+
+      # Parameters
+      m = .5 # mass
+      J = Matrix(Diagonal([0.0023; 0.0023; 0.004])) # inertia matrix
+      Jinv = Matrix(Diagonal(1.0./[0.0023; 0.0023; 0.004])) # inverted inertia matrix
+      g = 9.81 # gravity
+      L = 0.1750 # distance between motors
+
+      w1 = u[1]
+      w2 = u[2]
+      w3 = u[3]
+      w4 = u[4]
+
+      w5 = u[5:7]
+
+      kf = 1; # 6.11*10^-8;
+      F1 = kf*w1;
+      F2 = kf*w2;
+      F3 = kf*w3;
+      F4 = kf*w4;
+      F = [0;0;F1+F2+F3+F4] #total rotor force in body frame
+
+      km = 0.0245;
+      M1 = km*w1;
+      M2 = km*w2;
+      M3 = km*w3;
+      M4 = km*w4;
+      tau = [L*(F2-F4);L*(F3-F1);(M1-M2+M3-M4)] #total rotor torque in body frame
+
+      ẋ[1:3] = v # velocity in world frame
+      ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
+      ẋ[8:10] = [0;0;-g] + (1/m)*(qrot(q,F) + w5) #acceleration in world frame
+      ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
+end
+
+function quad2_mass1!(ẋ,x,u)
+      g = [0.;0.;9.81]
+      mb = 1 # mass of load
+
+      mbinv = Diagonal(1/mb*ones(3))
+
+      # body 1
+      z = x[1:3]
+      ż = x[4:6]
+
+      # quad 1
+      y = x[7:19]
+
+      # constraint force
+      fz1 = u[1:3]
+
+      uy1 = u[4:10]
+
+      ẋ[1:3] = ż
+      ẋ[4:6] = mbinv*fz1
+
+      quadrotor_modified!(view(ẋ,7:19),y,uy1)
+
+end
+
 function quadrotor_dynamics(X,u)
       ẋ = zeros(13,1)
       quadrotor_dynamics!(ẋ,X,u)
