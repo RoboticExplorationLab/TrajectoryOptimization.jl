@@ -1,3 +1,26 @@
+## Utilities
+"""
+$(SIGNATURES)
+    Rotate a vector by a quaternion
+"""
+function qrot(q,r)
+      r + 2*cross(q[2:4],cross(q[2:4],r) + q[1]*r)
+end
+
+"""
+$(SIGNATURES)
+    Multiplication of two quaternions (q = [s;v])
+"""
+function qmult(q1,q2)
+      [q1[1]*q2[1] - q1[2:4]'*q2[2:4]; q1[1]*q2[2:4] + q2[1]*q1[2:4] + cross(q1[2:4],q2[2:4])]
+end
+
+# unit quaternion constraint
+function unit_quaternion(c,x,u)
+    c[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
+end
+
+
 function quadrotor_dynamics!(ẋ,X,u)
       #TODO change concatentations to make faster!
       # Quaternion representation
@@ -192,23 +215,6 @@ function quadrotor_dynamics(X,u)
 end
 
 
-## Utilities
-"""
-@(SIGNATURES)
-    Rotate a vector by a quaternion
-"""
-function qrot(q,r)
-      r + 2*cross(q[2:4],cross(q[2:4],r) + q[1]*r)
-end
-
-"""
-@(SIGNATURES)
-    Multiplication of two quaternions (q = [s;v])
-"""
-function qmult(q1,q2)
-      [q1[1]*q2[1] - q1[2:4]'*q2[2:4]; q1[1]*q2[2:4] + q2[1]*q1[2:4] + cross(q1[2:4],q2[2:4])]
-end
-
 # Model
 n = 13
 m = 4
@@ -259,10 +265,6 @@ function cI_3obs_quad(c,x,u)
     c
 end
 
-# unit quaternion constraint
-function unit_quaternion(c,x,u)
-    c[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
 
 obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cE=unit_quaternion)
 obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad)#,cE=unit_quaternion)

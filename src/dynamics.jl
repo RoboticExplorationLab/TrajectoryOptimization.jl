@@ -4,6 +4,7 @@ using TrajectoryOptimization: Model, UnconstrainedObjective, ConstrainedObjectiv
 using RigidBodyDynamics
 using LinearAlgebra
 using PartedArrays
+using DocStringExtensions
 
 export
     pendulum,
