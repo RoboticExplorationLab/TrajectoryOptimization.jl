@@ -463,7 +463,9 @@ function admm_solve_parallel(solver,res,U0)
         # optimize each agent individually
 
         for b in bodies
-            J = ilqr_solve(solver,res_joint[b],b)
+            if b != :m
+                J = ilqr_solve(solver,res_joint[b],b)
+            end
         end
 
         for b in bodies

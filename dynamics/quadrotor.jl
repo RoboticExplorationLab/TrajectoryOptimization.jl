@@ -179,9 +179,6 @@ function quad3_mass1!(ẋ,x,u)
 
       return nothing
 end
-
-quad3_mass1!(rand(45),rand(45),rand(30))
-
 # Model
 model_3quad_1mass = Model(quad3_mass1!,45,30)
 

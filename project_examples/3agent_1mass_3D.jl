@@ -147,7 +147,7 @@ solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
 J = admm_solve(solver,res,U0)
-# res, J = admm_solve_parallel(solver,res,U0);
+res, J = admm_solve_parallel(solver,res,U0);
 
 admm_plot3(res)
 
