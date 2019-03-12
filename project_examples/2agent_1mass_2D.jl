@@ -48,7 +48,7 @@ end
 function cE(c,x)
     c[1] = norm(x[1:2] - x[5:6])^2 - d^2
     c[2] = norm(x[9:10] - x[1:2])^2 -d^2
-    c[2+1:n+2] = x - xf
+    c[2+1:N+2] = x - xf
 end
 
 function ∇cE(cx,cu,x,u)
@@ -78,7 +78,7 @@ function ∇cE(cx,x)
     cx[1,5:6] = 2(y1 - z)
     cx[2,1:2] = 2(z - y2)
     cx[2,9:10] = 2(y2 - z)
-    cx[2+1:n+2,:] = Diagonal(I,n)
+    cx[2+1:N+2,:] = Diagonal(I,N)
 end
 
 cost1 = LQRCost(Qm,Rm,Qfm,[zf;żf])
@@ -108,17 +108,7 @@ res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 @time result, = admm_solve_parallel(solver,res,ones(m,N-1)*5);
 admm_plot2(result)
 
-function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
-    N = length(res.X)
-    for k = 1:N
-        copyto!(res.X[k][b], res0.X[k][b])
-        if k < N
-            copyto!(res.U[k][b], res0.U[k][b])
-        end
-    end
-    copyto!(res.X_,res.X);
-    copyto!(res.U_,res.U);
-end
+
 
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 initial_admm_rollout!(solver,res,ones(m,N-1)*5);

@@ -429,19 +429,22 @@ function admm_solve(solver,results,U0)
     J0 = initial_admm_rollout!(solver,res,U0);
     J = Inf
     println("J0 = $J0")
-    for i = 1:solver.opts.iterations_outerloop
-        J = ilqr_loop(solver,res)
-        println("iter: $i, J = $J")
-        update_constraints!(res,solver)
-        c_max = max_violation(res)
-        println("c_max: $(c_max)")
-        λ_update_default!(res,solver)
-        μ_update_default!(res,solver)
+    logger = default_logger(solver)
+    withlogger(logger) do
+        for i = 1:solver.opts.iterations_outerloop
+            J = ilqr_loop(solver,res)
+            println("iter: $i, J = $J")
+            update_constraints!(res,solver)
+            c_max = max_violation(res)
+            println("c_max: $(c_max)")
+            λ_update_default!(res,solver)
+            μ_update_default!(res,solver)
 
-        if c_max < solver.opts.constraint_tolerance
-            break
+            if c_max < solver.opts.constraint_tolerance
+                break
+            end
         end
-    end
+    end  # with logger
     return J
 end
 
@@ -476,14 +479,27 @@ function admm_solve_parallel(solver,res,U0)
 
         c_max = max_violation(res_joint[:m])
 
-        println("cost = $J")
-        println("c_max = $c_max")
+        @logmsg InnerLoop :iter_admm value=i loc=2
+        # println("cost = $J")
+        # println("c_max = $c_max")
 
         if c_max < solver.opts.constraint_tolerance
             break
         end
     end
     return res_joint.m, J
+end
+
+function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
+    N = length(res.X)
+    for k = 1:N
+        copyto!(res.X[k][b], res0.X[k][b])
+        if k < N
+            copyto!(res.U[k][b], res0.U[k][b])
+        end
+    end
+    copyto!(res.X_,res.X);
+    copyto!(res.U_,res.U);
 end
 
 function ilqr_loop(solver::Solver,res::ADMMResults)
@@ -513,8 +529,11 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
     X = res.X; U = res.U; X_ = res.X_; U_ = res.U_
     J0 = cost(solver,res)
     J = Inf
+    logger = default_logger(solver)
 
     update_constraints!(res,solver)
+    with_logger(logger) do
+    printstyled("Body $b\n" * "-"^10 * "\n",color=:yellow,bold=true)
     for ii = 1:solver.opts.iterations_innerloop
         iter_inner = ii
 
@@ -533,10 +552,15 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
         dJ = copy(abs(J-J0)) # change in cost
         J0 = copy(J)
 
-        if dJ < solver.opts.cost_tolerance
+        @logmsg InnerLoop :iter value=ii
+        ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
+        print_row(logger,InnerLoop)
+
+        if dJ < solver.opts.cost_tolerance_intermediate
             break
         end
     end
+    end # logger
     return J
 end
 

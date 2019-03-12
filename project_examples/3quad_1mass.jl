@@ -195,6 +195,9 @@ plot_quadrotor(res0)
 # Step by step
 solver = Solver(model,obj,integration=:rk3,N=15)
 solver.opts.penalty_initial = 1e-6
+solver.opts.cost_tolerance_intermediate = 1e-2
+solver.opts.iterations_innerloop = 100
+solver.opts.penalty_scaling = 1000
 solver.opts.verbose = true
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 copyto!(res.μ, res.μ*solver.opts.penalty_initial)
@@ -202,7 +205,7 @@ U0 = zeros(model.m,solver.N-1)
 U0[10:13,:] .= 0.5*9.81/4.0
 U0[17:20,:] .= 0.5*9.81/4.0
 U0[24:27,:] .= 0.5*9.81/4.0
-admm_solve(solver,res,U0)
+@time admm_solve(solver,res,U0)
 J0 = initial_admm_rollout!(solver,res,U0)
 ilqr_solve(solver,res,:a1)
 ilqr_solve(solver,res,:a2)
@@ -325,7 +328,7 @@ function create_animation(res)
     Y3 = to_array(res.X)[part_x.a3,:]
 
     anim = MeshCat.Animation()
-    s = 5
+    s = 10
     for i = 1:solver.N
         MeshCat.atframe(anim,vis,i*s) do frame
             # cables
