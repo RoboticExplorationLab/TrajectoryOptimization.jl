@@ -253,3 +253,26 @@ for i = 1:solver.N
     sleep(solver.dt)
 
 end
+
+# Animation
+# (solver.N-1)/tf
+anim = MeshCat.Animation(10)
+for i = 1:solver.N
+    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
+    MeshCat.atframe(anim,vis,i) do frame
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
+        # MeshCat.setobject!(frame["cable1"],geom,red_)
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y2[1,i],Y2[2,i],Y2[3,i]]),convert(Float32,0.01))
+        # Meshcatsetobject!(frame["cable2"],geom,red_)
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y3[1,i],Y3[2,i],Y3[3,i]]),convert(Float32,0.01))
+        # MeshCat.setobject!(frame["cable3"],geom,red_)
+        # settransform!(frame["cable1"],Translation(0.,0.,0.))
+        settransform!(frame["cable1"],geom,red_)
+        settransform!(frame["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+        settransform!(frame["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+        settransform!(frame["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
+        settransform!(frame["mass1"], Translation(Z[1:3,i]...))
+    end
+end
+MeshCat.setanimation!(vis,anim)
+anim
