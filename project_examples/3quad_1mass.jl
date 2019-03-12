@@ -4,14 +4,13 @@ na1,ma1 = 13,7
 na2,ma2 = 13,7
 na3,ma3 = 13,7
 
-
 N = nb+na1+na2+na3
 M = mb+ma1+ma2+ma3
 
 bodies = (:m,:a1,:a2,:a3)
 ns = (nb,na1,na2,na3)
 ms = (mb,ma1,ma2,ma3)
-tf = 1.0
+tf = 2.25
 scaling = 1.0
 _shift = [10.0;0.0;0.0]
 
@@ -55,6 +54,35 @@ Q4 = Diagonal(0.01I,na3)
 R4 = Diagonal(0.0001I,ma3)
 Qf4 = Diagonal(1000.0I,na3)
 
+# Q1 = 0.0001*Matrix(I,nb,nb)
+# R1 = 0.00001*Matrix(I,mb,mb)
+# Qf1 = 10000.0*Matrix(I,nb,nb)
+#
+# Q2 = (1e-1)*Matrix(I,na1,na1)
+# Q2[4,4] = 1.0; Q2[5,5] = 1.0; Q2[6,6] = 1.0; Q2[7,7] = 1.0
+# R2 = (1.0)*Matrix(I,ma1,ma1)
+# Qf2 = (1000.0)*Matrix(I,na1,na1)
+#
+# Q3 = (1e-1)*Matrix(I,na2,na2)
+# Q3[4,4] = 1.0; Q3[5,5] = 1.0; Q3[6,6] = 1.0; Q3[7,7] = 1.0
+# R3 = (1.0)*Matrix(I,ma2,ma2)
+# Qf3 = (1000.0)*Matrix(I,na2,na2)
+#
+# Q4 = (1e-1)*Matrix(I,na3,na3)
+# Q4[4,4] = 1.0; Q4[5,5] = 1.0; Q4[6,6] = 1.0; Q4[7,7] = 1.0
+# R4 = (1.0)*Matrix(I,ma3,ma3)
+# Qf4 = (1000.0)*Matrix(I,na3,na3)
+
+# Q2 = Diagonal(0.0001I,na1)
+# R2 = Diagonal(0.001I,ma1)
+# Qf2 = Diagonal(1000.0I,na1)
+# Q3 = Diagonal(0.0001I,na2)
+# R3 = Diagonal(0.001I,ma2)
+# Qf3 = Diagonal(1000.0I,na2)
+# Q4 = Diagonal(0.0001I,na3)
+# R4 = Diagonal(0.001I,ma3)
+# Qf4 = Diagonal(1000.0I,na3)
+
 function cE(c,x::AbstractArray,u)
     c[1] = norm(x[7:9] - x[1:3])^2 - d^2
     c[2] = norm(x[20:22] - x[1:3])^2 -d^2
@@ -74,6 +102,7 @@ function cE(c,x)
     c[1] = norm(x[7:9] - x[1:3])^2 - d^2
     c[2] = norm(x[20:22] - x[1:3])^2 -d^2
     c[3] = norm(x[33:35] - x[1:3])^2 -d^2
+    # c[4:48] = x - xf
 end
 
 function ∇cE(cx,cu,x,u)
@@ -119,6 +148,7 @@ function ∇cE(cx,x)
     cx[2,20:22] = 2(y2 - z)
     cx[3,1:3] = 2(z - y3)
     cx[3,33:35] = 2(y3 - z)
+    # cx[4:48,1:45] = 1.0*Matrix(I,45,45)
 end
 
 cost1 = LQRCost(Q1,R1,Qf1,[zf;żf])
@@ -134,10 +164,10 @@ obj = UnconstrainedObjective(acost,tf,x0,xf)
 obj = ConstrainedObjective(obj,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
 p = obj.p
 p_N = obj.p_N
-solver = Solver(model,obj,integration=:rk3,dt=0.05)
-solver.opts.cost_tolerance = 1e-8
-solver.opts.cost_tolerance_intermediate = 1e-8
-solver.opts.constraint_tolerance = 1e-6
+solver = Solver(model,obj,integration=:rk3,dt=0.1)
+solver.opts.cost_tolerance = 1e-5
+solver.opts.cost_tolerance_intermediate = 1e-5
+solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
@@ -145,7 +175,7 @@ U0[10:13,:] .= 0.5*9.81/4.0
 U0[17:20,:] .= 0.5*9.81/4.0
 U0[24:27,:] .= 0.5*9.81/4.0
 X = rollout(solver,U0)
-J = admm_solve(solver,res,U0)
+@time J = admm_solve(solver,res,U0)
 
 # 3D visualization
 using MeshCat
@@ -205,7 +235,6 @@ setobject!(vis["agent2"],robot_obj,black_)
 setobject!(vis["agent3"],robot_obj,black_)
 setobject!(vis["mass1"],sphere_small,green_)
 
-
 for i = 1:solver.N
     # cables
     geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
@@ -221,5 +250,29 @@ for i = 1:solver.N
     settransform!(vis["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
     settransform!(vis["mass1"], Translation(Z[1:3,i]...))
 
-    sleep(solver.dt*3)
+    sleep(solver.dt)
+
 end
+
+# Animation
+# (solver.N-1)/tf
+anim = MeshCat.Animation(10)
+for i = 1:solver.N
+    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
+    MeshCat.atframe(anim,vis,i) do frame
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
+        # MeshCat.setobject!(frame["cable1"],geom,red_)
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y2[1,i],Y2[2,i],Y2[3,i]]),convert(Float32,0.01))
+        # Meshcatsetobject!(frame["cable2"],geom,red_)
+        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y3[1,i],Y3[2,i],Y3[3,i]]),convert(Float32,0.01))
+        # MeshCat.setobject!(frame["cable3"],geom,red_)
+        # settransform!(frame["cable1"],Translation(0.,0.,0.))
+        settransform!(frame["cable1"],geom,red_)
+        settransform!(frame["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+        settransform!(frame["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+        settransform!(frame["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
+        settransform!(frame["mass1"], Translation(Z[1:3,i]...))
+    end
+end
+MeshCat.setanimation!(vis,anim)
+anim
