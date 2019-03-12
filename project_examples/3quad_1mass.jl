@@ -10,7 +10,7 @@ M = mb+ma1+ma2+ma3
 bodies = (:m,:a1,:a2,:a3)
 ns = (nb,na1,na2,na3)
 ms = (mb,ma1,ma2,ma3)
-tf = 2.25
+tf = 5.0
 scaling = 1.0
 _shift = [10.0;0.0;0.0]
 
@@ -176,6 +176,39 @@ U0[17:20,:] .= 0.5*9.81/4.0
 U0[24:27,:] .= 0.5*9.81/4.0
 X = rollout(solver,U0)
 @time J = admm_solve(solver,res,U0)
+res_default = copy(res);
+
+# Just one quadrotor
+Q0 = Diagonal(I,13)*0.01
+R0 = Diagonal(I,4)*0.0001
+Qf0 = Diagonal(I,13)*1000.0
+tf = 5.0
+cost0 = LQRCost(Q0,R0,Qf0,y1f)
+obj0 = UnconstrainedObjective(cost0,tf,y10,y1f)
+obj0.cost.Qf
+solver0 = Solver(Dynamics.quadrotor[1],obj0,N=15)
+U0 = ones(solver0.model.m,solver0.N-1)*0.5*9.81/4
+solver0.opts.verbose = true
+res0,stats0 = solve(solver0,U0)
+plot_quadrotor(res0)
+
+# Step by step
+solver = Solver(model,obj,integration=:rk3,N=15)
+solver.opts.penalty_initial = 1e-6
+solver.opts.verbose = true
+res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
+copyto!(res.μ, res.μ*solver.opts.penalty_initial)
+U0 = zeros(model.m,solver.N-1)
+U0[10:13,:] .= 0.5*9.81/4.0
+U0[17:20,:] .= 0.5*9.81/4.0
+U0[24:27,:] .= 0.5*9.81/4.0
+admm_solve(solver,res,U0)
+J0 = initial_admm_rollout!(solver,res,U0)
+ilqr_solve(solver,res,:a1)
+ilqr_solve(solver,res,:a2)
+ilqr_solve(solver,res,:a3)
+ilqr_solve(solver,res,:m)
+plot_system(res,0.5)
 
 # 3D visualization
 using MeshCat
@@ -183,6 +216,7 @@ using GeometryTypes
 using CoordinateTransformations
 using FileIO
 using MeshIO
+using Plots
 
 vis = Visualizer()
 open(vis)
@@ -223,56 +257,90 @@ agent2 = vis["agent2"]
 agent3 = vis["agent3"]
 mass1 = vis["mass1"]
 
-Z = to_array(res.X)[part_x.m,:]
-Y1 = to_array(res.X)[part_x.a1,:]
-Y2 = to_array(res.X)[part_x.a2,:]
-Y3 = to_array(res.X)[part_x.a3,:]
-
-# Set camera location
-settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 setobject!(vis["agent1"],robot_obj,black_)
 setobject!(vis["agent2"],robot_obj,black_)
 setobject!(vis["agent3"],robot_obj,black_)
 setobject!(vis["mass1"],sphere_small,green_)
+cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d),convert(Float32,0.01))
+setobject!(vis["cable"]["1"],cable,red_)
+setobject!(vis["cable"]["2"],cable,red_)
+setobject!(vis["cable"]["3"],cable,red_)
 
-for i = 1:solver.N
-    # cables
-    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
-    setobject!(vis["cable"]["1"],geom,red_)
-    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y2[1,i],Y2[2,i],Y2[3,i]]),convert(Float32,0.01))
-    setobject!(vis["cable"]["2"],geom,red_)
-    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y3[1,i],Y3[2,i],Y3[3,i]]),convert(Float32,0.01))
-    setobject!(vis["cable"]["3"],geom,red_)
 
-    # agents + load
-    settransform!(vis["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
-    settransform!(vis["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
-    settransform!(vis["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
-    settransform!(vis["mass1"], Translation(Z[1:3,i]...))
+# Set camera location
+settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
-    sleep(solver.dt)
 
+function cable_transform(y,z)
+    v1 = [0,0,1]
+    v2 = y[1:3,1] - z[1:3,1]
+    normalize!(v2)
+    ax = cross(v1,v2)
+    ang = acos(v1'v2)
+    R = AngleAxis(ang,ax...)
+    compose(Translation(z),LinearMap(R))
 end
 
-# Animation
-# (solver.N-1)/tf
-anim = MeshCat.Animation(10)
-for i = 1:solver.N
-    geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
-    MeshCat.atframe(anim,vis,i) do frame
-        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y1[1,i],Y1[2,i],Y1[3,i]]),convert(Float32,0.01))
-        # MeshCat.setobject!(frame["cable1"],geom,red_)
-        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y2[1,i],Y2[2,i],Y2[3,i]]),convert(Float32,0.01))
-        # Meshcatsetobject!(frame["cable2"],geom,red_)
-        # geom = Cylinder(Point3f0([Z[1,i],Z[2,i],Z[3,i]]),Point3f0([Y3[1,i],Y3[2,i],Y3[3,i]]),convert(Float32,0.01))
-        # MeshCat.setobject!(frame["cable3"],geom,red_)
-        # settransform!(frame["cable1"],Translation(0.,0.,0.))
-        settransform!(frame["cable1"],geom,red_)
-        settransform!(frame["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
-        settransform!(frame["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
-        settransform!(frame["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
-        settransform!(frame["mass1"], Translation(Z[1:3,i]...))
+function plot_system(res,dt=0.1)
+    N = length(res.X)
+
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    Y3 = to_array(res.X)[part_x.a3,:]
+
+    for i = 1:N
+        # cables
+        settransform!(vis["cable"]["1"], cable_transform(Y1[1:3,i],Z[1:3,i]))
+        settransform!(vis["cable"]["2"], cable_transform(Y2[1:3,i],Z[1:3,i]))
+        settransform!(vis["cable"]["3"], cable_transform(Y3[1:3,i],Z[1:3,i]))
+
+        # agents + load
+        settransform!(vis["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+        settransform!(vis["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+        settransform!(vis["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
+        settransform!(vis["mass1"], Translation(Z[1:3,i]...))
+
+        sleep(dt)
+
     end
 end
-MeshCat.setanimation!(vis,anim)
-anim
+
+function plot_quadrotor(res,name="agent1",dt=0.1)
+    N = length(res.X)
+    setobject!(vis[name],robot_obj,black_)
+    X = to_array(res.X)
+    for i = 1:N
+        settransform!(vis[name],compose(Translation(X[1:3,i]...),LinearMap(Quat(X[4:7,i]...))))
+        sleep(dt)
+    end
+end
+
+function create_animation(res)
+    N = length(res.X)
+
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    Y3 = to_array(res.X)[part_x.a3,:]
+
+    anim = MeshCat.Animation()
+    s = 5
+    for i = 1:solver.N
+        MeshCat.atframe(anim,vis,i*s) do frame
+            # cables
+            settransform!(frame["cable"]["1"], cable_transform(Y1[1:3,i],Z[1:3,i]))
+            settransform!(frame["cable"]["2"], cable_transform(Y2[1:3,i],Z[1:3,i]))
+            settransform!(frame["cable"]["3"], cable_transform(Y3[1:3,i],Z[1:3,i]))
+
+            settransform!(frame["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+            settransform!(frame["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+            settransform!(frame["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
+            settransform!(frame["mass1"], Translation(Z[1:3,i]...))
+        end
+    end
+    MeshCat.setanimation!(vis,anim)
+    anim
+end
+
+create_animation(res)
