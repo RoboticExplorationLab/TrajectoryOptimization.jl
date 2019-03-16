@@ -169,6 +169,7 @@ solver.opts.cost_tolerance = 1e-5
 solver.opts.cost_tolerance_intermediate = 1e-5
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
+solver.opts.verbose = true
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
 U0[10:13,:] .= 0.5*9.81/4.0
@@ -200,7 +201,6 @@ solver.opts.iterations_innerloop = 100
 solver.opts.penalty_scaling = 1000
 solver.opts.verbose = true
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-copyto!(res.μ, res.μ*solver.opts.penalty_initial)
 U0 = zeros(model.m,solver.N-1)
 U0[10:13,:] .= 0.5*9.81/4.0
 U0[17:20,:] .= 0.5*9.81/4.0

@@ -101,12 +101,17 @@ solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-U0 = zeros(model.m,solver.N-1)
-@time J = admm_solve(solver,res,U0)
+U0 = ones(M,N-1)*5
+@time stats = admm_solve(solver,res,U0)
+plot(stats["c_max"],yscale=:log10)
 admm_plot2(res)
+res.λ
+norm(res.U[2][1:2])
+
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-@time result, = admm_solve_parallel(solver,res,ones(m,N-1)*5);
+@time result,stats_p = admm_solve_parallel(solver,res,U0);
 admm_plot2(result)
+plot!(stats_p["c_max"])
 
 
 
@@ -138,15 +143,19 @@ res0 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 res1 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 res2 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 res3 = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-initial_admm_rollout!(solver,res0,ones(m,N-1)*5);
-initial_admm_rollout!(solver,res1,ones(m,N-1)*5);
-initial_admm_rollout!(solver,res2,ones(m,N-1)*5);
-initial_admm_rollout!(solver,res3,ones(m,N-1)*5);
+initial_admm_rollout!(solver,res0,ones(M,N-1)*5)
+initial_admm_rollout!(solver,res1,ones(M,N-1)*5);
+initial_admm_rollout!(solver,res2,ones(M,N-1)*5);
+initial_admm_rollout!(solver,res3,ones(M,N-1)*5);
 
+ilqr_solve(solver,res0,:m)
 ilqr_solve(solver,res0,:a1)
 ilqr_solve(solver,res0,:a2)
-ilqr_solve(solver,res0,:m)
 to_array(res0.X)
+
+ilqr_solve(solver,res3,:m)
+send_results!(res1,res3,:m);
+send_results!(res2,res3,:m);
 
 ilqr_solve(solver,res1,:a1)
 # send_results!(res2,res1,:a1);
@@ -156,9 +165,6 @@ ilqr_solve(solver,res2,:a2)
 # send_results!(res1,res2,:a2);
 send_results!(res3,res2,:a2);
 
-ilqr_solve(solver,res3,:m)
-send_results!(res1,res3,:m);
-send_results!(res2,res3,:m);
 # send_results!(res1,res3,:a1);
 # send_results!(res2,res3,:a1);
 # send_results!(res1,res3,:a2);
