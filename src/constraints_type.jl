@@ -2,39 +2,47 @@ using BlockArrays, Test, ForwardDiff
 using BenchmarkTools
 
 abstract type ConstraintType end
-# abstract type StageConstraint <: ConstraintType end
-# abstract type TerminalConstraint <: ConstraintType end
 abstract type Equality <: ConstraintType end
 abstract type Inequality <: ConstraintType end
 
 abstract type AbstractConstraint{S<:ConstraintType} end
+
+"$(TYPEDEF) Stage constraint"
 struct Constraint{S} <: AbstractConstraint{S}
     c::Function
     ∇c::Function
     p::Int
     label::Symbol
 end
+"$(TYPEDEF) Create a stage-wise constraint, using ForwardDiff to generate the Jacobian"
 function Constraint{S}(c::Function,n::Int,m::Int,p::Int,label::Symbol) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,m,p)
     Constraint{S}(c,∇c,p,label)
 end
 
+"$(TYPEDEF) Terminal constraint"
 struct TerminalConstraint{S} <: AbstractConstraint{S}
     c::Function
     ∇c::Function
     p::Int
     label::Symbol
 end
+"$(TYPEDEF) Create a terminal constraint, using ForwardDiff to generate the Jacobian"
 function TerminalConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,p)
     TerminalConstraint{S}(c,∇c,p,label)
 end
+"$(TYPEDEF) Convenient constructor for terminal constraints"
 Constraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType = TerminalConstraint(c,n,p,label)
 
-
+"$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
+"$(SIGNATURES) Number of element in constraint function (p)"
 length(C::AbstractConstraint) = C.p
 
+"""$(SIGNATURES) Create a stage bound constraint
+Will default to bounds at infinity. "trim" will remove any bounds at infinity from the constraint function.
+"""
 function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
                                          u_min=ones(m)*-Inf, u_max=ones(m)*Inf, trim::Bool=false)
      # Validate bounds
@@ -76,6 +84,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
      end
  end
 
+"$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x,u)"
 function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
     inds = (x=1:n,u=n .+ (1:m), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)))
     Z = zeros(p,n+m)
@@ -92,6 +101,7 @@ function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
     return ∇f!, f_aug
 end
 
+"$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
     return ∇f!, f!
@@ -102,6 +112,8 @@ ConstraintSet = Vector{<:AbstractConstraint{S} where S}
 StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
 
+"$(SIGNATURES) Count the number of inequality and equality constraints in a constraint set.
+Returns the sizes of the constraint vector, not the number of constraint types."
 function count_constraints(C::ConstraintSet)
     pI = 0
     pE = 0
@@ -115,6 +127,7 @@ function count_constraints(C::ConstraintSet)
     return pI,pE
 end
 
+"$(SIGNATURES) Split a constraint set into sets of inequality and equality constraints"
 function Base.split(C::ConstraintSet)
     E = AbstractConstraint{Equality}[]
     I = AbstractConstraint{Inequality}[]
@@ -128,12 +141,15 @@ function Base.split(C::ConstraintSet)
     return I,E
 end
 
+"$(SIGNATURES) Evaluate the constraint function for all the stage-wise constraint functions in a set"
 function calculate!(c::BlockVector, C::StageConstraintSet, x, u)
     for con in C
         con.c(c[con.label],x,u)
     end
 end
 calculate!(c::BlockVector, C::ConstraintSet, x, u) = calculate!(c,stage(C),x,u)
+
+"$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
 function calculate!(c::BlockVector, C::TerminalConstraintSet, x)
     for con in C
         con.c(c[con.label],x)
@@ -150,140 +166,3 @@ bounds(C::ConstraintSet) = filter(x->x.label==:bound,C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
 BlockArrays.create_partition(C::ConstraintSet) = create_partition(Tuple(length.(C)),Tuple(labels(C)))
 BlockArrays.BlockArray(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
-
-n,m = 3,2
-
-# Custom Equality Constraint
-p1 = 3
-c(v,x,u) = begin v[1]  = x[1]^2 + x[2]^2 - 5; v[2:3] =  u - ones(2,1) end
-jacob_c(x,u) = [2x[1] 2x[2] 0 0 0;
-                0     0     0 1 0;
-                0     0     0 0 1];
-v = zeros(p1)
-x = [1,2,3]
-u = [-5,5]
-c(v,x,u)
-@test v == [0,-6,4]
-
-# Test constraint function
-con = Constraint{Equality}(c,n,m,p1,:custom)
-con.c(v,x,u)
-@test v == [0,-6,4]
-
-# Test constraint jacobian
-A = zeros(p1,n)
-B = zeros(p1,m)
-C = zeros(p1,n+m)
-con.∇c(A,B,v,x,u);
-@test A == jacob_c(x,u)[:,1:n]
-@test B == jacob_c(x,u)[:,n+1:end]
-
-# Joint jacobian function
-con.∇c(C,v,[x;u])
-@test C == jacob_c(x,u)
-
-
-# Custom inequality constraint
-p2 = 2
-c2(v,x,u) = begin v[1] = sin(x[1]); v[2] = sin(x[3]) end
-∇c2(A,B,v,x,u) = begin A[1,1] = cos(x[1]); A[2,3] = cos(x[3]); c2(v,x,u) end
-con2 = Constraint{Inequality}(c2,∇c2,p2,:ineq)
-
-# Bound constraint
-x_max = [5,5,Inf]
-x_min = [-10,-5,0]
-u_max = 0
-u_min = -10
-p3 = 2(n+m)
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
-v = zeros(p3)
-bnd.c(v,x,u)
-@test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
-A = zeros(p3,n)
-B = zeros(p3,m)
-C = zeros(p3,n+m)
-bnd.∇c(A,B,v,x,u)
-@test A == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
-@test B == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
-
-# Trimmed bound constraint
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max,trim=true)
-p3 = 2(n+m)-1
-v = zeros(p3)
-bnd.c(v,x,u)
-@test v == [-4,-3,-5,5,-11,-7,-3,-5,-15]
-
-# Create Constraint Set
-C = [con,con2,bnd]
-@test C isa ConstraintSet
-@test C isa StageConstraintSet
-@test !(C isa TerminalConstraintSet)
-
-@test findall(C,Inequality) == [false,true,true]
-@test split(C) == ([con2,bnd],[con,])
-@test count_constraints(C) == (p2+p3,p1)
-@test inequalities(C) == [con2,bnd]
-@test equalities(C) == [con,]
-@test bounds(C) == [bnd,]
-@test labels(C) == [:custom,:ineq,:bound]
-
-c_part = create_partition(C)
-cs2 = BlockArray(C)
-calculate!(cs2,C,x,u)
-
-obj = LQRObjective(Diagonal(I,n),Diagonal(I,m),Diagonal(I,n),2.,zeros(n),ones(n))
-obj = ConstrainedObjective(obj,u_max=u_max,u_min=u_min,x_max=x_max,x_min=x_min,cI=c2,cE=c)
-cfun, = generate_constraint_functions(obj)
-cs = zeros(obj.p)
-cfun(cs,x,u)
-
-# Test sum since they're ordered differently
-@test sum(cs) == sum(cs2)
-
-@btime calculate!(cs2,C,x,u)
-@btime cfun(cs,x,u)
-
-
-# Terminal Constraint
-cterm(v,x) = begin v[1] = x[1] - 5; v[2] = x[1]*x[2] end
-∇cterm(x) = [1 0 0; x[2] x[1] 0]
-∇cterm(A,x) = copyto!(A,∇cterm(x))
-p_N = 2
-v = zeros(p_N)
-cterm(v,x)
-con_term = TerminalConstraint{Equality}(cterm,∇cterm,p_N,:terminal)
-v2 = zeros(p_N)
-con_term.c(v2,x)
-@test v == v2
-A = zeros(p_N,n)
-con_term.∇c(A,x) == ∇cterm(x)
-
-C_term = [con_term,]
-C2 = [con,con2,bnd,con_term]
-@test C2 isa ConstraintSet
-@test C_term isa TerminalConstraintSet
-
-@test terminal(C2) == C_term
-@test terminal(C_term) == C_term
-@test stage(C2) == C
-@test isempty(terminal(C))
-@test isempty(stage(C_term))
-@test count_constraints(C_term) == (0,p_N)
-@test count_constraints(C2) == (p2+p3,p1+p_N)
-@test split(C2) == ([con2,bnd],[con,con_term])
-@test split(C2) == (inequalities(C2),equalities(C2))
-@test bounds(C2) == [bnd,]
-@test labels(C2) == [:custom,:ineq,:bound,:terminal]
-terminal(C2)
-Vector{Constraint}(stage(C2)) isa StageConstraintSet
-
-v_stage = BlockArray(stage(C2))
-v_term = BlockArray(terminal(C2))
-v_stage2 = BlockArray(stage(C2))
-v_term2 = BlockArray(terminal(C2))
-calculate!(v_stage,C,x,u)
-calculate!(v_term,C_term,x)
-calculate!(v_stage2,C2,x,u)
-calculate!(v_term2,C2,x)
-@test v_stage == v_stage2
-@test v_term == v_term2

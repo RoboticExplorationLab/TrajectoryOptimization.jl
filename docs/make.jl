@@ -5,7 +5,8 @@ using RigidBodyDynamics
 makedocs(
     sitename = "TrajectoryOptimization",
     format = :html,
-    modules = [TrajectoryOptimization]
+    modules = [TrajectoryOptimization],
+    # devbranch = "restructure",
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
