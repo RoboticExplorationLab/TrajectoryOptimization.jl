@@ -425,39 +425,51 @@ function admm_plot3(res,xlim=(-2,12),ylim=(-2.5,2.5),zlim=(-2.5,2.5))
     end
 end
 
-function admm_solve(solver,results,U0)
+function admm_solve(solver,res,U0)
+    copyto!(res.μ, res.μ*solver.opts.penalty_initial)
     J0 = initial_admm_rollout!(solver,res,U0);
     J = Inf
     println("J0 = $J0")
+
+    iter = 0
+    max_c = Float64[]
+    costs = Float64[]
     logger = default_logger(solver)
-    withlogger(logger) do
+    t_start = time_ns()
+    with_logger(logger) do
         for i = 1:solver.opts.iterations_outerloop
             J = ilqr_loop(solver,res)
-            println("iter: $i, J = $J")
-            update_constraints!(res,solver)
+            # update_constraints!(res,solver)
             c_max = max_violation(res)
-            println("c_max: $(c_max)")
             λ_update_default!(res,solver)
             μ_update_default!(res,solver)
 
+            push!(max_c,c_max)
+            push!(costs,J)
             if c_max < solver.opts.constraint_tolerance
                 break
             end
+            iter += 1
         end
     end  # with logger
-    return J
+    stats = Dict("cost"=>costs, "c_max"=>max_c,"iterations"=>iter,"runtime"=>(time_ns()-t_start)/1e9)
+    return stats
 end
 
 function admm_solve_parallel(solver,res,U0)
+    copyto!(res.μ, res.μ*solver.opts.penalty_initial)
     # rollout joint system
     J0 = initial_admm_rollout!(solver,res,U0);
     agents = res.bodies[2:end]
     J = Inf
     c_max = Inf
-    println("J0 = $J0")
 
+    iter = 0
+    max_c = Float64[]
+    costs = Float64[]
+
+    t_start = time_ns()
     res_joint =  NamedTuple{res.bodies}([copy(res) for b in res.bodies]);
-
     for i = 1:solver.opts.iterations_outerloop
 
         # optimize each agent individually
@@ -480,14 +492,15 @@ function admm_solve_parallel(solver,res,U0)
         c_max = max_violation(res_joint[:m])
 
         @logmsg InnerLoop :iter_admm value=i loc=2
-        # println("cost = $J")
-        # println("c_max = $c_max")
+        push!(max_c,c_max)
+        push!(costs,J)
 
         if c_max < solver.opts.constraint_tolerance
             break
         end
     end
-    return res_joint.m, J
+    stats = Dict("cost"=>costs, "c_max"=>max_c,"iterations"=>iter,"runtime"=>(time_ns()-t_start)/1e9)
+    return res_joint.m, stats
 end
 
 function send_results!(res::ADMMResults,res0::ADMMResults,b::Symbol)
@@ -507,6 +520,7 @@ function ilqr_loop(solver::Solver,res::ADMMResults)
     for b in res.bodies
         J = ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
     end
+    # J = ilqr_solve(solver::Solver,res::ADMMResults,:m)
     return J
 end
 
@@ -533,33 +547,35 @@ function ilqr_solve(solver::Solver,res::ADMMResults,b::Symbol)
 
     update_constraints!(res,solver)
     with_logger(logger) do
-    printstyled("Body $b\n" * "-"^10 * "\n",color=:yellow,bold=true)
-    for ii = 1:solver.opts.iterations_innerloop
-        iter_inner = ii
-
-        ### BACKWARD PASS ###
-        update_jacobians!(res, solver)
-        Δv = _backwardpass_admm!(res, solver, b)
-
-        ### FORWARDS PASS ###
-        J = forwardpass!(res, solver, Δv, J0, b)
-        c_max = max_violation(res)
-
-        ### UPDATE RESULTS ###
-        copyto!(X,X_)
-        copyto!(U,U_)
-
-        dJ = copy(abs(J-J0)) # change in cost
-        J0 = copy(J)
-
-        @logmsg InnerLoop :iter value=ii
-        ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
-        print_row(logger,InnerLoop)
-
-        if dJ < solver.opts.cost_tolerance_intermediate
-            break
+        if solver.opts.verbose
+            printstyled("Body $b\n" * "-"^10 * "\n",color=:yellow,bold=true)
         end
-    end
+        for ii = 1:solver.opts.iterations_innerloop
+            iter_inner = ii
+
+            ### BACKWARD PASS ###
+            update_jacobians!(res, solver)
+            Δv = _backwardpass_admm!(res, solver, b)
+
+            ### FORWARDS PASS ###
+            J = forwardpass!(res, solver, Δv, J0, b)
+            c_max = max_violation(res)
+
+            ### UPDATE RESULTS ###
+            copyto!(X,X_)
+            copyto!(U,U_)
+
+            dJ = copy(abs(J-J0)) # change in cost
+            J0 = copy(J)
+
+            @logmsg InnerLoop :iter value=ii
+            ii % 10 == 1 ? print_header(logger,InnerLoop) : nothing
+            print_row(logger,InnerLoop)
+
+            if dJ < solver.opts.cost_tolerance_intermediate
+                break
+            end
+        end
     end # logger
     return J
 end
