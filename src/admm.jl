@@ -381,7 +381,7 @@ function admm_plot2(res)
     Z = to_array(res.X)[part_x.m,:]
     Y1 = to_array(res.X)[part_x.a1,:]
     Y2 = to_array(res.X)[part_x.a2,:]
-    for k = 1:1length(res.X)
+    for k = 1:length(res.X)
         p = plot(xlim=(-2,12),ylim=(-5,5),aspectratio=:equal,label="")
         plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
         plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
@@ -392,6 +392,31 @@ function admm_plot2(res)
 
         display(p)
     end
+end
+
+# plot double agent and mass (2D)
+function admm_plot2_start_end(res)
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    k = 1
+    p = plot(xlim=(-2,12),ylim=(-5,5),aspectratio=:equal,label="")
+    plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+    plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+
+    scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
+    scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
+    scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="")
+
+    k = length(res.X)
+    plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+    plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+
+    scatter!([Z[1,k]],[Z[2,k]],color=:black,label="")
+    scatter!([Y1[1,k]],[Y1[2,k]],color=:green,label="")
+    scatter!([Y2[1,k]],[Y2[2,k]],color=:green,label="",xlabel="x",ylabel="y")
+
+    display(p)
 end
 
 function admm_plot3(res,xlim=(-2,12),ylim=(-2.5,2.5),zlim=(-2.5,2.5))
@@ -424,6 +449,57 @@ function admm_plot3(res,xlim=(-2,12),ylim=(-2.5,2.5),zlim=(-2.5,2.5))
         display(p)
     end
 end
+
+function admm_plot3_start_end(res,xlim=(-2,12),ylim=(-2.5,2.5),zlim=(-2.5,2.5))
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    Y3 = to_array(res.X)[part_x.a3,:]
+
+    k = 1
+    p1 = plot(xlim=xlim,ylim=ylim,aspectratio=:equal,label="")
+    p1 = plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+    p1 = plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+    p1 = plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
+    p1 = scatter!([Z[1,k]],[Z[2,k]],color=:green,label="")
+    p1 = scatter!([Y1[1,k]],[Y1[2,k]],color=:black,label="")
+    p1 = scatter!([Y2[1,k]],[Y2[2,k]],color=:black,label="")
+    p1 = scatter!([Y3[1,k]],[Y3[2,k]],color=:black,label="",xlabel="x",ylabel="y")
+
+    k = length(res.X)
+    p1 = plot!([Z[1,k],Y1[1,k]],[Z[2,k],Y1[2,k]],color=:red,label="")
+    p1 = plot!([Z[1,k],Y2[1,k]],[Z[2,k],Y2[2,k]],color=:red,label="")
+    p1 = plot!([Z[1,k],Y3[1,k]],[Z[2,k],Y3[2,k]],color=:red,label="")
+    p1 = scatter!([Z[1,k]],[Z[2,k]],color=:green,label="")
+    p1 = scatter!([Y1[1,k]],[Y1[2,k]],color=:black,label="")
+    p1 = scatter!([Y2[1,k]],[Y2[2,k]],color=:black,label="")
+    p1 = scatter!([Y3[1,k]],[Y3[2,k]],color=:black,label="",xlabel="x",ylabel="y")
+
+    k = 1
+    p2 = plot(xlim=xlim,ylim=zlim,aspectratio=:equal,label="")
+    p2 = plot!([Z[1,k],Y1[1,k]],[Z[3,k],Y1[3,k]],color=:red,label="")
+    p2 = plot!([Z[1,k],Y2[1,k]],[Z[3,k],Y2[3,k]],color=:red,label="")
+    p2 = plot!([Z[1,k],Y3[1,k]],[Z[3,k],Y3[3,k]],color=:red,label="")
+    p2 = scatter!([Z[1,k]],[Z[3,k]],color=:green,label="")
+    p2 = scatter!([Y1[1,k]],[Y1[3,k]],color=:black,label="")
+    p2 = scatter!([Y2[1,k]],[Y2[3,k]],color=:black,label="")
+    p2 = scatter!([Y3[1,k]],[Y3[3,k]],color=:black,label="",xlabel="x",ylabel="z")
+
+    k = length(res.X)
+    p2 = plot!([Z[1,k],Y1[1,k]],[Z[3,k],Y1[3,k]],color=:red,label="")
+    p2 = plot!([Z[1,k],Y2[1,k]],[Z[3,k],Y2[3,k]],color=:red,label="")
+    p2 = plot!([Z[1,k],Y3[1,k]],[Z[3,k],Y3[3,k]],color=:red,label="")
+    p2 = scatter!([Z[1,k]],[Z[3,k]],color=:green,label="")
+    p2 = scatter!([Y1[1,k]],[Y1[3,k]],color=:black,label="")
+    p2 = scatter!([Y2[1,k]],[Y2[3,k]],color=:black,label="")
+    p2 = scatter!([Y3[1,k]],[Y3[3,k]],color=:black,label="",xlabel="x",ylabel="z")
+
+
+    p = plot(p1,p2,layout=(2,1),aspectratio=:equal)
+
+    display(p)
+end
+
 
 function admm_solve(solver,res,U0)
     copyto!(res.μ, res.μ*solver.opts.penalty_initial)

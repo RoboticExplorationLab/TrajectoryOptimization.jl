@@ -100,19 +100,27 @@ solver.opts.cost_tolerance = 1e-5
 solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
+solver.opts.iterations_outerloop = 100
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = ones(M,N-1)*5
 @time stats = admm_solve(solver,res,U0)
-plot(stats["c_max"],yscale=:log10)
 admm_plot2(res)
+IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"project_examples")
+admm_plot2_start_end(res)
+savefig(joinpath(IMAGE_DIR,"2i_1m_2d.png"))
+
+plot(stats["c_max"],yscale=:log10,label="sequential",xlabel="iterations",ylabel="c_max",title="2 Double Integrators 1 Mass")
+
+
+
 res.λ
 norm(res.U[2][1:2])
 
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
-@time result,stats_p = admm_solve_parallel(solver,res,U0);
-admm_plot2(result)
-plot!(stats_p["c_max"])
-
+@time res,stats_p = admm_solve_parallel(solver,res,U0);
+admm_plot2(res)
+plot!(stats_p["c_max"],label="parallel")
+savefig(joinpath(IMAGE_DIR,"2i_1m_2d_c_max.png"))
 
 
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);

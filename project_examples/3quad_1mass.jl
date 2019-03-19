@@ -169,7 +169,7 @@ solver.opts.cost_tolerance = 1e-5
 solver.opts.cost_tolerance_intermediate = 1e-5
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
-solver.opts.verbose = true
+solver.opts.verbose = false
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
 U0[10:13,:] .= 0.5*9.81/4.0
@@ -199,13 +199,26 @@ solver.opts.penalty_initial = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-2
 solver.opts.iterations_innerloop = 100
 solver.opts.penalty_scaling = 1000
-solver.opts.verbose = true
+solver.opts.verbose = false
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = zeros(model.m,solver.N-1)
 U0[10:13,:] .= 0.5*9.81/4.0
 U0[17:20,:] .= 0.5*9.81/4.0
 U0[24:27,:] .= 0.5*9.81/4.0
-@time admm_solve(solver,res,U0)
+@time stats = admm_solve(solver,res,U0)
+@time res, stats_p = admm_solve_parallel(solver,res,U0);
+
+
+admm_plot3_start_end(res)
+IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"project_examples")
+savefig(joinpath(IMAGE_DIR,"3quad_1m_3d.png"))
+
+plot(stats["c_max"],yscale=:log10,label="sequential",xlabel="iterations",ylabel="c_max",title="2 Double Integrators 1 Mass")
+plot!(stats_p["c_max"],label="parallel")
+savefig(joinpath(IMAGE_DIR,"3quad_1m_3d_c_max.png"))
+
+
+
 J0 = initial_admm_rollout!(solver,res,U0)
 ilqr_solve(solver,res,:a1)
 ilqr_solve(solver,res,:a2)
@@ -309,6 +322,26 @@ function plot_system(res,dt=0.1)
     end
 end
 
+function plot_system_frame(res,i=1)
+    N = length(res.X)
+
+    Z = to_array(res.X)[part_x.m,:]
+    Y1 = to_array(res.X)[part_x.a1,:]
+    Y2 = to_array(res.X)[part_x.a2,:]
+    Y3 = to_array(res.X)[part_x.a3,:]
+
+    # cables
+    settransform!(vis["cable"]["1"], cable_transform(Y1[1:3,i],Z[1:3,i]))
+    settransform!(vis["cable"]["2"], cable_transform(Y2[1:3,i],Z[1:3,i]))
+    settransform!(vis["cable"]["3"], cable_transform(Y3[1:3,i],Z[1:3,i]))
+
+    # agents + load
+    settransform!(vis["agent1"], compose(Translation(Y1[1:3,i]...),LinearMap(Quat(Y1[4:7,i]...))))
+    settransform!(vis["agent2"], compose(Translation(Y2[1:3,i]...),LinearMap(Quat(Y2[4:7,i]...))))
+    settransform!(vis["agent3"], compose(Translation(Y3[1:3,i]...),LinearMap(Quat(Y3[4:7,i]...))))
+    settransform!(vis["mass1"], Translation(Z[1:3,i]...))
+end
+
 function plot_quadrotor(res,name="agent1",dt=0.1)
     N = length(res.X)
     setobject!(vis[name],robot_obj,black_)
@@ -347,3 +380,4 @@ function create_animation(res)
 end
 
 create_animation(res)
+plot_system(res,0.5)

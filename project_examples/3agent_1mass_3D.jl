@@ -146,10 +146,20 @@ solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = rand(model.m,solver.N-1)
-J = admm_solve(solver,res,U0)
-res, J = admm_solve_parallel(solver,res,U0);
+@time stats = admm_solve(solver,res,U0)
+@time res, stats_p = admm_solve_parallel(solver,res,U0);
 
 admm_plot3(res)
+admm_plot3_start_end(res)
+
+IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"project_examples")
+
+savefig(joinpath(IMAGE_DIR,"3i_1m_3d.png"))
+
+plot(stats["c_max"],yscale=:log10,label="sequential",xlabel="iterations",ylabel="c_max",title="2 Double Integrators 1 Mass")
+plot!(stats_p["c_max"],label="parallel")
+savefig(joinpath(IMAGE_DIR,"3i_1m_3d_c_max.png"))
+
 
 # 3D visualization
 using MeshCat
