@@ -27,12 +27,14 @@ ẏ2f = ẏ20
 
 xf = [zf;żf;y1f;ẏ1f;y2f;ẏ2f]
 
-Qa = Diagonal(1e-3I,nb)
-Ra = Diagonal(1e-3I,mb)
-Qfa = Diagonal(1e1I,nb)
-Qm = Diagonal(1e-0I,na2)
-Rm = Diagonal(1e-1I,ma2)
-Qfm = Diagonal(1e3I,na2)
+
+Qm = Diagonal(1e-0I,nb)
+Rm = Diagonal(1e-1I,mb)
+Qfm = Diagonal(1e3I,nb)
+
+Qa = Diagonal(1e-3I,na1)
+Ra = Diagonal(1e-3I,ma1)
+Qfa = Diagonal(1e1I,na1)
 
 d = 1
 
@@ -85,6 +87,17 @@ cost1 = LQRCost(Qm,Rm,Qfm,[zf;żf])
 cost2 = LQRCost(Qa,Ra,Qfa,[y1f;ẏ1f])
 cost3 = LQRCost(Qa,Ra,Qfa,[y2f;ẏ2f])
 
+Qm = Diagonal(1e-0I,nb)
+Rm = Diagonal(1e-1I,mb)
+Qfm = Diagonal(1e3I,nb)
+
+Qa = Diagonal(1e-3I,na1)
+Ra = Diagonal(1e-3I,ma1)
+Qfa = Diagonal(1e1I,na1)
+
+cost_joint = LQRCost(Diagonal([1e-0*ones(nb);1e-3*ones(na1);;1e-3*ones(na1)]),Diagonal([1e-1*ones(mb);1e-3*ones(ma1);;1e-3*ones(ma1)]),Diagonal([1e3*ones(nb);1e1*ones(na1);;1e1*ones(na1)]),xf)
+
+
 costs = NamedTuple{bodies}((cost1,cost2,cost3))
 part_x = create_partition((nb,na1,na2),bodies)
 part_u = create_partition((mb,ma1,ma2),bodies)
@@ -92,19 +105,34 @@ part_u = create_partition((mb,ma1,ma2),bodies)
 acost = ADMMCost(costs,cE,∇cE,3,[:a1],N,M,part_x,part_u)
 obj = UnconstrainedObjective(acost,tf,x0,xf)
 obj = ConstrainedObjective(obj,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
+obj_joint = UnconstrainedObjective(cost_joint,tf,x0,xf)
+obj_joint = ConstrainedObjective(obj_joint,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
+
 p = obj.p
 p_N = obj.p_N
+
+#Joint solve
+solver = Solver(model,obj_joint,integration=:none,dt=0.1)
+solver.opts.cost_tolerance = 1e-5
+solver.opts.cost_tolerance_intermediate = 1e-4
+solver.opts.constraint_tolerance = 1e-4
+solver.opts.penalty_scaling = 2.0
+solver.opts.iterations_outerloop = 30
+U0 = ones(M,N-1)*5
+@time res, stats = solve(solver,U0)
+plot(res.X)
 
 solver = Solver(model,obj,integration=:none,dt=0.1)
 solver.opts.cost_tolerance = 1e-5
 solver.opts.cost_tolerance_intermediate = 1e-4
 solver.opts.constraint_tolerance = 1e-4
 solver.opts.penalty_scaling = 2.0
-solver.opts.iterations_outerloop = 100
+solver.opts.iterations_outerloop = 30
 res = ADMMResults(bodies,ns,ms,p,solver.N,p_N);
 U0 = ones(M,N-1)*5
 @time stats = admm_solve(solver,res,U0)
 admm_plot2(res)
+plot(res.X)
 IMAGE_DIR = joinpath(TrajectoryOptimization.root_dir(),"project_examples")
 admm_plot2_start_end(res)
 savefig(joinpath(IMAGE_DIR,"2i_1m_2d.png"))

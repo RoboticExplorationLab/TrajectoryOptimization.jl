@@ -159,6 +159,10 @@ costs = NamedTuple{bodies}((cost1,cost2,cost3,cost4))
 part_x = create_partition((nb,na1,na2,na3),bodies)
 part_u = create_partition((mb,ma1,ma2,ma3),bodies)
 
+cost_joint = LQRCost(Diagonal([0.01*ones(nb);0.01*ones(na1);0.01*ones(na2);0.01*ones(na3)]),Diagonal([0.000001*ones(mb);0.0001*ones(ma1);0.0001*ones(ma2);0.0001*ones(ma3)]),Diagonal([10000.0*ones(nb);1000.0*ones(na1);1000.0*ones(na2);1000.0*ones(na3)]),xf)
+obj_joint = UnconstrainedObjective(cost_joint,tf,x0,xf)
+obj_joint = ConstrainedObjective(obj_joint,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
+
 acost = ADMMCost(costs,cE,∇cE,4,[:a1],N,M,part_x,part_u)
 obj = UnconstrainedObjective(acost,tf,x0,xf)
 obj = ConstrainedObjective(obj,cE=cE,cE_N=cE,∇cE=∇cE,use_xf_equality_constraint=false)
@@ -194,6 +198,18 @@ res0,stats0 = solve(solver0,U0)
 plot_quadrotor(res0)
 
 # Step by step
+solver = Solver(model,obj_joint,integration=:rk3,N=15)
+solver.opts.penalty_initial = 1e-6
+solver.opts.cost_tolerance_intermediate = 1e-2
+solver.opts.iterations_innerloop = 100
+solver.opts.penalty_scaling = 1000
+solver.opts.verbose = false
+U0 = zeros(model.m,solver.N-1)
+U0[10:13,:] .= 0.5*9.81/4.0
+U0[17:20,:] .= 0.5*9.81/4.0
+U0[24:27,:] .= 0.5*9.81/4.0
+@time res, stats = solve(solver,U0)
+
 solver = Solver(model,obj,integration=:rk3,N=15)
 solver.opts.penalty_initial = 1e-6
 solver.opts.cost_tolerance_intermediate = 1e-2
