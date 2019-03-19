@@ -1,4 +1,4 @@
-using BlockArrays, Test, ForwardDiff
+using PartedArrays, Test, ForwardDiff
 using BenchmarkTools
 
 abstract type ConstraintType end
@@ -147,5 +147,5 @@ inequalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Inequality})
 equalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
 bounds(C::ConstraintSet) = filter(x->x.label==:bound,C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
-BlockArrays.create_partition(C::ConstraintSet) = create_partition(Tuple(length.(C)),Tuple(labels(C)))
-BlockArrays.BlockArray(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
+PartedArrays.create_partition(C::ConstraintSet) = create_partition(Tuple(length.(C)),Tuple(labels(C)))
+PartedArrays.BlockArray(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
