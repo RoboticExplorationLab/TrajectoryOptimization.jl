@@ -22,15 +22,15 @@ dynamics(model,xdot,x,u)
 x,u = rand(n),rand(m)
 z = [x;u]
 ẋ = zeros(n)
-@test_nowarn Z = model.∇f(x,u)
+Z = model.∇f(x,u)
 @test_nowarn model.∇f(Z,x,u)
-@test all(TrajectoryOptimization._test_jacobian(∇f!))
+@test all(TrajectoryOptimization._test_jacobian(Continuous,model.∇f))
 
 # Custom dynamics
-mass_ = 10
-J = Diagonal(I,n)/2
 n = 4
 m = 2
+mass_ = 10
+J = Diagonal(I,n)/2
 function gen_dynamics(mass,J)
     function f2(ẋ,x,u)
         ẋ[1:2] = x[1:2] .^2 .+ u[1]
@@ -102,6 +102,116 @@ model1.f(ẋ2,x,u)
 @test ẋ == ẋ2
 
 
+# Custom discrete dynamics function
+dt = 0.1
+function gen_dynamics(mass,J,dt)
+    function f2(ẋ,x,u,dt=dt)
+        ẋ[1:2] = x[1:2] .^2 .+ u[1]
+        ẋ[3:4] = mass*x[3:4] + u
+        ẋ .+= J*x
+        ẋ .= x + ẋ*dt
+    end
+    function ∇f2(Z,x,u::AbstractVector,dt::Float64=dt)
+        Z[1,1] = (2*x[1] + J[1,1])*dt + 1
+        Z[1,5] = dt
+        Z[2,2] = (2*x[2] + J[2,2])*dt + 1
+        Z[2,5] = dt
+        Z[3,3] = (mass + J[3,3])*dt + 1
+        Z[3,5] = dt
+        Z[4,4] = (mass + J[4,4])*dt + 1
+        Z[4,6] = dt
+    end
+    return f2,∇f2
+end
+fd1,∇fd1 = gen_dynamics(mass_,J,dt)
+
+ẋ = zeros(n)
+ẋ2 = zeros(n)
+x,u = rand(n), rand(m)
+S = zeros(n,n+m+1)
+∇fd1(S,x,u,dt)
+∇fd1!, = generate_jacobian(fd1,n,m)
+@test ∇fd1!(x,u) == S[:,1:n+m]
+
+∇fd1!, = generate_jacobian(Discrete,fd1,n,m)
+∇fd1!(x,u,dt)
+∇fd1!(S,ẋ,x,u,dt)
+model1 = AnalyticalModel{Discrete}(fd1,n,m)
+model2 = AnalyticalModel{Discrete}(fd1,∇fd1,n,m, check_functions=true)
+@test _test_jacobian(Discrete,∇fd1) == [false,true,false]
+@test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
+
+@test model1.∇f(x,u,dt) == S
+@test model1.∇f(x,u,dt)[:,1:6] == model2.∇f(x,u,dt)[:,1:6]
+t_fd = @elapsed model1.∇f(S,x,u,dt)
+t_an = @elapsed model2.∇f(S,x,u,dt)
+@test t_an*1.5 < t_fd
+model1.f(ẋ,x,u)
+model2.f(ẋ2,x,u)
+@test ẋ == ẋ2
+
+
+# Create discrete dynamics from continuous
+f = Dynamics.dubins_dynamics!
+n,m = 3,2
+model = Model(f,n,m)
+discretizer = rk3
+model_d = Model{Discrete}(model,discretizer)
+
+
+# Generate discrete dynamics equations
+f! = model.f
+fd! = discretizer(f!, dt)
+f_aug! = f_augmented!(f!, n, m)
+
+fd_aug! = discretizer(f_aug!)
+nm1 = n + m + 1
+
+In = 1.0*Matrix(I,n,n)
+
+# Initialize discrete and continuous dynamics Jacobians
+Jd = zeros(nm1, nm1)
+Sd = zeros(nm1)
+Sdotd = zero(Sd)
+Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
+Sdotd
+
+function fd_jacobians!(fdx,fdu,x,u)
+
+    # Assign state, control (and dt) to augmented vector
+    Sd[1:n] = x
+    Sd[n+1:n+m] = u[1:m]
+    Sd[end] = √dt
+
+    # Calculate Jacobian
+    Fd!(Jd,Sdotd,Sd)
+
+    fdx[1:n,1:n] = Jd[1:n,1:n]
+    fdu[1:n,1:m] = Jd[1:n,n.+(1:m)]
+end
+
+# Test against previous method
+x,u = rand(n),rand(m)
+ẋ,ẋ2 = zeros(n), zeros(n)
+fdx = zeros(n,n)
+fdu = zeros(n,m)
+
+model_d.f(ẋ,x,u,dt)
+fd!(ẋ2,x,u,dt)
+@test ẋ == ẋ2
+sdot = zeros(nm1)
+fd_aug!(sdot,[x;u;√dt])
+
+solver = Solver(model,Dynamics.dubinscar[2],integration=:rk3,dt=dt)
+
+S = zeros(n,nm1)
+fd_jacobians!(fdx,fdu,x,u)
+@test model_d.∇f(x,u,dt)[:,1:n+m] == [fdx fdu]
+@btime solver.Fd($fdx,$fdu,$x,$u)
+@btime model_d.∇f($S,$x,$u,$dt)
+using InteractiveUtils
+@code_warntype model_d.∇f(S,x,u,dt)
+@code_warntype model_d.f(ẋ,x,u,dt)
 
 ######### Rigid Body Dynamics Model ###############
 acrobot = parse_urdf(Dynamics.urdf_doublependulum)

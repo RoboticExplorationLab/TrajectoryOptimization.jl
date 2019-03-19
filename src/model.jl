@@ -50,7 +50,7 @@ struct AnalyticalModel{D} <:Model{D}
             else
                 f! = wrap_inplace(f)
             end
-            ∇f! = _check_jacobian(f,∇f,n,m)
+            ∇f! = _check_jacobian(D,f,∇f,n,m)
             new{D}(f!,∇f!,n,m,p,evals,d)
         else
             new{D}(f,∇f,n,m,p,evals,d)
@@ -60,14 +60,14 @@ end
 
 function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType
     p = NamedTuple()
-    ∇f, = generate_jacobian(f,n,m)
+    ∇f, = generate_jacobian(D,f,n,m)
     AnalyticalModel{D}(f,∇f,n,m,p,d)
 end
 
 function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType
     f_p(ẋ,x,u) = f(ẋ,x,u,p)
     f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
-    ∇f, = generate_jacobian(f_p,n,m)
+    ∇f, = generate_jacobian(D,f_p,n,m)
     AnalyticalModel{D}(f_p,∇f,n,m,p,d)
 end
 
@@ -236,7 +236,8 @@ end
 
 
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x,u)"
-function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
+generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Continuous,f!,n,m,p)
+function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
     inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
     Z = BlockArray(zeros(p,n+m),inds)
     z = zeros(n+m)
@@ -252,6 +253,7 @@ function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
     ∇f!(Z::AbstractMatrix,x::AbstractVector,u::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
+        @show size(v0), size(z)
         ∇fz(Z,v0,z)
         return nothing
     end
@@ -263,6 +265,45 @@ function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
     end
     return ∇f!, f_aug
 end
+
+function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
+    inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
+    S0 = zeros(n,n+m+1)
+    s = zeros(n+m+1)
+    ẋ0 = zeros(n)
+
+    fd_aug!(xdot,s) = fd!(xdot,view(s,inds.x),view(s,inds.u),s[inds.dt])
+    Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
+    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[inds.dt] = dt
+        Fd!(S,ẋ,s)
+        return nothing
+    end
+    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,dt::Float64) = ∇fd!(S,ẋ0,x,u,dt)
+    ∇fd!(x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+        ∇fd!(S0,ẋ0,x,u,dt)
+        return S0
+    end
+    return ∇fd!, fd_aug!
+end
+
+
+function Model{Discrete}(model::Model{Continuous},discretizer::Function)
+    fd!,∇fd! = discretize(model.f,discretizer,model.n,model.m)
+    AnalyticalModel{Discrete}(fd!,∇fd!,model.n,model.m,model.params,model.info)
+end
+
+function discretize(f::Function,discretizer::Function,n::Int,m::Int)
+    inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
+    dt = 0.1  # TODO: remove this after getting rid of old discretization code
+    fd! = discretizer(f,dt)
+    ∇fd!, = generate_jacobian(Discrete,fd!,n,m)
+    return fd!,∇fd!
+end
+
+
 
 
 """
@@ -309,13 +350,13 @@ function wrap_inplace(f::Function)
 end
 
 """$(SIGNATURES)
-Checks jacobians of functions of the form f(v,x,u) to make sure they have the correct forms.
+Checks jacobians of functions of the form `f(v,x,u)` to make sure they have the correct forms.
 Jacobians should have the following three forms
-∇f(Z,v,z)
-∇f(Z,v,x,u)
-∇f(A,B,v,x,u)
+```∇f(x,u)
+∇f(Z,x,u)
+∇f(Z,v,x,u)```
 """
-function _test_jacobian(∇f::Function)
+function _test_jacobian(::Type{Continuous},∇f::Function)
     form = [true,true,true]
     form[1] = hasmethod(∇f,(AbstractVector,AbstractVector))
     form[2] = hasmethod(∇f,(AbstractMatrix,AbstractVector,AbstractVector))
@@ -323,8 +364,24 @@ function _test_jacobian(∇f::Function)
     return form
 end
 
-function _check_jacobian(f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
-    forms = _test_jacobian(∇f)
+"""$(SIGNATURES)
+Checks jacobians of functions of the form `f(v,x,u,dt)` to make sure they have the correct forms.
+Jacobians should have the following three forms
+```∇f(x,u,dt)
+∇f(S,x,u,dt)
+∇f(S,v,x,u,dt)```
+"""
+function _test_jacobian(::Type{Discrete},∇f::Function)
+    form = [true,true,true]
+    form[1] = hasmethod(∇f,(AbstractVector,AbstractVector,Float64))
+    form[2] = hasmethod(∇f,(AbstractMatrix,AbstractVector,AbstractVector,Float64))
+    form[3] = hasmethod(∇f,(AbstractMatrix,AbstractVector,AbstractVector,AbstractVector,Float64))
+    return form
+end
+
+_check_jacobian(f::Function,∇f::Function,n::Int,m::Int,p::Int=n) = _check_jacobian(Continuous,f,∇f,n,m,p)
+function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
+    forms = _test_jacobian(Continuous,∇f)
     if !forms[2]
         throw("Jacobians must have the method ∇f(Z,x,u)")
     else
@@ -352,6 +409,42 @@ function _check_jacobian(f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
                 u = z[inds.u]
                 f(v,x,u)
                 ∇f!(Z,x,u)
+            end
+        end
+    end
+    return ∇f!
+end
+
+function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
+    forms = _test_jacobian(Discrete,∇f)
+    if !forms[2]
+        throw("Jacobians must have the method ∇f(Z,x,u,dt)")
+    else
+        inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
+        S = BlockArray(zeros(p,n+m+1),inds)
+        s = zeros(n+m+1)
+
+        # Copy the correct method form
+        ∇f!(S,x,u,dt) = ∇f(S,x,u,dt)
+
+        # Implement the missing method(s)
+        if forms[1]
+            ∇f!(x,u,dt) = ∇f(x,u,dt)
+        else
+            ∇f!(x,u,dt) = begin
+                ∇f!(S,x,u,dt)
+                return S
+            end
+        end
+        if forms[3]
+            ∇f!(S,v,x,u,dt) = ∇f(S,v,x,u,dt)
+        else
+            ∇f!(S,v,x,u,dt) = begin
+                x = s[inds.x]
+                u = s[inds.u]
+                dt = s[inds.dt]
+                f(v,x,u,dt)
+                ∇f!(S,x,u,dt)
             end
         end
     end
