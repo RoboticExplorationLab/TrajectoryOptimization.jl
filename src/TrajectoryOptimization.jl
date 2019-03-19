@@ -23,7 +23,7 @@ using Logging
 using Formatting
 using Plots
 using BenchmarkTools
-using BlockArrays
+using PartedArrays
 
 export
     Dynamics
