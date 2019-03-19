@@ -125,20 +125,20 @@ function Base.split(C::ConstraintSet)
 end
 
 "$(SIGNATURES) Evaluate the constraint function for all the stage-wise constraint functions in a set"
-function calculate!(c::BlockVector, C::StageConstraintSet, x, u)
+function evaluate!(c::BlockVector, C::StageConstraintSet, x, u)
     for con in C
         con.c(c[con.label],x,u)
     end
 end
-calculate!(c::BlockVector, C::ConstraintSet, x, u) = calculate!(c,stage(C),x,u)
+evaluate!(c::BlockVector, C::ConstraintSet, x, u) = calculate!(c,stage(C),x,u)
 
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
-function calculate!(c::BlockVector, C::TerminalConstraintSet, x)
+function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
     for con in C
         con.c(c[con.label],x)
     end
 end
-calculate!(c::BlockVector, C::ConstraintSet, x) = calculate!(c,terminal(C),x)
+evaluate!(c::BlockVector, C::ConstraintSet, x) = calculate!(c,terminal(C),x)
 
 labels(C::ConstraintSet) = [c.label for c in C]
 terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))

@@ -52,6 +52,7 @@ end
 f1,∇f1 = gen_dynamics(mass_,J)
 
 ẋ = zeros(n)
+ẋ2 = zeros(n)
 x,u = rand(n), rand(m)
 Z = zeros(n,n+m)
 ∇f1(Z,x,u)
@@ -63,7 +64,9 @@ model2 = Model(f1,∇f1,n,m)
 t_fd = @elapsed model1.∇f(Z,x,u)
 t_an = @elapsed model2.∇f(Z,x,u)
 @test t_an*1.5 < t_fd
-
+model1.f(ẋ,x,u)
+model2.f(ẋ2,x,u)
+@test ẋ == ẋ2
 
 params = (mass=mass_,J=J);
 function f3(ẋ,x,u,p)
@@ -92,6 +95,13 @@ model3 = Model(f3,n,m,params)
 model4 = Model(f3,∇f3,n,m,params)
 @test model3.∇f(x,u) == model4.∇f(x,u)
 @test model1.∇f(x,u) == model3.∇f(x,u)
+model3.f(ẋ,x,u)
+model4.f(ẋ2,x,u)
+@test ẋ == ẋ2
+model1.f(ẋ2,x,u)
+@test ẋ == ẋ2
+
+
 
 ######### Rigid Body Dynamics Model ###############
 acrobot = parse_urdf(Dynamics.urdf_doublependulum)

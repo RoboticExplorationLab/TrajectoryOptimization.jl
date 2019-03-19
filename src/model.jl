@@ -42,7 +42,7 @@ struct AnalyticalModel{D} <:Model{D}
             p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}();
             check_functions::Bool=false) where D<:DynamicsType
         d[:evals] = 0
-        evals = [0,]
+        evals = [0,0]
         if check_functions
             # Make dynamics inplace
             if is_inplace_dynamics(f,n,m)
@@ -58,18 +58,19 @@ struct AnalyticalModel{D} <:Model{D}
     end
 end
 
-function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType
-    f_p(ẋ,x,u) = f(ẋ,x,u,p)
-    ∇f, = generate_jacobian(f_p,n,m)
-    AnalyticalModel{D}(f,∇f,n,m,p,d)
-end
-
 function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType
     p = NamedTuple()
-    f_p(ẋ,x,u) = f(ẋ,x,u,p)
     ∇f, = generate_jacobian(f,n,m)
     AnalyticalModel{D}(f,∇f,n,m,p,d)
 end
+
+function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType
+    f_p(ẋ,x,u) = f(ẋ,x,u,p)
+    f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
+    ∇f, = generate_jacobian(f_p,n,m)
+    AnalyticalModel{D}(f_p,∇f,n,m,p,d)
+end
+
 
 """ $(SIGNATURES)
 Create a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters
@@ -97,11 +98,12 @@ Dynamics functions pass in parameters:
 """
 Model(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
     f_p(ẋ,x,u) = f(ẋ,x,u,p)
+    f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
     ∇f_p(Z,x,u) = ∇f(Z,x,u,p)
     AnalyticalModel{Continuous}(f_p,∇f_p,n,m,p,d, check_functions=true); end
 
 """ $(SIGNATURES)
-Create a dynamics model with an analytical Jacobian, with parameters
+Create a dynamics model with an analytical Jacobian, without parameters
 Dynamics functions pass of the form:
     f(ẋ,x,u)
     ∇f(Z,x,u)
@@ -120,8 +122,39 @@ function add_infeasible_controls(m::Model{D}) where D<:Discrete
 end
 
 
+""" $(SIGNATURES) Evaluate the dynamics at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+function evaluate!(ẋ::AbstractVector,model::Model,x,u)
+    model.f(ẋ,x,u)
+    model.evals[1] += 1
+end
 
+""" $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)
+    model.∇f(Z,ẋ,x,u)
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+""" $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u) = evaluate!(Z,ẋ,model,x,u)
+
+""" $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+function jacobian!(Z::AbstractMatrix,model::Model,x,u)
+    model.∇f(ẋ,x,u)
+    model.evals[2] += 1
+end
+
+""" $(SIGNATURES) Return the number of dynamics evaluations """
 evals(model::Model) = model.evals[1]
+
+""" $(SIGNATURES) Reset the evaluation counts for the model """
 reset(model::Model) = begin model.evals[1] = 0; return nothing end
 
 function dynamics(model::Model,xdot,x,u)
