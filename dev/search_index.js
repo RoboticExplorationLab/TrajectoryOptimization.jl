@@ -41,11 +41,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, n, m, p)\nModel(f, n, m, p, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters Dynamics function of the form:     f(ẋ,x,u)\n\n\n\n\n\n"
+},
+
+{
     "location": "Models/#Continuous-Models-1",
     "page": "Setting up a Dynamics Model",
     "title": "Continuous Models",
     "category": "section",
-    "text": "Continuous models assume differential equations are specified by an in-place function in one of the following forms:f!(ẋ,x,u)\nf!(ẋ,x,u,p)and Jacobians of the form∇f!(Z,x,u)\n∇f!(Z,x,u,p)where ẋ is the state derivative, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)]).The following constructors can be used to create Continuous Analytical modelsModel(::Function,::Int,::Int,::Dict)\nModel(::Function,::Int,::Int,::NamedTuple,::Dict)\nModel(::Function,::Function,::Int,::Int,::Dict)\nModel(::Function,::Function,::Int,::Int,::NamedTuple,::Dict)"
+    "text": "Continuous models assume differential equations are specified by an in-place function in one of the following forms:f!(ẋ,x,u)\nf!(ẋ,x,u,p)and Jacobians of the form∇f!(Z,x,u)\n∇f!(Z,x,u,p)where ẋ is the state derivative, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)]).The following constructors can be used to create Continuous Analytical modelsModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
 },
 
 {
