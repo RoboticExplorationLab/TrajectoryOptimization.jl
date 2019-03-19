@@ -281,9 +281,18 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
         Fd!(S,ẋ,s)
         return nothing
     end
-    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,dt::Float64) = ∇fd!(S,ẋ0,x,u,dt)
+    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[inds.dt] = dt
+        Fd!(S,ẋ0,s)
+        return nothing
+    end
     ∇fd!(x::AbstractVector,u::AbstractVector,dt::Float64) = begin
-        ∇fd!(S0,ẋ0,x,u,dt)
+        s[inds.x] = x
+        s[inds.u] = u
+        s[inds.dt] = dt
+        Fd!(S0,ẋ0,s)
         return S0
     end
     return ∇fd!, fd_aug!

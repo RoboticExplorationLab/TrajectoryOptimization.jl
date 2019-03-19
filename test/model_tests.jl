@@ -133,16 +133,17 @@ S = zeros(n,n+m+1)
 ∇fd1!, = generate_jacobian(fd1,n,m)
 @test ∇fd1!(x,u) == S[:,1:n+m]
 
-∇fd1!, = generate_jacobian(Discrete,fd1,n,m)
+∇fd1!,fd1_aug! = generate_jacobian(Discrete,fd1,n,m)
 ∇fd1!(x,u,dt)
-∇fd1!(S,ẋ,x,u,dt)
 model1 = AnalyticalModel{Discrete}(fd1,n,m)
 model2 = AnalyticalModel{Discrete}(fd1,∇fd1,n,m, check_functions=true)
 @test _test_jacobian(Discrete,∇fd1) == [false,true,false]
 @test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
 
+@test model1.∇f(x,u,dt)[:,1:6] == S[:,1:6]
+model2.∇f(S,x,u,dt)
 @test model1.∇f(x,u,dt) == S
-@test model1.∇f(x,u,dt)[:,1:6] == model2.∇f(x,u,dt)[:,1:6]
+model1.∇f(S,zeros(n),x,u,dt)
 t_fd = @elapsed model1.∇f(S,x,u,dt)
 t_an = @elapsed model2.∇f(S,x,u,dt)
 @test t_an*1.5 < t_fd
@@ -150,6 +151,8 @@ model1.f(ẋ,x,u)
 model2.f(ẋ2,x,u)
 @test ẋ == ẋ2
 
+@inferred model1.∇f(S,x,u,dt)
+@inferred model2.∇f(S,x,u,dt)
 
 # Create discrete dynamics from continuous
 f = Dynamics.dubins_dynamics!
@@ -163,10 +166,8 @@ model_d = Model{Discrete}(model,discretizer)
 f! = model.f
 fd! = discretizer(f!, dt)
 f_aug! = f_augmented!(f!, n, m)
-
 fd_aug! = discretizer(f_aug!)
 nm1 = n + m + 1
-
 In = 1.0*Matrix(I,n,n)
 
 # Initialize discrete and continuous dynamics Jacobians
@@ -199,19 +200,17 @@ fdu = zeros(n,m)
 model_d.f(ẋ,x,u,dt)
 fd!(ẋ2,x,u,dt)
 @test ẋ == ẋ2
-sdot = zeros(nm1)
-fd_aug!(sdot,[x;u;√dt])
-
 solver = Solver(model,Dynamics.dubinscar[2],integration=:rk3,dt=dt)
 
 S = zeros(n,nm1)
 fd_jacobians!(fdx,fdu,x,u)
 @test model_d.∇f(x,u,dt)[:,1:n+m] == [fdx fdu]
-@btime solver.Fd($fdx,$fdu,$x,$u)
-@btime model_d.∇f($S,$x,$u,$dt)
-using InteractiveUtils
-@code_warntype model_d.∇f(S,x,u,dt)
-@code_warntype model_d.f(ẋ,x,u,dt)
+t_0 = @elapsed fd_jacobians!(fdx,fdu,x,u)
+t_1 = @elapsed model_d.∇f(S,x,u,dt)
+@test t_1*1.5 < t_0
+
+@inferred model_d.f(ẋ,x,u,dt)
+@inferred model_d.∇f(S,x,u,dt)
 
 ######### Rigid Body Dynamics Model ###############
 acrobot = parse_urdf(Dynamics.urdf_doublependulum)
