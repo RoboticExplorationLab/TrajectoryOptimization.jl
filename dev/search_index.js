@@ -109,7 +109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "Analytical",
     "category": "section",
-    "text": "An analytical model with discrete dynamics can be created using the following constructorsAnalyticalModel{D}(f::Function, ∇f::Function, n::Int64, m::Int64,\n          p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}() where D<:DynamicsType\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where D<:DynamicsType"
+    "text": "An analytical model with discrete dynamics can be created using the following constructorsAnalyticalModel{D}(f::Function, ∇f::Function, n::Int64, m::Int64,\n          p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}()\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
 },
 
 {
