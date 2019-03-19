@@ -298,7 +298,19 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
     return ∇fd!, fd_aug!
 end
 
-
+"""$(SIGNATURES)
+Convert a continuous dynamics model into a discrete one using the given discretization function.
+    The discretization function can either be one of the currently supported functions (midpoint, rk3, rk4) or a custom method that has the following form
+    ```
+    function discretizer(f::Function,dt::Float64)
+        function fd!(xdot,x,u,dt)
+            # Your code
+            return nothing
+        end
+        return fd!
+    end
+    ```
+"""
 function Model{Discrete}(model::Model{Continuous},discretizer::Function)
     fd!,∇fd! = discretize(model.f,discretizer,model.n,model.m)
     AnalyticalModel{Discrete}(fd!,∇fd!,model.n,model.m,model.params,model.info)

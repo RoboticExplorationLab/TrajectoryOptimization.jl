@@ -4,7 +4,7 @@ using RigidBodyDynamics
 
 makedocs(
     sitename = "TrajectoryOptimization",
-    format = :html,
+    format = Documenter.HTML(),
     modules = [TrajectoryOptimization],
     devbranch = "restructure",
 )

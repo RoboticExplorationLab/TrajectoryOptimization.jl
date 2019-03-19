@@ -1,5 +1,6 @@
 using PartedArrays, Test, ForwardDiff
 using BenchmarkTools
+using DocStringExtensions
 
 abstract type ConstraintType end
 abstract type Equality <: ConstraintType end
