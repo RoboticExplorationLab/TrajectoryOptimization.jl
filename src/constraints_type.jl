@@ -84,23 +84,6 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
      end
  end
 
-"$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x,u)"
-function generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n)
-    inds = (x=1:n,u=n .+ (1:m), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)))
-    Z = zeros(p,n+m)
-    z = zeros(n+m)
-    f_aug(dZ::AbstractVector,Z::AbstractVector) = f!(dZ,view(Z,inds.x), view(Z,inds.u))
-    ∇f!(Z,v,z) = ForwardDiff.jacobian!(Z,f_aug,v,z)
-    ∇f!(A,B,v,x,u) = begin
-        z[inds.x] = x
-        z[inds.u] = u
-        ∇f!(Z,v,z)
-        copyto!(A,Z[inds.xx...])
-        copyto!(B,Z[inds.xu...])
-    end
-    return ∇f!, f_aug
-end
-
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
