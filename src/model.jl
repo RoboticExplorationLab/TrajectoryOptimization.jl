@@ -125,31 +125,47 @@ end
 """ $(SIGNATURES) Evaluate the dynamics at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function evaluate!(ẋ::AbstractVector,model::Model,x,u)
+function evaluate!(ẋ::AbstractVector,model::Model{Continuous},x,u)
     model.f(ẋ,x,u)
+    model.evals[1] += 1
+end
+function evaluate!(ẋ::AbstractVector,model::Model{Discrete},x,u,dt)
+    model.f(ẋ,x,u,dt)
     model.evals[1] += 1
 end
 
 """ $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Continuous},x,u)
     model.∇f(Z,ẋ,x,u)
     model.evals[1] += 1
     model.evals[2] += 1
 end
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Discrete},x,u,dt)
+    model.∇f(Z,ẋ,x,u,dt)
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+
 """ $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u) = evaluate!(Z,ẋ,model,x,u)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Continuous},x,u) = evaluate!(Z,ẋ,model,x,u)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Discrete},x,u,dt) = evaluate!(Z,ẋ,model,x,u,dt)
 
 """ $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function jacobian!(Z::AbstractMatrix,model::Model,x,u)
-    model.∇f(ẋ,x,u)
+function jacobian!(Z::AbstractMatrix,model::Model{Continuous},x,u)
+    model.∇f(Z,x,u)
     model.evals[2] += 1
 end
+function jacobian!(Z::AbstractMatrix,model::Model{Discrete},x,u,dt)
+    model.∇f(Z,x,u,dt)
+    model.evals[2] += 1
+end
+
 
 """ $(SIGNATURES) Return the number of dynamics evaluations """
 evals(model::Model) = model.evals[1]
