@@ -39,7 +39,7 @@ Constraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType =
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
 "$(SIGNATURES) Number of element in constraint function (p)"
-length(C::AbstractConstraint) = C.p
+Base.length(C::AbstractConstraint) = C.p
 
 """$(SIGNATURES) Create a stage bound constraint
 Will default to bounds at infinity. "trim" will remove any bounds at infinity from the constraint function.
@@ -70,7 +70,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
              v[inds.u_min] = (u_min - u)[active.u_min]
          end
          active_all = vcat(values(active)...)
-         ∇c_trim(A,B,v,x,u) = begin copyto!(A,jac_A[active_all,:]); copyto!(B,jac_B[active_all,:]); bound_trim(v,x,u) end
+         ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
          Constraint{Inequality}(bound_trim,∇c_trim,count(active_all),:bound)
      else
          # Generate function
@@ -80,7 +80,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
              v[inds.x_min] = x_min - x
              v[inds.u_min] = u_min - u
          end
-         ∇c(A,B,v,x,u) = begin copyto!(A,jac_A); copyto!(B,jac_B); bound_all(v,x,u); return jac_A, jac_B end
+         ∇c(C,x,u) = copyto!(C,jac_bnd)
          Constraint{Inequality}(bound_all,∇c,2(n+m),:bound)
      end
  end
@@ -131,7 +131,7 @@ function evaluate!(c::BlockVector, C::StageConstraintSet, x, u)
         con.c(c[con.label],x,u)
     end
 end
-evaluate!(c::BlockVector, C::ConstraintSet, x, u) = calculate!(c,stage(C),x,u)
+evaluate!(c::BlockVector, C::ConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
 
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
 function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
@@ -139,8 +139,9 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
         con.c(c[con.label],x)
     end
 end
-evaluate!(c::BlockVector, C::ConstraintSet, x) = calculate!(c,terminal(C),x)
+evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
 
+RigidBodyDynamics.num_constraints(C::ConstraintSet) = sum(length.(C))
 labels(C::ConstraintSet) = [c.label for c in C]
 terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))
 stage(C::ConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
@@ -148,5 +149,17 @@ inequalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Inequality})
 equalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
 bounds(C::ConstraintSet) = filter(x->x.label==:bound,C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
-PartedArrays.create_partition(C::ConstraintSet) = create_partition(Tuple(length.(C)),Tuple(labels(C)))
+function PartedArrays.create_partition(C::ConstraintSet)
+    lens = length.(C)
+    part = create_partition(Tuple(lens),Tuple(labels(C)))
+    ineq = BlockArray(trues(sum(lens)),part)
+    for c in C
+        if type(c) == Equality
+            copyto!(ineq[c.label], falses(length(c)))
+        end
+    end
+    part_IE = (inequality=LinearIndices(ineq)[ineq],equality=LinearIndices(ineq)[.!ineq])
+    return merge(part,part_IE)
+end
 PartedArrays.BlockArray(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
+PartedArrays.BlockArray(T::Type,C::ConstraintSet) = BlockArray(zeros(T,sum(length.(C))), create_partition(C))

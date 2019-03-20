@@ -12,13 +12,10 @@ import Base: isempty,copy,getindex,setindex!,firstindex,lastindex,copyto!,length
 #                                      UnconstrainedResults    ConstrainedResults
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Trajectory Types
-Trajectory = Vector{T} where T <: AbstractArray
-TrajectoryVectors = Vector{Vector{T}} where T <: Real
-TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
-TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
-
-"$(TYPEDEF) Abstract type for the backward pass expansion terms"
+"""
+$(TYPEDEF)
+    Abstract type for the backward pass expansion terms
+"""
 abstract type AbstractBackwardPass end
 
 struct BackwardPass <: AbstractBackwardPass

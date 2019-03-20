@@ -142,7 +142,7 @@ model2 = AnalyticalModel{Discrete}(fd1,∇fd1,n,m, check_functions=true)
 
 @test model1.∇f(x,u,dt)[:,1:6] == S[:,1:6]
 model2.∇f(S,x,u,dt)
-@test model1.∇f(x,u,dt) == S
+@test model1.∇f(x,u,dt)[:,1:n+m] == S[:,1:n+m]
 model1.∇f(S,zeros(n),x,u,dt)
 t_fd = @elapsed model1.∇f(S,x,u,dt)
 t_an = @elapsed model2.∇f(S,x,u,dt)
@@ -194,8 +194,6 @@ end
 # Test against previous method
 x,u = rand(n),rand(m)
 ẋ,ẋ2 = zeros(n), zeros(n)
-fdx = zeros(n,n)
-fdu = zeros(n,m)
 
 model_d.f(ẋ,x,u,dt)
 fd!(ẋ2,x,u,dt)
@@ -211,6 +209,12 @@ t_1 = @elapsed model_d.∇f(S,x,u,dt)
 
 @inferred model_d.f(ẋ,x,u,dt)
 @inferred model_d.∇f(S,x,u,dt)
+
+S2 = zero(S)
+jacobian!(S2,model_d,x,u,dt)
+evaluate!(ẋ2,model_d,x,u,dt)
+@test ẋ == ẋ2
+@test S2 == S
 
 ######### Rigid Body Dynamics Model ###############
 acrobot = parse_urdf(Dynamics.urdf_doublependulum)
