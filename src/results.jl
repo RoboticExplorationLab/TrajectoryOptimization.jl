@@ -30,9 +30,9 @@ struct BackwardPass <: AbstractBackwardPass
 end
 
 function BackwardPass(n::Int,m::Int,N::Int)
-    Qx = [zeros(n) for i = 1:N]
+    Qx = [zeros(n) for i = 1:N-1]
     Qu = [zeros(m) for i = 1:N-1]
-    Qxx = [zeros(n,n) for i = 1:N]
+    Qxx = [zeros(n,n) for i = 1:N-1]
     Qux = [zeros(m,n) for i = 1:N-1]
     Quu = [zeros(m,m) for i = 1:N-1]
 
@@ -44,6 +44,14 @@ end
 
 function copy(bp::BackwardPass)
     BackwardPass(deepcopy(bp.Qx),deepcopy(bp.Qu),deepcopy(bp.Qxx),deepcopy(bp.Qux),deepcopy(bp.Quu),deepcopy(bp.Qux_reg),deepcopy(bp.Quu_reg))
+end
+
+function reset(bp::BackwardPass)
+    N_ = length(bp.Qx)
+    for k = 1:N-1
+        Qx[k] = zero(Qx[k]); Qu[k] = zero(Qu[k]); Qxx[k] = zero(Qxx[k]); Quu[k] = zero(Quu[k]); Qux[k] = zero(Qux[k])
+        Quu_reg[k] = zero(Quu_reg[k]); Qux_reg[k] = zero(Qux_reg[k])
+    end
 end
 
 """
