@@ -77,10 +77,11 @@ export
     reset_evals
 
 # Trajectory Types
-Trajectory = Vector{T} where T <: AbstractArray
-TrajectoryVectors = Vector{Vector{T}} where T <: Real
-TrajectoryMatrices = Vector{Matrix{T}} where T <: Real
-TrajectoryDiagonals = Vector{Diagonal{Vector{T}}} where T <: Real
+Trajectory{T} = Vector{T} where T <: AbstractArray
+VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
+MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
+DiagonalTrajectory{T} = Vector{Diagonal{Vector{T}}} where T <: Real
+
 
 include("constraints_type.jl")
 include("cost.jl")

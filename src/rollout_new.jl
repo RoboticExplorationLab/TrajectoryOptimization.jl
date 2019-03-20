@@ -30,7 +30,7 @@ function rollout!(p::Problem)
         for k = 1:N
             push!(X,zeros(p.model.n))
         end
-    else
+
         X[1] = p.x0
         for k = 1:N-1
             p.model.f(X[k+1], X[k], U[k])

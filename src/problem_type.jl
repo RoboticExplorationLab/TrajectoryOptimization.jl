@@ -1,38 +1,45 @@
-abstract type AbstractProblem end
-
 "$(TYPEDEF) Trajectory Optimization Problem"
-struct Problem <: AbstractProblem
+struct Problem{T<:AbstractFloat}
     model::Model
     cost::CostFunction
     constraints::ConstraintSet
-    x0::Vector
-    X::Trajectory
-    U::Trajectory
-    N::Int64
-    dt::Float64
+    x0::Vector{T}
+    X::VectorTrajectory{T}
+    U::VectorTrajectory{T}
+    N::Int
+    dt::T
 end
 
-Problem(model::Model,cost::CostFunction) = Problem(model,cost,
+Problem(model::Model,cost::CostFunction) = Problem{Float64}(model,cost,
     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
-Problem(model::Model,cost::CostFunction,U::Trajectory,x0::Vector) = Problem(model,
+
+Problem(T::Type,model::Model,cost::CostFunction) = Problem{T}(model,cost,
+    AbstractConstraint[],[],Vector[],Vector[],0,0.0)
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T}) where T = Problem{T}(model,
     cost,AbstractConstraint[],x0,Vector[],U,length(U)+1,0.0)
-Problem(model::Model,cost::CostFunction,x0::Vector,U::Trajectory,N::Int,dt::Float64) = Problem(model,
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
     cost,AbstractConstraint[],x0,Vector[],U,N,dt)
-Problem(model::Model,cost::CostFunction,x0::Vector,X::Trajectory,U::Trajectory) = Problem(
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T = Problem{T}(
     model,cost,AbstractConstraint[],x0,X,U,length(X),0.0)
-Problem(model::Model,cost::CostFunction,x0::Vector,U::Matrix) = Problem(model,cost,
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T}) where T = Problem{T}(model,cost,
     AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],size(U,2)+1,0.0)
-Problem(model::Model,cost::CostFunction,x0::Vector,U::Matrix,N::Int,dt::Float64) = Problem(model,cost,
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},N::Int,dt::T) where T = Problem{T}(model,cost,
     AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],N,dt)
-Problem(model::Model,cost::CostFunction,x0::Vector,X::Matrix,U::Matrix) = Problem(
+
+Problem(model::Model,cost::CostFunction,x0::Vector{T},X::Matrix{T},U::Matrix{T}) where T = Problem{T}(
     model,cost,AbstractConstraint[],x0,[X[:,k] for k = 1:size(X,2)],
     [U[:,k] for k = 1:size(U,2)],size(X,2),0.0)
 
 function update_problem(p::Problem;
-    model=p.model,cost=p.cost,constraints=p.constraints,X=p.X,U=p.U,
+    model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
     N=p.N,dt=p.dt)
 
-    Problem(model,cost,constraints,X,U,N,dt)
+    Problem(model,cost,constraints,x0,X,U,N,dt)
 end
 
 function add_constraints!(p::Problem,c::Constraint)
@@ -94,17 +101,18 @@ R = 1e-3*Diagonal(I,m)
 tf = 5.
 costfun = LQRCost(Q,R,Qf,xf)
 cc = copy(costfun)
-check_problem(p1)
+# check_problem(p1)
+model
 p1 = Problem(model,costfun)
-p2 = Problem(model,costfun,[rand(m) for k = 1:10])
-p3 = Problem(model,costfun,[rand(n) for k = 1:11],[rand(m) for k = 1:10])
+p2 = Problem(model,costfun,rand(n),[rand(m) for k = 1:10])
+p3 = Problem(model,costfun,rand(n),[rand(n) for k = 1:11],[rand(m) for k = 1:10])
 p4 = update_problem(p3,dt=0.1)
 add_constraints!(p3,con)
 p3
 add_constraints!(p4,con)
 p4
 aa = [p4.constraints...,C...]
-
+count_constraints(p3.constraints)
 n,m = 3,2
 aa = [[]]
 aa == [[]]
@@ -174,4 +182,12 @@ C = [con,con2,bnd]
 [C,C]
 @test C isa ConstraintSet
 append!(C,C)
+C
+
+num_stage_constraints(C)
+num_terminal_constraints(C)
+num_constraints(C)
+stage(C)
+terminal(C)
+
 C

@@ -1,6 +1,6 @@
-abstract type Solver end
+abstract type SolverNew end
 
-struct iLQRSolver <: Solver
+struct iLQRSolver <: SolverNew
     # Options
     cost_tolerance::Float64 # dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve
     cost_tolerance_intermediate::Float64 # dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve
@@ -29,7 +29,7 @@ struct iLQRSolver <: Solver
 
 end
 
-struct ALSolver <: Solver
+struct ALSolver <: SolverNew
     constraint_tolerance::Float64 # max(constraint) < ϵ, constraint convergence criteria
     constraint_tolerance_intermediate::Float64 # max(constraint) < ϵ_int, intermediate constraint convergence criteria
 
@@ -52,7 +52,7 @@ struct ALSolver <: Solver
 
 end
 
-struct ALTROSolver <: Solver
+struct ALTROSolver <: SolverNew
     ######################
     ## Infeasible Start ##
     ######################
