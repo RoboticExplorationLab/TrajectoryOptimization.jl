@@ -11,7 +11,6 @@ pI = 2
 pI_N = 0
 
 model, obj = Dynamics.dubinscar
-obj.tf = 3
 count_inplace_output(cI,n,m)
 obj_con = ConstrainedObjective(obj,cE=cE,cI=cI)
 @test obj_con.p == pE + pI
@@ -101,15 +100,9 @@ con.c(v,x,u)
 @test v == [0,-6,4]
 
 # Test constraint jacobian
-A = zeros(p1,n)
-B = zeros(p1,m)
 C = zeros(p1,n+m)
-con.∇c(A,B,v,x,u);
-@test A == jacob_c(x,u)[:,1:n]
-@test B == jacob_c(x,u)[:,n+1:end]
-
-# Joint jacobian function
-con.∇c(C,v,[x;u])
+con.∇c(C,x,u);
+@test con.∇c(x,u) == jacob_c(x,u)
 @test C == jacob_c(x,u)
 
 
@@ -129,12 +122,10 @@ bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
 v = zeros(p3)
 bnd.c(v,x,u)
 @test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
-A = zeros(p3,n)
-B = zeros(p3,m)
-C = zeros(p3,n+m)
-bnd.∇c(A,B,v,x,u)
-@test A == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
-@test B == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
+C = BlockArray(zeros(p3,n+m),create_partition2((p3,),(n,m),(:x,),(:x,:u)))
+bnd.∇c(C,x,u)
+@test C.xx == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
+@test C.xu == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
 
 # Trimmed bound constraint
 bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max,trim=true)
@@ -159,7 +150,7 @@ C = [con,con2,bnd]
 
 c_part = create_partition(C)
 cs2 = BlockArray(C)
-calculate!(cs2,C,x,u)
+evaluate!(cs2,C,x,u)
 
 obj = LQRObjective(Diagonal(I,n),Diagonal(I,m),Diagonal(I,n),2.,zeros(n),ones(n))
 obj = ConstrainedObjective(obj,u_max=u_max,u_min=u_min,x_max=x_max,x_min=x_min,cI=c2,cE=c)
@@ -170,8 +161,8 @@ cfun(cs,x,u)
 # Test sum since they're ordered differently
 @test sum(cs) == sum(cs2)
 
-@btime calculate!(cs2,C,x,u)
-@btime cfun(cs,x,u)
+# @btime evaluate!(cs2,C,x,u)
+# @btime cfun(cs,x,u)
 
 
 # Terminal Constraint
@@ -205,15 +196,40 @@ C2 = [con,con2,bnd,con_term]
 @test bounds(C2) == [bnd,]
 @test labels(C2) == [:custom,:ineq,:bound,:terminal]
 terminal(C2)
-Vector{Constraint}(stage(C2)) isa StageConstraintSet
+@test Vector{Constraint}(stage(C2)) isa StageConstraintSet
 
 v_stage = BlockArray(stage(C2))
 v_term = BlockArray(terminal(C2))
 v_stage2 = BlockArray(stage(C2))
 v_term2 = BlockArray(terminal(C2))
-calculate!(v_stage,C,x,u)
-calculate!(v_term,C_term,x)
-calculate!(v_stage2,C2,x,u)
-calculate!(v_term2,C2,x)
+evaluate!(v_stage,C,x,u)
+evaluate!(v_term,C_term,x)
+evaluate!(v_stage2,C2,x,u)
+evaluate!(v_term2,C2,x)
 @test v_stage == v_stage2
 @test v_term == v_term2
+
+
+N = 21
+p = num_constraints(C2)
+c_part = create_partition(C2)
+λ = [BlockArray(zeros(p),c_part) for k = 1:N]
+μ = [BlockArray(ones(p),c_part) for k = 1:N]
+a = [BlockArray(trues(p),c_part) for k = 1:N]
+cval = [BlockArray(zeros(p),c_part) for k = 1:N]
+Iμ = [BlockArray(zeros(p),c_part) for k = 1:N]
+X = to_dvecs(rand(n,N))
+U = to_dvecs(rand(m,N-1))
+update_constraints!(cval,C2,X,U)
+active_set!(a,cval,λ)
+update_Iμ!(Iμ,a,μ)
+
+constraint_cost(cval,λ,μ,a,Iμ)
+constraint_cost(cval,λ,μ,a)
+@btime constraint_cost($cval,$λ,$μ,$a,$Iμ)
+@btime constraint_cost($cval,$λ,$μ,$a)
+# @btime active_set!($a,$v_stage,$λ,$C)
+@code_warntype inequality_active!(a,v_stage,λ)
+using InteractiveUtils
+
+a.equality .= true
