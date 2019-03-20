@@ -10,7 +10,6 @@ module TrajectoryOptimization
 
 using RigidBodyDynamics
 using ForwardDiff
-using JuMP
 using DocStringExtensions
 using Interpolations
 using RecipesBase

@@ -5,6 +5,7 @@ struct Problem <: AbstractProblem
     model::Model
     cost::CostFunction
     constraints::ConstraintSet
+    x0::Vector
     X::Trajectory
     U::Trajectory
     N::Int64
@@ -12,20 +13,20 @@ struct Problem <: AbstractProblem
 end
 
 Problem(model::Model,cost::CostFunction) = Problem(model,cost,
-    AbstractConstraint[],[[]],[[]],0,0.0)
-Problem(model::Model,cost::CostFunction,U::Trajectory) = Problem(model,
-    cost,AbstractConstraint[],[[]],U,length(U)+1,0.0)
-Problem(model::Model,cost::CostFunction,U::Trajectory,N::Int,dt::Float64) = Problem(model,
-    cost,AbstractConstraint[],[[]],U,N,dt)
-Problem(model::Model,cost::CostFunction,X::Trajectory,U::Trajectory) = Problem(
-    model,cost,AbstractConstraint[],X,U,length(X),0.0)
-Problem(model::Model,cost::CostFunction,U::Array) = Problem(model,cost,
-    AbstractConstraint[],[[]],[U[:,k] for k = 1:length(U)],length(U)+1,0.0)
-Problem(model::Model,cost::CostFunction,U::Array,N::Int,dt::Float64) = Problem(model,cost,
-    AbstractConstraint[],[[]],[U[:,k] for k = 1:length(U)],N,dt)
-Problem(model::Model,cost::CostFunction,X::Array,U::Array) = Problem(
-    model,cost,AbstractConstraint[],[X[:,k] for k = 1:length(X)],
-    [U[:,k] for k = 1:length(U)],length(X),0.0)
+    AbstractConstraint[],[],Vector[],Vector[],0,0.0)
+Problem(model::Model,cost::CostFunction,U::Trajectory,x0::Vector) = Problem(model,
+    cost,AbstractConstraint[],x0,Vector[],U,length(U)+1,0.0)
+Problem(model::Model,cost::CostFunction,x0::Vector,U::Trajectory,N::Int,dt::Float64) = Problem(model,
+    cost,AbstractConstraint[],x0,Vector[],U,N,dt)
+Problem(model::Model,cost::CostFunction,x0::Vector,X::Trajectory,U::Trajectory) = Problem(
+    model,cost,AbstractConstraint[],x0,X,U,length(X),0.0)
+Problem(model::Model,cost::CostFunction,x0::Vector,U::Matrix) = Problem(model,cost,
+    AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],size(U,2)+1,0.0)
+Problem(model::Model,cost::CostFunction,x0::Vector,U::Matrix,N::Int,dt::Float64) = Problem(model,cost,
+    AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],N,dt)
+Problem(model::Model,cost::CostFunction,x0::Vector,X::Matrix,U::Matrix) = Problem(
+    model,cost,AbstractConstraint[],x0,[X[:,k] for k = 1:size(X,2)],
+    [U[:,k] for k = 1:size(U,2)],size(X,2),0.0)
 
 function update_problem(p::Problem;
     model=p.model,cost=p.cost,constraints=p.constraints,X=p.X,U=p.U,
