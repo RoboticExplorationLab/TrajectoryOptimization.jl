@@ -22,7 +22,7 @@ dynamics(model,xdot,x,u)
 x,u = rand(n),rand(m)
 z = [x;u]
 ẋ = zeros(n)
-Z = model.∇f(x,u)
+Z = BlockMatrix(model)
 @test_nowarn model.∇f(Z,x,u)
 @test all(TrajectoryOptimization._test_jacobian(Continuous,model.∇f))
 
@@ -161,6 +161,30 @@ model = Model(f,n,m)
 discretizer = rk3
 model_d = Model{Discrete}(model,discretizer)
 
+# Test partitioning
+Z = BlockMatrix(model)
+@test size(Z) == (n,n+m)
+@test size(Z.xx) == (n,n)
+@test size(Z.xu) == (n,m)
+Z = BlockMatrix(Int,model)
+@test Z isa BlockMatrix{Int,Matrix{Int}}
+
+S = BlockMatrix(model_d)
+@test size(S) == (n,n+m+1)
+@test size(S.xx) == (n,n)
+@test size(S.xu) == (n,m)
+@test size(S.xdt) == (n,1)
+S = BlockMatrix(Int,model_d)
+@test size(S) == (n,n+m+1)
+@test size(S.xx) == (n,n)
+@test size(S.xu) == (n,m)
+@test size(S.xdt) == (n,1)
+@test S isa BlockMatrix{Int,Matrix{Int}}
+
+z = BlockVector(model)
+@test length(z) == n+m
+s = BlockVector(model_d)
+@test length(s) == n+m+1
 
 # Generate discrete dynamics equations
 f! = model.f
