@@ -23,6 +23,7 @@ using Formatting
 using Plots
 using BenchmarkTools
 using PartedArrays
+using Parameters
 
 export
     Dynamics
