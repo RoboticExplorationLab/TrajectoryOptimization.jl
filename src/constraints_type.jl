@@ -175,11 +175,18 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
 end
 evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
 
-function jacobian!(Z,C::ConstraintSet,x,u)
+function jacobian!(Z,C::StageConstraintSet,x,u)
     for con in C
         con.∇c(Z[con.label],x,u)
     end
 end
+jacobian!(Z,C::ConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
+function jacobian!(Z,C::TerminalConstraintSet,x)
+    for con in C
+        con.∇c(Z[con.label],x)
+    end
+end
+jacobian!(Z,C::ConstraintSet,x) = jacobian!(Z,terminal(C),x)
 
 RigidBodyDynamics.num_constraints(C::ConstraintSet) = sum(length.(C))
 labels(C::ConstraintSet) = [c.label for c in C]
