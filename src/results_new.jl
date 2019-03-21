@@ -48,7 +48,7 @@ struct iLQRResults{T} <: Results{T}
     S::MatrixTrajectory{T}  # Cost-to-go Hessian (n,n,N)
     s::VectorTrajectory{T}  # Cost-to-go gradient (n,N)
 
-    ∇F::MatrixTrajectory{T} # discrete dynamics jacobian (block) (n,n+m+1,N)
+    ∇F::PartedMatTrajectory{T} # discrete dynamics jacobian (block) (n,n+m+1,N)
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change

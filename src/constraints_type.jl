@@ -221,3 +221,4 @@ end
 PartedArrays.BlockVector(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
 PartedArrays.BlockVector(T::Type,C::ConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
 PartedArrays.BlockMatrix(C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
+PartedArrays.BlockMatrix(T::Type,C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
