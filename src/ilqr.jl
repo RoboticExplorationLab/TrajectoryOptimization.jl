@@ -1,21 +1,24 @@
 
 function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
     n,m,N = size(prob)
+    J = Inf
 
     # Initial rollout
     rollout!(prob)
+    J_prev = cost(prob.cost, prob.X, prob.U, prob.dt)
 
     for i = 1:solver.iterations
-        step!(prob,solver)
-
-        dJ = J - J_prev
-        record_iteration!(prob,solver,dJ)
-        evaluate_convergence(solver)
+        J = step!(prob, solver)
+        dJ = abs(J - J_prev)
+        J_prev = copy(J)
+        record_iteration!(prob, solver, dJ)
+        evaluate_convergence(solver) ? break : nothing
     end
+    return J
 end
 
 function step!(prob::Problem, solver::iLQRSolver)
-    jacobian!(prob,solver)
+    jacobian!(prob, solver)
 
     ΔV = backwardpass!(prob,solver)
     J = forwardpass!(prob,solver,ΔV,J_prev)
@@ -89,11 +92,11 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
         # @logmsg InnerLoop "Regularization Increased"
         solver.dρ[1] = max(solver.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)
         solver.ρ[1] = max(solver.ρ[1]*solver.dρ[1], solver.opts.bp_reg_min)
-        if results.ρ[1] > solver.opts.bp_reg_max
+        if solver.ρ[1] > solver.opts.bp_reg_max
             @warn "Max regularization exceeded"
         end
     elseif status == :decrease # decrease regularization
-        results.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
-        results.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
+        solver.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
+        solver.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
     end
 end
