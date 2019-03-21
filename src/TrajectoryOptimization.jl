@@ -81,8 +81,8 @@ Trajectory{T} = Vector{T} where T <: AbstractArray
 VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
 MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
 DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
-PartedVecTrajectory{T} = Vector{BlockArray{T,1}} where T <: Real
-PartedMatTrajectory{T} = Vector{BlockArray{T,2}} where T <: Real
+PartedVecTrajectory{T} = Vector{BlockVector{T,Vector{T}}}
+PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
 
 include("constraints_type.jl")
 include("cost.jl")
