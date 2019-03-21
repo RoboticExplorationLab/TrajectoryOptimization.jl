@@ -165,6 +165,14 @@ function jacobian!(Z::AbstractMatrix,model::Model{Discrete},x,u,dt)
     model.∇f(Z,x,u,dt)
     model.evals[2] += 1
 end
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k])
+    end
+end
+jacobian!(prob::Problem{T}) where T = jacobian!(Z,prob.model,prob.X,prob.U)
+
 
 
 """ $(SIGNATURES) Return the number of dynamics evaluations """
@@ -448,13 +456,7 @@ function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m:
             ∇f!(x,u) = begin
                 ∇f!(Z,x,u)
                 return Z
-            end@test Z2.A == Z.A
-@test !(Z2.A === Z.A)
-Z2 .= rand(1:7,7)
-@test Z2.x != Z.x
-Zs = [Z,Z2]
-Zs2 = copy(Zs)
-@test Zs2[1].A == Zs[1].A
+            end
         end
         if forms[3]
             ∇f!(Z,v,x,u) = ∇f(Z,v,x,u)
