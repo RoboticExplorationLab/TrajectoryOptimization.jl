@@ -77,7 +77,9 @@ abstract type AbstractSolverOptions{T<:Real} end
     max_control_value::T = 1.0e8
 end
 
-@with_kw mutable struct ALSolverOptions{T} <: AbstractSolverOptions{T}
+aa = iLQRSolverOptions{Float64}(iterations=5)
+
+@with_kw mutable struct AugmentedLagrangianSolverOptions{T} <: AbstractSolverOptions{T}
     "unconstrained minimization solver"
     unconstrained_solver::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 

@@ -109,7 +109,7 @@ include("logger.jl")
 include("controller.jl")
 
 include("problem_type.jl")
-include("solvers.jl")
+include("solver_options_new.jl")
 include("solvers_new.jl")
 include("ilqr.jl")
 include("backwardpass_new.jl")

@@ -60,13 +60,18 @@ struct iLQRSolver{T} <: AbstractSolver{T}
     bp::BackwardPassNew{T}
 end
 
-function iLQRSolver(p::Problem{T}, opts::iLQRSolverOptions{T}=iLQRSolverOptions{T}()) where T
+function iLQRSolver(prob::Problem{T}) where T
+     opts=iLQRSolverOptions{T}()
+     AbstractSolver(prob, opts)
+end
+
+function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:gradient=>[],
         :dJ_zero_counter=>0)
 
     # Init solver results
-    n = p.model.n; m = p.model.m; N = p.N
+    n = prob.model.n; m = prob.model.m; N = prob.N
 
     X̄  = [zeros(T,n)   for i = 1:N]
     Ū  = [zeros(T,m)   for i = 1:N-1]
@@ -83,7 +88,7 @@ function iLQRSolver(p::Problem{T}, opts::iLQRSolverOptions{T}=iLQRSolverOptions{
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    bp = BackwardPassNew(p)
+    bp = BackwardPassNew(prob)
 
     iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
 end
@@ -94,7 +99,7 @@ end
 
 "$(TYPEDEF) Augmented Lagrangian results"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
-    opts::ALSolverOptions{T}
+    opts::AugmentedLagrangianSolverOptions{T}
     stats::Dict{Symbol,Any}
     stats_uncon::Vector{Dict{Symbol,Any}}  # Stash of unconstraint stats
 
@@ -103,11 +108,11 @@ struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     C_prev::PartedVecTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
     ∇C::PartedMatTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
     λ::PartedVecTrajectory{T}      # Lagrange multipliers [(p,N-1) (p_N)]
-    Iμ::DiagonalTrajectory{T}     # Penalty matrix [(p,p,N-1) (p_N,p_N)]
+    μ::PartedVecTrajectory{T}     # Penalty matrix [(p,p,N-1) (p_N,p_N)]
     active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
-function AugmentedLagrangianSolver(prob::Problem{T}, opts::ALSolverOptions{T}=ALSolverOptions{T}()) where T
+function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}=ALSolverOptions{T}()) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:c_max=>T[])
     stats_uncon = Dict{Symbol,Any}[]
@@ -126,17 +131,18 @@ function AugmentedLagrangianSolver(prob::Problem{T}, opts::ALSolverOptions{T}=AL
     C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
     ∇C = [BlockArray(zeros(T,p,n+m),c_part2) for k = 1:N-1]
     λ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    Iμ = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
+    μ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
     active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
     push!(C,BlockVector(T,c_term))
     push!(C_prev,BlockVector(T,c_term))
     push!(∇C,BlockMatrix(T,c_term,n,m))
     push!(λ,BlockVector(T,c_term))
+    push!(μ,BlockVector(T,c_term))
     push!(active_set,BlockVector(Bool,c_term))
 
-    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,Iμ,active_set)
+    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)
 end
 
 function copy(r::AugmentedLagrangianSolver{T}) where T
-    AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.Iμ),deepcopy(r.active_set))
+    AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.active_set))
 end
