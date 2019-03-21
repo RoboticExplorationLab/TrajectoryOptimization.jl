@@ -97,22 +97,22 @@ function ALResults(prob::Problem{T}) where T
     p = num_stage_constraints(prob.constraints)
     p_N = num_terminal_constraints(prob.constraints)
 
-    c_stage_part = create_partition(stage(prob.constraints))
-    c_stage_part2 = create_partition2(stage(prob.constraints),n,m)
-    c_term_part = create_partition(terminal(prob.constraints))
-    c_term_part2 = create_partition2(terminal(prob.constraints),n,m)
+    c_stage = stage(prob.constraints)
+    c_term = terminal(prob.constraints)
+    c_part = create_partition(c_stage)
+    c_part2 = create_partition2(c_stage,n,m)
 
-    C      = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
-        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
-    C_prev = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
-        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
-    ∇C     = [i != N ? BlockArray(zeros(T,p,n+m), c_stage_part2) :
-        BlockArray(zeros(T,p_N,n), c_term_part2) for i = 1:N]
-    λ      = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
-        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
-    Iμ     = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
-    active_set = [i != N ? BlockArray(zeros(Bool,p), c_stage_part) :
-        BlockArray(zeros(Bool,p_N), c_term_part)  for i = 1:N]
+    C = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+    C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+    ∇C = [BlockArray(zeros(T,p,n+m),c_part2) for k = 1:N-1]
+    λ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+    Iμ = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
+    active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
+    push!(C,BlockVector(T,c_term))
+    push!(C_prev,BlockVector(T,c_term))
+    push!(∇C,BlockMatrix(T,c_term,n,m))
+    push!(λ,BlockVector(T,c_term))
+    push!(active_set,BlockVector(Bool,c_term))
 
     ALResults{T}(C,C_prev,∇C,λ,Iμ,active_set)
 end

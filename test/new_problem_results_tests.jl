@@ -45,19 +45,38 @@ res = iLQRResults(P4)
 res2 = copy(res)
 
 ALres = ALResults(P4)
+con
+add_constraints!(P4,C_term)
+T = Float64
+N = 10
+p = 5
+n = 5
+m = 2
+p_N = 3
+∇cval = [BlockArray(zeros(p,n+m),c_part2) for k = 1:N-1]
+push!(∇cval,BlockMatrix(C_term,n,m))
 
+∇cval
 
 prob = P4
-PartedArrays.create_partition2(prob.constraints,n,m)
+prob
 n = prob.model.n; m = prob.model.m; N = prob.N
 p = num_stage_constraints(prob.constraints)
 p_N = num_terminal_constraints(prob.constraints)
-T = Float64
-C      = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
-C_prev = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
-∇C     = [i != N ? zeros(T,p,n+m) : zeros(T,p_N,n)  for i = 1:N]
-λ      = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
-Iμ     = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
-active_set2 = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
-Iμ isa Vector{Diagonal{T,Vector{T}}} where T
-ALResults2{T}(C,∇C,λ,active_set2)
+
+c_stage = stage(prob.constraints)
+c_term = terminal(prob.constraints)
+c_part = create_partition(c_stage)
+c_part2 = create_partition2(c_stage,n,m)
+
+C = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+∇C = [BlockArray(zeros(T,p,n+m),c_part2) for k = 1:N-1]
+λ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+Iμ = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
+active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
+push!(C,BlockVector(T,c_term))
+push!(C_prev,BlockVector(T,c_term))
+push!(∇C,BlockMatrix(T,c_term,n,m))
+push!(λ,BlockVector(T,c_term))
+push!(active_set,BlockVector(Bool,c_term))

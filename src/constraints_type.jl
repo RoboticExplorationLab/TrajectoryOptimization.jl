@@ -28,6 +28,7 @@ struct TerminalConstraint{S} <: AbstractConstraint{S}
     p::Int
     label::Symbol
 end
+
 "$(TYPEDEF) Create a terminal constraint, using ForwardDiff to generate the Jacobian"
 function TerminalConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,p)
@@ -38,6 +39,7 @@ Constraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType =
 
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
+
 "$(SIGNATURES) Number of element in constraint function (p)"
 Base.length(C::AbstractConstraint) = C.p
 
@@ -84,6 +86,38 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
          Constraint{Inequality}(bound_all,∇c,2(n+m),:bound)
      end
  end
+
+ function bound_constraint(n::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf, trim::Bool=false)
+    # Validate bounds
+    x_max, x_min = _validate_bounds(x_max,x_min,n)
+
+    # Specify stacking
+    inds = create_partition((n,n),(:x_max,:x_min))
+
+    # Pre-allocate jacobian
+    jac_bnd = [Diagonal(I,n); -Diagonal(I,n)]
+
+    if trim
+        active = (x_max=isfinite.(x_max), x_min=isfinite.(x_min))
+        lengths = [count(val) for val in values(active)]
+        inds = create_partition(Tuple(lengths),keys(active))
+        function bound_trim(v,x)
+            v[inds.x_max] = (x - x_max)[active.x_max]
+            v[inds.x_min] = (x_min - x)[active.x_min]
+        end
+        active_all = vcat(values(active)...)
+        ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
+        TerminalConstraint{Inequality}(bound_trim,∇c_trim,count(active_all),:terminal_bound)
+    else
+        # Generate function
+        function bound_all(v,x,u)
+            v[inds.x_max] = x - x_max
+            v[inds.x_min] = x_min - x
+        end
+        ∇c(C,x,u) = copyto!(C,jac_bnd)
+        TerminalConstraint{Inequality}(bound_all,∇c,2(n+m),:terminal_bound)
+    end
+end
 
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
@@ -141,10 +175,18 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
 end
 evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
 
-"$(SIGNATURES) Return number of stage constraints in a set"
-num_stage_constraints(C::ConstraintSet) = sum(length.(stage(C)))
-"$(SIGNATURES) Return number of stage constraints in a set"
-num_terminal_constraints(C::ConstraintSet) = sum(length.(terminal(C)))
+function jacobian!(Z,C::StageConstraintSet,x,u)
+    for con in C
+        con.∇c(Z[con.label],x,u)
+    end
+end
+jacobian!(Z,C::ConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
+function jacobian!(Z,C::TerminalConstraintSet,x)
+    for con in C
+        con.∇c(Z[con.label],x)
+    end
+end
+jacobian!(Z,C::ConstraintSet,x) = jacobian!(Z,terminal(C),x)
 
 RigidBodyDynamics.num_constraints(C::ConstraintSet) = sum(length.(C))
 labels(C::ConstraintSet) = [c.label for c in C]
@@ -152,7 +194,7 @@ terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,Terminal
 stage(C::ConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
 inequalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Inequality}),C)
 equalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
-bounds(C::ConstraintSet) = filter(x->x.label==:bound,C)
+bounds(C::ConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
 function PartedArrays.create_partition(C::ConstraintSet)
     lens = length.(C)
@@ -166,5 +208,16 @@ function PartedArrays.create_partition(C::ConstraintSet)
     part_IE = (inequality=LinearIndices(ineq)[ineq],equality=LinearIndices(ineq)[.!ineq])
     return merge(part,part_IE)
 end
-PartedArrays.BlockArray(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
-PartedArrays.BlockArray(T::Type,C::ConstraintSet) = BlockArray(zeros(T,sum(length.(C))), create_partition(C))
+function PartedArrays.create_partition2(C::ConstraintSet,n::Int,m::Int)
+    lens = Tuple(length.(C))
+    names = Tuple(labels(C))
+    p = num_constraints(C)
+    part1 = create_partition(lens,names)
+    part2 = NamedTuple{names}([(rng,1:n+m) for rng in part1])
+    part_xu = (x=(1:p,1:n),u=(1:p,n+1:n+m))
+    return merge(part2,part_xu)
+end
+
+PartedArrays.BlockVector(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
+PartedArrays.BlockVector(T::Type,C::ConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
+PartedArrays.BlockMatrix(C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))

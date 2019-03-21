@@ -204,7 +204,7 @@ c_jac = BlockMatrix(C,n,m)
 @test size(c_jac.u) == (p1+p2+p3,m)
 
 
-
+BlockVector(Int64,C_term)
 # Test constrained cost stuff
 N = 21
 p = num_constraints(C)
