@@ -173,6 +173,19 @@ evals(model::Model) = model.evals[1]
 """ $(SIGNATURES) Reset the evaluation counts for the model """
 reset(model::Model) = begin model.evals[1] = 0; return nothing end
 
+Base.length(model::Model{Discrete}) = model.n + model.m + 1
+Base.length(model::Model{Continuous}) = model.n + model.m
+
+PartedArrays.create_partition(model::Model{Discrete}) = create_partition((model.n,model.m,1),(:x,:u,:dt))
+PartedArrays.create_partition2(model::Model{Discrete}) = create_partition2((model.n,),(model.n,model.m,1),(:x,),(:x,:u,:dt))
+PartedArrays.create_partition(model::Model{Continuous}) = create_partition((model.n,model.m),(:x,:u))
+PartedArrays.create_partition2(model::Model{Continuous}) = create_partition2((model.n,),(model.n,model.m),(:x,),(:x,:u))
+PartedArrays.BlockVector(model::Model) = BlockArray(zeros(length(model)),create_partition(model))
+PartedArrays.BlockVector(T::Type,model::Model) = BlockArray(zeros(T,length(model)),create_partition(model))
+PartedArrays.BlockMatrix(model::Model) = BlockArray(zeros(model.n,length(model)),create_partition2(model))
+PartedArrays.BlockMatrix(T::Type,model::Model) = BlockArray(zeros(T,model.n,length(model)),create_partition2(model))
+
+
 function dynamics(model::Model,xdot,x,u)
     model.f(xdot,x,u)
     model.evals[1] += 1
@@ -435,7 +448,13 @@ function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m:
             ∇f!(x,u) = begin
                 ∇f!(Z,x,u)
                 return Z
-            end
+            end@test Z2.A == Z.A
+@test !(Z2.A === Z.A)
+Z2 .= rand(1:7,7)
+@test Z2.x != Z.x
+Zs = [Z,Z2]
+Zs2 = copy(Zs)
+@test Zs2[1].A == Zs[1].A
         end
         if forms[3]
             ∇f!(Z,v,x,u) = ∇f(Z,v,x,u)
