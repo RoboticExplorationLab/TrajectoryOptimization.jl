@@ -35,10 +35,14 @@ function reset!(bp::BackwardPassNew)
     end
 end
 
-abstract type Results{T<:AbstractFloat} end
+abstract type AbstractSolver{T<:AbstractFloat} end
 
 "$(TYPEDEF) Iterative LQR results"
-struct iLQRResults{T} <: Results{T}
+struct iLQRSolver{T} <: AbstractSolver{T}
+    opts::iLQRSolverOptions{T}
+    stats::Dict{Symbol,Any}
+
+    # Data variables
     X̄::VectorTrajectory{T} # states (n,N)
     Ū::VectorTrajectory{T} # controls (m,N-1)
 
@@ -56,7 +60,12 @@ struct iLQRResults{T} <: Results{T}
     bp::BackwardPassNew{T}
 end
 
-function iLQRResults(p::Problem{T}) where T
+function iLQRSolver(p::Problem{T}, opts::iLQRSolverOptions{T}=iLQRSolverOptions{T}()) where T
+    # Init solver statistics
+    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:gradient=>[],
+        :dJ_zero_counter=>0)
+
+    # Init solver results
     n = p.model.n; m = p.model.m; N = p.N
 
     X̄  = [zeros(T,n)   for i = 1:N]
@@ -75,15 +84,20 @@ function iLQRResults(p::Problem{T}) where T
 
     bp = BackwardPassNew(p)
 
-    iLQRResults{T}(X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
+    iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
 end
 
-function copy(r::iLQRResults{T}) where T
-    iLQRResults{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
+function copy(r::iLQRSolver{T}) where T
+    iLQRSolver{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
 "$(TYPEDEF) Augmented Lagrangian results"
-struct ALResults{T} <: Results{T}
+struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
+    opts::ALSolverOptions{T}
+    stats::Dict{Symbol,Any}
+    stats_uncon::Vector{Dict{Symbol,Any}}  # Stash of unconstraint stats
+
+    # Data variables
     C::PartedVecTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
     C_prev::PartedVecTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
     ∇C::PartedMatTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
@@ -92,7 +106,12 @@ struct ALResults{T} <: Results{T}
     active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
-function ALResults(prob::Problem{T}) where T
+function AugmentedLagrangianSolver(prob::Problem{T}, opts::ALSolverOptions{T}=ALSolverOptions{T}()) where T
+    # Init solver statistics
+    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:c_max=>T[])
+    stats_uncon = Dict{Symbol,Any}[]
+
+    # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
     p = num_stage_constraints(prob.constraints)
     p_N = num_terminal_constraints(prob.constraints)
@@ -114,9 +133,9 @@ function ALResults(prob::Problem{T}) where T
     push!(λ,BlockVector(T,c_term))
     push!(active_set,BlockVector(Bool,c_term))
 
-    ALResults{T}(C,C_prev,∇C,λ,Iμ,active_set)
+    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,Iμ,active_set)
 end
 
-function copy(r::ALResults{T}) where T
-    ALResults{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.Iμ),deepcopy(r.active_set))
+function copy(r::AugmentedLagrangianSolver{T}) where T
+    AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.Iμ),deepcopy(r.active_set))
 end
