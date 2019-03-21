@@ -78,6 +78,9 @@ abstract type SolverOptionsNew{T<:Real} end
 end
 
 @with_kw mutable struct ALSolverOptions{T} <: SolverOptionsNew{T}
+    "unconstrained minimization solver"
+    unconstrained_solver::SolverOptionsNew = iLQRSolverOptions{T}()
+
     "max(constraint) < ϵ, constraint convergence criteria"
     constraint_tolerance::T = 1.0e-3
 
