@@ -77,7 +77,8 @@ function iLQRSolver(p::Problem{T}, opts::iLQRSolverOptions{T}=iLQRSolverOptions{
     S  = [zeros(T,n,n) for i = 1:N]
     s  = [zeros(T,n)   for i = 1:N]
 
-    ∇F = [zeros(T,n,n+m+1) for i = 1:N-1]
+    part_f = create_partition2(p.model)
+    ∇F = [BlockArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
