@@ -114,6 +114,7 @@ include("solvers_new.jl")
 include("ilqr.jl")
 include("backwardpass_new.jl")
 include("forward_pass_new.jl")
+include("rollout_new.jl")
 
 using Ipopt
 

@@ -26,14 +26,14 @@ function rollout!(p::Problem)
     N = p.N
     X = p.X; U = p.U
 
-    if isempty(X)
-        for k = 1:N
-            push!(X,zeros(p.model.n))
-        end
+    if !all(isfinite.(prob.X[1]))
+        # for k = 1:N
+        #     push!(X,zeros(p.model.n))
+        # end
 
         X[1] = p.x0
         for k = 1:N-1
-            evaluate!(X[k+1], p.model, X[k], U[k])
+            evaluate!(X[k+1], p.model, X[k], U[k], prob.dt)
         end
     end
 end
