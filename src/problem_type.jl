@@ -35,6 +35,8 @@ Problem(model::Model,cost::CostFunction,x0::Vector{T},X::Matrix{T},U::Matrix{T})
     model,cost,AbstractConstraint[],x0,[X[:,k] for k = 1:size(X,2)],
     [U[:,k] for k = 1:size(U,2)],size(X,2),0.0)
 
+Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
+
 function update_problem(p::Problem;
     model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
     N=p.N,dt=p.dt)
