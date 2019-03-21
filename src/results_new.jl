@@ -84,12 +84,12 @@ end
 
 "$(TYPEDEF) Augmented Lagrangian results"
 struct ALResults{T} <: Results{T}
-    C::VectorTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
-    C_prev::VectorTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
-    ∇C::MatrixTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
-    λ::VectorTrajectory{T}      # Lagrange multipliers [(p,N-1) (p_N)]
+    C::PartedVecTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
+    C_prev::PartedVecTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
+    ∇C::PartedMatTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
+    λ::PartedVecTrajectory{T}      # Lagrange multipliers [(p,N-1) (p_N)]
     Iμ::DiagonalTrajectory{T}     # Penalty matrix [(p,p,N-1) (p_N,p_N)]
-    active_set::VectorTrajectory{Bool} # active set [(p,N-1) (p_N)]
+    active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
 function ALResults(prob::Problem{T}) where T
@@ -97,12 +97,22 @@ function ALResults(prob::Problem{T}) where T
     p = num_stage_constraints(prob.constraints)
     p_N = num_terminal_constraints(prob.constraints)
 
-    C      = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
-    C_prev = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
-    ∇C     = [i != N ? zeros(T,p,n+m) : zeros(T,p_N,n)  for i = 1:N]
-    λ      = [i != N ? zeros(T,p) : zeros(T,p_N)  for i = 1:N]
+    c_stage_part = create_partition(stage(prob.constraints))
+    c_stage_part2 = create_partition2(stage(prob.constraints),n,m)
+    c_term_part = create_partition(terminal(prob.constraints))
+    c_term_part2 = create_partition2(terminal(prob.constraints),n,m)
+
+    C      = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
+        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
+    C_prev = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
+        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
+    ∇C     = [i != N ? BlockArray(zeros(T,p,n+m), c_stage_part2) :
+        BlockArray(zeros(T,p_N,n), c_term_part2) for i = 1:N]
+    λ      = [i != N ? BlockArray(zeros(T,p), c_stage_part) :
+        BlockArray(zeros(T,p_N), c_term_part)  for i = 1:N]
     Iμ     = [i != N ? Diagonal(ones(T,p)) : Diagonal(ones(T,p_N)) for i = 1:N]
-    active_set = [i != N ? zeros(Bool,p) : zeros(Bool,p_N)  for i = 1:N]
+    active_set = [i != N ? BlockArray(zeros(Bool,p), c_stage_part) :
+        BlockArray(zeros(Bool,p_N), c_term_part)  for i = 1:N]
 
     ALResults{T}(C,C_prev,∇C,λ,Iμ,active_set)
 end

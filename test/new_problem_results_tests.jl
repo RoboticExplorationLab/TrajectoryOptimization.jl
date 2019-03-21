@@ -35,8 +35,7 @@ C = [con,con2,bnd]
 
 P4 = update_problem(P3,dt=0.1)
 add_constraints!(P3,con)
-P3
-add_constraints!(P4,con)
+P4
 
 bp = BackwardPassNew(P4)
 bp2 = copy(bp)
@@ -49,7 +48,7 @@ ALres = ALResults(P4)
 
 
 prob = P4
-
+PartedArrays.create_partition2(prob.constraints,n,m)
 n = prob.model.n; m = prob.model.m; N = prob.N
 p = num_stage_constraints(prob.constraints)
 p_N = num_terminal_constraints(prob.constraints)
