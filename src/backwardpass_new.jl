@@ -1,25 +1,26 @@
-function backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
-    if sol.square_root
-        ΔV = _backwardpass_sqrt!(p,res,sol)
+function backwardpass!(prob::Problem,solver::iLQRSolver)
+    if solver.square_root
+        error("Square root bp not implemented yet!")
+        ΔV = _backwardpass_sqrt!(prob,solver)
     else
-        ΔV = _backwardpass!(p,res,sol)
+        ΔV = _backwardpass!(prob,solver)
     end
     return ΔV
 end
 
-function _backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
-    N = p.N
+function _backwardpass!(prob::Problem,solver::iLQRSolver)
+    N = prob.N
 
     # Objective
-    cost = p.cost
+    cost = prob.cost
 
     dt = solver.dt
 
     X = p.X; U = p.U; K = res.K; d = res.d; S = res.S; s = res.s
 
-    reset(res.bp)
-    Qx = res.bp.Qx; Qu = res.bp.Qu; Qxx = res.bp.Qxx; Quu = res.bp.Quu; Qux = res.bp.Qux
-    Quu_reg = res.bp.Quu_reg; Qux_reg = res.bp.Qux_reg
+    reset(solver.bp)
+    Qx = solver.bp.Qx; Qu = solver.bp.Qu; Qxx = solver.bp.Qxx; Quu = solver.bp.Quu; Qux = solver.bp.Qux
+    Quu_reg = solver.bp.Quu_reg; Qux_reg = solver.bp.Qux_reg
 
     # Boundary Conditions
     S[N], s[N] = taylor_expansion(cost, X[N])
@@ -33,7 +34,7 @@ function _backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
         expansion = taylor_expansion(cost,x,u)
         Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = expansion
 
-        fdx, fdu = res.fdx[k], res.fdu[k]
+        fdx, fdu = solver.fdx[k], solver.fdu[k]
 
         Qx[k] += fdx'*s[k+1]
         Qu[k] += fdu'*s[k+1]
@@ -42,10 +43,10 @@ function _backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
         Qux[k] += fdu'*S[k+1]*fdx
 
         if sol.bp_reg_type == :state
-            Quu_reg[k] = Quu[k] + res.ρ[1]*fdu'*fdu
-            Qux_reg[k] = Qux[k] + res.ρ[1]*fdu'*fdx
+            Quu_reg[k] = Quu[k] + solver.ρ[1]*fdu'*fdu
+            Qux_reg[k] = Qux[k] + solver.ρ[1]*fdu'*fdx
         elseif sol.bp_reg_type == :control
-            Quu_reg[k] = Quu[k] + res.ρ[1]*I
+            Quu_reg[k] = Quu[k] + solver.ρ[1]*I
             Qux_reg[k] = Qux[k]
         end
 
@@ -53,7 +54,7 @@ function _backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
             @logmsg InnerIters "Regularizing Quu "
-            regularization_update!(res,sol,:increase)
+            regularization_update!(solver,:increase)
 
             # reset backward pass
             k = N-1
@@ -79,7 +80,7 @@ function _backwardpass!(p::Problem,res::iLQRResults,sol::iLQRSolver)
     end
 
     # decrease regularization after backward pass
-    regularization_update!(res,sol,:decrease)
+    regularization_update!(solver,:decrease)
 
     return ΔV
 end

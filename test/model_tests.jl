@@ -185,6 +185,8 @@ z = BlockVector(model)
 @test length(z) == n+m
 s = BlockVector(model_d)
 @test length(s) == n+m+1
+@test length(model) == n+m
+@test length(model_d) == n+m+1
 
 # Generate discrete dynamics equations
 f! = model.f
