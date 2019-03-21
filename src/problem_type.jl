@@ -191,3 +191,5 @@ stage(C)
 terminal(C)
 
 C
+
+res = iLQRResults(P1)

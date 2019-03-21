@@ -1,3 +1,40 @@
+struct BackwardPassNew{T<:AbstractFloat}
+    Qx::VectorTrajectory{T}
+    Qu::VectorTrajectory{T}
+    Qxx::MatrixTrajectory{T}
+    Qux::MatrixTrajectory{T}
+    Quu::MatrixTrajectory{T}
+    Qux_reg::MatrixTrajectory{T}
+    Quu_reg::MatrixTrajectory{T}
+end
+
+function BackwardPassNew(p::Problem{T}) where T
+    n = p.model.n; m = p.model.m; N = p.N
+
+    Qx = [zeros(T,n) for i = 1:N-1]
+    Qu = [zeros(T,m) for i = 1:N-1]
+    Qxx = [zeros(T,n,n) for i = 1:N-1]
+    Qux = [zeros(T,m,n) for i = 1:N-1]
+    Quu = [zeros(T,m,m) for i = 1:N-1]
+
+    Qux_reg = [zeros(T,m,n) for i = 1:N-1]
+    Quu_reg = [zeros(T,m,m) for i = 1:N-1]
+
+    BackwardPassNew{T}(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
+end
+
+function copy(bp::BackwardPassNew{T}) where T
+    BackwardPassNew{T}(deepcopy(bp.Qx),deepcopy(bp.Qu),deepcopy(bp.Qxx),deepcopy(bp.Qux),deepcopy(bp.Quu),deepcopy(bp.Qux_reg),deepcopy(bp.Quu_reg))
+end
+
+function reset!(bp::BackwardPassNew)
+    N = length(bp.Qx)
+    for k = 1:N-1
+        bp.Qx[k] = zero(bp.Qx[k]); bp.Qu[k] = zero(bp.Qu[k]); bp.Qxx[k] = zero(bp.Qxx[k]); bp.Quu[k] = zero(bp.Quu[k]); bp.Qux[k] = zero(bp.Qux[k])
+        bp.Quu_reg[k] = zero(bp.Quu_reg[k]); bp.Qux_reg[k] = zero(bp.Qux_reg[k])
+    end
+end
+
 abstract type Results{T<:AbstractFloat} end
 
 "$(TYPEDEF) Iterative LQR results"
@@ -16,7 +53,7 @@ struct iLQRResults{T} <: Results{T}
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
 
-    bp::BackwardPass{T}
+    bp::BackwardPassNew{T}
 end
 
 function iLQRResults(p::Problem{T}) where T
@@ -36,7 +73,7 @@ function iLQRResults(p::Problem{T}) where T
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    bp = BackwardPass{T}(n,m,N)
+    bp = BackwardPassNew(p)
 
     iLQRResults{T}(X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
 end
@@ -45,45 +82,8 @@ function copy(r::iLQRResults{T}) where T
     iLQRResults{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
 
-
-struct BackwardPassNew{T<:AbstractFloat}
-    Qx::VectorTrajectory{T}
-    Qu::VectorTrajectory{T}
-    Qxx::MatrixTrajectory{T}
-    Qux::MatrixTrajectory{T}
-    Quu::MatrixTrajectory{T}
-    Qux_reg::MatrixTrajectory{T}
-    Quu_reg::MatrixTrajectory{T}
-end
-
-function BackwardPassNew(p::Problem{T}) where T
-    Qx = [zeros(T,n) for i = 1:N-1]
-    Qu = [zeros(T,m) for i = 1:N-1]
-    Qxx = [zeros(T,n,n) for i = 1:N-1]
-    Qux = [zeros(T,m,n) for i = 1:N-1]
-    Quu = [zeros(T,m,m) for i = 1:N-1]
-
-    Qux_reg = [zeros(T,m,n) for i = 1:N-1]
-    Quu_reg = [zeros(T,m,m) for i = 1:N-1]
-
-    BackwardPassNew{T}(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
-end
-
-function copy(bp::BackwardPassNew{T}) where T
-    BackwardPassNew{T}(deepcopy(bp.Qx),deepcopy(bp.Qu),deepcopy(bp.Qxx),deepcopy(bp.Qux),deepcopy(bp.Quu),deepcopy(bp.Qux_reg),deepcopy(bp.Quu_reg))
-end
-
-function reset(bp::BackwardPass)
-    N_ = length(bp.Qx)
-    for k = 1:N-1
-        Qx[k] = zero(Qx[k]); Qu[k] = zero(Qu[k]); Qxx[k] = zero(Qxx[k]); Quu[k] = zero(Quu[k]); Qux[k] = zero(Qux[k])
-        Quu_reg[k] = zero(Quu_reg[k]); Qux_reg[k] = zero(Qux_reg[k])
-    end
-end
-
-
 "$(TYPEDEF) Augmented Lagrangian results"
-struct ALResults <: Results{T<:Real}
+struct ALResults{T} <: Results{T}
     C::VectorTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
     C_prev::VectorTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
     ∇C::MatrixTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
