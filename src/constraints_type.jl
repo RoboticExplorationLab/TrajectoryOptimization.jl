@@ -141,6 +141,11 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
 end
 evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
 
+"$(SIGNATURES) Return number of stage constraints in a set"
+num_stage_constraints(C::ConstraintSet) = sum(length.(stage(C)))
+"$(SIGNATURES) Return number of stage constraints in a set"
+num_terminal_constraints(C::ConstraintSet) = sum(length.(terminal(C)))
+
 RigidBodyDynamics.num_constraints(C::ConstraintSet) = sum(length.(C))
 labels(C::ConstraintSet) = [c.label for c in C]
 terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))

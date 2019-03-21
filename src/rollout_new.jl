@@ -12,7 +12,7 @@ function rollout!(p::Problem,res::iLQRResults,sol::iLQRSolver,alpha::Float64)
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        p.model.fd(view(X̄[k]), X̄[k-1], Ū[k-1])
+        evaluate!(X̄[k], p.model, X̄[k-1], Ū[k-1])
 
         # Check that rollout has not diverged
         if ~(norm(X̄[k],Inf) < sol.max_state_value && norm(Ū[k-1],Inf) < sol.max_control_value)
@@ -33,7 +33,7 @@ function rollout!(p::Problem)
 
         X[1] = p.x0
         for k = 1:N-1
-            p.model.f(X[k+1], X[k], U[k])
+            evaluate!(X[k+1], p.model, X[k], U[k])
         end
     end
 end

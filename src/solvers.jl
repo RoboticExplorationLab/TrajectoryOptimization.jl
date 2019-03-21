@@ -1,8 +1,9 @@
 abstract type SolverNew end
 
-struct iLQRSolver <: SolverNew
+mutable struct iLQRSolver <: SolverNew
     # Options
-    cost_tolerance::Float64 # dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve
+    "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
+    cost_tolerance::Float64 
     cost_tolerance_intermediate::Float64 # dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve
     gradient_norm_tolerance::Float64 # gradient_norm < ϵ, gradient norm convergence criteria
     gradient_norm_tolerance_intermediate::Float64 # gradient_norm_int < ϵ, gradient norm intermediate convergence criteria
@@ -27,9 +28,16 @@ struct iLQRSolver <: SolverNew
     bp_reg_sqrt_initial::Float64 # initial regularization for square root method
     bp_reg_sqrt_increase_factor::Float64 # regularization scaling factor for square root method
 
+    #############################
+    ## Solver Numerical Limits ##
+    #############################
+    max_cost_value::Float64 # maximum cost value, if exceded solve will error
+    max_state_value::Float64 # maximum state value, evaluated during rollout, if exceded solve will error
+    max_control_value::Float64 # maximum control value, evaluated during rollout, if exceded solve will error
+
 end
 
-struct ALSolver <: SolverNew
+mutable struct ALSolver <: SolverNew
     constraint_tolerance::Float64 # max(constraint) < ϵ, constraint convergence criteria
     constraint_tolerance_intermediate::Float64 # max(constraint) < ϵ_int, intermediate constraint convergence criteria
 
@@ -52,7 +60,7 @@ struct ALSolver <: SolverNew
 
 end
 
-struct ALTROSolver <: SolverNew
+mutable struct ALTROSolver <: SolverNew
     ######################
     ## Infeasible Start ##
     ######################
@@ -75,12 +83,4 @@ struct ALTROSolver <: SolverNew
     penalty_initial_minimum_time_equality::Float64 # initial penalty term for minimum time equality constraints
     penalty_scaling_minimum_time_inequality::Float64 # penalty update rate for minimum time bounds constraints
     penalty_scaling_minimum_time_equality::Float64 # penalty update rate for minimum time equality constraints
-
-    #############################
-    ## Solver Numerical Limits ##
-    #############################
-    max_cost_value::Float64 # maximum cost value, if exceded solve will error
-    max_state_value::Float64 # maximum state value, evaluated during rollout, if exceded solve will error
-    max_control_value::Float64 # maximum control value, evaluated during rollout, if exceded solve will error
-
 end

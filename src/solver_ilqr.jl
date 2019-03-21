@@ -11,4 +11,8 @@ tf = 5.
 costfun = LQRCost(Q,R,Qf,xf)
 N = 11
 dt = 0.1
-prob = Problem(model,cost,x0,rand(m,N-1),N,dt)
+prob = Problem(model,costfun,x0,rand(m,N-1),N,dt)
+prob.X
+
+rollout!(prob)
+prob.X

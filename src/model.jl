@@ -269,7 +269,6 @@ function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=
     ∇f!(Z::AbstractMatrix,x::AbstractVector,u::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
-        @show size(v0), size(z)
         ∇fz(Z,v0,z)
         return nothing
     end
