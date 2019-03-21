@@ -14,9 +14,8 @@ function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
     end
 end
 
-function step!(prob::Problem, solver::iLQRSolver)
+function step!(prob::Problem, solver::iLQRSolver,J_prev)
     jacobian!(prob,solver)
-
     ΔV = backwardpass!(prob,solver)
     J = forwardpass!(prob,solver,ΔV,J_prev)
 end
@@ -93,7 +92,7 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
             @warn "Max regularization exceeded"
         end
     elseif status == :decrease # decrease regularization
-        results.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
-        results.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
+        solver.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
+        solver.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
     end
 end

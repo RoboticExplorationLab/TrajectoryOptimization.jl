@@ -1,5 +1,5 @@
 function backwardpass!(prob::Problem,solver::iLQRSolver)
-    if solver.square_root
+    if solver.opts.square_root
         error("Square root bp not implemented yet!")
         ΔV = _backwardpass_sqrt!(prob,solver)
     else
@@ -14,11 +14,11 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Objective
     cost = prob.cost
 
-    dt = solver.dt
+    dt = prob.dt
 
-    X = p.X; U = p.U; K = res.K; d = res.d; S = res.S; s = res.s
+    X = prob.X; U = prob.U; K = res.K; d = res.d; S = res.S; s = res.s
 
-    reset(solver.bp)
+    reset!(solver.bp)
     Qx = solver.bp.Qx; Qu = solver.bp.Qu; Qxx = solver.bp.Qxx; Quu = solver.bp.Quu; Qux = solver.bp.Qux
     Quu_reg = solver.bp.Quu_reg; Qux_reg = solver.bp.Qux_reg
 
@@ -31,10 +31,10 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        expansion = taylor_expansion(cost,x,u)
+        expansion = taylor_expansion(cost,X[k],U[k])
         Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = expansion
 
-        fdx, fdu = solver.fdx[k], solver.fdu[k]
+        fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
         Qx[k] += fdx'*s[k+1]
         Qu[k] += fdu'*s[k+1]
@@ -42,10 +42,10 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         Quu[k] += fdu'*S[k+1]*fdu
         Qux[k] += fdu'*S[k+1]*fdx
 
-        if sol.bp_reg_type == :state
+        if solver.opts.bp_reg_type == :state
             Quu_reg[k] = Quu[k] + solver.ρ[1]*fdu'*fdu
             Qux_reg[k] = Qux[k] + solver.ρ[1]*fdu'*fdx
-        elseif sol.bp_reg_type == :control
+        elseif solver.opts.bp_reg_type == :control
             Quu_reg[k] = Quu[k] + solver.ρ[1]*I
             Qux_reg[k] = Qux[k]
         end
