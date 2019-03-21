@@ -1,6 +1,6 @@
-abstract type SolverOptionsNew{T<:Real} end
+abstract type AbstractSolverOptions{T<:Real} end
 
-mutable struct iLQRSolverOptions{T} <: SolverOptionsNew{T}
+mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
     cost_tolerance::T
@@ -126,7 +126,7 @@ mutable struct iLQRSolverOptions{T} <: SolverOptionsNew{T}
     end
 end
 
-mutable struct ALSolverOptions{T} <: SolverOptionsNew{T}
+mutable struct ALSolverOptions{T} <: AbstractSolverOptions{T}
     "max(constraint) < ϵ, constraint convergence criteria"
     constraint_tolerance::T
 
@@ -202,7 +202,7 @@ mutable struct ALSolverOptions{T} <: SolverOptionsNew{T}
     end
 end
 
-mutable struct ALTROSolverOptions{T} <: SolverOptionsNew{T}
+mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
     ## Infeasible Start
     "infeasible control constraint tolerance"
     constraint_tolerance_infeasible::T

@@ -2,10 +2,10 @@
 $(SIGNATURES)
 Propagate dynamics with a line search (in-place)
 """
-function forwardpass!(p::Problem, res::iLQRResults, sol::iLQRSolver, ΔV::Array,J_prev::Float64)
+function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array,J_prev::Float64)
     # Pull out values from results
-    X = p.X; U = p.U; X̄ = res.X̄; Ū = res.Ū
-    cost = p.cost
+    X = prob.X; U = prob.U; X̄ = solver.X̄; Ū = solver.Ū
+    costfun = prob.cost
 
     J = Inf
     alpha = 1.0
@@ -16,7 +16,7 @@ function forwardpass!(p::Problem, res::iLQRResults, sol::iLQRSolver, ΔV::Array,
     logger = current_logger()
     @logmsg InnerIters :iter value=0
     @logmsg InnerIters :cost value=J_prev
-    while (z ≤ sol.line_search_lower_bound || z > sol.line_search_upper_bound) && J >= J_prev
+    while (z ≤ solver.line_search_lower_bound || z > solver.line_search_upper_bound) && J >= J_prev
 
         # Check that maximum number of line search decrements has not occured
         if iter > sol.iterations_linesearch
@@ -24,20 +24,20 @@ function forwardpass!(p::Problem, res::iLQRResults, sol::iLQRSolver, ΔV::Array,
             copyto!(X̄,X)
             copyto!(Ū,U)
 
-            J = cost(sol, res, X̄, Ū)
+            J = cost(prob, X̄, Ū)
 
             z = 0.
             alpha = 0.0
             expected = 0.
 
             @logmsg InnerLoop "Max iterations (forward pass)"
-            regularization_update!(res,sol,:increase) # increase regularization
+            regularization_update!(solver,:increase) # increase regularization
             res.ρ[1] += sol.bp_reg_fp
             break
         end
 
         # Otherwise, rollout a new trajectory for current alpha
-        flag = rollout!(res,sol,alpha)
+        flag = rollout!(prob,solver,alpha)
 
         # Check if rollout completed
         if ~flag
@@ -49,7 +49,7 @@ function forwardpass!(p::Problem, res::iLQRResults, sol::iLQRSolver, ΔV::Array,
         end
 
         # Calcuate cost
-        J = cost(sol, res, X̄, Ū)   # Unconstrained cost
+        J = cost(prob, X̄, Ū)   # Unconstrained cost
 
         expected = -alpha*(ΔV[1] + alpha*ΔV[2])
         if expected > 0

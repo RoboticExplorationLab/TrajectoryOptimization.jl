@@ -171,7 +171,6 @@ function jacobian!(Z::PartedMatTrajectory{T},model::Model{Discrete},X::VectorTra
         jacobian!(Z[k],model,X[k],U[k])
     end
 end
-jacobian!(prob::Problem{T}) where T = jacobian!(Z,prob.model,prob.X,prob.U)
 
 
 
