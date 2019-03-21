@@ -283,11 +283,10 @@ solver_cost(solver,res)
 
 @btime _cost($solver,$res)
 @btime cost($quadcost,$X,$U,$dt)
-Diagonal(μ[1])*a[1]
 
 using InteractiveUtils
-@code_warntype stage_constraint_cost(alcost,X[1],U[1],1)
 @code_warntype penalty_cost(cval[1],λ[1],μ[1])
+@code_warntype stage_constraint_cost(alcost,X[1],U[1],1)
 
 @btime constraint_cost($cval,$λ,$μ,$a,$Iμ)
 @btime constraint_cost($cval,$λ,$μ,$a)
@@ -295,4 +294,6 @@ using InteractiveUtils
 @code_warntype inequality_active!(a,v_stage,λ)
 using InteractiveUtils
 
+taylor_expansion(alcost,X[1],U[1],1)
+taylor_expansion(alcost,X[N])
 a.equality .= true

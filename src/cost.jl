@@ -311,17 +311,17 @@ function cost(alcost::AugmentedLagrangianCost,X::Trajectory,U::Trajectory,dt::Ab
 end
 
 function taylor_expansion(alcost::AugmentedLagrangianCost,x,u, k::Int)
-    Q,R,H,q,r = taylor_expansion(alcost.cost,x,u)
+    Q,R,H,q,r = taylor_expansion(alcost.cost,x,u,k)
 
     c = alcost.c[k]
     λ = alcost.λ[k]
     μ = alcost.μ[k]
-    cx = ∇c.x
-    cu = ∇c.u
     a = active_set(c,λ)
     Iμ = Diagonal(a .* μ)
     ∇c = alcost.∇c[k]
     jacobian!(∇c,alcost.constraints,x,u)
+    cx = ∇c.x
+    cu = ∇c.u
 
     # Second Order pieces
     Q += cx'Iμ*cx
