@@ -168,7 +168,7 @@ end
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
     N = length(X)
     for k = 1:N-1
-        jacobian!(Z[k],model,X[k],U[k])
+        jacobian!(Z[k],model,X[k],U[k],dt)
     end
 end
 
