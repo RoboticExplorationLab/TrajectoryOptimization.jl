@@ -1,10 +1,10 @@
-function rollout!(p::Problem,res::iLQRResults,sol::iLQRSolver,alpha::Float64)
-    X = p.X; U = p.U
-    K = res.K; d = res.d; X̄ = res.X̄; Ū = res.Ū
+function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
+    X = prob.X; U = prob.U
+    K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    X̄[1] = p.x0
+    X̄[1] = prob.x0
 
-    for k = 2:p.N
+    for k = 2:prob.N
         # Calculate state trajectory difference
         δx = X̄[k-1] - X[k-1]
 
@@ -12,10 +12,10 @@ function rollout!(p::Problem,res::iLQRResults,sol::iLQRSolver,alpha::Float64)
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        evaluate!(X̄[k], p.model, X̄[k-1], Ū[k-1])
+        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1])
 
         # Check that rollout has not diverged
-        if ~(norm(X̄[k],Inf) < sol.max_state_value && norm(Ū[k-1],Inf) < sol.max_control_value)
+        if ~(norm(X̄[k],Inf) < solver.max_state_value && norm(Ū[k-1],Inf) < solver.max_control_value)
             return false
         end
     end

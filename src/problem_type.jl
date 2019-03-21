@@ -90,3 +90,8 @@ function check_problem(p::Problem)
 
     return flag
 end
+
+
+jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U)
+
+cost(prob::Problem,X=prob.X,U=prob.U) = cost(prob.cost,X,U,prob.dt)

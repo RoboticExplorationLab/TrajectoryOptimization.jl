@@ -108,6 +108,13 @@ include("dynamics.jl")
 include("logger.jl")
 include("controller.jl")
 
+include("problem_type.jl")
+include("solvers.jl")
+include("solvers_new.jl")
+include("ilqr.jl")
+include("backwardpass_new.jl")
+include("forward_pass_new.jl")
+
 using Ipopt
 
 # DIRCOL methods

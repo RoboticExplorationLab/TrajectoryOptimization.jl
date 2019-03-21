@@ -1,8 +1,8 @@
 using Parameters
 
-abstract type SolverOptionsNew{T<:Real} end
+abstract type AbstractSolverOptions{T<:Real} end
 
-@with_kw mutable struct iLQRSolverOptions{T} <: SolverOptionsNew{T}
+@with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
     cost_tolerance::T = 1.0e-4
@@ -77,9 +77,9 @@ abstract type SolverOptionsNew{T<:Real} end
     max_control_value::T = 1.0e8
 end
 
-@with_kw mutable struct ALSolverOptions{T} <: SolverOptionsNew{T}
+@with_kw mutable struct ALSolverOptions{T} <: AbstractSolverOptions{T}
     "unconstrained minimization solver"
-    unconstrained_solver::SolverOptionsNew = iLQRSolverOptions{T}()
+    unconstrained_solver::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
     "max(constraint) < ϵ, constraint convergence criteria"
     constraint_tolerance::T = 1.0e-3
@@ -124,7 +124,7 @@ end
     use_penalty_burnin::Bool = false
 end
 
-@with_kw mutable struct ALTROSolverOptions{T} <: SolverOptionsNew{T}
+@with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
     ## Infeasible Start
     "infeasible control constraint tolerance"
     constraint_tolerance_infeasible::T = 1.0e-5
