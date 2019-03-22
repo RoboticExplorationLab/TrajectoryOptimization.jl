@@ -1,3 +1,8 @@
+using LinearAlgebra
+using BlockArrays
+using ForwardDiff
+using BenchmarkTools
+
 model,obj = Dynamics.dubinscar
 solver = Solver(model,obj,N=21)
 n,m,N = get_sizes(solver)
@@ -18,10 +23,10 @@ z = [x;u]
 solver.Fd(dz,z)
 dz == [dx du]
 
-ind_z = create_partition([n,m],(:x,:u))
-ind2_z = create_partition2([n,m],(:x,:u))
+ind_z = create_partition((n,m),(:x,:u))
+ind2_z = create_partition2((n,m),(:x,:u))
 f = model.f
-fd! = rk4(f,solver.dt)
+fd! = TrajectoryOptimization.rk4(f,solver.dt)
 fd_aug!(xdot,z) = fd!(xdot,view(z,ind_z.x),view(z,ind_z.u))
 f_aug!(xdot,z) = f(xdot,view(z,ind_z.x),view(z,ind_z.u))
 fd_aug2!(dS,S::Array) = begin
@@ -48,6 +53,8 @@ dz == dz2 == [dx du]
 @btime Fd!($dz,$z)
 @btime Fd2!($dz,$z)
 @btime solver.Fd($dz,$z)
+
+inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
 
 function Fd_split!(dx,du,x,u)
     z[ind_z.x] = x
