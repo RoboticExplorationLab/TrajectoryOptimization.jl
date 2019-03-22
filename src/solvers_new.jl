@@ -67,8 +67,7 @@ end
 
 function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     # Init solver statistics
-    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:dJ=>T[],:gradient=>T[],
-        :dJ_zero_counter=>0)
+    stats = Dict{Symbol,Any}()
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
@@ -90,7 +89,17 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
 
     bp = BackwardPassNew(prob)
 
-    iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
+    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
+    reset!(solver)
+    return solver
+end
+
+function reset!(solver::iLQRSolver{T}) where T
+    solver.stats[:iterations]      = 0
+    solver.stats[:cost]            = T[]
+    solver.stats[:dJ]              = T[]
+    solver.stats[:gradient]        = T[]
+    solver.stats[:dJ_zero_counter] = 0
 end
 
 function copy(r::iLQRSolver{T}) where T

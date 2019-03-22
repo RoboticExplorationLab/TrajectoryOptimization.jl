@@ -1,24 +1,39 @@
 
 function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
+    reset!(solver)
+
     n,m,N = size(prob)
     J = Inf
+
+    logger = default_logger(true)
 
     # Initial rollout
     rollout!(prob)
     J_prev = cost(prob.cost, prob.X, prob.U, prob.dt)
     push!(solver.stats[:cost], J_prev)
 
-    for i = 1:solver.opts.iterations
-        J = step!(prob, solver, J_prev)
-        copyto!(prob.X,solver.X̄)
-        copyto!(prob.U,solver.Ū)
+    with_logger(logger) do
+        for i = 1:solver.opts.iterations
+            J = step!(prob, solver, J_prev)
+            copyto!(prob.X,solver.X̄)
+            copyto!(prob.U,solver.Ū)
 
-        dJ = abs(J - J_prev)
-        J_prev = copy(J)
-        record_iteration!(prob, solver, J, dJ)
-        evaluate_convergence(solver) ? break : nothing
+            dJ = abs(J - J_prev)
+            J_prev = copy(J)
+            record_iteration!(prob, solver, J, dJ)
+
+            println(logger,InnerLoop)
+            evaluate_convergence(solver) ? break : nothing
+        end
     end
     return J
+end
+
+
+function solve(prob0::Problem{T},solver::iLQRSolver{T})::Problem{T} where T
+    prob = copy(prob0)
+    solve!(prob,solver)
+    return prob
 end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
@@ -33,6 +48,12 @@ function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T)
     push!(solver.stats[:dJ], dJ)
     push!(solver.stats[:gradient],calculate_gradient(prob,solver))
     dJ == 0 ? solver.stats[:dJ_zero_counter] += 1 : solver.stats[:dJ_zero_counter] = 0
+
+    @logmsg InnerLoop :iter value=solver.stats[:iterations]
+    @logmsg InnerLoop :cost value=J
+    @logmsg InnerLoop :dJ   value=dJ
+    @logmsg InnerLoop :grad value=solver.stats[:gradient][end]
+    @logmsg InnerLoop :zero_count value=solver.stats[:dJ_zero_counter][end]
 end
 
 function calculate_gradient(prob::Problem,solver::iLQRSolver)

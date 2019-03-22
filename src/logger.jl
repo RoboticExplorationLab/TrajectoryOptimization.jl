@@ -4,19 +4,19 @@ const OuterLoop = LogLevel(-100)
 const InnerLoop = LogLevel(-200)
 const InnerIters = LogLevel(-500)
 
-function default_logger(solver::Solver)
-    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
+function default_logger(verbose::Bool)
+    verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
 
     logger = SolverLogger(min_level)
-    inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
-    inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
+    inner_cols = [:iter, :cost, :expected, :z, :α, :info]
+    inner_widths = [5,     14,      12,    10, 10,    50]
     outer_cols = [:outeriter, :iter, :iterations, :info]
     outer_widths = [10,          5,        12,        40]
     add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
     add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
     return logger
 end
-
+default_logger(solver::Solver) = default_logger(solver.opts.verbose)
 
 
 """
@@ -35,16 +35,21 @@ struct LogData
     data::Dict{Symbol,Any}
     cache::Dict{Symbol,Vector}
     metadata::NamedTuple
-    LogData(cols,widths,print::BitArray{1},data::Dict{Symbol,Any},cache::Dict{Symbol,Vector},metadata::NamedTuple) = new(cols,widths,print,data,cache,metadata)
+    LogData(cols,widths,print::BitArray{1},data::Dict{Symbol,Any},cache::Dict{Symbol,Vector},
+        metadata::NamedTuple) = new(cols,widths,print,data,cache,metadata)
 end
 
+Base.getindex(ldata::LogData,index::Symbol) = ldata.data[index]
+
 "$(SIGNATURES) Default (empty) constructor)"
-function LogData(metadata::NamedTuple=(color=:default,))
+function LogData(metadata::NamedTuple=(color=:default,header_frequency=10, indent=0))
     LogData(Symbol[],Int[],BitArray{1}(),Dict{Symbol,Any}(),Dict{Symbol,Vector}(),metadata)
 end
 
 "$(SIGNATURES) Create LogData pre-specifying columns, widths, and optionally printing and variable types (recommended)"
-function LogData(cols,widths; do_print=trues(length(cols)), vartypes=fill(Any,length(cols)), metadata=(color=:default,))
+function LogData(cols,widths; do_print=trues(length(cols)), vartypes=fill(Any,length(cols)),
+        color=:default, header_frequency=10, indent=0)
+    metadata = (color=color,header_frequency=header_frequency,indent=indent)
     ldata = LogData(metadata)
     for (col,width,prnt,vartype) in zip(cols,widths,do_print,vartypes)
         add_col!(ldata,col,width,do_print=prnt,vartype=vartype)
@@ -53,7 +58,7 @@ function LogData(cols,widths; do_print=trues(length(cols)), vartypes=fill(Any,le
 end
 
 "$(SIGNATURES) Store the current data in the cache"
-function cache_data(ldata::LogData)
+function cache_data!(ldata::LogData)
     for (key,val) in ldata.data
         if isempty(val) && eltype(ldata.cache[key]) <: Number
             val = NaN
@@ -82,6 +87,16 @@ function clear!(ldata::LogData)
     end
 end
 
+function clear_cache!(ldata::LogData)
+    for key in keys(ldata.data)
+        if key == :info
+            ldata.cache[key] = Vector{Vector{String}}()
+        else
+            ldata.cache[key] = Vector{eltype(ldata.cache[key])}()
+        end
+    end
+end
+
 """$(SIGNATURES) Add a column to the table
 # Arguments
 * idx: specify the order in the table. 0 will insert at the end, and any negative number will index from the end
@@ -89,10 +104,16 @@ end
 * vartype: Type of the variable (recommended). Default=Any
 """
 function add_col!(ldata::LogData,name::Symbol,width::Int=10,idx::Int=0; do_print::Bool=true, vartype::Type=Any)
+    # Don't add a duplicate column
+    if name ∈ ldata.cols; return nothing end
+
+    # Set location
     name == :info ? idx = 0 : nothing
     if idx <= 0
         idx = length(ldata.cols) + 1 + idx
     end
+
+    # Add to ldata
     insert!(ldata.cols,idx,name)
     insert!(ldata.widths,idx,width)
     insert!(ldata.print,idx,do_print)
@@ -190,8 +211,11 @@ struct SolverLogger <: Logging.AbstractLogger
     default_logger::ConsoleLogger
 end
 
+Base.getindex(logger::SolverLogger, level::LogLevel) = logger.leveldata[level]
+
+
 function SolverLogger(min_level::LogLevel=Logging.Info; default_width=10, io::IO=stderr)
-    SolverLogger(io,min_level,default_width,Dict{LogLevel,LogData}(),ConsoleLogger())
+    SolverLogger(io,min_level,default_width,Dict{LogLevel,LogData}(),ConsoleLogger(stderr,min_level))
 end
 
 """ $(SIGNATURES)
@@ -202,9 +226,16 @@ data generated at that level. Additional keyword arguments (from LogData constru
 * do_print = BitArray specifying whether or now the column should be printed (or just cached and not printed)
 """
 function add_level!(logger::SolverLogger, level::LogLevel, cols, widths; print_color=:default, indent=0, kwargs...)
-    logger.leveldata[level] = LogData(cols, widths, metadata=(color=print_color, indent=indent); kwargs...)
+    logger.leveldata[level] = LogData(cols, widths, color=print_color, indent=indent)
 end
 
+function Base.println(logger::SolverLogger, level::LogLevel)
+    ldata = logger[level]
+    if cache_size(ldata) % ldata.metadata.header_frequency == 0
+        print_header(logger,level)
+    end
+    print_row(logger,level)
+end
 
 "$(SIGNATURES) Print the header row for a given level (in color)"
 function print_header(logger::SolverLogger,level::LogLevel)
@@ -219,7 +250,7 @@ end
 function print_row(logger::SolverLogger,level::LogLevel)
     if  level >= logger.min_level
         println(logger.io, create_row(logger.leveldata[level]))
-        cache_data(logger.leveldata[level])
+        cache_data!(logger.leveldata[level])
         clear!(logger.leveldata[level])
     end
 end
@@ -239,15 +270,17 @@ Usage Example:
 
 """
 function Logging.handle_message(logger::SolverLogger, level, message::Symbol, _module, group, id, file, line; value=NaN, print=true, loc=-1, width=logger.default_width)
-    if level in keys(logger.leveldata)  && level >= logger.min_level
-        ldata = logger.leveldata[level]
-        if !(message in ldata.cols)
-            :info in ldata.cols ? idx = loc : idx = 0  # add before last "info" column
-            width = max(width,length(string(message))+1)
-            add_col!(ldata, message, width, idx, do_print=print, vartype=typeof(value))
+    if level in keys(logger.leveldata)
+        if level >= logger.min_level
+            ldata = logger.leveldata[level]
+            if !(message in ldata.cols)
+                :info in ldata.cols ? idx = loc : idx = 0  # add before last "info" column
+                width = max(width,length(string(message))+1)
+                add_col!(ldata, message, width, idx, do_print=print, vartype=typeof(value))
+            end
+            logger.leveldata[level].data[message] = value
         end
-        logger.leveldata[level].data[message] = value
-    else
+    else level >= logger.min_level
         # Pass off to global logger
         Logging.handle_message(logger.default_logger, level, message, _module, group, id, file, line)
     end
@@ -255,14 +288,16 @@ end
 
 "$(SIGNATURES) Adds a message to the special :info column, which will join all messages together and print them (like a NOTES column)"
 function Logging.handle_message(logger::SolverLogger, level, message::String, _module, group, id, file, line; value=NaN)
-    if level in keys(logger.leveldata)  && level >= logger.min_level
-        ldata = logger.leveldata[level]
-        if !(:info in ldata.cols)
-            add_col!(ldata, :info, 20)
-            ldata.data[:info] = String[]
+    if level in keys(logger.leveldata)
+        if level >= logger.min_level
+            ldata = logger.leveldata[level]
+            if !(:info in ldata.cols)
+                add_col!(ldata, :info, 20)
+                ldata.data[:info] = String[]
+            end
+            # Append message to info field
+            push!(ldata.data[:info], message)
         end
-        # Append message to info field
-        push!(ldata.data[:info], message)
     else
         # Pass off to global logger
         Logging.handle_message(logger.default_logger, level, message, _module, group, id, file, line)
