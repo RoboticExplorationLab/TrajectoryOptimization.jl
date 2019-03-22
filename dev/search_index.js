@@ -233,14 +233,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "#TrajectoryOptimization.bound_constraint",
-    "page": "TrajectoryOptimization.jl",
-    "title": "TrajectoryOptimization.bound_constraint",
-    "category": "function",
-    "text": "bound_constraint(n, m; x_min, x_max, u_min, u_max, trim)\n\n\nCreate a stage bound constraint Will default to bounds at infinity. \"trim\" will remove any bounds at infinity from the constraint function.\n\n\n\n\n\n"
-},
-
-{
     "location": "#Special-Constraints-1",
     "page": "TrajectoryOptimization.jl",
     "title": "Special Constraints",
@@ -249,7 +241,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#",
+    "location": "models/#",
     "page": "Setting up a Dynamics Model",
     "title": "Setting up a Dynamics Model",
     "category": "page",
@@ -257,15 +249,15 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#Setting-up-a-Dynamics-Model-1",
+    "location": "models/#Setting-up-a-Dynamics-Model-1",
     "page": "Setting up a Dynamics Model",
     "title": "Setting up a Dynamics Model",
     "category": "section",
-    "text": "CurrentModule = TrajectoryOptimizationDocumentation for TrajectoryOptimization.jl"
+    "text": "CurrentModule = TrajectoryOptimization"
 },
 
 {
-    "location": "Models/#Overview-1",
+    "location": "models/#Overview-1",
     "page": "Setting up a Dynamics Model",
     "title": "Overview",
     "category": "section",
@@ -273,7 +265,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#Continuous-Models-1",
+    "location": "models/#Continuous-Models-1",
     "page": "Setting up a Dynamics Model",
     "title": "Continuous Models",
     "category": "section",
@@ -281,7 +273,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.AnalyticalModel",
+    "location": "models/#TrajectoryOptimization.AnalyticalModel",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.AnalyticalModel",
     "category": "type",
@@ -289,7 +281,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.Model",
+    "location": "models/#TrajectoryOptimization.Model",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.Model",
     "category": "type",
@@ -297,7 +289,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.Model",
+    "location": "models/#TrajectoryOptimization.Model",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.Model",
     "category": "type",
@@ -305,7 +297,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.Model",
+    "location": "models/#TrajectoryOptimization.Model",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.Model",
     "category": "type",
@@ -313,7 +305,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.Model",
+    "location": "models/#TrajectoryOptimization.Model",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.Model",
     "category": "type",
@@ -321,7 +313,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#Analytical-Models-1",
+    "location": "models/#Analytical-Models-1",
     "page": "Setting up a Dynamics Model",
     "title": "Analytical Models",
     "category": "section",
@@ -329,7 +321,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.RBDModel",
+    "location": "models/#TrajectoryOptimization.RBDModel",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.RBDModel",
     "category": "type",
@@ -337,7 +329,39 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#URDF-Models-1",
+    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism,Array}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(mech, torques)\n\n\nModel(mech::Mechanism, torques::Array{Bool, 1}) Constructor for an underactuated mechanism, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(mech)\n\n\nConstruct model from a Mechanism type from RigidBodyDynamics\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{String}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(urdf)\n\n\nConstruct a fully actuated model from a string to a urdf file\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{String,Array{Float64,1}}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(urdf, torques)\n\n\nConstruct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#URDF-Models-1",
     "page": "Setting up a Dynamics Model",
     "title": "URDF Models",
     "category": "section",
@@ -345,7 +369,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#Discrete-Models-1",
+    "location": "models/#Discrete-Models-1",
     "page": "Setting up a Dynamics Model",
     "title": "Discrete Models",
     "category": "section",
@@ -353,7 +377,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#Analytical-1",
+    "location": "models/#Analytical-1",
     "page": "Setting up a Dynamics Model",
     "title": "Analytical",
     "category": "section",
@@ -361,7 +385,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#TrajectoryOptimization.Model-Union{Tuple{Discrete}, Tuple{Model{Continuous},Function}} where Discrete",
+    "location": "models/#TrajectoryOptimization.Model-Union{Tuple{Discrete}, Tuple{Model{Continuous},Function}} where Discrete",
     "page": "Setting up a Dynamics Model",
     "title": "TrajectoryOptimization.Model",
     "category": "method",
@@ -369,7 +393,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#From-Continuous-Model-1",
+    "location": "models/#From-Continuous-Model-1",
     "page": "Setting up a Dynamics Model",
     "title": "From Continuous Model",
     "category": "section",
@@ -377,11 +401,59 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "Models/#API-1",
+    "location": "models/#API-1",
     "page": "Setting up a Dynamics Model",
     "title": "API",
     "category": "section",
     "text": "evaluate!(ẋ::AbstractVector,model::Model,x,u)\nevaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,model::Model,x,u)\nevals(model::Model)\nreset(model::Model)"
+},
+
+{
+    "location": "constraints/#",
+    "page": "Constraints",
+    "title": "Constraints",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "constraints/#Constraints-1",
+    "page": "Constraints",
+    "title": "Constraints",
+    "category": "section",
+    "text": "CurrentModule = TrajectoryOptimization"
+},
+
+{
+    "location": "constraints/#Constraint-Type-1",
+    "page": "Constraints",
+    "title": "Constraint Type",
+    "category": "section",
+    "text": "AbstractConstraint\nConstraint\nTerminalConstraint\nConstraintType\nEquality\nInequalityThere are two constraint types that inherit from AbstractConstraint: Constraint and TerminalConstraint. Both of these constraints are parameterized by a ConstraintType, which can be either Equality or Inequality. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vector or scalar-valued). Each constraint contains the following fields:c - the in-place constraint function. Of the form c(v,x,u) for Constraint and c(v,x) for TerminalConstraint.\n∇c - the in-place constraint jacobian function. For Constraint it can either be called as ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, or as ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian. For TerminalConstraint there is only ∇c(A,x).\np - number of elements in the constraint vector\nlabel - a Symbol for identifying the constraint"
+},
+
+{
+    "location": "constraints/#Creating-Constraints-1",
+    "page": "Constraints",
+    "title": "Creating Constraints",
+    "category": "section",
+    "text": "A stage-wise constraint can be created with either of the two constructorsConstraint{S}(c::Function,∇c::Function,p::Int,label::Symbol) where S<:ConstraintType\nConstraint{S}(c::Function,n::Int,m::Int,p::Int,label::Symbol) where S<:ConstraintTypeThe first is the default constructor. c must be in-place of the form c(v,x,u) where v holds the constraint function values. ∇c must be multiple dispatched to have the forms ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, and ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian.The second will use ForwardDiff to generate the constraint Jacobian, so requires the size of the state and control input vectors.A terminal constraint can be similarly defined using one of the following constructorsTerminalConstraint{S}(c::Function,∇c::Function,p::Int,label::Symbol) where S<:ConstraintType\nTerminalConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType\nConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintTypewhich are identical to the ones above, expect that they require a constraint function and Jacobian of the form c(v,x) and ∇c(A,x)."
+},
+
+{
+    "location": "constraints/#TrajectoryOptimization.bound_constraint",
+    "page": "Constraints",
+    "title": "TrajectoryOptimization.bound_constraint",
+    "category": "function",
+    "text": "bound_constraint(n, m; x_min, x_max, u_min, u_max, trim)\n\n\nCreate a stage bound constraint Will default to bounds at infinity. \"trim\" will remove any bounds at infinity from the constraint function.\n\n\n\n\n\n"
+},
+
+{
+    "location": "constraints/#Special-Constraints-1",
+    "page": "Constraints",
+    "title": "Special Constraints",
+    "category": "section",
+    "text": "A few constructors for common constraints have been provided:bound_constraint"
 },
 
 ]}
