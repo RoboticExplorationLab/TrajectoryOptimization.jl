@@ -49,7 +49,7 @@ end
 function Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
     N = length(U) + 1
     X = empty_state(model.n,N)
-    Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
+    Problem(model,cost,AbstractConstraint[],x0,X,deepcopy(U),N,dt)
 end
 
 # Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
@@ -74,9 +74,13 @@ empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
 function update_problem(p::Problem;
     model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
-    N=p.N,dt=p.dt)
+    N=p.N,dt=p.dt,newProb=true)
 
-    Problem(model,cost,constraints,x0,X,U,N,dt)
+    if newProb
+        Problem(model,cost,constraints,x0,deepcopy(X),deepcopy(U),N,dt)
+    else
+        Problem(model,cost,constraints,x0,X,U,N,dt)
+    end
 end
 
 function add_constraints!(p::Problem,c::Constraint)

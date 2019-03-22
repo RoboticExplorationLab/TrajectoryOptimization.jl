@@ -31,8 +31,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        expansion = taylor_expansion(prob.cost,X[k],U[k])
-        Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = expansion
+        Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = taylor_expansion(prob.cost,X[k],U[k],k)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 

@@ -214,14 +214,14 @@ Cost function of the form
 struct AugmentedLagrangianCost{T} <: CostFunction
     cost::C where C<:CostFunction
     constraints::ConstraintSet
+    C::PartedVecTrajectory{T}  # Constraint values
+    ∇C::PartedMatTrajectory{T} # Constraint jacobians
     λ::PartedVecTrajectory{T}  # Lagrange multipliers
     μ::PartedVecTrajectory{T}  # Penalty Term
-    a::PartedVecTrajectory{Bool}  # Active set
-    c::PartedVecTrajectory{T}  # Constraint values
-    ∇c::PartedMatTrajectory{T}    # Constraint jacobians
+    active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
-function update_constraints!(c::Trajectory,constraints::ConstraintSet,X::Trajectory,U::Trajectory)
+function update_constraints!(c::PartedVecTrajectory{T},constraints::ConstraintSet,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
         evaluate!(c[k],constraints,X[k],U[k])
@@ -229,80 +229,85 @@ function update_constraints!(c::Trajectory,constraints::ConstraintSet,X::Traject
     evaluate!(c[N],constraints,X[N])
 end
 
-function active_set!(a::Trajectory,c::Trajectory,λ::Trajectory,tol=1e-3)
+function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
     N = length(c)
     for k = 1:N
         active_set!(a[k],c[k],λ[k])
     end
 end
 
-function active_set!(a::AbstractVector{Bool}, c::AbstractVector, λ::AbstractVector, tol=1e-3)
+function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
     # inequality_active!(a,c,λ,tol)
     a.equality .= true
     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
     return nothing
 end
 
-function active_set(c::AbstractVector, λ::AbstractVector, tol=1e-3)
+function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
     a = BlockArray(trues(length(c)),c.parts)
     a.equality .= true
     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
     return a
 end
 
-function update_Iμ!(Iμ::Trajectory,a::Trajectory,μ::Trajectory)
-    N = length(a)
-    for k = 1:N
-        Iμ[k] .= a[k] .* μ[k]
-    end
-end
+# function update_Iμ!(Iμ::Trajectory{T},a::Trajectory{Bool},μ::Trajectory{T}) where T
+#     N = length(a)
+#     for k = 1:N
+#         Iμ[k] .= a[k] .* μ[k]
+#     end
+# end
 
-function constraint_cost(c::Trajectory,λ::Trajectory,μ::Trajectory,a::Trajectory)::AbstractFloat
-    N = length(c)
-    J = 0.0
-    for k = 1:N
-        a = active_set!(c[k],λ[k])
-        J += λ[k]'c[k] + 1/2*c[k]'Diagonal(a .* μ[k])*c[k]
-    end
-    return J
-end
+# function constraint_cost(c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},μ::PartedVecTrajectory{T},a::PartedVecTrajectory{Bool}) where T
+#     N = length(c)
+#     J = 0.0
+#     for k = 1:N
+#         a = active_set!(c[k],λ[k])
+#         J += λ[k]'c[k] + 1/2*c[k]'Diagonal(a .* μ[k])*c[k]
+#     end
+#     return J
+# end
 
-function penalty_cost(c::AbstractVector,λ::AbstractVector,μ::AbstractVector)
-    a = active_set(c,λ)
-    Iμ = Diagonal(μ.A)
-    Iμ = Iμ*a.A
+function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
+    # a = active_set(c,λ)
+    # Iμ = Diagonal(μ.A)
+    # Iμ = Iμ*a.A
     λ'c + 1/2*c'Diagonal(a .* μ)*c
 end
 
-function stage_constraint_cost(alcost::AugmentedLagrangianCost,x,u,k::Int)
-    c = alcost.c[k]
+function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
+    c = alcost.C[k]
     λ = alcost.λ[k]
     μ = alcost.μ[k]
-    evaluate!(c,alcost.constraints,x,u)
-    penalty_cost(c,λ,μ)
+    a = alcost.active_set[k]
+    # evaluate!(c,alcost.constraints,x,u)
+    aula_cost(a,c,λ,μ)
 end
 
-function stage_constraint_cost(alcost::AugmentedLagrangianCost,x)
-    c = alcost.c[end]
+function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+    c = alcost.C[end]
     λ = alcost.λ[end]
     μ = alcost.μ[end]
-    evaluate!(c,alcost.constraints,x)
-    penalty_cost(c,λ,μ)
+    a = alcost.active_set[end]
+    # evaluate!(c,alcost.constraints,x)
+    aula_cost(a,c,λ,μ)
 end
 
-function stage_cost(alcost::AugmentedLagrangianCost, x::AbstractVector, u::AbstractVector, k)
+function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
     J0 = stage_cost(alcost.cost,x,u,k)
     J0 + stage_constraint_cost(alcost,x,u,k)
 end
 
-function stage_cost(alcost::AugmentedLagrangianCost, x::AbstractVector)
+function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}) where T
     J0 = stage_cost(alcost.cost,x)
     J0 + stage_constraint_cost(alcost,x)
 end
 
-function cost(alcost::AugmentedLagrangianCost,X::Trajectory,U::Trajectory,dt::AbstractFloat)
+function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
     J = cost(alcost.cost,X,U,dt)
+    update_constraints!(alcost.C,alcost.constraints,X,U)
+    update_active_set!(alcost.active_set,alcost.C,alcost.λ)
+
     for k = 1:N-1
         J += stage_constraint_cost(alcost,X[k],U[k],k)
     end
@@ -310,15 +315,16 @@ function cost(alcost::AugmentedLagrangianCost,X::Trajectory,U::Trajectory,dt::Ab
     return J
 end
 
-function taylor_expansion(alcost::AugmentedLagrangianCost,x,u, k::Int)
+function taylor_expansion(alcost::AugmentedLagrangianCost{T},
+        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
     Q,R,H,q,r = taylor_expansion(alcost.cost,x,u,k)
 
-    c = alcost.c[k]
+    c = alcost.C[k]
     λ = alcost.λ[k]
     μ = alcost.μ[k]
     a = active_set(c,λ)
     Iμ = Diagonal(a .* μ)
-    ∇c = alcost.∇c[k]
+    ∇c = alcost.∇C[k]
     jacobian!(∇c,alcost.constraints,x,u)
     cx = ∇c.x
     cu = ∇c.u
@@ -336,15 +342,16 @@ function taylor_expansion(alcost::AugmentedLagrangianCost,x,u, k::Int)
     return Q,R,H,q,r
 end
 
-function taylor_expansion(alcost::AugmentedLagrangianCost,x)
+function taylor_expansion(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
     Qf,qf = taylor_expansion(alcost.cost,x)
 
-    c = alcost.c[N]
+    c = alcost.C[N]
     λ = alcost.λ[N]
     μ = alcost.μ[N]
     a = active_set(c,λ)
     Iμ = Diagonal(a .* μ)
-    cx = alcost.∇c[N]
+    cx = alcost.∇C[N]
+
     jacobian!(cx,alcost.constraints,x)
 
     # Second Order pieces
