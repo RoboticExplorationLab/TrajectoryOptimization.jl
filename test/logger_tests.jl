@@ -27,6 +27,7 @@ add_col!(ld,:cost)
 strhead = create_header(ld)
 @test occursin("iter",strhead)
 @test !occursin("outer",strhead)
+@test ld.metadata.header_frequency == 10
 
 # Add entry
 ld.data[:iter] = 1
@@ -50,7 +51,8 @@ clear!(ld)
 
 
 # Logger Tests
-import TrajectoryOptimization: SolverLogger, add_level!, InnerLoop, OuterLoop, print_header, print_row
+import TrajectoryOptimization: SolverLogger, add_level!, InnerLoop, OuterLoop,
+    print_header, print_row, clear_cache!
 logger = SolverLogger(InnerLoop, default_width=15)
 add_level!(logger, InnerLoop, cols, width; print_color=:green, indent=4)
 @test logger.leveldata[InnerLoop].metadata.indent == 4
@@ -94,25 +96,9 @@ strrow = create_row(logger[InnerLoop])
 @test_logs (:warn,:iter) @warn :iter   # Should log
 @test_logs @logmsg LogLevel(-500) :hi  # No logs
 
-function test_logging(a,level)
-    logger = global_logger()
-    for i = 1:length(a)
-        @logmsg level :iter value=a[i]
-        cache_data!(logger[level])
-    end
+clear_cache!(logger[InnerLoop])
+for i = 1:100
+    @logmsg InnerLoop :iter value=i
+    @logmsg InnerLoop :cost value=rand()
+    println(logger,InnerLoop)
 end
-a = 1:100
-TrajectoryOptimization.clear_cache!(logger[InnerLoop])
-test_logging(a,InnerLoop)
-cache_size(logger[InnerLoop])
-TrajectoryOptimization.clear_cache!(logger[InnerLoop])
-@btime test_logging($a,InnerLoop)
-
-function test_dict(a,d)
-    for i = 1:length(a)
-        push!(d[:iter],a[i])
-    end
-end
-d = Dict(:iter=>Int[])
-test_dict(1:10,d)
-@btime test_dict(a,$d)

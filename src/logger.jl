@@ -4,19 +4,19 @@ const OuterLoop = LogLevel(-100)
 const InnerLoop = LogLevel(-200)
 const InnerIters = LogLevel(-500)
 
-function default_logger(solver::Solver)
-    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
+function default_logger(verbose::Bool)
+    verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
 
     logger = SolverLogger(min_level)
-    inner_cols = [:iter, :cost, :expected, :actual, :z, :α, :c_max, :info]
-    inner_widths = [5,     14,      12,        12,  10, 10,   10,      50]
+    inner_cols = [:iter, :cost, :expected, :z, :α, :info]
+    inner_widths = [5,     14,      12,    10, 10,    50]
     outer_cols = [:outeriter, :iter, :iterations, :info]
     outer_widths = [10,          5,        12,        40]
     add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
     add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
     return logger
 end
-
+default_logger(solver::Solver) = default_logger(solver.opts.verbose)
 
 
 """
@@ -42,13 +42,14 @@ end
 Base.getindex(ldata::LogData,index::Symbol) = ldata.data[index]
 
 "$(SIGNATURES) Default (empty) constructor)"
-function LogData(metadata::NamedTuple=(color=:default,))
+function LogData(metadata::NamedTuple=(color=:default,header_frequency=10, indent=0))
     LogData(Symbol[],Int[],BitArray{1}(),Dict{Symbol,Any}(),Dict{Symbol,Vector}(),metadata)
 end
 
 "$(SIGNATURES) Create LogData pre-specifying columns, widths, and optionally printing and variable types (recommended)"
 function LogData(cols,widths; do_print=trues(length(cols)), vartypes=fill(Any,length(cols)),
-        metadata=(color=:default,))
+        color=:default, header_frequency=10, indent=0)
+    metadata = (color=color,header_frequency=header_frequency,indent=indent)
     ldata = LogData(metadata)
     for (col,width,prnt,vartype) in zip(cols,widths,do_print,vartypes)
         add_col!(ldata,col,width,do_print=prnt,vartype=vartype)
@@ -225,9 +226,16 @@ data generated at that level. Additional keyword arguments (from LogData constru
 * do_print = BitArray specifying whether or now the column should be printed (or just cached and not printed)
 """
 function add_level!(logger::SolverLogger, level::LogLevel, cols, widths; print_color=:default, indent=0, kwargs...)
-    logger.leveldata[level] = LogData(cols, widths, metadata=(color=print_color, indent=indent); kwargs...)
+    logger.leveldata[level] = LogData(cols, widths, color=print_color, indent=indent)
 end
 
+function Base.println(logger::SolverLogger, level::LogLevel)
+    ldata = logger[level]
+    if cache_size(ldata) % ldata.metadata.header_frequency == 0
+        print_header(logger,level)
+    end
+    print_row(logger,level)
+end
 
 "$(SIGNATURES) Print the header row for a given level (in color)"
 function print_header(logger::SolverLogger,level::LogLevel)
