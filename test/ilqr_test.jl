@@ -5,7 +5,7 @@ n,m = get_sizes(solver)
 U0 = ones(m,N-1)
 X0 = rollout(solver,U0)
 cost(solver,X0,U0)
-@btime res,stats = solve($solver,$U0)
+res,stats = solve(solver,U0)
 stats["cost"][end]
 plot(res.X)
 
@@ -26,7 +26,7 @@ ilqr = iLQRSolver(prob)
 # ΔV = backwardpass!(prob,ilqr)
 # J = forwardpass!(prob,ilqr,ΔV,J_prev)
 # step!(prob,ilqr,J_prev)
-@btime solve!($prob,$ilqr)
+solve!(prob,ilqr)
 plot(prob.X)
 plot(prob.U)
 

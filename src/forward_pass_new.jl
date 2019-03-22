@@ -12,7 +12,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
     z = -1.
     expected = 0.
 
-    # logger = current_logger()
+    logger = current_logger()
     # @logmsg InnerIters :iter value=0
     # @logmsg InnerIters :cost value=J_prev
     while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
@@ -71,10 +71,10 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
 
     # @logmsg InnerLoop :cost value=J
     # @logmsg InnerLoop :dJ value=J_prev-J
-    # @logmsg InnerLoop :expected value=expected
-    # @logmsg InnerLoop :z value=z
-    # @logmsg InnerLoop :α value=2*alpha
-    # @logmsg InnerLoop :ρ value=solver.ρ[1]
+    @logmsg InnerLoop :expected value=expected
+    @logmsg InnerLoop :z value=z
+    @logmsg InnerLoop :α value=2*alpha
+    @logmsg InnerLoop :ρ value=solver.ρ[1]
 
     if J > J_prev
         error("Error: Cost increased during Forward Pass")
