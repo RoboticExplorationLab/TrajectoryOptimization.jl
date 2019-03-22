@@ -121,6 +121,8 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
             Qux_reg[k] = Qux[k]
         end
 
+
+
         # Regularization
         if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization

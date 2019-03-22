@@ -28,9 +28,31 @@ ilqr = iLQRSolver(prob)
 # step!(prob,ilqr,J_prev)
 @btime solve!($prob,$ilqr)
 plot(prob.X)
+plot(prob.U)
+
+
+
 
 # prob.U isa VectorTrajectory
 # ilqr.∇F isa PartedMatTrajectory
 # jacobian!(ilqr.∇F,prob.model,prob.X,prob.U,prob.dt)
 
 # all(isfinite.(prob.X[1]))
+
+u_max = 4.5
+u_min = 0.0
+bnd = bound_constraint(model.n,model.m,u_min=u_min,u_max=u_max,trim=true)
+add_constraints!(prob,bnd)
+prob
+al_solver = AugmentedLagrangianSolver(prob)
+unconstrained_solver = AbstractSolver(prob, al_solver.opts.unconstrained_solver)
+
+al_solver.λ[prob.N].equality
+step!(prob,al_solver)
+J_prev = solve!(prob, unconstrained_solver)
+dual_update!(prob,al_solver)
+penalty_update!(prob,al_solver)
+al_solver
+
+a = NamedTuple{(:eq,:in)}((1:0,0:0))
+rand(4)[a.eq]

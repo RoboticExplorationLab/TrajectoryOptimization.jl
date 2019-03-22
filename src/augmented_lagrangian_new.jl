@@ -43,9 +43,9 @@ function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
     c = solver.C; λ = solver.λ; μ = solver.μ
 
     for k = 1:prob.N
-        λ[k] = saturate(λ[k] + μ[k].*c[k], solver.opts.dual_max,
-            solver.opts.dual_min)
-        λ[k].inequality = max.(0.0, λ[k].inequality)
+        copyto!(λ[k],saturate(λ[k] + μ[k].*c[k], solver.opts.dual_max,
+            solver.opts.dual_min))
+        copyto!(λ[k].inequality,max.(0.0, λ[k].inequality))
     end
 end
 
@@ -53,6 +53,6 @@ end
 function penalty_update!(prob::Problem, solver::AugmentedLagrangianSolver)
     μ = solver.μ
     for k = 1:prob.N
-        μ[k] = saturate(solver.opts.penalty_scaling * μ[k], solver.opts.penalty_max, 0.0)
+        copyto!(μ[k], saturate(solver.opts.penalty_scaling * μ[k], solver.opts.penalty_max, 0.0))
     end
 end

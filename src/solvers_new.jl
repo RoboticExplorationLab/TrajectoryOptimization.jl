@@ -112,7 +112,7 @@ struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
-function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}=ALSolverOptions{T}()) where T
+function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:c_max=>T[])
     stats_uncon = Dict{Symbol,Any}[]
@@ -131,13 +131,13 @@ function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSo
     C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
     ∇C = [BlockArray(zeros(T,p,n+m),c_part2) for k = 1:N-1]
     λ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    μ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+    μ = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
     active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
     push!(C,BlockVector(T,c_term))
     push!(C_prev,BlockVector(T,c_term))
     push!(∇C,BlockMatrix(T,c_term,n,m))
     push!(λ,BlockVector(T,c_term))
-    push!(μ,BlockVector(T,c_term))
+    push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))
 
     AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)

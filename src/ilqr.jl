@@ -89,7 +89,6 @@ function evaluate_convergence(solver::iLQRSolver)
     return false
 end
 
-
 function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
     if status == :increase # increase regularization
         # @logmsg InnerLoop "Regularization Increased"

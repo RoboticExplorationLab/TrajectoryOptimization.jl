@@ -188,7 +188,13 @@ function jacobian!(Z,C::TerminalConstraintSet,x)
 end
 jacobian!(Z,C::ConstraintSet,x) = jacobian!(Z,terminal(C),x)
 
-RigidBodyDynamics.num_constraints(C::ConstraintSet) = sum(length.(C))
+function RigidBodyDynamics.num_constraints(C::ConstraintSet)
+    if !isempty(C)
+        return sum(length.(C))
+    else
+        return 0
+    end
+end
 labels(C::ConstraintSet) = [c.label for c in C]
 terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))
 stage(C::ConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
@@ -197,28 +203,39 @@ equalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
 bounds(C::ConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
 function PartedArrays.create_partition(C::ConstraintSet)
-    lens = length.(C)
-    part = create_partition(Tuple(lens),Tuple(labels(C)))
-    ineq = BlockArray(trues(sum(lens)),part)
-    for c in C
-        if type(c) == Equality
-            copyto!(ineq[c.label], falses(length(c)))
+    if !isempty(C)
+        lens = length.(C)
+        part = create_partition(Tuple(lens),Tuple(labels(C)))
+        ineq = BlockArray(trues(sum(lens)),part)
+        for c in C
+            if type(c) == Equality
+                copyto!(ineq[c.label], falses(length(c)))
+            end
         end
+        part_IE = (inequality=LinearIndices(ineq)[ineq],equality=LinearIndices(ineq)[.!ineq])
+        return merge(part,part_IE)
+    else
+        return NamedTuple{(:equality,:inequality)}((1:0,1:0))
     end
-    part_IE = (inequality=LinearIndices(ineq)[ineq],equality=LinearIndices(ineq)[.!ineq])
-    return merge(part,part_IE)
 end
 function PartedArrays.create_partition2(C::ConstraintSet,n::Int,m::Int)
-    lens = Tuple(length.(C))
-    names = Tuple(labels(C))
-    p = num_constraints(C)
-    part1 = create_partition(lens,names)
-    part2 = NamedTuple{names}([(rng,1:n+m) for rng in part1])
-    part_xu = (x=(1:p,1:n),u=(1:p,n+1:n+m))
-    return merge(part2,part_xu)
+    if !isempty(C)
+        lens = Tuple(length.(C))
+        names = Tuple(labels(C))
+        p = num_constraints(C)
+        part1 = create_partition(lens,names)
+        part2 = NamedTuple{names}([(rng,1:n+m) for rng in part1])
+        part_xu = (x=(1:p,1:n),u=(1:p,n+1:n+m))
+        return merge(part2,part_xu)
+    else
+        return NamedTuple{(:equality,:inequality)}((1:0,1:0))
+    end
 end
 
-PartedArrays.BlockVector(C::ConstraintSet) = BlockArray(zeros(sum(length.(C))), create_partition(C))
+PartedArrays.BlockVector(C::ConstraintSet) = BlockArray(zeros(num_constraints(C)), create_partition(C))
 PartedArrays.BlockVector(T::Type,C::ConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
 PartedArrays.BlockMatrix(C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
 PartedArrays.BlockMatrix(T::Type,C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
+
+num_stage_constraints(C::ConstraintSet) = num_constraints(stage(C))
+num_terminal_constraints(C::ConstraintSet) = num_constraints(terminal(C))
