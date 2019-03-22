@@ -1,182 +1,6 @@
 var documenterSearchIndex = {"docs": [
 
 {
-    "location": "Models/#",
-    "page": "Setting up a Dynamics Model",
-    "title": "Setting up a Dynamics Model",
-    "category": "page",
-    "text": ""
-},
-
-{
-    "location": "Models/#Setting-up-a-Dynamics-Model-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Setting up a Dynamics Model",
-    "category": "section",
-    "text": "CurrentModule = TrajectoryOptimizationDocumentation for TrajectoryOptimization.jl"
-},
-
-{
-    "location": "Models/#Overview-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Overview",
-    "category": "section",
-    "text": "The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form ẋ = f(x,u) where ẋ is the state derivative, x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.TrajectoryOptimization.jl poses the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.Sometimes is it convenient to write down the difference equation directly, rather than running a differential equation through a discretizing integration method. TrajectoryOptimization.jl offers method deal directly with either continuous differential equations, or discrete difference equations.The Model type is parameterized by the DynamicsType, which is either Continuous, or Discrete. The models holds the equation f and it\'s Jacobian, ∇f, along with the dimensions of the state and control vectors.Models can be created by writing down the dynamics analytically or be generated from a URDF file via RigidBodyDynamics.jl."
-},
-
-{
-    "location": "Models/#Continuous-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Continuous Models",
-    "category": "section",
-    "text": "Continuous models assume differential equations are specified by an in-place function in one of the following forms:f!(ẋ,x,u)\nf!(ẋ,x,u,p)and Jacobians of the form∇f!(Z,x,u)\n∇f!(Z,x,u,p)where ẋ is the state derivative, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)]). As soon as the model is created, however, only the forms without parameters (the top lines) are available. The Model type will automatically bake in the parameters. A new model must be created if a parameter is changed (this will be made easier in the future)."
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.AnalyticalModel",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.AnalyticalModel",
-    "category": "type",
-    "text": "struct AnalyticalModel{D} <: Model{D}\n\nDynamics model\n\nHolds all information required to uniquely describe a dynamic system, including a general nonlinear dynamics function of the form ẋ = f(x,u), where x ∈ ℜⁿ are the states and u ∈ ℜᵐ are the controls.\n\nDynamics function Model.f should be in the following forms:     \'f!(ẋ,x,u)\' and modify ẋ in place\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, n, m, p)\nModel(f, n, m, p, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters Dynamics function of the form:     f(ẋ,x,u)\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, ∇f, n, m, p)\nModel(f, ∇f, n, m, p, d)\n\n\nCreate a dynamics model with an analytical Jacobian, with parameters Dynamics functions pass in parameters:     f(ẋ,x,u,p)     ∇f(Z,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, ∇f, n, m)\nModel(f, ∇f, n, m, d)\n\n\nCreate a dynamics model with an analytical Jacobian, without parameters Dynamics functions pass of the form:     f(ẋ,x,u)     ∇f(Z,x,u)\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#Analytical-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Analytical Models",
-    "category": "section",
-    "text": "AnalyticalModelThe following constructors can be used to create Continuous Analytical modelsModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.RBDModel",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.RBDModel",
-    "category": "type",
-    "text": "struct RBDModel{D} <: Model{D}\n\nRigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#URDF-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "URDF Models",
-    "category": "section",
-    "text": "RBDModelThe following constructors can be used to create a Model from a URDF fileModel(mech::Mechanism, torques::Array)\nModel(mech::Mechanism)\nModel(urdf::String)\nModel(urdf::String,torques::Array{Float64,1})"
-},
-
-{
-    "location": "Models/#Discrete-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Discrete Models",
-    "category": "section",
-    "text": "Discrete models assume difference equations are specified by an in-place function in one of the following forms:f!(x′,x,u,dt)\nf!(x′,x,u,p,dt)and Jacobians of the form∇f!(Z,x,u,dt)\n∇f!(Z,x,u,p,dt)where x′ is the state at the next time step, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)])."
-},
-
-{
-    "location": "Models/#Analytical-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Analytical",
-    "category": "section",
-    "text": "An analytical model with discrete dynamics can be created using the following constructorsAnalyticalModel{D}(f::Function, ∇f::Function, n::Int64, m::Int64,\n          p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}()\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
-},
-
-{
-    "location": "Models/#From-Continuous-Model-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "From Continuous Model",
-    "category": "section",
-    "text": "A discrete model can be created from a continuous model by specifying the integration (discretization) method. The following methods are currently supportedmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)Use the following method to discretize a continuous model with one of the integration methods listed previouslyModel{Discrete}(model::Model{Continuous},discretizer::Function)"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.evaluate!-Tuple{AbstractArray{T,1} where T,Model,Any,Any}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.evaluate!",
-    "category": "method",
-    "text": "evaluate!(ẋ, model, x, u)\n\n\nEvaluate the dynamics at state x and control x Keeps track of the number of evaluations\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.evaluate!-Tuple{AbstractArray{T,2} where T,AbstractArray{T,1} where T,Model,Any,Any}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.evaluate!",
-    "category": "method",
-    "text": "evaluate!(Z, ẋ, model, x, u)\n\n\nEvaluate the dynamics and dynamics Jacobian simultaneously at state x and control x Keeps track of the number of evaluations\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.jacobian!-Tuple{AbstractArray{T,2} where T,AbstractArray{T,1} where T,Model,Any,Any}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.jacobian!",
-    "category": "method",
-    "text": "jacobian!(Z, ẋ, model, x, u)\n\n\nEvaluate the dynamics and dynamics Jacobian simultaneously at state x and control x Keeps track of the number of evaluations\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.jacobian!-Tuple{AbstractArray{T,2} where T,Model,Any,Any}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.jacobian!",
-    "category": "method",
-    "text": "jacobian!(Z, model, x, u)\n\n\nEvaluate the dynamics Jacobian simultaneously at state x and control x Keeps track of the number of evaluations\n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#TrajectoryOptimization.evals-Tuple{Model}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.evals",
-    "category": "method",
-    "text": "evals(model)\n\n\nReturn the number of dynamics evaluations \n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#Base.reset-Tuple{Model}",
-    "page": "Setting up a Dynamics Model",
-    "title": "Base.reset",
-    "category": "method",
-    "text": "reset(model)\n\n\nReset the evaluation counts for the model \n\n\n\n\n\n"
-},
-
-{
-    "location": "Models/#API-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "API",
-    "category": "section",
-    "text": "evaluate!(ẋ::AbstractVector,model::Model,x,u)\nevaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,model::Model,x,u)\nevals(model::Model)\nreset(model::Model)"
-},
-
-{
     "location": "#",
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.jl",
@@ -422,6 +246,142 @@ var documenterSearchIndex = {"docs": [
     "title": "Special Constraints",
     "category": "section",
     "text": "A few constructors for common constraints have been provided:bound_constraint"
+},
+
+{
+    "location": "Models/#",
+    "page": "Setting up a Dynamics Model",
+    "title": "Setting up a Dynamics Model",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "Models/#Setting-up-a-Dynamics-Model-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Setting up a Dynamics Model",
+    "category": "section",
+    "text": "CurrentModule = TrajectoryOptimizationDocumentation for TrajectoryOptimization.jl"
+},
+
+{
+    "location": "Models/#Overview-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Overview",
+    "category": "section",
+    "text": "The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form ẋ = f(x,u) where ẋ is the state derivative, x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.TrajectoryOptimization.jl poses the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.Sometimes is it convenient to write down the difference equation directly, rather than running a differential equation through a discretizing integration method. TrajectoryOptimization.jl offers method deal directly with either continuous differential equations, or discrete difference equations.The Model type is parameterized by the DynamicsType, which is either Continuous, or Discrete. The models holds the equation f and it\'s Jacobian, ∇f, along with the dimensions of the state and control vectors.Models can be created by writing down the dynamics analytically or be generated from a URDF file via RigidBodyDynamics.jl."
+},
+
+{
+    "location": "Models/#Continuous-Models-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Continuous Models",
+    "category": "section",
+    "text": "Continuous models assume differential equations are specified by an in-place function in one of the following forms:f!(ẋ,x,u)\nf!(ẋ,x,u,p)and Jacobians of the form∇f!(Z,x,u)\n∇f!(Z,x,u,p)where ẋ is the state derivative, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)]). As soon as the model is created, however, only the forms without parameters (the top lines) are available. The Model type will automatically bake in the parameters. A new model must be created if a parameter is changed (this will be made easier in the future)."
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.AnalyticalModel",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.AnalyticalModel",
+    "category": "type",
+    "text": "struct AnalyticalModel{D} <: Model{D}\n\nDynamics model\n\nHolds all information required to uniquely describe a dynamic system, including a general nonlinear dynamics function of the form ẋ = f(x,u), where x ∈ ℜⁿ are the states and u ∈ ℜᵐ are the controls.\n\nDynamics function Model.f should be in the following forms:     \'f!(ẋ,x,u)\' and modify ẋ in place\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, n, m, p)\nModel(f, n, m, p, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters Dynamics function of the form:     f(ẋ,x,u)\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, ∇f, n, m, p)\nModel(f, ∇f, n, m, p, d)\n\n\nCreate a dynamics model with an analytical Jacobian, with parameters Dynamics functions pass in parameters:     f(ẋ,x,u,p)     ∇f(Z,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f, ∇f, n, m)\nModel(f, ∇f, n, m, d)\n\n\nCreate a dynamics model with an analytical Jacobian, without parameters Dynamics functions pass of the form:     f(ẋ,x,u)     ∇f(Z,x,u)\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#Analytical-Models-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Analytical Models",
+    "category": "section",
+    "text": "AnalyticalModelThe following constructors can be used to create Continuous Analytical modelsModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.RBDModel",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.RBDModel",
+    "category": "type",
+    "text": "struct RBDModel{D} <: Model{D}\n\nRigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#URDF-Models-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "URDF Models",
+    "category": "section",
+    "text": "RBDModelThe following constructors can be used to create a Model from a URDF fileModel(mech::Mechanism, torques::Array)\nModel(mech::Mechanism)\nModel(urdf::String)\nModel(urdf::String,torques::Array{Float64,1})"
+},
+
+{
+    "location": "Models/#Discrete-Models-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Discrete Models",
+    "category": "section",
+    "text": "Discrete models assume difference equations are specified by an in-place function in one of the following forms:f!(x′,x,u,dt)\nf!(x′,x,u,p,dt)and Jacobians of the form∇f!(Z,x,u,dt)\n∇f!(Z,x,u,p,dt)where x′ is the state at the next time step, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)])."
+},
+
+{
+    "location": "Models/#Analytical-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Analytical",
+    "category": "section",
+    "text": "An analytical model with discrete dynamics can be created using the following constructorsAnalyticalModel{D}(f::Function, ∇f::Function, n::Int64, m::Int64,\n          p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}()\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
+},
+
+{
+    "location": "Models/#TrajectoryOptimization.Model-Union{Tuple{Discrete}, Tuple{Model{Continuous},Function}} where Discrete",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Convert a continuous dynamics model into a discrete one using the given discretization function.     The discretization function can either be one of the currently supported functions (midpoint, rk3, rk4) or a custom method that has the following form     function discretizer(f::Function,dt::Float64)         function fd!(xdot,x,u,dt)             # Your code             return nothing         end         return fd!     end\n\n\n\n\n\n"
+},
+
+{
+    "location": "Models/#From-Continuous-Model-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "From Continuous Model",
+    "category": "section",
+    "text": "A discrete model can be created from a continuous model by specifying the integration (discretization) method. The following methods are currently supportedmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)Use the following method to discretize a continuous model with one of the integration methods listed previouslyModel{Discrete}(model::Model{Continuous},discretizer::Function)"
+},
+
+{
+    "location": "Models/#API-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "API",
+    "category": "section",
+    "text": "evaluate!(ẋ::AbstractVector,model::Model,x,u)\nevaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,model::Model,x,u)\nevals(model::Model)\nreset(model::Model)"
 },
 
 ]}
