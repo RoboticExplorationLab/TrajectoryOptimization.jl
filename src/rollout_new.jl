@@ -12,10 +12,10 @@ function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1])
+        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], prob.dt)
 
         # Check that rollout has not diverged
-        if ~(norm(X̄[k],Inf) < solver.max_state_value && norm(Ū[k-1],Inf) < solver.max_control_value)
+        if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
             return false
         end
     end
@@ -27,10 +27,6 @@ function rollout!(p::Problem)
     X = p.X; U = p.U
 
     if !all(isfinite.(prob.X[1]))
-        # for k = 1:N
-        #     push!(X,zeros(p.model.n))
-        # end
-
         X[1] = p.x0
         for k = 1:N-1
             evaluate!(X[k+1], p.model, X[k], U[k], prob.dt)

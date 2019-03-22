@@ -118,6 +118,9 @@ function vec(A::Trajectory)
 	vec(to_array(A))
 end
 
+function to_trajectory(X::AbstractArray)
+    to_dvecs(X)
+end
 
 function to_dvecs(X::AbstractArray)
     N = size(X)[end]

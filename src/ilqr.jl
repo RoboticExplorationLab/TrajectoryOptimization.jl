@@ -6,25 +6,30 @@ function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
     # Initial rollout
     rollout!(prob)
     J_prev = cost(prob.cost, prob.X, prob.U, prob.dt)
+    push!(solver.stats[:cost], J_prev)
 
-    for i = 1:solver.iterations
-        J = step!(prob, solver)
+    for i = 1:solver.opts.iterations
+        J = step!(prob, solver, J_prev)
+        copyto!(prob.X,solver.X̄)
+        copyto!(prob.U,solver.Ū)
+
         dJ = abs(J - J_prev)
         J_prev = copy(J)
-        record_iteration!(prob, solver, dJ)
+        record_iteration!(prob, solver, J, dJ)
         evaluate_convergence(solver) ? break : nothing
     end
     return J
 end
 
-function step!(prob::Problem, solver::iLQRSolver,J_prev)
+function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     jacobian!(prob,solver)
     ΔV = backwardpass!(prob,solver)
-    J = forwardpass!(prob,solver,ΔV,J_prev)
+    J = forwardpass!(prob,solver,ΔV,J)
 end
 
-function record_iteration!(prob::Problem,solver::iLQRSolver,dJ)
+function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T) where T
     solver.stats[:iterations] += 1
+    push!(solver.stats[:cost], J)
     push!(solver.stats[:dJ], dJ)
     push!(solver.stats[:gradient],calculate_gradient(prob,solver))
     dJ == 0 ? solver.stats[:dJ_zero_counter] += 1 : solver.stats[:dJ_zero_counter] = 0
@@ -63,13 +68,12 @@ end
 function evaluate_convergence(solver::iLQRSolver)
     # Check for cost convergence
     # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
-    if 0.0 < dJ < solver.opts.cost_tolerance
+    if 0.0 < solver.stats[:dJ][end] < solver.opts.cost_tolerance
         return true
     end
 
     # Check for gradient convergence
-    gradient = solver.stats[:gradient][end]
-    if gradient < solver.opts.gradient_norm_tolerance
+    if solver.stats[:gradient][end] < solver.opts.gradient_norm_tolerance
         return true
     end
 

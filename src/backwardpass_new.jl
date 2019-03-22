@@ -16,14 +16,14 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
 
     dt = prob.dt
 
-    X = prob.X; U = prob.U; K = res.K; d = res.d; S = res.S; s = res.s
+    X = prob.X; U = prob.U; K = solver.K; d = solver.d; S = solver.S; s = solver.s
 
     reset!(solver.bp)
     Qx = solver.bp.Qx; Qu = solver.bp.Qu; Qxx = solver.bp.Qxx; Quu = solver.bp.Quu; Qux = solver.bp.Qux
     Quu_reg = solver.bp.Quu_reg; Qux_reg = solver.bp.Qux_reg
 
     # Boundary Conditions
-    S[N], s[N] = taylor_expansion(cost, X[N])
+    S[N], s[N] = taylor_expansion(prob.cost, X[N])
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -31,7 +31,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        expansion = taylor_expansion(cost,X[k],U[k])
+        expansion = taylor_expansion(prob.cost,X[k],U[k])
         Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = expansion
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu

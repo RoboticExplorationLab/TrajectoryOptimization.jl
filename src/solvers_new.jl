@@ -67,7 +67,7 @@ end
 
 function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     # Init solver statistics
-    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:gradient=>[],
+    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:dJ=>T[],:gradient=>T[],
         :dJ_zero_counter=>0)
 
     # Init solver results
@@ -82,7 +82,7 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     S  = [zeros(T,n,n) for i = 1:N]
     s  = [zeros(T,n)   for i = 1:N]
 
-    part_f = create_partition2(p.model)
+    part_f = create_partition2(prob.model)
     ∇F = [BlockArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
 
     ρ = zeros(T,1)
