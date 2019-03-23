@@ -224,7 +224,7 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
             x = X[k][1:n]
             u = U[k][1:m]
             solver.state.minimum_time ? dt = U[k][m̄]^2 : dt = solver.dt
-            expansion = taylor_expansion(solver.obj.cost,x,u)
+            expansion = cost_expansion(solver.obj.cost,x,u)
             Q,R,H,q,r = expansion .* dt
 
             idx = ((k-1)*nm + 1):k*nm
@@ -234,7 +234,7 @@ function Buys_λ_second_order_update!(results::SolverIterResults,solver::Solver,
             C̄[idx2,idx] = [results.Cx[k] results.Cu[k]]
         else
             x = X[N][1:n]
-            expansion = taylor_expansion(solver.obj.cost,x)
+            expansion = cost_expansion(solver.obj.cost,x)
             Qf,qf = expansion
 
             idx = ((k-1)*nm + 1):Nz
@@ -367,9 +367,9 @@ end
 #
 #         if k != N
 #             u = results.U[k]
-#             Q,R,H,q,r = taylor_expansion(costfun,x,u) .* solver.dt
+#             Q,R,H,q,r = cost_expansion(costfun,x,u) .* solver.dt
 #         else
-#             Qf,qf = taylor_expansion(costfun,x) .* solver.dt
+#             Qf,qf = cost_expansion(costfun,x) .* solver.dt
 #         end
 #
 #         # Indices
@@ -445,17 +445,17 @@ end
 #     #     @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
 #     #
 #     #     k = 1
-#     #     Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+#     #     Q,R,H,q,r = cost_expansion(costfun,results.X[k],results.U[k])
 #     #     @test Q̄[1:nm,1:nm] == [Q H'; H R]
 #     #     @test q̄[1:nm] == [q;r]
 #     #
 #     #     k = 13
-#     #     Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+#     #     Q,R,H,q,r = cost_expansion(costfun,results.X[k],results.U[k])
 #     #     @test Q̄[(k-1)*nm+1:k*nm,(k-1)*nm+1:k*nm] == [Q H'; H R]
 #     #     @test q̄[(k-1)*nm+1:k*nm] == [q;r]
 #     #
 #     #     k = N
-#     #     Qf,qf = taylor_expansion(costfun,results.X[k])
+#     #     Qf,qf = cost_expansion(costfun,results.X[k])
 #     #     @test Q̄[(k-1)*nm+1:Nz,(k-1)*nm+1:Nz] == Qf
 #     #     @test q̄[(k-1)*nm+1:Nz] == qf
 #     #

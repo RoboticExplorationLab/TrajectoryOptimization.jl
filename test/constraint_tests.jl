@@ -295,6 +295,6 @@ using InteractiveUtils
 @code_warntype inequality_active!(a,v_stage,λ)
 using InteractiveUtils
 
-taylor_expansion(alcost,X[1],U[1],1)
-taylor_expansion(alcost,X[N])
+cost_expansion(alcost,X[1],U[1],1)
+cost_expansion(alcost,X[N])
 a.equality .= true

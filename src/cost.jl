@@ -6,7 +6,8 @@ import Base.copy
 
 abstract type CostFunction end
 
-function cost(cost::CostFunction,X::Trajectory,U::Trajectory,dt::AbstractFloat)
+"Calculate (unconstrained) cost for X and U trajectories"
+function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
     J = 0.0
     for k = 1:N-1
@@ -16,13 +17,13 @@ function cost(cost::CostFunction,X::Trajectory,U::Trajectory,dt::AbstractFloat)
     return J
 end
 
-taylor_expansion(cost::CostFunction,x,u) = taylor_expansion(cost,x,u,1)
-stage_cost(cost::CostFunction,x,u) = stage_cost(cost,x,u,1)
+cost_expansion(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = cost_expansion(cost,x,u,1)
+stage_cost(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = stage_cost(cost,x,u,1)
 
 """
 $(TYPEDEF)
 Cost function of the form
-    xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
+    1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
 mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
@@ -56,10 +57,10 @@ end
 """
 $(SIGNATURES)
 Cost function of the form
-    (xₙ-x_f)ᵀ Qf (xₙ - x_f) ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
+    1/2(xₙ-x_f)ᵀ Qf (xₙ - x_f) + 1/2 ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-function LQRCost(Q,R,Qf,xf)
+function LQRCost(Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
@@ -69,23 +70,25 @@ function LQRCost(Q,R,Qf,xf)
     return QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
 end
 
-function taylor_expansion(cost::QuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}, k::Int)
+"Second-order Taylor expansion of cost function at time step k"
+function cost_expansion(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     m = get_sizes(cost)[2]
     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u[1:m] + cost.r
 end
 
-function taylor_expansion(cost::QuadraticCost, xN::AbstractVector{Float64})
+function cost_expansion(cost::QuadraticCost, xN::Vector{T}) where T
     return cost.Qf, cost.Qf*xN + cost.qf
 end
 
-gradient(cost::QuadraticCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}) = cost.Q*x + cost.q, cost.R*u + cost.r
-gradient(cost::QuadraticCost, xN::AbstractVector{Float64}) = cost.Qf*xN + cost.qf
+"Gradient of the cost function at a single time step"
+gradient(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T = cost.Q*x + cost.q, cost.R*u + cost.r
+gradient(cost::QuadraticCost, xN::Vector{T}) where T = cost.Qf*xN + cost.qf
 
-function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector, k::Int)
+function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
 
-function stage_cost(cost::QuadraticCost, xN::AbstractVector)
+function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
     0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 
@@ -125,7 +128,7 @@ Create a Generic Cost, specifying the gradient and hessian of the cost function 
 
 """
 function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
-    function expansion(x,u)
+    function expansion(x::Vector{T},u::Vector{T}) where T
         Q,R,H = hess(x,u)
         q,r = grad(x,u)
         return Q,R,H,q,r
@@ -153,7 +156,7 @@ function GenericCost(ℓ::Function, ℓf::Function, n::Int, m::Int)
     GenericCost(ℓ,ℓf, expansion, n,m)
 end
 
-function auto_expansion_function(ℓ,ℓf,n,m)
+function auto_expansion_function(ℓ::Function,ℓf::Function,n::Int,m::Int)
     z = zeros(n+m)
     hess = zeros(n+m,n+m)
     grad = zeros(n+m)
@@ -163,12 +166,12 @@ function auto_expansion_function(ℓ,ℓf,n,m)
     xinds = 1:n
     uinds = n .+(1:m)
     inds = (x=xinds, u=uinds, xx=linds[xinds,xinds], uu=linds[uinds,uinds], ux=linds[uinds,xinds])
-    function ℓ_aug(z)
+    function ℓ_aug(z::Vector{T}) where T
         x = view(z,xinds)
         u = view(z,uinds)
         ℓ(x,u)
     end
-    function expansion(x::Vector,u::Vector)
+    function expansion(x::Vector{T},u::Vector{T}) where T
         z[inds.x] = x
         z[inds.u] = u
         ForwardDiff.hessian!(hess, ℓ_aug, z)
@@ -181,30 +184,28 @@ function auto_expansion_function(ℓ,ℓf,n,m)
         r = view(grad,inds.u)
         return Q,R,H,q,r
     end
-    function expansion(xN::Vector)
+    function expansion(xN::Vector{T}) where T
         ForwardDiff.gradient!(qf,ℓf,xN)
         ForwardDiff.hessian!(Qf,ℓf,xN)
         return Qf, qf
     end
 end
 
-function taylor_expansion(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}, k::Int)
+function cost_expansion(cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     cost.expansion(x,u)
 end
 
-function taylor_expansion(cost::GenericCost, xN::AbstractVector{Float64})
+function cost_expansion(cost::GenericCost, xN::Vector{T}) where T
     cost.expansion(xN)
 end
 
 # TODO: Split gradient and hessian calculations
 
-stage_cost(cost::GenericCost, x::AbstractVector{Float64}, u::AbstractVector{Float64}, k::Int) = cost.ℓ(x,u)
-stage_cost(cost::GenericCost, xN::AbstractVector{Float64}) = cost.ℓf(xN)
+stage_cost(cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T = cost.ℓ(x,u)
+stage_cost(cost::GenericCost, xN::Vector{T}) where T = cost.ℓf(xN)
 
 get_sizes(cost::GenericCost) = cost.n, cost.m
 copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
-
-
 
 """
 $(TYPEDEF)
@@ -221,6 +222,7 @@ struct AugmentedLagrangianCost{T} <: CostFunction
     active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
+"Update constraints trajectories"
 function update_constraints!(c::PartedVecTrajectory{T},constraints::ConstraintSet,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
@@ -229,6 +231,7 @@ function update_constraints!(c::PartedVecTrajectory{T},constraints::ConstraintSe
     evaluate!(c[N],constraints,X[N])
 end
 
+"Evaluate active set constraints for entire trajectory"
 function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
     N = length(c)
     for k = 1:N
@@ -236,6 +239,7 @@ function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{
     end
 end
 
+"Evaluate active set constraints for a single time step"
 function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
     # inequality_active!(a,c,λ,tol)
     a.equality .= true
@@ -250,27 +254,8 @@ function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) whe
     return a
 end
 
-# function update_Iμ!(Iμ::Trajectory{T},a::Trajectory{Bool},μ::Trajectory{T}) where T
-#     N = length(a)
-#     for k = 1:N
-#         Iμ[k] .= a[k] .* μ[k]
-#     end
-# end
-
-# function constraint_cost(c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},μ::PartedVecTrajectory{T},a::PartedVecTrajectory{Bool}) where T
-#     N = length(c)
-#     J = 0.0
-#     for k = 1:N
-#         a = active_set!(c[k],λ[k])
-#         J += λ[k]'c[k] + 1/2*c[k]'Diagonal(a .* μ[k])*c[k]
-#     end
-#     return J
-# end
-
+"Cost function terms for Lagrangian and quadratic penalty"
 function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
-    # a = active_set(c,λ)
-    # Iμ = Diagonal(μ.A)
-    # Iμ = Iμ*a.A
     λ'c + 1/2*c'Diagonal(a .* μ)*c
 end
 
@@ -279,7 +264,6 @@ function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVec
     λ = alcost.λ[k]
     μ = alcost.μ[k]
     a = alcost.active_set[k]
-    # evaluate!(c,alcost.constraints,x,u)
     aula_cost(a,c,λ,μ)
 end
 
@@ -288,7 +272,6 @@ function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVec
     λ = alcost.λ[end]
     μ = alcost.μ[end]
     a = alcost.active_set[end]
-    # evaluate!(c,alcost.constraints,x)
     aula_cost(a,c,λ,μ)
 end
 
@@ -302,6 +285,7 @@ function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}) wh
     J0 + stage_constraint_cost(alcost,x)
 end
 
+"Augmented Lagrangian cost for X and U trajectories"
 function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
     J = cost(alcost.cost,X,U,dt)
@@ -315,9 +299,10 @@ function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::Vecto
     return J
 end
 
-function taylor_expansion(alcost::AugmentedLagrangianCost{T},
+"Second-order expansion of augmented Lagrangian cost"
+function cost_expansion(alcost::AugmentedLagrangianCost{T},
         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
-    Q,R,H,q,r = taylor_expansion(alcost.cost,x,u,k)
+    Q,R,H,q,r = cost_expansion(alcost.cost,x,u,k)
 
     c = alcost.C[k]
     λ = alcost.λ[k]
@@ -342,8 +327,8 @@ function taylor_expansion(alcost::AugmentedLagrangianCost{T},
     return Q,R,H,q,r
 end
 
-function taylor_expansion(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
-    Qf,qf = taylor_expansion(alcost.cost,x)
+function cost_expansion(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+    Qf,qf = cost_expansion(alcost.cost,x)
 
     c = alcost.C[N]
     λ = alcost.λ[N]

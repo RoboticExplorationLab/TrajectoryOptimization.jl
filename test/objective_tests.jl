@@ -289,7 +289,7 @@ jac_cE(A1,B1,x,u)
 
 
 # COST FUNCTION TESTS
-using TrajectoryOptimization: taylor_expansion, stage_cost
+using TrajectoryOptimization: cost_expansion, stage_cost
 n,m = 3,2
 Q = Diagonal([1.,2,3])
 R = Diagonal([4.,5])
@@ -302,8 +302,8 @@ u = ones(m)*2
 
 LinQuad = LQRCost(Q,R,Qf,xf)
 J = stage_cost(LinQuad,x,u)
-@test taylor_expansion(LinQuad,x,u) == (Q,R,zeros(m,n),Q*(x-xf),R*u)
-@test taylor_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
+@test cost_expansion(LinQuad,x,u) == (Q,R,zeros(m,n),Q*(x-xf),R*u)
+@test cost_expansion(LinQuad,x) == (Qf,Qf*(x-xf))
 
 # Generic Cost Function
 my_stage_cost(x,u) = x[1]^2 + 2*x[2]*x[3] + x[3] + 3*u[1] + u[2]^2 + u[2]*u[1] + x[2]*u[1] + log(x[3]) + sin(u[2])
@@ -320,8 +320,8 @@ Qffun(x) = [2x[1] 1 0; 1 0 0; 0 0 0]
 
 mycost = GenericCost(my_stage_cost,my_final_cost,n,m)
 stage_expansion = (Qfun(x,u), Rfun(x,u), Hfun(x,u), qfun(x,u), rfun(x,u))
-@test taylor_expansion(mycost,x,u) == stage_expansion
-@test taylor_expansion(mycost,x) == (Qffun(x), qffun(x))
+@test cost_expansion(mycost,x,u) == stage_expansion
+@test cost_expansion(mycost,x) == (Qffun(x), qffun(x))
 
 mygrad(x,u) = qfun(x,u), rfun(x,u)
 myhess(x,u) = Qfun(x,u), Rfun(x,u), Hfun(x,u)
@@ -331,12 +331,12 @@ myhess(x) = Qffun(x)
 myexpansion(x) = Qffun(x), qffun(x)
 
 mycost2 = GenericCost(my_stage_cost,my_final_cost,myexpansion,n,m)
-@test taylor_expansion(mycost2,x,u) == stage_expansion
-@test taylor_expansion(mycost2,x) == (Qffun(x), qffun(x))
+@test cost_expansion(mycost2,x,u) == stage_expansion
+@test cost_expansion(mycost2,x) == (Qffun(x), qffun(x))
 
 mycost2 = GenericCost(my_stage_cost,my_final_cost,mygrad,myhess,n,m)
-@test taylor_expansion(mycost2,x,u) == stage_expansion
-@test taylor_expansion(mycost2,x) == (Qffun(x), qffun(x))
+@test cost_expansion(mycost2,x,u) == stage_expansion
+@test cost_expansion(mycost2,x) == (Qffun(x), qffun(x))
 
 # Unconstrained Objective
 costfun = LinQuad

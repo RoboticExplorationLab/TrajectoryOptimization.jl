@@ -42,7 +42,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
     end
 
     # Boundary Conditions
-    S[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
+    S[N][1:n,1:n], s[N][1:n] = cost_expansion(costfun, X[N][1:n])
 
     if solver.state.minimum_time
         s[N][n̄] = R_minimum_time*X[N][n̄]
@@ -69,7 +69,7 @@ function _backwardpass!(res::SolverVectorResults,solver::Solver)
         x = X[k][1:n]
         u = U[k][1:m]
 
-        expansion = taylor_expansion(costfun,x,u)
+        expansion = cost_expansion(costfun,x,u)
         Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* dt
 
         # Minimum time expansion components
@@ -267,10 +267,10 @@ function al_expansion!(res::SolverIterResults, solver::Solver, k::Int)
     x = X[k][1:n]
 
     if k == N
-        Qxx[k][1:n,1:n],Qx[k][1:n] = taylor_expansion(costfun,x)
+        Qxx[k][1:n,1:n],Qx[k][1:n] = cost_expansion(costfun,x)
     else
         u = U[k][1:m]
-        expansion = taylor_expansion(costfun,x,u)
+        expansion = cost_expansion(costfun,x,u)
         Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* solver.dt
     end
 
@@ -372,7 +372,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
     end
 
     # Boundary Conditions
-    Su[N][1:n,1:n], s[N][1:n] = taylor_expansion(costfun, X[N][1:n])
+    Su[N][1:n,1:n], s[N][1:n] = cost_expansion(costfun, X[N][1:n])
 
     if solver.state.minimum_time
         s[N][n̄] = R_minimum_time*X[N][n̄]
@@ -415,7 +415,7 @@ function _backwardpass_sqrt!(res::SolverVectorResults,solver::Solver)
         x = X[k][1:n]
         u = U[k][1:m]
 
-        expansion = taylor_expansion(costfun,x,u)
+        expansion = cost_expansion(costfun,x,u)
         Qxx[k][1:n,1:n],Quu[k][1:m,1:m],Qux[k][1:m,1:n],Qx[k][1:n],Qu[k][1:m] = expansion .* dt
 
         # Minimum time expansion components

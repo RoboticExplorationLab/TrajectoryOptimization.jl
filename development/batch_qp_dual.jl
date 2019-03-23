@@ -16,8 +16,8 @@ plot(to_array(results_c.U)')
 # costfun = solver.obj.cost
 # x = results_c.X[1]
 # u = results_c.U[1]
-# expansion = taylor_expansion(costfun,x,u)
-# Q,R,H,q,r = taylor_expansion(costfun,x,u)
+# expansion = cost_expansion(costfun,x,u)
+# Q,R,H,q,r = cost_expansion(costfun,x,u)
 # H
 
 plot(to_array(results_c.λ)[:,1:solver.N-1]')
@@ -59,9 +59,9 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
 
         if k != N
             u = results.U[k]
-            Q,R,H,q,r = taylor_expansion(costfun,x,u)
+            Q,R,H,q,r = cost_expansion(costfun,x,u)
         else
-            Qf,qf = taylor_expansion(costfun,x)
+            Qf,qf = cost_expansion(costfun,x)
         end
 
         # Indices
@@ -137,17 +137,17 @@ function λ_second_order_update!(results::SolverIterResults,solver::Solver,verbo
     #     @test B̄[(N-1)*nm+1:Nz,(N-2)*m+1:(N-1)*m] == results.fdu[N-1]
     #
     #     k = 1
-    #     Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+    #     Q,R,H,q,r = cost_expansion(costfun,results.X[k],results.U[k])
     #     @test Q̄[1:nm,1:nm] == [Q H'; H R]
     #     @test q̄[1:nm] == [q;r]
     #
     #     k = 13
-    #     Q,R,H,q,r = taylor_expansion(costfun,results.X[k],results.U[k])
+    #     Q,R,H,q,r = cost_expansion(costfun,results.X[k],results.U[k])
     #     @test Q̄[(k-1)*nm+1:k*nm,(k-1)*nm+1:k*nm] == [Q H'; H R]
     #     @test q̄[(k-1)*nm+1:k*nm] == [q;r]
     #
     #     k = N
-    #     Qf,qf = taylor_expansion(costfun,results.X[k])
+    #     Qf,qf = cost_expansion(costfun,results.X[k])
     #     @test Q̄[(k-1)*nm+1:Nz,(k-1)*nm+1:Nz] == Qf
     #     @test q̄[(k-1)*nm+1:Nz] == qf
     #

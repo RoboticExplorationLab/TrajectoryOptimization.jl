@@ -196,7 +196,7 @@ function gen_usrfun_newton(solver::Solver)
 
     if solver.obj.cost isa QuadraticCost
         Z0 = PrimalVars(n,m,N)
-        ∇²J, = taylor_expansion(solver,Z0)
+        ∇²J, = cost_expansion(solver,Z0)
     else
         error("Not yet implemented for non-Quadratic cost functions")
     end
@@ -400,7 +400,7 @@ end
 """$(SIGNATURES)
 Full 2nd order taylor expansion of a Quadratic Cost with respect to Z = [X;U]
 """
-function taylor_expansion(solver::Solver,Z::PrimalVars)
+function cost_expansion(solver::Solver,Z::PrimalVars)
     costfun = solver.obj.cost
     dt = solver.dt
     n,m,N = get_sizes(Z)
@@ -415,7 +415,7 @@ function taylor_expansion(solver::Solver,Z::PrimalVars)
     X,U = Z.X, Z.U
     for k = 1:N-1
         off = (k-1)*(n+m)
-        Q,R,H,q,r = taylor_expansion(costfun,X[:,k],U[:,k])
+        Q,R,H,q,r = cost_expansion(costfun,X[:,k],U[:,k])
         hess[off .+ ind1.x, off .+ ind1.x] = Q
         hess[off .+ ind1.x, off .+ ind1.u] = H'
         hess[off .+ ind1.u, off .+ ind1.x] = H
@@ -427,7 +427,7 @@ function taylor_expansion(solver::Solver,Z::PrimalVars)
     hess .*= dt
     grad .*= dt
     off = (N-1)*(n+m)
-    Qf, qf = taylor_expansion(costfun,X[:,N])
+    Qf, qf = cost_expansion(costfun,X[:,N])
     hess[off .+ ind1.x, off .+ ind1.x] = Qf
     grad[off .+ ind1.x] = qf
     return hess, grad

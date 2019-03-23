@@ -615,7 +615,7 @@ ee_costfun = GenericCost(eecostfun,eecostfun,expansion,n,m)
 stage_cost(ee_costfun,x0,u0)
 expansion(x0,u0)
 expansion(x0)
-TrajectoryOptimization.taylor_expansion(ee_costfun,x0)
+TrajectoryOptimization.cost_expansion(ee_costfun,x0)
 
 ee_obj = UnconstrainedObjective(ee_costfun,tf,x0)
 u_bnd = ones(m)*20

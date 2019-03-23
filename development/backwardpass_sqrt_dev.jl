@@ -24,7 +24,7 @@ function test_backwardpass_sqrt!(res::SolverIterResults,solver::Solver,bp::Backw
     # Quu_reg = bp.Quu_reg; Qux_reg = bp.Qux_reg
 
     # Boundary Conditions
-    lxx,lx = taylor_expansion(costfun, X[N][1:n])
+    lxx,lx = cost_expansion(costfun, X[N][1:n])
 
     # Initialize expected change in cost-to-go
     Δv = zeros(2)
@@ -52,7 +52,7 @@ function test_backwardpass_sqrt!(res::SolverIterResults,solver::Solver,bp::Backw
         u = U[k][1:m]
         h = sqrt(dt)
 
-        expansion = taylor_expansion(costfun,x,u)
+        expansion = cost_expansion(costfun,x,u)
         lxx,luu,lux,lx,_lu = expansion
 
 

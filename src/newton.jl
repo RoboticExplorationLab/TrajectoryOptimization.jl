@@ -120,9 +120,9 @@ function update_newton_results!(newton_results::NewtonResults,results::SolverIte
 
         if k != N
             u = results.U[k]
-            Q,R,H,q,r = taylor_expansion(solver.obj.cost,x,u) .* solver.dt
+            Q,R,H,q,r = cost_expansion(solver.obj.cost,x,u) .* solver.dt
         else
-            Qf,qf = taylor_expansion(solver.obj.cost,x)
+            Qf,qf = cost_expansion(solver.obj.cost,x)
         end
 
         # Indices
