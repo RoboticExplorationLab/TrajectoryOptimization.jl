@@ -424,4 +424,60 @@ var documenterSearchIndex = {"docs": [
     "text": "A few constructors for common constraints have been provided:bound_constraint"
 },
 
+{
+    "location": "problem/#",
+    "page": "Setting up a Problem",
+    "title": "Setting up a Problem",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "problem/#Setting-up-a-Problem-1",
+    "page": "Setting up a Problem",
+    "title": "Setting up a Problem",
+    "category": "section",
+    "text": "CurrentModule = TrajectoryOptimizationThe Problem type represents the trajectory optimization problem to be solved, which consists of the following information:Dynamics model: the physical system that is being controlled, specified by a system of difference equations. We assume that continuous dynamics have been discretized, see From Continuous Model.\nCost function: the function to be minimized, and must be of the form ell_N(x_N) + sum_k=0^N ell(x_ku_k)\nConstraints: Aside from the dynamics constraints imposed by the dynamics model, the problem specifies \"stage\" constraints of the form c(x_ku_k) or \"terminal\" constraints of the form c(x_N).\nInitial state: all trajectory optimization algorithms require the initial state.\nN: the number of knot points (or number of discretization points)\ndt: the time step used for integrating the continuous dynamics, if required by the dynamics modelThe Problem type also stores the state and control input trajectories (i.e. the primal variables)."
+},
+
+{
+    "location": "problem/#Creating-a-Problem-1",
+    "page": "Setting up a Problem",
+    "title": "Creating a Problem",
+    "category": "section",
+    "text": "A problem is typically created using the following constructorsProblem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T\nProblem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) where Twhere U is either an n × N-1 matrix or a vector of n-dimensional vectors (VectorTrajectory). A bare-minimum constructor is also availableProblem(model::Model,cost::CostFunction,N::Int,dt::T) where Twhich initializes the initial state and the control input trajectory to zeros.The inner constructor can also be used with caution.Problem(model::Model, cost::CostFunction, constraints::ConstraintSet,\n      x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T) where T"
+},
+
+{
+    "location": "problem/#Adding-constraints-1",
+    "page": "Setting up a Problem",
+    "title": "Adding constraints",
+    "category": "section",
+    "text": "A constraint can be added once the problem is created usingadd_constraints"
+},
+
+{
+    "location": "solvers/#",
+    "page": "Solvers",
+    "title": "Solvers",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "solvers/#Solvers-1",
+    "page": "Solvers",
+    "title": "Solvers",
+    "category": "section",
+    "text": "CurrentModule = TrajectoryOptimization"
+},
+
+{
+    "location": "solvers/#Iterative-LQR-(iLQR)-1",
+    "page": "Solvers",
+    "title": "Iterative LQR (iLQR)",
+    "category": "section",
+    "text": "iLQR is an indirect method for trajectory optimization that parameterizes only the controls and enforces strict dynamics feasibility at every iteration by simulating forward the dynamics with an LQR feedback controller. The main algorithm consists of two parts: 1) a backward pass that uses differential dynamic programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, K and d, respectively, for an LQR tracking controller, and 2) a forward pass that uses the gains K and d to simulate forward the dynamics with feedback.The vanilla iLQR algorithm is incapable of handling constraints aside from the dynamics. Any reference to the iLQR algorithm within TrajectoryOptimization.jl will assume the problem is solving an unconstrained problem. Other algorithms, such as ALTRO, use iLQR an an internal, unconstrained solver to solve a trajectory optimization problem with constraints.The iLQR solver has the following solver optionsiLQRSolverOptions"
+},
+
 ]}
