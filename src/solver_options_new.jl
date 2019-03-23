@@ -2,6 +2,10 @@ using Parameters
 
 abstract type AbstractSolverOptions{T<:Real} end
 
+"""$(TYPEDEF)
+Solver options for the iterative LQR (iLQR) solver. iLQR is an indirect, unconstrained solver.
+DocStringExtensions.FIELDS
+"""
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"

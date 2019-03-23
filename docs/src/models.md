@@ -3,8 +3,6 @@
 CurrentModule = TrajectoryOptimization
 ```
 
-Documentation for TrajectoryOptimization.jl
-
 ```@contents
 ```
 # Overview
