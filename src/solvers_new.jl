@@ -144,7 +144,7 @@ function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSo
     active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
     push!(C,BlockVector(T,c_term))
     push!(C_prev,BlockVector(T,c_term))
-    push!(∇C,BlockMatrix(T,c_term,n,m))
+    push!(∇C,BlockMatrix(T,c_term,n,0))
     push!(λ,BlockVector(T,c_term))
     push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))
