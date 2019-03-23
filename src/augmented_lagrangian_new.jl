@@ -5,11 +5,9 @@ function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
     for i = 1:solver.opts.iterations
         J = step!(prob, solver, unconstrained_solver)
         c_max = max_violation(solver)
-        record_iteration!(prob, solver, J, c_max)
+        record_iteration!(prob, solver, J, c_max, unconstrained_solver)
         evaluate_convergence(solver) ? break : nothing
     end
-
-    # solver.stats_uncon .= unconstrained_solver.stats
 end
 
 "Augmented Lagrangian step"
@@ -27,10 +25,11 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver)
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},J::T, c_max::T) where T
+function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},J::T, c_max::T, unconstrained_solver::AbstractSolver{T}) where T
     solver.stats[:iterations] += 1
     push!(solver.stats[:cost],J)
     push!(solver.stats[:c_max],c_max)
+    push!(solver.stats_uncon, unconstrained_solver.stats)
 end
 
 "Saturate a vector element-wise with upper and lower bounds"
