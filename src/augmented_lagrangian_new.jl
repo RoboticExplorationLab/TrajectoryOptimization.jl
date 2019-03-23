@@ -25,7 +25,7 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver)
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},J::T, c_max::T, unconstrained_solver::AbstractSolver{T}) where T
+function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T, c_max::T, unconstrained_solver::AbstractSolver{T}) where T
     solver.stats[:iterations] += 1
     push!(solver.stats[:cost],J)
     push!(solver.stats[:c_max],c_max)
