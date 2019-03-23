@@ -21,7 +21,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "Overview",
     "category": "section",
-    "text": "The purpose of this package is to provide a testbed for state-of-the-art trajectory optimization algorithms. In general, this package focuses on trajectory optimization problems of the form (put LaTeX here)This package currently implements both indirect and direct methods for trajectory optimization:Iterative LQR (iLQR): indirect method based on differential dynamic programming\nDirect Collocation: direct method that formulates the problem as an NLP and passes the problem off to a commercial NLP solverKey features include the use of ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints; the use of RigidBodyDynamics to work directly from URDF files; and the ability to specify general constraints.The primary focus of this package is developing the iLQR algorithm, although we hope this will extend to many algorithms in the future."
+    "text": "The purpose of this package is to provide a testbed for state-of-the-art trajectory optimization algorithms. In general, this package focuses on trajectory optimization problems of the form (put LaTeX here)This package currently implements both indirect and direct methods for trajectory optimization:Iterative LQR (iLQR): indirect method based on differential dynamic programming\nDirect Collocation: direct method that formulates the problem as an NLP and passes the problem off to a commercial NLP solverKey features include the use of ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints; the use of RigidBodyDynamics to work directly from URDF files; and the ability to specify general constraints.The primary focus of this package is developing the ALTRO algorithm, although we hope this will extend to many algorithms in the future."
 },
 
 {
@@ -29,7 +29,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "Getting Started",
     "category": "section",
-    "text": "In order to set up a trajectory optimization problem, the user needs to create a Model and Objective"
+    "text": "To set up and solve a trajectory optimization problem with TrajectoryOptimization.jl, the user will go through the following steps:Create a Model\nCreate a CostFunction\nInstantiate a Problem with constraints\nPick an appropriate solver\nSolve the problem\nAnalyze the solution"
 },
 
 {
@@ -206,38 +206,6 @@ var documenterSearchIndex = {"docs": [
     "title": "DIRCOL Method",
     "category": "section",
     "text": "Problems can be solved using DIRCOL by simply callingsolve_dircol(solver,X0,U0)"
-},
-
-{
-    "location": "#Constraints-1",
-    "page": "TrajectoryOptimization.jl",
-    "title": "Constraints",
-    "category": "section",
-    "text": ""
-},
-
-{
-    "location": "#Constraint-Type-1",
-    "page": "TrajectoryOptimization.jl",
-    "title": "Constraint Type",
-    "category": "section",
-    "text": "AbstractConstraint\nConstraint\nTerminalConstraint\nConstraintType\nEquality\nInequalityThere are two constraint types that inherit from AbstractConstraint: Constraint and TerminalConstraint. Both of these constraints are parameterized by a ConstraintType, which can be either Equality or Inequality. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vector or scalar-valued). Each constraint contains the following fields:c - the in-place constraint function. Of the form c(v,x,u) for Constraint and c(v,x) for TerminalConstraint.\n∇c - the in-place constraint jacobian function. For Constraint it can either be called as ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, or as ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian. For TerminalConstraint there is only ∇c(A,x).\np - number of elements in the constraint vector\nlabel - a Symbol for identifying the constraint"
-},
-
-{
-    "location": "#Creating-Constraints-1",
-    "page": "TrajectoryOptimization.jl",
-    "title": "Creating Constraints",
-    "category": "section",
-    "text": "A stage-wise constraint can be created with either of the two constructorsConstraint{S}(c::Function,∇c::Function,p::Int,label::Symbol) where S<:ConstraintType\nConstraint{S}(c::Function,n::Int,m::Int,p::Int,label::Symbol) where S<:ConstraintTypeThe first is the default constructor. c must be in-place of the form c(v,x,u) where v holds the constraint function values. ∇c must be multiple dispatched to have the forms ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, and ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian.The second will use ForwardDiff to generate the constraint Jacobian, so requires the size of the state and control input vectors.A terminal constraint can be similarly defined using one of the following constructorsTerminalConstraint{S}(c::Function,∇c::Function,p::Int,label::Symbol) where S<:ConstraintType\nTerminalConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType\nConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintTypewhich are identical to the ones above, expect that they require a constraint function and Jacobian of the form c(v,x) and ∇c(A,x)."
-},
-
-{
-    "location": "#Special-Constraints-1",
-    "page": "TrajectoryOptimization.jl",
-    "title": "Special Constraints",
-    "category": "section",
-    "text": "A few constructors for common constraints have been provided:bound_constraint"
 },
 
 {
@@ -429,7 +397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Constraints",
     "title": "Constraint Type",
     "category": "section",
-    "text": "AbstractConstraint\nConstraint\nTerminalConstraint\nConstraintType\nEquality\nInequalityThere are two constraint types that inherit from AbstractConstraint: Constraint and TerminalConstraint. Both of these constraints are parameterized by a ConstraintType, which can be either Equality or Inequality. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vector or scalar-valued). Each constraint contains the following fields:c - the in-place constraint function. Of the form c(v,x,u) for Constraint and c(v,x) for TerminalConstraint.\n∇c - the in-place constraint jacobian function. For Constraint it can either be called as ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, or as ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian. For TerminalConstraint there is only ∇c(A,x).\np - number of elements in the constraint vector\nlabel - a Symbol for identifying the constraint"
+    "text": "AbstractConstraint\nConstraint\nTerminalConstraint\nConstraintType\nEquality\nInequalityThere are two constraint types that inherit from AbstractConstraint: Constraint and TerminalConstraint. Both of these constraints are parameterized by a ConstraintType, which can be either Equality or Inequality. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vectoxr or scalar-valued). Each constraint contains the following fields:c: the in-place constraint function. Of the form c(v,x,u) for Constraint and c(v,x) for TerminalConstraint.\n∇c: the in-place constraint jacobian function. For Constraint it can either be called as ∇c(A,B,x,u) where A is the state Jacobian and B is the control Jacobian, or as ∇c(Z,x,u) where Z is the p × (n+m) concatenated Jacobian. For TerminalConstraint there is only ∇c(A,x).\np: number of elements in the constraint vector\nlabel: a Symbol for identifying the constraint"
 },
 
 {
