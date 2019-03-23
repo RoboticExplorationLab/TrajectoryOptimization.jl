@@ -39,18 +39,27 @@ end
 # Problem(T::Type,model::Model,cost::CostFunction) = Problem{T}(model,cost,
 #     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
 
-
+"$(SIGNATURES)
+$(TYPEDSIGNATURES)
+Create a problem, initializing the initial state and control input trajectories to zeros"
 function Problem(model::Model,cost::CostFunction,N::Int,dt::T) where T
     X = empty_state(model.n,N)
     U = [zeros(model.m) for k = 1:N-1]
     Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
 end
 
-function Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
+"$(SIGNATURES) Create am unconstrained trajectory optimization problem
+
+Creates a problem with discrete dynamics with timestep `dt` from `model`, minimizing the objective given by `cost`, subject
+to an initial state `x0`. `U` is the initial guess for the control trajectory.
+"""
+function Problem(model::Model{Discrete},cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
     N = length(U) + 1
     X = empty_state(model.n,N)
     Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
 end
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) =
+    Problem(model,cost,x0,to_dvecs(U),dt)
 
 # Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
 #     cost,AbstractConstraint[],x0,Vector[],U,N,dt)
@@ -70,6 +79,9 @@ end
 
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
+Base.copy(p::Problem) = Problem(p.model, p.cost, p.constraints, copy(p.x0),
+    deepcopy(p.X), deepcopy(p.U), p.N, p.dt)
+
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
 function update_problem(p::Problem;
@@ -79,10 +91,12 @@ function update_problem(p::Problem;
     Problem(model,cost,constraints,x0,X,U,N,dt)
 end
 
+"$(SIGNATURES) Add a constraint to the problem"
 function add_constraints!(p::Problem,c::Constraint)
     push!(p.constraints,c)
 end
 
+"$(SIGNATURES) Add a set of constraints to the problem"
 function add_constraints!(p::Problem,C::ConstraintSet)
     append!(p.constraints,C)
 end

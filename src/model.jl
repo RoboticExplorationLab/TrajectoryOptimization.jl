@@ -72,7 +72,7 @@ function AnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::D
 end
 
 
-""" $(SIGNATURES)
+""" $(TYPEDSIGNATURES)
 Create a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters
 Dynamics function passes in parameters:
     f(ẋ,x,u,p)
@@ -81,7 +81,7 @@ Dynamics function passes in parameters:
 Model(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
     AnalyticalModel{Continuous}(f,n,m,d)
 
-""" $(SIGNATURES)
+""" $(TYPEDSIGNATURES)
 Create a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters
 Dynamics function of the form:
     f(ẋ,x,u)
@@ -89,7 +89,7 @@ Dynamics function of the form:
 Model(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
     AnalyticalModel{Continuous}(f,n,m,p,d)
 
-""" $(SIGNATURES)
+""" $(TYPEDSIGNATURES)
 Create a dynamics model with an analytical Jacobian, with parameters
 Dynamics functions pass in parameters:
     f(ẋ,x,u,p)
@@ -102,7 +102,7 @@ Model(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Sy
     ∇f_p(Z,x,u) = ∇f(Z,x,u,p)
     AnalyticalModel{Continuous}(f_p,∇f_p,n,m,p,d, check_functions=true); end
 
-""" $(SIGNATURES)
+""" $(TYPEDSIGNATURES)
 Create a dynamics model with an analytical Jacobian, without parameters
 Dynamics functions pass of the form:
     f(ẋ,x,u)

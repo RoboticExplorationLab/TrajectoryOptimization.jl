@@ -26,9 +26,10 @@ ilqr = iLQRSolver(prob)
 # ΔV = backwardpass!(prob,ilqr)
 # J = forwardpass!(prob,ilqr,ΔV,J_prev)
 # step!(prob,ilqr,J_prev)
-solve!(prob,ilqr)
-plot(prob.X)
-plot(prob.U)
+p = solve(prob,ilqr)
+plot(p.X)
+plot(p.U)
+
 
 
 

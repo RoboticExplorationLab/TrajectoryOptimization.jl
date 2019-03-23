@@ -7,6 +7,13 @@ makedocs(
     format = Documenter.HTML(),
     modules = [TrajectoryOptimization],
     devbranch = "restructure",
+    pages = [
+        "index.md",
+        "models.md",
+        "constraints.md",
+        "problem.md",
+        "solvers.md"
+    ]
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
