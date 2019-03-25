@@ -60,8 +60,7 @@ struct iLQRSolver{T} <: AbstractSolver{T}
     bp::BackwardPassNew{T}
 end
 
-function iLQRSolver(prob::Problem{T}) where T
-     opts=iLQRSolverOptions{T}()
+function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
      AbstractSolver(prob, opts)
 end
 
@@ -100,11 +99,15 @@ function reset!(solver::iLQRSolver{T}) where T
     solver.stats[:dJ]              = T[]
     solver.stats[:gradient]        = T[]
     solver.stats[:dJ_zero_counter] = 0
+    solver.ρ[1] = 0
+    solver.dρ[1] = 0
 end
 
 function copy(r::iLQRSolver{T}) where T
     iLQRSolver{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
 end
+
+get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
 
 "$(TYPEDEF) Augmented Lagrangian results"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
@@ -121,9 +124,14 @@ struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
-function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T
+AugmentedLagrangianSolver(prob::Problem{T},
+    opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T =
+    AbstractSolver(prob,opts)
+
+function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     # Init solver statistics
-    stats = Dict{Symbol,Any}(:iterations=>0,:cost=>T[],:c_max=>T[])
+    stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
+        :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
     stats_uncon = Dict{Symbol,Any}[]
 
     # Init solver results
@@ -152,6 +160,22 @@ function AugmentedLagrangianSolver(prob::Problem{T}, opts::AugmentedLagrangianSo
     AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)
 end
 
+function reset!(solver::AugmentedLagrangianSolver{T}) where T
+    solver.stats[:iterations]       = 0
+    solver.stats[:iterations_total] = 0
+    solver.stats[:iterations_inner] = T[]
+    solver.stats[:cost]             = T[]
+    solver.stats[:c_max]            = T[]
+    n,m,N = get_sizes(solver)
+    for k = 1:N
+        solver.λ[k] .*= 0
+        solver.μ[k] .= solver.μ[k]*0 .+ solver.opts.penalty_initial
+    end
+end
+
+
 function copy(r::AugmentedLagrangianSolver{T}) where T
     AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.active_set))
 end
+
+get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
