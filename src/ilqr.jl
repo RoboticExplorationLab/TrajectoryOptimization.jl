@@ -1,11 +1,31 @@
 
-function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
+
+function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
+    solver = AbstractSolver(prob,opts)
+    solve!(prob,solver)
+end
+
+
+function solve(prob0::Problem{T},solver::AbstractSolver{T})::Problem{T} where T
+    prob = copy(prob0)
+    solve!(prob,solver)
+    return prob
+end
+
+function solve(prob0::Problem{T},opts::AbstractSolverOptions{T})::Problem{T} where T
+    prob = copy(prob0)
+    solver = AbstractSolver(prob,opts)
+    solve!(prob,solver)
+    return prob
+end
+
+function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     reset!(solver)
 
     n,m,N = size(prob)
     J = Inf
 
-    logger = default_logger(true)
+    logger = default_logger(solver)
 
     # Initial rollout
     rollout!(prob)
@@ -15,26 +35,20 @@ function solve!(prob::Problem{T},solver::iLQRSolver{T}) where T
     with_logger(logger) do
         for i = 1:solver.opts.iterations
             J = step!(prob, solver, J_prev)
-            copyto!(prob.X,solver.X̄)
-            copyto!(prob.U,solver.Ū)
+            copyto!(prob.X, solver.X̄)
+            copyto!(prob.U, solver.Ū)
 
             dJ = abs(J - J_prev)
             J_prev = copy(J)
             record_iteration!(prob, solver, J, dJ)
 
-            println(logger,InnerLoop)
+            println(logger, InnerLoop)
             evaluate_convergence(solver) ? break : nothing
         end
     end
     return J
 end
 
-
-function solve(prob0::Problem{T},solver::iLQRSolver{T})::Problem{T} where T
-    prob = copy(prob0)
-    solve!(prob,solver)
-    return prob
-end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     jacobian!(prob,solver)
