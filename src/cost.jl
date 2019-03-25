@@ -7,7 +7,7 @@ import Base.copy
 abstract type CostFunction end
 
 "Calculate (unconstrained) cost for X and U trajectories"
-function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
+function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T)::T where T <: AbstractFloat
     N = length(X)
     J = 0.0
     for k = 1:N-1

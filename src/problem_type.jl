@@ -39,16 +39,16 @@ end
 # Problem(T::Type,model::Model,cost::CostFunction) = Problem{T}(model,cost,
 #     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
 
-"$(SIGNATURES)
+"""$(SIGNATURES)
 $(TYPEDSIGNATURES)
-Create a problem, initializing the initial state and control input trajectories to zeros"
+Create a problem, initializing the initial state and control input trajectories to zeros"""
 function Problem(model::Model,cost::CostFunction,N::Int,dt::T) where T
     X = empty_state(model.n,N)
     U = [zeros(model.m) for k = 1:N-1]
     Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
 end
 
-"$(SIGNATURES) Create am unconstrained trajectory optimization problem
+"""$(SIGNATURES) Create am unconstrained trajectory optimization problem
 
 Creates a problem with discrete dynamics with timestep `dt` from `model`, minimizing the objective given by `cost`, subject
 to an initial state `x0`. `U` is the initial guess for the control trajectory.
@@ -58,7 +58,7 @@ function Problem(model::Model{Discrete},cost::CostFunction,x0::Vector{T},U::Vect
     X = empty_state(model.n,N)
     Problem(model,cost,AbstractConstraint[],x0,X,deepcopy(U),N,dt)
 end
-Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) =
+Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) where T =
     Problem(model,cost,x0,to_dvecs(U),dt)
 
 # Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
@@ -83,6 +83,8 @@ Base.copy(p::Problem) = Problem(p.model, p.cost, p.constraints, copy(p.x0),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
+
+is_constrained(p::Problem) = !isempty(p.constraints)
 
 function update_problem(p::Problem;
     model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
@@ -144,7 +146,37 @@ function check_problem(p::Problem)
     return flag
 end
 
+num_stage_constraints(p::Problem) = num_stage_constraints(p.constraints)
+num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints)
 
 jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
-cost(prob::Problem,X=prob.X,U=prob.U) = cost(prob.cost,X,U,prob.dt)
+cost(prob::Problem{T}) where T = cost(prob.cost, prob.X, prob.U, prob.dt)::T
+
+pos(x) = max(0,x)
+
+function max_violation(prob::Problem{T}) where T
+    if is_constrained(prob)
+        N = prob.N
+        stage_con = stage(prob.constraints)
+        c = BlockVector(T,stage_con)
+        c_max = -Inf
+        for k = 1:N-1
+            evaluate!(c,stage_con,prob.X[k],prob.U[k])
+            max_E = norm(c.equality,Inf)
+            max_I = maximum(pos.(c))
+            c_max = max(c_max,max(max_E,max_I))
+        end
+        if num_terminal_constraints(prob) > 0
+            term_con = terminal(prob.constraints)
+            c = BlockVector(T,term_con)
+            evaluate!(c,term_con,prob.X[N])
+            max_E = norm(c.equality,Inf)
+            max_I = maximum(pos.(c))
+            c_max = max(c_max,max(max_E,max_I))
+        end
+        return c_max
+    else
+        return 0
+    end
+end

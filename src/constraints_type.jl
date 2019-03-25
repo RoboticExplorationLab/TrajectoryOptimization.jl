@@ -228,7 +228,7 @@ function PartedArrays.create_partition2(C::ConstraintSet,n::Int,m::Int)
         part_xu = (x=(1:p,1:n),u=(1:p,n+1:n+m))
         return merge(part2,part_xu)
     else
-        return NamedTuple{(:equality,:inequality)}((1:0,1:0))
+        return NamedTuple{(:x,:u)}(((1:0,1:n),(1:0,n+1:n+m)))
     end
 end
 
