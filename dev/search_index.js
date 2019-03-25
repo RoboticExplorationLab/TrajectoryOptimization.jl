@@ -45,7 +45,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.Model",
     "category": "method",
-    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+    "text": "Model(f::Function, n::Int64, m::Int64) -> TrajectoryOptimization.AnalyticalModel{Continuous}\nModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}) -> TrajectoryOptimization.AnalyticalModel{Continuous}\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
 },
 
 {
@@ -77,7 +77,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.QuadraticCost",
     "category": "type",
-    "text": "mutable struct QuadraticCost{TM, TH, TV, T} <: TrajectoryOptimization.CostFunction\n\nCost function of the form     xₙᵀ Qf xₙ + qfᵀxₙ + ∫ ( xᵀQx + uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf R must be positive definite, Q and Qf must be positive semidefinite\n\n\n\n\n\n"
+    "text": "mutable struct QuadraticCost{TM, TH, TV, T} <: TrajectoryOptimization.CostFunction\n\nCost function of the form     1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf R must be positive definite, Q and Qf must be positive semidefinite\n\n\n\n\n\n"
 },
 
 {
@@ -85,7 +85,7 @@ var documenterSearchIndex = {"docs": [
     "page": "TrajectoryOptimization.jl",
     "title": "TrajectoryOptimization.LQRCost",
     "category": "function",
-    "text": "LQRCost(Q, R, Qf, xf)\n\n\nCost function of the form     (xₙ-xf)ᵀ Qf (xₙ - xf) ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf R must be positive definite, Q and Qf must be positive semidefinite\n\n\n\n\n\n"
+    "text": "LQRCost(Q, R, Qf, xf)\n\n\nCost function of the form     1/2(xₙ-xf)ᵀ Qf (xₙ - xf) + 1/2 ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf R must be positive definite, Q and Qf must be positive semidefinite\n\n\n\n\n\n"
 },
 
 {
@@ -237,103 +237,31 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "Continuous Models",
     "category": "section",
-    "text": "Continuous models assume differential equations are specified by an in-place function in one of the following forms:f!(ẋ,x,u)\nf!(ẋ,x,u,p)and Jacobians of the form∇f!(Z,x,u)\n∇f!(Z,x,u,p)where ẋ is the state derivative, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)]). As soon as the model is created, however, only the forms without parameters (the top lines) are available. The Model type will automatically bake in the parameters. A new model must be created if a parameter is changed (this will be made easier in the future)."
+    "text": ""
 },
 
 {
-    "location": "models/#TrajectoryOptimization.AnalyticalModel",
+    "location": "models/#From-analytical-function-1",
     "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.AnalyticalModel",
-    "category": "type",
-    "text": "struct AnalyticalModel{D} <: Model{D}\n\nDynamics model\n\nHolds all information required to uniquely describe a dynamic system, including a general nonlinear dynamics function of the form ẋ = f(x,u), where x ∈ ℜⁿ are the states and u ∈ ℜᵐ are the controls.\n\nDynamics function Model.f should be in the following forms:     \'f!(ẋ,x,u)\' and modify ẋ in place\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, n, m)\nModel(f, n, m, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, n, m, p)\nModel(f, n, m, p, d)\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters Dynamics function of the form:     f(ẋ,x,u)\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, ∇f, n, m, p)\nModel(f, ∇f, n, m, p, d)\n\n\nCreate a dynamics model with an analytical Jacobian, with parameters Dynamics functions pass in parameters:     f(ẋ,x,u,p)     ∇f(Z,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "type",
-    "text": "Model(f, ∇f, n, m)\nModel(f, ∇f, n, m, d)\n\n\nCreate a dynamics model with an analytical Jacobian, without parameters Dynamics functions pass of the form:     f(ẋ,x,u)     ∇f(Z,x,u)\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#Analytical-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "Analytical Models",
+    "title": "From analytical function",
     "category": "section",
-    "text": "AnalyticalModelThe following constructors can be used to create Continuous Analytical modelsModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
+    "text": "Let\'s start by writing down a dynamics function for a simple pendulum with state [θ; ω] and a torque control inputfunction pendulum_dynamics!(xdot,x,u)\n    m = 1.\n    l = 0.5\n    b = 0.1\n    lc = 0.5\n    J = 0.25\n    g = 9.81\n    xdot[1] = x[2]\n    xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/J\nendNote that the function is in-place, in that it writes the result to the first argument. It is also good practice to concretely specify the location to write to rather than using something like xdot[1:end] or xdot[:].Notice that we had to specify a handful of constants when writing down the dynamics. We could have initialized them outside the scope of the function (which may result in global variables, so be careful!) or we can pass them in as a NamedTuple of parameters:function pendulum_dynamics_params!(xdot,x,u,p)\n    xdot[1] = x[2]\n    xdot[2] = (u[1] - p.m * p.g * p.lc * sin(x[1]) - p.b*x[2])/p.J\nendWe can now create our model using our analytical dynamics function with or without the parameters tuplen,m = 2,1\nmodel = Model(pendulum_dynamics!, n, m)\n\nparams = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)\nmodel = Model(pendulum_dynamics_params!, n, m, params)"
 },
 
 {
-    "location": "models/#TrajectoryOptimization.RBDModel",
+    "location": "models/#With-analytical-Jacobians-1",
     "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.RBDModel",
-    "category": "type",
-    "text": "struct RBDModel{D} <: Model{D}\n\nRigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism,Array}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "method",
-    "text": "Model(mech, torques)\n\n\nModel(mech::Mechanism, torques::Array{Bool, 1}) Constructor for an underactuated mechanism, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "method",
-    "text": "Model(mech)\n\n\nConstruct model from a Mechanism type from RigidBodyDynamics\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model-Tuple{String}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "method",
-    "text": "Model(urdf)\n\n\nConstruct a fully actuated model from a string to a urdf file\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#TrajectoryOptimization.Model-Tuple{String,Array{Float64,1}}",
-    "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "method",
-    "text": "Model(urdf, torques)\n\n\nConstruct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#URDF-Models-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "URDF Models",
+    "title": "With analytical Jacobians",
     "category": "section",
-    "text": "RBDModelThe following constructors can be used to create a Model from a URDF fileModel(mech::Mechanism, torques::Array)\nModel(mech::Mechanism)\nModel(urdf::String)\nModel(urdf::String,torques::Array{Float64,1})"
+    "text": "Since we have a very simple model, writing down an analytical expression of the Jacobian is pretty easy:function pendulum_jacobian!(Z,x,u)\n    m = 1.\n    l = 0.5\n    b = 0.1\n    lc = 0.5\n    J = 0.25\n    g = 9.81\n\n    Z[1,1] = 0                    # ∂θdot/∂θ\n    Z[1,2] = 1                    # ∂θdot/∂ω\n    Z[1,3] = 0                    # ∂θ/∂u\n    Z[2,1] = -m*g*lc*cos(x[1])/J  # ∂ωdot/∂θ\n    Z[2,2] = -b/J                 # ∂ωdot/∂ω\n    Z[2,3] = 1/J                  # ∂ωdot/∂u\nend\n\nfunction pendulum_jacobian_params!(Z,x,u,p)\n    Z[1,1] = 0                                    # ∂θdot/∂θ\n    Z[1,2] = 1                                    # ∂θdot/∂ω\n    Z[1,3] = 0                                    # ∂θ/∂u\n    Z[2,1] = -p.m * p.g * p.lc * cos(x[1]) / p.J  # ∂ωdot/∂θ\n    Z[2,2] = -p.b / p.J                           # ∂ωdot/∂ω\n    Z[2,3] = 1/p.J                                # ∂ωdot/∂u\nendWe can then pass these functions into the model instead of using ForwardDiff to calculate themmodel = Model(pendulum_dynamics!, pendulum_jacobian!, n, m)\nmodel = Model(pendulum_dynamics_params!, pendulum_jacobian_params!, n, m, params)"
+},
+
+{
+    "location": "models/#URDF-Files-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "URDF Files",
+    "category": "section",
+    "text": "Instead of writing down the dynamics explicity, we can import the dynamics from geometry specified in a URDF model using RigidBodyDynamics.jl. Let\'s say we have a URDF file for a double pendulum and don\'t want to both writing down the dynamics, then we can create a model using any of the following methodsusing RigidBodyDynamics\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech)Now let\'s say we want to control an acrobot, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are \"active\".joints = [true,false]\n\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf,joints)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech,joints)"
 },
 
 {
@@ -369,11 +297,75 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f::Function, n::Int64, m::Int64) -> TrajectoryOptimization.AnalyticalModel{Continuous}\nModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}) -> TrajectoryOptimization.AnalyticalModel{Continuous}\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters Dynamics function passes in parameters:     f(ẋ,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f::Function, n::Int64, m::Int64, p::NamedTuple) -> TrajectoryOptimization.AnalyticalModel{Continuous}\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}) -> TrajectoryOptimization.AnalyticalModel{Continuous}\n\n\nCreate a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters Dynamics function of the form:     f(ẋ,x,u)\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple) -> TrajectoryOptimization.AnalyticalModel{Continuous}\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}) -> TrajectoryOptimization.AnalyticalModel{Continuous}\n\n\nCreate a dynamics model with an analytical Jacobian, with parameters Dynamics functions pass in parameters:     f(ẋ,x,u,p)     ∇f(Z,x,u,p)     where p in NamedTuple of parameters\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "type",
+    "text": "Model(f::Function, ∇f::Function, n::Int64, m::Int64) -> TrajectoryOptimization.AnalyticalModel{Continuous}\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}) -> TrajectoryOptimization.AnalyticalModel{Continuous}\n\n\nCreate a dynamics model with an analytical Jacobian, without parameters Dynamics functions pass of the form:     f(ẋ,x,u)     ∇f(Z,x,u)\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism,Array}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(mech, torques)\n\n\nModel(mech::Mechanism, torques::Array{Bool, 1}) Constructor for an underactuated mechanism, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{Mechanism}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(mech)\n\n\nConstruct model from a Mechanism type from RigidBodyDynamics\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{String}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(urdf)\n\n\nConstruct a fully actuated model from a string to a urdf file\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.Model-Tuple{String,Array{Float64,1}}",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.Model",
+    "category": "method",
+    "text": "Model(urdf, torques)\n\n\nConstruct a partially actuated model from a string to a urdf file, where torques is a binary array that specifies whether a joint is actuated.\n\n\n\n\n\n"
+},
+
+{
     "location": "models/#API-1",
     "page": "Setting up a Dynamics Model",
     "title": "API",
     "category": "section",
-    "text": "evaluate!(ẋ::AbstractVector,model::Model,x,u)\nevaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,model::Model,x,u)\nevals(model::Model)\nreset(model::Model)"
+    "text": "The following constructors can be used to create a model from an analytic function, with or without parameters or analyical JacobiansModel(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nModel(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())The following constructors can be used to create a Model from a URDF fileModel(mech::Mechanism, torques::Array)\nModel(mech::Mechanism)\nModel(urdf::String)\nModel(urdf::String,torques::Array{Float64,1})evaluate!(ẋ::AbstractVector,model::Model,x,u)\nevaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model,x,u)\njacobian!(Z::AbstractMatrix,model::Model,x,u)\nevals(model::Model)\nreset(model::Model)"
 },
 
 {
@@ -441,6 +433,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "problem/#TrajectoryOptimization.Problem-Union{Tuple{T}, Tuple{Model,CostFunction,Int64,T}} where T",
+    "page": "Setting up a Problem",
+    "title": "TrajectoryOptimization.Problem",
+    "category": "method",
+    "text": "Problem(model, cost, N, dt)\n\n\nProblem(model::T, cost::T, N::T, dt::T)\n\n\nCreate a problem, initializing the initial state and control input trajectories to zeros\n\n\n\n\n\n"
+},
+
+{
     "location": "problem/#Creating-a-Problem-1",
     "page": "Setting up a Problem",
     "title": "Creating a Problem",
@@ -470,6 +470,14 @@ var documenterSearchIndex = {"docs": [
     "title": "Solvers",
     "category": "section",
     "text": "CurrentModule = TrajectoryOptimization"
+},
+
+{
+    "location": "solvers/#TrajectoryOptimization.iLQRSolverOptions",
+    "page": "Solvers",
+    "title": "TrajectoryOptimization.iLQRSolverOptions",
+    "category": "type",
+    "text": "mutable struct iLQRSolverOptions{T} <: TrajectoryOptimization.AbstractSolverOptions{T}\n\nSolver options for the iterative LQR (iLQR) solver. iLQR is an indirect, unconstrained solver. DocStringExtensions.FIELDS\n\n\n\n\n\n"
 },
 
 {
