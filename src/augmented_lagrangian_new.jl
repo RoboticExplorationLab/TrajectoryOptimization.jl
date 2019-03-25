@@ -1,21 +1,32 @@
 "Augmented Lagrangian solve"
 function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
+    reset!(solver)
+    
     unconstrained_solver = AbstractSolver(prob, solver.opts.unconstrained_solver)
+    prob_al = AugmentedLagrangianProblem(prob, solver)
+    logger = default_logger(solver)
 
-    for i = 1:solver.opts.iterations
-        J = step!(prob, solver, unconstrained_solver)
-        c_max = max_violation(solver)
-        record_iteration!(prob, solver, J, c_max, unconstrained_solver)
-        evaluate_convergence(solver) ? break : nothing
+    with_logger(logger) do
+        for i = 1:solver.opts.iterations
+            J = step!(prob, solver, prob_al, unconstrained_solver)
+
+            record_iteration!(prob, solver, J, unconstrained_solver)
+            println(logger,OuterLoop)
+            evaluate_convergence(solver) ? break : nothing
+        end
     end
 end
 
 "Augmented Lagrangian step"
-function step!(prob::Problem, solver::AugmentedLagrangianSolver,unconstrained_solver::AbstractSolver)
-    J = solve!(prob, unconstrained_solver)
+function step!(prob::Problem, solver::AugmentedLagrangianSolver,
+        prob_al::Problem,unconstrained_solver::AbstractSolver)
+
+    # Solve the unconstrained problem
+    J = solve!(prob_al, unconstrained_solver)
+
+    # Outer loop update
     dual_update!(prob, solver)
     penalty_update!(prob, solver)
-
     copyto!(solver.C_prev,solver.C)
 
     return J
@@ -25,11 +36,20 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver)
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T, c_max::T, unconstrained_solver::AbstractSolver{T}) where T
+function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T, unconstrained_solver::AbstractSolver{T}) where T
+    c_max = max_violation(solver)
+
     solver.stats[:iterations] += 1
+    solver.stats[:iterations_total] += unconstrained_solver.stats[:iterations]
+    push!(solver.stats[:iterations_inner], unconstrained_solver.stats[:iterations])
     push!(solver.stats[:cost],J)
     push!(solver.stats[:c_max],c_max)
     push!(solver.stats_uncon, unconstrained_solver.stats)
+
+    @logmsg OuterLoop :iter value=solver.stats[:iterations]
+    @logmsg OuterLoop :total value=solver.stats[:iterations_total]
+    @logmsg OuterLoop :cost value=J
+    @logmsg OuterLoop :c_max value=c_max
 end
 
 "Saturate a vector element-wise with upper and lower bounds"
@@ -44,6 +64,9 @@ function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
             solver.opts.dual_min))
         copyto!(λ[k].inequality,max.(0.0, λ[k].inequality))
     end
+
+    # Update active set after updating multipliers (need to calculate c_max)
+    update_active_set!(solver.active_set,solver.C,solver.λ)
 end
 
 "Penalty update (default) - update all penalty parameters"

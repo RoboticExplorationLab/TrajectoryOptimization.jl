@@ -44,9 +44,30 @@ export
     SolverOptions,
     Trajectory
 
+export
+    Problem,
+    iLQRSolver,
+    iLQRSolverOptions,
+    AugmentedLagrangianSolver,
+    AugmentedLagrangianSolverOptions,
+    Discrete,
+    Continuous,
+    Constraint,
+    TerminalConstraint,
+    Equality,
+    Inequality
+
+export
+    rk3,
+    rk4,
+    midpoint,
+    add_constraints!
+
+
 # Primary methods
 export
     solve,
+    solve!,
     rollout!,
     rollout,
     forwardpass!,
@@ -63,6 +84,7 @@ export
     get_num_controls,
     init_results,
     to_array,
+    to_dvecs,
     get_N,
     quat2rot,
     sphere_constraint,
@@ -105,7 +127,6 @@ include("augmented_lagrangian.jl")
 include("solve.jl")
 include("utils.jl")
 include("dynamics.jl")
-include("logger.jl")
 include("controller.jl")
 
 include("problem_type.jl")
@@ -116,6 +137,7 @@ include("backwardpass_new.jl")
 include("forward_pass_new.jl")
 include("rollout_new.jl")
 include("augmented_lagrangian_new.jl")
+include("logger.jl")
 
 using Ipopt
 
