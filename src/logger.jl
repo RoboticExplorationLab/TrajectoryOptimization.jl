@@ -10,15 +10,29 @@ function default_logger(verbose::Bool)
     logger = SolverLogger(min_level)
     inner_cols = [:iter, :cost, :expected, :z, :α, :info]
     inner_widths = [5,     14,      12,    10, 10,    50]
-    outer_cols = [:outeriter, :iter, :iterations, :info]
-    outer_widths = [10,          5,        12,        40]
+    outer_cols = [:iter, :total, :c_max, :info]
+    outer_widths = [6,          7,        12,        50]
     add_level!(logger, InnerLoop, inner_cols, inner_widths, print_color=:green,indent=4)
     add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
     return logger
 end
-default_logger(solver::Solver) = default_logger(solver.opts.verbose)
+default_logger(solver::Union{Solver,AbstractSolver}) = default_logger(solver.opts.verbose)
 
+function default_logger(solver::AugmentedLagrangianSolver)
+    solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
 
+    logger = SolverLogger(min_level)
+    outer_cols = [:iter, :total, :c_max, :info]
+    outer_widths = [6,          7,        12,        50]
+    if solver.opts.unconstrained_solver.verbose
+        freq = 1
+    else
+        freq = 5
+    end
+    add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,
+        indent=0, header_frequency=freq)
+    return logger
+end
 """
 $(SIGNATURES)
 Holds logging information about a particular print level, meant to assemble
@@ -225,8 +239,9 @@ data generated at that level. Additional keyword arguments (from LogData constru
 * vartypes = Vector of variable types for each column
 * do_print = BitArray specifying whether or now the column should be printed (or just cached and not printed)
 """
-function add_level!(logger::SolverLogger, level::LogLevel, cols, widths; print_color=:default, indent=0, kwargs...)
-    logger.leveldata[level] = LogData(cols, widths, color=print_color, indent=indent)
+function add_level!(logger::SolverLogger, level::LogLevel, cols, widths; print_color=:default,
+        indent=0, kwargs...)
+    logger.leveldata[level] = LogData(cols, widths, color=print_color, indent=indent; kwargs...)
 end
 
 function Base.println(logger::SolverLogger, level::LogLevel)
