@@ -8,6 +8,9 @@ DocStringExtensions.FIELDS
 """
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
+    "Print summary at each iteration"
+    verbose=false
+
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
     cost_tolerance::T = 1.0e-4
 
@@ -81,9 +84,10 @@ DocStringExtensions.FIELDS
     max_control_value::T = 1.0e8
 end
 
-aa = iLQRSolverOptions{Float64}(iterations=5)
-
 @with_kw mutable struct AugmentedLagrangianSolverOptions{T} <: AbstractSolverOptions{T}
+    "Print summary at each iteration"
+    verbose::Bool=false
+
     "unconstrained minimization solver"
     unconstrained_solver::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
@@ -131,6 +135,9 @@ aa = iLQRSolverOptions{Float64}(iterations=5)
 end
 
 @with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
+    "Print summary at each iteration"
+    verbose::Bool=false
+
     ## Infeasible Start
     "infeasible control constraint tolerance"
     constraint_tolerance_infeasible::T = 1.0e-5
