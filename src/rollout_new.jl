@@ -22,14 +22,14 @@ function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
     return true
 end
 
-function rollout!(p::Problem)
-    N = p.N
-    X = p.X; U = p.U
+function rollout!(prob::Problem)
+    N = prob.N
+    X = prob.X; U = prob.U
 
     if !all(isfinite.(prob.X[1]))
-        X[1] = p.x0
+        X[1] = prob.x0
         for k = 1:N-1
-            evaluate!(X[k+1], p.model, X[k], U[k], prob.dt)
+            evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
         end
     end
 end

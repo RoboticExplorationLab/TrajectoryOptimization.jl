@@ -329,6 +329,7 @@ end
 
 function cost_expansion(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
     Qf,qf = cost_expansion(alcost.cost,x)
+    N = length(alcost.μ)
 
     c = alcost.C[N]
     λ = alcost.λ[N]
