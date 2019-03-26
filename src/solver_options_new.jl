@@ -4,7 +4,7 @@ abstract type AbstractSolverOptions{T<:Real} end
 
 """$(TYPEDEF)
 Solver options for the iterative LQR (iLQR) solver. iLQR is an indirect, unconstrained solver.
-DocStringExtensions.FIELDS
+$(FIELDS)
 """
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
@@ -84,6 +84,11 @@ DocStringExtensions.FIELDS
     max_control_value::T = 1.0e8
 end
 
+"""$(TYPEDEF)
+Solver options for the augmented Lagrangian solver.
+    Augmented Lagrangian is a general method for solving constrained problems by solving a sequence of unconstrained problems.
+$(FIELDS)
+"""
 @with_kw mutable struct AugmentedLagrangianSolverOptions{T} <: AbstractSolverOptions{T}
     "Print summary at each iteration"
     verbose::Bool=false

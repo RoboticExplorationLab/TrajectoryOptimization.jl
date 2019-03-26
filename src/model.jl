@@ -15,8 +15,15 @@ Holds all information required to uniquely describe a dynamic system, including
 a general nonlinear dynamics function of the form `ẋ = f(x,u)`, where x ∈ ℜⁿ are
 the states and u ∈ ℜᵐ are the controls.
 
-Dynamics function `Model.f` should be in the following forms:
-    'f!(ẋ,x,u)' and modify ẋ in place
+Dynamics function, f, should be of the form
+    f(ẋ,x,u,p) for Continuous models, where ẋ is the state derivative
+    f(ẋ,x,u,p,dt) for Discrete models, where ẋ is the state at the next time step
+    and x is the state vector, u is the control input vector, and p is an optional `NamedTuple` of static parameters (mass, gravity, etc.)
+
+Dynamics jacobians, ∇f, should be of the form
+    ∇f(Z,x,u,p) for Continuous models, and
+    ∇f(Z,x,u,,p,dt) for discrete models
+    where p is the same `NamedTuple` of parameters used in the dynamics
 """
 struct AnalyticalModel{D} <:Model{D}
     f::Function   # dynamics f(ẋ,x,u)

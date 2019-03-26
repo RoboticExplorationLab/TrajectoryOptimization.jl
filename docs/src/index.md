@@ -33,7 +33,6 @@ To set up and solve a trajectory optimization problem with TrajectoryOptimizatio
 5) Solve the problem
 6) Analyze the solution
 
-
 ## Creating a Model
 There are two ways of creating a model:
 1) An in-place analytic function of the form f(ẋ,x,u)

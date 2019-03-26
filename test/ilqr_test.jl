@@ -1,6 +1,7 @@
 using LinearAlgebra, Random
 using Test
 using BenchmarkTools
+using Plots
 
 model, obj = Dynamics.quadrotor
 N = 21
@@ -10,8 +11,10 @@ U0 = 6*ones(m,N-1)
 X0 = rollout(solver,U0)
 J0 = cost(solver,X0,U0)
 res,stats = solve(solver,U0)
-stats["cost"][end]
-stats["iterations"]
+
+obj_c = ConstrainedObjective(obj,u_min=0,u_max=4.5)
+solver = Solver(model,obj_c,N=N)
+res_con,stats_con = solve(solver,U0)
 
 
 import TrajectoryOptimization: empty_state,num_stage_constraints,num_terminal_constraints, AugmentedLagrangianProblem, AugmentedLagrangianCost
@@ -25,7 +28,7 @@ dt = solver.dt
 x0 = obj.x0
 prob = Problem(model_d,costfun,x0,U,dt)
 
-opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=true)
+opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
 ilqr = iLQRSolver(prob,opts)
 res1 = solve(prob,ilqr)
 
@@ -61,7 +64,13 @@ update_constraints!(prob_al.cost.C,prob_al.cost.constraints,prob_al.X,prob_al.U)
 
 prob = Problem(model_d,costfun,x0,U,dt)
 add_constraints!(prob,bnd)
-opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=true,unconstrained_solver=opts)
+opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=false,unconstrained_solver=opts)
 auglag = AugmentedLagrangianSolver(prob,opts_al)
 res3 = solve(prob,auglag)
 @test max_violation(res3) == max_violation(auglag)
+
+@btime solve($prob,$auglag)
+@btime solve($solver,$U0)
+plot(stats_con["c_max"],yscale=:log10)
+
+plot!(cumsum(auglag.stats[:iterations_inner]),auglag.stats[:c_max],seriestype=:step)

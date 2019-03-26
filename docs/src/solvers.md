@@ -15,3 +15,8 @@ The iLQR solver has the following solver options
 ```@docs
 iLQRSolverOptions
 ```
+
+Augmented Lagrangian
+```@docs
+AugmentedLagrangianSolverOptions
+```
