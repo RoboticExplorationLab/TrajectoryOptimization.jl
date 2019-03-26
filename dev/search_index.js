@@ -261,7 +261,31 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "URDF Files",
     "category": "section",
-    "text": "Instead of writing down the dynamics explicity, we can import the dynamics from geometry specified in a URDF model using RigidBodyDynamics.jl. Let\'s say we have a URDF file for a double pendulum and don\'t want to both writing down the dynamics, then we can create a model using any of the following methodsusing RigidBodyDynamics\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech)Now let\'s say we want to control an acrobot, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are \"active\".joints = [true,false]\n\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf,joints)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech,joints)"
+    "text": "Instead of writing down the dynamics explicity, we can import the dynamics from geometry specified in a URDF model using RigidBodyDynamics.jl. Let\'s say we have a URDF file for a double pendulum and don\'t want to both writing down the dynamics, then we can create a model using any of the following methodsusing RigidBodyDynamics\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech)Now let\'s say we want to control an acrobot, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are \"active.\"joints = [true,false]\n\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf,joints)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech,joints)"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.AnalyticalModel",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.AnalyticalModel",
+    "category": "type",
+    "text": "struct AnalyticalModel{D} <: Model{D}\n\nDynamics model\n\nHolds all information required to uniquely describe a dynamic system, including a general nonlinear dynamics function of the form ẋ = f(x,u), where x ∈ ℜⁿ are the states and u ∈ ℜᵐ are the controls.\n\nDynamics function Model.f should be in the following forms:     \'f!(ẋ,x,u)\' and modify ẋ in place\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#TrajectoryOptimization.RBDModel",
+    "page": "Setting up a Dynamics Model",
+    "title": "TrajectoryOptimization.RBDModel",
+    "category": "type",
+    "text": "struct RBDModel{D} <: Model{D}\n\nRigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism\n\n\n\n\n\n"
+},
+
+{
+    "location": "models/#A-note-on-Model-types-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "A note on Model types",
+    "category": "section",
+    "text": "While the constructors look very similar, URDF models actually return a slightly different type than the the analytical ones of the first section. Analytical models are represented byAnalyticalModelwhereas those created from a URDF are represented byRBDModelwhich explicitly stores the Mechanism internally. "
 },
 
 {
@@ -269,7 +293,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "Discrete Models",
     "category": "section",
-    "text": "Discrete models assume difference equations are specified by an in-place function in one of the following forms:f!(x′,x,u,dt)\nf!(x′,x,u,p,dt)and Jacobians of the form∇f!(Z,x,u,dt)\n∇f!(Z,x,u,p,dt)where x′ is the state at the next time step, p is a NamedTuple of model parameters, and Zis the (n × (n+m)) Jacobian matrix (i.e. [∇ₓf(x,u) ∇ᵤf(x,u)])."
+    "text": "The previous methods all generate models with continuous dynamics (note that all of the models returned above will be of the type Model{Continuous}). In order to perform trajectory optimization we need to have discrete dynamics. Typically, we will form the continuous dynamics as we did above and then use a particular integration scheme to discretize it. Alternatively, we may know the analytical expression for the discrete dynamics."
+},
+
+{
+    "location": "models/#From-a-continuous-model-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "From a continuous model",
+    "category": "section",
+    "text": "Assuming we have a model of type Model{Continuous}, we can discretize as follows:model_discrete = Model{Discrete}(model,discretizer)where discretizer is a function that returns a discretized version of the continuous dynamics. TrajectoryOptimization.jl offers the following integration schemesmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)So to create a discrete model of the pendulum with fourth order Runge-Kutta integration we would do the following# Create the continuous model (any of the previously mentioned method would work here)\nparams = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)\nmodel = Model(pendulum_dynamics_params!, n, m, params)\n\n# Discretize the continuous model\nmodel_discrete = Model{Discrete}(model,rk4)"
 },
 
 {
@@ -293,7 +325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "From Continuous Model",
     "category": "section",
-    "text": "A discrete model can be created from a continuous model by specifying the integration (discretization) method. The following methods are currently supportedmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)Use the following method to discretize a continuous model with one of the integration methods listed previouslyModel{Discrete}(model::Model{Continuous},discretizer::Function)"
+    "text": "A discrete model can be created from a continuous model by specifying the integration (discretization) method. The following methods are currently supportedUse the following method to discretize a continuous model with one of the integration methods listed previouslyModel{Discrete}(model::Model{Continuous},discretizer::Function)"
 },
 
 {
