@@ -285,7 +285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "A note on Model types",
     "category": "section",
-    "text": "While the constructors look very similar, URDF models actually return a slightly different type than the the analytical ones of the first section. Analytical models are represented byAnalyticalModelwhereas those created from a URDF are represented byRBDModelwhich explicitly stores the Mechanism internally. "
+    "text": "While the constructors look very similar, URDF models actually return a slightly different type than the the analytical ones of the first section. Analytical models are represented byAnalyticalModelwhereas those created from a URDF are represented byRBDModelwhich explicitly stores the Mechanism internally."
 },
 
 {
@@ -301,31 +301,23 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "From a continuous model",
     "category": "section",
-    "text": "Assuming we have a model of type Model{Continuous}, we can discretize as follows:model_discrete = Model{Discrete}(model,discretizer)where discretizer is a function that returns a discretized version of the continuous dynamics. TrajectoryOptimization.jl offers the following integration schemesmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)So to create a discrete model of the pendulum with fourth order Runge-Kutta integration we would do the following# Create the continuous model (any of the previously mentioned method would work here)\nparams = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)\nmodel = Model(pendulum_dynamics_params!, n, m, params)\n\n# Discretize the continuous model\nmodel_discrete = Model{Discrete}(model,rk4)"
+    "text": "Assuming we have a model of type Model{Continuous}, we can discretize as follows:model_discrete = Model{Discrete}(model,discretizer)where discretizer is a function that returns a discretized version of the continuous dynamics. TrajectoryOptimization.jl offers the following integration schemesmidpoint\nrk3 (Third Order Runge-Kutta)\nrk4 (Fourth Order Runge-Kutta)So to create a discrete model of the pendulum with fourth order Runge-Kutta integration we would do the following# Create the continuous model (any of the previously mentioned methods would work here)\nparams = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)\nmodel = Model(pendulum_dynamics_params!, n, m, params)\n\n# Discretize the continuous model\nmodel_discrete = Model{Discrete}(model,rk4)"
 },
 
 {
-    "location": "models/#Analytical-1",
+    "location": "models/#From-an-analytical-expression-1",
     "page": "Setting up a Dynamics Model",
-    "title": "Analytical",
+    "title": "From an analytical expression",
     "category": "section",
-    "text": "An analytical model with discrete dynamics can be created using the following constructorsAnalyticalModel{D}(f::Function, ∇f::Function, n::Int64, m::Int64,\n          p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}()\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}())\nAnalyticalModel{D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}())"
+    "text": "Very little changes when specifying an analytical discrete model. The only change is that both the dynamics and Jacobian functions must take in the time step dt as an argument. Here is an example for the pendulum using simple Euler integration for simplicityfunction pendulum_discrete!(xdot,x,u,dt)\n    pendulum_dynamics!(xdot,x,u)\n    xdot .= x + xdot*dt\nendThe Jacobian is similarly specified as a function of the form ∇f(Z,x,u,dt). We don\'t give an example for brevity.The model is then created in a similar fashion to the above methodsmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!,n,m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!,n,m,params)  # if we defined this\n\n# If we defined the Jacobian function we also create it as\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!, pendulum_discrete_jacobian!, n, m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!, pendulum_discrete_jacobian!, n, m, params)"
 },
 
 {
-    "location": "models/#TrajectoryOptimization.Model-Union{Tuple{Discrete}, Tuple{Model{Continuous},Function}} where Discrete",
+    "location": "models/#Methods-1",
     "page": "Setting up a Dynamics Model",
-    "title": "TrajectoryOptimization.Model",
-    "category": "method",
-    "text": "Convert a continuous dynamics model into a discrete one using the given discretization function.     The discretization function can either be one of the currently supported functions (midpoint, rk3, rk4) or a custom method that has the following form     function discretizer(f::Function,dt::Float64)         function fd!(xdot,x,u,dt)             # Your code             return nothing         end         return fd!     end\n\n\n\n\n\n"
-},
-
-{
-    "location": "models/#From-Continuous-Model-1",
-    "page": "Setting up a Dynamics Model",
-    "title": "From Continuous Model",
+    "title": "Methods",
     "category": "section",
-    "text": "A discrete model can be created from a continuous model by specifying the integration (discretization) method. The following methods are currently supportedUse the following method to discretize a continuous model with one of the integration methods listed previouslyModel{Discrete}(model::Model{Continuous},discretizer::Function)"
+    "text": "Models are pretty basic types and don\'t offer much functionality other than specifying the dynamics. We can get the number of stage and controls as followsn = model.n\nm = model.mIt\'s often useful to test out the dynamics or it\'s Jacobians. We must pre-allocate the arraysxdot = zeros(n)\nZ = zeros(n,m)Or create a partitioned vector and Jacobian for easy access to separate state and control jacobiansxdot = BlockVector(model)\nZ = BlockMatrix(model)Once the arrays are allocated, we can either call using evaluate! and jacobian! (increments the evaluation count, recommended)evaluate!(xdot,model,x,u)\njacobian!(Z,model,x,u)or call them directly (not recommended)x,u = rand(x), rand(u)\nmodel.f(xdot,x,u)\nmodel.∇f(Z,x,u,dt)If we created a partitioned Jacobian using BlockMatrix(model), we can access the different piecesfdx = Z.x   # ∂f/∂x\nfdu = Z.u   # ∂f/∂u\nfdt = Z.dt  # ∂f/∂dt"
 },
 
 {
