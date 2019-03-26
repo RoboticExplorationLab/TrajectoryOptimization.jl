@@ -261,7 +261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "URDF Files",
     "category": "section",
-    "text": "Instead of writing down the dynamics explicity, we can import the dynamics from geometry specified in a URDF model using RigidBodyDynamics.jl. Let\'s say we have a URDF file for a double pendulum and don\'t want to both writing down the dynamics, then we can create a model using any of the following methodsusing RigidBodyDynamics\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech)Now let\'s say we want to control an acrobot, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are \"active.\"joints = [true,false]\n\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf,joints)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech,joints)"
+    "text": "Instead of writing down the dynamics explicity, we can import the dynamics from geometry specified in a URDF model using RigidBodyDynamics.jl. Let\'s say we have a URDF file for a double pendulum and don\'t want to bother writing down the dynamics, then we can create a model using any of the following methodsusing RigidBodyDynamics\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech)Now let\'s say we want to control an acrobot, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are \"active.\"joints = [true,false]\n\n# From a string\nurdf = \"doublependulum.urdf\"\nmodel = Model(urdf,joints)\n\n# From a RigidBodyDynamics `Mechanism` type\nmech = parse_urdf(urdf)  # return a Mechanism type\nmodel = Model(mech,joints)"
 },
 
 {
@@ -293,7 +293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "Discrete Models",
     "category": "section",
-    "text": "The previous methods all generate models with continuous dynamics (note that all of the models returned above will be of the type Model{Continuous}). In order to perform trajectory optimization we need to have discrete dynamics. Typically, we will form the continuous dynamics as we did above and then use a particular integration scheme to discretize it. Alternatively, we may know the analytical expression for the discrete dynamics."
+    "text": "The previous methods all generate models with continuous dynamics (note that all of the models returned above will be of the type Model{Continuous}. In order to perform trajectory optimization we need to have discrete dynamics. Typically, we will form the continuous dynamics as we did above and then use a particular integration scheme to discretize it. Alternatively, we may know the analytical expression for the discrete dynamics."
 },
 
 {
@@ -309,7 +309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "From an analytical expression",
     "category": "section",
-    "text": "Very little changes when specifying an analytical discrete model. The only change is that both the dynamics and Jacobian functions must take in the time step dt as an argument. Here is an example for the pendulum using simple Euler integration for simplicityfunction pendulum_discrete!(xdot,x,u,dt)\n    pendulum_dynamics!(xdot,x,u)\n    xdot .= x + xdot*dt\nendThe Jacobian is similarly specified as a function of the form ∇f(Z,x,u,dt). We don\'t give an example for brevity.The model is then created in a similar fashion to the above methodsmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!,n,m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!,n,m,params)  # if we defined this\n\n# If we defined the Jacobian function we also create it as\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!, pendulum_discrete_jacobian!, n, m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!, pendulum_discrete_jacobian!, n, m, params)"
+    "text": "Very little changes when specifying an analytical discrete model. The only change is that both the dynamics and Jacobian functions must take in the time step dt as an argument. Here is an example for the pendulum using Euler integration for simplicityfunction pendulum_discrete!(xdot,x,u,dt)\n    pendulum_dynamics!(xdot,x,u)\n    xdot .= x + xdot*dt\nendThe Jacobian is similarly specified as a function of the form ∇f(Z,x,u,dt). We don\'t give an example for brevity.The model is then created in a similar fashion to the above methodsmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!,n,m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!,n,m,params)  # if we defined this\n\n# If we defined the Jacobian function we also create it as\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete!, pendulum_discrete_jacobian!, n, m)\nmodel_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!, pendulum_discrete_jacobian!, n, m, params)"
 },
 
 {
@@ -317,7 +317,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Setting up a Dynamics Model",
     "title": "Methods",
     "category": "section",
-    "text": "Models are pretty basic types and don\'t offer much functionality other than specifying the dynamics. We can get the number of stage and controls as followsn = model.n\nm = model.mIt\'s often useful to test out the dynamics or it\'s Jacobians. We must pre-allocate the arraysxdot = zeros(n)\nZ = zeros(n,m)Or create a partitioned vector and Jacobian for easy access to separate state and control jacobiansxdot = BlockVector(model)\nZ = BlockMatrix(model)Once the arrays are allocated, we can either call using evaluate! and jacobian! (increments the evaluation count, recommended)evaluate!(xdot,model,x,u)\njacobian!(Z,model,x,u)or call them directly (not recommended)x,u = rand(x), rand(u)\nmodel.f(xdot,x,u)\nmodel.∇f(Z,x,u,dt)If we created a partitioned Jacobian using BlockMatrix(model), we can access the different piecesfdx = Z.x   # ∂f/∂x\nfdu = Z.u   # ∂f/∂u\nfdt = Z.dt  # ∂f/∂dt"
+    "text": "Models are pretty basic types and don\'t offer much functionality other than specifying the dynamics. We can get the number of stage and controls as followsn = model.n\nm = model.m"
+},
+
+{
+    "location": "models/#Testing-the-dynamics-1",
+    "page": "Setting up a Dynamics Model",
+    "title": "Testing the dynamics",
+    "category": "section",
+    "text": "It\'s often useful to test out the dynamics or it\'s Jacobians. We must pre-allocate the arraysxdot = zeros(n)\nZ = zeros(n,m)Or create a partitioned vector and Jacobian for easy access to separate state and control jacobiansxdot = BlockVector(model)\nZ = BlockMatrix(model)Once the arrays are allocated, we can call using evaluate! and jacobian! (increments the evaluation count, recommended)x,u = rand(x), rand(u)  # or some known test inputs\nevaluate!(xdot,model,x,u)\njacobian!(Z,model,x,u)or call them directly (not recommended)model.f(xdot,x,u)\nmodel.∇f(Z,x,u,dt)If we created a partitioned Jacobian using BlockMatrix(model), we can access the different piecesfdx = Z.x   # ∂f/∂x\nfdu = Z.u   # ∂f/∂u\nfdt = Z.dt  # ∂f/∂dt"
 },
 
 {
