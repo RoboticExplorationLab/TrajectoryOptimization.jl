@@ -1,9 +1,10 @@
-# Constraints
+# 4. Add Constraints
 ```@meta
 CurrentModule = TrajectoryOptimization
 ```
 
 ```@contents
+Pages = ["constraints.md"]
 ```
 
 # Constraint Type

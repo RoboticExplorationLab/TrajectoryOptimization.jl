@@ -10,6 +10,7 @@ makedocs(
     pages = [
         "index.md",
         "models.md",
+        "costfunctions.md",
         "constraints.md",
         "problem.md",
         "solvers.md"

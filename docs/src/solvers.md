@@ -4,6 +4,7 @@ CurrentModule = TrajectoryOptimization
 ```
 
 ```@contents
+Pages = ["solvers.md"]
 ```
 
 # Iterative LQR (iLQR)

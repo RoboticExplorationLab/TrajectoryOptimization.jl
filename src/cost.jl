@@ -210,7 +210,13 @@ copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
 """
 $(TYPEDEF)
 Cost function of the form
-    ℓf(xₙ) + ∫ ℓ(x,u) dt from 0 to tf
+    `` J(X,U) + λ^T c(X,U) + \frac{1}{2} c(X,U)^T I_{\mu} c(X,U)``
+    where ``X`` and ``U`` are state and control trajectories, ``J(X,U)`` is the original cost function,
+    ``c(X,U)`` is the vector-value constraint function, μ is the penalty parameter, and ``I_{\mu}``
+    is a diagonal matrix that whose entries are μ for active constraints and 0 otherwise.
+
+Internally stores trajectories for the Lagrange multipliers.
+$(FIELDS)
 """
 struct AugmentedLagrangianCost{T} <: CostFunction
     cost::C where C<:CostFunction
@@ -220,6 +226,32 @@ struct AugmentedLagrangianCost{T} <: CostFunction
     λ::PartedVecTrajectory{T}  # Lagrange multipliers
     μ::PartedVecTrajectory{T}  # Penalty Term
     active_set::PartedVecTrajectory{Bool}  # Active set
+end
+
+"""$(TYPEDSIGNATURES)
+Create an AugmentedLagrangianCost from another cost function and a set of constraints
+    for a problem with N knot points. Allocates new memory for the internal arrays.
+"""
+function AugmentedLagrangianCost{T}(cost::CostFunction,constraints::ConstraintSet,N::Int;
+        μ_init::T=1.,λ_init::T=0.)
+    # Get sizes
+    n,m = get_sizes(cost)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    AugmentedLagrangianCost(cost,constraint,C,∇C,λ,μ,active_set)
+end
+
+"""$(TYPEDSIGNATURES)
+Create an AugmentedLagrangianCost from another cost function and a set of constraints
+    for a problem with N knot points, specifying the Lagrange multipliers.
+    Allocates new memory for the internal arrays.
+"""
+function AugmentedLagrangianCost{T}(cost::CostFunction{T},constraints::ConstraintSet,
+        λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
+    # Get sizes
+    n,m = get_sizes(cost)
+    N = length(λ)
+    C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    AugmentedLagrangianCost(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
 "Update constraints trajectories"

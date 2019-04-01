@@ -119,6 +119,13 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
     end
 end
 
+function goal_constraint(xf::Vector{T}) where T
+    n = length(xf)
+    terminal_constraint(v,xN) = copyto!(v,xN-xf)
+    terminal_jacobian(C,xN) = copyto!(Diagonal(I,n))
+    TerminalConstraint{Equality}(terminal_constraint,terminal_jacobian,n,:goal)
+end
+
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)

@@ -4,6 +4,7 @@ CurrentModule = TrajectoryOptimization
 ```
 
 ```@contents
+Pages = ["problem.md"]
 ```
 
 The [Problem](@ref) type represents the trajectory optimization problem to be solved, which consists of the following information:

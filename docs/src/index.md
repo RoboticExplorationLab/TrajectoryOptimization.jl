@@ -28,10 +28,11 @@ To set up and solve a trajectory optimization problem with TrajectoryOptimizatio
 
 1) Create a [Model](@ref)
 2) Create a [CostFunction](@ref)
-3) Instantiate a [Problem](@ref) with constraints
-4) Pick an appropriate solver
-5) Solve the problem
-6) Analyze the solution
+3) Instantiate a [Problem](@ref)
+4) Add constraints
+5) Pick an appropriate solver
+6) Solve the problem
+7) Analyze the solution
 
 ## Creating a Model
 There are two ways of creating a model:

@@ -1,9 +1,10 @@
-# Setting up a Dynamics Model
+# 1. Setting up a Dynamics Model
 ```@meta
 CurrentModule = TrajectoryOptimization
 ```
 
 ```@contents
+Pages = ["models.md"]
 ```
 # Overview
 The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form ẋ = f(x,u) where ẋ is the state derivative, x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.

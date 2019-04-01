@@ -128,6 +128,10 @@ AugmentedLagrangianSolver(prob::Problem{T},
     opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T =
     AbstractSolver(prob,opts)
 
+"""$(TYPEDSIGNATURES)
+Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
+    Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
+"""
 function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
@@ -136,28 +140,38 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
-    p = num_stage_constraints(prob.constraints)
-    p_N = num_terminal_constraints(prob.constraints)
+    c_part = create_partition(stage(prob.constraints))
 
-    c_stage = stage(prob.constraints)
-    c_term = terminal(prob.constraints)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N, μ_init=opts.penalty_initial)
+    C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
+    push!(C_prev,BlockVector(T,c_term))
+
+    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)
+end
+
+function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N::Int;
+        μ_init::T=1.,λ_init::T=0.)
+    p = num_stage_constraints(constraints)
+    p_N = num_terminal_constraints(constraints)
+
+    # Initialize the partitions
+    c_stage = stage(constraints)
+    c_term = terminal(constraints)
     c_part = create_partition(c_stage)
     c_part2 = create_partition2(c_stage,n,m)
 
-    C = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    ∇C = [BlockArray(zeros(T,p,n+m),c_part2) for k = 1:N-1]
-    λ = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    μ = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
-    active_set = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
+    # Create Trajectories
+    C          = [BlockArray(zeros(T,p),c_part)       for k = 1:N-1]
+    ∇C         = [BlockArray(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
+    λ          = [BlockArray(ones(T,p),c_part)*λ_init for k = 1:N-1]
+    μ          = [BlockArray(ones(T,p),c_part)*μ_init for k = 1:N-1]
+    active_set = [BlockArray(ones(Bool,p),c_part)     for k = 1:N-1]
     push!(C,BlockVector(T,c_term))
-    push!(C_prev,BlockVector(T,c_term))
     push!(∇C,BlockMatrix(T,c_term,n,0))
     push!(λ,BlockVector(T,c_term))
     push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))
-
-    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)
+    return C,∇C,λ,μ,active_set
 end
 
 function reset!(solver::AugmentedLagrangianSolver{T}) where T
