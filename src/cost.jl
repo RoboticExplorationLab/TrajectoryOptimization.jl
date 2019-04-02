@@ -210,9 +210,9 @@ copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
 """
 $(TYPEDEF)
 Cost function of the form
-    `` J(X,U) + λ^T c(X,U) + \frac{1}{2} c(X,U)^T I_{\mu} c(X,U)``
+    `` J(X,U) + λ^T c(X,U) + \\frac{1}{2} c(X,U)^T I_{\\mu} c(X,U)``
     where ``X`` and ``U`` are state and control trajectories, ``J(X,U)`` is the original cost function,
-    ``c(X,U)`` is the vector-value constraint function, μ is the penalty parameter, and ``I_{\mu}``
+    ``c(X,U)`` is the vector-value constraint function, μ is the penalty parameter, and ``I_{\\mu}``
     is a diagonal matrix that whose entries are μ for active constraints and 0 otherwise.
 
 Internally stores trajectories for the Lagrange multipliers.
@@ -233,7 +233,7 @@ Create an AugmentedLagrangianCost from another cost function and a set of constr
     for a problem with N knot points. Allocates new memory for the internal arrays.
 """
 function AugmentedLagrangianCost{T}(cost::CostFunction,constraints::ConstraintSet,N::Int;
-        μ_init::T=1.,λ_init::T=0.)
+        μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
@@ -245,7 +245,7 @@ Create an AugmentedLagrangianCost from another cost function and a set of constr
     for a problem with N knot points, specifying the Lagrange multipliers.
     Allocates new memory for the internal arrays.
 """
-function AugmentedLagrangianCost{T}(cost::CostFunction{T},constraints::ConstraintSet,
+function AugmentedLagrangianCost(cost::CostFunction,constraints::ConstraintSet,
         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)

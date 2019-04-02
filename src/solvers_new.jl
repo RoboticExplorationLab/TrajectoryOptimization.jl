@@ -150,7 +150,7 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 end
 
 function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N::Int;
-        μ_init::T=1.,λ_init::T=0.)
+        μ_init::T=1.,λ_init::T=0.) where T
     p = num_stage_constraints(constraints)
     p_N = num_terminal_constraints(constraints)
 
