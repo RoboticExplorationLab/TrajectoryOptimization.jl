@@ -1,3 +1,39 @@
+"$(TYPEDEF) Expansion"
+struct Expansion{T<:AbstractFloat}
+    x::Vector{T}
+    u::Vector{T}
+    xx::Matrix{T}
+    uu::Matrix{T}
+    ux::Matrix{T}
+end
+
+function Expansion(prob::Problem{T}) where T
+    n = prob.model.n; m = prob.model.m
+    Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
+end
+
+function copy(e::Expansion{T}) where T
+    Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
+end
+
+function reset!(e::Expansion)
+    e.x .= zero(e.x)
+    e.u .= zero(e.u)
+    e.xx .= zero(e.xx)
+    e.uu .= zero(e.uu)
+    e.ux .= zero(e.ux)
+    return nothing
+end
+
+ExpansionTrajectory{T} = Vector{Expansion{T}} where T <: AbstractFloat
+
+function reset!(et::ExpansionTrajectory)
+    for e in et
+        reset!(e)
+    end
+end
+
+
 struct BackwardPassNew{T<:AbstractFloat}
     Qx::VectorTrajectory{T}
     Qu::VectorTrajectory{T}
@@ -57,7 +93,7 @@ struct iLQRSolver{T} <: AbstractSolver{T}
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
 
-    bp::BackwardPassNew{T}
+    Q::ExpansionTrajectory{T} # cost-to-go expansion trajectory
 end
 
 function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
@@ -86,9 +122,9 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    bp = BackwardPassNew(prob)
+    Q = [Expansion(prob) for i = 1:N-1]
 
-    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
+    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,Q)
     reset!(solver)
     return solver
 end
@@ -104,17 +140,11 @@ function reset!(solver::iLQRSolver{T}) where T
 end
 
 function copy(r::iLQRSolver{T}) where T
-    iLQRSolver{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
+    iLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.Q))
 end
 
 get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
 
-"$(TYPEDEF) ALTRO solver"
-struct ALTROSolver{T} <: AbstractSolver{T}
-    opts::ALTROSolverOptions{T}
-    stats::Dict{Symbol,Any}
-
-end
 
 "$(TYPEDEF) Augmented Lagrangian solver"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
@@ -200,3 +230,39 @@ function copy(r::AugmentedLagrangianSolver{T}) where T
 end
 
 get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
+
+
+"Second-order Taylor expansion of cost function at time step k"
+function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    m = get_sizes(cost)[2]
+    e[k].x .= cost.Q*x + cost.q
+    e[k].u .= cost.R*u[1:m]
+    e[k].xx .= cost.Q
+    e[k].uu .= cost.R
+    e[k].ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
+    solver.S[end] .= cost.Qf
+    solver.s[end] .= cost.Qf*xN + cost.qf
+    return nothing
+end
+
+#TODO change generic cost expansiont to perform in-place
+function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    Q,R,H,q,r = cost.expansion(x,u)
+    e[k].x .= Q
+    e[k].u .= R
+    e[k].xx .= cost.Q
+    e[k].uu .= cost.R
+    e[k].ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) where T
+    Qf, qf = cost.expansion(xN)
+    solver.S[end] .= Qf
+    solver.s[end] .= qf
+    return nothing
+end

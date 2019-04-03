@@ -84,6 +84,11 @@ $(FIELDS)
     max_control_value::T = 1.0e8
 end
 
+#TODO
+function copy(r::iLQRSolverOptions)
+    nothing
+end
+
 """$(TYPEDEF)
 Solver options for the augmented Lagrangian solver.
     Augmented Lagrangian is a general method for solving constrained problems by solving a sequence of unconstrained problems.
