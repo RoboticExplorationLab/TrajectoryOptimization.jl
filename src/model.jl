@@ -353,10 +353,18 @@ Convert a continuous dynamics model into a discrete one using the given discreti
     end
     ```
 """
-function Model{Discrete}(model::Model{Continuous},discretizer::Function)
+function Model{Discrete}(model::Model{Continuous}, discretizer::Function)
     fd!,∇fd! = discretize(model.f,discretizer,model.n,model.m)
-    AnalyticalModel{Discrete}(fd!,∇fd!,model.n,model.m,model.params,model.info)
+    info_d = deepcopy(model.info)
+    integration = string(discretizer)
+    info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
+    AnalyticalModel{Discrete}(fd!, ∇fd!, model.n, model.m, model.params, info_d)
 end
+
+midpoint(model::Model{Continuous}) = Model{Discrete}(model, midpoint)
+rk3(model::Model{Continuous}) = Model{Discrete}(model, rk3)
+rk4(model::Model{Continuous}) = Model{Discrete}(model, rk4)
+
 
 function discretize(f::Function,discretizer::Function,n::Int,m::Int)
     inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))

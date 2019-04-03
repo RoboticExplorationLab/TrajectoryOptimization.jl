@@ -31,7 +31,113 @@ struct Problem{T<:AbstractFloat}
     end
 end
 
+"""$(TYPEDSIGNATURES)
+Create a problem from a continuous model, specifying the discretizer as a symbol
+"""
+function Problem(model::Model{Continuous}, cost::CostFunction; integration=:rk4, kwargs...)
+    if isdefined(TrajectoryOptimization,integration)
+        discretizer = eval(integration)
+    else
+        throw(ArgumentError("$integration is not a defined integration scheme"))
+    end
+    Problem(discretizer(model), cost; kwargs...)
+end
 
+
+"""$(TYPEDSIGNATURES)
+Create Problem, optionally specifying constraints, initial state, and length.
+At least 2 of N, dt, or tf must be specified
+"""
+function Problem(model::Model{Discrete}, cost::CostFunction, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
+        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        N::Int=-1, dt=NaN, tf=NaN) where T
+    N, tf, dt = _validate_time(N, tf, dt)
+    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+end
+Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+    Problem(model, cost, to_dvecs(X0), to_dvecs(U0); kwargs...)
+
+function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
+        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        N::Int=-1, dt=NaN, tf=NaN) where T
+    N, tf, dt = _validate_time(N, tf, dt)
+    X0 = empty_state(model.n, N)
+    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+end
+Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
+    Problem(model, cost, to_dvecs(U0); kwargs...)
+
+function Problem(model::Model{Discrete}, cost::CostFunction;
+        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        N::Int=-1, dt=NaN, tf=NaN) where T
+    N, tf, dt = _validate_time(N, tf, dt)
+    X0 = empty_state(model.n, N)
+    U0 = [zeros(T,model.m) for k = 1:N-1]
+    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+end
+
+"$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
+initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
+initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
+
+"$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
+initial_state!(prob::Problem{T}, X0::VectorTrajectory{T}) where T = copyto!(prob.X, X0)
+initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, to_dvecs(X0))
+
+set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
+
+function _validate_time(N,tf,dt)
+    if N == -1 && isnan(dt) && isnan(tf)
+        throw(ArgumentError("Must specify at least 2 of N, dt, or tf"))
+    end
+    # Check for minimum time
+    if (tf == 0) || (tf == :min)
+        dt = 0.
+        if N==-1
+            throw(ArgumentError("N must be specified for a minimum-time problem"))
+        end
+    elseif tf > 0
+        # Handle combination of N and dt
+        if isnan(dt) && N > 0
+            dt = tf / (N-1)
+        elseif ~isnan(dt) && N == -1
+            N, dt = calc_N(tf, dt)
+        elseif isnan(dt) && N==-1
+            @warn "Neither dt or N were specified. Setting N = 51"
+            N = 51
+            dt = tf / (N-1)
+        elseif ~isnan(dt) && N > 0
+            if dt !== tf/(N-1)
+                throw(ArgumentError("Specified time step, number of knot points, and final time do not agree ($dt ≢ $(obj.tf)/$(N-1))"))
+            end
+        end
+        if dt == 0
+            throw(ArgumentError("dt must be non-zero for non-minimum time problems"))
+        end
+    elseif isnan(tf)
+        if dt > 0
+            if N == -1
+                @warn "Neither tf or N were specified. Setting N = 51"
+                N = 51
+            end
+            tf = dt*(N-1)
+        else
+            throw(ArgumentError("dt must be positive for a non-minimum-time problem"))
+        end
+    else
+        throw(ArgumentError("Invalid input for tf"))
+    end
+
+    # Check N, dt for valid entries
+    if N < 0
+        err = ArgumentError("$N is not a valid entry for N. Number of knot points must be a positive integer.")
+        throw(err)
+    elseif dt < 0
+        err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
+        throw(err)
+    end
+    return N,tf,dt
+end
 
 # Problem(model::Model,cost::CostFunction) = Problem{Float64}(model,cost,
 #     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
@@ -39,27 +145,29 @@ end
 # Problem(T::Type,model::Model,cost::CostFunction) = Problem{T}(model,cost,
 #     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
 
-"""$(SIGNATURES)
-$(TYPEDSIGNATURES)
-Create a problem, initializing the initial state and control input trajectories to zeros"""
-function Problem(model::Model,cost::CostFunction,N::Int,dt::T) where T
-    X = empty_state(model.n,N)
-    U = [zeros(model.m) for k = 1:N-1]
-    Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
-end
-
-"""$(SIGNATURES) Create am unconstrained trajectory optimization problem
-
-Creates a problem with discrete dynamics with timestep `dt` from `model`, minimizing the objective given by `cost`, subject
-to an initial state `x0`. `U` is the initial guess for the control trajectory.
-"""
-function Problem(model::Model{Discrete},cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
-    N = length(U) + 1
-    X = empty_state(model.n,N)
-    Problem(model,cost,AbstractConstraint[],x0,X,deepcopy(U),N,dt)
-end
-Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) where T =
-    Problem(model,cost,x0,to_dvecs(U),dt)
+#
+#
+# """$(SIGNATURES)
+# $(TYPEDSIGNATURES)
+# Create a problem, initializing the initial state and control input trajectories to zeros"""
+# function Problem(model::Model,cost::CostFunction,N::Int,dt::T) where T
+#     X = empty_state(model.n,N)
+#     U = [zeros(model.m) for k = 1:N-1]
+#     Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
+# end
+#
+# """$(SIGNATURES) Create am unconstrained trajectory optimization problem
+#
+# Creates a problem with discrete dynamics with timestep `dt` from `model`, minimizing the objective given by `cost`, subject
+# to an initial state `x0`. `U` is the initial guess for the control trajectory.
+# """
+# function Problem(model::Model{Discrete},cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
+#     N = length(U) + 1
+#     X = empty_state(model.n,N)
+#     Problem(model,cost,AbstractConstraint[],x0,X,deepcopy(U),N,dt)
+# end
+# Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) where T =
+#     Problem(model,cost,x0,to_dvecs(U),dt)
 
 # Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
 #     cost,AbstractConstraint[],x0,Vector[],U,N,dt)
