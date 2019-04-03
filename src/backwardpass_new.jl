@@ -22,7 +22,6 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     reset!(Q)
 
     # Boundary Conditions
-    # S[N], s[N] = cost_expansion(prob.cost, X[N])
     cost_expansion!(solver,prob.cost,X[N])
 
     # Initialize expected change in cost-to-go
@@ -31,16 +30,9 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        # Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = cost_expansion(prob.cost,X[k],U[k],k)
         cost_expansion!(Q, cost, X[k], U[k], k)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
-
-        # Qx[k] += fdx'*s[k+1]
-        # Qu[k] += fdu'*s[k+1]
-        # Qxx[k] += fdx'*S[k+1]*fdx
-        # Quu[k] += fdu'*S[k+1]*fdu
-        # Qux[k] += fdu'*S[k+1]*fdx
 
         Q[k].x .+= fdx'*s[k+1]
         Q[k].u .+= fdu'*s[k+1]

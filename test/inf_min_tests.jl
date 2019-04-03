@@ -25,8 +25,8 @@ bp.Qx
 bp.Qx[1]
 obj.cost.q
 X[1]
-cost_expansion!(bp,obj.cost, rand(n), rand(m), 2)
-cost_expansion!(ilqr,obj.cost,rand(n))
+# cost_expansion!(bp,obj.cost, rand(n), rand(m), 2)
+# cost_expansion!(ilqr,obj.cost,rand(n))
 
 ilqr.s[end]
 
@@ -38,8 +38,8 @@ et = [e for i = 1:5]
 
 et2 = copy(et)
 
-ilqr2 = copy(ilqr)
-ctg2 = copy(ilqr.ctg)
+# ilqr2 = copy(ilqr)
+ctg2 = copy(ilqr.Q)
 
 copy(opts)
 

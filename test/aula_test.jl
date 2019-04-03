@@ -18,7 +18,7 @@ U = to_dvecs(U0)
 X = empty_state(n,N)
 x0 = obj.x0
 dt = solver.dt
-C = AbstractConstraint[]
+# C = AbstractConstraint[]
 prob = Problem(model_d,costfun,x0,U,dt)
 u_max = 4.0
 u_min = 0.0
@@ -32,7 +32,7 @@ cs isa ConstraintSet
 al_solver = AugmentedLagrangianSolver(prob)
 al_prob = AugmentedLagrangianProblem(prob,al_solver)
 J = solve!(al_prob,al_solver)
-
+step!()
 max_violation(al_solver)
 plot(al_prob.U)
 plot(al_solver.stats[:c_max])

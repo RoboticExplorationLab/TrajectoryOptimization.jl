@@ -1,7 +1,7 @@
 "Augmented Lagrangian solve"
 function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
     reset!(solver)
-    
+
     unconstrained_solver = AbstractSolver(prob, solver.opts.unconstrained_solver)
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
