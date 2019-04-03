@@ -25,6 +25,10 @@ u_min = 0.0
 bnd = bound_constraint(model.n,model.m,u_min=u_min,u_max=u_max,trim=true)
 add_constraints!(prob,bnd)
 
+cs = [bnd,bnd]
+
+cs isa ConstraintSet
+
 al_solver = AugmentedLagrangianSolver(prob)
 al_prob = AugmentedLagrangianProblem(prob,al_solver)
 J = solve!(al_prob,al_solver)

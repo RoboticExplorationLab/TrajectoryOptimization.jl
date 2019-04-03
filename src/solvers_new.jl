@@ -109,7 +109,14 @@ end
 
 get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
 
-"$(TYPEDEF) Augmented Lagrangian results"
+"$(TYPEDEF) ALTRO solver"
+struct ALTROSolver{T} <: AbstractSolver{T}
+    opts::ALTROSolverOptions{T}
+    stats::Dict{Symbol,Any}
+
+end
+
+"$(TYPEDEF) Augmented Lagrangian solver"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
     stats::Dict{Symbol,Any}

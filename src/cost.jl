@@ -307,6 +307,7 @@ function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVec
     aula_cost(a,c,λ,μ)
 end
 
+#TODO these stage costs need to be multiplied by dt
 function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
     J0 = stage_cost(alcost.cost,x,u,k)
     J0 + stage_constraint_cost(alcost,x,u,k)
