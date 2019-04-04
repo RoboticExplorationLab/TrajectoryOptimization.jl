@@ -18,12 +18,11 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
 
     X = prob.X; U = prob.U; K = solver.K; d = solver.d; S = solver.S; s = solver.s
 
-    reset!(solver.bp)
-    Qx = solver.bp.Qx; Qu = solver.bp.Qu; Qxx = solver.bp.Qxx; Quu = solver.bp.Quu; Qux = solver.bp.Qux
-    Quu_reg = solver.bp.Quu_reg; Qux_reg = solver.bp.Qux_reg
+    Q = solver.Q # cost-to-go expansion
+    reset!(Q)
 
     # Boundary Conditions
-    S[N], s[N] = cost_expansion(prob.cost, X[N])
+    cost_expansion!(solver,prob.cost,X[N])
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -31,26 +30,27 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        Qxx[k],Quu[k],Qux[k],Qx[k],Qu[k] = cost_expansion(prob.cost,X[k],U[k],k)
+        cost_expansion!(Q, cost, X[k], U[k], k)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
-        Qx[k] += fdx'*s[k+1]
-        Qu[k] += fdu'*s[k+1]
-        Qxx[k] += fdx'*S[k+1]*fdx
-        Quu[k] += fdu'*S[k+1]*fdu
-        Qux[k] += fdu'*S[k+1]*fdx
+        Q[k].x .+= fdx'*s[k+1]
+        Q[k].u .+= fdu'*s[k+1]
+        Q[k].xx .+= fdx'*S[k+1]*fdx
+        Q[k].uu .+= fdu'*S[k+1]*fdu
+        Q[k].ux .+= fdu'*S[k+1]*fdx
+
 
         if solver.opts.bp_reg_type == :state
-            Quu_reg[k] = Quu[k] + solver.ρ[1]*fdu'*fdu
-            Qux_reg[k] = Qux[k] + solver.ρ[1]*fdu'*fdx
+            Quu_reg = Q[k].uu + solver.ρ[1]*fdu'*fdu
+            Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
-            Quu_reg[k] = Quu[k] + solver.ρ[1]*I
-            Qux_reg[k] = Qux[k]
+            Quu_reg = Q[k].uu + solver.ρ[1]*I
+            Qux_reg = Q[k].ux
         end
 
         # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg[k])))  # need to wrap Array since isposdef doesn't work for static arrays
+        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
             # increase regularization
             @logmsg InnerIters "Regularizing Quu "
             regularization_update!(solver,:increase)
@@ -63,17 +63,17 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         end
 
         # Compute gains
-        K[k] = -Quu_reg[k]\Qux_reg[k]
-        d[k] = -Quu_reg[k]\Qu[k]
+        K[k] = -Quu_reg\Qux_reg
+        d[k] = -Quu_reg\Q[k].u
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Qx[k] + K[k]'*Quu[k]*d[k] + K[k]'*Qu[k] + Qux[k]'*d[k]
-        S[k] = Qxx[k] + K[k]'*Quu[k]*K[k] + K[k]'*Qux[k] + Qux[k]'*K[k]
+        s[k] = Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'*Q[k].u + Q[k].ux'*d[k]
+        S[k] = Q[k].xx + K[k]'*Q[k].uu*K[k] + K[k]'*Q[k].ux + Q[k].ux'*K[k]
         S[k] = 0.5*(S[k] + S[k]')
 
         # calculated change is cost-to-go over entire trajectory
-        ΔV[1] += d[k]'*Qu[k]
-        ΔV[2] += 0.5*d[k]'*Quu[k]*d[k]
+        ΔV[1] += d[k]'*Q[k].u
+        ΔV[2] += 0.5*d[k]'*Q[k].uu*d[k]
 
         k = k - 1;
     end

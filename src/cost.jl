@@ -79,6 +79,23 @@ end
 function cost_expansion(cost::QuadraticCost, xN::Vector{T}) where T
     return cost.Qf, cost.Qf*xN + cost.qf
 end
+#
+# "Second-order Taylor expansion of cost function at time step k"
+# function cost_expansion!(bp::BackwardPassNew,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+#     m = get_sizes(cost)[2]
+#     bp.Qx[k] = cost.Q*x + cost.q
+#     bp.Qu[k] = cost.R*u[1:m]
+#     bp.Qxx[k] = cost.Q
+#     bp.Quu[k] = cost.R
+#     bp.Qux[k] = cost.H
+#     return nothing
+# end
+#
+# function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
+#     solver.S[end] = cost.Qf
+#     solver.s[end] = cost.Qf*xN + cost.qf
+#     return nothing
+# end
 
 "Gradient of the cost function at a single time step"
 gradient(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T = cost.Q*x + cost.q, cost.R*u + cost.r
@@ -198,6 +215,23 @@ end
 function cost_expansion(cost::GenericCost, xN::Vector{T}) where T
     cost.expansion(xN)
 end
+
+# #TODO change generic cost expansiont to perform in-place
+# function cost_expansion!(bp::BackwardPassNew,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+#     Q,R,H,q,r = cost.expansion(x,u)
+#     bp.Qx[k] = Q
+#     bp.Qu[k] = R
+#     bp.Qxx[k] = cost.Q
+#     bp.Quu[k] = cost.R
+#     bp.Qux[k] = cost.H
+# end
+#
+# function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) where T
+#     Qf, qf = cost.expansion(xN)
+#
+# end
+
+
 
 # TODO: Split gradient and hessian calculations
 

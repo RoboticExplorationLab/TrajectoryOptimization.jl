@@ -1,3 +1,39 @@
+"$(TYPEDEF) Expansion"
+struct Expansion{T<:AbstractFloat}
+    x::Vector{T}
+    u::Vector{T}
+    xx::Matrix{T}
+    uu::Matrix{T}
+    ux::Matrix{T}
+end
+
+function Expansion(prob::Problem{T}) where T
+    n = prob.model.n; m = prob.model.m
+    Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
+end
+
+function copy(e::Expansion{T}) where T
+    Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
+end
+
+function reset!(e::Expansion)
+    e.x .= zero(e.x)
+    e.u .= zero(e.u)
+    e.xx .= zero(e.xx)
+    e.uu .= zero(e.uu)
+    e.ux .= zero(e.ux)
+    return nothing
+end
+
+ExpansionTrajectory{T} = Vector{Expansion{T}} where T <: AbstractFloat
+
+function reset!(et::ExpansionTrajectory)
+    for e in et
+        reset!(e)
+    end
+end
+
+
 struct BackwardPassNew{T<:AbstractFloat}
     Qx::VectorTrajectory{T}
     Qu::VectorTrajectory{T}
@@ -57,7 +93,7 @@ struct iLQRSolver{T} <: AbstractSolver{T}
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
 
-    bp::BackwardPassNew{T}
+    Q::ExpansionTrajectory{T} # cost-to-go expansion trajectory
 end
 
 function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
@@ -86,9 +122,9 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    bp = BackwardPassNew(prob)
+    Q = [Expansion(prob) for i = 1:N-1]
 
-    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,bp)
+    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,Q)
     reset!(solver)
     return solver
 end
@@ -104,17 +140,11 @@ function reset!(solver::iLQRSolver{T}) where T
 end
 
 function copy(r::iLQRSolver{T}) where T
-    iLQRSolver{T}(copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.bp))
+    iLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.Q))
 end
 
 get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
 
-"$(TYPEDEF) ALTRO solver"
-struct ALTROSolver{T} <: AbstractSolver{T}
-    opts::ALTROSolverOptions{T}
-    stats::Dict{Symbol,Any}
-
-end
 
 "$(TYPEDEF) Augmented Lagrangian solver"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
@@ -147,13 +177,11 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
-    c_part = create_partition(stage(prob.constraints))
+    p = num_stage_constraints(prob)
 
-    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N, μ_init=opts.penalty_initial)
-    C_prev = [BlockArray(zeros(T,p),c_part) for k = 1:N-1]
-    push!(C_prev,BlockVector(T,c_term))
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
 
-    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,C_prev,∇C,λ,μ,active_set)
+    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set)
 end
 
 function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N::Int;
@@ -170,14 +198,21 @@ function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N
     # Create Trajectories
     C          = [BlockArray(zeros(T,p),c_part)       for k = 1:N-1]
     ∇C         = [BlockArray(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
-    λ          = [BlockArray(ones(T,p),c_part)*λ_init for k = 1:N-1]
-    μ          = [BlockArray(ones(T,p),c_part)*μ_init for k = 1:N-1]
+    λ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
+    μ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
     active_set = [BlockArray(ones(Bool,p),c_part)     for k = 1:N-1]
     push!(C,BlockVector(T,c_term))
     push!(∇C,BlockMatrix(T,c_term,n,0))
     push!(λ,BlockVector(T,c_term))
     push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))
+
+    # Initialize dual and penality values
+    for k = 1:N
+        λ[k] .*= λ_init
+        μ[k] .*= μ_init
+    end
+
     return C,∇C,λ,μ,active_set
 end
 
@@ -194,9 +229,104 @@ function reset!(solver::AugmentedLagrangianSolver{T}) where T
     end
 end
 
-
 function copy(r::AugmentedLagrangianSolver{T}) where T
     AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.active_set))
 end
 
 get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
+
+
+"Second-order Taylor expansion of cost function at time step k"
+function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    m = get_sizes(cost)[2]
+    e[k].x .= cost.Q*x + cost.q
+    e[k].u .= cost.R*u[1:m]
+    e[k].xx .= cost.Q
+    e[k].uu .= cost.R
+    e[k].ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
+    solver.S[end] .= cost.Qf
+    solver.s[end] .= cost.Qf*xN + cost.qf
+    return nothing
+end
+
+"Second-order Taylor expansion of cost function at time step k"
+# function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+#     cost_expansion!(e,cost.cost,x,u,k)
+#     return nothing
+# end
+#
+# function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost, xN::Vector{T}) where T
+#     cost_expansion!(solver,cost.cost,xN)
+#     return nothing
+# end
+
+function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T},
+        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
+    # Q,R,H,q,r = cost_expansion(alcost.cost,x,u,k)
+    cost_expansion!(e,cost.cost, x, u, k)
+    c = cost.C[k]
+    λ = cost.λ[k]
+    μ = cost.μ[k]
+    a = active_set(c,λ)
+    Iμ = Diagonal(a .* μ)
+    ∇c = cost.∇C[k]
+    jacobian!(∇c,cost.constraints,x,u)
+    cx = ∇c.x
+    cu = ∇c.u
+
+    # Second Order pieces
+    e[k].xx .+= cx'Iμ*cx
+    e[k].uu .+= cu'Iμ*cu
+    e[k].ux .+= cu'Iμ*cx
+
+    # First order pieces
+    g = (Iμ*c + λ)
+    e[k].x .+= cx'g
+    e[k].u .+= cu'g
+
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+    cost_expansion!(solver,cost.cost,x)
+    N = length(cost.μ)
+
+    c = cost.C[N]
+    λ = cost.λ[N]
+    μ = cost.μ[N]
+    a = active_set(c,λ)
+    Iμ = Diagonal(a .* μ)
+    cx = cost.∇C[N]
+
+    jacobian!(cx,cost.constraints,x)
+
+    # Second Order pieces
+    solver.S[N] .+= cx'Iμ*cx
+
+    # First order pieces
+    solver.s[N] .+= cx'*(Iμ*c + λ)
+
+    return nothing
+end
+
+#TODO change generic cost expansiont to perform in-place
+function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    Q,R,H,q,r = cost.expansion(x,u)
+    e[k].x .= Q
+    e[k].u .= R
+    e[k].xx .= cost.Q
+    e[k].uu .= cost.R
+    e[k].ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) where T
+    Qf, qf = cost.expansion(xN)
+    solver.S[end] .= Qf
+    solver.s[end] .= qf
+    return nothing
+end
