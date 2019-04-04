@@ -191,8 +191,8 @@ $(SIGNATURES)
 Interpolate a trajectory using cubic interpolation
 """
 function interp_traj(N::Int,tf::Float64,X::AbstractMatrix,U::AbstractMatrix)::Tuple{Matrix,Matrix}
-    if isempty(X)
-        X2 = X
+    if isempty(X) || isnan(sum(X))
+        X2 = ones(size(X,1),N)*NaN
     else
         X2 = interp_rows(N,tf,X)
     end
@@ -200,7 +200,10 @@ function interp_traj(N::Int,tf::Float64,X::AbstractMatrix,U::AbstractMatrix)::Tu
     return X2, U2
 end
 
-interp_traj(N::Int,tf::Float64,X::Trajectory,U::Trajectory) = interp_traj(N,tf,to_array(X),to_array(U))
+function interp_traj(N::Int,tf::Float64,X::Trajectory,U::Trajectory)
+    X2, U2 = interp_traj(N,tf,to_array(X),to_array(U))
+    return to_dvecs(X2), to_dvecs(U2)
+end
 
 """
 $(SIGNATURES)
