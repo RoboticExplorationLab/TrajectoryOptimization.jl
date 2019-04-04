@@ -55,13 +55,17 @@ export
     Constraint,
     TerminalConstraint,
     Equality,
-    Inequality
+    Inequality,
+    ConstraintSet,
+    StageConstraintSet,
+    TerminalConstraintSet
 
 export
     rk3,
     rk4,
     midpoint,
-    add_constraints!
+    add_constraints!,
+    bound_constraint
 
 
 # Primary methods

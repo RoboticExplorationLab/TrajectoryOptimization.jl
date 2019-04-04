@@ -1,4 +1,7 @@
 using Test
+import TrajectoryOptimization: bound_constraint, ConstraintSet, StageConstraintSet, TerminalConstraintSet, stage
+using PartedArrays
+using LinearAlgebra
 # # Test constraint stuff
 # n,m = 3,2
 # cE(x,u) = [2x[1:2]+u;
@@ -110,7 +113,7 @@ con.∇c(C,x,u);
 p2 = 2
 c2(v,x,u) = begin v[1] = sin(x[1]); v[2] = sin(x[3]) end
 ∇c2(Z,x,u) = begin Z[1,1] = cos(x[1]); Z[2,3] = cos(x[3]); end
-con2 = Constraint{Inequality}(c2,∇c2,p2,:ineq)
+con2 = Constraint{Inequality}(c2,∇c2,p2,:ineq,[1:n,1:m])
 
 # Bound constraint
 x_max = [5,5,Inf]
@@ -203,6 +206,21 @@ c_jac = BlockMatrix(C,n,m)
 @test size(c_jac.x) == (p1+p2+p3,n)
 @test size(c_jac.u) == (p1+p2+p3,m)
 
+
+# Augment State
+m_inf = m+n
+con_inf = TrajectoryOptimization.infeasible_constraint(n,m)
+u_inf = [u; 5; -5; 10]
+v = zeros(n)
+con_inf.c(v,x,u_inf[con_inf.inds[2]])
+@test v == [5,-5,10]
+
+C_inf = [con,con2,bnd,con_inf]
+v_stage = BlockVector(stage(C))
+v_inf = BlockVector(stage(C_inf))
+TrajectoryOptimization.evaluate!(v_stage,C,x,u_inf)
+TrajectoryOptimization.evaluate!(v_inf,C_inf,x,u_inf)
+@test v_inf == [v_stage;5;-5;10]
 
 BlockVector(Int64,C_term)
 # Test constrained cost stuff

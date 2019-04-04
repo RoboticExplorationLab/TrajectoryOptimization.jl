@@ -14,11 +14,14 @@ struct Constraint{S} <: AbstractConstraint{S}
     ∇c::Function
     p::Int
     label::Symbol
+    inds::Vector{Vector{Int}}
 end
+
 "$(TYPEDEF) Create a stage-wise constraint, using ForwardDiff to generate the Jacobian"
-function Constraint{S}(c::Function,n::Int,m::Int,p::Int,label::Symbol) where S<:ConstraintType
+function Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol;
+        inds=[collect(1:n), collect(1:m)]) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,m,p)
-    Constraint{S}(c,∇c,p,label)
+    Constraint{S}(c, ∇c, p, label, inds)
 end
 
 "$(TYPEDEF) Terminal constraint"
@@ -27,15 +30,18 @@ struct TerminalConstraint{S} <: AbstractConstraint{S}
     ∇c::Function
     p::Int
     label::Symbol
+    inds::Vector{Vector{Int}}
 end
 
 "$(TYPEDEF) Create a terminal constraint, using ForwardDiff to generate the Jacobian"
-function TerminalConstraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType
+function TerminalConstraint{S}(c::Function, n::Int, p::Int, label::Symbol;
+        inds=[collect(1:n)]) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,p)
-    TerminalConstraint{S}(c,∇c,p,label)
+    TerminalConstraint{S}(c, ∇c, p, label, inds)
 end
 "$(TYPEDEF) Convenient constructor for terminal constraints"
-Constraint{S}(c::Function,n::Int,p::Int,label::Symbol) where S<:ConstraintType = TerminalConstraint(c,n,p,label)
+Constraint{S}(c::Function, n::Int, p::Int, label::Symbol; kwargs...) where S<:ConstraintType =
+    TerminalConstraint(c ,n, p, label; kwargs...)
 
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
@@ -60,6 +66,9 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
      jac_A = view(jac_bnd,:,inds.x_max)
      jac_B = view(jac_bnd,:,inds.u_max)
 
+     # Specify which controls and states get used  TODO: Allow this as an input
+     inds2 = [collect(1:n), collect(1:m)]
+
      if trim
          active = (x_max=isfinite.(x_max),u_max=isfinite.(u_max),
                    x_min=isfinite.(x_min),u_min=isfinite.(u_min))
@@ -73,7 +82,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
          end
          active_all = vcat(values(active)...)
          ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
-         Constraint{Inequality}(bound_trim,∇c_trim,count(active_all),:bound)
+         Constraint{Inequality}(bound_trim, ∇c_trim, count(active_all), :bound, inds2)
      else
          # Generate function
          function bound_all(v,x,u)
@@ -83,7 +92,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
              v[inds.u_min] = u_min - u
          end
          ∇c(C,x,u) = copyto!(C,jac_bnd)
-         Constraint{Inequality}(bound_all,∇c,2(n+m),:bound)
+         Constraint{Inequality}(bound_all, ∇c, 2(n+m), :bound, inds2)
      end
  end
 
@@ -107,7 +116,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
         end
         active_all = vcat(values(active)...)
         ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
-        TerminalConstraint{Inequality}(bound_trim,∇c_trim,count(active_all),:terminal_bound)
+        TerminalConstraint{Inequality}(bound_trim,∇c_trim,count(active_all),:terminal_bound, [collect(1:n)])
     else
         # Generate function
         function bound_all(v,x,u)
@@ -115,7 +124,7 @@ function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
             v[inds.x_min] = x_min - x
         end
         ∇c(C,x,u) = copyto!(C,jac_bnd)
-        TerminalConstraint{Inequality}(bound_all,∇c,2(n+m),:terminal_bound)
+        TerminalConstraint{Inequality}(bound_all,∇c,2(n+m),:terminal_bound, [collect(1:n)])
     end
 end
 
@@ -123,8 +132,20 @@ function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
     terminal_jacobian(C,xN) = copyto!(Diagonal(I,n))
-    TerminalConstraint{Equality}(terminal_constraint,terminal_jacobian,n,:goal)
+    TerminalConstraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n)])
 end
+
+function infeasible_constraint(n::Int, m::Int)
+    u_inf = m .+ (1:n)
+    ∇inf = zeros(n,n+m)
+    ∇inf[:,u_inf] = Diagonal(1.0I,n)
+    inf_con(v,x,u) = copyto!(v, u)
+    inf_jac(C,x,u) = copyto!(C, ∇inf)
+    Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)])
+end
+
+
+
 
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
@@ -132,7 +153,12 @@ function generate_jacobian(f!::Function,n::Int,p::Int=n)
     return ∇f!, f!
 end
 
-# Constraint Sets
+
+
+
+########################
+#   Constraint Sets    #
+########################
 ConstraintSet = Vector{<:AbstractConstraint{S} where S}
 StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
@@ -169,7 +195,7 @@ end
 "$(SIGNATURES) Evaluate the constraint function for all the stage-wise constraint functions in a set"
 function evaluate!(c::BlockVector, C::StageConstraintSet, x, u)
     for con in C
-        con.c(c[con.label],x,u)
+        con.c(c[con.label],x[con.inds[1]],u[con.inds[2]])
     end
 end
 evaluate!(c::BlockVector, C::ConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
@@ -177,20 +203,21 @@ evaluate!(c::BlockVector, C::ConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
 function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
     for con in C
-        con.c(c[con.label],x)
+        con.c(c[con.label], x[con.inds[1]])
     end
 end
 evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
 
 function jacobian!(Z,C::StageConstraintSet,x,u)
     for con in C
-        con.∇c(Z[con.label],x,u)
+        x_,u_ = x[con.inds[1]], u[con.inds[2]]
+        con.∇c(Z[con.label], x_, u_)
     end
 end
 jacobian!(Z,C::ConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
 function jacobian!(Z,C::TerminalConstraintSet,x)
     for con in C
-        con.∇c(Z[con.label],x)
+        con.∇c(Z[con.label], x[con.inds[1]])
     end
 end
 jacobian!(Z,C::ConstraintSet,x) = jacobian!(Z,terminal(C),x)
