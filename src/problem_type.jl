@@ -60,6 +60,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}
 function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
         constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
+    N = length(U) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     Problem(model, cost, constraints, x0, X0, U0, N, dt)

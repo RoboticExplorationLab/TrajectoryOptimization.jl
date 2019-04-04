@@ -119,13 +119,47 @@ Model(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{
     p = NamedTuple()
     AnalyticalModel{Continuous}(f,∇f,n,m,p,d, check_functions=true); end
 
-function add_infeasible_controls(m::Model{D}) where D<:Discrete
-    part_u = create_partition((model.m,model.n),(:u,:inf))
-    function f(ẋ,x,u)
-        model.f(ẋ,x,u[ui.u])
-        ẋ .+= u[ui.inf]
+"Add slack controls to dynamics to make artificially fully actuated"
+function add_slack_controls(model::Model{D}) where D<:Discrete
+    n = model.n; m = model.m
+    nm = n+m
+
+    idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
+    idx2 = [(1:nm)...,2n+m+1]
+
+    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        model.f(x₊,x,u[idx.u],dt)
+        x₊ .+= u[idx.inf]
     end
-    AnalyticalModel(f,model.n,model.m+model.n,model.params,model.d)
+
+    function ∇f!(Z::AbstractMatrix{T},x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],dt)
+        view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
+    end
+
+    AnalyticalModel{Discrete}(f!,∇f!,n,nm,model.params,model.info)
+end
+
+"Add minimum time controls to dynamics "
+function add_min_time_controls(model::Model{D}) where D<:Discrete
+    n = model.n; m = model.m
+    n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
+    idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
+    idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
+
+    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[idx.mintime][1]
+        model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
+        x₊[n̄] = h
+    end
+
+    function ∇f!(Z::AbstractMatrix{T},x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[idx.mintime][1]
+        model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],h^2)
+        Z[idx.x,n̄m̄] .*= 2*h
+        Z[n̄,n̄m̄] = 1.0
+    end
+    AnalyticalModel{Discrete}(f!,∇f!,n̄,m̄,model.params,model.info)
 end
 
 
@@ -136,6 +170,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{Continuous},x,u)
     model.f(ẋ,x,u)
     model.evals[1] += 1
 end
+
+function evaluate!(ẋ::AbstractVector,model::Model{Discrete},x::AbstractVector,u::AbstractVector)
+    model.f(ẋ,x,u)
+    model.evals[1] += 1
+end
+
 function evaluate!(ẋ::AbstractVector,model::Model{Discrete},x,u,dt)
     model.f(ẋ,x,u,dt)
     model.evals[1] += 1
