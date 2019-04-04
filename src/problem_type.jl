@@ -86,6 +86,17 @@ initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, t
 
 set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
 
+final_time(prob::Problem) = (prob.N-1) * prob.dt
+
+function change_N(prob::Problem, N::Int)
+    tf = final_time(prob)
+    dt = tf/(N-1)
+    X, U = interp_traj(N, tf, prob.X, prob.U)
+    @show length(X)
+    Problem(prob.model, prob.cost, prob.constraints, prob.x0, X, U, N, dt)
+end
+
+
 function _validate_time(N,tf,dt)
     if N == -1 && isnan(dt) && isnan(tf)
         throw(ArgumentError("Must specify at least 2 of N, dt, or tf"))

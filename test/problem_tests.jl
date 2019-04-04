@@ -36,4 +36,13 @@ prob = (@test_logs (:info, "Length of U should be N-1, not N. Trimming last entr
 @test length(prob.U) == N-1
 
 
+# Change knot points
+import TrajectoryOptimization: change_N, initial_state!
+X0 = zeros(n,51)
+X0[1,:] = sin.(range(0,stop=10,length=51))
+initial_state!(prob,X0)
+prob2 = change_N(prob,101)
+@test prob2.N == 101
+
+
 # TODO: Test minimum time
