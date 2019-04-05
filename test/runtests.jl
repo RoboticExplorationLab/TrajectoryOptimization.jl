@@ -9,6 +9,15 @@ using Logging
 
 disable_logging(Logging.Info)
 
+# New stuff
+@testset "Constraints" begin
+    include("constraint_tests.jl")
+end
+@testset "Logging" begin
+    include("logger_tests.jl")
+end
+
+# Mixed
 @testset "Simple Pendulum" begin
     include("simple_pendulum.jl")
 end

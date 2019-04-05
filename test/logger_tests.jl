@@ -62,43 +62,39 @@ add_level!(logger, InnerLoop, cols, width; print_color=:green, indent=5)
 @test :iter in logger[InnerLoop].cols
 
 # Add some data
-global_logger(logger)
-@logmsg InnerLoop :iter value=5
-@test logger[InnerLoop].data[:iter] == 5
-@test logger[InnerLoop].data[:cost] == ""
-@logmsg InnerLoop :cost value=10.5
-@test logger[InnerLoop].data[:cost] == 10.5
+with_logger(logger) do
+    global_logger(logger)
+    @logmsg InnerLoop :iter value=5
+    @test logger[InnerLoop].data[:iter] == 5
+    @test logger[InnerLoop].data[:cost] == ""
+    @logmsg InnerLoop :cost value=10.5
+    @test logger[InnerLoop].data[:cost] == 10.5
 
-# Printing clears and caches the values
-print_row(logger,InnerLoop)
-@test logger[InnerLoop].data[:iter] == ""
-@test logger[InnerLoop].data[:cost] == ""
-@test logger[InnerLoop].cache[:iter][1] == 5
-@test logger[InnerLoop].cache[:cost][1] == 10.5
-@test cache_size(logger[InnerLoop]) == 1
+    # Printing clears and caches the values
+    print_row(logger,InnerLoop)
+    @test logger[InnerLoop].data[:iter] == ""
+    @test logger[InnerLoop].data[:cost] == ""
+    @test logger[InnerLoop].cache[:iter][1] == 5
+    @test logger[InnerLoop].cache[:cost][1] == 10.5
+    @test cache_size(logger[InnerLoop]) == 1
 
-# Add column
-@logmsg InnerLoop :c_max value=3.2
-@test logger[InnerLoop].cols[3] == :c_max
-@logmsg InnerLoop :iter value=2
-@test logger[InnerLoop].data[:iter] == 2
-@test logger[InnerLoop].data[:c_max] == 3.2
+    # Add column
+    @logmsg InnerLoop :c_max value=3.2
+    @test logger[InnerLoop].cols[3] == :c_max
+    @logmsg InnerLoop :iter value=2
+    @test logger[InnerLoop].data[:iter] == 2
+    @test logger[InnerLoop].data[:c_max] == 3.2
 
-# Add Info column
-@logmsg InnerLoop "Something happened"
-@test logger[InnerLoop][:info][1] == "Something happened"
-@logmsg InnerLoop "Awesome"
-@test logger[InnerLoop][:info][2] == "Awesome"
-strrow = create_row(logger[InnerLoop])
-@test occursin("Something happened. Awesome", strrow)
+    # Add Info column
+    @logmsg InnerLoop "Something happened"
+    @test logger[InnerLoop][:info][1] == "Something happened"
+    @logmsg InnerLoop "Awesome"
+    @test logger[InnerLoop][:info][2] == "Awesome"
+    strrow = create_row(logger[InnerLoop])
+    @test occursin("Something happened. Awesome", strrow)
 
-# Try a level not in the logger
-@test_logs (:warn,:iter) @warn :iter   # Should log
-@test_logs @logmsg LogLevel(-500) :hi  # No logs
-
-clear_cache!(logger[InnerLoop])
-for i = 1:100
-    @logmsg InnerLoop :iter value=i
-    @logmsg InnerLoop :cost value=rand()
-    println(logger,InnerLoop)
+    # Try a level not in the logger
+    @test_logs (:warn,:iter) @warn :iter   # Should log
+    @test_logs @logmsg LogLevel(-500) :hi  # No logs
+    clear_cache!(logger[InnerLoop])
 end
