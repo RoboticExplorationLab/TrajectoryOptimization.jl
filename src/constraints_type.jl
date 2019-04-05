@@ -142,7 +142,7 @@ end
 function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
-    terminal_jacobian(C,xN) = copyto!(Diagonal(I,n))
+    terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n))
     TerminalConstraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n)])
 end
 
