@@ -77,7 +77,12 @@ function Problem(model::Model{Discrete}, cost::CostFunction;
 end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
+function initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T
+    if length(U0) != prob.N-1
+        U0 = interp_rows(prob.N-1, final_time(prob), to_array(U0))
+    end
+    copyto!(prob.U, U0)
+end
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
