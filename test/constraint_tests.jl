@@ -113,7 +113,7 @@ con.∇c(C,x,u);
 p2 = 2
 c2(v,x,u) = begin v[1] = sin(x[1]); v[2] = sin(x[3]) end
 ∇c2(Z,x,u) = begin Z[1,1] = cos(x[1]); Z[2,3] = cos(x[3]); end
-con2 = Constraint{Inequality}(c2,∇c2,p2,:ineq,[1:n,1:m])
+con2 = Constraint{Inequality}(c2,∇c2,n,m,p2,:ineq)
 
 # Bound constraint
 x_max = [5,5,Inf]
@@ -121,7 +121,7 @@ x_min = [-10,-5,0]
 u_max = 0
 u_min = -10
 p3 = 2(n+m)
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
+bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max, trim=false)
 v = zeros(p3)
 bnd.c(v,x,u)
 @test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
@@ -131,7 +131,7 @@ bnd.∇c(C,x,u)
 @test C.xu == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
 
 # Trimmed bound constraint
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max,trim=true)
+bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
 p3 = 2(n+m)-1
 v = zeros(p3)
 bnd.c(v,x,u)
@@ -139,12 +139,13 @@ bnd.c(v,x,u)
 
 # Create Constraint Set
 C = [con,con2,bnd]
-@test C isa ConstraintSet
+@test C isa AbstractConstraintSet
 @test C isa StageConstraintSet
 @test !(C isa TerminalConstraintSet)
 
 @test findall(C,Inequality) == [false,true,true]
 @test split(C) == ([con2,bnd],[con,])
+count_constraints(C)
 @test count_constraints(C) == (p2+p3,p1)
 @test inequalities(C) == [con2,bnd]
 @test equalities(C) == [con,]
@@ -159,7 +160,7 @@ cterm(v,x) = begin v[1] = x[1] - 5; v[2] = x[1]*x[2] end
 p_term = 2
 v = zeros(p_term)
 cterm(v,x)
-con_term = TerminalConstraint{Equality}(cterm,∇cterm,p_term,:terminal)
+con_term = TerminalConstraint{Equality}(cterm,∇cterm,n,p_term,:terminal)
 v2 = zeros(p_term)
 con_term.c(v2,x)
 @test v == v2
@@ -172,7 +173,7 @@ pI_N = 5
 
 C_term = [con_term,bnd_term]
 C2 = [con,con2,bnd,con_term,bnd_term]
-@test C2 isa ConstraintSet
+@test C2 isa AbstractConstraintSet
 @test C_term isa TerminalConstraintSet
 
 @test terminal(C2) == C_term
@@ -247,13 +248,13 @@ v = zeros(p1)
 c(v,X[5],U[5])
 @test cval[5].custom == v
 
-Q = Diagonal(1I,n)
-R = Diagonal(1I,m)
-Qf = Diagonal(10I,n)
+Q = Diagonal(1.0I,n)
+R = Diagonal(1.0I,m)
+Qf = Diagonal(10.0I,n)
 xf = rand(n)
 quadcost = LQRCost(Q,R,Qf,xf)
 
-alcost = AugmentedLagrangianCost(quadcost,C2,λ,μ,a,cval,∇cval)
+alcost = AugmentedLagrangianCost(quadcost,C2,cval,∇cval,λ,μ,a)
 stage_cost(alcost,X[1],U[1],1)
 
 
@@ -270,8 +271,8 @@ solver.c_fun(cs,x,u)
 evaluate!(cs2,C,x,u)
 @test sum(cs) ≈ sum(cs2)  # Test sum since they're ordered differently
 
-@btime solver.c_fun($cs,$x,$u)
-@btime evaluate!($cs2,$C,$x,$u)
+# @btime solver.c_fun($cs,$x,$u)
+# @btime evaluate!($cs2,$C,$x,$u)
 
 # Test constraint jacobians
 cx,cu = zeros(obj.p,n), zeros(obj.p,m)
@@ -280,39 +281,14 @@ solver.c_jacobian(cx,cu,x,u)
 jacobian!(cz,C,x,u)
 @test sum(cz) ≈ sum(cx) + sum(cu)
 
-@btime solver.c_jacobian($cx,$cu,$x,$u)
-@btime jacobian!($cz,$C,$x,$u)
+# @btime solver.c_jacobian($cx,$cu,$x,$u)
+# @btime jacobian!($cz,$C,$x,$u)
 
-num_constraints(C)
-get_num_constraints(solver)
+@test num_constraints(C) == 14
+@test get_num_constraints(solver) == (14,11,3)
 res = init_results(solver,Matrix{Float64}(undef,0,0),to_array(U),λ=λ,μ=μ)
 copyto!(res.X,X)
 update_constraints!(res,solver)
-@test cost(alcost,X,U,dt) - cost(quadcost,X,U,dt) ≈ cost_constraints(solver,res)
-@test _cost(solver,res) == cost(quadcost,X,U,dt)
+@test cost(alcost,X,U,dt) - cost(quadcost,X,U,dt) ≈ TrajectoryOptimization.cost_constraints(solver,res)
+@test TrajectoryOptimization._cost(solver,res) == cost(quadcost,X,U,dt)
 @test cost(alcost,X,U,dt) ≈ cost(solver,res)
-
-function solver_cost(solver::Solver,res)
-    update_constraints!(res,solver)
-    cost(solver,res)
-end
-solver_cost(solver,res)
-@btime solver_cost($solver,$res)
-@btime cost($alcost,$X,$U,$dt)
-
-@btime _cost($solver,$res)
-@btime cost($quadcost,$X,$U,$dt)
-
-using InteractiveUtils
-@code_warntype penalty_cost(cval[1],λ[1],μ[1])
-@code_warntype stage_constraint_cost(alcost,X[1],U[1],1)
-
-@btime constraint_cost($cval,$λ,$μ,$a,$Iμ)
-@btime constraint_cost($cval,$λ,$μ,$a)
-# @btime active_set!($a,$v_stage,$λ,$C)
-@code_warntype inequality_active!(a,v_stage,λ)
-using InteractiveUtils
-
-cost_expansion(alcost,X[1],U[1],1)
-cost_expansion(alcost,X[N])
-a.equality .= true
