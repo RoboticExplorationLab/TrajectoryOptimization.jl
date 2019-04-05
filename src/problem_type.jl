@@ -13,9 +13,10 @@ struct Problem{T<:AbstractFloat}
         x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T) where T
 
         n,m = model.n, model.m
-        @assert length(X[1]) == n
-        @assert length(U[1]) == m
-        @assert length(x0) == n
+        # TODO these checks break for infeasible, minimum time -> do a post check
+        # @assert length(X[1]) == n
+        # @assert length(U[1]) == m
+        # @assert length(x0) == n
         @assert length(X) == N
 
         if length(U) == N
@@ -299,4 +300,11 @@ function max_violation(prob::Problem{T}) where T
     else
         return 0
     end
+end
+
+include("infeasible_new.jl")
+function infeasible_problem(prob::Problem{T}) where T
+    model_inf = add_slack_controls(prob.model)
+    u_slack = slack_controls(prob)
+    update_problem(prob,model=model_inf,U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end

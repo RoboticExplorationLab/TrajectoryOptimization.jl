@@ -82,3 +82,13 @@ solve!(prob,auglag)
 altro_cost = ALTROCost(prob,cost_al,NaN,NaN)
 altro_cost.R_inf
 cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)
+
+copyto!(prob.X,[rand(prob.model.n) for k = 1:prob.N])
+altro_cost = ALTROCost(prob,cost_al,1.0,NaN)
+model_inf = add_slack_controls(prob.model)
+ui = infeasible_controls(prob)
+prob_inf = update_problem(prob,model=model_inf,U=[[prob.U[k];ui[k]] for k = 1:prob.N-1])
+
+opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
+ilqr_inf = iLQRSolver(prob_inf,opts)
+cost_expansion!(ilqr_inf.Q,altro_cost,rand(prob_inf.model.n),rand(prob_inf.model.m), 1)

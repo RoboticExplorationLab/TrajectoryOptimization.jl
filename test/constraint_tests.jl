@@ -209,7 +209,7 @@ c_jac = BlockMatrix(C,n,m)
 
 # Augment State
 m_inf = m+n
-con_inf = TrajectoryOptimization.infeasible_constraint(n,m)
+con_inf = TrajectoryOptimization.slack_control_constraints(n,m)
 u_inf = [u; 5; -5; 10]
 v = zeros(n)
 con_inf.c(v,x,u_inf[con_inf.inds[2]])
