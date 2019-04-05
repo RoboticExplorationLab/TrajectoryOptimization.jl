@@ -36,7 +36,8 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver)
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T, unconstrained_solver::AbstractSolver{T}) where T
+function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T,
+        unconstrained_solver::AbstractSolver{T}) where T
     c_max = max_violation(solver)
 
     solver.stats[:iterations] += 1
@@ -66,7 +67,7 @@ function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
     end
 
     # Update active set after updating multipliers (need to calculate c_max)
-    update_active_set!(solver.active_set,solver.C,solver.λ)
+    update_active_set!(solver.active_set, solver.C, solver.λ)
 end
 
 "Penalty update (default) - update all penalty parameters"

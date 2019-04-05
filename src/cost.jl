@@ -289,7 +289,8 @@ function AugmentedLagrangianCost(cost::CostFunction,constraints::ConstraintSet,
 end
 
 "Update constraints trajectories"
-function update_constraints!(c::PartedVecTrajectory{T},constraints::ConstraintSet,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+function update_constraints!(c::PartedVecTrajectory{T}, constraints::ConstraintSet,
+        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
         evaluate!(c[k],constraints,X[k],U[k])
@@ -301,7 +302,7 @@ end
 function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
     N = length(c)
     for k = 1:N
-        active_set!(a[k],c[k],λ[k])
+        active_set!(a[k], c[k], λ[k], tol)
     end
 end
 
@@ -356,8 +357,8 @@ end
 function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
     J = cost(alcost.cost,X,U,dt)
-    update_constraints!(alcost.C,alcost.constraints,X,U)
-    update_active_set!(alcost.active_set,alcost.C,alcost.λ)
+    update_constraints!(alcost.C, alcost.constraints, X, U)
+    update_active_set!(alcost.active_set, alcost.C, alcost.λ)
 
     for k = 1:N-1
         J += stage_constraint_cost(alcost,X[k],U[k],k)
