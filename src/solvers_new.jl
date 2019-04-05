@@ -238,12 +238,12 @@ get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(so
 
 "Second-order Taylor expansion of cost function at time step k"
 function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-    m = get_sizes(cost)[2]
-    e[k].x .= cost.Q*x + cost.q
-    e[k].u .= cost.R*u[1:m]
-    e[k].xx .= cost.Q
-    e[k].uu .= cost.R
-    e[k].ux .= cost.H
+    n,m = get_sizes(cost)
+    e[k].x[1:n] .= cost.Q*x + cost.q
+    e[k].u[1:m] .= cost.R*u[1:m]
+    e[k].xx[1:n,1:n] .= cost.Q
+    e[k].uu[1:m,1:m] .= cost.R
+    e[k].ux[1:m,1:n] .= cost.H
     return nothing
 end
 
@@ -253,20 +253,9 @@ function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) 
     return nothing
 end
 
-"Second-order Taylor expansion of cost function at time step k"
-# function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     cost_expansion!(e,cost.cost,x,u,k)
-#     return nothing
-# end
-#
-# function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost, xN::Vector{T}) where T
-#     cost_expansion!(solver,cost.cost,xN)
-#     return nothing
-# end
-
 function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T},
         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
-    # Q,R,H,q,r = cost_expansion(alcost.cost,x,u,k)
+    n,m = get_sizes(cost.cost)
     cost_expansion!(e,cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
@@ -279,14 +268,14 @@ function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T}
     cu = ∇c.u
 
     # Second Order pieces
-    e[k].xx .+= cx'Iμ*cx
-    e[k].uu .+= cu'Iμ*cu
-    e[k].ux .+= cu'Iμ*cx
+    e[k].xx[1:n,1:n] .+= cx'Iμ*cx
+    e[k].uu[1:m,1:m] .+= cu'Iμ*cu
+    e[k].ux[1:m,1:n] .+= cu'Iμ*cx
 
     # First order pieces
     g = (Iμ*c + λ)
-    e[k].x .+= cx'g
-    e[k].u .+= cu'g
+    e[k].x[1:n] .+= cx'g
+    e[k].u[1:m] .+= cu'g
 
     return nothing
 end
@@ -315,12 +304,13 @@ end
 
 #TODO change generic cost expansiont to perform in-place
 function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    n,m = get_sizes(cost)
     Q,R,H,q,r = cost.expansion(x,u)
-    e[k].x .= Q
-    e[k].u .= R
-    e[k].xx .= cost.Q
-    e[k].uu .= cost.R
-    e[k].ux .= cost.H
+    e[k].x[1:n] .= Q
+    e[k].u[1:m] .= R
+    e[k].xx[1:n,1:n] .= cost.Q
+    e[k].uu[1:m,1:m] .= cost.R
+    e[k].ux[1:m,1:n] .= cost.H
     return nothing
 end
 
@@ -329,4 +319,133 @@ function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) wh
     solver.S[end] .= Qf
     solver.s[end] .= qf
     return nothing
+end
+
+"$(TYPEDEF) ALTRO cost, potentially including infeasible start and minimum time costs"
+struct ALTROCost{T} <: CostFunction
+    cost::AugmentedLagrangianCost
+    R_inf::T
+    R_min_time::T
+    n::Int # state dimension of original problem
+    m::Int # input dimension of original problem
+end
+
+function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_min_time::T) where T
+    ALTROCost(cost,R_inf,R_min_time,prob.model.n,prob.model.m)
+end
+
+function get_sizes(cost::ALTROCost)
+    n = cost.n
+    m = cost.m
+
+    if cost.R_min_time != NaN
+        m̄ = m + 1
+        n̄ = n + 1
+    else
+        m̄ = m
+        n̄ = n
+    end
+
+    return n,m,n̄,m̄
+end
+
+#NOTE don't use these...
+function stage_cost(cost::ALTROCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
+    n,m,n̄,m̄ = get_sizes(cost)
+
+    J = 0.0
+
+    # if cost.R_min_time != NaN
+    #     J += cost.R_min_time*u[m̄]^2
+    #     dt =
+    # end
+    #
+    # if cost.R_inf!= NaN
+    #     u_inf = u[m̄ .+(1:n)]
+    #     J += 0.5*cost.R_inf*u_inf'*u_inf
+    # end
+    #
+    # J = stage_cost(cost.cost.cost,x[1:n],u[1:m],k) # stage cost only for original x, u
+    # J += stage_constraint_cost(cost.cost,x,u,k) # constraints consider
+
+
+    J
+end
+
+function stage_cost(cost::ALTROCost{T}, x::AbstractVector{T}) where T
+    # J0 = stage_cost(cost.cost.cost,x[1:cost.n])
+    # J0 + stage_constraint_cost(cost.cost,x)
+    0.0
+end
+
+"ALTRO cost for X and U trajectories"
+function cost(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
+    N = length(X)
+    n,m,n̄,m̄ = get_sizes(cost)
+
+    update_constraints!(cost.cost.C,cost.cost.constraints,X,U)
+    update_active_set!(cost.cost.active_set,cost.cost.C,cost.cost.λ)
+
+    J = 0.0
+
+    for k = 1:N-1
+        # Minimum time stage cost
+        if !isnan(R_min_time)
+            dt = U[k][m̄]^2
+            J += cost.R_min_time*dt
+        end
+
+        # Infeasible start stage cost
+        if !isnan(R_inf)
+            u_inf = u[m̄ .+(1:n)]
+            J += 0.5*cost.R_inf*u_inf'*u_inf
+        end
+
+        J += cost(cost.cost.cost,X[k][1:n],U[k][1:m],k)*dt
+        J += stage_constraint_cost(cost.cost,X[k],U[k],k)
+    end
+
+    J += cost(cost.cost.cost,X[N])
+    J += stage_constraint_cost(cost.cost,X[N])
+
+    return J
+end
+
+"Second-order expansion of ALTRO cost"
+function cost_expansion!(Q::ExpansionTrajectory{T},cost::ALTROCost, x::Vector{T},
+        u::Vector{T}, k::Int) where T
+
+    n,m,n̄,m̄ = get_sizes(cost)
+    R_min_time = cost.R_min_time
+    R_inf = cost.R_inf
+    cost_expansion!(Q,cost.cost,x,u,k)
+
+    # Minimum time expansion components
+    if !isnan(R_min_time)
+        ℓ1 = stage_cost(cost.cost.cost,x,u)
+        Qx, Qu = cost_expansion_gradients(cost.cost.cost,x,u,k)
+        τ = u[m̄]
+        tmp = 2.0*τ*Qu
+
+        Q[k].u[m̄] = τ*(2.0*ℓ1 + R_min_time)
+        Q[k].uu[1:m,m̄] = tmp
+        Q[k].uu[m̄,1:m] = tmp'
+        Q[k].uu[m̄,m̄] = (2.0*ℓ1 + R_min_time)
+        Q[k].ux[m̄,1:n] = 2.0*τ*Qx'
+
+        Q[k].x[n̄] = R_min_time*x[k][n̄]
+        Q[k].xx[n̄,n̄] = R_min_time
+    end
+
+    # Infeasible expansion components
+    if !isnan(R_inf)
+        Q[k].u[m̄+1:mm] = R_inf*u[k][m̄+1:m̄+n]
+        Q[k].uu[m̄+1:mm,m̄+1:mm] = R_inf
+    end
+
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver, cost::ALTROCost, xN::Vector{T}) where T
+    cost_expansion!(solver,cost.cost,xN)
 end
