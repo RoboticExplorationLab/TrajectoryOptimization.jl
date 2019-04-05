@@ -11,7 +11,7 @@ function pendulum_dynamics!(xdot,x,u)
     xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/I
 end
 n,m = 2,1
-model = Model(pendulum_dynamics!,n,m) # inplace model
+pendulum_model = Model(pendulum_dynamics!,n,m) # inplace model
 
 # initial conditions
 x0 = [0; 0.]
@@ -27,14 +27,21 @@ R = 1e-2*Matrix(I,m,m)
 # simulation
 tf = 5.
 
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+# Create the cost
+pendulum_cost = LQRCost(Q, R, Qf, xf)
 
 # Constraints
 u_bound = 2
-u_min = [-u_bound]
-u_max = [u_bound]
-obj_con = ConstrainedObjective(obj_uncon, u_min=u_min, u_max=u_max) # constrained objective
+bnd = bound_constraint(n, m, u_min=-u_bound, u_max=u_bound)
 
-# Set up problem
-pendulum = [model,obj_uncon]
-pendulum_constrained = [model, obj_con]
+# Create Problem
+N = 51
+pendulum_new = Problem(pendulum_model, pendulum_cost, constraints=C, N=N, tf=tf)
+initial_controls!(pendulum_new, rand(m, N-1))
+
+# Set up (old) problem
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+pendulum = [pendulum_model,obj_uncon]
+
+obj_con = ConstrainedObjective(obj_uncon, u_min=-u_bound, u_max=u_bound) # constrained objective
+pendulum_constrained = [pendulum_model, obj_con]
