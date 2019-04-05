@@ -249,7 +249,7 @@ function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T
 end
 
 function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
-    n, = get_size(cost)
+    n, = get_sizes(cost)
     solver.S[end] .= cost.Qf
     solver.s[end] .= cost.Qf*xN[1:n] + cost.qf
     return nothing
@@ -258,7 +258,6 @@ end
 function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T},
         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
     n,m = get_sizes(cost.cost)
-    idx = (x=1:n, u=1:m)
 
     cost_expansion!(e,cost.cost, x, u, k)
     c = cost.C[k]
@@ -272,14 +271,14 @@ function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T}
     cu = ∇c.u
 
     # Second Order pieces
-    e[k].xx[idx.x,idx.x] .+= cx'Iμ*cx
-    e[k].uu[idx.u,idx.u] .+= cu'Iμ*cu
-    e[k].ux[idx.u,idx.x] .+= cu'Iμ*cx
+    e[k].xx .+= cx'Iμ*cx
+    e[k].uu .+= cu'Iμ*cu
+    e[k].ux .+= cu'Iμ*cx
 
     # First order pieces
     g = (Iμ*c + λ)
-    e[k].x[idx.x] .+= cx'g
-    e[k].u[idx.u] .+= cu'g
+    e[k].x .+= cx'g
+    e[k].u .+= cu'g
 
     return nothing
 end
@@ -337,93 +336,53 @@ struct ALTROCost{T} <: CostFunction
 end
 
 function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_min_time::T) where T
-    ALTROCost(cost,R_inf,R_min_time,prob.model.n,prob.model.m)
-end
-
-"""Get sizes for ALTRO problem
-n,m -> original problem dimensions
-n̄,m̄ -> minimum time indices
-nn,mm -> original problem dimensions + slack control dimensions
-"""
-function get_sizes(cost::ALTROCost)
-    n = cost.n; m = cost.m
-    nn = copy(n); mm = copy(m)
-
-    if !isnan(cost.R_inf)
-        mm += n
-    end
-
-    if !isnan(cost.R_min_time)
-        m̄ = mm + 1
-        n̄ = nn + 1
-    else
-        m̄ = mm
-        n̄ = nn
-    end
-
-    return n,m,nn,mm,n̄,m̄
-end
-
-#NOTE don't use these...
-function stage_cost(cost::ALTROCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
-    n,m,n̄,m̄ = get_sizes(cost)
-
-    J = 0.0
-
-    # if cost.R_min_time != NaN
-    #     J += cost.R_min_time*u[m̄]^2
-    #     dt =
-    # end
-    #
-    # if cost.R_inf!= NaN
-    #     u_inf = u[m̄ .+(1:n)]
-    #     J += 0.5*cost.R_inf*u_inf'*u_inf
-    # end
-    #
-    # J = stage_cost(cost.cost.cost,x[1:n],u[1:m],k) # stage cost only for original x, u
-    # J += stage_constraint_cost(cost.cost,x,u,k) # constraints consider
-
-
-    J
-end
-
-function stage_cost(cost::ALTROCost{T}, x::AbstractVector{T}) where T
-    # J0 = stage_cost(cost.cost.cost,x[1:cost.n])
-    # J0 + stage_constraint_cost(cost.cost,x)
-    0.0
+    n,m = get_sizes(cost.cost)
+    ALTROCost(cost,R_inf,R_min_time,n,m)
 end
 
 "ALTRO cost for X and U trajectories"
 function cost(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
-    n,m,n̄,m̄ = get_sizes(cost)
+    n = cost.n; m = cost.m
+    idx = (x=1:n, u=1:m)
+    R_min_time = cost.R_min_time
+    R_inf = cost.R_inf
 
-    update_constraints!(cost.cost.C,cost.cost.constraints,X,U)
-    update_active_set!(cost.cost.active_set,cost.cost.C,cost.cost.λ)
+    update_constraints!(cost,X,U)
+    update_active_set!(cost)
 
     J = 0.0
 
     for k = 1:N-1
         # Minimum time stage cost
         if !isnan(R_min_time)
-            dt = U[k][m̄]^2
+            dt = U[k][end]^2
             J += cost.R_min_time*dt
         end
 
         # Infeasible start stage cost
         if !isnan(R_inf)
-            u_inf = u[m̄ .+(1:n)]
+            u_inf = U[k][(idx.x) .+ m]
             J += 0.5*cost.R_inf*u_inf'*u_inf
         end
 
-        J += cost(cost.cost.cost,X[k][1:n],U[k][1:m],k)*dt
+        J += stage_cost(cost.cost.cost,X[k][idx.x],U[k][idx.u])*dt
         J += stage_constraint_cost(cost.cost,X[k],U[k],k)
     end
 
-    J += cost(cost.cost.cost,X[N])
+    J += stage_cost(cost.cost.cost,X[N][idx.x])
     J += stage_constraint_cost(cost.cost,X[N])
 
     return J
+end
+
+function update_constraints!(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    update_constraints!(cost.cost.C,cost.cost.constraints,X,U)
+    !isnan(cost.R_min_time) ? cost.cost.C[1][:min_time_eq][1] = 0.0 : nothing
+end
+
+function update_active_set!(cost::ALTROCost{T},tol::T=0.0) where T
+    update_active_set!(cost.cost.active_set,cost.cost.C,cost.cost.λ)
 end
 
 "Second-order expansion of ALTRO cost"
