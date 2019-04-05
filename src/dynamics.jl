@@ -1,6 +1,7 @@
 module Dynamics
 
-using TrajectoryOptimization: Model, UnconstrainedObjective, ConstrainedObjective, LQRObjective, Trajectory
+using TrajectoryOptimization: Problem, Model, UnconstrainedObjective, ConstrainedObjective,
+    LQRObjective, LQRCost, Trajectory, bound_constraint, initial_controls!
 using RigidBodyDynamics
 using LinearAlgebra
 

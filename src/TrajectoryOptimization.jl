@@ -39,6 +39,7 @@ export
     QuadraticCost,
     LQRCost,
     GenericCost,
+    AugmentedLagrangianCost,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
     SolverOptions,
@@ -50,6 +51,7 @@ export
     iLQRSolverOptions,
     AugmentedLagrangianSolver,
     AugmentedLagrangianSolverOptions,
+    AugmentedLagrangianProblem,
     Discrete,
     Continuous,
     Constraint,
@@ -58,14 +60,18 @@ export
     Inequality,
     ConstraintSet,
     StageConstraintSet,
-    TerminalConstraintSet
+    TerminalConstraintSet,
+    AbstractConstraintSet
 
 export
     rk3,
     rk4,
     midpoint,
     add_constraints!,
-    bound_constraint
+    bound_constraint,
+    goal_constraint,
+    initial_controls!,
+    initial_state!
 
 
 # Primary methods
@@ -80,10 +86,13 @@ export
     max_violation,
     update_objective,
     infeasible_control,
-    line_trajectory
+    line_trajectory,
+    evaluate!,
+    jacobian!
 
 export
     get_sizes,
+    num_constraints,
     get_num_constraints,
     get_num_controls,
     init_results,
@@ -101,7 +110,16 @@ export
     lqr,
     evals,
     reset,
-    reset_evals
+    reset_evals,
+    final_time,
+    count_constraints,
+    inequalities,
+    equalities,
+    bounds,
+    labels,
+    terminal,
+    stage
+
 
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray
@@ -130,7 +148,6 @@ include("ilqr_methods.jl")
 include("augmented_lagrangian.jl")
 include("solve.jl")
 include("utils.jl")
-include("dynamics.jl")
 include("controller.jl")
 
 include("problem_type.jl")
@@ -141,6 +158,7 @@ include("backwardpass_new.jl")
 include("forward_pass_new.jl")
 include("rollout_new.jl")
 include("augmented_lagrangian_new.jl")
+include("dynamics.jl")
 include("logger.jl")
 
 using Ipopt
