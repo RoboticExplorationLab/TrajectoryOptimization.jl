@@ -35,13 +35,13 @@ u_bound = 2
 bnd = bound_constraint(n, m, u_min=-u_bound, u_max=u_bound)
 
 # Create Problem
-N = 51
-pendulum_new = Problem(pendulum_model, pendulum_cost, constraints=C, N=N, tf=tf)
-initial_controls!(pendulum_new, rand(m, N-1))
-
-# Set up (old) problem
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-pendulum = [pendulum_model,obj_uncon]
-
-obj_con = ConstrainedObjective(obj_uncon, u_min=-u_bound, u_max=u_bound) # constrained objective
-pendulum_constrained = [pendulum_model, obj_con]
+# N = 51
+# pendulum_new = Problem(pendulum_model, pendulum_cost, constraints=C, N=N, tf=tf)
+# initial_controls!(pendulum_new, rand(m, N-1))
+#
+# # Set up (old) problem
+# obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+# pendulum = [pendulum_model,obj_uncon]
+#
+# obj_con = ConstrainedObjective(obj_uncon, u_min=-u_bound, u_max=u_bound) # constrained objective
+# pendulum_constrained = [pendulum_model, obj_con]

@@ -2,7 +2,7 @@
 struct Problem{T<:AbstractFloat}
     model::Model{Discrete}
     cost::CostFunction
-    constraints::ConstraintSet
+    constraints::AbstractConstraintSet
     x0::Vector{T}
     X::VectorTrajectory{T}
     U::VectorTrajectory{T}
@@ -28,7 +28,7 @@ struct Problem{T<:AbstractFloat}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T}(model, cost, ConstraintSet(constraints), x0, X, U, N, dt)
+        new{T}(model,cost,constraints,x0,X,U,N,dt)
     end
 end
 
@@ -50,7 +50,7 @@ Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
 function Problem(model::Model{Discrete}, cost::CostFunction, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, cost, constraints, x0, X0, U0, N, dt)
@@ -59,7 +59,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}
     Problem(model, cost, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
-        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N = length(U) + 1
     N, tf, dt = _validate_time(N, tf, dt)
@@ -70,7 +70,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) wh
     Problem(model, cost, to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, cost::CostFunction;
-        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
@@ -79,12 +79,7 @@ function Problem(model::Model{Discrete}, cost::CostFunction;
 end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-function initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T
-    if length(U0) != prob.N-1
-        U0 = interp_rows(prob.N-1, final_time(prob), to_array(U0))
-    end
-    copyto!(prob.U, U0)
-end
+initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
@@ -224,12 +219,12 @@ function update_problem(p::Problem;
 end
 
 "$(SIGNATURES) Add a constraint to the problem"
-function add_constraints!(p::Problem,c::AbstractConstraint)
+function add_constraints!(p::Problem,c::Constraint)
     push!(p.constraints,c)
 end
 
 "$(SIGNATURES) Add a set of constraints to the problem"
-function add_constraints!(p::Problem,C::ConstraintSet)
+function add_constraints!(p::Problem,C::AbstractConstraintSet)
     append!(p.constraints,C)
 end
 
@@ -290,7 +285,7 @@ function max_violation(prob::Problem{T}) where T
         for k = 1:N-1
             evaluate!(c,stage_con,prob.X[k],prob.U[k])
             max_E = norm(c.equality,Inf)
-            max_I = pos(maximum(c))
+            max_I = maximum(pos.(c))
             c_max = max(c_max,max(max_E,max_I))
         end
         if num_terminal_constraints(prob) > 0
@@ -298,7 +293,7 @@ function max_violation(prob::Problem{T}) where T
             c = BlockVector(T,term_con)
             evaluate!(c,term_con,prob.X[N])
             max_E = norm(c.equality,Inf)
-            max_I = pos(maximum(c))
+            max_I = maximum(pos.(c))
             c_max = max(c_max,max(max_E,max_I))
         end
         return c_max
@@ -311,5 +306,17 @@ include("infeasible_new.jl")
 function infeasible_problem(prob::Problem{T}) where T
     model_inf = add_slack_controls(prob.model)
     u_slack = slack_controls(prob)
-    update_problem(prob,model=model_inf,U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+    con_inf = infeasible_constraints(prob.model.n,prob.model.m)
+    update_problem(prob,model=model_inf,
+        constraints=[prob.constraints...,con_inf],U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+end
+
+function minimum_time_problem(prob::Problem{T},dt_max::T=1.0,dt_min::T=1.0e-3) where T
+    model_min_time = add_min_time_controls(prob.model)
+    con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
+    prob_min_time = update_problem(prob,model=model_min_time,
+        constraints=[prob.constraints...,con_min_time_eq,con_min_time_bnd],
+        U=[[prob.U[k];prob.dt] for k = 1:prob.N-1],
+        X=[[prob.X[k];prob.dt] for k = 1:prob.N],
+        x0=[x0;NaN])
 end

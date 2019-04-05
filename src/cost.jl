@@ -249,7 +249,7 @@ $(FIELDS)
 """
 struct AugmentedLagrangianCost{T} <: CostFunction
     cost::C where C<:CostFunction
-    constraints::ConstraintSet
+    constraints::AbstractConstraintSet
     C::PartedVecTrajectory{T}  # Constraint values
     ∇C::PartedMatTrajectory{T} # Constraint jacobians
     λ::PartedVecTrajectory{T}  # Lagrange multipliers
@@ -261,7 +261,7 @@ end
 Create an AugmentedLagrangianCost from another cost function and a set of constraints
     for a problem with N knot points. Allocates new memory for the internal arrays.
 """
-function AugmentedLagrangianCost{T}(cost::CostFunction,constraints::ConstraintSet,N::Int;
+function AugmentedLagrangianCost{T}(cost::CostFunction,constraints::AbstractConstraintSet,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
@@ -274,7 +274,7 @@ Create an AugmentedLagrangianCost from another cost function and a set of constr
     for a problem with N knot points, specifying the Lagrange multipliers.
     Allocates new memory for the internal arrays.
 """
-function AugmentedLagrangianCost(cost::CostFunction,constraints::ConstraintSet,
+function AugmentedLagrangianCost(cost::CostFunction,constraints::AbstractConstraintSet,
         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)
@@ -284,7 +284,7 @@ function AugmentedLagrangianCost(cost::CostFunction,constraints::ConstraintSet,
 end
 
 "Update constraints trajectories"
-function update_constraints!(c::PartedVecTrajectory{T}, constraints::ConstraintSet,
+function update_constraints!(c::PartedVecTrajectory{T}, constraints::AbstractConstraintSet,
         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1

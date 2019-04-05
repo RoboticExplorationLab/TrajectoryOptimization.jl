@@ -184,7 +184,7 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
     AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set)
 end
 
-function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N::Int;
+function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,m::Int,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
     p = num_stage_constraints(constraints)
     p_N = num_terminal_constraints(constraints)
@@ -239,23 +239,27 @@ get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(so
 "Second-order Taylor expansion of cost function at time step k"
 function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     n,m = get_sizes(cost)
-    e[k].x[1:n] .= cost.Q*x + cost.q
-    e[k].u[1:m] .= cost.R*u[1:m]
-    e[k].xx[1:n,1:n] .= cost.Q
-    e[k].uu[1:m,1:m] .= cost.R
-    e[k].ux[1:m,1:n] .= cost.H
+    idx = (x=1:n, u=1:m)
+    e[k].x[idx.x] .= cost.Q*x[idx.x] + cost.q
+    e[k].u[idx.u] .= cost.R*u[idx.u]
+    e[k].xx[idx.x,idx.x] .= cost.Q
+    e[k].uu[idx.u,idx.u] .= cost.R
+    e[k].ux[idx.u,idx.x] .= cost.H
     return nothing
 end
 
 function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
+    n, = get_size(cost)
     solver.S[end] .= cost.Qf
-    solver.s[end] .= cost.Qf*xN + cost.qf
+    solver.s[end] .= cost.Qf*xN[1:n] + cost.qf
     return nothing
 end
 
 function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T},
         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
     n,m = get_sizes(cost.cost)
+    idx = (x=1:n, u=1:m)
+
     cost_expansion!(e,cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
@@ -268,14 +272,14 @@ function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T}
     cu = ∇c.u
 
     # Second Order pieces
-    e[k].xx[1:n,1:n] .+= cx'Iμ*cx
-    e[k].uu[1:m,1:m] .+= cu'Iμ*cu
-    e[k].ux[1:m,1:n] .+= cu'Iμ*cx
+    e[k].xx[idx.x,idx.x] .+= cx'Iμ*cx
+    e[k].uu[idx.u,idx.u] .+= cu'Iμ*cu
+    e[k].ux[idx.u,idx.x] .+= cu'Iμ*cx
 
     # First order pieces
     g = (Iμ*c + λ)
-    e[k].x[1:n] .+= cx'g
-    e[k].u[1:m] .+= cu'g
+    e[k].x[idx.x] .+= cx'g
+    e[k].u[idx.u] .+= cu'g
 
     return nothing
 end
@@ -305,12 +309,14 @@ end
 #TODO change generic cost expansiont to perform in-place
 function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     n,m = get_sizes(cost)
+    idx = (x=1:n, u=1:m)
+
     Q,R,H,q,r = cost.expansion(x,u)
-    e[k].x[1:n] .= Q
-    e[k].u[1:m] .= R
-    e[k].xx[1:n,1:n] .= cost.Q
-    e[k].uu[1:m,1:m] .= cost.R
-    e[k].ux[1:m,1:n] .= cost.H
+    e[k].x[idx.x] .= Q
+    e[k].u[idx.u] .= R
+    e[k].xx[idx.x,idx.x] .= cost.Q
+    e[k].uu[idx.u,idx.u] .= cost.R
+    e[k].ux[idx.u,idx.x] .= cost.H
     return nothing
 end
 
@@ -334,19 +340,28 @@ function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_
     ALTROCost(cost,R_inf,R_min_time,prob.model.n,prob.model.m)
 end
 
+"""Get sizes for ALTRO problem
+n,m -> original problem dimensions
+n̄,m̄ -> minimum time indices
+nn,mm -> original problem dimensions + slack control dimensions
+"""
 function get_sizes(cost::ALTROCost)
-    n = cost.n
-    m = cost.m
+    n = cost.n; m = cost.m
+    nn = copy(n); mm = copy(m)
 
-    if cost.R_min_time != NaN
-        m̄ = m + 1
-        n̄ = n + 1
-    else
-        m̄ = m
-        n̄ = n
+    if !isnan(cost.R_inf)
+        mm += n
     end
 
-    return n,m,n̄,m̄
+    if !isnan(cost.R_min_time)
+        m̄ = mm + 1
+        n̄ = nn + 1
+    else
+        m̄ = mm
+        n̄ = nn
+    end
+
+    return n,m,nn,mm,n̄,m̄
 end
 
 #NOTE don't use these...
@@ -412,35 +427,38 @@ function cost(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},d
 end
 
 "Second-order expansion of ALTRO cost"
-function cost_expansion!(Q::ExpansionTrajectory{T},cost::ALTROCost, x::Vector{T},
+function cost_expansion!(Q::ExpansionTrajectory{T},cost::ALTROCost,x::Vector{T},
         u::Vector{T}, k::Int) where T
 
-    n,m,n̄,m̄ = get_sizes(cost)
-    R_min_time = cost.R_min_time
-    R_inf = cost.R_inf
+    n = cost.n; m = cost.m
+    idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
+
+    R_min_time = cost.R_min_time; R_inf = cost.R_inf
+
     cost_expansion!(Q,cost.cost,x,u,k)
+
+    # Slack control expansion components
+    if !isnan(R_inf)
+        Q[k].u[idx.inf] = R_inf*u[idx.inf]
+        Q[k].uu[idx.inf,idx.inf] = Diagonal(R_inf*I,n)
+    end
 
     # Minimum time expansion components
     if !isnan(R_min_time)
-        ℓ1 = stage_cost(cost.cost.cost,x,u)
-        Qx, Qu = cost_expansion_gradients(cost.cost.cost,x,u,k)
-        τ = u[m̄]
+        n̄ = n+1
+        ℓ1 = stage_cost(cost.cost.cost,x[idx.x],u[idx.u])
+        Qx, Qu = cost_expansion_gradients(cost.cost.cost,x[idx.x],u[idx.u],k)
+        τ = u[end]
         tmp = 2.0*τ*Qu
 
-        Q[k].u[m̄] = τ*(2.0*ℓ1 + R_min_time)
-        Q[k].uu[1:m,m̄] = tmp
-        Q[k].uu[m̄,1:m] = tmp'
-        Q[k].uu[m̄,m̄] = (2.0*ℓ1 + R_min_time)
-        Q[k].ux[m̄,1:n] = 2.0*τ*Qx'
+        Q[k].u[end] = τ*(2.0*ℓ1 + R_min_time)
+        Q[k].uu[idx.u,end] = tmp
+        Q[k].uu[end,idx.u] = tmp'
+        Q[k].uu[end,end] = (2.0*ℓ1 + R_min_time)
+        Q[k].ux[end,idx.x] = 2.0*τ*Qx'
 
-        Q[k].x[n̄] = R_min_time*x[k][n̄]
+        Q[k].x[n̄] = R_min_time*x[n̄]
         Q[k].xx[n̄,n̄] = R_min_time
-    end
-
-    # Infeasible expansion components
-    if !isnan(R_inf)
-        Q[k].u[m̄+1:mm] = R_inf*u[k][m̄+1:m̄+n]
-        Q[k].uu[m̄+1:mm,m̄+1:mm] = R_inf
     end
 
     return nothing

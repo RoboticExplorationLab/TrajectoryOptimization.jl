@@ -210,7 +210,7 @@ c_jac = BlockMatrix(C,n,m)
 
 # Augment State
 m_inf = m+n
-con_inf = TrajectoryOptimization.slack_control_constraints(n,m)
+con_inf = TrajectoryOptimization.infeasible_constraints(n,m)
 u_inf = [u; 5; -5; 10]
 v = zeros(n)
 con_inf.c(v,x,u_inf[con_inf.inds[2]])
@@ -292,3 +292,24 @@ update_constraints!(res,solver)
 @test cost(alcost,X,U,dt) - cost(quadcost,X,U,dt) ≈ TrajectoryOptimization.cost_constraints(solver,res)
 @test TrajectoryOptimization._cost(solver,res) == cost(quadcost,X,U,dt)
 @test cost(alcost,X,U,dt) ≈ cost(solver,res)
+
+con1, con2 = min_time_constraints(n,m,1.0,1.0e-3)
+
+x = rand(n+1)
+u = rand(m+1)
+v = [0.0]
+V = zeros(1,n+m+2)
+con1.c(v,x,u)
+con1.∇c(V,x,u)
+@test isapprox(v[1],u[end]-x[end])
+@test V[n+1] == -1.0
+@test V[n+m+2] == 1.0
+
+v = zeros(2)
+V = zeros(2,n+m+2)
+con2.c(v,x,u)
+con2.∇c(V,x,u)
+@test isapprox(v[1],u[end] - sqrt(1.0))
+@test isapprox(v[2],sqrt(1.0e-3) - u[end])
+@test isapprox(V[1,n+m+2],1.0)
+@test isapprox(V[2,n+m+2],-1.0)

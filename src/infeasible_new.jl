@@ -15,7 +15,7 @@ function slack_controls(prob::Problem{T}) where T
         evaluate!(x[k+1],prob.model,x[k],prob.U[k],dt)
 
         u_slack[k] = prob.X[k+1] - x[k+1]
-        x[k+1] += ui[k]
+        x[k+1] += u_slack[k]
     end
     return u_slack
 end

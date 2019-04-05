@@ -146,13 +146,43 @@ function goal_constraint(xf::Vector{T}) where T
     TerminalConstraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n)])
 end
 
-function infeasible_constraint(n::Int, m::Int)
+function infeasible_constraints(n::Int, m::Int)
     u_inf = m .+ (1:n)
     ∇inf = zeros(n,n+m)
     ∇inf[:,u_inf] = Diagonal(1.0I,n)
     inf_con(v,x,u) = copyto!(v, u)
     inf_jac(C,x,u) = copyto!(C, ∇inf)
     Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)])
+end
+
+function min_time_constraints(n::Int,m::Int,dt_max::T=1.0,dt_min::T=1.0e-3) where T
+    n̄ = n+1; m̄ = m+1; idx_h = n+m+2
+    ∇con_eq = zeros(1,idx_h)
+    ∇con_eq[1,idx_h] = 1.0
+    ∇con_eq[1,n̄] = -1.0
+
+    function con_eq(v,x,u)
+        v[1] = u[end] - x[end]
+    end
+
+    jac_eq(C,x,u) = copyto!(C, ∇con_eq)
+    con_min_time_eq = Constraint{Equality}(con_eq, jac_eq, 1, :min_time_eq, [collect(1:n̄), collect(1:m̄)])
+
+    ∇con_bnd = zeros(2,idx_h)
+    ∇con_bnd[1,idx_h] = 1.0
+    ∇con_bnd[2,idx_h] = -1.0
+
+    function con_bnd(v,x,u)
+        h = u[end]
+        v[1] = h - sqrt(dt_max)
+        v[2] = sqrt(dt_min) - h
+    end
+
+    jac_bnd(C,x,u) = copyto!(C, ∇con_bnd)
+
+    con_min_time_bnd = Constraint{Inequality}(con_bnd, jac_bnd, 2, :min_time_bnd, [collect(1:n̄), collect(1:m̄)])
+
+    return con_min_time_eq, con_min_time_bnd
 end
 
 
@@ -177,7 +207,7 @@ TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
 
 "$(SIGNATURES) Count the number of inequality and equality constraints in a constraint set.
 Returns the sizes of the constraint vector, not the number of constraint types."
-function count_constraints(C::ConstraintSet)
+function count_constraints(C::AbstractConstraintSet)
     pI = 0
     pE = 0
     for c in C
@@ -191,7 +221,7 @@ function count_constraints(C::ConstraintSet)
 end
 
 "$(SIGNATURES) Split a constraint set into sets of inequality and equality constraints"
-function Base.split(C::ConstraintSet)
+function Base.split(C::AbstractConstraintSet)
     E = AbstractConstraint{Equality}[]
     I = AbstractConstraint{Inequality}[]
     for c in C
@@ -210,7 +240,7 @@ function evaluate!(c::BlockVector, C::StageConstraintSet, x, u)
         con.c(c[con.label],x[con.inds[1]],u[con.inds[2]])
     end
 end
-evaluate!(c::BlockVector, C::ConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
+evaluate!(c::BlockVector, C::AbstractConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
 
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
 function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
@@ -218,7 +248,7 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
         con.c(c[con.label], x[con.inds[1]])
     end
 end
-evaluate!(c::BlockVector, C::ConstraintSet, x) = evaluate!(c,terminal(C),x)
+evaluate!(c::BlockVector, C::AbstractConstraintSet, x) = evaluate!(c,terminal(C),x)
 
 function jacobian!(Z,C::StageConstraintSet,x,u)
     for con in C
@@ -226,29 +256,29 @@ function jacobian!(Z,C::StageConstraintSet,x,u)
         con.∇c(Z[con.label], x_, u_)
     end
 end
-jacobian!(Z,C::ConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
+jacobian!(Z,C::AbstractConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
 function jacobian!(Z,C::TerminalConstraintSet,x)
     for con in C
         con.∇c(Z[con.label], x[con.inds[1]])
     end
 end
-jacobian!(Z,C::ConstraintSet,x) = jacobian!(Z,terminal(C),x)
+jacobian!(Z,C::AbstractConstraintSet,x) = jacobian!(Z,terminal(C),x)
 
-function RigidBodyDynamics.num_constraints(C::ConstraintSet)
+function RigidBodyDynamics.num_constraints(C::AbstractConstraintSet)
     if !isempty(C)
         return sum(length.(C))
     else
         return 0
     end
 end
-labels(C::ConstraintSet) = [c.label for c in C]
-terminal(C::ConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))
-stage(C::ConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
-inequalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Inequality}),C)
-equalities(C::ConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
-bounds(C::ConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
-Base.findall(C::ConstraintSet,T::Type) = isa.(C,Constraint{T})
-function PartedArrays.create_partition(C::ConstraintSet)
+labels(C::AbstractConstraintSet) = [c.label for c in C]
+terminal(C::AbstractConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))
+stage(C::AbstractConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
+inequalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Inequality}),C)
+equalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
+bounds(C::AbstractConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
+Base.findall(C::AbstractConstraintSet,T::Type) = isa.(C,Constraint{T})
+function PartedArrays.create_partition(C::AbstractConstraintSet)
     if !isempty(C)
         lens = length.(C)
         part = create_partition(Tuple(lens),Tuple(labels(C)))
@@ -264,7 +294,7 @@ function PartedArrays.create_partition(C::ConstraintSet)
         return NamedTuple{(:equality,:inequality)}((1:0,1:0))
     end
 end
-function PartedArrays.create_partition2(C::ConstraintSet,n::Int,m::Int)
+function PartedArrays.create_partition2(C::AbstractConstraintSet,n::Int,m::Int)
     if !isempty(C)
         lens = Tuple(length.(C))
         names = Tuple(labels(C))
@@ -278,10 +308,10 @@ function PartedArrays.create_partition2(C::ConstraintSet,n::Int,m::Int)
     end
 end
 
-PartedArrays.BlockVector(C::ConstraintSet) = BlockArray(zeros(num_constraints(C)), create_partition(C))
-PartedArrays.BlockVector(T::Type,C::ConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
-PartedArrays.BlockMatrix(C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
-PartedArrays.BlockMatrix(T::Type,C::ConstraintSet,n::Int,m::Int) = BlockArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
+PartedArrays.BlockVector(C::AbstractConstraintSet) = BlockArray(zeros(num_constraints(C)), create_partition(C))
+PartedArrays.BlockVector(T::Type,C::AbstractConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
+PartedArrays.BlockMatrix(C::AbstractConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
+PartedArrays.BlockMatrix(T::Type,C::AbstractConstraintSet,n::Int,m::Int) = BlockArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
 
-num_stage_constraints(C::ConstraintSet) = num_constraints(stage(C))
-num_terminal_constraints(C::ConstraintSet) = num_constraints(terminal(C))
+num_stage_constraints(C::AbstractConstraintSet) = num_constraints(stage(C))
+num_terminal_constraints(C::AbstractConstraintSet) = num_constraints(terminal(C))

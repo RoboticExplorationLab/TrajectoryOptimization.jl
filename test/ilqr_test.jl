@@ -33,17 +33,16 @@ res1 = solve(prob,ilqr)
 # plot(res1.X)
 rollout!(prob)
 @test J0 == cost(prob)
-TrajectoryOptimization.terminal(prob.constraints)
-c_term = TrajectoryOptimization.create_partition(TrajectoryOptimization.terminal(prob.constraints))
 # Constrained
 bnd = bound_constraint(n,m,u_min=0,u_max=4.5,trim=true)
 add_constraints!(prob,bnd)
 @test is_constrained(prob)
 res2 = solve(prob,ilqr)
-plot(res2.U)
+# plot(res2.U)
 @test cost(res1) == cost(res2)
 Ures = to_array(res2.U)
-@test maximum(Ures) - 4.5 == max_violation(res2)
+p = num_stage_constraints(prob)
+
 
 auglag = AugmentedLagrangianSolver(prob)
 prob_al = AugmentedLagrangianProblem(prob,auglag)
@@ -80,15 +79,22 @@ solve!(prob,auglag)
 # plot!(cumsum(auglag.stats[:iterations_inner]),auglag.stats[:c_max],seriestype=:step)
 
 altro_cost = ALTROCost(prob,cost_al,NaN,NaN)
-altro_cost.R_inf
+opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
 cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)
 
 copyto!(prob.X,[rand(prob.model.n) for k = 1:prob.N])
 altro_cost = ALTROCost(prob,cost_al,1.0,NaN)
-model_inf = add_slack_controls(prob.model)
-ui = infeasible_controls(prob)
-prob_inf = update_problem(prob,model=model_inf,U=[[prob.U[k];ui[k]] for k = 1:prob.N-1])
 
-opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
+prob_inf = infeasible_problem(prob)
 ilqr_inf = iLQRSolver(prob_inf,opts)
 cost_expansion!(ilqr_inf.Q,altro_cost,rand(prob_inf.model.n),rand(prob_inf.model.m), 1)
+
+altro_cost = ALTROCost(prob,cost_al,NaN,1.0)
+prob_min_time = minimum_time_problem(prob)
+ilqr_min_time = iLQRSolver(prob_min_time,opts)
+cost_expansion!(ilqr_min_time.Q,altro_cost,rand(prob_min_time.model.n),rand(prob_min_time.model.m), 1)
+
+altro_cost = ALTROCost(prob,cost_al,1.0,1.0)
+prob_altro = minimum_time_problem(prob_inf)
+ilqr_altro = iLQRSolver(prob_altro,opts)
+cost_expansion!(ilqr_altro.Q,altro_cost,rand(prob_altro.model.n),rand(prob_altro.model.m), 1)
