@@ -24,6 +24,11 @@ function Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol;
     Constraint{S}(c, ∇c, p, label, inds)
 end
 
+function Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol;
+        inds=[collect(1:n), collect(1:m)]) where S<:ConstraintType
+    Constraint{S}(c, ∇c, p, label, inds)
+end
+
 "$(TYPEDEF) Terminal constraint"
 struct TerminalConstraint{S} <: AbstractConstraint{S}
     c::Function
@@ -39,9 +44,15 @@ function TerminalConstraint{S}(c::Function, n::Int, p::Int, label::Symbol;
     ∇c,c_aug = generate_jacobian(c,n,p)
     TerminalConstraint{S}(c, ∇c, p, label, inds)
 end
+
 "$(TYPEDEF) Convenient constructor for terminal constraints"
 Constraint{S}(c::Function, n::Int, p::Int, label::Symbol; kwargs...) where S<:ConstraintType =
     TerminalConstraint(c ,n, p, label; kwargs...)
+
+function TerminalConstraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol;
+        inds=[collect(1:n)]) where S<:ConstraintType
+    TerminalConstraint{S}(c, ∇c, p, label, inds)
+end
 
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
@@ -53,7 +64,7 @@ Base.length(C::AbstractConstraint) = C.p
 Will default to bounds at infinity. "trim" will remove any bounds at infinity from the constraint function.
 """
 function bound_constraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
-                                         u_min=ones(m)*-Inf, u_max=ones(m)*Inf, trim::Bool=false)
+                                         u_min=ones(m)*-Inf, u_max=ones(m)*Inf, trim::Bool=true)
      # Validate bounds
      u_max, u_min = _validate_bounds(u_max,u_min,m)
      x_max, x_min = _validate_bounds(x_max,x_min,n)
@@ -131,7 +142,7 @@ end
 function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
-    terminal_jacobian(C,xN) = copyto!(Diagonal(I,n))
+    terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n))
     TerminalConstraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n)])
 end
 
@@ -159,7 +170,8 @@ end
 ########################
 #   Constraint Sets    #
 ########################
-ConstraintSet = Vector{<:AbstractConstraint{S} where S}
+ConstraintSet = Vector{AbstractConstraint{S} where S}
+AbstractConstraintSet = Vector{<:AbstractConstraint{S} where S}
 StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
 

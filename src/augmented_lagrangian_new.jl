@@ -36,7 +36,8 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver)
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T, unconstrained_solver::AbstractSolver{T}) where T
+function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T,
+        unconstrained_solver::AbstractSolver{T}) where T
     c_max = max_violation(solver)
 
     solver.stats[:iterations] += 1
@@ -66,7 +67,7 @@ function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
     end
 
     # Update active set after updating multipliers (need to calculate c_max)
-    update_active_set!(solver.active_set,solver.C,solver.λ)
+    update_active_set!(solver.active_set, solver.C, solver.λ)
 end
 
 "Penalty update (default) - update all penalty parameters"
@@ -91,8 +92,20 @@ end
 "Evaluate maximum constraint violation"
 function max_violation(solver::AugmentedLagrangianSolver)
     c_max = 0.0
-    for k = 1:length(solver.C)
-        c_max = max(norm(solver.C[k].equality,Inf),norm(solver.C[k].inequality .* solver.active_set[k].inequality,Inf), c_max)
+    C = solver.C
+    N = length(C)
+    if length(C[1]) > 0
+        for k = 1:N-1
+            c_max = max(norm(C[k].equality,Inf),
+                        pos(maximum(C[k].inequality)),
+                        c_max)
+        end
+    end
+    if length(solver.C[N]) > 0
+        c_max = max(norm(C[N].equality,Inf), c_max)
+        if length(C[N].inequality) > 0
+            c_max = max(pos(maximum(C[N].inequality)), c_max)
+        end
     end
     return c_max
 end

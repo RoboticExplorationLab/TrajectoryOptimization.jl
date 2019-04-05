@@ -73,7 +73,7 @@ function norm2(x::Vector{Real})
     return v
 end
 
-function to_array(X::Vector{Vector{Float64}})
+function to_array(X::Vector{V}) where V <: AbstractVector{T} where T
     N = length(X)
     n = length(X[1])
     Y = zeros(n,N)

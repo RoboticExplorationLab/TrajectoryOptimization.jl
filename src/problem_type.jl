@@ -9,7 +9,7 @@ struct Problem{T<:AbstractFloat}
     N::Int
     dt::T
 
-    function Problem(model::Model, cost::CostFunction, constraints::ConstraintSet,
+    function Problem(model::Model, cost::CostFunction, constraints::AbstractConstraintSet,
         x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T) where T
 
         n,m = model.n, model.m
@@ -28,7 +28,7 @@ struct Problem{T<:AbstractFloat}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T}(model,cost,constraints,x0,X,U,N,dt)
+        new{T}(model, cost, ConstraintSet(constraints), x0, X, U, N, dt)
     end
 end
 
@@ -50,7 +50,7 @@ Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
 function Problem(model::Model{Discrete}, cost::CostFunction, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, cost, constraints, x0, X0, U0, N, dt)
@@ -59,7 +59,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}
     Problem(model, cost, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
-        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N = length(U) + 1
     N, tf, dt = _validate_time(N, tf, dt)
@@ -70,7 +70,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) wh
     Problem(model, cost, to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, cost::CostFunction;
-        constraints::ConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::AbstractConstraintSet=ConstraintSet(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
@@ -79,7 +79,12 @@ function Problem(model::Model{Discrete}, cost::CostFunction;
 end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
+function initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T
+    if length(U0) != prob.N-1
+        U0 = interp_rows(prob.N-1, final_time(prob), to_array(U0))
+    end
+    copyto!(prob.U, U0)
+end
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
@@ -219,7 +224,7 @@ function update_problem(p::Problem;
 end
 
 "$(SIGNATURES) Add a constraint to the problem"
-function add_constraints!(p::Problem,c::Constraint)
+function add_constraints!(p::Problem,c::AbstractConstraint)
     push!(p.constraints,c)
 end
 
@@ -285,7 +290,7 @@ function max_violation(prob::Problem{T}) where T
         for k = 1:N-1
             evaluate!(c,stage_con,prob.X[k],prob.U[k])
             max_E = norm(c.equality,Inf)
-            max_I = maximum(pos.(c))
+            max_I = pos(maximum(c))
             c_max = max(c_max,max(max_E,max_I))
         end
         if num_terminal_constraints(prob) > 0
@@ -293,7 +298,7 @@ function max_violation(prob::Problem{T}) where T
             c = BlockVector(T,term_con)
             evaluate!(c,term_con,prob.X[N])
             max_E = norm(c.equality,Inf)
-            max_I = maximum(pos.(c))
+            max_I = pos(maximum(c))
             c_max = max(c_max,max(max_E,max_I))
         end
         return c_max

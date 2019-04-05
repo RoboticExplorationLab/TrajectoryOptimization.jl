@@ -1,63 +1,90 @@
+using Test, LinearAlgebra
+import TrajectoryOptimization: final_time, initial_controls!
+using BenchmarkTools
+using Plots
+
 # Set up models and objective
-model, obj = TrajectoryOptimization.Dynamics.pendulum
-obj_c = Dynamics.pendulum_constrained[2]
-opts = TrajectoryOptimization.SolverOptions()
-opts.cost_tolerance = 1e-5
-opts.constraint_tolerance = 1e-5
+model = Dynamics.pendulum_model
+costfun = Dynamics.pendulum_cost
+prob0 = Dynamics.pendulum_new
+ilqr = iLQRSolverOptions()
+ilqr.cost_tolerance = 1e-5
+al = AugmentedLagrangianSolverOptions{Float64}(unconstrained_solver=ilqr)
+al.constraint_tolerance = 1e-5
+
+n,m = model.n, model.m
+N = 501
+U0 = rand(m,N-1)
+tf = final_time(prob)
+xf = [π, 0]
+con = prob0.constraints
 
 ### UNCONSTRAINED ###
 # rk4
-solver = TrajectoryOptimization.Solver(model,obj,dt=0.01,opts=opts)
-U = zeros(solver.model.m, solver.N-1)
-results, = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[end]-obj.xf) < 1e-3
+prob = Problem(model, costfun, integration=:rk4, N=N, tf=tf)
+initial_controls!(prob, U0)
+solver = iLQRSolver(prob, ilqr)
+solve!(prob, solver)
+@test norm(prob.X[N] - xf) < 1e-3
+
 
 # midpoint
-solver = TrajectoryOptimization.Solver(model,obj,integration=:midpoint,dt=0.1,opts=opts)
-results, = TrajectoryOptimization.solve(solver,U)
-@test norm(results.X[end]-obj.xf) < 1e-3
+N = 51
+prob = Problem(model, costfun, integration=:midpoint, N=N, tf=tf)
+@test prob.model.info[:integration] == :midpoint
+initial_controls!(prob, U0)
+solver = iLQRSolver(prob, ilqr)
+solve!(prob, solver)
+@test norm(prob.X[N] - xf) < 1e-3
+plot(prob.X)
 
-# random control initialization
-solver.opts
-solver = TrajectoryOptimization.Solver(model,obj,dt=0.1)
-results, =TrajectoryOptimization.solve(solver) # Test random init
-@test norm(results.X[end]-obj.xf) < 1e-3
 
 ### CONSTRAINED ###
 # rk4
-solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver, U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-5
-@test max_c < 1e-5
+bnd = con[1]
+prob = Problem(model, costfun, integration=:rk4, constraints=[bnd], N=N, tf=tf)
+add_constraints!(prob, goal_constraint(xf))
+initial_controls!(prob, U0)
+solver = AugmentedLagrangianSolver(prob, al)
+# @btime solve($prob, $solver)
+solve!(prob, solver)
+@test norm(prob.X[N] - xf) < 1e-3
+@test max_violation(solver) < 1e-5
+
+# obj_c = Dynamics.pendulum_constrained[2]
+# solver = Solver(model,obj_c,dt=0.1,opts=opts)
+# results_c, = solve(solver, U0)
+# @btime solve($solver, $U0)
+# max_c = max_violation(results_c)
+# @test norm(results_c.X[end]-xf) < 1e-5
+# @test max_c < 1e-5
 
 # midpoint
-solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver, U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-5
-@test max_c < 1e-5
+bnd = con[1]
+prob = Problem(model, costfun, integration=:midpoint, constraints=[bnd], N=N, tf=tf)
+add_constraints!(prob, goal_constraint(xf))
+initial_controls!(prob, U0)
+solver = AugmentedLagrangianSolver(prob, al)
+@btime solve($prob, $solver)
+solve!(prob, solver)
+@test norm(prob.X[N] - xf) < 1e-3
+@test max_violation(solver) < 1e-5
 
-# Constrained
-solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
-results_c, = TrajectoryOptimization.solve(solver,U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-5
-@test max_c < 1e-5
+# solver = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts)
+# results_c, = TrajectoryOptimization.solve(solver, U0)
+# max_c = TrajectoryOptimization.max_violation(results_c)
+# @test norm(results_c.X[end]-xf) < 1e-5
+# @test max_c < 1e-5
+# @btime solve($solver, $U0)
 
-# Constrained - midpoint
-solver = TrajectoryOptimization.Solver(model,obj_c, integration=:midpoint, dt=0.1, opts=opts)
-results_c, = TrajectoryOptimization.solve(solver,U)
-max_c = TrajectoryOptimization.max_violation(results_c)
-@test norm(results_c.X[end]-obj.xf) < 1e-5
-@test max_c < 1e-5
 
+# TODO: Change this to new stuff
 # Infeasible Start
 solver_inf = TrajectoryOptimization.Solver(model, obj_c, dt=0.1, opts=opts)
 X_interp = TrajectoryOptimization.line_trajectory(solver_inf)
-results_inf, = TrajectoryOptimization.solve(solver_inf,X_interp,U)
+results_inf, = TrajectoryOptimization.solve(solver_inf,X_interp,U0)
 max_c = TrajectoryOptimization.max_violation(results_inf)
-@test norm(results_inf.X[end]-obj.xf) < 1e-5
+@test norm(results_inf.X[end]-xf) < 1e-5
 @test max_c < 1e-5
 
 # test linear interpolation for state trajectory
@@ -88,4 +115,4 @@ TrajectoryOptimization.rollout!(results_infeasible,solver)
 
 ### OTHER TESTS ###
 # Test undefined integration
-@test_throws ArgumentError TrajectoryOptimization.Solver(model,obj_c, integration=:bogus, dt=0.1, opts=opts)
+@test_throws ArgumentError Problem(model, costfun, integration=:bogus, N=N)
