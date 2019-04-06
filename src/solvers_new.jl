@@ -150,7 +150,7 @@ get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), le
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
     stats::Dict{Symbol,Any}
-    stats_uncon::Vector{Dict{Symbol,Any}}  # Stash of unconstraint stats
+    stats_uncon::Vector{Dict{Symbol,Any}}
 
     # Data variables
     C::PartedVecTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
@@ -338,6 +338,27 @@ end
 function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_min_time::T) where T
     n,m = get_sizes(cost.cost)
     ALTROCost(cost,R_inf,R_min_time,n,m)
+end
+
+"$(TYPEDEF) Augmented Lagrangian solver"
+struct ALTROSolver{T} <: AbstractSolver{T}
+    opts::ALTROSolverOptions{T}
+    stats::Dict{Symbol,Any}
+    stats_uncon::Vector{Dict{Symbol,Any}}
+
+    minimum_time::Bool
+    infeasible::Bool
+    projectedNewton::Bool
+end
+
+function AbstractSolver(prob::Problem{T}, opts::ALTROSolverOptions{T}) where T
+    # Init solver statistics
+    stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
+        :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
+    stats_uncon = Dict{Symbol,Any}[]
+    !isempty(prob.X) ? infeasible=true : infeasible=false
+
+    ALTROSolver{T}(opts,stats,stats_uncon,opts.minimum_time,infeasible,opts.projected_newton)
 end
 
 "ALTRO cost for X and U trajectories"

@@ -145,6 +145,13 @@ $(FIELDS)
 end
 
 @with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
+
+    "Minimum time solve"
+    minimum_time::Bool=false #TODO move this option somewhere else?
+
+    "Projected Newton solve"
+    projected_newton::Bool=false
+
     "Print summary at each iteration"
     verbose::Bool=false
 

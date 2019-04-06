@@ -1,5 +1,3 @@
-
-
 function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
     solver = AbstractSolver(prob,opts)
     solve!(prob,solver)

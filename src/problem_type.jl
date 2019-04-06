@@ -303,20 +303,49 @@ function max_violation(prob::Problem{T}) where T
 end
 
 include("infeasible_new.jl")
-function infeasible_problem(prob::Problem{T}) where T
+"Create infeasible state trajectory initialization problem from problem"
+function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
+    # modify problem with slack control
     model_inf = add_slack_controls(prob.model)
     u_slack = slack_controls(prob)
     con_inf = infeasible_constraints(prob.model.n,prob.model.m)
-    update_problem(prob,model=model_inf,
+
+    prob_altro = update_problem(prob,model=model_inf,
         constraints=[prob.constraints...,con_inf],U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+
+    # update cost
+    solver_al = AugmentedLagrangianSolver(prob_altro)
+    cost_al = AugmentedLagrangianCost(prob_altro,solver_al)
+    #TODO check if min time can come before infeasible start
+    if prob.cost isa ALTROCost
+        R_min_time = prob.cost.R_min_time
+    else
+        R_min_time = NaN
+    end
+    cost_altro = ALTROCost(prob_altro,cost_al,R_inf,R_min_time)
+
+    update_problem(prob_altro,cost=cost_altro)
 end
 
-function minimum_time_problem(prob::Problem{T},dt_max::T=1.0,dt_min::T=1.0e-3) where T
+function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
+    # modify problem with time step control
     model_min_time = add_min_time_controls(prob.model)
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
-    prob_min_time = update_problem(prob,model=model_min_time,
+    prob_altro = update_problem(prob,model=model_min_time,
         constraints=[prob.constraints...,con_min_time_eq,con_min_time_bnd],
         U=[[prob.U[k];prob.dt] for k = 1:prob.N-1],
         X=[[prob.X[k];prob.dt] for k = 1:prob.N],
-        x0=[x0;NaN])
+        x0=[x0;0.0])
+
+    # update cost
+    solver_al = AugmentedLagrangianSolver(prob_altro)
+    cost_al = AugmentedLagrangianCost(prob_altro,solver_al)
+    if prob.cost isa ALTROCost
+        R_inf = prob.cost.R_inf
+    else
+        R_inf = NaN
+    end
+    cost_altro = ALTROCost(prob_altro,cost_al,R_inf,R_min_time)
+
+    update_problem(prob_altro,cost=cost_altro)
 end
