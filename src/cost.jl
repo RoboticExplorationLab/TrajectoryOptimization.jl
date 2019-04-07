@@ -95,7 +95,7 @@ end
 #     bp.Qux[k] = cost.H
 #     return nothing
 # end
-#
+
 # function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
 #     solver.S[end] = cost.Qf
 #     solver.s[end] = cost.Qf*xN + cost.qf
@@ -107,11 +107,15 @@ gradient(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T = cost.Q*x + c
 gradient(cost::QuadraticCost, xN::Vector{T}) where T = cost.Qf*xN + cost.qf
 
 function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
+    n,m = get_sizes(cost)
+    idx = (x=1:n,u=1:m)
+    0.5*x[idx.x]'cost.Q*x[idx.x] + 0.5*u[idx.u]'*cost.R*u[idx.u] + cost.q'x[idx.x] + cost.r'u[idx.u] + cost.c
 end
 
 function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
-    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
+    n, = get_sizes(cost)
+    idx = (x=1:n,)
+    0.5*xN[idx.x]'cost.Qf*xN[idx.x] + cost.qf'*xN[idx.x] + cost.cf
 end
 
 function get_sizes(cost::QuadraticCost)

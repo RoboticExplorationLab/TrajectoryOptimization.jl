@@ -3,7 +3,6 @@ function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
     solve!(prob,solver)
 end
 
-
 function solve(prob0::Problem{T},solver::AbstractSolver{T})::Problem{T} where T
     prob = copy(prob0)
     solve!(prob,solver)

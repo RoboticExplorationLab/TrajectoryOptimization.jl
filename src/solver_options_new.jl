@@ -146,11 +146,14 @@ end
 
 @with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
 
-    "Minimum time solve"
+    "minimum time solve"
     minimum_time::Bool=false #TODO move this option somewhere else?
 
-    "Projected Newton solve"
+    "projected Newton solve"
     projected_newton::Bool=false
+
+    "augmented Lagrangian solver"
+    solver_al::AbstractSolverOptions{T} = AugmentedLagrangianSolverOptions{T}()
 
     "Print summary at each iteration"
     verbose::Bool=false
@@ -160,7 +163,7 @@ end
     constraint_tolerance_infeasible::T = 1.0e-5
 
     "regularization term for infeasible controls"
-    R_infeasible::T = 1.0
+    R_inf::T = 1.0
 
     "resolve feasible problem after infeasible solve"
     resolve_feasible::Bool = true
@@ -176,7 +179,7 @@ end
 
     # Minimum Time
     "regularization term for dt"
-    R_minimum_time::T = 1.0
+    R_min_time::T = 1.0
 
     "maximum allowable dt"
     max_dt::T = 1.0

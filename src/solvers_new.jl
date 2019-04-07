@@ -341,13 +341,12 @@ function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_
 end
 
 "$(TYPEDEF) Augmented Lagrangian solver"
-struct ALTROSolver{T} <: AbstractSolver{T}
+mutable struct ALTROSolver{T} <: AbstractSolver{T}
     opts::ALTROSolverOptions{T}
     stats::Dict{Symbol,Any}
-    stats_uncon::Vector{Dict{Symbol,Any}}
 
-    minimum_time::Bool
     infeasible::Bool
+    minimum_time::Bool
     projectedNewton::Bool
 end
 
@@ -355,10 +354,9 @@ function AbstractSolver(prob::Problem{T}, opts::ALTROSolverOptions{T}) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
         :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
-    stats_uncon = Dict{Symbol,Any}[]
-    !isempty(prob.X) ? infeasible=true : infeasible=false
+    all(x->isnan(x),prob.X[1]) ? infeasible=false : infeasible=true
 
-    ALTROSolver{T}(opts,stats,stats_uncon,opts.minimum_time,infeasible,opts.projected_newton)
+    ALTROSolver{T}(opts,stats,infeasible,opts.minimum_time,opts.projected_newton)
 end
 
 "ALTRO cost for X and U trajectories"

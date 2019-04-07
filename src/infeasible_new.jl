@@ -19,3 +19,13 @@ function slack_controls(prob::Problem{T}) where T
     end
     return u_slack
 end
+
+
+function line_trajectory_new(x0::Vector{T},xf::Vector{T},N::Int) where T
+    t = range(0,stop=N,length=N)
+    slope = (xf .- x0)./N
+    x_traj = [slope*t[k] for k = 1:N]
+    x_traj[1] = x0
+    x_traj[end] = xf
+    x_traj
+end

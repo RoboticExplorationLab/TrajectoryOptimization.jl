@@ -135,6 +135,14 @@ function to_svecs(X::AbstractArray)
     [MArray{Tuple{s...}}(X[ax...,1]) for i = 1:N]
 end
 
+function copyto!(A::Vector{T}, B::Vector{T},n::Int) where T
+	N = length(A)
+	idx = 1:n
+	for k = 1:N
+		A[k][idx] = B[k][idx]
+	end
+end
+
 function copyto!(A::Vector{T}, B::AbstractArray{Float64}) where {T<:Union{MArray,VecOrMat}}
     N = size(B)[end]
     ax = axes(B)[1:end-1]

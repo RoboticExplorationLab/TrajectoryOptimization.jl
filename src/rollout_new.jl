@@ -6,7 +6,7 @@ function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
 
     for k = 2:prob.N
         # Calculate state trajectory difference
-        δx = X̄[k-1] - X[k-1]
+        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
 
         # Calculate updated control
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
@@ -31,5 +31,13 @@ function rollout!(prob::Problem)
         for k = 1:N-1
             evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
         end
+    end
+end
+
+function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
+    if true
+        x̄ - x
+    else
+        nothing #TODO quaternion
     end
 end

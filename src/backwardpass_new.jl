@@ -32,7 +32,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     while k >= 1
         cost_expansion!(Q, cost, X[k], U[k], k)
 
-        fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
+        # fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
+        fdx, fdu = dynamics_jacobians(prob,solver,k)
 
         Q[k].x .+= fdx'*s[k+1]
         Q[k].u .+= fdu'*s[k+1]
@@ -82,4 +83,12 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     regularization_update!(solver,:decrease)
 
     return ΔV
+end
+
+function dynamics_jacobians(prob::Problem{T},solver::AbstractSolver{T},k::Int) where T
+    if !(prob.cost isa ALTROCost)
+        return solver.∇F[k].xx, solver.∇F[k].xu
+    else
+        nothing
+    end
 end
