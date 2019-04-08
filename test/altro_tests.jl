@@ -76,13 +76,47 @@ prob_al.model.∇f(Z,rand(13),rand(17),1.0)
 unconstrained_solver
 
 ilqr__ = iLQRSolver(prob,iLQRSolverOptions())
-prob.model.∇f(view(Z,1:13,1:18),rand(13),rand(4),1.0)
-
-prob_al.model
+prob.model.∇f(view(Z,1:13,1:18),rand(13),rand(13),rand(4),1.0)
 
 
+model_ = add_slack_controls(prob.model)
+Z = zeros(13,31)
+model_.∇f(Z,x,u,dt)
 
+jacobian!(Z,model_,x,u,1.0)
 
+# n = prob.model.n; m = prob.model.m
+# nm = n+m
+#
+# idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
+# idx2 = [(1:nm)...,2n+m+1]
+#
+# function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+#     model.f(x₊,x,u[idx.u],dt)
+#     x₊ .+= u[idx.inf]
+# end
+#
+# function ∇f!(Z::AbstractMatrix{T},x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+#     prob.model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],dt)
+#     view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
+# end
+#
+# view(Z,idx.x,idx2)
+# x₊ = rand(13)
+# x = rand(13)
+# u = rand(17)
+#
+# x₊[idx.x]
+# x[idx.x]
+# u[idx.u]
+# prob.model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],dt)
+# prob.model.∇f(view(Z,idx.x,idx2),rand(13),rand(13),rand(4),dt)
+#
+# view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
+# Z
+# Z = zeros(13,31)
+# ∇f!(Z,rand(13),rand(13),rand(17),1.0)
+# idx.u
 # altro_cost = ALTROCost(prob,cost_al,NaN,NaN)
 # opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
 # cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)

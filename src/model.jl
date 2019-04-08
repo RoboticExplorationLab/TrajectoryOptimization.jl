@@ -132,8 +132,8 @@ function add_slack_controls(model::Model{D}) where D<:Discrete
         x₊ .+= u[idx.inf]
     end
 
-    function ∇f!(Z::AbstractMatrix{T},x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],dt)
+    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],dt)
         view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
     end
 
@@ -153,9 +153,9 @@ function add_min_time_controls(model::Model{D}) where D<:Discrete
         x₊[n̄] = h
     end
 
-    function ∇f!(Z::AbstractMatrix{T},x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
         h = u[idx.mintime][1]
-        model.∇f(view(Z,idx.x,idx2),x₊[idx.x],x[idx.x],u[idx.u],h^2)
+        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
         Z[idx.x,n̄m̄] .*= 2*h
         Z[n̄,n̄m̄] = 1.0
     end

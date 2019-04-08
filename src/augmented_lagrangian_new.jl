@@ -8,7 +8,7 @@ function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
 
     with_logger(logger) do
         for i = 1:solver.opts.iterations
-            J = step!(prob, solver, prob_al, unconstrained_solver)
+            J = step!(prob_al, solver, unconstrained_solver)
 
             record_iteration!(prob, solver, J, unconstrained_solver)
             println(logger,OuterLoop)
@@ -19,10 +19,10 @@ end
 
 "Augmented Lagrangian step"
 function step!(prob::Problem, solver::AugmentedLagrangianSolver,
-        prob_al::Problem,unconstrained_solver::AbstractSolver)
+        unconstrained_solver::AbstractSolver)
 
     # Solve the unconstrained problem
-    J = solve!(prob_al, unconstrained_solver)
+    J = solve!(prob, unconstrained_solver)
 
     # Outer loop update
     dual_update!(prob, solver)
