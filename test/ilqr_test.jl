@@ -43,7 +43,6 @@ res2 = solve(prob,ilqr)
 Ures = to_array(res2.U)
 p = num_stage_constraints(prob)
 
-
 auglag = AugmentedLagrangianSolver(prob)
 prob_al = AugmentedLagrangianProblem(prob,auglag)
 cost_al = AugmentedLagrangianCost(prob,auglag)
@@ -77,33 +76,33 @@ solve!(prob,auglag)
 # plot(stats_con["c_max"],yscale=:log10)
 # plot!(cumsum(auglag.stats[:iterations_inner]),auglag.stats[:c_max],seriestype=:step)
 
-# No infeasible or minimum time
-altro_cost = ALTROCost(prob,cost_al,NaN,NaN)
-opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
-cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)
-auglag = AugmentedLagrangianSolver(prob)
-prob_al = AugmentedLagrangianProblem(prob,auglag)
-cost_al = AugmentedLagrangianCost(prob,auglag)
-cost_altro1 = ALTROCost(prob,cost_al,NaN,NaN)
-cost(cost_altro1,prob.X,prob.U,prob.dt)
-
-# Infeasible
-copyto!(prob.X,[rand(prob.model.n) for k = 1:prob.N])
-prob_inf = infeasible_problem(prob)
-
-ilqr_inf = iLQRSolver(prob_inf,opts)
-
-cost_expansion!(ilqr_inf.Q,prob_inf.cost,rand(prob_inf.model.n),rand(prob_inf.model.m), 1)
-cost(prob_inf.cost,prob_inf.X,prob_inf.U,prob_inf.dt)
-
-# Minimum time
-prob_min_time = minimum_time_problem(prob)
-ilqr_min_time = iLQRSolver(prob_min_time,opts)
-cost_expansion!(ilqr_min_time.Q,prob_min_time.cost,rand(prob_min_time.model.n),rand(prob_min_time.model.m), 1)
-cost(prob_min_time.cost,prob_min_time.X,prob_min_time.U,prob_min_time.dt)
-
-# Infeasible and Minimum Time
-prob_altro = minimum_time_problem(prob_inf)
-ilqr_altro = iLQRSolver(prob_altro,opts)
-cost_expansion!(ilqr_altro.Q,prob_altro.cost,rand(prob_altro.model.n),rand(prob_altro.model.m), 1)
-cost(prob_altro.cost,prob_altro.X,prob_altro.U,prob_altro.dt)
+# # No infeasible or minimum time
+# altro_cost = ALTROCost(prob,cost_al,NaN,NaN)
+# opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
+# cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)
+# auglag = AugmentedLagrangianSolver(prob)
+# prob_al = AugmentedLagrangianProblem(prob,auglag)
+# cost_al = AugmentedLagrangianCost(prob,auglag)
+# cost_altro1 = ALTROCost(prob,cost_al,NaN,NaN)
+# cost(cost_altro1,prob.X,prob.U,prob.dt)
+#
+# # Infeasible
+# copyto!(prob.X,[rand(prob.model.n) for k = 1:prob.N])
+# prob_inf = infeasible_problem(prob)
+#
+# ilqr_inf = iLQRSolver(prob_inf,opts)
+#
+# cost_expansion!(ilqr_inf.Q,prob_inf.cost,rand(prob_inf.model.n),rand(prob_inf.model.m), 1)
+# cost(prob_inf.cost,prob_inf.X,prob_inf.U,prob_inf.dt)
+#
+# # Minimum time
+# prob_min_time = minimum_time_problem(prob)
+# ilqr_min_time = iLQRSolver(prob_min_time,opts)
+# cost_expansion!(ilqr_min_time.Q,prob_min_time.cost,rand(prob_min_time.model.n),rand(prob_min_time.model.m), 1)
+# cost(prob_min_time.cost,prob_min_time.X,prob_min_time.U,prob_min_time.dt)
+#
+# # Infeasible and Minimum Time
+# prob_altro = minimum_time_problem(prob_inf)
+# ilqr_altro = iLQRSolver(prob_altro,opts)
+# cost_expansion!(ilqr_altro.Q,prob_altro.cost,rand(prob_altro.model.n),rand(prob_altro.model.m), 1)
+# cost(prob_altro.cost,prob_altro.X,prob_altro.U,prob_altro.dt)

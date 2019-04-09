@@ -3,6 +3,7 @@ function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
     reset!(solver)
 
     unconstrained_solver = AbstractSolver(prob, solver.opts.unconstrained_solver)
+
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
 
@@ -79,15 +80,9 @@ function penalty_update!(prob::Problem, solver::AugmentedLagrangianSolver)
 end
 
 "Generate augmented Lagrangian cost from unconstrained cost"
-function AugmentedLagrangianCost(prob::Problem{T},solver::AugmentedLagrangianSolver{T}) where T
-    if prob.cost isa ALTROCost
-        cost = prob.cost.cost.cost
-    elseif prob.cost isa AugmentedLagrangianCost
-        cost = prob.cost.cost
-    else
-        cost = prob.cost
-    end
-    AugmentedLagrangianCost{T}(cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
+function AugmentedLagrangianCost(prob::Problem{T},
+        solver::AugmentedLagrangianSolver{T}) where T
+    AugmentedLagrangianCost{MM,T}(prob.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
 end
 
 "Generate augmented Lagrangian problem from constrained problem"

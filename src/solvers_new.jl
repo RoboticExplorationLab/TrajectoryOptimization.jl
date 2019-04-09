@@ -250,13 +250,14 @@ end
 
 function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
     n, = get_sizes(cost)
-    solver.S[end] .= cost.Qf
-    solver.s[end] .= cost.Qf*xN[1:n] + cost.qf
+    idx = 1:n
+    solver.S[end][idx,idx] .= cost.Qf
+    solver.s[end][idx] .= cost.Qf*xN[idx] + cost.qf
     return nothing
 end
 
-function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T},
-        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
+function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{S,T},
+        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where {S,T}
     n,m = get_sizes(cost.cost)
 
     cost_expansion!(e,cost.cost, x, u, k)
@@ -283,7 +284,7 @@ function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{T}
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost{S,T},x::AbstractVector{T}) where {S,T}
     cost_expansion!(solver,cost.cost,x)
     N = length(cost.μ)
 
@@ -335,7 +336,7 @@ struct ALTROCost{T} <: CostFunction
     m::Int # input dimension of original problem
 end
 
-function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{T},R_inf::T,R_min_time::T) where T
+function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{S,T},R_inf::T,R_min_time::T) where {S,T}
     n,m = get_sizes(cost.cost)
     ALTROCost(cost,R_inf,R_min_time,n,m)
 end

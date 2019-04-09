@@ -108,14 +108,12 @@ gradient(cost::QuadraticCost, xN::Vector{T}) where T = cost.Qf*xN + cost.qf
 
 function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     n,m = get_sizes(cost)
-    idx = (x=1:n,u=1:m)
-    0.5*x[idx.x]'cost.Q*x[idx.x] + 0.5*u[idx.u]'*cost.R*u[idx.u] + cost.q'x[idx.x] + cost.r'u[idx.u] + cost.c
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
 
 function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
     n, = get_sizes(cost)
-    idx = (x=1:n,)
-    0.5*xN[idx.x]'cost.Qf*xN[idx.x] + cost.qf'*xN[idx.x] + cost.cf
+    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 
 function get_sizes(cost::QuadraticCost)
@@ -137,7 +135,6 @@ struct GenericCost <: CostFunction
     expansion::Function     # 2nd order Taylor Series Expansion of the form,  Q,R,H,q,r = expansion(x,u)
     n::Int                  #                                                     Qf,qf = expansion(xN)
     m::Int
-
 end
 
 """
@@ -251,7 +248,14 @@ Cost function of the form
 Internally stores trajectories for the Lagrange multipliers.
 $(FIELDS)
 """
-struct AugmentedLagrangianCost{T} <: CostFunction
+
+abstract type AugmentedLagrangianType end
+abstract type MM <: AugmentedLagrangianType end # Method of Multipliers
+abstract type ADMM <: AugmentedLagrangianType end # Alternating Direction Method of Multipliers
+abstract type ℓ₁ <: ADMM end # ℓ₁-norm
+abstract type ALTRO <: AugmentedLagrangianType end # ALTRO Method of Multipliers
+
+struct AugmentedLagrangianCost{S,T} <: CostFunction
     cost::C where C<:CostFunction
     constraints::AbstractConstraintSet
     C::PartedVecTrajectory{T}  # Constraint values
@@ -265,12 +269,12 @@ end
 Create an AugmentedLagrangianCost from another cost function and a set of constraints
     for a problem with N knot points. Allocates new memory for the internal arrays.
 """
-function AugmentedLagrangianCost{T}(cost::CostFunction,constraints::AbstractConstraintSet,N::Int;
-        μ_init::T=1.,λ_init::T=0.) where T
+function AugmentedLagrangianCost(cost::CostFunction,constraints::AbstractConstraintSet,N::Int;
+        S::AugmentedLagrangianType=MM,μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianCost(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianCost{S,T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
 """$(TYPEDSIGNATURES)
@@ -279,12 +283,12 @@ Create an AugmentedLagrangianCost from another cost function and a set of constr
     Allocates new memory for the internal arrays.
 """
 function AugmentedLagrangianCost(cost::CostFunction,constraints::AbstractConstraintSet,
-        λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
+        λ::PartedVecTrajectory{T}; S::AugmentedLagrangianType=MM,μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)
     N = length(λ)
     C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianCost(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianCost{S,T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
 "Update constraints trajectories"
@@ -325,7 +329,7 @@ function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVect
     λ'c + 1/2*c'Diagonal(a .* μ)*c
 end
 
-function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
+function stage_constraint_cost(alcost::AugmentedLagrangianCost{S,T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where {S,T}
     c = alcost.C[k]
     λ = alcost.λ[k]
     μ = alcost.μ[k]
@@ -333,7 +337,7 @@ function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVec
     aula_cost(a,c,λ,μ)
 end
 
-function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+function stage_constraint_cost(alcost::AugmentedLagrangianCost{S,T},x::AbstractVector{T}) where {S,T}
     c = alcost.C[end]
     λ = alcost.λ[end]
     μ = alcost.μ[end]
@@ -341,19 +345,18 @@ function stage_constraint_cost(alcost::AugmentedLagrangianCost{T},x::AbstractVec
     aula_cost(a,c,λ,μ)
 end
 
-#TODO these stage costs need to be multiplied by dt
-function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
+function stage_cost(alcost::AugmentedLagrangianCost{S,T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where {S,T}
     J0 = stage_cost(alcost.cost,x,u,k)
     J0 + stage_constraint_cost(alcost,x,u,k)
 end
 
-function stage_cost(alcost::AugmentedLagrangianCost{T}, x::AbstractVector{T}) where T
+function stage_cost(alcost::AugmentedLagrangianCost{S,T}, x::AbstractVector{T}) where {S,T}
     J0 = stage_cost(alcost.cost,x)
     J0 + stage_constraint_cost(alcost,x)
 end
 
 "Augmented Lagrangian cost for X and U trajectories"
-function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
+function cost(alcost::AugmentedLagrangianCost{S,T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where {S,T <: AbstractFloat}
     N = length(X)
     J = cost(alcost.cost,X,U,dt)
     update_constraints!(alcost.C, alcost.constraints, X, U)
@@ -367,8 +370,8 @@ function cost(alcost::AugmentedLagrangianCost{T},X::VectorTrajectory{T},U::Vecto
 end
 
 "Second-order expansion of augmented Lagrangian cost"
-function cost_expansion(alcost::AugmentedLagrangianCost{T},
-        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
+function cost_expansion(alcost::AugmentedLagrangianCost{S,T},
+        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where {S,T}
     Q,R,H,q,r = cost_expansion(alcost.cost,x,u,k)
 
     c = alcost.C[k]
@@ -394,7 +397,7 @@ function cost_expansion(alcost::AugmentedLagrangianCost{T},
     return Q,R,H,q,r
 end
 
-function cost_expansion(alcost::AugmentedLagrangianCost{T},x::AbstractVector{T}) where T
+function cost_expansion(alcost::AugmentedLagrangianCost{S,T},x::AbstractVector{T}) where {S,T}
     Qf,qf = cost_expansion(alcost.cost,x)
     N = length(alcost.μ)
 

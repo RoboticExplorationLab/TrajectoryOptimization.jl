@@ -61,7 +61,7 @@ Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}
 function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
         constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
-    N = length(U) + 1
+    N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     Problem(model, cost, constraints, x0, X0, U0, N, dt)
@@ -306,46 +306,35 @@ include("infeasible_new.jl")
 "Create infeasible state trajectory initialization problem from problem"
 function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
     # modify problem with slack control
+    cost_inf = copy(prob.cost)
+    cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n),dims=(1,2))
+    cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
+    cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
+
     model_inf = add_slack_controls(prob.model)
     u_slack = slack_controls(prob)
     con_inf = infeasible_constraints(prob.model.n,prob.model.m)
 
-    prob_altro = update_problem(prob,model=model_inf,
+    update_problem(prob,model=model_inf,cost=cost_inf,
         constraints=[prob.constraints...,con_inf],U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
-
-    # update cost
-    solver_al = AugmentedLagrangianSolver(prob_altro)
-    cost_al = AugmentedLagrangianCost(prob_altro,solver_al)
-    #TODO check if min time can come before infeasible start
-    if prob.cost isa ALTROCost
-        R_min_time = prob.cost.R_min_time
-    else
-        R_min_time = NaN
-    end
-    cost_altro = ALTROCost(prob_altro,cost_al,R_inf,R_min_time)
-
-    update_problem(prob_altro,cost=cost_altro)
 end
 
 function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
     # modify problem with time step control
+    cost_min_time = copy(prob.cost)
+    cost_min_time.Q = cat(cost_min_time.Q,0,dims=(1,2))
+    cost_min_time.q = [cost_min_time.q; 0]
+    cost_min_time.R = cat(cost_min_time.R,0,dims=(1,2))
+    cost_min_time.r = [cost_min_time.r; R_min_time]
+    cost_min_time.H = [cost_min_time.H zeros(prob.model.m,1); zeros(1,prob.model.n+1)]
+    cost_min_time.Qf = cat(cost_min_time.Qf,0,dims=(1,2))
+    cost_min_time.qf = [cost_min_time.qf; 0]
+
     model_min_time = add_min_time_controls(prob.model)
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
-    prob_altro = update_problem(prob,model=model_min_time,
+    update_problem(prob,model=model_min_time,cost=cost_min_time,
         constraints=[prob.constraints...,con_min_time_eq,con_min_time_bnd],
         U=[[prob.U[k];prob.dt] for k = 1:prob.N-1],
         X=[[prob.X[k];prob.dt] for k = 1:prob.N],
         x0=[x0;0.0])
-
-    # update cost
-    solver_al = AugmentedLagrangianSolver(prob_altro)
-    cost_al = AugmentedLagrangianCost(prob_altro,solver_al)
-    if prob.cost isa ALTROCost
-        R_inf = prob.cost.R_inf
-    else
-        R_inf = NaN
-    end
-    cost_altro = ALTROCost(prob_altro,cost_al,R_inf,R_min_time)
-
-    update_problem(prob_altro,cost=cost_altro)
 end
