@@ -98,8 +98,8 @@ $(FIELDS)
     "Print summary at each iteration"
     verbose::Bool=false
 
-    "unconstrained minimization solver"
-    unconstrained_solver::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
+    "unconstrained solver options"
+    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
     "max(constraint) < ϵ, constraint convergence criteria"
     constraint_tolerance::T = 1.0e-3
@@ -146,19 +146,12 @@ end
 
 @with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
 
-    "minimum time solve"
-    minimum_time::Bool=false #TODO move this option somewhere else?
-
-    "projected Newton solve"
-    projected_newton::Bool=false
-
-    "augmented Lagrangian solver"
-    solver_al::AbstractSolverOptions{T} = AugmentedLagrangianSolverOptions{T}()
-
-    "Print summary at each iteration"
     verbose::Bool=false
 
-    ## Infeasible Start
+    "Augmented Lagrangian solver options"
+    opts_con::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
+
+    # Infeasible Start
     "infeasible control constraint tolerance"
     constraint_tolerance_infeasible::T = 1.0e-5
 
@@ -176,32 +169,4 @@ end
 
     "penalty update rate for infeasible controls"
     penalty_scaling_infeasible::T = 10.0
-
-    # Minimum Time
-    "regularization term for dt"
-    R_min_time::T = 1.0
-
-    "maximum allowable dt"
-    max_dt::T = 1.0
-
-    "minimum allowable dt"
-    min_dt::T = 1.0e-3
-
-    "initial guess for the length of the minimum time problem (in seconds)"
-    minimum_time_tf_estimate::T = 0.0
-
-    "initial guess for dt of the minimum time problem (in seconds)"
-    minimum_time_dt_estimate::T = 0.0
-
-    "initial penalty term for minimum time bounds constraints"
-    penalty_initial_minimum_time_inequality::T = 1.0
-
-    "initial penalty term for minimum time equality constraints"
-    penalty_initial_minimum_time_equality::T = 1.0
-
-    "penalty update rate for minimum time bounds constraints"
-    penalty_scaling_minimum_time_inequality::T = 1.0
-
-    "penalty update rate for minimum time equality constraints"
-    penalty_scaling_minimum_time_equality::T = 1.0
 end

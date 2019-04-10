@@ -254,7 +254,7 @@ Qf = Diagonal(10.0I,n)
 xf = rand(n)
 quadcost = LQRCost(Q,R,Qf,xf)
 
-alcost = AugmentedLagrangianCost(quadcost,C2,cval,∇cval,λ,μ,a)
+alcost = ALCost(quadcost,C2,cval,∇cval,λ,μ,a)
 stage_cost(alcost,X[1],U[1],1)
 
 

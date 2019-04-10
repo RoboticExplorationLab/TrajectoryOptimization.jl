@@ -39,7 +39,7 @@ export
     QuadraticCost,
     LQRCost,
     GenericCost,
-    AugmentedLagrangianCost,
+    ALCost,
     ConstrainedVectorResults,
     UnconstrainedVectorResults,
     SolverOptions,

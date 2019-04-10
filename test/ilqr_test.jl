@@ -16,7 +16,7 @@ obj_c = ConstrainedObjective(obj,u_min=0,u_max=4.5)
 solver = Solver(model,obj_c,N=N)
 res_con,stats_con = solve(solver,U0)
 
-import TrajectoryOptimization: empty_state,num_stage_constraints,num_terminal_constraints, AugmentedLagrangianProblem, AugmentedLagrangianCost
+import TrajectoryOptimization: empty_state,num_stage_constraints,num_terminal_constraints, AugmentedLagrangianProblem, ALCost
 import TrajectoryOptimization: bound_constraint, is_constrained, step!, update_constraints!, dual_update!, penalty_update!
 import TrajectoryOptimization: OuterLoop, update_active_set!
 costfun = obj.cost
@@ -45,7 +45,7 @@ p = num_stage_constraints(prob)
 
 auglag = AugmentedLagrangianSolver(prob)
 prob_al = AugmentedLagrangianProblem(prob,auglag)
-cost_al = AugmentedLagrangianCost(prob,auglag)
+cost_al = ALCost(prob,auglag)
 cost_al.C[1]
 auglag.μ[1][5] = 4.25
 @test cost_al.μ[1][5] == 4.25
@@ -53,7 +53,6 @@ auglag.μ[1][5] = 4.25
 @test prob_al.cost.μ[1][5] == 4.25
 @test !is_constrained(prob_al)
 auglag.μ[1][5] = 1
-
 rollout!(prob_al)
 cost_al.C[1]
 cost(cost_al,prob.X,prob.U,prob.dt) - J0
@@ -63,13 +62,15 @@ update_constraints!(prob_al.cost.C,prob_al.cost.constraints,prob_al.X,prob_al.U)
 
 prob = Problem(model_d,costfun,U,dt=dt,x0=x0)
 add_constraints!(prob,bnd)
-
-opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=true,unconstrained_solver=opts)
+opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=true,opts_uncon=opts)
 auglag = AugmentedLagrangianSolver(prob,opts_al)
 res3 = solve(prob,auglag)
 solve!(prob,auglag)
 
 @test max_violation(res3) == max_violation(auglag)
+
+
+solve!(prob,ALTROSolverOptions{Float64}())
 # plot(res3.U)
 # @btime solve($prob,$auglag)
 # @btime solve($solver,$U0)
@@ -82,7 +83,7 @@ solve!(prob,auglag)
 # cost_expansion!(ilqr.Q,altro_cost,rand(prob.model.n),rand(prob.model.m), 1)
 # auglag = AugmentedLagrangianSolver(prob)
 # prob_al = AugmentedLagrangianProblem(prob,auglag)
-# cost_al = AugmentedLagrangianCost(prob,auglag)
+# cost_al = ALCost(prob,auglag)
 # cost_altro1 = ALTROCost(prob,cost_al,NaN,NaN)
 # cost(cost_altro1,prob.X,prob.U,prob.dt)
 #

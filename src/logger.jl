@@ -18,13 +18,13 @@ function default_logger(verbose::Bool)
 end
 default_logger(solver::Union{Solver,AbstractSolver}) = default_logger(solver.opts.verbose)
 
-function default_logger(solver::AugmentedLagrangianSolver)
+function default_logger(solver::AugmentedLagrangianSolver{T}) where T
     solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop
 
     logger = SolverLogger(min_level)
     outer_cols = [:iter, :total, :c_max, :info]
     outer_widths = [6,          7,        12,        50]
-    if solver.opts.unconstrained_solver.verbose
+    if solver.opts.opts_uncon.verbose
         freq = 1
     else
         freq = 5

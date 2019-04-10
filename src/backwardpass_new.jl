@@ -85,7 +85,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     return ΔV
 end
 
-function dynamics_jacobians(prob::Problem{T},solver::AbstractSolver{T},k::Int) where T
+function dynamics_jacobians(prob::Problem{T},solver::AbstractSolver,k::Int) where T
     # if !(prob.cost isa ALTROCost)
     #     return solver.∇F[k].xx, solver.∇F[k].xu
     # else

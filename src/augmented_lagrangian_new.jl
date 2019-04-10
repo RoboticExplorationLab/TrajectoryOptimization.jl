@@ -1,8 +1,8 @@
 "Augmented Lagrangian solve"
-function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
+function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
     reset!(solver)
 
-    unconstrained_solver = AbstractSolver(prob, solver.opts.unconstrained_solver)
+    unconstrained_solver = AbstractSolver(prob, solver.opts.opts_uncon)
 
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
@@ -19,8 +19,8 @@ function solve!(prob::Problem, solver::AugmentedLagrangianSolver)
 end
 
 "Augmented Lagrangian step"
-function step!(prob::Problem, solver::AugmentedLagrangianSolver,
-        unconstrained_solver::AbstractSolver)
+function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
+        unconstrained_solver::AbstractSolver) where T
 
     # Solve the unconstrained problem
     J = solve!(prob, unconstrained_solver)
@@ -33,12 +33,12 @@ function step!(prob::Problem, solver::AugmentedLagrangianSolver,
     return J
 end
 
-function evaluate_convergence(solver::AugmentedLagrangianSolver)
+function evaluate_convergence(solver::AugmentedLagrangianSolver{T}) where T
     solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
 end
 
 function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T,
-        unconstrained_solver::AbstractSolver{T}) where T
+        unconstrained_solver::AbstractSolver) where T
     c_max = max_violation(solver)
 
     solver.stats[:iterations] += 1
@@ -58,7 +58,7 @@ end
 saturate(input::AbstractVector{T}, max_value::T, min_value::T) where T = max.(min_value, min.(max_value, input))
 
 "Dual update (first-order)"
-function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
+function dual_update!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
     c = solver.C; λ = solver.λ; μ = solver.μ
 
     for k = 1:prob.N
@@ -72,7 +72,7 @@ function dual_update!(prob::Problem, solver::AugmentedLagrangianSolver)
 end
 
 "Penalty update (default) - update all penalty parameters"
-function penalty_update!(prob::Problem, solver::AugmentedLagrangianSolver)
+function penalty_update!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
     μ = solver.μ
     for k = 1:prob.N
         copyto!(μ[k], saturate(solver.opts.penalty_scaling * μ[k], solver.opts.penalty_max, 0.0))
@@ -80,19 +80,19 @@ function penalty_update!(prob::Problem, solver::AugmentedLagrangianSolver)
 end
 
 "Generate augmented Lagrangian cost from unconstrained cost"
-function AugmentedLagrangianCost(prob::Problem{T},
+function ALCost(prob::Problem{T},
         solver::AugmentedLagrangianSolver{T}) where T
-    AugmentedLagrangianCost{MM,T}(prob.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
+    ALCost{T}(prob.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
 end
 
 "Generate augmented Lagrangian problem from constrained problem"
 function AugmentedLagrangianProblem(prob::Problem{T},solver::AugmentedLagrangianSolver{T}) where T
-    al_cost = AugmentedLagrangianCost(prob,solver)
+    al_cost = ALCost(prob,solver)
     al_prob = update_problem(prob,cost=al_cost,constraints=AbstractConstraint[],newProb=false)
 end
 
 "Evaluate maximum constraint violation"
-function max_violation(solver::AugmentedLagrangianSolver)
+function max_violation(solver::AugmentedLagrangianSolver{T}) where T
     c_max = 0.0
     C = solver.C
     N = length(C)

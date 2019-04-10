@@ -71,7 +71,7 @@ function reset!(bp::BackwardPassNew)
     end
 end
 
-abstract type AbstractSolver{T<:AbstractFloat} end
+abstract type AbstractSolver{T} end
 
 "$(TYPEDEF) Iterative LQR results"
 struct iLQRSolver{T} <: AbstractSolver{T}
@@ -233,34 +233,30 @@ function copy(r::AugmentedLagrangianSolver{T}) where T
     AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.active_set))
 end
 
-get_sizes(solver::AugmentedLagrangianSolver) = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
+get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
 
 "Second-order Taylor expansion of cost function at time step k"
-function cost_expansion!(e::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-    n,m = get_sizes(cost)
-    idx = (x=1:n, u=1:m)
-    e[k].x[idx.x] .= cost.Q*x[idx.x] + cost.q
-    e[k].u[idx.u] .= cost.R*u[idx.u]
-    e[k].xx[idx.x,idx.x] .= cost.Q
-    e[k].uu[idx.u,idx.u] .= cost.R
-    e[k].ux[idx.u,idx.x] .= cost.H
+function cost_expansion!(Q::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T},
+        u::Vector{T}, k::Int) where T
+    Q[k].x .= cost.Q*x + cost.q
+    Q[k].u .= cost.R*u
+    Q[k].xx .= cost.Q
+    Q[k].uu .= cost.R
+    Q[k].ux .= cost.H
     return nothing
 end
 
 function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
-    n, = get_sizes(cost)
-    idx = 1:n
-    solver.S[end][idx,idx] .= cost.Qf
-    solver.s[end][idx] .= cost.Qf*xN[idx] + cost.qf
+    solver.S[end] .= cost.Qf
+    solver.s[end] .= cost.Qf*xN + cost.qf
     return nothing
 end
 
-function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{S,T},
-        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where {S,T}
-    n,m = get_sizes(cost.cost)
+function cost_expansion!(Q::ExpansionTrajectory,cost::ALCost{T},
+        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
 
-    cost_expansion!(e,cost.cost, x, u, k)
+    cost_expansion!(Q, cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
     μ = cost.μ[k]
@@ -272,19 +268,20 @@ function cost_expansion!(e::ExpansionTrajectory,cost::AugmentedLagrangianCost{S,
     cu = ∇c.u
 
     # Second Order pieces
-    e[k].xx .+= cx'Iμ*cx
-    e[k].uu .+= cu'Iμ*cu
-    e[k].ux .+= cu'Iμ*cx
+    Q[k].xx .+= cx'Iμ*cx
+    Q[k].uu .+= cu'Iμ*cu
+    Q[k].ux .+= cu'Iμ*cx
 
     # First order pieces
     g = (Iμ*c + λ)
-    e[k].x .+= cx'g
-    e[k].u .+= cu'g
+    Q[k].x .+= cx'g
+    Q[k].u .+= cu'g
 
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost{S,T},x::AbstractVector{T}) where {S,T}
+function cost_expansion!(solver::iLQRSolver,cost::ALCost{T},x::AbstractVector{T}) where T
+
     cost_expansion!(solver,cost.cost,x)
     N = length(cost.μ)
 
@@ -306,17 +303,16 @@ function cost_expansion!(solver::iLQRSolver,cost::AugmentedLagrangianCost{S,T},x
     return nothing
 end
 
-#TODO change generic cost expansiont to perform in-place
-function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-    n,m = get_sizes(cost)
-    idx = (x=1:n, u=1:m)
+function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T},
+        u::Vector{T}, k::Int) where T
 
     Q,R,H,q,r = cost.expansion(x,u)
-    e[k].x[idx.x] .= Q
-    e[k].u[idx.u] .= R
-    e[k].xx[idx.x,idx.x] .= cost.Q
-    e[k].uu[idx.u,idx.u] .= cost.R
-    e[k].ux[idx.u,idx.x] .= cost.H
+
+    e[k].x .= q
+    e[k].u .= r
+    e[k].xx .= Q
+    e[k].uu .= R
+    e[k].ux .= H
     return nothing
 end
 
@@ -327,122 +323,174 @@ function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) wh
     return nothing
 end
 
-"$(TYPEDEF) ALTRO cost, potentially including infeasible start and minimum time costs"
-struct ALTROCost{T} <: CostFunction
-    cost::AugmentedLagrangianCost
-    R_inf::T
-    R_min_time::T
-    n::Int # state dimension of original problem
-    m::Int # input dimension of original problem
-end
-
-function ALTROCost(prob::Problem{T},cost::AugmentedLagrangianCost{S,T},R_inf::T,R_min_time::T) where {S,T}
-    n,m = get_sizes(cost.cost)
-    ALTROCost(cost,R_inf,R_min_time,n,m)
-end
-
-"$(TYPEDEF) Augmented Lagrangian solver"
-mutable struct ALTROSolver{T} <: AbstractSolver{T}
+"$(TYPEDEF) ALTRO solver"
+struct ALTROSolver{T} <: AbstractSolver{T}
     opts::ALTROSolverOptions{T}
-    stats::Dict{Symbol,Any}
-
-    infeasible::Bool
-    minimum_time::Bool
-    projectedNewton::Bool
+    solver_al::AugmentedLagrangianSolver{T}
 end
 
-function AbstractSolver(prob::Problem{T}, opts::ALTROSolverOptions{T}) where T
-    # Init solver statistics
-    stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
-        :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
-    all(x->isnan(x),prob.X[1]) ? infeasible=false : infeasible=true
-
-    ALTROSolver{T}(opts,stats,infeasible,opts.minimum_time,opts.projected_newton)
+function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
+    solver_al = AbstractSolver(prob,opts.opts_con)
+    ALTROSolver{T}(opts,solver_al)
 end
 
-"ALTRO cost for X and U trajectories"
-function cost(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
-    N = length(X)
-    n = cost.n; m = cost.m
-    idx = (x=1:n, u=1:m)
-    R_min_time = cost.R_min_time
-    R_inf = cost.R_inf
 
-    update_constraints!(cost,X,U)
-    update_active_set!(cost)
+# # ALTRO
+# struct ALTROCost{T} <: ALCost{T}
+#     cost::C where C<:CostFunction
+#     constraints::AbstractConstraintSet
+#     C::PartedVecTrajectory{T}  # Constraint values
+#     ∇C::PartedMatTrajectory{T} # Constraint jacobians
+#     λ::PartedVecTrajectory{T}  # Lagrange multipliers
+#     μ::PartedVecTrajectory{T}  # Penalty Term
+#     active_set::PartedVecTrajectory{Bool}  # Active set
+#     R_inf::T
+#     R_min_time::T
+#     n::Int # original problem state dimension
+#     m::Int # original problem control dimension
+# end
+#
+# """$(TYPEDSIGNATURES)
+# Create an ALTROCost from another cost function and a set of constraints
+#     for a problem with N knot points. Allocates new memory for the internal arrays.
+# """
+# function ALTROCost(cost::CostFunction,constraints::AbstractConstraintSet,n::Int,m::Int,N::Int;
+#         μ_init::T=1.,λ_init::T=0.,R_inf::T=1.0,R_min_time::T=1.0) where T
+#     # Get sizes
+#     n̄,m̄ = get_sizes(cost)
+#     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n̄,m̄,N,μ_init=μ_init,λ_init=λ_init)
+#     ALCost{T}(cost,constraint,C,∇C,λ,μ,active_set,R_inf,R_min_time,n,m)
+# end
+#
+# "Generate augmented Lagrangian cost from unconstrained cost"
+# function ALTROCost(prob::Problem{T},
+#         solver::ALTROSolver{T},R_inf::T,R_min_time::T,n::Int,m::Int) where T
+#     ALTROCost{T}(prob.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set,R_inf,R_min_time,n,m)
+# end
+#
+# ALTROSolver(prob::Problem{T},
+#     opts::AugmentedLagrangianSolverOptions{T},
+#     opts_altro::ALTROSolverOptions{T}) where T =
+#     AbstractSolver(prob,opts,opts_altro)
 
-    J = 0.0
+# function AbstractSolver(prob::Problem{T},opts_altro::ALTROSolverOptions{T},
+#      opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T
+#     # Init solver statistics
+#     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
+#         :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
+#     stats_uncon = Dict{Symbol,Any}[]
+#
+#     # Init solver results
+#     n = prob.model.n; m = prob.model.m; N = prob.N
+#     p = num_stage_constraints(prob)
+#
+#     C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
+#
+#     ALTROSolver{T}(opts,opts_altro,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set,false,false,false)
+# end
 
-    for k = 1:N-1
-        # Minimum time stage cost
-        if !isnan(R_min_time)
-            dt = U[k][end]^2
-            J += cost.R_min_time*dt
-        end
+# "$(TYPEDEF) Augmented Lagrangian solver"
+# mutable struct ALTROSolver{T} <: AbstractSolver{T}
+#     opts::ALTROSolverOptions{T}
+#     stats::Dict{Symbol,Any}
+#
+#     infeasible::Bool
+#     minimum_time::Bool
+#     projectedNewton::Bool
+# end
+#
+# function AbstractSolver(prob::Problem{T}, opts::ALTROSolverOptions{T}) where T
+#     # Init solver statistics
+#     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
+#         :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
+#     all(x->isnan(x),prob.X[1]) ? infeasible=false : infeasible=true
+#
+#     ALTROSolver{T}(opts,stats,infeasible,opts.minimum_time,opts.projected_newton)
+# end
+#
+# "ALTRO cost for X and U trajectories"
+# function cost(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
+#     N = length(X)
+#     n = cost.n; m = cost.m
+#     idx = (x=1:n, u=1:m)
+#     R_min_time = cost.R_min_time
+#     R_inf = cost.R_inf
+#
+#     update_constraints!(cost,X,U)
+#     update_active_set!(cost)
+#
+#     J = 0.0
+#
+#     for k = 1:N-1
+#         # Minimum time stage cost
+#         if !isnan(R_min_time)
+#             dt = U[k][end]^2
+#             J += cost.R_min_time*dt
+#         end
+#
+#         # Infeasible start stage cost
+#         if !isnan(R_inf)
+#             u_inf = U[k][(idx.x) .+ m]
+#             J += 0.5*cost.R_inf*u_inf'*u_inf
+#         end
+#
+#         J += stage_cost(cost.cost.cost,X[k][idx.x],U[k][idx.u])*dt
+#         J += stage_constraint_cost(cost.cost,X[k],U[k],k)
+#     end
+#
+#     J += stage_cost(cost.cost.cost,X[N][idx.x])
+#     J += stage_constraint_cost(cost.cost,X[N])
+#
+#     return J
+# end
+#
+#
+# function update_constraints!(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+#     update_constraints!(cost.C,cost.constraints,X,U)
+#     !isnan(cost.R_min_time) ? cost.C[1][:min_time_eq][1] = 0.0 : nothing
+# end
 
-        # Infeasible start stage cost
-        if !isnan(R_inf)
-            u_inf = U[k][(idx.x) .+ m]
-            J += 0.5*cost.R_inf*u_inf'*u_inf
-        end
-
-        J += stage_cost(cost.cost.cost,X[k][idx.x],U[k][idx.u])*dt
-        J += stage_constraint_cost(cost.cost,X[k],U[k],k)
-    end
-
-    J += stage_cost(cost.cost.cost,X[N][idx.x])
-    J += stage_constraint_cost(cost.cost,X[N])
-
-    return J
-end
-
-function update_constraints!(cost::ALTROCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    update_constraints!(cost.cost.C,cost.cost.constraints,X,U)
-    !isnan(cost.R_min_time) ? cost.cost.C[1][:min_time_eq][1] = 0.0 : nothing
-end
-
-function update_active_set!(cost::ALTROCost{T},tol::T=0.0) where T
-    update_active_set!(cost.cost.active_set,cost.cost.C,cost.cost.λ)
-end
-
-"Second-order expansion of ALTRO cost"
-function cost_expansion!(Q::ExpansionTrajectory{T},cost::ALTROCost,x::Vector{T},
-        u::Vector{T}, k::Int) where T
-
-    n = cost.n; m = cost.m
-    idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
-
-    R_min_time = cost.R_min_time; R_inf = cost.R_inf
-
-    cost_expansion!(Q,cost.cost,x,u,k)
-
-    # Slack control expansion components
-    if !isnan(R_inf)
-        Q[k].u[idx.inf] = R_inf*u[idx.inf]
-        Q[k].uu[idx.inf,idx.inf] = Diagonal(R_inf*I,n)
-    end
-
-    # Minimum time expansion components
-    if !isnan(R_min_time)
-        n̄ = n+1
-        ℓ1 = stage_cost(cost.cost.cost,x[idx.x],u[idx.u])
-        Qx, Qu = cost_expansion_gradients(cost.cost.cost,x[idx.x],u[idx.u],k)
-        τ = u[end]
-        tmp = 2.0*τ*Qu
-
-        Q[k].u[end] = τ*(2.0*ℓ1 + R_min_time)
-        Q[k].uu[idx.u,end] = tmp
-        Q[k].uu[end,idx.u] = tmp'
-        Q[k].uu[end,end] = (2.0*ℓ1 + R_min_time)
-        Q[k].ux[end,idx.x] = 2.0*τ*Qx'
-
-        Q[k].x[n̄] = R_min_time*x[n̄]
-        Q[k].xx[n̄,n̄] = R_min_time
-    end
-
-    return nothing
-end
-
-function cost_expansion!(solver::iLQRSolver, cost::ALTROCost, xN::Vector{T}) where T
-    cost_expansion!(solver,cost.cost,xN)
-end
+# function update_active_set!(cost::ALTROCost{T},tol::T=0.0) where T
+#     update_active_set!(cost.active_set,cost.C,cost.λ)
+# end
+#
+# "Second-order expansion of ALTRO cost"
+# function cost_expansion!(Q::ExpansionTrajectory{T},cost::ALTROCost{T},x::Vector{T},
+#         u::Vector{T}, k::Int) where T <: AbstractFloat
+#
+#     n = cost.n; m = cost.m
+#     idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
+#
+#     R_min_time = cost.R_min_time; R_inf = cost.R_inf
+#
+#     cost_expansion!(Q,cost.cost,x,u,k,n,m)
+#
+#     # Slack control expansion components
+#     if !isnan(R_inf)
+#         Q[k].u[idx.inf] = R_inf*u[idx.inf]
+#         Q[k].uu[idx.inf,idx.inf] = Diagonal(R_inf*I,n)
+#     end
+#
+#     # Minimum time expansion components
+#     if !isnan(R_min_time)
+#         ℓ1 = stage_cost(cost.cost,x,u,n,m)
+#         Qx, Qu = cost_expansion_gradients(cost.cost,x,u,k,n,m)
+#         τ = u[end]
+#         tmp = 2.0*τ*Qu
+#
+#         Q[k].u[end] = τ*(2.0*ℓ1 + R_min_time)
+#         Q[k].uu[idx.u,end] = tmp
+#         Q[k].uu[end,idx.u] = tmp'
+#         Q[k].uu[end,end] = (2.0*ℓ1 + R_min_time)
+#         Q[k].ux[end,idx.x] = 2.0*τ*Qx'
+#
+#         Q[k].x[end] = R_min_time*x[end]
+#         Q[k].xx[end,end] = R_min_time
+#     end
+#
+#     return nothing
+# end
+#
+# function cost_expansion!(solver::iLQRSolver, cost::ALTROCost{T}, xN::Vector{T}) where T
+#     cost_expansion!(solver,cost.cost,xN,cost.n)
+# end
