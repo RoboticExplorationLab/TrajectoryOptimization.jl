@@ -8,9 +8,10 @@ struct Problem{T<:AbstractFloat}
     U::VectorTrajectory{T}
     N::Int
     dt::T
+    tf::T
 
     function Problem(model::Model, cost::CostFunction, constraints::AbstractConstraintSet,
-        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T) where T
+        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where T
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
@@ -28,7 +29,7 @@ struct Problem{T<:AbstractFloat}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T}(model,cost,constraints,x0,X,U,N,dt)
+        new{T}(model,cost,constraints,x0,X,U,N,dt,tf)
     end
 end
 
@@ -53,7 +54,7 @@ function Problem(model::Model{Discrete}, cost::CostFunction, X0::VectorTrajector
         constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
-    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
 end
 Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, cost, to_dvecs(X0), to_dvecs(U0); kwargs...)
@@ -64,7 +65,7 @@ function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajector
     N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
-    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
 end
 Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
     Problem(model, cost, to_dvecs(U0); kwargs...)
@@ -75,7 +76,7 @@ function Problem(model::Model{Discrete}, cost::CostFunction;
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     U0 = [zeros(T,model.m) for k = 1:N-1]
-    Problem(model, cost, constraints, x0, X0, U0, N, dt)
+    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
 end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
@@ -95,7 +96,7 @@ function change_N(prob::Problem, N::Int)
     dt = tf/(N-1)
     X, U = interp_traj(N, tf, prob.X, prob.U)
     @show length(X)
-    Problem(prob.model, prob.cost, prob.constraints, prob.x0, X, U, N, dt)
+    Problem(prob.model, prob.cost, prob.constraints, prob.x0, X, U, N, dt, tf)
 end
 
 
@@ -201,7 +202,7 @@ end
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
 Base.copy(p::Problem) = Problem(p.model, p.cost, p.constraints, copy(p.x0),
-    deepcopy(p.X), deepcopy(p.U), p.N, p.dt)
+    deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
@@ -209,12 +210,12 @@ is_constrained(p::Problem) = !isempty(p.constraints)
 
 function update_problem(p::Problem;
     model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
-    N=p.N,dt=p.dt,newProb=true)
+    N=p.N,dt=p.dt,tf=p.tf,newProb=true)
 
     if newProb
-        Problem(model,cost,constraints,x0,deepcopy(X),deepcopy(U),N,dt)
+        Problem(model,cost,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
     else
-        Problem(model,cost,constraints,x0,X,U,N,dt)
+        Problem(model,cost,constraints,x0,X,U,N,dt,tf)
     end
 end
 

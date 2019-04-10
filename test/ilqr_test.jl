@@ -69,8 +69,14 @@ solve!(prob,auglag)
 
 @test max_violation(res3) == max_violation(auglag)
 
+X0 = zeros(prob.model.n,prob.N)
+X0[4,:] .= 1.0
+X0[3,:] .= range(prob.x0[2],stop=obj.xf[2],length=N)
+copyto!(prob.X,X0)
+prob
+pa,sa = solve!(prob,ALTROSolverOptions{Float64}())
 
-solve!(prob,ALTROSolverOptions{Float64}())
+
 # plot(res3.U)
 # @btime solve($prob,$auglag)
 # @btime solve($solver,$U0)
