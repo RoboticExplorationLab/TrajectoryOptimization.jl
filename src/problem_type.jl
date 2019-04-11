@@ -323,15 +323,7 @@ end
 
 function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
     # modify problem with time step control
-    cost_min_time = copy(prob.cost)
-    cost_min_time.Q = cat(cost_min_time.Q,0.0,dims=(1,2))
-    cost_min_time.q = [cost_min_time.q; 0.0]
-    cost_min_time.R = cat(cost_min_time.R,2.0*R_min_time,dims=(1,2))
-    cost_min_time.r = [cost_min_time.r; 0.0]
-    cost_min_time.H = [cost_min_time.H zeros(prob.model.m,1); zeros(1,prob.model.n+1)]
-    cost_min_time.Qf = cat(cost_min_time.Qf,0.0,dims=(1,2))
-    cost_min_time.qf = [cost_min_time.qf; 0.0]
-
+    cost_min_time = MinTimeCost(copy(prob.cost),R_min_time)
     model_min_time = add_min_time_controls(prob.model)
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
     update_problem(prob,model=model_min_time,cost=cost_min_time,

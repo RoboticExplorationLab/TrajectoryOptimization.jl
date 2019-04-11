@@ -237,26 +237,27 @@ get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,
 
 
 "Second-order Taylor expansion of cost function at time step k"
-function cost_expansion!(Q::ExpansionTrajectory,cost::QuadraticCost, x::Vector{T},
+function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, x::Vector{T},
         u::Vector{T}, k::Int) where T
-    Q[k].x .= cost.Q*x + cost.q
-    Q[k].u .= cost.R*u
-    Q[k].xx .= cost.Q
-    Q[k].uu .= cost.R
-    Q[k].ux .= cost.H
+    Q = solver.Q[k]
+    Q.x .= cost.Q*x + cost.q
+    Q.u .= cost.R*u
+    Q.xx .= cost.Q
+    Q.uu .= cost.R
+    Q.ux .= cost.H
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, xN::Vector{T}) where T
+function cost_expansion!(solver::iLQRSolver{T},cost::QuadraticCost, xN::Vector{T}) where T
     solver.S[end] .= cost.Qf
     solver.s[end] .= cost.Qf*xN + cost.qf
     return nothing
 end
 
-function cost_expansion!(Q::ExpansionTrajectory,cost::ALCost{T},
+function cost_expansion!(solver::iLQRSolver{T},cost::ALCost{T},
         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
-
-    cost_expansion!(Q, cost.cost, x, u, k)
+    Q = solver.Q[k]
+    cost_expansion!(solver, cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
     μ = cost.μ[k]
@@ -268,14 +269,14 @@ function cost_expansion!(Q::ExpansionTrajectory,cost::ALCost{T},
     cu = ∇c.u
 
     # Second Order pieces
-    Q[k].xx .+= cx'Iμ*cx
-    Q[k].uu .+= cu'Iμ*cu
-    Q[k].ux .+= cu'Iμ*cx
+    Q.xx .+= cx'Iμ*cx
+    Q.uu .+= cu'Iμ*cu
+    Q.ux .+= cu'Iμ*cx
 
     # First order pieces
     g = (Iμ*c + λ)
-    Q[k].x .+= cx'g
-    Q[k].u .+= cu'g
+    Q.x .+= cx'g
+    Q.u .+= cu'g
 
     return nothing
 end
@@ -303,20 +304,21 @@ function cost_expansion!(solver::iLQRSolver,cost::ALCost{T},x::AbstractVector{T}
     return nothing
 end
 
-function cost_expansion!(e::ExpansionTrajectory,cost::GenericCost, x::Vector{T},
+function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, x::Vector{T},
         u::Vector{T}, k::Int) where T
 
-    Q,R,H,q,r = cost.expansion(x,u)
+    e = cost.expansion(x,u)
+    Q = solver.Q[k]
 
-    e[k].x .= q
-    e[k].u .= r
-    e[k].xx .= Q
-    e[k].uu .= R
-    e[k].ux .= H
+    Q.x .= e[4]
+    Q.u .= e[5]
+    Q.xx .= e[1]
+    Q.uu .= e[2]
+    Q.ux .= e[3]
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::GenericCost, xN::Vector{T}) where T
+function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, xN::Vector{T}) where T
     Qf, qf = cost.expansion(xN)
     solver.S[end] .= Qf
     solver.s[end] .= qf
@@ -333,6 +335,56 @@ function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     solver_al = AbstractSolver(prob,opts.opts_con)
     ALTROSolver{T}(opts,solver_al)
 end
+
+
+"Second-order Taylor expansion of cost function at time step k"
+function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T},
+        u::Vector{T}, k::Int) where T
+
+    @assert cost.cost isa QuadraticCost
+    n,m = get_sizes(cost.cost)
+    idx = (x=1:n,u=1:m)
+    R_min_time = cost.R_min_time
+    Q = solver.Q[k]
+
+    Qx = cost.cost.Q*x[idx.x] + cost.cost.q
+    Qu = cost.cost.R*u[idx.u]
+    Q.x[idx.x] .= Qx
+    Q.u[idx.u] .= Qu
+    Q.xx[idx.x,idx.x] .= cost.cost.Q
+    Q.uu[idx.u,idx.u] .= cost.cost.R
+    Q.ux[idx.u,idx.x] .= cost.cost.H
+
+    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+    τ = u[end]
+    tmp = 2.0*τ*Qu
+
+    Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
+    Q.uu[idx.u,end] = tmp
+    Q.uu[end,idx.u] = tmp'
+    Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
+    Q.ux[end,idx.x] = 2.0*τ*Qx'
+
+    Q.x[end] = R_min_time*x[end]
+    Q.xx[end,end] = R_min_time
+
+    return nothing
+end
+
+function cost_expansion!(solver::iLQRSolver,cost::MinTimeCost,xN::Vector{T}) where T
+    n, = get_sizes(cost.cost)
+    R_min_time = cost.R_min_time
+    S = solver.S[end]
+    s = solver.s[end]
+    idx = 1:n
+    S[idx,idx] = cost.cost.Qf
+    s[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
+    S[end,end] = R_min_time*xN[end]
+    s[end] = R_min_time
+
+    return nothing
+end
+
 
 
 # # ALTRO

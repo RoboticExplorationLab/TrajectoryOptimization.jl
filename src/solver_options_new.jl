@@ -169,4 +169,32 @@ end
 
     "penalty update rate for infeasible controls"
     penalty_scaling_infeasible::T = 10.0
+
+    # Minimum Time
+    "regularization term for dt"
+    R_minimum_time::T = 1.0
+
+    "maximum allowable dt"
+    max_dt::T = 1.0
+
+    "minimum allowable dt"
+    min_dt::T = 1.0e-3
+
+    "initial guess for the length of the minimum time problem (in seconds)"
+    minimum_time_tf_estimate::T = 0.0
+
+    "initial guess for dt of the minimum time problem (in seconds)"
+    minimum_time_dt_estimate::T = 0.0
+
+    "initial penalty term for minimum time bounds constraints"
+    penalty_initial_minimum_time_inequality::T = 1.0
+
+    "initial penalty term for minimum time equality constraints"
+    penalty_initial_minimum_time_equality::T = 1.0
+
+    "penalty update rate for minimum time bounds constraints"
+    penalty_scaling_minimum_time_inequality::T = 1.0
+
+    "penalty update rate for minimum time equality constraints"
+    penalty_scaling_minimum_time_equality::T = 1.0
 end

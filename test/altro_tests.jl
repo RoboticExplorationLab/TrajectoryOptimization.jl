@@ -73,5 +73,30 @@ X0 = zeros(prob.model.n,prob.N)
 X0[4,:] .= 1.0
 X0[3,:] .= range(prob.x0[2],stop=obj.xf[2],length=N)
 copyto!(prob.X,X0)
-prob
-pa,sa = solve!(prob,ALTROSolverOptions{Float64}())
+solve!(prob,ALTROSolverOptions{Float64}())
+
+
+prob_mt = minimum_time_problem(prob,1.7)
+
+ilqr = iLQRSolver(prob_mt,iLQRSolverOptions{Float64}())
+ilqr.Q[1].x
+prob_mt.cost.cost.Q
+get_sizes(prob_mt.cost.cost)
+x = rand(14); u = rand(5)
+Q = ilqr.Q
+cost_expansion!(ilqr, prob_mt.cost, rand(14),rand(5), 1)
+cost_expansion!(ilqr,prob_mt.cost, rand(14))
+
+n,m = get_sizes(prob_mt.cost.cost)
+idx = (x=1:n,u=1:m)
+k = 1
+R_min_time = prob_mt.cost.R_min_time
+Qx = prob_mt.cost.cost.Q*x[idx.x] + prob_mt.cost.cost.q[idx.x]
+Qu = prob_mt.cost.cost.R*u[idx.u]
+Q[k].x[idx.x] .= Qx
+Q[k].u[idx.u] .= Qu
+Q[k].xx[idx.x,idx.x] .= prob_mt.cost.cost.Q
+Q[k].uu[idx.u,idx.u] .= prob_mt.cost.cost.R
+Q[k].ux[idx.u,idx.x] .= prob_mt.cost.cost.H
+
+ℓ1 = stage_cost(prob_mt.cost.cost,x[idx.x],u[idx.u])

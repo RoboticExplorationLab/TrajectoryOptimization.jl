@@ -8,6 +8,11 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
         prob_altro = infeasible_problem(prob_altro,opts.R_inf)
     end
 
+    if prob_altro.tf == 0.0
+        println("Minimum Time Solve")
+        prob_altro = minimum_time_problem(prob_altro,opts.R_min_time)
+    end
+
     # create altro solver
     solver_altro = AbstractSolver(prob_altro,opts)
 

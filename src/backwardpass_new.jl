@@ -22,7 +22,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     reset!(Q)
 
     # Boundary Conditions
-    cost_expansion!(solver,prob.cost,X[N])
+    cost_expansion!(solver,cost,X[N])
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -30,9 +30,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(Q, cost, X[k], U[k], k)
+        cost_expansion!(solver, cost, X[k], U[k], k)
 
-        # fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
         fdx, fdu = dynamics_jacobians(prob,solver,k)
 
         Q[k].x .+= fdx'*s[k+1]

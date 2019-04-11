@@ -214,6 +214,19 @@ stage_cost(cost::GenericCost, xN::Vector{T}) where T = cost.ℓf(xN)
 get_sizes(cost::GenericCost) = cost.n, cost.m
 copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
 
+# Minimum Time Cost function
+struct MinTimeCost{T} <: CostFunction
+    cost::C where C <:CostFunction
+    R_min_time::T
+end
+
+stage_cost(cost::MinTimeCost, x::Vector{T}, u::Vector{T}, k::Int) where T = stage_cost(cost.cost,x[1:end-1],u[1:end-1],k) + cost.R_min_time*u[end]^2
+
+stage_cost(cost::MinTimeCost, xN::Vector{T}) where T = stage_cost(cost.cost,xN[1:end-1])
+
+get_sizes(cost::MinTimeCost) = get_sizes(cost.cost) .+ 1
+copy(cost::MinTimeCost) = MinTimeCost(copy(cost.cost),copy(cost.R_min_time))
+
 """
 $(TYPEDEF)
 Cost function of the form
