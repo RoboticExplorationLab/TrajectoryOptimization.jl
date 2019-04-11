@@ -29,6 +29,7 @@ solver_min.opts.iterations_outerloop = 50 # 20
 U = ones(m,solver_min.N-1)
 results_uncon,stats_uncon = TrajectoryOptimization.solve(solver_uncon,U)
 results_min,stats_min = TrajectoryOptimization.solve(solver_min,U)
+plot(results_min.U)
 # plot(TrajectoryOptimization.to_array(results_min.X)[1:2,:]')
 # plot(TrajectoryOptimization.to_array(results_min.U)[1:2,:]')
 

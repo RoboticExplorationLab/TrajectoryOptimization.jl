@@ -56,7 +56,6 @@ auglag.μ[1][5] = 1
 rollout!(prob_al)
 cost_al.C[1]
 cost(cost_al,prob.X,prob.U,prob.dt) - J0
-update_constraints!(prob_al.cost.C,prob_al.cost.constraints,prob_al.X,prob_al.U)
 @test max_violation(auglag) == 1.5
 @test max_violation(auglag) == max_violation(prob)
 
@@ -69,13 +68,13 @@ solve!(prob,auglag)
 
 @test max_violation(res3) == max_violation(auglag)
 
+prob = Problem(model_d,costfun,U,dt=dt,x0=x0)
+add_constraints!(prob,bnd)
 X0 = zeros(prob.model.n,prob.N)
 X0[4,:] .= 1.0
 X0[3,:] .= range(prob.x0[2],stop=obj.xf[2],length=N)
 copyto!(prob.X,X0)
-prob
-pa,sa = solve!(prob,ALTROSolverOptions{Float64}())
-
+solve!(prob,ALTROSolverOptions{Float64}())
 
 # plot(res3.U)
 # @btime solve($prob,$auglag)

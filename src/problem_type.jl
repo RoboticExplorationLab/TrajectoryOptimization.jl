@@ -102,11 +102,11 @@ end
 
 function _validate_time(N,tf,dt)
     if N == -1 && isnan(dt) && isnan(tf)
-        throw(ArgumentError("Must specify at least 2 of N, dt, or tf"))
+        throw(ArgumentError("Must specify at least 2: N, dt, or tf"))
     end
     # Check for minimum time
     if (tf == 0) || (tf == :min)
-        dt = 0.
+        tf = 0.0
         if N==-1
             throw(ArgumentError("N must be specified for a minimum-time problem"))
         end

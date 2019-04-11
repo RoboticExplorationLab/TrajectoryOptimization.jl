@@ -32,6 +32,11 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     with_logger(logger) do
         for i = 1:solver.opts.iterations
             J = step!(prob, solver, J_prev)
+
+            # if J > solver.opts.max_cost_value
+            #     error("Cost exceeded maximum cost")
+            # end
+
             copyto!(prob.X, solver.X̄)
             copyto!(prob.U, solver.Ū)
 
@@ -50,7 +55,7 @@ end
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     jacobian!(prob,solver)
     ΔV = backwardpass!(prob,solver)
-    J = forwardpass!(prob,solver,ΔV,J)
+    forwardpass!(prob,solver,ΔV,J)
 end
 
 function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T) where T

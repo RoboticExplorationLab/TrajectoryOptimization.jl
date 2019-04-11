@@ -276,14 +276,30 @@ function ALCost(cost::CostFunction,constraints::AbstractConstraintSet,
 end
 
 "Update constraints trajectories"
-function update_constraints!(c::PartedVecTrajectory{T}, constraints::AbstractConstraintSet,
+function update_constraints!(cost::CostFunction,C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
-        evaluate!(c[k],constraints,X[k],U[k])
+        evaluate!(C[k],constraints,X[k],U[k])
     end
-    evaluate!(c[N],constraints,X[N])
+    evaluate!(C[N],constraints,X[N])
 end
+
+function update_constraints!(cost::MinTimeCost{T},C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
+        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        evaluate!(C[k],constraints,X[k],U[k])
+    end
+    C[1][:min_time_eq][1] = 0.0 # no constraint at timestep one
+    evaluate!(C[N],constraints,X[N])
+end
+
+function update_constraints!(cost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    update_constraints!(cost.cost,cost.C,cost.constraints,X,U)
+end
+
+
 
 "Evaluate active set constraints for entire trajectory"
 function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
@@ -291,6 +307,10 @@ function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{
     for k = 1:N
         active_set!(a[k], c[k], λ[k], tol)
     end
+end
+
+function update_active_set!(cost::ALCost{T},tol::T=0.0) where T
+    update_active_set!(cost.active_set,cost.C,cost.λ,tol)
 end
 
 "Evaluate active set constraints for a single time step"
@@ -343,8 +363,9 @@ end
 function cost(alcost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
     N = length(X)
     J = cost(alcost.cost,X,U,dt)
-    update_constraints!(alcost.C, alcost.constraints, X, U)
-    update_active_set!(alcost.active_set, alcost.C, alcost.λ)
+    update_constraints!(alcost.cost,alcost.C,alcost.constraints, X, U)
+
+    update_active_set!(alcost)
 
     for k = 1:N-1
         J += stage_constraint_cost(alcost,X[k],U[k],k)

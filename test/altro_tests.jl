@@ -76,7 +76,12 @@ copyto!(prob.X,X0)
 solve!(prob,ALTROSolverOptions{Float64}())
 
 
+prob = Problem(model_d,costfun,U,dt=dt,x0=x0,N=length(U)+1)
+prob.constraints
 prob_mt = minimum_time_problem(prob,1.7)
+all(x->isnan(x),prob_mt.X[1])
+solve!(prob,ALTROSolverOptions{Float64}())
+plot(prob.U)
 
 ilqr = iLQRSolver(prob_mt,iLQRSolverOptions{Float64}())
 ilqr.Q[1].x

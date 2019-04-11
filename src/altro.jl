@@ -10,14 +10,12 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 
     if prob_altro.tf == 0.0
         println("Minimum Time Solve")
-        prob_altro = minimum_time_problem(prob_altro,opts.R_min_time)
+        prob_altro = minimum_time_problem(prob_altro,opts.R_minimum_time,
+            opts.dt_max,opts.dt_min)
     end
 
-    # create altro solver
-    solver_altro = AbstractSolver(prob_altro,opts)
-
     # solve
-    solve!(prob_altro,solver_altro.solver_al)
+    solve!(prob_altro,opts.opts_con)
 
     # move results to original problem
     copyto!(prob.X,prob_altro.X,prob.model.n)

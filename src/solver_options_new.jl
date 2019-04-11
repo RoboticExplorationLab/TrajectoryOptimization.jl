@@ -175,16 +175,10 @@ end
     R_minimum_time::T = 1.0
 
     "maximum allowable dt"
-    max_dt::T = 1.0
+    dt_max::T = 1.0
 
     "minimum allowable dt"
-    min_dt::T = 1.0e-3
-
-    "initial guess for the length of the minimum time problem (in seconds)"
-    minimum_time_tf_estimate::T = 0.0
-
-    "initial guess for dt of the minimum time problem (in seconds)"
-    minimum_time_dt_estimate::T = 0.0
+    dt_min::T = 1.0e-3
 
     "initial penalty term for minimum time bounds constraints"
     penalty_initial_minimum_time_inequality::T = 1.0

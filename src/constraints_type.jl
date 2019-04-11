@@ -250,19 +250,22 @@ function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
 end
 evaluate!(c::BlockVector, C::AbstractConstraintSet, x) = evaluate!(c,terminal(C),x)
 
-function jacobian!(Z,C::StageConstraintSet,x,u)
+function jacobian!(Z,C::StageConstraintSet,x::Vector{T},u::Vector{T}) where T
     for con in C
         x_,u_ = x[con.inds[1]], u[con.inds[2]]
         con.∇c(Z[con.label], x_, u_)
     end
 end
-jacobian!(Z,C::AbstractConstraintSet,x,u) = jacobian!(Z,stage(C),x,u)
-function jacobian!(Z,C::TerminalConstraintSet,x)
+
+jacobian!(Z,C::AbstractConstraintSet,x::Vector{T},u::Vector{T}) where T = jacobian!(Z,stage(C),x,u)
+
+function jacobian!(Z,C::TerminalConstraintSet,x::Vector{T}) where T
     for con in C
         con.∇c(Z[con.label], x[con.inds[1]])
     end
 end
-jacobian!(Z,C::AbstractConstraintSet,x) = jacobian!(Z,terminal(C),x)
+jacobian!(Z,C::AbstractConstraintSet,x::Vector{T}) where T = jacobian!(Z,terminal(C),x)
+
 
 function RigidBodyDynamics.num_constraints(C::AbstractConstraintSet)
     if !isempty(C)
