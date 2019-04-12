@@ -23,36 +23,23 @@ opts_altro = ALTROSolverOptions{T}(verbose=true,opts_con=opts_al,R_minimum_time=
 # constraints
 u_bnd = 5.
 bnd = bound_constraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
+goal_con = goal_constraint(xf)
+
+con = [bnd, goal_con]
 
 # problem
 N = 31
 U = [ones(m) for k = 1:N-1]
 dt = 0.15/2.0
 prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0,tf=:min)
-add_constraints!(prob,bnd)
+add_constraints!(prob,con)
+# X0 = zeros(prob.model.n,prob.N)
+# X0[1,:] .= range(prob.x0[1],stop=xf[1],length=N)
+# copyto!(prob.X,X0)
 
-# prob = minimum_time_problem(prob,15.0)
-
-
+# prob_inf = infeasible_problem(prob,opts_altro.R_inf)
+prob
 solve!(prob,opts_altro)
 
 using Plots
 plot(prob.U)
-
-## altro breakdown
-
-# prob_altro = prob
-# opts = opts_altro
-# if prob_altro.tf == 0.0
-#     println("Minimum Time Solve")
-#     prob_altro = minimum_time_problem(prob_altro,opts.R_minimum_time,
-#         opts.dt_max,opts.dt_min)
-# end
-# prob_altro
-# solver_al = AbstractSolver(prob_altro,opts.opts_con)
-#
-# unconstrained_solver = AbstractSolver(prob_altro, solver_al.opts.opts_uncon)
-#
-# prob_al = AugmentedLagrangianProblem(prob_altro, solver_al)
-#
-# prob_al.cost.C[1][:min_time_eq]

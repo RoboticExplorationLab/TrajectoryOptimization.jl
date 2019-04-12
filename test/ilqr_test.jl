@@ -59,22 +59,30 @@ cost(cost_al,prob.X,prob.U,prob.dt) - J0
 @test max_violation(auglag) == 1.5
 @test max_violation(auglag) == max_violation(prob)
 
-prob = Problem(model_d,costfun,U,dt=dt,x0=x0)
-add_constraints!(prob,bnd)
+prob = Problem(model_d,costfun,U,dt=dt,x0=x0,N=N)
+goal_con = goal_constraint(obj.xf)
+con = [bnd, goal_con]
+add_constraints!(prob,con)
+
+opts.verbose=true
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=true,opts_uncon=opts)
-auglag = AugmentedLagrangianSolver(prob,opts_al)
-res3 = solve(prob,auglag)
-solve!(prob,auglag)
+# auglag = AugmentedLagrangianSolver(prob,opts_al)
+# res3 = solve(prob,auglag)
+solve!(prob,opts_al)
 
 @test max_violation(res3) == max_violation(auglag)
 
-prob = Problem(model_d,costfun,U,dt=dt,x0=x0)
+N = 101
+prob = Problem(model_d,costfun,[ones(model_d.m) for k = 1:N-1],dt=dt,x0=x0,N=N)
+con = [bnd,goal_con]
 add_constraints!(prob,bnd)
 X0 = zeros(prob.model.n,prob.N)
 X0[4,:] .= 1.0
 X0[3,:] .= range(prob.x0[2],stop=obj.xf[2],length=N)
 copyto!(prob.X,X0)
-solve!(prob,ALTROSolverOptions{Float64}())
+
+prob
+solve!(prob,ALTROSolverOptions{Float64}(opts_con=opts_al,R_inf=0.01))
 
 # plot(res3.U)
 # @btime solve($prob,$auglag)

@@ -336,8 +336,7 @@ function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     ALTROSolver{T}(opts,solver_al)
 end
 
-
-"Second-order Taylor expansion of cost function at time step k"
+"Second-order Taylor expansion of minimum time cost function at time step k"
 function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T},
         u::Vector{T}, k::Int) where T
 
@@ -346,17 +345,16 @@ function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T
     idx = (x=1:n,u=1:m)
     R_min_time = cost.R_min_time
     Q = solver.Q[k]
-
+    τ = u[end]
     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
-    Qu = cost.cost.R*u[idx.u]
-    Q.x[idx.x] .= Qx
-    Q.u[idx.u] .= Qu
-    Q.xx[idx.x,idx.x] .= cost.cost.Q
-    Q.uu[idx.u,idx.u] .= cost.cost.R
-    Q.ux[idx.u,idx.x] .= cost.cost.H
+    Qu = cost.cost.R*u[idx.u] + cost.cost.r
+    Q.x[idx.x] .= Qx*τ
+    Q.u[idx.u] .= Qu*τ
+    Q.xx[idx.x,idx.x] .= cost.cost.Q*τ
+    Q.uu[idx.u,idx.u] .= cost.cost.R*τ
+    Q.ux[idx.u,idx.x] .= cost.cost.H*τ
 
     ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
-    τ = u[end]
     tmp = 2.0*τ*Qu
 
     Q.u[end] = τ*(2.0*ℓ1 + R_min_time)

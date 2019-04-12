@@ -227,6 +227,17 @@ stage_cost(cost::MinTimeCost, xN::Vector{T}) where T = stage_cost(cost.cost,xN[1
 get_sizes(cost::MinTimeCost) = get_sizes(cost.cost) .+ 1
 copy(cost::MinTimeCost) = MinTimeCost(copy(cost.cost),copy(cost.R_min_time))
 
+function cost(cost::MinTimeCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T)::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        dt = U[k][end]^2
+        J += stage_cost(cost,X[k],U[k])*dt
+    end
+    J += stage_cost(cost,X[N])
+    return J
+end
+
 """
 $(TYPEDEF)
 Cost function of the form

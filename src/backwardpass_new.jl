@@ -14,8 +14,6 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Objective
     cost = prob.cost
 
-    dt = prob.dt
-
     X = prob.X; U = prob.U; K = solver.K; d = solver.d; S = solver.S; s = solver.s
 
     Q = solver.Q # cost-to-go expansion
