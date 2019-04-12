@@ -15,7 +15,7 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     end
 
     # solve
-    solve!(prob_altro,opts.opts_con)
+    solve!(prob_altro,opts.opts_al)
 
     #TODO inf resolve
 

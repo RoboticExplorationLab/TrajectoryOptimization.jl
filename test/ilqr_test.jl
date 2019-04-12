@@ -82,7 +82,7 @@ X0[3,:] .= range(prob.x0[2],stop=obj.xf[2],length=N)
 copyto!(prob.X,X0)
 
 prob
-solve!(prob,ALTROSolverOptions{Float64}(opts_con=opts_al,R_inf=0.01))
+solve!(prob,ALTROSolverOptions{Float64}(opts_al=opts_al,R_inf=0.01))
 
 # plot(res3.U)
 # @btime solve($prob,$auglag)

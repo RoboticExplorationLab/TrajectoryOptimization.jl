@@ -9,7 +9,10 @@ $(FIELDS)
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
     "Print summary at each iteration"
-    verbose=false
+    verbose::Bool=false
+
+    "Live plotting"
+    live_plotting::Symbol=:off # :state, :control
 
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
     cost_tolerance::T = 1.0e-4
@@ -71,7 +74,6 @@ $(FIELDS)
 
     "regularization scaling factor for square root method"
     bp_reg_sqrt_increase_factor::T = 10.0
-
 
     # Solver Numerical Limits
     "maximum cost value, if exceded solve will error"
@@ -149,7 +151,7 @@ end
     verbose::Bool=false
 
     "Augmented Lagrangian solver options"
-    opts_con::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
+    opts_al::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
 
     # Infeasible Start
     "infeasible control constraint tolerance"

@@ -37,11 +37,11 @@ max_cn_S_sqrt = TrajectoryOptimization.backwardpass_max_condition_number(results
 u_min = -10
 u_max = 10
 obj_c = TrajectoryOptimization.ConstrainedObjective(obj,u_min=u_min,u_max=u_max) # constrained objective
-opts_con = TrajectoryOptimization.SolverOptions()
-opts_con_sqrt = TrajectoryOptimization.SolverOptions()
-opts_con_sqrt.square_root = true
-solver_con = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con)
-solver_con_sqrt = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_con_sqrt)
+opts_al = TrajectoryOptimization.SolverOptions()
+opts_al_sqrt = TrajectoryOptimization.SolverOptions()
+opts_al_sqrt.square_root = true
+solver_con = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_al)
+solver_con_sqrt = TrajectoryOptimization.Solver(model,obj_c,dt=0.1,opts=opts_al_sqrt)
 U0 = ones(solver_con.model.m,solver_con.N)
 results_con = init_results(solver_con,Array{Float64}(undef,0,0),U0)
 results_con_sqrt = init_results(solver_con_sqrt,Array{Float64}(undef,0,0),U0)

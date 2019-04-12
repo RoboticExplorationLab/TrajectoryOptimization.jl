@@ -33,9 +33,10 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
         for i = 1:solver.opts.iterations
             J = step!(prob, solver, J_prev)
 
-            # if J > solver.opts.max_cost_value
-            #     error("Cost exceeded maximum cost")
-            # end
+            # check for cost blow up
+            if J > solver.opts.max_cost_value
+                error("Cost exceeded maximum cost")
+            end
 
             copyto!(prob.X, solver.X̄)
             copyto!(prob.U, solver.Ū)
@@ -43,6 +44,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
             dJ = abs(J - J_prev)
             J_prev = copy(J)
             record_iteration!(prob, solver, J, dJ)
+            live_plotting(prob,solver)
 
             println(logger, InnerLoop)
             evaluate_convergence(solver) ? break : nothing
@@ -57,6 +59,19 @@ function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     ΔV = backwardpass!(prob,solver)
     forwardpass!(prob,solver,ΔV,J)
 end
+
+function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
+    if solver.opts.live_plotting == :state
+        p = plot(prob.X,title="State trajectory")
+        display(p)
+    elseif solver.opts.live_plotting == :control
+        p = plot(prob.U,title="Control trajectory")
+        display(p)
+    else
+        nothing
+    end
+end
+
 
 function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T) where T
     solver.stats[:iterations] += 1

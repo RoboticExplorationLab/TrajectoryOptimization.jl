@@ -332,7 +332,7 @@ struct ALTROSolver{T} <: AbstractSolver{T}
 end
 
 function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
-    solver_al = AbstractSolver(prob,opts.opts_con)
+    solver_al = AbstractSolver(prob,opts.opts_al)
     ALTROSolver{T}(opts,solver_al)
 end
 
