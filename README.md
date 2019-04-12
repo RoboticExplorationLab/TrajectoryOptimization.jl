@@ -4,19 +4,15 @@
 [![codecov](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/dev)
 
-A package for solving trajectory optimization problems in Julia.
+A library of solvers for trajectory optimization problems written in Julia. Currently, the following methods are implemented:
 
-This package solves optimal control problems using:
-* Iterative LQR (iLQR)
-  * Augmented Lagrangian method for nonlinear constraints
-  * Infeasible state trajectory initialization
-  * Minimum time
-  * Square root method for numerical conditioning
-  * Nonlinear cost functions
+[ALTRO (Augmented Lagrangian TRajectory Optimizer)](https://rexlab.stanford.edu/papers/altro-iros.pdf): A novel fast solver for trajectory optimization that features:
+  * General nonlinear cost functions, including minimum time problems
+  * General nonlinear state and input constraints
+  * Infeasible initialization
+  * Square-root methods for improved numerical conditioning
 
 * Direct Collocation (DIRCOL)
-  * IPOPT, SNOPT
+  * Interfaces to IPOPT and SNOPT
 
--Autodifferentiation of nonlinear dynamics and constraint functions via ForwardDiff.jl
-
--Dynamics directly from a URDF via RigidBodyDynamics.jl
+All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of cost or constraint functions, and dynamics can be cumputed directly from a URDF file via [RigidBodyDynamics.jl](https://github.com/JuliaRobotics/RigidBodyDynamics.jl).
