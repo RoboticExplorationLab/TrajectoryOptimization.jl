@@ -318,3 +318,20 @@ PartedArrays.BlockMatrix(T::Type,C::AbstractConstraintSet,n::Int,m::Int) = Block
 
 num_stage_constraints(C::AbstractConstraintSet) = num_constraints(stage(C))
 num_terminal_constraints(C::AbstractConstraintSet) = num_constraints(terminal(C))
+
+"Return a new constraint set with modified jacobians--useful for state augmented problems"
+function update_constraint_set_jacobians(cs::AbstractConstraintSet,n::Int,n̄::Int,m::Int)
+    idx = [(1:n)...,((1:m) .+ n̄)...]
+    _cs = []
+
+    for con in stage(cs)
+        _∇c(C,x,u) = con.∇c(view(C,:,idx),x,u)
+        push!(_cs,Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds))
+    end
+
+    for con in terminal(cs)
+        push!(_cs,con)
+    end
+
+    return [_cs...]
+end

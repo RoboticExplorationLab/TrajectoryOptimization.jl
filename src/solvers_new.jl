@@ -346,13 +346,14 @@ function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T
     R_min_time = cost.R_min_time
     Q = solver.Q[k]
     τ = u[end]
+    dt = τ^2
     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
     Qu = cost.cost.R*u[idx.u] + cost.cost.r
-    Q.x[idx.x] .= Qx*τ
-    Q.u[idx.u] .= Qu*τ
-    Q.xx[idx.x,idx.x] .= cost.cost.Q*τ
-    Q.uu[idx.u,idx.u] .= cost.cost.R*τ
-    Q.ux[idx.u,idx.x] .= cost.cost.H*τ
+    Q.x[idx.x] .= Qx*dt
+    Q.u[idx.u] .= Qu*dt
+    Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
+    Q.uu[idx.u,idx.u] .= cost.cost.R*dt
+    Q.ux[idx.u,idx.x] .= cost.cost.H*dt
 
     ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
     tmp = 2.0*τ*Qu

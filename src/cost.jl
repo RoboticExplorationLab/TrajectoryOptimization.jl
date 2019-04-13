@@ -303,7 +303,7 @@ function update_constraints!(cost::MinTimeCost{T},C::PartedVecTrajectory{T},cons
         evaluate!(C[k],constraints,X[k],U[k])
     end
     C[1][:min_time_eq][1] = 0.0 # no constraint at timestep one
-    evaluate!(C[N],constraints,X[N])
+    evaluate!(C[N],constraints,X[N][1:end-1])
 end
 
 function update_constraints!(cost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T

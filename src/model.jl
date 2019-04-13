@@ -148,13 +148,13 @@ function add_min_time_controls(model::Model{D}) where D<:Discrete
     idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
 
     function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[idx.mintime][1]
+        h = u[end]
         model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
         x₊[n̄] = h
     end
 
     function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[idx.mintime][1]
+        h = u[end]
         model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
         Z[idx.x,n̄m̄] .*= 2*h
         Z[n̄,n̄m̄] = 1.0

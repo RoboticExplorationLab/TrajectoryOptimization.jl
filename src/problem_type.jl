@@ -326,9 +326,11 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
     cost_min_time = MinTimeCost(copy(prob.cost),R_min_time)
     model_min_time = add_min_time_controls(prob.model)
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
+    _con = update_constraint_set_jacobians(prob.constraints,prob.model.n,prob.model.n+1,prob.model.m)
+
     update_problem(prob,model=model_min_time,cost=cost_min_time,
-        constraints=[prob.constraints...,con_min_time_eq,con_min_time_bnd],
-        U=[[prob.U[k];prob.dt] for k = 1:prob.N-1],
-        X=[[prob.X[k];prob.dt] for k = 1:prob.N],
+        constraints=[_con...,con_min_time_eq,con_min_time_bnd],
+        U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
+        X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],
         x0=[x0;0.0])
 end
