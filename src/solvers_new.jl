@@ -125,6 +125,7 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     Q = [Expansion(prob) for i = 1:N-1]
 
     solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,Q)
+
     reset!(solver)
     return solver
 end
@@ -135,8 +136,8 @@ function reset!(solver::iLQRSolver{T}) where T
     solver.stats[:dJ]              = T[]
     solver.stats[:gradient]        = T[]
     solver.stats[:dJ_zero_counter] = 0
-    solver.ρ[1] = 0
-    solver.dρ[1] = 0
+    solver.ρ[1] = 0.0
+    solver.dρ[1] = 0.0
 end
 
 function copy(r::iLQRSolver{T}) where T
@@ -170,6 +171,9 @@ Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangia
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
 function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+    # check for conflicting convergence criteria between unconstrained solver and AL: warn
+    check_convergence_criteria(opts.opts_uncon,opts.cost_tolerance,opts.gradient_norm_tolerance)
+
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
         :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])

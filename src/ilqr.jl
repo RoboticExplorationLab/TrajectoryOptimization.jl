@@ -78,7 +78,7 @@ function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T)
     push!(solver.stats[:cost], J)
     push!(solver.stats[:dJ], dJ)
     push!(solver.stats[:gradient],calculate_gradient(prob,solver))
-    dJ == 0 ? solver.stats[:dJ_zero_counter] += 1 : solver.stats[:dJ_zero_counter] = 0
+    dJ == 0.0 ? solver.stats[:dJ_zero_counter] += 1 : solver.stats[:dJ_zero_counter] = 0
 
     @logmsg InnerLoop :iter value=solver.stats[:iterations]
     @logmsg InnerLoop :cost value=J
@@ -138,6 +138,7 @@ function evaluate_convergence(solver::iLQRSolver)
     if solver.stats[:dJ_zero_counter] > solver.opts.dJ_counter_limit
         return true
     end
+
     return false
 end
 
