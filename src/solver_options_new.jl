@@ -140,17 +140,11 @@ $(FIELDS)
     "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1"
     constraint_decrease_ratio::T = 0.25
 
-    "type of outer loop update (default, momentum, individual, accelerated)"
+    "type of outer loop update (default, feedback)"
     outer_loop_update_type::Symbol = :default
-
-    "determines how many iterations should pass before the penalty is updated (1 is every iteration)"
-    penalty_update_frequency::Int = 1
 
     "numerical tolerance for constraint violation"
     active_constraint_tolerance::T = 0.0
-
-    "perform only penalty updates (no dual updates) until constraint_tolerance_intermediate < ϵ_int"
-    use_penalty_burnin::Bool = false
 
 end
 
@@ -180,11 +174,11 @@ end
     "regularization term for infeasible controls"
     R_inf::T = 1.0
 
-    "resolve feasible problem after infeasible solve"
-    resolve_feasible::Bool = true
+    "project infeasible results to feasible space using TVLQR"
+    dynamically_feasible_projection::Bool = true
 
-    "project infeasible solution into feasible space w/ BP, rollout"
-    feasible_projection::Bool = true
+    "resolve feasible problem after infeasible solve"
+    resolve_feasible_problem::Bool = true
 
     "initial penalty term for infeasible controls"
     penalty_initial_infeasible::T = 1.0
@@ -213,4 +207,7 @@ end
 
     "penalty update rate for minimum time equality constraints"
     penalty_scaling_minimum_time_equality::T = 1.0
+
+    # Projected Newton
+    projected_newton::Bool = false
 end
