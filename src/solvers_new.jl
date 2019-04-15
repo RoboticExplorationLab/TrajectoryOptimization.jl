@@ -165,6 +165,28 @@ AugmentedLagrangianSolver(prob::Problem{T},
     opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T =
     AbstractSolver(prob,opts)
 
+
+"$(TYPEDEF) L1 solver"
+    struct L1Solver{T} <: AbstractSolver{T}
+        opts::L1SolverOptions{T}
+        stats::Dict{Symbol,Any}
+        stats_uncon::Vector{Dict{Symbol,Any}}
+
+        # Data variables
+        C::PartedVecTrajectory{T}      # Constraint values [(p,N-1) (p_N)]
+        C_prev::PartedVecTrajectory{T} # Previous constraint values [(p,N-1) (p_N)]
+        ∇C::PartedMatTrajectory{T}   # Constraint jacobians [(p,n+m,N-1) (p_N,n)]
+        Y::PartedVecTrajectory{T}      # ADMM dummy variable trajectory [(p,N-1) (p_N)]
+        M::PartedVecTrajectory{T}      # ADMM Lagrange multipliers [(p,N-1) (p_N)]
+        λ::PartedVecTrajectory{T}      # Lagrange multipliers [(p,N-1) (p_N)]
+        μ::PartedVecTrajectory{T}     # Penalty matrix [(p,p,N-1) (p_N,p_N)]
+        active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
+    end
+
+    L1Solver(prob::Problem{T},
+        opts::L1SolverOptions{T}=L1SolverOptions{T}()) where T =
+        AbstractSolver(prob,opts)
+
 """$(TYPEDSIGNATURES)
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.

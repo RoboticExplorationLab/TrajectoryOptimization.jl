@@ -16,6 +16,143 @@ function solve(prob0::Problem{T},opts::AbstractSolverOptions{T})::Problem{T} whe
     return prob
 end
 
+function solve!(prob::Problem{T}, solver::L1Solver{T}) where T
+    reset!(solver)
+    println("***We are in solve!(prob::Problem{T}, solver::L1Solver{T})")
+    n,m,N = size(prob)
+    J = Inf
+    # # Create Trajectories
+    # C          = [BlockArray(zeros(T,p),c_part)       for k = 1:N-1]
+    # ∇C         = [BlockArray(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
+    # λ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
+    # μ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
+    # active_set = [BlockArray(ones(Bool,p),c_part)     for k = 1:N-1]
+    # push!(C,BlockVector(T,c_term))
+    # push!(∇C,BlockMatrix(T,c_term,n,0))
+    # push!(λ,BlockVector(T,c_term))
+    # push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
+    # push!(active_set,BlockVector(Bool,c_term))
+
+    # Initialization
+    Y = zeros(N,m) ###
+    M = ones(N,m) ###
+    ρ = 10^-4 ###
+    logger = default_logger(solver)
+
+    # Initial rollout
+    rollout!(prob)
+    J_prev = cost(prob.cost, prob.X, prob.U, prob.dt)
+    push!(solver.stats[:cost], J_prev)
+
+    # create L1ALCost
+    l1cost = prob.cost
+    l1alcost = L1ALCost(l1cost,Y,M,ρ)
+    # create L1ALProblem
+    l1alprob = Problem(prob.model, l1alcost, prob.constraints, prob.x0, prob.X,
+        prob.U, prob.N, prob.dt, prob.tf)
+    # create L1ALSolver
+    l1alsolver = iLQRSolver(l1alprob)
+
+    with_logger(logger) do
+        for i = 1:solver.opts.iterations
+            # update L1AlCost, L1ALProblem, L1ALSolver
+            l1alcost.Y = Y
+            l1alcost.M = M
+            l1alcost.ρ = ρ
+            l1alprob.cost = l1alcost
+            l1alsolver.prob = l1alproblem
+            # ADMM Steps
+            # Optimal Control Update
+            X,U = solve(l1alprob,l1alsolver,U) ###
+            # Soft threshold Update
+            Y = soft_thresholding(cost.d/ρ, U + (M .- [cost.r])/ρ)
+            # Dual Update
+            M += ρ*(U - Y)
+
+            # eval convergence
+            J = cost(prob.cost, X, U, prob.dt)
+            # check for cost blow up
+            if J > solver.opts.max_cost_value
+                error("Cost exceeded maximum cost")
+            end
+            dJ = abs(J - J_prev)
+            J_prev = copy(J)
+            record_iteration!(prob, solver, J, dJ)
+            live_plotting(prob,solver)
+            # println(logger, InnerLoop)
+            evaluate_convergence(l1solver) ? break : nothing
+        end
+    end
+    return J
+end
+
+
+function live_plotting(prob::Problem{T},solver::L1Solver{T}) where T
+    if solver.opts.live_plotting == :state
+        p = plot(prob.X,title="State trajectory")
+        display(p)
+    elseif solver.opts.live_plotting == :control
+        p = plot(prob.U,title="Control trajectory")
+        display(p)
+    else
+        nothing
+    end
+end
+
+function record_iteration!(prob::Problem{T}, solver::L1Solver{T}, J::T, dJ::T) where T
+    solver.stats[:iterations] += 1
+    push!(solver.stats[:cost], J)
+    push!(solver.stats[:dJ], dJ)
+    push!(solver.stats[:gradient],calculate_gradient(prob,solver))
+    dJ == 0 ? solver.stats[:dJ_zero_counter] += 1 : solver.stats[:dJ_zero_counter] = 0
+
+    @logmsg InnerLoop :iter value=solver.stats[:iterations]
+    @logmsg InnerLoop :cost value=J
+    @logmsg InnerLoop :dJ   value=dJ
+    @logmsg InnerLoop :grad value=solver.stats[:gradient][end]
+    @logmsg InnerLoop :zero_count value=solver.stats[:dJ_zero_counter][end]
+end
+
+function calculate_gradient(prob::Problem,solver::L1Solver)
+    if solver.opts.gradient_type == :todorov
+        gradient = gradient_todorov(prob,solver)
+    elseif solver.opts.gradient_type == :feedforward
+        gradient = gradient_feedforward(solver)
+    end
+    return gradient
+end
+
+function evaluate_convergence(solver::L1Solver)
+    # Check for cost convergence
+    # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
+    if 0.0 < solver.stats[:dJ][end] < solver.opts.cost_tolerance
+        return true
+    end
+
+    # Check for gradient convergence
+    if solver.stats[:gradient][end] < solver.opts.gradient_norm_tolerance
+        return true
+    end
+
+    # Check total iterations
+    if solver.stats[:iterations] >= solver.opts.iterations
+        return true
+    end
+
+    # Outer loop update if forward pass is repeatedly unsuccessful
+    if solver.stats[:dJ_zero_counter] > solver.opts.dJ_counter_limit
+        return true
+    end
+    return false
+end
+
+
+
+
+
+
+
+
 function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     reset!(solver)
 

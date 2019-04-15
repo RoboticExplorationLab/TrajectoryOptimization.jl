@@ -1,4 +1,6 @@
 import Base.copy
+import LinearAlgebra.norm
+import LinearAlgebra.I
 
 #*********************************#
 #       COST FUNCTION CLASS       #
@@ -102,6 +104,57 @@ end
 function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end
+
+"""
+$(TYPEDEF)
+Cost function of the form
+    1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx + rᵀu + d|u|) dt from 0 to tf
+R must be positive definite, Q and Qf must be positive semidefinite
+"""
+mutable struct L1Cost{TM,TH,TV,T} <: CostFunction
+    Q::TM                 # Quadratic stage cost for states (n,n)
+    R::TM                 # Quadratic stage cost for controls (m,m)
+    H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
+    q::TV                 # Linear term on states (n,)
+    r::TV                 # Linear term on controls (m,)
+    c::T                  # constant term
+    d::T                  # Scaling term (l1 cost term)
+    Qf::TM                # Quadratic final cost for terminal state (n,n)
+    qf::TV                # Linear term on terminal state (n,)
+    cf::T                 # constant term (terminal)
+    function L1Cost(Q::TM, R::TM, H::TH, q::TV, r::TV, c::T, d::T, Qf::TM, qf::TV, cf::T) where {TM, TH, TV, T}
+        if !isposdef(R)
+            err = ArgumentError("R must be positive definite")
+            throw(err)
+        end
+        if !ispossemidef(Q)
+            err = ArgumentError("Q must be positive semi-definite")
+            throw(err)
+        end
+        if !ispossemidef(Qf)
+            err = ArgumentError("Qf must be positive semi-definite")
+            throw(err)
+        end
+        new{TM,TH,TV,T}(Q,R,H,q,r,c,d,Qf,qf,cf)
+    end
+end
+
+function stage_cost(cost::L1Cost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + cost.d*norm(u,1)
+end
+
+function stage_cost(cost::L1Cost, xN::Vector{T}) where T
+    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
+end
+
+function get_sizes(cost::L1Cost)
+    return size(cost.Q,1), size(cost.R,1)
+end
+
+function copy(cost::L1Cost)
+    return L1Cost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.d), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
+end
+
 
 """
 $(TYPEDEF)
@@ -237,6 +290,63 @@ function cost(cost::MinTimeCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}
     J += stage_cost(cost,X[N])
     return J
 end
+
+
+"""
+$(TYPEDEF)
+Cost function of the form
+    `` 1/2xₙᵀ Qf xₙ + qfᵀxₙ + cf + ∑ (1/2xᵀQx + q⁠ᵀx + rᵀy + d|y| + c + λ^T (u-y) + ρ/2 (u-y)^T(u-y) + uᵀRu + xᵀHu)``
+    We can get rid of terms that depend only on y.
+    `` 1/2xₙᵀ Qf xₙ + qfᵀxₙ + cf + ∑ (1/2xᵀQx + q⁠ᵀx + c + uᵀ(R+ρ/2*I)u + (λ-y)ᵀu + xᵀHu)``
+    Here ``X`` and ``U`` are state and control trajectories, and ``Y`` is a dummy variables trajectory.
+
+Internally stores trajectories for the Lagrange multipliers.
+$(FIELDS)
+"""
+
+struct L1ALCost{T} <: CostFunction
+    cost::C where C<:CostFunction
+    # constraints::AbstractConstraintSet
+    # C::PartedVecTrajectory{T}  # Constraint values
+    # ∇C::PartedMatTrajectory{T} # Constraint jacobians
+    Y::PartedVecTrajectory{T}  # ADMM Dummy variables trajectory
+    M::PartedVecTrajectory{T}  # ADMM Lagrange multipliers
+    ρ::AbstractFloat # ADMM Penalty Term
+    # λ::PartedVecTrajectory{T}  # Lagrange multipliers
+    # μ::PartedVecTrajectory{T}  # Penalty Term
+    # active_set::PartedVecTrajectory{Bool}  # Active set
+end
+
+function stage_cost(l1alcost::L1ALCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
+    cost = l1alcost.cost
+    y = l1alcost.Y[k]
+    ν = l1alcost.M[k]
+    return 0.5*x'cost.Q*x + cost.q'x + cost.c + 0.5*u'*(cost.R + l1alcost.ρ/2*I)*u + (ν-y)'u
+end
+
+function stage_cost(cost::L1ALCost, xN::Vector{T}) where T
+    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
+end
+
+"Second-order Taylor expansion of cost function at time step k"
+function cost_expansion(l1alcost::L1ALCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    cost = l1alcost.cost
+    y = l1alcost.Y[k]
+    ν = l1alcost.M[k]
+    return cost.Q, cost.R + l1alcost.ρ/2*I, cost.H, cost.Q*x + cost.q, (cost.R + l1alcost.ρ/2*I)*u + (ν-y)
+end
+
+function cost_expansion(cost::L1ALCost, xN::Vector{T}) where T
+    return cost.Qf, cost.Qf*xN + cost.qf
+end
+
+function cost_expansion_gradients(cost::L1ALCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+    cost = l1alcost.cost
+    y = l1alcost.Y[k]
+    ν = l1alcost.M[k]
+    return cost.Q*x + cost.q, (cost.R + l1alcost.ρ/2*I)*u + (ν-y)
+end
+
 
 """
 $(TYPEDEF)

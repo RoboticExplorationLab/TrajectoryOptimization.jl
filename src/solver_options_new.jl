@@ -91,6 +91,61 @@ function copy(r::iLQRSolverOptions)
     nothing
 end
 
+
+"""$(TYPEDEF)
+Solver options for the L1 solver used to solve problem with quadratic cost and L1 cost term on the control.
+$(FIELDS)
+"""
+@with_kw mutable struct L1SolverOptions{T} <: AbstractSolverOptions{T}
+    "Print summary at each iteration"
+    verbose::Bool=false
+
+    "unconstrained solver options"
+    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
+
+    "max(constraint) < ϵ, constraint convergence criteria"
+    constraint_tolerance::T = 1.0e-3
+
+    "max(constraint) < ϵ_int, intermediate constraint convergence criteria"
+    constraint_tolerance_intermediate::T = 1.0e-3
+
+    "maximum outerloop updates"
+    iterations::Int = 30
+
+    "minimum Lagrange multiplier"
+    dual_min::T = -1.0e8
+
+    "maximum Lagrange multiplier"
+    dual_max::T = 1.0e8
+
+    "maximum penalty term"
+    penalty_max::T = 1.0e8
+
+    "initial penalty term"
+    penalty_initial::T = 1.0
+
+    "penalty update multiplier; penalty_scaling > 0"
+    penalty_scaling::T = 10.0
+
+    "penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)"
+    penalty_scaling_no::T = 1.0
+
+    "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1"
+    constraint_decrease_ratio::T = 0.25
+
+    "type of outer loop update (default, momentum, individual, accelerated)"
+    outer_loop_update_type::Symbol = :default
+
+    "determines how many iterations should pass before the penalty is updated (1 is every iteration)"
+    penalty_update_frequency::Int = 1
+
+    "numerical tolerance for constraint violation"
+    active_constraint_tolerance::T = 0.0
+
+    "perform only penalty updates (no dual updates) until constraint_tolerance_intermediate < ϵ_int"
+    use_penalty_burnin::Bool = false
+end
+
 """$(TYPEDEF)
 Solver options for the augmented Lagrangian solver.
     Augmented Lagrangian is a general method for solving constrained problems by solving a sequence of unconstrained problems.
