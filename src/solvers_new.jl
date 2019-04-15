@@ -172,7 +172,7 @@ Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangia
 """
 function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     # check for conflicting convergence criteria between unconstrained solver and AL: warn
-    check_convergence_criteria(opts.opts_uncon,opts.cost_tolerance,opts.gradient_norm_tolerance)
+    # check_convergence_criteria(opts.opts_uncon,opts.cost_tolerance,opts.gradient_norm_tolerance)
 
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,

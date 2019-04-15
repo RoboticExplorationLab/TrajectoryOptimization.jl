@@ -6,12 +6,13 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     # primary solve (augmented Lagrangian)
     solve!(prob_altro,opts.opts_al)
 
-    # process primary solve results
+    # # process primary solve results
     process_altro_results!(prob,prob_altro,state,opts)
 
     return nothing
 end
 
+"Processes ALTRO solve results, including: remove slack controls, add minimum time controls"
 function process_altro_results!(prob::Problem{T},prob_altro::Problem{T},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T
 
@@ -41,15 +42,16 @@ function process_altro_results!(prob::Problem{T},prob_altro::Problem{T},
         end
         copyto!(prob.X,prob_altro.X,prob.model.n)
 
-        if state.projected_newton
-            #TODO
-            nothing
-        end
+        # if state.projected_newton
+        #     #TODO
+        #     nothing
+        # end
     end
 
     return nothing
 end
 
+"Return ALTRO problem from original problem, includes: adding slack controls, adding minimum time controls"
 function create_altro_problem(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     prob_altro = prob
 
@@ -78,6 +80,7 @@ function create_altro_problem(prob::Problem{T},opts::ALTROSolverOptions{T}) wher
     return prob_altro, state
 end
 
+"Return a feasible problem from an infeasible problem"
 function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T
     prob_altro_feasible = prob
@@ -101,6 +104,7 @@ function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
     return prob_altro_feasible
 end
 
+"Project dynamically infeasible state trajectory into feasible space using TVLQR"
 function dynamically_feasible_projection!(prob::Problem{T},opts::iLQRSolverOptions{T}) where T
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     solver_ilqr = AbstractSolver(prob,opts)
