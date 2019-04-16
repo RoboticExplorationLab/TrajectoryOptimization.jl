@@ -1,3 +1,4 @@
+using Test
 ## Augment dynamics
 model, = Dynamics.pendulum
 model_d = Model{Discrete}(model,rk4)
@@ -20,7 +21,7 @@ evaluate!(x_d,model_d,x,u,1.0)
 evaluate!(x_inf,model_inf,x,u_inf,1.0)
 
 evaluate!(Z_d,rand(model_d.n),model_d,x,u,1.0)
-evaluate!(Z_inf,rand(model_inf.n),model_inf,x,u_inf,1.0)
+model_inf.∇f(Z_inf,x,u_inf,1.0)
 
 @test x_inf == x_d + u_inf[model_d.m+1:end]
 @test Z_d == Z_inf[1:model_d.n,[(1:model_d.n+model_d.m)...,2model_d.n+model_d.m+1]]
@@ -46,7 +47,7 @@ evaluate!(x_d,model_d,x,u,dt)
 evaluate!(x₊_mintime,model_mintime,x_mintime,u_mintime,Inf) # note we can use Inf here since dt input is not used
 
 evaluate!(Z_d,rand(model_d.n),model_d,x,u,dt)
-evaluate!(Z_mintime,rand(model_mintime.n),model_mintime,x_mintime,u_mintime,Inf)
+model_mintime.∇f(Z_mintime,x_mintime,u_mintime,Inf)
 
 @test isapprox(x₊_mintime[1:model_d.n],x_d)
 
@@ -77,9 +78,8 @@ evaluate!(x_d,model_d,x,u,dt)
 evaluate!(x₊_altro,model_altro,x_altro,u_altro,Inf) # note we can use Inf here since dt input is not used
 
 evaluate!(Z_d,rand(model_d.n),model_d,x,u,dt)
-evaluate!(Z_altro,rand(model_altro.n),model_altro,x_altro,u_altro,Inf)
+model_altro.∇f(Z_altro,x_altro,u_altro,Inf)
 
-x₊_altro
 @test isapprox(x₊_altro[1:model_d.n],x_d + u_altro[(1:model_d.n) .+ model_d.n])
 @test x₊_altro[end] == u_altro[end]
 @test isapprox(Z_d[1:model_d.n,1:model_d.n+model_d.m],Z_altro[1:model_d.n,[(1:model_d.n)...,((1:model_d.m) .+ (model_d.n+1))...]])
