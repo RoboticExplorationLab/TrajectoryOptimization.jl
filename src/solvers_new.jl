@@ -239,16 +239,15 @@ end
 
 get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
-
 "Second-order Taylor expansion of cost function at time step k"
 function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, x::Vector{T},
-        u::Vector{T}, k::Int) where T
+        u::Vector{T}, dt::T, k::Int) where T
     Q = solver.Q[k]
-    Q.x .= cost.Q*x + cost.q
-    Q.u .= cost.R*u
-    Q.xx .= cost.Q
-    Q.uu .= cost.R
-    Q.ux .= cost.H
+    Q.x .= (cost.Q*x + cost.q)*dt
+    Q.u .= cost.R*u*dt
+    Q.xx .= cost.Q*dt
+    Q.uu .= cost.R*dt
+    Q.ux .= cost.H*dt
     return nothing
 end
 
@@ -259,9 +258,9 @@ function cost_expansion!(solver::iLQRSolver{T},cost::QuadraticCost, xN::Vector{T
 end
 
 function cost_expansion!(solver::iLQRSolver{T},cost::ALCost{T},
-        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
+        x::AbstractVector{T},u::AbstractVector{T}, dt::T, k::Int) where T
     Q = solver.Q[k]
-    cost_expansion!(solver, cost.cost, x, u, k)
+    cost_expansion!(solver, cost.cost, x, u, dt, k)
     c = cost.C[k]
     λ = cost.λ[k]
     μ = cost.μ[k]
@@ -309,16 +308,16 @@ function cost_expansion!(solver::iLQRSolver,cost::ALCost{T},x::AbstractVector{T}
 end
 
 function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, x::Vector{T},
-        u::Vector{T}, k::Int) where T
+        u::Vector{T}, dt::T, k::Int) where T
 
     e = cost.expansion(x,u)
     Q = solver.Q[k]
 
-    Q.x .= e[4]
-    Q.u .= e[5]
-    Q.xx .= e[1]
-    Q.uu .= e[2]
-    Q.ux .= e[3]
+    Q.x .= e[4]*dt
+    Q.u .= e[5]*dt
+    Q.xx .= e[1]*dt
+    Q.uu .= e[2]*dt
+    Q.ux .= e[3]*dt
     return nothing
 end
 
@@ -342,7 +341,7 @@ end
 
 "Second-order Taylor expansion of minimum time cost function at time step k"
 function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T},
-        u::Vector{T}, k::Int) where T
+        u::Vector{T}, dt::T, k::Int) where T
 
     @assert cost.cost isa QuadraticCost
     n,m = get_sizes(cost.cost)

@@ -10,6 +10,7 @@ end
 
 function _backwardpass!(prob::Problem,solver::iLQRSolver)
     N = prob.N
+    dt = prob.dt
 
     # Objective
     cost = prob.cost
@@ -28,7 +29,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(solver, cost, X[k], U[k], k)
+        cost_expansion!(solver, cost, X[k], U[k], dt, k)
 
         fdx, fdu = dynamics_jacobians(prob,solver,k)
 

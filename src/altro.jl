@@ -26,7 +26,7 @@ function process_altro_results!(prob::Problem{T},prob_altro::Problem{T},
         # remove infeasible, perform feasible projection, resolve
         if state.infeasible
             # infeasible problem -> feasible problem
-            prob_altro = infeasible_to_feasible_problem(prob,prob_altro,opts)
+            prob_altro = infeasible_to_feasible_problem(prob,prob_altro,state,opts)
 
             # secondary solve (augmented Lagrangian)
             if opts.resolve_feasible_problem

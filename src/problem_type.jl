@@ -309,7 +309,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
     @assert prob.cost isa QuadraticCost
     # modify problem with slack control
     cost_inf = copy(prob.cost)
-    cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n),dims=(1,2))
+    cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n)/prob.dt,dims=(1,2))
     cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
     cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
 

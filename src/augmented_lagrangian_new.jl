@@ -19,6 +19,11 @@ function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
     end
 end
 
+function solve!(prob::Problem{T},opts::AugmentedLagrangianSolverOptions{T}) where T
+    isempty(prob.constraints) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
+    solve!(prob,solver)
+end
+
 function set_intermediate_uncon_solver_tolerances!(solver::AugmentedLagrangianSolver{T},
         solver_uncon::AbstractSolver{T},i::Int) where T
     if i != solver.opts.iterations
@@ -38,6 +43,8 @@ function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
 
     # Solve the unconstrained problem
     J = solve!(prob, unconstrained_solver)
+
+    reset!(unconstrained_solver)
 
     # Outer loop update
     dual_update!(prob, solver)
@@ -112,9 +119,10 @@ function max_violation(solver::AugmentedLagrangianSolver{T}) where T
     N = length(C)
     if length(C[1]) > 0
         for k = 1:N-1
-            c_max = max(norm(C[k].equality,Inf),
-                        pos(maximum(C[k].inequality)),
-                        c_max)
+            c_max = max(norm(C[k].equality,Inf), c_max)
+            if length(C[k].inequality) > 0
+                c_max = max(pos(maximum(C[k].inequality)), c_max)
+            end
         end
     end
     if length(solver.C[N]) > 0

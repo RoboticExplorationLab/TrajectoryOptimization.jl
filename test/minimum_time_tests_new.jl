@@ -71,8 +71,10 @@ lqr_cost = LQRCost(Q,R,Qf,xf)
 # options
 verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=false,live_plotting=:off)
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,iterations=30,penalty_scaling=10.0)
-opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=1.0,dt_max=0.2,dt_min=1.0e-3)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,
+    iterations=30,penalty_scaling=10.0)
+opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=1.0,
+    dt_max=0.2,dt_min=1.0e-3)
 
 # constraints
 u_bnd = 2.
