@@ -572,6 +572,33 @@ function chol_plus(A,B)
     return qr(P).R
 end
 
+function chol_plus!(A::AbstractMatrix{T},B::AbstractMatrix{T}) where T
+    # copyto!(X,qr([A;B]).R)
+    A .= qr([A;B]).R
+end
+tmp = zeros(6,3)
+function chol_plus!(X::AbstractMatrix{T},tmp::AbstractMatrix{T},A::AbstractMatrix{T},B::AbstractMatrix{T}) where T
+    # copyto!(X,qr([A;B]).R)
+    tmp[1:3,:] = A
+    tmp[4:6,:] = B
+    X .= qr(tmp).R
+end
+
+A = rand(3,3)
+B = rand(3,3)
+X = zeros(3,3)
+
+qr([A;B]).R
+
+chol_plus!(A,B)
+A
+
+using BenchmarkTools
+@benchmark chol_plus($A,$B)
+@benchmark chol_plus!($A,$B)
+@benchmark chol_plus!($X,$tmp,$A,$B)
+
+
 function backwardpass_max_condition_number(bp::TrajectoryOptimization.BackwardPass)
     N = length(bp.Quu)
     max_cn = 0.

@@ -8,6 +8,7 @@ $(FIELDS)
 """
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
+    
     "Print summary at each iteration"
     verbose::Bool=false
 
