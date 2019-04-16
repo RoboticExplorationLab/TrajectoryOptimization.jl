@@ -46,7 +46,6 @@ X0 = line_trajectory_new(x0,xf,N)
 prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
-opts_altro.opts_al
 @test norm(prob.X[end] - xf) < 1.0e-3
 
 # constrained infeasible solve

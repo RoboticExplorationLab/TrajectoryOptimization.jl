@@ -15,13 +15,14 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Objective
     cost = prob.cost
 
-    X = prob.X; U = prob.U; K = solver.K; d = solver.d; S = solver.S; s = solver.s
+    X = prob.X; U = prob.U; K = solver.K; d = solver.d
 
+    S = solver.S
     Q = solver.Q # cost-to-go expansion
     reset!(Q)
 
     # Boundary Conditions
-    cost_expansion!(solver,cost,X[N])
+    cost_expansion!(S[N],cost,X[N])
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -29,15 +30,15 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(solver, cost, X[k], U[k], dt, k)
+        cost_expansion!(Q[k], cost, X[k], U[k], dt, k)
 
         fdx, fdu = dynamics_jacobians(prob,solver,k)
 
-        Q[k].x .+= fdx'*s[k+1]
-        Q[k].u .+= fdu'*s[k+1]
-        Q[k].xx .+= fdx'*S[k+1]*fdx
-        Q[k].uu .+= fdu'*S[k+1]*fdu
-        Q[k].ux .+= fdu'*S[k+1]*fdx
+        Q[k].x .+= fdx'*S[k+1].x
+        Q[k].u .+= fdu'*S[k+1].x
+        Q[k].xx .+= fdx'*S[k+1].xx*fdx
+        Q[k].uu .+= fdu'*S[k+1].xx*fdu
+        Q[k].ux .+= fdu'*S[k+1].xx*fdx
 
 
         if solver.opts.bp_reg_type == :state
@@ -66,9 +67,9 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         d[k] = -Quu_reg\Q[k].u
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'*Q[k].u + Q[k].ux'*d[k]
-        S[k] = Q[k].xx + K[k]'*Q[k].uu*K[k] + K[k]'*Q[k].ux + Q[k].ux'*K[k]
-        S[k] = 0.5*(S[k] + S[k]')
+        S[k].x .= Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'*Q[k].u + Q[k].ux'*d[k]
+        S[k].xx .= Q[k].xx + K[k]'*Q[k].uu*K[k] + K[k]'*Q[k].ux + Q[k].ux'*K[k]
+        S[k].xx .= 0.5*(S[k].xx + S[k].xx')
 
         # calculated change is cost-to-go over entire trajectory
         ΔV[1] += d[k]'*Q[k].u
@@ -95,15 +96,16 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Objective
     cost = prob.cost
 
-    X = prob.X; U = prob.U; K = solver.K; d = solver.d; S = solver.S; s = solver.s
+    X = prob.X; U = prob.U; K = solver.K; d = solver.d
 
+    S = solver.S
     Q = solver.Q # cost-to-go expansion
     reset!(Q)
 
     # Boundary Conditions
-    cost_expansion!(solver,cost,X[N])
+    cost_expansion!(S[N],cost,X[N])
     try
-        S[N] = cholesky(S[N]).U
+        S[N].xx = cholesky(S[N].xx).U
     catch PosDefException
         error("Terminal cost Hessian must be PD for sqrt backward pass")
     end
@@ -116,14 +118,14 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(solver, cost, X[k], U[k], dt, k)
+        cost_expansion!(Q[k], cost, X[k], U[k], dt, k)
 
         fdx, fdu = dynamics_jacobians(prob,solver,k)
 
-        Q[k].x .+= fdx'*s[k+1]
-        Q[k].u .+= fdu'*s[k+1]
-        tmp_x = S[k+1]*fdx
-        tmp_u = S[k+1]*fdu
+        Q[k].x .+= fdx'*S[k+1].x
+        Q[k].u .+= fdu'*S[k+1].x
+        tmp_x = S[k+1].xx*fdx
+        tmp_u = S[k+1].xx*fdu
         Q[k].xx .= cholesky(Q[k].xx).U
         chol_plus!(Q[k].xx,tmp_x)
         Q[k].uu .= cholesky(Q[k].uu).U
@@ -145,7 +147,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
         d[k] = -Quu_reg\(Quu_reg'\Q[k].u)
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        s[k] = Q[k].x + (K[k]'*Q[k].uu')*(Q[k].uu*d[k]) + K[k]'*Q[k].u + Q[k].ux'*d[k]
+        S[k].x .= Q[k].x + (K[k]'*Q[k].uu')*(Q[k].uu*d[k]) + K[k]'*Q[k].u + Q[k].ux'*d[k]
 
         try
             tmp1 = (Q[k].xx')\Q[k].ux'
@@ -162,7 +164,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
             tmp2 = Diagonal(sqrt.(tmp.values))*tmp.vectors'
         end
 
-        S[k] = chol_plus(Q[k].xx + tmp1*K[k],tmp2*K[k])
+        S[k].xx .= chol_plus(Q[k].xx + tmp1*K[k],tmp2*K[k])
 
         # calculated change is cost-to-go over entire trajectory
         ΔV[1] += d[k]'*Q[k].u

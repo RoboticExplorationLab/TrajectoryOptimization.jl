@@ -5,11 +5,11 @@ function dubins_dynamics!(xdot,x,u)
     xdot[1] = u[1]*cos(x[3])
     xdot[2] = u[1]*sin(x[3])
     xdot[3] = u[2]
-    xdot
+    return nothing
 end
 n,m = 3,2
 
-model = Model(dubins_dynamics!,n,m)
+car_model = Model(dubins_dynamics!,n,m)
 
 ##########################
 ## Constrained Examples ##

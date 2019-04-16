@@ -45,7 +45,6 @@ function Problem(model::Model{Continuous}, cost::CostFunction; integration=:rk4,
     Problem(discretizer(model), cost; kwargs...)
 end
 
-
 """$(TYPEDSIGNATURES)
 Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified

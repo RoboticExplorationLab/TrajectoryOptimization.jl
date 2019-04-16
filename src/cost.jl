@@ -26,17 +26,19 @@ Cost function of the form
     1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
-    Q::TM                 # Quadratic stage cost for states (n,n)
-    R::TM                 # Quadratic stage cost for controls (m,m)
-    H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
-    q::TV                 # Linear term on states (n,)
-    r::TV                 # Linear term on controls (m,)
+mutable struct QuadraticCost{T} <: CostFunction
+    Q::AbstractMatrix{T}                 # Quadratic stage cost for states (n,n)
+    R::AbstractMatrix{T}                 # Quadratic stage cost for controls (m,m)
+    H::AbstractMatrix{T}                 # Quadratic Cross-coupling for state and controls (n,m)
+    q::AbstractVector{T}                 # Linear term on states (n,)
+    r::AbstractVector{T}                 # Linear term on controls (m,)
     c::T                  # constant term
-    Qf::TM                # Quadratic final cost for terminal state (n,n)
-    qf::TV                # Linear term on terminal state (n,)
+    Qf::AbstractMatrix{T}                # Quadratic final cost for terminal state (n,n)
+    qf::AbstractVector{T}               # Linear term on terminal state (n,)
     cf::T                 # constant term (terminal)
-    function QuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, c::T, Qf::TM, qf::TV, cf::T) where {TM, TH, TV, T}
+    function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
+            q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
+            qf::AbstractVector{T}, cf::T) where T
         if !isposdef(R)
             err = ArgumentError("R must be positive definite")
             throw(err)
@@ -49,7 +51,7 @@ mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
             err = ArgumentError("Qf must be positive semi-definite")
             throw(err)
         end
-        new{TM,TH,TV,T}(Q,R,H,q,r,c,Qf,qf,cf)
+        new{T}(Q,R,H,q,r,c,Qf,qf,cf)
     end
 end
 

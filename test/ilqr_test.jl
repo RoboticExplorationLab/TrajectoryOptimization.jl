@@ -26,7 +26,9 @@ X = empty_state(n,N)
 dt = solver.dt
 x0 = obj.x0
 prob = Problem(model_d,costfun,U,dt=dt,x0=x0)
-
+prob
+ee = TrajectoryOptimization.Expansion(prob)
+eex = Expansion(prob,:x)
 opts = iLQRSolverOptions(iterations=50, gradient_norm_tolerance=1e-4, verbose=false)
 ilqr = iLQRSolver(prob,opts)
 res1 = solve(prob,ilqr)
