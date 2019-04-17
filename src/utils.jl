@@ -19,6 +19,8 @@ function get_N(solver::Solver,method::Symbol)
     get_N(solver.N,method)
 end
 
+get_N(prob::Problem, solver::DIRCOLSolver) = get_N(prob.N, solver.opts.method)
+
 function get_N(N0::Int,method::Symbol)
     if method == :midpoint
         N,N_ = N0,N0
@@ -158,6 +160,12 @@ end
 
 function copyto!(A::Vector{T}, B::Vector{T}) where {T<:SArray{S,Float64,N,L} where {S,N,L}}
     A .= copy.(B)
+end
+
+function copyto!(A::AbstractMatrix{T}, B::VectorTrajectory{T}) where T
+	for k = 1:length(B)
+		A[:,k] = B[k]
+	end
 end
 
 function Array{Float64,3}(X::Vector{D}) where {D<:Diagonal}

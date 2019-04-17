@@ -281,6 +281,11 @@ inequalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Ineq
 equalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
 bounds(C::AbstractConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
 Base.findall(C::AbstractConstraintSet,T::Type) = isa.(C,Constraint{T})
+function split_bounds(C::AbstractConstraintSet)
+    bnd = bounds(C)
+    notbnd = setdiff(C, bnd)
+    return bnd, notbnd
+end
 function PartedArrays.create_partition(C::AbstractConstraintSet)
     if !isempty(C)
         lens = length.(C)
@@ -318,6 +323,8 @@ PartedArrays.BlockMatrix(T::Type,C::AbstractConstraintSet,n::Int,m::Int) = Block
 
 num_stage_constraints(C::AbstractConstraintSet) = num_constraints(stage(C))
 num_terminal_constraints(C::AbstractConstraintSet) = num_constraints(terminal(C))
+count_stage_constraints(C::AbstractConstraintSet) = count_constraints(stage(C))
+count_terminal_constraints(C::AbstractConstraintSet) = count_constraints(terminal(C))
 
 "Return a new constraint set with modified jacobians--useful for state augmented problems"
 function update_constraint_set_jacobians(cs::AbstractConstraintSet,n::Int,n̄::Int,m::Int)

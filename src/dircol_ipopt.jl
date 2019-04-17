@@ -13,6 +13,44 @@ function init_jacobians(solver,method)
     return A,B
 end
 
+
+function init_jacobians(prob,solver)
+    method = solver.opts.method
+    N,N_ = get_N(prob, solver)
+    n,m = size(prob)
+    if method == :trapezoid || method == :hermite_simpson_separated
+        A = zeros(n,n+m,N_)
+        B = zeros(0,0,N_)
+    else
+        A = zeros(n,n,N_)
+        B = zeros(n,m,N_)
+    end
+    return A,B
+end
+
+function get_nG(prob::Problem, solver::DIRCOLSolver)
+    n,m = size(prob)
+    N,N_ = get_N(prob, solver)
+    method = solver.opts.method
+
+    # Collocation constraints
+    if method == :trapezoid || method == :hermite_simpson
+        nC = 2(n+m)*(N-1)n
+    elseif method == :hermite_simpson_separated
+        nC = 3(n+m)*(N-1)n
+    elseif method == :midpoint
+        nC = (2n+m)*(N-1)n
+    end
+
+    # Custom constraints
+    pI,pE = count_stage_constraints(prob)
+    pI_N,pE_N = count_terminal_constraints(prob)
+    nP = (N-1)*(n+m)*(pE + pI) + n*(pE_N + pI_N)
+
+    nG = nC + nP
+    return nG, (collocation=nC, custom=nP)
+end
+
 function get_nG(solver::Solver,method::Symbol)
     n,m = get_sizes(solver)
     N,N_ = get_N(solver,method)
@@ -32,6 +70,132 @@ function get_nG(solver::Solver,method::Symbol)
 
     nG = nC + nE + nP
     return nG, (collocation=nC, dt=nE, custom=nP)
+end
+
+function gen_usrfun_ipopt(prob::Problem, solver::DIRCOLSolver)
+    method = solver.opts.method
+
+    N,N_ = get_N(prob, solver)
+    n,m = size(prob)
+    NN = N*(n+m)
+
+    # Initialize Variables
+    fVal = zeros(n,N)
+    gX_,gU_,fVal_ = init_traj_points(solver,fVal,method)
+    weights = get_weights(method,N_)
+    A,B = init_jacobians(solver,method)
+
+    # Generate custom constraint functions
+    if solver.state.constrained
+        custom_constraints!, custom_constraint_jacobian!, custom_jacobian_sparsity = TrajectoryOptimization.gen_custom_constraint_fun(solver, method)
+        pI_c, pE_c = count_constraints(solver.obj, :custom)
+        PI_c = (N-1)pI_c[1] + pI_c[2]  # Total custom inequality constraints
+        PE_c = (N-1)pE_c[1] + pE_c[2]  # Total custom equality constraints
+        P_c = PI_c + PE_c              # Total custom constraints
+
+        # Partition constraints
+        n_colloc = (N-1)n  # Number of collocation constraints
+        g_colloc = 1:n_colloc           # Collocation constraints
+        g_custom = n_colloc.+(1:P_c)    # Custom constraints
+        g_dt = (n_colloc+P_c).+(1:N-2)  # dt constraints (minimum time)
+
+        nG,Gpart = get_nG(solver,method)
+        jac_g_colloc = 1:Gpart.collocation
+        jac_g_custom = Gpart.collocation .+ (1:Gpart.custom)
+        jac_g_dt = Gpart.collocation + Gpart.custom + 1:nG
+    end
+
+
+
+    #################
+    # COST FUNCTION #
+    #################
+    function eval_f(Z)
+        # vars = DircolVars(Z,n,m̄,N)
+        # X,U = vars.X, vars.U
+        X,U = unpackZ(Z,(n,m̄,N))
+        fVal = zeros(eltype(Z),n,N)
+        X_ = zeros(eltype(Z),n,N_)
+        U_ = zeros(eltype(Z),m̄,N_)
+        X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method,true)
+        J = cost(solver,X_,U_,method)
+        return J
+    end
+
+    ###########################
+    # COLLOCATION CONSTRAINTS #
+    ###########################
+    function eval_g(Z, g)
+        # vars = DircolVars(Z,n,m,N)
+        # X,U = vars.X,vars.U
+        X,U = unpackZ(Z,(n,m̄,N))
+        fVal = zeros(eltype(Z),n,N)
+        X_ = zeros(eltype(Z),n,N_)
+        U_ = zeros(eltype(Z),m̄,N_)
+        fVal_ = zeros(eltype(Z),n,N_)
+        X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
+        get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal, method)
+        collocation_constraints!(solver::Solver, X_, U_, fVal_, view(g,g_colloc), method::Symbol)
+        if solver.state.constrained
+            custom_constraints!(view(g,g_custom),X,U)
+            if solver.state.minimum_time
+                dt_constraints!(solver, view(g,g_dt), view(U,m̄,1:N))
+            end
+        end
+        return nothing
+    end
+
+    #################
+    # COST GRADIENT #
+    #################
+    function eval_grad_f(Z, grad_f)
+        # vars = DircolVars(Z,n,m,N)
+        # X,U = vars.X,vars.U
+        X,U = unpackZ(Z,(n,m̄,N))
+        X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+        # get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+        update_jacobians!(solver,X_,U_,A,B,method,true)
+        cost_gradient!(solver, X_, U_, fVal, A, B, weights, grad_f, method)
+        return nothing
+    end
+
+    #######################
+    # CONSTRAINT JACOBIAN #
+    #######################
+    function eval_jac_g(Z, mode, rows, cols, vals)
+        if mode == :Structure  # TODO: Do this in place
+            nG,Gpart = get_nG(solver,method)
+            jacob_colloc = collocation_constraint_jacobian_sparsity(solver,method)
+            jacob_custom = custom_jacobian_sparsity(Gpart.collocation)
+            jacob_dt = time_step_constraint_jacobian_sparsity(solver,Gpart.collocation + Gpart.custom)
+            jacob_g = [jacob_colloc;
+                       jacob_custom;
+                       jacob_dt]
+
+            r,c,inds = findnz(jacob_g)
+            v = sortperm(inds)
+            rows .= r[v]
+            cols .= c[v]
+        else
+            # vars = DircolVars(Z,n,m,N)
+            # X,U = vars.X,vars.U
+            X,U = unpackZ(Z,(n,m̄,N))
+            X_,U_ = get_traj_points(solver,X,U,fVal,gX_,gU_,method)
+            get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal,method)
+            update_jacobians!(solver,X_,U_,A,B,method)
+            collocation_constraint_jacobian!(solver, X_,U_,fVal_, A,B, view(vals, jac_g_colloc), method)
+            if solver.state.constrained
+                custom_constraint_jacobian!(view(vals, jac_g_custom), X,U)
+            end
+            if solver.state.minimum_time
+                time_step_constraint_jacobian!(view(vals, jac_g_dt), solver)
+            end
+        end
+        return nothing
+    end
+
+    return eval_f, eval_g, eval_grad_f, eval_jac_g
+
 end
 
 function gen_usrfun_ipopt(solver::Solver,method::Symbol)
@@ -156,6 +320,24 @@ function gen_usrfun_ipopt(solver::Solver,method::Symbol)
     end
 
     return eval_f, eval_g, eval_grad_f, eval_jac_g
+
+end
+
+function solve_ipopt(prob::Problem{T}, solver::DIRCOLSolver{T}) where T
+    N,N_ = get_N(prob, solver)
+    n,m = size(prob)
+    NN = N*(n+m)
+    nG, = get_nG(prob, solver)
+
+    X0,U0 = to_array(prob.X), to_array(prob.U)
+
+    # Pack the variables
+    if size(U0,2) == N-1
+        U0 = [U0 U0[:,end]]
+    end
+    Z0 = packZ(X0,U0)
+    @assert length(Z0) == NN
+
 
 end
 

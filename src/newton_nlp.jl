@@ -130,19 +130,21 @@ function NewtonVars(solver::Solver, res::SolverIterResults)
     NewtonVars(Z,ν,λ,μ,r)
 end
 
-function get_primal_inds(n,m,N)
+function get_primal_inds(n,m,N,uN=N-1)
     Nx = N*n
-    Nu = (N-1)*m
+    Nu = uN*m
     Nz = Nx+Nu
     ind_x = zeros(Int,n,N)
-    ind_u = zeros(Int,m,N-1)
+    ind_u = zeros(Int,m,uN)
     ix = 1:n
     iu = n .+ (1:m)
-    for k = 1:N-1
+    for k = 1:uN
         ind_x[:,k] = ix .+ (k-1)*(n+m)
         ind_u[:,k] = iu .+ (k-1)*(n+m)
     end
-    ind_x[:,N] = ix .+ (N-1)*(n+m)
+    if uN == N-1
+        ind_x[:,N] = ix .+ (N-1)*(n+m)
+    end
     return ind_x, ind_u
 end
 

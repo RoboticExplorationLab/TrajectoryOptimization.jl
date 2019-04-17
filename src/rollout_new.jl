@@ -26,7 +26,7 @@ function rollout!(prob::Problem)
     N = prob.N
     X = prob.X; U = prob.U
 
-    if !all(isfinite.(prob.X[1]))
+    if !all(all.(map(x->isfinite.(x),prob.X)))
         X[1] = prob.x0
         for k = 1:N-1
             evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)

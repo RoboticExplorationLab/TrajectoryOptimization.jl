@@ -213,7 +213,7 @@ function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,
         μ[k] .*= μ_init
     end
 
-    return C,∇C,λ,μ,active_set
+    return C, ∇C, λ, μ, active_set
 end
 
 function reset!(solver::AugmentedLagrangianSolver{T}) where T

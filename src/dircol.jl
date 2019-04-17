@@ -1,3 +1,7 @@
+function solve!(prob::Problem{T}, solver::DIRCOLSolver{T}) where T
+
+end
+
 """
 $(SIGNATURES)
 Solve a trajectory optimization problem with direct collocation
@@ -516,6 +520,17 @@ function init_traj_points(solver::Solver,fVal::Matrix,method::Symbol)
     n,m = get_sizes(solver)
     m̄, = get_num_controls(solver)
     X_,U_,fVal_ = zeros(n,N_),zeros(m̄,N_),zeros(n,N_)
+    if method == :trapezoid || method == :hermite_simpson_separated
+        fVal_ = fVal
+    end
+    return X_,U_,fVal_
+end
+
+function init_traj_points(prob::Problem,solver::DIRCOLSolver,fVal::Matrix)
+    method = solver.opts.method
+    N,N_ = get_N(prob, solver)
+    n,m = size(prob)
+    X_,U_,fVal_ = zeros(n,N_),zeros(m,N_),zeros(n,N_)
     if method == :trapezoid || method == :hermite_simpson_separated
         fVal_ = fVal
     end

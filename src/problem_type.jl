@@ -271,6 +271,9 @@ end
 num_stage_constraints(p::Problem) = num_stage_constraints(p.constraints)
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints)
 
+count_stage_constraints(p::Problem) = count_stage_constraints(p.constraints)
+count_terminal_constraints(p::Problem) = count_terminal_constraints(p.constraints)
+
 jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
 cost(prob::Problem{T}) where T = cost(prob.cost, prob.X, prob.U, prob.dt)::T

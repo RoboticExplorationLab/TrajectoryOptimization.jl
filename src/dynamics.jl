@@ -1,7 +1,9 @@
 module Dynamics
 
 using TrajectoryOptimization: Problem, Model, UnconstrainedObjective, ConstrainedObjective,
-    LQRObjective, LQRCost, Trajectory, bound_constraint, initial_controls!
+    LQRObjective, LQRCost, Trajectory, bound_constraint, initial_controls!, rk3, rk4,
+    Constraint, TerminalConstraint, Inequality, Equality
+using DocStringExtensions
 using RigidBodyDynamics
 using LinearAlgebra
 
