@@ -103,7 +103,7 @@ V_ = newton_projection(solver,res_n,eps=1e-12,verbose=false)
 res_ = ConstrainedVectorResults(solver,V_.Z.X,V_.Z.U)
 backwardpass!(res_,solver)
 rollout!(res_,solver,0.0)
-# max_violation(res_)
+max_violation(res_)
 t_newton = float(time_ns()-t_start)/1e9
 
 t_ilqr = 0.617336
@@ -133,6 +133,13 @@ plot_vertical_lines!(p,[time_ilqr[stats_inf["max_mu_iteration (infeasible)"]]],l
 
 savefig(p,joinpath(IMAGE_DIR,"escape_newton.png"))
 
+pyplot()
+p = plot(time_dircol,stats_i["c_max"][2:end],yscale=:log10,label="DIRCOL",color=:blue,width=width,
+    markershape=:circle,markerstrokecolor=:blue,markersize=markersize)
+plot!(time_newton,c_max,yscale=:log10,ylim=[1e-9,1e-1],xlim=[0,10],label="ALTRO",legend=:topright,xlabel="Time (s)",ylabel="Max Constraint Violation",color=:green,width=width,
+    markershape=:circle,markerstrokecolor=:green,markersize=markersize,dpi=400,size=(500,250))
+
+savefig(p,joinpath(IMAGE_DIR,"escape_newton_simple.png"))
 cost(solver,res_)
 stats_i["cost"][end-3]
 stats_inf["cost"][end]
