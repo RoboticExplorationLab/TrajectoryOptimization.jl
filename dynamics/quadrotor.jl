@@ -66,7 +66,7 @@ end
 
 ## Utilities
 """
-@(SIGNATURES)
+$(SIGNATURES)
     Rotate a vector by a quaternion
 """
 function qrot(q,r)
@@ -74,7 +74,7 @@ function qrot(q,r)
 end
 
 """
-@(SIGNATURES)
+$(SIGNATURES)
     Multiplication of two quaternions (q = [s;v])
 """
 function qmult(q1,q2)
@@ -107,13 +107,11 @@ xf = copy(x0)
 xf[1:3] = [0.;40.;0.] # xyz position
 xf[4:7] = q0
 
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+quadrotor_cost = LQRCost(Q, R, Qf, xf)
+quadrotor_model = rk4(model)
 
-# Model + objective
-quadrotor = [model, obj_uncon]
 
 ## Constrained
-
 r_quad = 3.0
 r_sphere = 3.0
 spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
@@ -123,6 +121,9 @@ n_spheres = 3
 u_min = 0.0
 u_max = 10.0
 
+# Hover force
+f_hover = 0.5*9.81/4
+
 # 3 sphere obstacles
 function cI_3obs_quad(c,x,u)
     for i = 1:n_spheres
@@ -130,6 +131,17 @@ function cI_3obs_quad(c,x,u)
     end
     c
 end
+con_obs = Constraint{Inequality}(cI_3obs_quad, n, m, n_spheres, :obstacles)
+N = 51
+U_hover = ones(m,N-1)*f_hover
+quadrotor_obstacles = Problem(quadrotor_model, quadrotor_cost, U_hover, constraints=[con_obs], x0=x0, N=N, tf=tf)
+
+
+# Old Stuff
+obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
+
+# Model + objective
+quadrotor = [model, obj_uncon]
 
 # unit quaternion constraint
 function unit_quaternion(c,x,u)
