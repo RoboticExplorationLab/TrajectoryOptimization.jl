@@ -2,20 +2,39 @@
 function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
     reset!(solver)
 
-    unconstrained_solver = AbstractSolver(prob, solver.opts.opts_uncon)
+    solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
 
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
 
     with_logger(logger) do
         for i = 1:solver.opts.iterations
-            J = step!(prob_al, solver, unconstrained_solver)
+            set_intermediate_uncon_solver_tolerances!(solver,solver_uncon,i)
+            J = step!(prob_al, solver, solver_uncon)
 
-            record_iteration!(prob, solver, J, unconstrained_solver)
+            record_iteration!(prob, solver, J, solver_uncon)
             println(logger,OuterLoop)
             evaluate_convergence(solver) ? break : nothing
         end
     end
+end
+
+function solve!(prob::Problem{T},opts::AugmentedLagrangianSolverOptions{T}) where T
+    isempty(prob.constraints) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
+    solve!(prob,solver)
+end
+
+function set_intermediate_uncon_solver_tolerances!(solver::AugmentedLagrangianSolver{T},
+        solver_uncon::AbstractSolver{T},i::Int) where T
+    if i != solver.opts.iterations
+        solver_uncon.opts.cost_tolerance = solver.opts.cost_tolerance_intermediate
+        solver_uncon.opts.gradient_norm_tolerance = solver.opts.gradient_norm_tolerance_intermediate
+    else
+        solver_uncon.opts.cost_tolerance = solver.opts.cost_tolerance
+        solver_uncon.opts.gradient_norm_tolerance = solver.opts.gradient_norm_tolerance
+    end
+
+    return nothing
 end
 
 "Augmented Lagrangian step"
@@ -24,6 +43,8 @@ function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
 
     # Solve the unconstrained problem
     J = solve!(prob, unconstrained_solver)
+
+    reset!(unconstrained_solver)
 
     # Outer loop update
     dual_update!(prob, solver)
@@ -98,9 +119,10 @@ function max_violation(solver::AugmentedLagrangianSolver{T}) where T
     N = length(C)
     if length(C[1]) > 0
         for k = 1:N-1
-            c_max = max(norm(C[k].equality,Inf),
-                        pos(maximum(C[k].inequality)),
-                        c_max)
+            c_max = max(norm(C[k].equality,Inf), c_max)
+            if length(C[k].inequality) > 0
+                c_max = max(pos(maximum(C[k].inequality)), c_max)
+            end
         end
     end
     if length(solver.C[N]) > 0

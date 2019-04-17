@@ -8,6 +8,7 @@ $(FIELDS)
 """
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
+    
     "Print summary at each iteration"
     verbose::Bool=false
 
@@ -17,17 +18,11 @@ $(FIELDS)
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
     cost_tolerance::T = 1.0e-4
 
-    "dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve"
-    cost_tolerance_intermediate::T = 1.0e-3
-
     "gradient type: :todorov, :feedforward"
     gradient_type::Symbol = :todorov
 
     "gradient_norm < ϵ, gradient norm convergence criteria"
     gradient_norm_tolerance::T = 1.0e-5
-
-    "gradient_norm_int < ϵ, gradient norm intermediate convergence criteria"
-    gradient_norm_tolerance_intermediate::T = 1.0e-5
 
     "iLQR iterations"
     iterations::Int = 500
@@ -66,6 +61,7 @@ $(FIELDS)
     "additive regularization when forward pass reaches max iterations"
     bp_reg_fp::T = 10.0
 
+    # square root backward pass options:
     "type of matrix inversion for bp sqrt step"
     bp_sqrt_inv_type::Symbol = :pseudo
 
@@ -103,6 +99,18 @@ $(FIELDS)
     "unconstrained solver options"
     opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
+    "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
+    cost_tolerance::T = 1.0e-4
+
+    "dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve"
+    cost_tolerance_intermediate::T = 1.0e-3
+
+    "gradient_norm < ϵ, gradient norm convergence criteria"
+    gradient_norm_tolerance::T = 1.0e-5
+
+    "gradient_norm_int < ϵ, gradient norm intermediate convergence criteria"
+    gradient_norm_tolerance_intermediate::T = 1.0e-5
+
     "max(constraint) < ϵ, constraint convergence criteria"
     constraint_tolerance::T = 1.0e-3
 
@@ -133,18 +141,25 @@ $(FIELDS)
     "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1"
     constraint_decrease_ratio::T = 0.25
 
-    "type of outer loop update (default, momentum, individual, accelerated)"
+    "type of outer loop update (default, feedback)"
     outer_loop_update_type::Symbol = :default
-
-    "determines how many iterations should pass before the penalty is updated (1 is every iteration)"
-    penalty_update_frequency::Int = 1
 
     "numerical tolerance for constraint violation"
     active_constraint_tolerance::T = 0.0
 
-    "perform only penalty updates (no dual updates) until constraint_tolerance_intermediate < ϵ_int"
-    use_penalty_burnin::Bool = false
 end
+
+function check_convergence_criteria(opts_uncon::AbstractSolverOptions{T},cost_tolerance::T,gradient_norm_tolerance::T) where T
+    if opts_uncon.cost_tolerance != cost_tolerance
+        @warn "Augmented Lagrangian cost tolerance overriding unconstrained solver option\n >>cost tolerance=$cost_tolerance"
+    end
+
+    if opts_uncon.gradient_norm_tolerance != gradient_norm_tolerance
+        @warn "Augmented Lagrangian gradient norm tolerance overriding unconstrained solver option\n >>gradient norm tolerance=$gradient_norm_tolerance"
+    end
+    return nothing
+end
+
 
 @with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
 
@@ -160,11 +175,11 @@ end
     "regularization term for infeasible controls"
     R_inf::T = 1.0
 
-    "resolve feasible problem after infeasible solve"
-    resolve_feasible::Bool = true
+    "project infeasible results to feasible space using TVLQR"
+    dynamically_feasible_projection::Bool = true
 
-    "project infeasible solution into feasible space w/ BP, rollout"
-    feasible_projection::Bool = true
+    "resolve feasible problem after infeasible solve"
+    resolve_feasible_problem::Bool = true
 
     "initial penalty term for infeasible controls"
     penalty_initial_infeasible::T = 1.0
@@ -193,4 +208,7 @@ end
 
     "penalty update rate for minimum time equality constraints"
     penalty_scaling_minimum_time_equality::T = 1.0
+
+    # Projected Newton
+    projected_newton::Bool = false
 end

@@ -11,8 +11,9 @@ function cost(cost::CostFunction,X::AbstractVectorTrajectory{T},U::AbstractVecto
     N = length(X)
     J = 0.0
     for k = 1:N-1
-        J += stage_cost(cost,X[k],U[k])*dt
+        J += stage_cost(cost,X[k],U[k])
     end
+    J /= (N-1.0)
     J += stage_cost(cost,X[N])
     return J
 end
@@ -26,17 +27,19 @@ Cost function of the form
     1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
-    Q::TM                 # Quadratic stage cost for states (n,n)
-    R::TM                 # Quadratic stage cost for controls (m,m)
-    H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
-    q::TV                 # Linear term on states (n,)
-    r::TV                 # Linear term on controls (m,)
+mutable struct QuadraticCost{T} <: CostFunction
+    Q::AbstractMatrix{T}                 # Quadratic stage cost for states (n,n)
+    R::AbstractMatrix{T}                 # Quadratic stage cost for controls (m,m)
+    H::AbstractMatrix{T}                 # Quadratic Cross-coupling for state and controls (n,m)
+    q::AbstractVector{T}                 # Linear term on states (n,)
+    r::AbstractVector{T}                 # Linear term on controls (m,)
     c::T                  # constant term
-    Qf::TM                # Quadratic final cost for terminal state (n,n)
-    qf::TV                # Linear term on terminal state (n,)
+    Qf::AbstractMatrix{T}                # Quadratic final cost for terminal state (n,n)
+    qf::AbstractVector{T}               # Linear term on terminal state (n,)
     cf::T                 # constant term (terminal)
-    function QuadraticCost(Q::TM, R::TM, H::TH, q::TV, r::TV, c::T, Qf::TM, qf::TV, cf::T) where {TM, TH, TV, T}
+    function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
+            q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
+            qf::AbstractVector{T}, cf::T) where T
         if !isposdef(R)
             err = ArgumentError("R must be positive definite")
             throw(err)
@@ -49,7 +52,7 @@ mutable struct QuadraticCost{TM,TH,TV,T} <: CostFunction
             err = ArgumentError("Qf must be positive semi-definite")
             throw(err)
         end
-        new{TM,TH,TV,T}(Q,R,H,q,r,c,Qf,qf,cf)
+        new{T}(Q,R,H,q,r,c,Qf,qf,cf)
     end
 end
 
@@ -227,17 +230,6 @@ stage_cost(cost::MinTimeCost, xN::Vector{T}) where T = stage_cost(cost.cost,xN[1
 get_sizes(cost::MinTimeCost) = get_sizes(cost.cost) .+ 1
 copy(cost::MinTimeCost) = MinTimeCost(copy(cost.cost),copy(cost.R_min_time))
 
-function cost(cost::MinTimeCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T)::T where T <: AbstractFloat
-    N = length(X)
-    J = 0.0
-    for k = 1:N-1
-        dt = U[k][end]^2
-        J += stage_cost(cost,X[k],U[k])*dt
-    end
-    J += stage_cost(cost,X[N])
-    return J
-end
-
 """
 $(TYPEDEF)
 Cost function of the form
@@ -310,8 +302,6 @@ function update_constraints!(cost::ALCost{T},X::VectorTrajectory{T},U::VectorTra
     update_constraints!(cost.cost,cost.C,cost.constraints,X,U)
 end
 
-
-
 "Evaluate active set constraints for entire trajectory"
 function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
     N = length(c)
@@ -378,11 +368,14 @@ function cost(alcost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt
 
     update_active_set!(alcost)
 
+    Jc = 0.0
     for k = 1:N-1
-        J += stage_constraint_cost(alcost,X[k],U[k],k)
+        Jc += stage_constraint_cost(alcost,X[k],U[k],k)
     end
-    J += stage_constraint_cost(alcost,X[N])
-    return J
+    Jc /= (N-1.0)
+
+    Jc += stage_constraint_cost(alcost,X[N])
+    return J + Jc
 end
 
 "Second-order expansion of augmented Lagrangian cost"

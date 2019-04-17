@@ -147,9 +147,10 @@ function goal_constraint(xf::Vector{T}) where T
 end
 
 function infeasible_constraints(n::Int, m::Int)
+    idx_inf = (n+m) .+ (1:n)
     u_inf = m .+ (1:n)
-    ∇inf = zeros(n,n+m)
-    ∇inf[:,u_inf] = Diagonal(1.0I,n)
+    ∇inf = zeros(n,2n+m)
+    ∇inf[:,idx_inf] = Diagonal(1.0I,n)
     inf_con(v,x,u) = copyto!(v, u)
     inf_jac(C,x,u) = copyto!(C, ∇inf)
     Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)])

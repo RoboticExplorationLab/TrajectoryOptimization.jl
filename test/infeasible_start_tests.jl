@@ -13,6 +13,7 @@ U = ones(solver.model.m,solver.N-1)
 
 results, stats = solve(solver,X_interp,U)
 
+plot(results.U)
 @test norm(results.X[end] - solver.obj.xf) < 1e-5
 @test max_violation(results) < 1e-5
 @test stats["iterations"] > stats["iterations (infeasible)"]
@@ -35,3 +36,5 @@ results_con, stats_con = solve(solver_con,X_interp,U)
 @test max_violation(results_con) < 1e-5
 @test stats_con["iterations"] > stats_con["iterations (infeasible)"]
 @test stats_con["outer loop iterations"] > stats_con["outer loop iterations (infeasible)"]
+
+solver_con.opts

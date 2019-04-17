@@ -83,7 +83,8 @@ U0 = ones(solver_con_box.model.m,solver_con_box.N-1)
 
 # results_uncon, stats_uncon = TrajectoryOptimization.solve(solver_uncon,U0)
 results_con_box, stats_con_box = TrajectoryOptimization.solve(solver_con_box,U0)
-
+using Plots
+plot(results_con_box.U)
 obj_mintime = update_objective(obj_con_box,tf=:min, u_min=u_min, u_max=u_max)
 
 opts.max_dt = 0.2
@@ -93,7 +94,7 @@ opts.constraint_tolerance = 0.001 # 0.005
 opts.R_minimum_time = .05 #15.0 #13.5 # 12.0
 opts.constraint_decrease_ratio = .25
 opts.penalty_scaling = 10.0
-opts.outer_loop_update_type = :individual
+opts.outer_loop_update_type = :default
 opts.iterations = 1000
 opts.iterations_outerloop = 30 # 20
 

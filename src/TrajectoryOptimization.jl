@@ -161,6 +161,7 @@ include("backwardpass_new.jl")
 include("forward_pass_new.jl")
 include("rollout_new.jl")
 include("augmented_lagrangian_new.jl")
+include("minimum_time_new.jl")
 include("dynamics.jl")
 include("logger.jl")
 

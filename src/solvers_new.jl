@@ -12,16 +12,47 @@ function Expansion(prob::Problem{T}) where T
     Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
 end
 
+function Expansion(prob::Problem{T},exp::Symbol) where T
+    n = prob.model.n; m = prob.model.m
+    if exp == :x
+        return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))
+    elseif exp == :u
+        return Expansion(zeros(T,0),zeros(T,m),zeros(T,0,0),zeros(T,m,m),zeros(T,0,0))
+    else
+        error("Invalid expansion components requested")
+    end
+end
+
+import Base./, Base.*
+
+function *(e::Expansion{T},a::T) where T
+    e.x .*= a
+    e.u .*= a
+    e.xx .*= a
+    e.uu .*= a
+    e.ux .*= a
+    return nothing
+end
+
+function /(e::Expansion{T},a::T) where T
+    e.x ./= a
+    e.u ./= a
+    e.xx ./= a
+    e.uu ./= a
+    e.ux ./= a
+    return nothing
+end
+
 function copy(e::Expansion{T}) where T
     Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
 end
 
 function reset!(e::Expansion)
-    e.x .= zero(e.x)
-    e.u .= zero(e.u)
-    e.xx .= zero(e.xx)
-    e.uu .= zero(e.uu)
-    e.ux .= zero(e.ux)
+    !isempty(e.x) ? e.x .= zero(e.x) : nothing
+    !isempty(e.u) ? e.u .= zero(e.u) : nothing
+    !isempty(e.xx) ? e.xx .= zero(e.xx) : nothing
+    !isempty(e.uu) ? e.uu .= zero(e.uu) : nothing
+    !isempty(e.ux) ? e.ux .= zero(e.ux) : nothing
     return nothing
 end
 
@@ -30,44 +61,6 @@ ExpansionTrajectory{T} = Vector{Expansion{T}} where T <: AbstractFloat
 function reset!(et::ExpansionTrajectory)
     for e in et
         reset!(e)
-    end
-end
-
-
-struct BackwardPassNew{T<:AbstractFloat}
-    Qx::VectorTrajectory{T}
-    Qu::VectorTrajectory{T}
-    Qxx::MatrixTrajectory{T}
-    Qux::MatrixTrajectory{T}
-    Quu::MatrixTrajectory{T}
-    Qux_reg::MatrixTrajectory{T}
-    Quu_reg::MatrixTrajectory{T}
-end
-
-function BackwardPassNew(p::Problem{T}) where T
-    n = p.model.n; m = p.model.m; N = p.N
-
-    Qx = [zeros(T,n) for i = 1:N-1]
-    Qu = [zeros(T,m) for i = 1:N-1]
-    Qxx = [zeros(T,n,n) for i = 1:N-1]
-    Qux = [zeros(T,m,n) for i = 1:N-1]
-    Quu = [zeros(T,m,m) for i = 1:N-1]
-
-    Qux_reg = [zeros(T,m,n) for i = 1:N-1]
-    Quu_reg = [zeros(T,m,m) for i = 1:N-1]
-
-    BackwardPassNew{T}(Qx,Qu,Qxx,Qux,Quu,Qux_reg,Quu_reg)
-end
-
-function copy(bp::BackwardPassNew{T}) where T
-    BackwardPassNew{T}(deepcopy(bp.Qx),deepcopy(bp.Qu),deepcopy(bp.Qxx),deepcopy(bp.Qux),deepcopy(bp.Quu),deepcopy(bp.Qux_reg),deepcopy(bp.Quu_reg))
-end
-
-function reset!(bp::BackwardPassNew)
-    N = length(bp.Qx)
-    for k = 1:N-1
-        bp.Qx[k] = zero(bp.Qx[k]); bp.Qu[k] = zero(bp.Qu[k]); bp.Qxx[k] = zero(bp.Qxx[k]); bp.Quu[k] = zero(bp.Quu[k]); bp.Qux[k] = zero(bp.Qux[k])
-        bp.Quu_reg[k] = zero(bp.Quu_reg[k]); bp.Qux_reg[k] = zero(bp.Qux_reg[k])
     end
 end
 
@@ -85,15 +78,14 @@ struct iLQRSolver{T} <: AbstractSolver{T}
     K::MatrixTrajectory{T}  # State feedback gains (m,n,N-1)
     d::VectorTrajectory{T}  # Feedforward gains (m,N-1)
 
-    S::MatrixTrajectory{T}  # Cost-to-go Hessian (n,n,N)
-    s::VectorTrajectory{T}  # Cost-to-go gradient (n,N)
-
     ∇F::PartedMatTrajectory{T} # discrete dynamics jacobian (block) (n,n+m+1,N)
+
+    S::ExpansionTrajectory{T} # Optimal cost-to-go expansion trajectory
+    Q::ExpansionTrajectory{T} # cost-to-go expansion trajectory
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
 
-    Q::ExpansionTrajectory{T} # cost-to-go expansion trajectory
 end
 
 function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
@@ -113,18 +105,18 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     K  = [zeros(T,m,n) for i = 1:N-1]
     d  = [zeros(T,m)   for i = 1:N-1]
 
-    S  = [zeros(T,n,n) for i = 1:N]
-    s  = [zeros(T,n)   for i = 1:N]
-
     part_f = create_partition2(prob.model)
     ∇F = [BlockArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
+
+    S  = [Expansion(prob,:x) for i = 1:N]
+    Q = [Expansion(prob) for i = 1:N-1]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    Q = [Expansion(prob) for i = 1:N-1]
 
-    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,S,s,∇F,ρ,dρ,Q)
+    solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,∇F,S,Q,ρ,dρ)
+
     reset!(solver)
     return solver
 end
@@ -135,12 +127,12 @@ function reset!(solver::iLQRSolver{T}) where T
     solver.stats[:dJ]              = T[]
     solver.stats[:gradient]        = T[]
     solver.stats[:dJ_zero_counter] = 0
-    solver.ρ[1] = 0
-    solver.dρ[1] = 0
+    solver.ρ[1] = 0.0
+    solver.dρ[1] = 0.0
 end
 
 function copy(r::iLQRSolver{T}) where T
-    iLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.S),copy(r.s),copy(r.∇F),copy(r.ρ),copy(r.dρ),copy(r.Q))
+    iLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.∇F),copy(r.S),copy(r.Q),copy(r.ρ),copy(r.dρ))
 end
 
 get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
@@ -170,6 +162,9 @@ Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangia
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
 function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+    # check for conflicting convergence criteria between unconstrained solver and AL: warn
+    # check_convergence_criteria(opts.opts_uncon,opts.cost_tolerance,opts.gradient_norm_tolerance)
+
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
         :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
@@ -235,11 +230,9 @@ end
 
 get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
-
 "Second-order Taylor expansion of cost function at time step k"
-function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, x::Vector{T},
+function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
         u::Vector{T}, k::Int) where T
-    Q = solver.Q[k]
     Q.x .= cost.Q*x + cost.q
     Q.u .= cost.R*u
     Q.xx .= cost.Q
@@ -248,16 +241,15 @@ function cost_expansion!(solver::iLQRSolver,cost::QuadraticCost, x::Vector{T},
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver{T},cost::QuadraticCost, xN::Vector{T}) where T
-    solver.S[end] .= cost.Qf
-    solver.s[end] .= cost.Qf*xN + cost.qf
+function cost_expansion!(S::Expansion{T},cost::QuadraticCost, xN::Vector{T}) where T
+    S.xx .= cost.Qf
+    S.x .= cost.Qf*xN + cost.qf
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver{T},cost::ALCost{T},
-        x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
-    Q = solver.Q[k]
-    cost_expansion!(solver, cost.cost, x, u, k)
+function cost_expansion!(Q::Expansion{T},cost::ALCost{T},
+        x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
+    cost_expansion!(Q, cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
     μ = cost.μ[k]
@@ -281,9 +273,9 @@ function cost_expansion!(solver::iLQRSolver{T},cost::ALCost{T},
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::ALCost{T},x::AbstractVector{T}) where T
+function cost_expansion!(S::Expansion{T},cost::ALCost{T},x::AbstractVector{T}) where T
 
-    cost_expansion!(solver,cost.cost,x)
+    cost_expansion!(S,cost.cost,x)
     N = length(cost.μ)
 
     c = cost.C[N]
@@ -296,19 +288,18 @@ function cost_expansion!(solver::iLQRSolver,cost::ALCost{T},x::AbstractVector{T}
     jacobian!(cx,cost.constraints,x)
 
     # Second Order pieces
-    solver.S[N] .+= cx'Iμ*cx
+    S.xx .+= cx'Iμ*cx
 
     # First order pieces
-    solver.s[N] .+= cx'*(Iμ*c + λ)
+    S.x .+= cx'*(Iμ*c + λ)
 
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, x::Vector{T},
+function cost_expansion!(Q::Expansion{T},cost::GenericCost, x::Vector{T},
         u::Vector{T}, k::Int) where T
 
     e = cost.expansion(x,u)
-    Q = solver.Q[k]
 
     Q.x .= e[4]
     Q.u .= e[5]
@@ -318,10 +309,10 @@ function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, x::Vector{T},
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver{T},cost::GenericCost, xN::Vector{T}) where T
+function cost_expansion!(S::Expansion{T},cost::GenericCost, xN::Vector{T}) where T
     Qf, qf = cost.expansion(xN)
-    solver.S[end] .= Qf
-    solver.s[end] .= qf
+    S.xx .= Qf
+    S.x .= qf
     return nothing
 end
 
@@ -337,49 +328,62 @@ function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 end
 
 "Second-order Taylor expansion of minimum time cost function at time step k"
-function cost_expansion!(solver::iLQRSolver{T},cost::MinTimeCost{T}, x::Vector{T},
+function cost_expansion!(Q::Expansion{T},cost::MinTimeCost{T}, x::Vector{T},
         u::Vector{T}, k::Int) where T
 
     @assert cost.cost isa QuadraticCost
     n,m = get_sizes(cost.cost)
     idx = (x=1:n,u=1:m)
     R_min_time = cost.R_min_time
-    Q = solver.Q[k]
     τ = u[end]
-    dt = τ^2
+    # dt = τ^2
+    # Qx = cost.cost.Q*x[idx.x] + cost.cost.q
+    # Qu = cost.cost.R*u[idx.u] + cost.cost.r
+    # Q.x[idx.x] .= Qx*dt
+    # Q.u[idx.u] .= Qu*dt
+    # Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
+    # Q.uu[idx.u,idx.u] .= cost.cost.R*dt
+    # Q.ux[idx.u,idx.x] .= cost.cost.H*dt
+    #
+    # ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+    # tmp = 2.0*τ*Qu
+    #
+    # Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
+    # Q.uu[idx.u,end] = tmp
+    # Q.uu[end,idx.u] = tmp'
+    # Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
+    # Q.ux[end,idx.x] = 2.0*τ*Qx'
+    #
+    # Q.x[end] = R_min_time*x[end]
+    # Q.xx[end,end] = R_min_time
+
     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
     Qu = cost.cost.R*u[idx.u] + cost.cost.r
-    Q.x[idx.x] .= Qx*dt
-    Q.u[idx.u] .= Qu*dt
-    Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
-    Q.uu[idx.u,idx.u] .= cost.cost.R*dt
-    Q.ux[idx.u,idx.x] .= cost.cost.H*dt
+    Q.x[idx.x] .= Qx
+    Q.u[idx.u] .= Qu
+    Q.xx[idx.x,idx.x] .= cost.cost.Q
+    Q.uu[idx.u,idx.u] .= cost.cost.R
+    Q.ux[idx.u,idx.x] .= cost.cost.H
 
-    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
-    tmp = 2.0*τ*Qu
 
-    Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
-    Q.uu[idx.u,end] = tmp
-    Q.uu[end,idx.u] = tmp'
-    Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
-    Q.ux[end,idx.x] = 2.0*τ*Qx'
-
-    Q.x[end] = R_min_time*x[end]
-    Q.xx[end,end] = R_min_time
+    Q.u[end] = 2.0*τ*R_min_time
+    Q.uu[idx.u,end] = zeros(m)
+    Q.uu[end,idx.u] = zeros(m)
+    Q.uu[end,end] = 2.0*R_min_time
+    Q.ux[end,idx.x] = zeros(n)
 
     return nothing
 end
 
-function cost_expansion!(solver::iLQRSolver,cost::MinTimeCost,xN::Vector{T}) where T
+function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where T
     n, = get_sizes(cost.cost)
     R_min_time = cost.R_min_time
-    S = solver.S[end]
-    s = solver.s[end]
+
     idx = 1:n
-    S[idx,idx] = cost.cost.Qf
-    s[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
-    S[end,end] = R_min_time*xN[end]
-    s[end] = R_min_time
+    S.xx[idx,idx] = cost.cost.Qf
+    S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
+    # S.xx[end,end] = R_min_time*xN[end]
+    # S.x[end] = R_min_time
 
     return nothing
 end
