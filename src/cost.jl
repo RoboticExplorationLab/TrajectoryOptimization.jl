@@ -7,7 +7,7 @@ import Base.copy
 abstract type CostFunction end
 
 "Calculate (unconstrained) cost for X and U trajectories"
-function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T)::T where T <: AbstractFloat
+function cost(cost::CostFunction,X::AbstractVectorTrajectory{T},U::AbstractVectorTrajectory{T},dt::T)::T where T <: AbstractFloat
     N = length(X)
     J = 0.0
     for k = 1:N-1
@@ -17,8 +17,8 @@ function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},d
     return J
 end
 
-cost_expansion(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = cost_expansion(cost,x,u,1)
-stage_cost(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = stage_cost(cost,x,u,1)
+cost_expansion(cost::CostFunction,x::AbstractVector{T},u::AbstractVector{T}) where T = cost_expansion(cost,x,u,1)
+stage_cost(cost::CostFunction,x::AbstractVector{T},u::AbstractVector{T}) where T = stage_cost(cost,x,u,1)
 
 """
 $(TYPEDEF)
@@ -71,7 +71,7 @@ function LQRCost(Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf
 end
 
 "Second-order Taylor expansion of cost function at time step k"
-function cost_expansion(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+function cost_expansion!(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u + cost.r
 end
 
@@ -87,11 +87,11 @@ end
 gradient(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T = cost.Q*x + cost.q, cost.R*u + cost.r
 gradient(cost::QuadraticCost, xN::Vector{T}) where T = cost.Qf*xN + cost.qf
 
-function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
+function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
 
-function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
+function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
     0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 

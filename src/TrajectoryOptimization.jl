@@ -125,6 +125,7 @@ export
 Trajectory{T} = Vector{T} where T <: AbstractArray
 VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
 MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
+AbstractVectorTrajectory{T} = Vector{V} where {V <: AbstractVector{T}, T <: Real}
 DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
 PartedVecTrajectory{T} = Vector{BlockVector{T,Vector{T}}}
 PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
@@ -147,12 +148,13 @@ include("minimum_time.jl")
 include("ilqr_methods.jl")
 include("augmented_lagrangian.jl")
 include("solve.jl")
-include("utils.jl")
 include("controller.jl")
 
 include("problem_type.jl")
 include("solver_options_new.jl")
 include("solvers_new.jl")
+include("solvers/direct/direct_solvers.jl")
+include("utils.jl")
 include("ilqr.jl")
 include("altro.jl")
 include("backwardpass_new.jl")
