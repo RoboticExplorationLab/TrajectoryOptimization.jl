@@ -13,7 +13,7 @@ model_d = Model{Discrete}(model,rk4)
 x0 = [0; 0.]
 xf = [pi; 0] # (ie, swing up)
 Q = 1e-3*Matrix(I,n,n)
-Qf = 100.0*Matrix(I,n,n)
+Qf = 1000.0*Matrix(I,n,n)
 R = 1e-2*Matrix(I,m,m)
 tf = 5.
 lqr_cost = LQRCost(Q,R,Qf,xf)
@@ -44,6 +44,9 @@ X0 = line_trajectory_new(x0,xf,N)
 
 # unconstrained infeasible solve
 prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
+ilqr_solver = AbstractSolver(prob,opts_ilqr)
+ilqr_solver.Q[1]
+solve!(prob,ilqr_solver)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 @test norm(prob.X[end] - xf) < 1.0e-3

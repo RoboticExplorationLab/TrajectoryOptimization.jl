@@ -214,12 +214,12 @@ get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,
 
 "Second-order Taylor expansion of cost function at time step k"
 function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
-        u::Vector{T}, dt::T, k::Int) where T
-    Q.x .= (cost.Q*x + cost.q)*dt
-    Q.u .= cost.R*u*dt
-    Q.xx .= cost.Q*dt
-    Q.uu .= cost.R*dt
-    Q.ux .= cost.H*dt
+        u::Vector{T}, k::Int) where T
+    Q.x .= cost.Q*x + cost.q
+    Q.u .= cost.R*u
+    Q.xx .= cost.Q
+    Q.uu .= cost.R
+    Q.ux .= cost.H
     return nothing
 end
 
@@ -230,8 +230,8 @@ function cost_expansion!(S::Expansion{T},cost::QuadraticCost, xN::Vector{T}) whe
 end
 
 function cost_expansion!(Q::Expansion{T},cost::ALCost{T},
-        x::AbstractVector{T},u::AbstractVector{T}, dt::T, k::Int) where T
-    cost_expansion!(Q, cost.cost, x, u, dt, k)
+        x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
+    cost_expansion!(Q, cost.cost, x, u, k)
     c = cost.C[k]
     λ = cost.λ[k]
     μ = cost.μ[k]
@@ -279,15 +279,15 @@ function cost_expansion!(S::Expansion{T},cost::ALCost{T},x::AbstractVector{T}) w
 end
 
 function cost_expansion!(Q::Expansion{T},cost::GenericCost, x::Vector{T},
-        u::Vector{T}, dt::T, k::Int) where T
+        u::Vector{T}, k::Int) where T
 
     e = cost.expansion(x,u)
 
-    Q.x .= e[4]*dt
-    Q.u .= e[5]*dt
-    Q.xx .= e[1]*dt
-    Q.uu .= e[2]*dt
-    Q.ux .= e[3]*dt
+    Q.x .= e[4]
+    Q.u .= e[5]
+    Q.xx .= e[1]
+    Q.uu .= e[2]
+    Q.ux .= e[3]
     return nothing
 end
 
@@ -311,33 +311,48 @@ end
 
 "Second-order Taylor expansion of minimum time cost function at time step k"
 function cost_expansion!(Q::Expansion{T},cost::MinTimeCost{T}, x::Vector{T},
-        u::Vector{T}, dt::T, k::Int) where T
+        u::Vector{T}, k::Int) where T
 
     @assert cost.cost isa QuadraticCost
     n,m = get_sizes(cost.cost)
     idx = (x=1:n,u=1:m)
     R_min_time = cost.R_min_time
     τ = u[end]
-    dt = τ^2
+    # dt = τ^2
+    # Qx = cost.cost.Q*x[idx.x] + cost.cost.q
+    # Qu = cost.cost.R*u[idx.u] + cost.cost.r
+    # Q.x[idx.x] .= Qx*dt
+    # Q.u[idx.u] .= Qu*dt
+    # Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
+    # Q.uu[idx.u,idx.u] .= cost.cost.R*dt
+    # Q.ux[idx.u,idx.x] .= cost.cost.H*dt
+    #
+    # ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+    # tmp = 2.0*τ*Qu
+    #
+    # Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
+    # Q.uu[idx.u,end] = tmp
+    # Q.uu[end,idx.u] = tmp'
+    # Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
+    # Q.ux[end,idx.x] = 2.0*τ*Qx'
+    #
+    # Q.x[end] = R_min_time*x[end]
+    # Q.xx[end,end] = R_min_time
+
     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
     Qu = cost.cost.R*u[idx.u] + cost.cost.r
-    Q.x[idx.x] .= Qx*dt
-    Q.u[idx.u] .= Qu*dt
-    Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
-    Q.uu[idx.u,idx.u] .= cost.cost.R*dt
-    Q.ux[idx.u,idx.x] .= cost.cost.H*dt
+    Q.x[idx.x] .= Qx
+    Q.u[idx.u] .= Qu
+    Q.xx[idx.x,idx.x] .= cost.cost.Q
+    Q.uu[idx.u,idx.u] .= cost.cost.R
+    Q.ux[idx.u,idx.x] .= cost.cost.H
 
-    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
-    tmp = 2.0*τ*Qu
 
-    Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
-    Q.uu[idx.u,end] = tmp
-    Q.uu[end,idx.u] = tmp'
-    Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
-    Q.ux[end,idx.x] = 2.0*τ*Qx'
-
-    Q.x[end] = R_min_time*x[end]
-    Q.xx[end,end] = R_min_time
+    Q.u[end] = 2.0*τ*R_min_time
+    Q.uu[idx.u,end] = zeros(m)
+    Q.uu[end,idx.u] = zeros(m)
+    Q.uu[end,end] = 2.0*R_min_time
+    Q.ux[end,idx.x] = zeros(n)
 
     return nothing
 end
@@ -349,8 +364,8 @@ function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where 
     idx = 1:n
     S.xx[idx,idx] = cost.cost.Qf
     S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
-    S.xx[end,end] = R_min_time*xN[end]
-    S.x[end] = R_min_time
+    # S.xx[end,end] = R_min_time*xN[end]
+    # S.x[end] = R_min_time
 
     return nothing
 end

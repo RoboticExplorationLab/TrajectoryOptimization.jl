@@ -10,7 +10,6 @@ end
 
 function _backwardpass!(prob::Problem,solver::iLQRSolver)
     N = prob.N
-    dt = prob.dt
 
     # Objective
     cost = prob.cost
@@ -24,15 +23,16 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Boundary Conditions
     cost_expansion!(S[N],cost,X[N])
 
+
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
 
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(Q[k], cost, X[k], U[k], dt, k)
+        cost_expansion!(Q[k], cost, X[k], U[k], k)
 
-        fdx, fdu = dynamics_jacobians(prob,solver,k)
+        fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
         Q[k].x .+= fdx'*S[k+1].x
         Q[k].u .+= fdu'*S[k+1].x
@@ -84,14 +84,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     return ΔV
 end
 
-function dynamics_jacobians(prob::Problem{T},solver::AbstractSolver,k::Int) where T
-    #TODO quaternion
-    return solver.∇F[k].xx, solver.∇F[k].xu
-end
-
 function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     N = prob.N
-    dt = prob.dt
 
     # Objective
     cost = prob.cost
@@ -118,9 +112,9 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(Q[k], cost, X[k], U[k], dt, k)
+        cost_expansion!(Q[k], cost, X[k], U[k], k)
 
-        fdx, fdu = dynamics_jacobians(prob,solver,k)
+        fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
         Q[k].x .+= fdx'*S[k+1].x
         Q[k].u .+= fdu'*S[k+1].x
