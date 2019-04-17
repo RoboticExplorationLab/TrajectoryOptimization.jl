@@ -23,7 +23,25 @@ function Expansion(prob::Problem{T},exp::Symbol) where T
     end
 end
 
+import Base./, Base.*
 
+function *(e::Expansion{T},a::T) where T
+    e.x .*= a
+    e.u .*= a
+    e.xx .*= a
+    e.uu .*= a
+    e.ux .*= a
+    return nothing
+end
+
+function /(e::Expansion{T},a::T) where T
+    e.x ./= a
+    e.u ./= a
+    e.xx ./= a
+    e.uu ./= a
+    e.ux ./= a
+    return nothing
+end
 
 function copy(e::Expansion{T}) where T
     Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))

@@ -13,6 +13,7 @@ function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T},d
     for k = 1:N-1
         J += stage_cost(cost,X[k],U[k])
     end
+    J /= (N-1.0)
     J += stage_cost(cost,X[N])
     return J
 end
@@ -367,11 +368,14 @@ function cost(alcost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt
 
     update_active_set!(alcost)
 
+    Jc = 0.0
     for k = 1:N-1
-        J += stage_constraint_cost(alcost,X[k],U[k],k)
+        Jc += stage_constraint_cost(alcost,X[k],U[k],k)
     end
-    J += stage_constraint_cost(alcost,X[N])
-    return J
+    Jc /= (N-1.0)
+
+    Jc += stage_constraint_cost(alcost,X[N])
+    return J + Jc
 end
 
 "Second-order expansion of augmented Lagrangian cost"

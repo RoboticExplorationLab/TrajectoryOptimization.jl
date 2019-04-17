@@ -30,7 +30,7 @@ for is in int_schemes
     initial_controls!(prob, U0)
     solver_ilqr = iLQRSolver(prob, opts_ilqr)
     solve!(prob, solver_ilqr)
-    @test norm(prob.X[N] - xf) < 1e-6
+    @test norm(prob.X[N] - xf) < 1e-4
 end
 
 ## Constrained
