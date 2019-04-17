@@ -98,7 +98,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Boundary Conditions
     cost_expansion!(S[N],cost,X[N])
     try
-        S[N].xx = cholesky(S[N].xx).U
+        S[N].xx .= cholesky(S[N].xx).U
     catch PosDefException
         error("Terminal cost Hessian must be PD for sqrt backward pass")
     end
@@ -112,6 +112,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     k = N-1
     while k >= 1
         cost_expansion!(Q[k], cost, X[k], U[k], k)
+        Q[k]/(N-1.)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
