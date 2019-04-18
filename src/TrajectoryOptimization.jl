@@ -150,6 +150,7 @@ include("solve.jl")
 include("utils.jl")
 include("controller.jl")
 
+include("objective_new.jl")
 include("problem_type.jl")
 include("solver_options_new.jl")
 include("solvers_new.jl")

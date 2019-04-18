@@ -26,7 +26,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
 
     # Initial rollout
     rollout!(prob)
-    J_prev = cost(prob.cost, prob.X, prob.U, prob.dt)
+    J_prev = cost(prob.obj, prob.X, prob.U)
     push!(solver.stats[:cost], J_prev)
 
     with_logger(logger) do

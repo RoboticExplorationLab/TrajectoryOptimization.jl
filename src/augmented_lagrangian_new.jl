@@ -101,15 +101,15 @@ function penalty_update!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T})
 end
 
 "Generate augmented Lagrangian cost from unconstrained cost"
-function ALCost(prob::Problem{T},
+function ALObjectiveNew(prob::Problem{T},
         solver::AugmentedLagrangianSolver{T}) where T
-    ALCost{T}(prob.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
+    ALObjectiveNew{T}(prob.obj.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
 end
 
 "Generate augmented Lagrangian problem from constrained problem"
 function AugmentedLagrangianProblem(prob::Problem{T},solver::AugmentedLagrangianSolver{T}) where T
-    al_cost = ALCost(prob,solver)
-    al_prob = update_problem(prob,cost=al_cost,constraints=AbstractConstraint[],newProb=false)
+    obj_al = ALObjectiveNew(prob,solver)
+    prob_al = update_problem(prob,obj=obj_al,constraints=AbstractConstraint[],newProb=false)
 end
 
 "Evaluate maximum constraint violation"

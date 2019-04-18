@@ -163,7 +163,6 @@ Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangia
 """
 function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     # check for conflicting convergence criteria between unconstrained solver and AL: warn
-    # check_convergence_criteria(opts.opts_uncon,opts.cost_tolerance,opts.gradient_norm_tolerance)
 
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
@@ -230,62 +229,71 @@ end
 
 get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
-"Second-order Taylor expansion of cost function at time step k"
-function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
-        u::Vector{T}, k::Int) where T
-    Q.x .= cost.Q*x + cost.q
-    Q.u .= cost.R*u
-    Q.xx .= cost.Q
-    Q.uu .= cost.R
-    Q.ux .= cost.H
+# "Second-order Taylor expansion of cost function at time step k"
+# function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
+#         u::Vector{T}, k::Int) where T
+#     Q.x .= cost.Q*x + cost.q
+#     Q.u .= cost.R*u
+#     Q.xx .= cost.Q
+#     Q.uu .= cost.R
+#     Q.ux .= cost.H
+#     return nothing
+# end
+#
+# function cost_expansion!(S::Expansion{T},cost::QuadraticCost, xN::Vector{T}) where T
+#     S.xx .= cost.Qf
+#     S.x .= cost.Qf*xN + cost.qf
+#     return nothing
+# end
+
+function cost_expansion!(Q::ExpansionTrajectory{T},obj::ALObjectiveNew{T},
+        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+
+    cost_expansion!(Q, obj.cost, X, U)
+
+    for k = 1:N-1
+        c = obj.C[k]
+        λ = obj.λ[k]
+        μ = obj.μ[k]
+        a = active_set(c,λ)
+        Iμ = Diagonal(a .* μ)
+        ∇c = obj.∇C[k]
+        jacobian!(obj[k],∇c,obj.constraints,X[k],U[k],k)
+        cx = ∇c.x
+        cu = ∇c.u
+
+        # Second Order pieces
+        Q[k].xx .+= cx'Iμ*cx
+        Q[k].uu .+= cu'Iμ*cu
+        Q[k].ux .+= cu'Iμ*cx
+
+        # First order pieces
+        g = (Iμ*c + λ)
+        Q[k].x .+= cx'g
+        Q[k].u .+= cu'g
+    end
+
     return nothing
 end
 
-function cost_expansion!(S::Expansion{T},cost::QuadraticCost, xN::Vector{T}) where T
-    S.xx .= cost.Qf
-    S.x .= cost.Qf*xN + cost.qf
+function cost_expansion!(S::Expansion{T},obj::ObjectiveNew,x::AbstractVector{T}) where T
+    cost_expansion!(S,obj.cost[end],x)
     return nothing
 end
 
-function cost_expansion!(Q::Expansion{T},cost::ALCost{T},
-        x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
-    cost_expansion!(Q, cost.cost, x, u, k)
-    c = cost.C[k]
-    λ = cost.λ[k]
-    μ = cost.μ[k]
+function cost_expansion!(S::Expansion{T},obj::ALObjectiveNew{T},x::AbstractVector{T}) where T
+    N = length(obj.μ)
+    cost_expansion!(S,obj[N],x)
+
+    c = obj.C[N]
+    λ = obj.λ[N]
+    μ = obj.μ[N]
     a = active_set(c,λ)
     Iμ = Diagonal(a .* μ)
-    ∇c = cost.∇C[k]
-    jacobian!(cost.cost,∇c,cost.constraints,x,u,k)
-    cx = ∇c.x
-    cu = ∇c.u
+    cx = obj.∇C[N]
 
-    # Second Order pieces
-    Q.xx .+= cx'Iμ*cx
-    Q.uu .+= cu'Iμ*cu
-    Q.ux .+= cu'Iμ*cx
-
-    # First order pieces
-    g = (Iμ*c + λ)
-    Q.x .+= cx'g
-    Q.u .+= cu'g
-
-    return nothing
-end
-
-function cost_expansion!(S::Expansion{T},cost::ALCost{T},x::AbstractVector{T}) where T
-
-    cost_expansion!(S,cost.cost,x)
-    N = length(cost.μ)
-
-    c = cost.C[N]
-    λ = cost.λ[N]
-    μ = cost.μ[N]
-    a = active_set(c,λ)
-    Iμ = Diagonal(a .* μ)
-    cx = cost.∇C[N]
-
-    jacobian!(cx,cost.constraints,x)
+    jacobian!(cx,obj.constraints,x)
 
     # Second Order pieces
     S.xx .+= cx'Iμ*cx
@@ -296,25 +304,25 @@ function cost_expansion!(S::Expansion{T},cost::ALCost{T},x::AbstractVector{T}) w
     return nothing
 end
 
-function cost_expansion!(Q::Expansion{T},cost::GenericCost, x::Vector{T},
-        u::Vector{T}, k::Int) where T
-
-    e = cost.expansion(x,u)
-
-    Q.x .= e[4]
-    Q.u .= e[5]
-    Q.xx .= e[1]
-    Q.uu .= e[2]
-    Q.ux .= e[3]
-    return nothing
-end
-
-function cost_expansion!(S::Expansion{T},cost::GenericCost, xN::Vector{T}) where T
-    Qf, qf = cost.expansion(xN)
-    S.xx .= Qf
-    S.x .= qf
-    return nothing
-end
+# function cost_expansion!(Q::Expansion{T},cost::GenericCost, x::Vector{T},
+#         u::Vector{T}, k::Int) where T
+#
+#     e = cost.expansion(x,u)
+#
+#     Q.x .= e[4]
+#     Q.u .= e[5]
+#     Q.xx .= e[1]
+#     Q.uu .= e[2]
+#     Q.ux .= e[3]
+#     return nothing
+# end
+#
+# function cost_expansion!(S::Expansion{T},cost::GenericCost, xN::Vector{T}) where T
+#     Qf, qf = cost.expansion(xN)
+#     S.xx .= Qf
+#     S.x .= qf
+#     return nothing
+# end
 
 "$(TYPEDEF) ALTRO solver"
 struct ALTROSolver{T} <: AbstractSolver{T}
@@ -329,33 +337,13 @@ end
 
 "Second-order Taylor expansion of minimum time cost function at time step k"
 function cost_expansion!(Q::Expansion{T},cost::MinTimeCost{T}, x::Vector{T},
-        u::Vector{T}, k::Int) where T
+        u::Vector{T}) where T
 
     @assert cost.cost isa QuadraticCost
     n,m = get_sizes(cost.cost)
     idx = (x=1:n,u=1:m)
     R_min_time = cost.R_min_time
     τ = u[end]
-    # dt = τ^2
-    # Qx = cost.cost.Q*x[idx.x] + cost.cost.q
-    # Qu = cost.cost.R*u[idx.u] + cost.cost.r
-    # Q.x[idx.x] .= Qx*dt
-    # Q.u[idx.u] .= Qu*dt
-    # Q.xx[idx.x,idx.x] .= cost.cost.Q*dt
-    # Q.uu[idx.u,idx.u] .= cost.cost.R*dt
-    # Q.ux[idx.u,idx.x] .= cost.cost.H*dt
-    #
-    # ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
-    # tmp = 2.0*τ*Qu
-    #
-    # Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
-    # Q.uu[idx.u,end] = tmp
-    # Q.uu[end,idx.u] = tmp'
-    # Q.uu[end,end] = (2.0*ℓ1 + R_min_time)
-    # Q.ux[end,idx.x] = 2.0*τ*Qx'
-    #
-    # Q.x[end] = R_min_time*x[end]
-    # Q.xx[end,end] = R_min_time
 
     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
     Qu = cost.cost.R*u[idx.u] + cost.cost.r
@@ -382,8 +370,6 @@ function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where 
     idx = 1:n
     S.xx[idx,idx] = cost.cost.Qf
     S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
-    # S.xx[end,end] = R_min_time*xN[end]
-    # S.x[end] = R_min_time
 
     return nothing
 end
@@ -392,4 +378,195 @@ jacobian!(cost::CostFunction,∇c,constraints::AbstractConstraintSet,x::Vector{T
 function jacobian!(cost::MinTimeCost{T},∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T
     jacobian!(∇c,constraints,x,u)
     k == 1 ? ∇c[:min_time_eq][:] .= 0.0 : nothing
+end
+
+
+## new objective stuff
+"Calculate unconstrained cost for X and U trajectories"
+function cost(obj::ObjectiveNew, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(obj[k],X[k],U[k])
+    end
+    J /= (N-1.0)
+    J += stage_cost(obj[N],X[N])
+    return J
+end
+
+function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
+end
+
+function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
+    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
+end
+
+stage_cost(cost::GenericCost, x::Vector{T}, u::Vector{T}) where T = cost.ℓ(x,u)
+stage_cost(cost::GenericCost, xN::Vector{T}) where T = cost.ℓf(xN)
+
+stage_cost(cost::MinTimeCost, x::Vector{T}, u::Vector{T}) where T = stage_cost(cost.cost,x[1:end-1],u[1:end-1],k) + cost.R_min_time*u[end]^2
+stage_cost(cost::MinTimeCost, xN::Vector{T}) where T = stage_cost(cost.cost,xN[1:end-1])
+
+function cost_expansion!(Q::ExpansionTrajectory{T},obj::ObjectiveNew,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    cost_expansion!(Q,obj.cost,X,U)
+end
+function cost_expansion!(Q::ExpansionTrajectory{T},c::CostTrajectory,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        cost_expansion!(Q[k],c[k],X[k],U[k])
+    end
+end
+
+function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
+        u::Vector{T}) where T
+    Q.x .= cost.Q*x + cost.q
+    Q.u .= cost.R*u
+    Q.xx .= cost.Q
+    Q.uu .= cost.R
+    Q.ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::Vector{T}) where T
+    S.xx .= cost.Qf
+    S.x .= cost.Qf*xN + cost.qf
+    return nothing
+end
+
+function cost_expansion!(Q::Expansion{T}, cost::GenericCost, x::Vector{T},
+        u::Vector{T}) where T
+
+    e = cost.expansion(x,u)
+
+    Q.x .= e[4]
+    Q.u .= e[5]
+    Q.xx .= e[1]
+    Q.uu .= e[2]
+    Q.ux .= e[3]
+    return nothing
+end
+
+function cost_expansion!(S::Expansion{T}, cost::GenericCost, xN::Vector{T}) where T
+    Qf, qf = cost.expansion(xN)
+    S.xx .= Qf
+    S.x .= qf
+    return nothing
+end
+
+# Augmented Lagrangian
+## new objective stuff
+"Calculate unconstrained cost for X and U trajectories"
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(c[k],X[k],U[k])
+    end
+    J /= (N-1.0)
+    J += stage_cost(c[N],X[N])
+    return J
+end
+
+function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    cost(obj.cost,X,U)
+end
+
+## Augmented Lagrangian
+
+"Update constraints trajectories"
+function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
+        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        evaluate!(C[k],constraints,X[k],U[k])
+    end
+    evaluate!(C[N],constraints,X[N])
+end
+
+# function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
+#         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+#     N = length(X)
+#     for k = 1:N-1
+#         evaluate!(C[k],constraints,X[k],U[k])
+#     end
+#     C[1][:min_time_eq][1] = 0.0 # no constraint at timestep one
+#     evaluate!(C[N],constraints,X[N][1:end-1])
+# end
+
+"Evaluate active set constraints for entire trajectory"
+function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
+    N = length(c)
+    for k = 1:N
+        active_set!(a[k], c[k], λ[k], tol)
+    end
+end
+
+function update_active_set!(obj::ALObjectiveNew{T},tol::T=0.0) where T
+    update_active_set!(obj.active_set,obj.C,obj.λ,tol)
+end
+
+"Evaluate active set constraints for a single time step"
+function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
+    # inequality_active!(a,c,λ,tol)
+    a.equality .= true
+    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
+    return nothing
+end
+
+function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
+    a = BlockArray(trues(length(c)),c.parts)
+    a.equality .= true
+    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
+    return a
+end
+
+"Cost function terms for Lagrangian and quadratic penalty"
+function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
+    λ'c + 1/2*c'Diagonal(a .* μ)*c
+end
+
+function stage_constraint_cost(obj::ALObjectiveNew{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
+    c = obj.C[k]
+    λ = obj.λ[k]
+    μ = obj.μ[k]
+    a = obj.active_set[k]
+    aula_cost(a,c,λ,μ)
+end
+
+function stage_constraint_cost(obj::ALObjectiveNew{T},x::AbstractVector{T}) where T
+    c = obj.C[end]
+    λ = obj.λ[end]
+    μ = obj.μ[end]
+    a = obj.active_set[end]
+    aula_cost(a,c,λ,μ)
+end
+#
+# function stage_cost(alcost::ALCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
+#     J0 = stage_cost(alcost.cost,x,u,k)
+#     J0 + stage_constraint_cost(alcost,x,u,k)
+# end
+#
+# function stage_cost(alcost::ALCost{T}, x::AbstractVector{T}) where T
+#     J0 = stage_cost(alcost.cost,x)
+#     J0 + stage_constraint_cost(alcost,x)
+# end
+
+
+"Augmented Lagrangian cost for X and U trajectories"
+function cost(obj::ALObjectiveNew{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T <: AbstractFloat
+    N = length(X)
+    J = cost(obj.cost,X,U)
+
+    update_constraints!(obj.C,obj.constraints, X, U)
+    update_active_set!(obj)
+
+    Jc = 0.0
+    for k = 1:N-1
+        Jc += stage_constraint_cost(obj,X[k],U[k],k)
+    end
+    Jc /= (N-1.0)
+
+    Jc += stage_constraint_cost(obj,X[N])
+    return J + Jc
 end

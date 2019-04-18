@@ -29,7 +29,6 @@ kuka_visuals = URDFVisuals(Dynamics.urdf_kuka)
 state = MechanismState(kuka)
 world = root_frame(kuka)
 
-
 # Create Visualizer
 vis = Visualizer()
 mvis = MechanismVisualizer(kuka, kuka_visuals, vis[:base])

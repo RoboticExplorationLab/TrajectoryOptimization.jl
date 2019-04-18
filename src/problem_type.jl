@@ -1,7 +1,7 @@
 "$(TYPEDEF) Trajectory Optimization Problem"
 struct Problem{T<:AbstractFloat}
     model::Model{Discrete}
-    cost::CostFunction
+    obj::AbstractObjective
     constraints::AbstractConstraintSet
     x0::Vector{T}
     X::VectorTrajectory{T}
@@ -10,7 +10,7 @@ struct Problem{T<:AbstractFloat}
     dt::T
     tf::T
 
-    function Problem(model::Model, cost::CostFunction, constraints::AbstractConstraintSet,
+    function Problem(model::Model, obj::AbstractObjective, constraints::AbstractConstraintSet,
         x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where T
 
         n,m = model.n, model.m
@@ -29,53 +29,53 @@ struct Problem{T<:AbstractFloat}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T}(model,cost,constraints,x0,X,U,N,dt,tf)
+        new{T}(model,obj,constraints,x0,X,U,N,dt,tf)
     end
 end
 
 """$(TYPEDSIGNATURES)
 Create a problem from a continuous model, specifying the discretizer as a symbol
 """
-function Problem(model::Model{Continuous}, cost::CostFunction; integration=:rk4, kwargs...)
+function Problem(model::Model{Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...)
     if isdefined(TrajectoryOptimization,integration)
         discretizer = eval(integration)
     else
         throw(ArgumentError("$integration is not a defined integration scheme"))
     end
-    Problem(discretizer(model), cost; kwargs...)
+    Problem(discretizer(model), obj; kwargs...)
 end
 
 """$(TYPEDSIGNATURES)
 Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
-function Problem(model::Model{Discrete}, cost::CostFunction, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
+function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
-    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
-Problem(model::Model{Discrete}, cost::CostFunction, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
-    Problem(model, cost, to_dvecs(X0), to_dvecs(U0); kwargs...)
+Problem(model::Model{Discrete}, obj::ObjectiveNew, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+    Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T};
+function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
         constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
-    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
-Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
-    Problem(model, cost, to_dvecs(U0); kwargs...)
+Problem(model::Model{Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
+    Problem(model, obj, to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, cost::CostFunction;
+function Problem(model::Model{Discrete}, obj::AbstractObjective;
         constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     U0 = [zeros(T,model.m) for k = 1:N-1]
-    Problem(model, cost, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
@@ -95,7 +95,7 @@ function change_N(prob::Problem, N::Int)
     dt = tf/(N-1)
     X, U = interp_traj(N, tf, prob.X, prob.U)
     @show length(X)
-    Problem(prob.model, prob.cost, prob.constraints, prob.x0, X, U, N, dt, tf)
+    Problem(prob.model, prob.obj, prob.constraints, prob.x0, X, U, N, dt, tf)
 end
 
 
@@ -200,7 +200,7 @@ end
 
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
-Base.copy(p::Problem) = Problem(p.model, p.cost, p.constraints, copy(p.x0),
+Base.copy(p::Problem) = Problem(p.model, p.obj, p.constraints, copy(p.x0),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
@@ -208,13 +208,13 @@ empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 is_constrained(p::Problem) = !isempty(p.constraints)
 
 function update_problem(p::Problem;
-    model=p.model,cost=p.cost,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
+    model=p.model,obj=p.obj,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
     N=p.N,dt=p.dt,tf=p.tf,newProb=true)
 
     if newProb
-        Problem(model,cost,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
+        Problem(model,obj,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
     else
-        Problem(model,cost,constraints,x0,X,U,N,dt,tf)
+        Problem(model,obj,constraints,x0,X,U,N,dt,tf)
     end
 end
 
@@ -272,7 +272,7 @@ num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints)
 
 jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
-cost(prob::Problem{T}) where T = cost(prob.cost, prob.X, prob.U, prob.dt)::T
+cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
 
 pos(x) = max(0,x)
 
@@ -307,18 +307,23 @@ end
 include("infeasible_new.jl")
 "Create infeasible state trajectory initialization problem from problem"
 function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
-    @assert prob.cost isa QuadraticCost
+    # @assert all([prob.obj[k] isa QuadraticCost for k = 1:N])
     # modify problem with slack control
-    cost_inf = copy(prob.cost)
-    cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n)/prob.dt,dims=(1,2))
-    cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
-    cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
+    obj_inf = []
+    for k = 1:N-1
+        cost_inf = copy(prob.obj[k])
+        cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n)/prob.dt,dims=(1,2))
+        cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
+        cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
+        push!(obj_inf,cost_inf)
+    end
+    push!(obj_inf,copy(prob.obj[N]))
 
     model_inf = add_slack_controls(prob.model)
     u_slack = slack_controls(prob)
     con_inf = infeasible_constraints(prob.model.n,prob.model.m)
 
-    update_problem(prob,model=model_inf,cost=cost_inf,
+    update_problem(prob,model=model_inf,obj=ObjectiveNew([obj_inf...]),
         constraints=[prob.constraints...,con_inf],U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end
 
@@ -329,7 +334,7 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
     _con = update_constraint_set_jacobians(prob.constraints,prob.model.n,prob.model.n+1,prob.model.m)
 
-    update_problem(prob,model=model_min_time,cost=cost_min_time,
+    update_problem(prob,model=model_min_time,obj=cost_min_time,
         constraints=[_con...,con_min_time_eq,con_min_time_bnd],
         U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
         X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],

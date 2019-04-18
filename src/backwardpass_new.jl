@@ -11,7 +11,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     N = prob.N
 
     # Objective
-    cost = prob.cost
+    obj = prob.obj
 
     X = prob.X; U = prob.U; K = solver.K; d = solver.d
 
@@ -19,8 +19,9 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     Q = solver.Q # cost-to-go expansion
     reset!(Q)
 
-    # Boundary Conditions
-    cost_expansion!(S[N],cost,X[N])
+    # Compute cost expansion
+    cost_expansion!(S[N],obj,X[N])
+    cost_expansion!(Q, obj, X, U)
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -28,7 +29,6 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(Q[k], cost, X[k], U[k], k)
         Q[k]/(N-1.) # scaling due to cost function: ℓf(xN) + 1\(N-1)Σℓ(x,u)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
