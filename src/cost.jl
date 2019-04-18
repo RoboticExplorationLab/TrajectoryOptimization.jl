@@ -72,6 +72,12 @@ function LQRCost(Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf
     return QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
 end
 
+function LQRCostTerminal(Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+    qf = -Qf*xf
+    cf = 0.5*xf'*Qf*xf
+    return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
+end
+
 # "Second-order Taylor expansion of cost function at time step k"
 # function cost_expansion(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
 #     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u + cost.r
@@ -300,34 +306,34 @@ end
 # function update_constraints!(cost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
 #     update_constraints!(cost.cost,cost.C,cost.constraints,X,U)
 # end
-
-"Evaluate active set constraints for entire trajectory"
-function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
-    N = length(c)
-    for k = 1:N
-        active_set!(a[k], c[k], λ[k], tol)
-    end
-end
-
-"Evaluate active set constraints for a single time step"
-function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-    # inequality_active!(a,c,λ,tol)
-    a.equality .= true
-    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-    return nothing
-end
-
-function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-    a = BlockArray(trues(length(c)),c.parts)
-    a.equality .= true
-    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-    return a
-end
-
-"Cost function terms for Lagrangian and quadratic penalty"
-function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
-    λ'c + 1/2*c'Diagonal(a .* μ)*c
-end
+#
+# "Evaluate active set constraints for entire trajectory"
+# function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
+#     N = length(c)
+#     for k = 1:N
+#         active_set!(a[k], c[k], λ[k], tol)
+#     end
+# end
+#
+# "Evaluate active set constraints for a single time step"
+# function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
+#     # inequality_active!(a,c,λ,tol)
+#     a.equality .= true
+#     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
+#     return nothing
+# end
+#
+# function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
+#     a = BlockArray(trues(length(c)),c.parts)
+#     a.equality .= true
+#     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
+#     return a
+# end
+#
+# "Cost function terms for Lagrangian and quadratic penalty"
+# function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
+#     λ'c + 1/2*c'Diagonal(a .* μ)*c
+# end
 #
 # function stage_constraint_cost(alcost::ALCost{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
 #     c = alcost.C[k]

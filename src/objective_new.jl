@@ -1,6 +1,6 @@
 abstract type AbstractObjective end
 
-CostTrajectory = Vector{CostFunction}
+CostTrajectory = Vector{C} where C <: CostFunction
 
 "$(TYPEDEF) Objective: stores stage cost(s) and terminal cost functions"
 struct ObjectiveNew <: AbstractObjective
@@ -21,10 +21,10 @@ function ObjectiveNew(cost::CostTrajectory,cost_terminal::CostFunction)
     ObjectiveNew([cost...,cost_terminal])
 end
 
-"Input requires cost function trajectory"
-function ObjectiveNew(cost::CostTrajectory)
-    ObjectiveNew(cost)
-end
+# "Input requires cost function trajectory"
+# function ObjectiveNew(cost::CostTrajectory)
+#     ObjectiveNew(cost)
+# end
 
 import Base.getindex
 

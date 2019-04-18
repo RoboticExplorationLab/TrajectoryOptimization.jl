@@ -51,3 +51,24 @@ end
 
 # Test undefined integration
 @test_throws ArgumentError Problem(model, ObjectiveNew(costfun,N), integration=:bogus, N=N)
+
+# Cost Trajectory
+costfun = LQRCost(Q, R, zeros(n,n), xf)
+costfun_terminal = LQRCostTerminal(Qf,xf)
+
+opts_ilqr = iLQRSolverOptions{T}(verbose=true,cost_tolerance=1.0e-5)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
+
+N = 51
+dt = 0.1
+U0 = [rand(m) for k = 1:N-1]
+
+
+costfun_traj = [costfun for k = 1:N-1]
+[costfun_traj...,costfun_terminal] isa CostTrajectory
+_obj = ObjectiveNew([costfun_traj...,costfun_terminal])
+prob = Problem(model, _obj, integration=:rk4, x0=x0, N=N, dt=dt)
+initial_controls!(prob, U0)
+solver_ilqr = iLQRSolver(prob, opts_ilqr)
+solve!(prob, solver_ilqr)
+@test norm(prob.X[N] - xf) < 1e-4
