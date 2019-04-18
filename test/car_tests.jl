@@ -27,13 +27,13 @@ U0 = [ones(m) for k = 1:N-1]
 X0 = line_trajectory_new(x0,xf,N)
 
 # Parallel Park
-prob = Problem(model, costfun, integration=integration, N=N, dt=dt)
+prob = Problem(model, costfun, integration=integration, x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_ilqr)
 @test norm(prob.X[N] - xf) < 1e-3
 
 # Infeasible parallel park
-prob = Problem(model, costfun, integration=integration, N=N, dt=dt)
+prob = Problem(model, costfun, integration=integration, x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 copyto!(prob.X,X0)
 solve!(prob, opts_altro)

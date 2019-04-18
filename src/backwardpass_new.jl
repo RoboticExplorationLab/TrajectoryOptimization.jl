@@ -1,6 +1,5 @@
 function backwardpass!(prob::Problem,solver::iLQRSolver)
     if solver.opts.square_root
-        error("Square root bp not implemented yet!")
         ΔV = _backwardpass_sqrt!(prob,solver)
     else
         ΔV = _backwardpass!(prob,solver)
@@ -49,7 +48,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         end
 
         # Regularization
-        if !isposdef(Hermitian(Array(Quu_reg)))  # need to wrap Array since isposdef doesn't work for static arrays
+        if !isposdef(Hermitian(Quu_reg))
             # increase regularization
             @logmsg InnerIters "Regularizing Quu "
             regularization_update!(solver,:increase)
@@ -163,7 +162,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
         # calculated change is cost-to-go over entire trajectory
         ΔV[1] += d[k]'*Q[k].u
 
-        tmp = (Q[k].uu*d[k])
+        tmp = Q[k].uu*d[k]
         ΔV[2] += 0.5*tmp'*tmp
         k = k - 1;
     end

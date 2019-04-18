@@ -26,7 +26,7 @@ int_schemes = [:midpoint, :rk3, :rk4]
 
 ## Unconstrained
 for is in int_schemes
-    prob = Problem(model, costfun, integration=is, N=N, dt=dt)
+    prob = Problem(model, costfun, integration=is, x0=x0, N=N, dt=dt)
     initial_controls!(prob, U0)
     solver_ilqr = iLQRSolver(prob, opts_ilqr)
     solve!(prob, solver_ilqr)
@@ -40,7 +40,7 @@ goal = goal_constraint(xf)
 con = [bnd, goal]
 
 for is in int_schemes
-    prob = Problem(model, costfun, integration=is, N=N, dt=dt)
+    prob = Problem(model, costfun, integration=is, x0=x0, N=N, dt=dt)
     add_constraints!(prob,con)
     initial_controls!(prob, U0)
     solver_al = AugmentedLagrangianSolver(prob, opts_al)

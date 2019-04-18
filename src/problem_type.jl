@@ -281,12 +281,14 @@ function max_violation(prob::Problem{T}) where T
         N = prob.N
         stage_con = stage(prob.constraints)
         c = BlockVector(T,stage_con)
-        c_max = -Inf
-        for k = 1:N-1
-            evaluate!(c,stage_con,prob.X[k],prob.U[k])
-            max_E = norm(c.equality,Inf)
-            max_I = maximum(pos.(c))
-            c_max = max(c_max,max(max_E,max_I))
+        c_max = 0.0
+        if num_stage_constraints(prob) > 0
+            for k = 1:N-1
+                evaluate!(c,stage_con,prob.X[k],prob.U[k])
+                max_E = norm(c.equality,Inf)
+                max_I = maximum(pos.(c))
+                c_max = max(c_max,max(max_E,max_I))
+            end
         end
         if num_terminal_constraints(prob) > 0
             term_con = terminal(prob.constraints)

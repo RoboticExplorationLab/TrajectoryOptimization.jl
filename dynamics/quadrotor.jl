@@ -57,13 +57,6 @@ function quadrotor_dynamics!(ẋ,X,u)
       ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
 end
 
-function quadrotor_dynamics(X,u)
-      ẋ = zeros(13,1)
-      quadrotor_dynamics!(ẋ,X,u)
-      ẋ
-end
-
-
 ## Utilities
 """
 @(SIGNATURES)
@@ -85,7 +78,7 @@ end
 n = 13
 m = 4
 
-model = Model(quadrotor_dynamics!,n,m)
+quadrotor_model = Model(quadrotor_dynamics!,n,m)
 
 # Unconstrained
 Q = (1e-1)*Matrix(I,n,n)
