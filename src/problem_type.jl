@@ -2,7 +2,7 @@
 struct Problem{T<:AbstractFloat}
     model::Model{Discrete}
     obj::AbstractObjective
-    constraints::AbstractConstraintSet
+    constraints::ProblemConstraints
     x0::Vector{T}
     X::VectorTrajectory{T}
     U::VectorTrajectory{T}
@@ -10,7 +10,7 @@ struct Problem{T<:AbstractFloat}
     dt::T
     tf::T
 
-    function Problem(model::Model, obj::AbstractObjective, constraints::AbstractConstraintSet,
+    function Problem(model::Model, obj::AbstractObjective, constraints::ProblemConstraints,
         x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where T
 
         n,m = model.n, model.m
@@ -50,7 +50,7 @@ Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
 function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
@@ -59,7 +59,7 @@ Problem(model::Model{Discrete}, obj::ObjectiveNew, X0::Matrix{T}, U0::Matrix{T};
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
-        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
@@ -70,7 +70,7 @@ Problem(model::Model{Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...
     Problem(model, obj, to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, obj::AbstractObjective;
-        constraints::AbstractConstraintSet=AbstractConstraint[], x0::Vector{T}=zeros(model.n),
+        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
@@ -205,7 +205,8 @@ Base.copy(p::Problem) = Problem(p.model, p.obj, p.constraints, copy(p.x0),
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
-is_constrained(p::Problem) = !isempty(p.constraints)
+# is_constrained(p::Problem) = !isempty(p.constraints)
+is_constrained(prob::Problem{T}) where T = !all(isempty.(prob.constraints.C))
 
 function update_problem(p::Problem;
     model=p.model,obj=p.obj,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
@@ -225,6 +226,11 @@ end
 
 "$(SIGNATURES) Add a set of constraints to the problem"
 function add_constraints!(p::Problem,C::AbstractConstraintSet)
+    append!(p.constraints,C)
+end
+
+"$(SIGNATURES) Add a set of constraints to the problem"
+function add_constraints!(p::Problem,C::ProblemConstraints)
     append!(p.constraints,C)
 end
 
@@ -270,6 +276,9 @@ end
 num_stage_constraints(p::Problem) = num_stage_constraints(p.constraints)
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints)
 
+num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for k = 1:p.N-1]
+num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
+
 jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
@@ -279,19 +288,19 @@ pos(x) = max(0,x)
 function max_violation(prob::Problem{T}) where T
     if is_constrained(prob)
         N = prob.N
-        stage_con = stage(prob.constraints)
-        c = BlockVector(T,stage_con)
         c_max = 0.0
-        if num_stage_constraints(prob) > 0
-            for k = 1:N-1
+        for k = 1:N-1
+            if num_stage_constraints(prob.constraints[k]) > 0
+                stage_con = stage(prob.constraints[k])
+                c = BlockVector(T,stage_con)
                 evaluate!(c,stage_con,prob.X[k],prob.U[k])
                 max_E = norm(c.equality,Inf)
                 max_I = maximum(pos.(c))
                 c_max = max(c_max,max(max_E,max_I))
             end
         end
-        if num_terminal_constraints(prob) > 0
-            term_con = terminal(prob.constraints)
+        if num_terminal_constraints(prob.constraints[N]) > 0
+            term_con = terminal(prob.constraints[N])
             c = BlockVector(T,term_con)
             evaluate!(c,term_con,prob.X[N])
             max_E = norm(c.equality,Inf)

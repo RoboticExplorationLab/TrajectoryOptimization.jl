@@ -171,7 +171,7 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
-    p = num_stage_constraints(prob)
+    # p = num_stage_constraints(prob)
 
     C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
 
@@ -199,6 +199,39 @@ function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,
     push!(∇C,BlockMatrix(T,c_term,n,0))
     push!(λ,BlockVector(T,c_term))
     push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
+    push!(active_set,BlockVector(Bool,c_term))
+
+    # Initialize dual and penality values
+    for k = 1:N
+        λ[k] .*= λ_init
+        μ[k] .*= μ_init
+    end
+
+    return C,∇C,λ,μ,active_set
+end
+
+function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::Int,N::Int;
+        μ_init::T=1.,λ_init::T=0.) where T
+
+    p = [num_stage_constraints(constraints[k]) for k = 1:N-1]
+    c_stage = [stage(constraints[k]) for k = 1:N-1]
+    c_part = [create_partition(c_stage[k]) for k = 1:N-1]
+    c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
+
+    # Create Trajectories
+    C          = [BlockArray(zeros(T,p[k]),c_part[k])       for k = 1:N-1]
+    ∇C         = [BlockArray(zeros(T,p[k],n+m),c_part2[k])  for k = 1:N-1]
+    λ          = [BlockArray(ones(T,p[k]),c_part[k]) for k = 1:N-1]
+    μ          = [BlockArray(ones(T,p[k]),c_part[k]) for k = 1:N-1]
+    active_set = [BlockArray(ones(Bool,p[k]),c_part[k])     for k = 1:N-1]
+
+    c_term = terminal(constraints[N])
+    p_N = num_constraints(c_term)
+
+    push!(C,BlockVector(T,c_term))
+    push!(∇C,BlockMatrix(T,c_term,n,0))
+    push!(λ,BlockVector(T,c_term))
+    push!(μ,BlockArray(ones(T,p_N), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))
 
     # Initialize dual and penality values
@@ -258,10 +291,9 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::ALObjectiveNew{T},
         μ = obj.μ[k]
         a = active_set(c,λ)
         Iμ = Diagonal(a .* μ)
-        ∇c = obj.∇C[k]
-        jacobian!(obj[k],∇c,obj.constraints,X[k],U[k],k)
-        cx = ∇c.x
-        cu = ∇c.u
+        jacobian!(obj.∇C[k],obj.constraints[k],X[k],U[k])
+        cx = obj.∇C[k].x
+        cu = obj.∇C[k].u
 
         # Second Order pieces
         Q[k].xx .+= cx'Iμ*cx
@@ -293,7 +325,7 @@ function cost_expansion!(S::Expansion{T},obj::ALObjectiveNew{T},x::AbstractVecto
     Iμ = Diagonal(a .* μ)
     cx = obj.∇C[N]
 
-    jacobian!(cx,obj.constraints,x)
+    jacobian!(cx,obj.constraints[N],x)
 
     # Second Order pieces
     S.xx .+= cx'Iμ*cx
@@ -374,11 +406,11 @@ function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where 
     return nothing
 end
 
-jacobian!(cost::CostFunction,∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T = jacobian!(∇c,constraints,x,u)
-function jacobian!(cost::MinTimeCost{T},∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T
-    jacobian!(∇c,constraints,x,u)
-    k == 1 ? ∇c[:min_time_eq][:] .= 0.0 : nothing
-end
+# jacobian!(cost::CostFunction,∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T = jacobian!(∇c,constraints,x,u)
+# function jacobian!(cost::MinTimeCost{T},∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T
+#     jacobian!(∇c,constraints,x,u)
+#     k == 1 ? ∇c[:min_time_eq][:] .= 0.0 : nothing
+# end
 
 
 ## new objective stuff
@@ -484,6 +516,15 @@ function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractCons
     evaluate!(C[N],constraints,X[N])
 end
 
+"Update constraints trajectories"
+function update_constraints!(C::PartedVecTrajectory{T},constraints::ProblemConstraints,
+        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        evaluate!(C[k],constraints[k],X[k],U[k])
+    end
+    evaluate!(C[N],constraints[N],X[N])
+end
 # function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
 #         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
 #     N = length(X)
@@ -541,6 +582,24 @@ function stage_constraint_cost(obj::ALObjectiveNew{T},x::AbstractVector{T}) wher
     a = obj.active_set[end]
     aula_cost(a,c,λ,μ)
 end
+
+function stage_constraint_cost(c,λ,μ,
+        a,x::AbstractVector{T},u::AbstractVector{T}) where T
+    # c = obj.C[k]
+    # λ = obj.λ[k]
+    # μ = obj.μ[k]
+    # a = obj.active_set[k]
+    aula_cost(a,c,λ,μ)
+end
+
+function stage_constraint_cost(c,λ,μ,
+        a,x::AbstractVector{T}) where T
+    # c = obj.C[end]
+    # λ = obj.λ[end]
+    # μ = obj.μ[end]
+    # a = obj.active_set[end]
+    aula_cost(a,c,λ,μ)
+end
 #
 # function stage_cost(alcost::ALCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
 #     J0 = stage_cost(alcost.cost,x,u,k)
@@ -563,10 +622,9 @@ function cost(obj::ALObjectiveNew{T},X::VectorTrajectory{T},U::VectorTrajectory{
 
     Jc = 0.0
     for k = 1:N-1
-        Jc += stage_constraint_cost(obj,X[k],U[k],k)
+        Jc += stage_constraint_cost(obj.C[k], obj.λ[k], obj.μ[k],obj.active_set[k],X[k],U[k])
     end
     Jc /= (N-1.0)
-
-    Jc += stage_constraint_cost(obj,X[N])
+    Jc += stage_constraint_cost(obj.C[N], obj.λ[N], obj.μ[N],obj.active_set[N],X[N])
     return J + Jc
 end

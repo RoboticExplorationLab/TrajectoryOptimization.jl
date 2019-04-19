@@ -33,7 +33,7 @@ getindex(obj::ObjectiveNew,i::Int) = obj.cost[i]
 "$(TYPEDEF) Augmented Lagrangian Objective: stores stage cost(s) and terminal cost functions"
 struct ALObjectiveNew{T} <: AbstractObjective where T
     cost::CostTrajectory
-    constraints::AbstractConstraintSet
+    constraints::ProblemConstraints
     C::PartedVecTrajectory{T}  # Constraint values
     ∇C::PartedMatTrajectory{T} # Constraint jacobians
     λ::PartedVecTrajectory{T}  # Lagrange multipliers
@@ -41,7 +41,7 @@ struct ALObjectiveNew{T} <: AbstractObjective where T
     active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
-function ALObjectiveNew(cost::CostTrajectory,constraints::AbstractConstraintSet,N::Int;
+function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
@@ -49,7 +49,7 @@ function ALObjectiveNew(cost::CostTrajectory,constraints::AbstractConstraintSet,
     ALObjectiveNew{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
-function ALObjectiveNew(cost::CostTrajectory,constraints::AbstractConstraintSet,
+function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,
         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)

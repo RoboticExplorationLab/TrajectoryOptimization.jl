@@ -196,8 +196,6 @@ function generate_jacobian(f!::Function,n::Int,p::Int=n)
 end
 
 
-
-
 ########################
 #   Constraint Sets    #
 ########################
@@ -205,6 +203,33 @@ ConstraintSet = Vector{AbstractConstraint{S} where S}
 AbstractConstraintSet = Vector{<:AbstractConstraint{S} where S}
 StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
+ConstraintSetTrajectory = Vector{C} where C <: AbstractConstraintSet
+
+struct ProblemConstraints
+    C::ConstraintSetTrajectory
+end
+
+function ProblemConstraints(C::AbstractConstraintSet,N::Int)
+    ProblemConstraints([C for k = 1:N])
+end
+
+function ProblemConstraints(C::AbstractConstraintSet,C_term::AbstractConstraintSet,N::Int)
+    ProblemConstraints([k < N ? C : C_term for k = 1:N])
+end
+
+function ProblemConstraints(C::ConstraintSetTrajectory,C_term::AbstractConstraintSet)
+    ProblemConstraints([C...,C_term])
+end
+
+function ProblemConstraints()
+    ProblemConstraints(AbstractConstraintSet[])
+end
+
+
+
+
+import Base.getindex
+getindex(c::ProblemConstraints,i::Int) = c.C[i]
 
 "$(SIGNATURES) Count the number of inequality and equality constraints in a constraint set.
 Returns the sizes of the constraint vector, not the number of constraint types."

@@ -283,15 +283,15 @@ copy(cost::MinTimeCost) = MinTimeCost(copy(cost.cost),copy(cost.R_min_time))
 #     ALCost{T}(cost,constraint,C,∇C,λ,μ,active_set)
 # end
 
-"Update constraints trajectories"
-function update_constraints!(cost::CostFunction,C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
-        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    N = length(X)
-    for k = 1:N-1
-        evaluate!(C[k],constraints,X[k],U[k])
-    end
-    evaluate!(C[N],constraints,X[N])
-end
+# "Update constraints trajectories"
+# function update_constraints!(cost::CostFunction,C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
+#         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+#     N = length(X)
+#     for k = 1:N-1
+#         evaluate!(C[k],constraints,X[k],U[k])
+#     end
+#     evaluate!(C[N],constraints,X[N])
+# end
 
 # function update_constraints!(cost::MinTimeCost{T},C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
 #         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T

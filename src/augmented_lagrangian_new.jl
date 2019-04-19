@@ -109,7 +109,7 @@ end
 "Generate augmented Lagrangian problem from constrained problem"
 function AugmentedLagrangianProblem(prob::Problem{T},solver::AugmentedLagrangianSolver{T}) where T
     obj_al = ALObjectiveNew(prob,solver)
-    prob_al = update_problem(prob,obj=obj_al,constraints=AbstractConstraint[],newProb=false)
+    prob_al = update_problem(prob,obj=obj_al,constraints=ProblemConstraints(),newProb=false)
 end
 
 "Evaluate maximum constraint violation"
