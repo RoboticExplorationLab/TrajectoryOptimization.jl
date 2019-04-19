@@ -4,9 +4,8 @@ using Test
 T = Float64
 
 # model
-dyn_pendulum = TrajectoryOptimization.Dynamics.pendulum_dynamics!
-n = 2; m = 1
-model = Model(dyn_pendulum,n,m)
+model = TrajectoryOptimization.Dynamics.pendulum_model
+n = model.n; m = model.m
 model_d = Model{Discrete}(model,rk4)
 
 # cost
@@ -19,7 +18,7 @@ tf = 5.
 lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # options
-verbose=true
+verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,constraint_tolerance=1.0e-5,
     cost_tolerance=1.0e-5,cost_tolerance_intermediate=1.0e-5,opts_uncon=opts_ilqr,iterations=30,
@@ -43,17 +42,13 @@ dt = 0.1
 X0 = line_trajectory_new(x0,xf,N)
 
 # unconstrained infeasible solve
-prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
-ilqr_solver = AbstractSolver(prob,opts_ilqr)
-ilqr_solver.Q[1]
-solve!(prob,ilqr_solver)
+prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,dt=dt,x0=x0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 @test norm(prob.X[end] - xf) < 1.0e-3
 
 # constrained infeasible solve
-prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
-add_constraints!(prob,con)
+prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 

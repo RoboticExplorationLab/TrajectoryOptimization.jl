@@ -16,8 +16,9 @@ xf = [pi; 0] # (ie, swing up)
 
 costfun = LQRCost(Q,R,Qf,xf)
 
-opts_ilqr = iLQRSolverOptions{T}(verbose=true,cost_tolerance=1.0e-5)
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
+verbose = false
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-5)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
 
 N = 51
 dt = 0.1
@@ -36,16 +37,22 @@ end
 ## Constrained
 u_bound = 3.0
 bnd = bound_constraint(n, m, u_min=-u_bound, u_max=u_bound)
-goal = goal_constraint(xf)
-con = [bnd,goal]
-prob = Problem(model, ObjectiveNew(costfun,N), constraints=ProblemConstraints(con,N),integration=:rk4, x0=x0, N=N, dt=dt)
-initial_controls!(prob, U0)
-solver_al = AugmentedLagrangianSolver(prob, opts_al)
-prob_al = AugmentedLagrangianProblem(prob,solver_al)
+con = [bnd]
 
 for is in int_schemes
     prob = Problem(model, ObjectiveNew(costfun,N), constraints=ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
-    # add_constraints!(prob,con)
+    initial_controls!(prob, U0)
+    solver_al = AugmentedLagrangianSolver(prob, opts_al)
+    solve!(prob, solver_al)
+    @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
+    @test max_violation(prob) < opts_al.constraint_tolerance
+end
+
+goal = goal_constraint(xf)
+con = [bnd,goal]
+
+for is in int_schemes
+    prob = Problem(model, ObjectiveNew(costfun,N), constraints=ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     initial_controls!(prob, U0)
     solver_al = AugmentedLagrangianSolver(prob, opts_al)
     solve!(prob, solver_al)
@@ -55,22 +62,3 @@ end
 
 # Test undefined integration
 @test_throws ArgumentError Problem(model, ObjectiveNew(costfun,N), integration=:bogus, N=N)
-
-## Cost Trajectory
-costfun = LQRCost(Q, R, zeros(n,n), xf)
-costfun_terminal = LQRCostTerminal(Qf,xf)
-
-opts_ilqr = iLQRSolverOptions{T}(verbose=true,cost_tolerance=1.0e-5)
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
-
-N = 51
-dt = 0.1
-U0 = [rand(m) for k = 1:N-1]
-
-costfun_traj = [costfun for k = 1:N-1]
-_obj = ObjectiveNew([costfun_traj...,costfun_terminal])
-prob = Problem(model, _obj, integration=:rk4, x0=x0, N=N, dt=dt)
-initial_controls!(prob, U0)
-solver_ilqr = iLQRSolver(prob, opts_ilqr)
-solve!(prob, solver_ilqr)
-@test norm(prob.X[N] - xf) < 1e-4

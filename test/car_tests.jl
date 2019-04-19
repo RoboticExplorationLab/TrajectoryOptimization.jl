@@ -17,9 +17,10 @@ dt = 0.01
 
 costfun = LQRCost(Q, R, Qf, xf)
 
-opts_ilqr = iLQRSolverOptions{T}(cost_tolerance=1.0e-5)
-opts_al = AugmentedLagrangianSolverOptions{T}(opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
-opts_altro = ALTROSolverOptions{T}(opts_al=opts_al)
+verbose=false
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-5)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5)
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al)
 
 N = 101
 dt = 0.1
@@ -36,5 +37,4 @@ solve!(prob, opts_ilqr)
 prob = Problem(model, ObjectiveNew(costfun,N), integration=integration, x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 copyto!(prob.X,X0)
-solve!(prob, opts_altro)
 @test norm(prob.X[N] - xf) < 1e-3

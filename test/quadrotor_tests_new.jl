@@ -8,9 +8,8 @@ model = Dynamics.quadrotor_model
 n = model.n; m = model.m
 
 # cost
-Q = (1.0)*Diagonal(I,n)
-# Q[4,4] = 1.0; Q[5,5] = 1.0; Q[6,6] = 1.0; Q[7,7] = 1.0
-R = 1.0*Diagonal(I,m)
+Q = (1.0e-2)*Diagonal(I,n)
+R = (1.0e-2)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
 
 # -initial state
@@ -27,9 +26,10 @@ xf[4:7] = q0
 costfun = LQRCost(Q, R, Qf, xf)
 
 # options
-opts_ilqr = iLQRSolverOptions{T}(cost_tolerance=1.0e-6)
-opts_al = AugmentedLagrangianSolverOptions{T}(opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1e-5)
-opts_altro = ALTROSolverOptions{T}(opts_al=opts_al)
+verbose=false
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-6)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1e-5)
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al)
 
 N = 101
 dt = 0.1
@@ -43,20 +43,18 @@ solve!(prob, opts_ilqr)
 
 # constrained w/ final position
 goal_con = goal_constraint(xf)
-
-prob = Problem(model, ObjectiveNew(costfun,N), x0=x0, integration=integration, N=N, dt=dt)
+con = [goal_con]
+prob = Problem(model, ObjectiveNew(costfun,N),constraints=ProblemConstraints(con,N), x0=x0, integration=integration, N=N, dt=dt)
 initial_controls!(prob, U0)
-add_constraints!(prob,[goal_con])
 solve!(prob, opts_al)
 @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
 
 # constrained w/ final position and control limits
 bnd = bound_constraint(n,m,u_min=0.0,u_max=6.0,trim=true)
-
-prob = Problem(model, ObjectiveNew(costfun,N), x0=x0, integration=integration, N=N, dt=dt)
+con = [bnd,goal_con]
+prob = Problem(model, ObjectiveNew(costfun,N), constraints=ProblemConstraints(con,N), x0=x0, integration=integration, N=N, dt=dt)
 initial_controls!(prob, U0)
-add_constraints!(prob,[bnd,goal_con])
 solve!(prob, opts_al)
 @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
@@ -75,10 +73,9 @@ function sphere_obs3(c,x,u)
 end
 
 obs = Constraint{Inequality}(sphere_obs3,n,m,n_spheres,:obs)
-
-prob = Problem(model, ObjectiveNew(costfun,N), x0=x0, integration=integration, N=N, dt=dt)
+con = [bnd,obs,goal_con]
+prob = Problem(model, ObjectiveNew(costfun,N), constraints=ProblemConstraints(con,N),x0=x0, integration=integration, N=N, dt=dt)
 initial_controls!(prob, U0)
-add_constraints!(prob,[bnd,obs,goal_con])
 opts_al.constraint_tolerance=1.0e-3
 opts_al.constraint_tolerance_intermediate=1.0e-3
 solve!(prob, opts_al)

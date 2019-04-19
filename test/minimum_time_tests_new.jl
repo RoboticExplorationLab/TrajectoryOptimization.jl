@@ -3,9 +3,8 @@ using Test
 T = Float64
 
 # model
-dyn_pendulum = TrajectoryOptimization.Dynamics.pendulum_dynamics!
-n = 2; m = 1
-model = Model(dyn_pendulum,n,m)
+model = TrajectoryOptimization.Dynamics.pendulum_model
+n = model.n; m = model.m
 model_d = Model{Discrete}(model,rk4)
 
 # cost
@@ -33,18 +32,17 @@ con = [bnd, goal_con]
 N = 31
 U = [ones(m) for k = 1:N-1]
 dt = 0.15
-prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
-add_constraints!(prob,con)
+prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
 dt = 0.15/2.0
-prob_mt = Problem(model_d,lqr_cost,U,dt=dt,x0=x0,tf=:min)
-add_constraints!(prob_mt,con)
+prob_mt = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 prob_mt.U[end][end]
 tt_mt = total_time(prob_mt)
 
+plot(prob_mt.U)
 @test tt_mt < 0.5*tt
 @test tt_mt < 1.0
 
@@ -52,11 +50,8 @@ tt_mt = total_time(prob_mt)
 @test max_violation(prob_mt) < opts_al.constraint_tolerance
 
 ## Box parallel park
-
-dyn_car = TrajectoryOptimization.Dynamics.dubins_dynamics!
-
-n = 3; m = 2
-model = Model(dyn_car,n,m)
+model = TrajectoryOptimization.Dynamics.car_model
+n = model.n; m = model.m
 model_d = Model{Discrete}(model,rk4)
 
 # cost
@@ -89,17 +84,13 @@ con = [bnd, goal_con]
 N = 51
 U = [ones(m) for k = 1:N-1]
 dt = 0.06
-prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
-add_constraints!(prob,con)
+prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 plot(prob.U)
 
-prob_mt = Problem(model_d,lqr_cost,U,dt=dt,x0=x0,tf=:min)
-add_constraints!(prob_mt,con)
+prob_mt = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
-prob_mt.U[end][end]
-plot(prob_mt.U)
 tt_mt = total_time(prob_mt)
 
 @test tt_mt < 0.75*tt

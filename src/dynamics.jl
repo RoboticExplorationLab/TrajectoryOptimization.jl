@@ -21,5 +21,6 @@ include("../dynamics/dubinscar.jl")
 include("../dynamics/quadrotor.jl")
 include("../dynamics/kuka.jl")
 include("../dynamics/double_integrator.jl")
+include("../dynamics/car.jl")
 
 end

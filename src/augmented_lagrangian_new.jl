@@ -20,7 +20,7 @@ function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
 end
 
 function solve!(prob::Problem{T},opts::AugmentedLagrangianSolverOptions{T}) where T
-    isempty(prob.constraints) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
+    !is_constrained(prob) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
 end
 

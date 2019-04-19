@@ -6,7 +6,7 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     # primary solve (augmented Lagrangian)
     solve!(prob_altro,opts.opts_al)
 
-    # # process primary solve results
+    # process primary solve results
     process_altro_results!(prob,prob_altro,state,opts)
 
     return nothing

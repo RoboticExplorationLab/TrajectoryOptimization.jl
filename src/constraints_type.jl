@@ -222,7 +222,7 @@ function ProblemConstraints(C::ConstraintSetTrajectory,C_term::AbstractConstrain
 end
 
 function ProblemConstraints()
-    ProblemConstraints(AbstractConstraintSet[])
+    ProblemConstraints(ConstraintSet[])
 end
 
 
