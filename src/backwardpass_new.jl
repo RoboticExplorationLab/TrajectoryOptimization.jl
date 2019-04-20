@@ -23,6 +23,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     cost_expansion!(S[N],obj,X[N])
     cost_expansion!(Q, obj, X, U)
 
+    println(S[N].xx)
+
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
 
@@ -86,7 +88,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     N = prob.N
 
     # Objective
-    cost = prob.cost
+    obj = prob.obj
 
     X = prob.X; U = prob.U; K = solver.K; d = solver.d
 
@@ -95,12 +97,17 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     reset!(Q)
 
     # Boundary Conditions
-    cost_expansion!(S[N],cost,X[N])
+    cost_expansion!(S[N],obj,X[N])
+    cost_expansion!(Q, obj, X, U)
+
+    println(S[N].xx)
     try
         S[N].xx .= cholesky(S[N].xx).U
     catch PosDefException
         error("Terminal cost Hessian must be PD for sqrt backward pass")
     end
+
+    println(S[N].xx)
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
@@ -110,7 +117,6 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        cost_expansion!(Q[k], cost, X[k], U[k], k)
         Q[k]/(N-1.)
 
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu

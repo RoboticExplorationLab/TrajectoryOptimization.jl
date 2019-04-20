@@ -225,7 +225,7 @@ model_d.f(ẋ,x,u,dt)
 fd!(ẋ2,x,u,dt)
 @test ẋ == ẋ2
 solver = Solver(model,Dynamics.dubinscar[2],integration=:rk3,dt=dt)
-
+fdx = zeros(model.n,model.n); fdu = zeros(model.n,model.m)
 S = zeros(n,nm1)
 fd_jacobians!(fdx,fdu,x,u)
 @test model_d.∇f(x,u,dt)[:,1:n+m] == [fdx fdu]

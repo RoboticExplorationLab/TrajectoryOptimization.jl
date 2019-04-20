@@ -4,9 +4,8 @@ using Test
 T = Float64
 
 # model
-dyn_pendulum = TrajectoryOptimization.Dynamics.dubins_dynamics!
-n = 3; m = 2
-model = Model(dyn_pendulum,n,m)
+model = TrajectoryOptimization.Dynamics.car_model
+n = model.n; m = model.m
 model_d = Model{Discrete}(model,rk4)
 
 # cost
@@ -21,7 +20,7 @@ lqr_cost = LQRCost(Q,R,Qf,xf)
 N = 31
 U = [ones(m) for k = 1:N-1]
 dt = 0.15
-prob = Problem(model_d,lqr_cost,U,dt=dt,x0=x0)
+prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,dt=dt,x0=x0)
 rollout!(prob)
 
 ## unconstrained
@@ -54,26 +53,28 @@ bnd = bound_constraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 bnd
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]
-add_constraints!(prob,con)
+prob = update_problem(prob,constraints=ProblemConstraints(con,N))
+rollout!(prob)
 
 #bp
 solver_ilqr = AbstractSolver(prob,opts_ilqr)
 solver_al = AbstractSolver(prob,opts_al)
 prob_al = AugmentedLagrangianProblem(prob,solver_al)
-update_constraints!(prob_al.cost,prob_al.cost.C,prob_al.cost.constraints, prob.X, prob.U)
-update_active_set!(prob_al.cost)
+update_constraints!(prob_al.obj.C,prob_al.obj.constraints, prob.X, prob.U)
+update_active_set!(prob_al.obj)
 jacobian!(prob_al,solver_ilqr)
 ΔV = _backwardpass!(prob_al,solver_ilqr)
 
 #bp sqrt
-solver_ilqr_sqrt = AbstractSolver(prob,opts_ilqr_sqrt)
-opts_ilqr
+solver_ilqr_sqrt = AbstractSolver(prob,opts_ilqr)
 solver_al_sqrt = AbstractSolver(prob,opts_al)
 prob_al_sqrt = AugmentedLagrangianProblem(prob,solver_al_sqrt)
-update_constraints!(prob_al_sqrt.cost,prob_al_sqrt.cost.C,prob_al_sqrt.cost.constraints, prob_al_sqrt.X, prob_al_sqrt.U)
-update_active_set!(prob_al_sqrt.cost)
+update_constraints!(prob_al_sqrt.obj.C,prob_al_sqrt.obj.constraints, prob_al_sqrt.X, prob_al_sqrt.U)
+prob_al.obj.C[end]
+update_active_set!(prob_al_sqrt.obj)
 jacobian!(prob_al_sqrt,solver_ilqr_sqrt)
 ΔV_sqrt = _backwardpass_sqrt!(prob_al_sqrt,solver_ilqr_sqrt)
+
 
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(solver_ilqr.K,solver_ilqr_sqrt.K))

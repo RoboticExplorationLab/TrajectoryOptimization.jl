@@ -11,12 +11,12 @@ model_d = Model{Discrete}(model, rk3)
 costfun = Dynamics.quadrotor[2].cost
 
 # Create Problem
-@test_throws ArgumentError Problem(model,costfun)
-prob = (@test_logs (:warn, "Neither dt or N were specified. Setting N = 51") Problem(model,costfun,tf=5))
+N = 10
+@test_throws ArgumentError Problem(model,ObjectiveNew(costfun,N))
 @test prob.model.info[:integration] == :rk4
 @test prob.dt == 0.1
 
-prob = Problem(model_d, costfun, tf=5, N=51)
+prob = Problem(model_d, ObjectiveNew(costfun,N), tf=5, N=51)
 @test prob.model.info[:integration] == :rk3
 
 @test_nowarn Problem(model_d, costfun, N=51, dt=0.2)

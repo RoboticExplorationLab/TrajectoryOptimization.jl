@@ -254,10 +254,6 @@ Qf = Diagonal(10.0I,n)
 xf = rand(n)
 quadcost = LQRCost(Q,R,Qf,xf)
 
-alcost = ALCost(quadcost,C2,cval,∇cval,λ,μ,a)
-stage_cost(alcost,X[1],U[1],1)
-
-
 obj = UnconstrainedObjective(quadcost,2.0,zeros(n),ones(n))
 obj = ConstrainedObjective(obj,u_max=u_max,u_min=u_min,x_max=x_max,x_min=x_min,
     cI=c2,cE=c,use_xf_equality_constraint=false,cE_N=cterm)
@@ -288,10 +284,10 @@ jacobian!(cz,C,x,u)
 @test get_num_constraints(solver) == (14,11,3)
 res = init_results(solver,Matrix{Float64}(undef,0,0),to_array(U),λ=λ,μ=μ)
 copyto!(res.X,X)
-update_constraints!(res,solver)
-@test cost(alcost,X,U,dt) - cost(quadcost,X,U,dt) ≈ TrajectoryOptimization.cost_constraints(solver,res)
-@test TrajectoryOptimization._cost(solver,res) == cost(quadcost,X,U,dt)
-@test cost(alcost,X,U,dt) ≈ cost(solver,res)
+# update_constraints!(res,solver)
+# @test cost(alcost,X,U,dt) - cost(quadcost,X,U,dt) ≈ TrajectoryOptimization.cost_constraints(solver,res)
+# @test TrajectoryOptimization._cost(solver,res) == cost(quadcost,X,U,dt)
+# @test cost(alcost,X,U,dt) ≈ cost(solver,res)
 
 con1, con2 = min_time_constraints(n,m,1.0,1.0e-3)
 

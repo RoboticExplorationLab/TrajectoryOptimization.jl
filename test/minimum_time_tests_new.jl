@@ -1,5 +1,4 @@
 using Test
-## Pendulum
 T = Float64
 
 # model
