@@ -1,548 +1,61 @@
+abstract type AbstractObjective end
 
-"""
-$(TYPEDEF)
-Generic type for Objective functions, which are currently strictly Quadratic
-"""
-abstract type Objective end
+CostTrajectory = Vector{C} where C <: CostFunction
 
-"""
-$(TYPEDEF)
-Defines an objective for an unconstrained optimization problem.
-xf does not have to specified. It is provided for convenience when used as part of the cost function (see LQRObjective function)
-If tf = 0, the objective is assumed to be minimum-time.
-"""
-struct UnconstrainedObjective{C} <: Objective
-    cost::C
-    tf::Float64          # Final time (sec). If tf = 0, the problem is set to minimum time
-    x0::Vector{Float64}  # Initial state (n,)
-    xf::Vector{Float64}  # (optional) Final state (n,)
-
-    function UnconstrainedObjective(cost::C,tf::Float64,x0,xf=Float64[]) where {C}
-        if !isempty(xf) && length(xf) != length(x0)
-            throw(ArgumentError("x0 and xf must be the same length"))
-        end
-        if tf < 0
-            throw(ArgumentError("tf must be non-negative"))
-        end
-        new{C}(cost,tf,x0,xf)
-    end
+"$(TYPEDEF) Objective: stores stage cost(s) and terminal cost functions"
+struct ObjectiveNew <: AbstractObjective
+    cost::CostTrajectory
 end
 
-"""
-$(SIGNATURES)
-Minimum time constructor for unconstrained objective
-"""
-function UnconstrainedObjective(cost::CostFunction,tf::Symbol,x0,xf)
-    if tf == :min
-        UnconstrainedObjective(cost,0.0,x0,xf)
-    else
-        err = ArgumentError(":min is the only recognized Symbol for the final time")
-        throw(err)
-    end
+function ObjectiveNew(cost::CostFunction,N::Int)
+    ObjectiveNew([cost for k = 1:N])
 end
 
-function copy(obj::UnconstrainedObjective)
-    UnconstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf))
+"Input requires separate stage and terminal costs (and trajectory length)"
+function ObjectiveNew(cost::CostFunction,cost_terminal::CostFunction,N::Int)
+    ObjectiveNew([k < N ? cost : cost_terminal for k = 1:N])
 end
 
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#                      CONSTRAINED OBJECTIVE                                   #
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-"""
-$(TYPEDEF)
-Define a quadratic objective for a constrained optimization problem.
-
-# Constraint formulation
-* Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
-
-"""
-struct ConstrainedObjective{C} <: Objective
-    cost::C
-    tf::Float64           # Final time (sec). If tf = 0, the problem is set to minimum time
-    x0::Array{Float64,1}  # Initial state (n,)
-    xf::Array{Float64,1}  # Final state (n,)
-
-    # Control Constraints
-    u_min::Array{Float64,1}  # Lower control bounds (m,)
-    u_max::Array{Float64,1}  # Upper control bounds (m,)
-
-    # State Constraints
-    x_min::Array{Float64,1}  # Lower state bounds (n,)
-    x_max::Array{Float64,1}  # Upper state bounds (n,)
-
-    # Custom constraints
-    cI::Function  # inequality constraint function (inplace)
-    cE::Function  # equality constraint function (inplace)
-
-    # Terminal Constraints
-    cI_N::Function          # custom terminal inequality constraint
-    cE_N::Function          # custom teriminal equality constraint
-    use_xf_equality_constraint::Bool  # Use terminal state constraint (true) or terminal cost (false) # TODO I don't think this is used
-
-    p::Int   # Total number of stage constraints
-    pI::Int  # Number of inequality constraints
-    p_N::Int  # Number of terminal constraints
-    pI_N::Int  # Number of terminal inequality constraints
-
-    pI_custom::Int   # Number of custom inequality constraints
-    pE_custom::Int   # Number of custom equality constraints
-    pI_N_custom::Int # Nubmer of custom terminal inequality constraints
-    pE_N_custom::Int # Number of custom terminal equality constraints
-
-    cIx::Function  # inequality constraint Jacobian (inplace)
-    cIu::Function  # inequality constraint Jacobian (inplace)
-    cEx::Function  # equality constraint Jacobian (inplace)
-    cEu::Function  # equality constraint Jacobian (inplace)
-
-    # Terminal Jacobians
-    cI_Nx::Function
-    cE_Nx::Function
-
-    function ConstrainedObjective(cost::C,tf::Real,x0,xf,
-        u_min, u_max,
-        x_min, x_max,
-        cI, cE,
-        cI_N, cE_N,
-        use_xf_equality_constraint,
-        cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
-
-        n,m = get_sizes(cost)
-        x = rand(n)
-        u = rand(m)
-
-        # Make general inequality/equality constraints inplace
-        is_inplace_function(cI,x,u) ? nothing : error("Custom inequality constraints are not inplace")
-        pI_custom = count_inplace_output(cI,x,u)
-
-        is_inplace_function(cE,x,u) ? nothing : error("Custom equality constraints are not inplace")
-        pE_custom = count_inplace_output(cE,x,u)
-
-        is_inplace_function(cI_N,x) ? nothing : error("Custom terminal inequality constraints are not inplace")
-        pI_N_custom = count_inplace_output(cI_N,x)
-
-        is_inplace_function(cE_N,x) ? nothing : error("Custom terminal equality constraints are not inplace")
-        pE_N_custom = count_inplace_output(cE_N,x)
-
-        # Validity Tests
-        u_max, u_min = _validate_bounds(u_max,u_min,m)
-        x_max, x_min = _validate_bounds(x_max,x_min,n)
-
-        # Stage Constraints
-        pI = 0
-        pE = 0
-        pI += count(isfinite, u_min)
-        pI += count(isfinite, u_max)
-        pI += count(isfinite, x_min)
-        pI += count(isfinite, x_max)
-
-        pI += pI_custom
-        pE += pE_custom
-
-        p = pI + pE
-
-        # Terminal Constraints
-        # pI_N = pI_N_custom
-        # pI_N += count(isfinite, x_min)
-        # pI_N += count(isfinite, x_max)
-
-        if use_xf_equality_constraint
-            if pE_N_custom > 0 || pI_N_custom > 0
-                throw(ArgumentError("Can't specify custom terminal constraints AND xf equality constraint -- set use_xf_equality_constraint=false"))
-            else
-                pE_N = n
-                pI_N = 0
-            end
-        else
-            pI_N = pI_N_custom # add custom constraints
-            pI_N += count(isfinite, x_min) # add x_max constraints
-            pI_N += count(isfinite, x_max) # add x_min constraints
-
-            if pE_N_custom > 0
-                pE_N = pE_N_custom
-            else
-                pE_N = 0
-            end
-        end
-
-        p_N = pI_N + pE_N
-
-        new{C}(cost::C, float(tf), x0,xf, u_min, u_max, x_min, x_max, cI, cE, cI_N, cE_N, use_xf_equality_constraint,
-            p, pI, p_N, pI_N, pI_custom, pE_custom, pI_N_custom, pE_N_custom,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
-    end
+"Input requires separate stage trajectory and terminal cost"
+function ObjectiveNew(cost::CostTrajectory,cost_terminal::CostFunction)
+    ObjectiveNew([cost...,cost_terminal])
 end
 
-function ConstrainedObjective(cost::C,tf::Symbol,x0,xf,
-    u_min, u_max,
-    x_min, x_max,
-    cI, cE,
-    cI_N, cE_N,
-    use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx) where {C}
-    if tf == :min
-        ConstrainedObjective(cost,0.0,x0,xf,
-            u_min, u_max,
-            x_min, x_max,
-            cI, cE,
-            cI_N, cE_N,
-            use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
-    else
-        err = ArgumentError(":min is the only recognized Symbol for the final time")
-        throw(err)
-    end
+# "Input requires cost function trajectory"
+# function ObjectiveNew(cost::CostTrajectory)
+#     ObjectiveNew(cost)
+# end
+
+import Base.getindex
+
+getindex(obj::ObjectiveNew,i::Int) = obj.cost[i]
+
+"$(TYPEDEF) Augmented Lagrangian Objective: stores stage cost(s) and terminal cost functions"
+struct ALObjectiveNew{T} <: AbstractObjective where T
+    cost::CostTrajectory
+    constraints::ProblemConstraints
+    C::PartedVecTrajectory{T}  # Constraint values
+    ∇C::PartedMatTrajectory{T} # Constraint jacobians
+    λ::PartedVecTrajectory{T}  # Lagrange multipliers
+    μ::PartedVecTrajectory{T}  # Penalty Term
+    active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
-"""$(SIGNATURES) Convert a ConstrainedObjective to an Unconstrained Objective """
-UnconstrainedObjective(obj::ConstrainedObjective) = UnconstrainedObjective(obj.cost, obj.tf, obj.x0, obj.xf)
-
-"""
-$(SIGNATURES)
-
-Construct a ConstrainedObjective with defaults.
-
-Create a ConstrainedObjective, specifying only the needed fields. All others
-will be set to their default, constrained values.
-
-# Constraint formulation
-* Equality constraints: `f(x,u) = 0`
-* Inequality constraints: `f(x,u) ≥ 0`
-
-# Arguments
-* u_min, u_max, x_min, x_max: Upper and lower bounds that can accept either a single scalar or
-a vector of size (m,). A scalar will be copied to all states or controls. Values
-can be ±Inf.
-* cI, cE: Functions for inequality and equality constraints. Must be of the form
-`c = f(x,u)`, where `c` is of size (pI_c,) or (pE_c,).
-* cI_N, cE_N: Functions for terminal constraints. Must be of the from `c = f(x)`,
-where `c` is of size (pI_c_N,) or (pE_c_N,).
-"""
-function ConstrainedObjective(cost,tf,x0,xf;
-    u_min=-ones(get_sizes(cost)[2])*Inf, u_max=ones(get_sizes(cost)[2])*Inf,
-    x_min=-ones(get_sizes(cost)[1])*Inf, x_max=ones(get_sizes(cost)[1])*Inf,
-    cI=null_constraint, cE=null_constraint,
-    cI_N=null_constraint, cE_N=null_constraint,
-    use_xf_equality_constraint=true,
-    cIx=null_constraint,cIu=null_constraint,cEx=null_constraint,cEu=null_constraint,cI_Nx=null_constraint,cE_Nx=null_constraint)
-
-    ConstrainedObjective(cost,tf,x0,xf,
-        u_min, u_max,
-        x_min, x_max,
-        cI, cE,
-        cI_N, cE_N,
-        use_xf_equality_constraint,cIx,cIu,cEx,cEu,cI_Nx,cE_Nx)
+function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,N::Int;
+        μ_init::T=1.,λ_init::T=0.) where T
+    # Get sizes
+    n,m = get_sizes(cost)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    ALObjectiveNew{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
-
-"$(SIGNATURES) Construct a ConstrainedObjective from an UnconstrainedObjective"
-function ConstrainedObjective(obj::UnconstrainedObjective; tf=obj.tf, kwargs...)
-    ConstrainedObjective(obj.cost, tf, obj.x0, obj.xf; kwargs...)
+function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,
+        λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
+    # Get sizes
+    n,m = get_sizes(cost)
+    N = length(λ)
+    C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    ALObjectiveNew{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
-function copy(obj::ConstrainedObjective)
-    ConstrainedObjective(copy(obj.cost),copy(obj.tf),copy(obj.x0),copy(obj.xf),
-        u_min=copy(obj.u_min), u_max=copy(obj.u_max), x_min=copy(obj.x_min), x_max=copy(obj.x_max),
-        cI=obj.cI, cE=obj.cE,
-        use_xf_equality_constraint=obj.use_xf_equality_constraint,
-        cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
-end
-
-"""
-$(SIGNATURES)
-Updates constrained objective values and returns a new objective.
-
-Only updates the specified fields, all others are copied from the previous
-Objective.
-"""
-function update_objective(obj::ConstrainedObjective;
-    cost=obj.cost, tf=obj.tf, x0=obj.x0, xf = obj.xf,
-    u_min=obj.u_min, u_max=obj.u_max, x_min=obj.x_min, x_max=obj.x_max,
-    cI=obj.cI, cE=obj.cE, cI_N=obj.cI_N, cE_N=obj.cE_N,
-    use_xf_equality_constraint=obj.use_xf_equality_constraint,
-    cIx=obj.cIx,cIu=obj.cIu,cEx=obj.cEx,cEu=obj.cEu,cI_Nx=obj.cI_Nx,cE_Nx=obj.cE_Nx)
-
-    ConstrainedObjective(cost,tf,x0,xf,
-        u_min=u_min, u_max=u_max,
-        x_min=x_min, x_max=x_max,
-        cI=cI, cE=cE,
-        cI_N=cI_N, cE_N=cE_N,
-        use_xf_equality_constraint=use_xf_equality_constraint,
-        cIx=cIx,cIu=cIu,cEx=cEx,cEu=cEu,cI_Nx=cI_Nx,cE_Nx=cE_Nx)
-
-end
-
-
-null_constraint(c,x,u) = nothing
-null_constraint(c,x) = nothing
-null_constraint_jacobian(cx,cu,x,u) = nothing
-null_constraint_jacobian(cx,x) = nothing
-
-get_sizes(obj::Objective) = get_sizes(obj.cost)
-
-"""
-$(SIGNATURES)
-Check max/min bounds for state and control.
-
-Converts scalar bounds to vectors of appropriate size and checks that lengths
-are equal and bounds do not result in an empty set (i.e. max > min).
-
-# Arguments
-* n: number of elements in the vector (n for states and m for controls)
-"""
-function _validate_bounds(max,min,n::Int)
-
-    if min isa Real
-        min = ones(n)*min
-    end
-    if max isa Real
-        max = ones(n)*max
-    end
-    if length(max) != length(min)
-        throw(DimensionMismatch("u_max and u_min must have equal length"))
-    end
-    if ~all(max .> min)
-        throw(ArgumentError("u_max must be greater than u_min"))
-    end
-    if length(max) != n
-        throw(DimensionMismatch("limit of length $(length(max)) doesn't match expected length of $n"))
-    end
-    return max, min
-end
-
-"""
-$(SIGNATURES)
-Create unconstrained objective for a problem of the form:
-    min (xₙ - xf)ᵀ Qf (xₙ - xf) + ∫ ( (x-xf)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
-    s.t. x(0) = x0
-         x(tf) = xf
-"""
-function LQRObjective(Q,R,Qf,tf,x0,xf)
-    cost = LQRCost(Q,R,Qf,xf)
-    UnconstrainedObjective(cost,tf,x0,xf)
-end
-
-
-"""
-$(SIGNATURES)
-Convenience method for getting the stage cost from any objective
-"""
-function stage_cost(obj::Objective,x::Vector{Float64},u::Vector{Float64})
-    stage_cost(obj.cost,x,u)
-end
-
-"""
-$(SIGNATURES)
-    Determine if the constraints are inplace. Returns boolean and number of constraints
-"""
-function is_inplace_constraints(c::Function,n::Int64,m::Int64)
-    x = rand(n)
-    u = rand(m)
-    q = 1000
-    iter = 1
-
-    vals = NaN*(ones(q))
-    try
-        c(vals,x,u)
-    catch e
-        if e isa MethodError
-            return false
-        end
-    end
-
-    return true
-end
-
-function count_inplace_output(c::Function, n::Int, m::Int)
-    x = rand(n)
-    u = rand(m)
-    q0 = 1000
-    iter = 1
-
-    q = q0
-    vals = NaN*(ones(q))
-    while iter < 5
-        try
-            c(vals,x,u)
-            break
-        catch e
-            q *= 10
-            iter += 1
-            vals = NaN*(ones(q))
-        end
-    end
-    p = count(isfinite.(vals))
-
-    q = q0
-    vals = NaN*(ones(q))
-    while iter < 5
-        try
-            c(vals,x)
-            break
-        catch e
-            if e isa MethodError
-                p_N = 0
-                break
-            else
-                q *= 10
-                iter += 1
-                vals = NaN*(ones(q))
-            end
-        end
-    end
-    p_N = count(isfinite.(vals))
-
-    return p, p_N
-end
-
-function count_inplace_output(c::Function, n::Int)
-    x = rand(n)
-    q = 1000
-    iter = 1
-    vals = NaN*(ones(q))
-
-    while iter < 5
-        try
-            c(vals,x)
-            break
-        catch e
-            q *= 10
-            iter += 1
-            vals = NaN*(ones(q))
-        end
-    end
-    return count(isfinite.(vals))
-end
-
-function is_inplace_function(c::Function, input...)
-    q = 1000
-    iter = 1
-
-    vals = ones(q)
-    while iter < 5
-        try
-            c(vals,input...)
-            return true
-        catch e
-            if e isa MethodError
-                return false
-            elseif e isa BoundsError
-                q *= 10
-            else
-                throw(e)
-            end
-            iter += 1
-        end
-    end
-    return false
-end
-
-function count_inplace_output(c::Function, input...)
-    q0 = 1000
-    iter = 1
-
-    q = q0
-    vals = NaN*(ones(q))
-    while iter < 5
-        try
-            c(vals,input...)
-            break
-        catch e
-            if e isa BoundsError
-                q *= 10
-                iter += 1
-                vals = NaN*(ones(q))
-            else
-                throw(e)
-            end
-        end
-    end
-    p = count(isfinite.(vals))
-
-    return p
-end
-
-"""
-$(SIGNATURES)
-    Check if constraints are custom
-"""
-function check_custom_constraints(obj::ConstrainedObjective)
-    if obj.pI_custom + obj.pE_custom > 0
-        return true
-    else
-        return false
-    end
-end
-
-function check_custom_constraints(obj::UnconstrainedObjective)
-    return false
-end
-
-"""
-$(SIGNATURES)
-    Check if constraints are custom
-"""
-function check_custom_terminal_constraints(obj::ConstrainedObjective)
-    if obj.pI_N_custom + obj.pE_N_custom > 0
-        return true
-    else
-        return false
-    end
-end
-
-function check_custom_terminal_constraints(obj::UnconstrainedObjective)
-    return false
-end
-
-"""
-$(SIGNATURES)
-    Generate Jacobian ∂C(x,u)/∂x
-"""
-function generate_Cx(c::Function,p::Int,n::Int64,m::Int64)::Function
-    c_aug! = f_augmented!(c,n,m)
-    J = zeros(p,n+m)
-    S = zeros(n+m)
-    cdot = zeros(p)
-    F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
-
-    function Cx(cx,x,u)
-        S[1:n] = x[1:n]
-        S[n+1:n+m] = u[1:m]
-        F(J,cdot,S)
-        cx .= J[1:p,1:n]
-    end
-    return Cx
-end
-
-"""
-$(SIGNATURES)
-    Generate Jacobian ∂C(x)/∂x
-"""
-function generate_Cx(c::Function,p::Int,n::Int64)::Function
-    J_N = zeros(p,n)
-    xdot = zeros(p)
-    F_N(J_N,xdot,x) = ForwardDiff.jacobian!(J_N,c,xdot,x)
-    function Cx(cx,x)
-        F_N(J_N,xdot,x)
-        cx .= J_N
-    end
-    return Cx
-end
-
-"""
-$(SIGNATURES)
-    Generate Jacobian ∂C(x,u)/∂u
-"""
-function generate_Cu(c::Function,p::Int,n::Int64,m::Int64)::Function
-    c_aug! = f_augmented!(c,n,m)
-    J = zeros(p,n+m)
-    S = zeros(n+m)
-    cdot = zeros(p)
-    F(J,cdot,S) = ForwardDiff.jacobian!(J,c_aug!,cdot,S)
-
-    function Cu(cu,x,u)
-        S[1:n] = x[1:n]
-        S[n+1:n+m] = u[1:m]
-        F(J,cdot,S)
-        cu .= J[1:p,n+1:n+m]
-    end
-    return Cu
-end
+getindex(obj::ALObjectiveNew,i::Int) = obj.cost[i]

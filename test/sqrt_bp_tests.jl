@@ -1,5 +1,6 @@
-using Test
-
+import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem
 ## Pendulum
 T = Float64
 

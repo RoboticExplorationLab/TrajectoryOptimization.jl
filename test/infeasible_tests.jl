@@ -1,4 +1,7 @@
-using Test
+import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    line_trajectory_new
 
 ## Pendulum
 T = Float64
@@ -43,6 +46,7 @@ X0 = line_trajectory_new(x0,xf,N)
 
 # unconstrained infeasible solve
 prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,dt=dt,x0=x0)
+prob_inf = TrajectoryOptimization.infeasible_problem(prob,1.0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 @test norm(prob.X[end] - xf) < 1.0e-3

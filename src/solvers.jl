@@ -367,44 +367,44 @@ function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     ALTROSolver{T}(opts,solver_al)
 end
 
-"Second-order Taylor expansion of minimum time cost function at time step k"
-function cost_expansion!(Q::Expansion{T},cost::MinTimeCost{T}, x::Vector{T},
-        u::Vector{T}) where T
-
-    @assert cost.cost isa QuadraticCost
-    n,m = get_sizes(cost.cost)
-    idx = (x=1:n,u=1:m)
-    R_min_time = cost.R_min_time
-    τ = u[end]
-
-    Qx = cost.cost.Q*x[idx.x] + cost.cost.q
-    Qu = cost.cost.R*u[idx.u] + cost.cost.r
-    Q.x[idx.x] .= Qx
-    Q.u[idx.u] .= Qu
-    Q.xx[idx.x,idx.x] .= cost.cost.Q
-    Q.uu[idx.u,idx.u] .= cost.cost.R
-    Q.ux[idx.u,idx.x] .= cost.cost.H
-
-
-    Q.u[end] = 2.0*τ*R_min_time
-    Q.uu[idx.u,end] = zeros(m)
-    Q.uu[end,idx.u] = zeros(m)
-    Q.uu[end,end] = 2.0*R_min_time
-    Q.ux[end,idx.x] = zeros(n)
-
-    return nothing
-end
-
-function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where T
-    n, = get_sizes(cost.cost)
-    R_min_time = cost.R_min_time
-
-    idx = 1:n
-    S.xx[idx,idx] = cost.cost.Qf
-    S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
-
-    return nothing
-end
+# "Second-order Taylor expansion of minimum time cost function at time step k"
+# function cost_expansion!(Q::Expansion{T},cost::MinTimeCost{T}, x::Vector{T},
+#         u::Vector{T}) where T
+#
+#     @assert cost.cost isa QuadraticCost
+#     n,m = get_sizes(cost.cost)
+#     idx = (x=1:n,u=1:m)
+#     R_min_time = cost.R_min_time
+#     τ = u[end]
+#
+#     Qx = cost.cost.Q*x[idx.x] + cost.cost.q
+#     Qu = cost.cost.R*u[idx.u] + cost.cost.r
+#     Q.x[idx.x] .= Qx
+#     Q.u[idx.u] .= Qu
+#     Q.xx[idx.x,idx.x] .= cost.cost.Q
+#     Q.uu[idx.u,idx.u] .= cost.cost.R
+#     Q.ux[idx.u,idx.x] .= cost.cost.H
+#
+#
+#     Q.u[end] = 2.0*τ*R_min_time
+#     Q.uu[idx.u,end] = zeros(m)
+#     Q.uu[end,idx.u] = zeros(m)
+#     Q.uu[end,end] = 2.0*R_min_time
+#     Q.ux[end,idx.x] = zeros(n)
+#
+#     return nothing
+# end
+#
+# function cost_expansion!(S::Expansion{T},cost::MinTimeCost,xN::Vector{T}) where T
+#     n, = get_sizes(cost.cost)
+#     R_min_time = cost.R_min_time
+#
+#     idx = 1:n
+#     S.xx[idx,idx] = cost.cost.Qf
+#     S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
+#
+#     return nothing
+# end
 
 # jacobian!(cost::CostFunction,∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T = jacobian!(∇c,constraints,x,u)
 # function jacobian!(cost::MinTimeCost{T},∇c,constraints::AbstractConstraintSet,x::Vector{T},u::Vector{T},k::Int) where T
@@ -453,7 +453,7 @@ end
 function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
         u::Vector{T}) where T
     Q.x .= cost.Q*x + cost.q
-    Q.u .= cost.R*u
+    Q.u .= cost.R*u + cost.r
     Q.xx .= cost.Q
     Q.uu .= cost.R
     Q.ux .= cost.H
@@ -506,15 +506,15 @@ end
 
 ## Augmented Lagrangian
 
-"Update constraints trajectories"
-function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
-        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    N = length(X)
-    for k = 1:N-1
-        evaluate!(C[k],constraints,X[k],U[k])
-    end
-    evaluate!(C[N],constraints,X[N])
-end
+# "Update constraints trajectories"
+# function update_constraints!(C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
+#         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+#     N = length(X)
+#     for k = 1:N-1
+#         evaluate!(C[k],constraints,X[k],U[k])
+#     end
+#     evaluate!(C[N],constraints,X[N])
+# end
 
 "Update constraints trajectories"
 function update_constraints!(C::PartedVecTrajectory{T},constraints::ProblemConstraints,

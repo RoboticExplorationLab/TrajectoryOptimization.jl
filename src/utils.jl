@@ -1,23 +1,23 @@
-import Base: convert, copyto!, Array, vec
+import Base: convert, copyto!, Array, vec, println
 import LinearAlgebra: norm
 import Plots: plot, plot!
 
-function get_cost_matrices(solver::Solver)
-    solver.obj.cost.Q, solver.obj.cost.R, solver.obj.cost.Qf
-end
-
-function get_sizes(solver::Solver)
-    return solver.model.n, solver.model.m, solver.N
-end
+# function get_cost_matrices(solver::Solver)
+#     solver.obj.cost.Q, solver.obj.cost.R, solver.obj.cost.Qf
+# end
+#
+# function get_sizes(solver::Solver)
+#     return solver.model.n, solver.model.m, solver.N
+# end
 
 function get_sizes(X::Vector{T}, U::Vector{T}) where {T<:MVector}
     N = length(X)
     n,m = length(X[1]), length(U[1])
 end
 
-function get_N(solver::Solver,method::Symbol)
-    get_N(solver.N,method)
-end
+# function get_N(solver::Solver,method::Symbol)
+#     get_N(solver.N,method)
+# end
 
 function get_N(N0::Int,method::Symbol)
     if method == :midpoint
@@ -211,30 +211,30 @@ function eul2quat(eul)
     quat
 end
 
-function print_solver(solver::Solver,name::String,io::IO=STDOUT)
-    println(io,"###  $name  ###")
-
-    println(io,"\nModel Props")
-    println(io,"-----------")
-    println(io,"\t n: $(solver.model.n)")
-    println(io,"\t m: $(solver.model.m)")
-    println(io,"\t inplace dynamics?: $(is_inplace_dynamics(solver.model))")
-
-    println(io,"\nObjective")
-    println(io,"----------")
-    println(io,"\t tf: $(obj.tf)")
-    println(io,"\t x0: $(obj.x0)")
-    println(io,"\t xf: $(obj.xf)")
-    println(io,"\t Q: $(diag(obj.Q))")
-    println(io,"\t R: $(diag(obj.R))")
-
-    println(io,"\nSolver Settings")
-    println(io,"-----------------")
-    println(io,"\t dt: $(solver.dt)")
-    println(io,"\t N: $(solver.N)")
-    println(io,"\t integration: $(solver.integration)")
-
-end
+# function print_solver(solver::Solver,name::String,io::IO=STDOUT)
+#     println(io,"###  $name  ###")
+#
+#     println(io,"\nModel Props")
+#     println(io,"-----------")
+#     println(io,"\t n: $(solver.model.n)")
+#     println(io,"\t m: $(solver.model.m)")
+#     println(io,"\t inplace dynamics?: $(is_inplace_dynamics(solver.model))")
+#
+#     println(io,"\nObjective")
+#     println(io,"----------")
+#     println(io,"\t tf: $(obj.tf)")
+#     println(io,"\t x0: $(obj.x0)")
+#     println(io,"\t xf: $(obj.xf)")
+#     println(io,"\t Q: $(diag(obj.Q))")
+#     println(io,"\t R: $(diag(obj.R))")
+#
+#     println(io,"\nSolver Settings")
+#     println(io,"-----------------")
+#     println(io,"\t dt: $(solver.dt)")
+#     println(io,"\t N: $(solver.N)")
+#     println(io,"\t integration: $(solver.integration)")
+#
+# end
 
 """
 $(SIGNATURES)
@@ -297,13 +297,13 @@ function plot_trajectory!(X::AbstractMatrix;kwargs...)
     plot!(X[1,:],X[2,:];kwargs...)
 end
 
-function plot_trajectory!(res::TrajectoryOptimization.SolverVectorResults; kwargs...)
-	plot_trajectory!(to_array(res.X); kwargs...)
-end
-
-function plot_trajectory!(res::DircolVars;kwargs...)
-    plot_trajectory!(res.X; kwargs...)
-end
+# function plot_trajectory!(res::TrajectoryOptimization.SolverVectorResults; kwargs...)
+# 	plot_trajectory!(to_array(res.X); kwargs...)
+# end
+#
+# function plot_trajectory!(res::DircolVars;kwargs...)
+#     plot_trajectory!(res.X; kwargs...)
+# end
 
 
 """
@@ -379,3 +379,27 @@ end
 plot(X::Trajectory; kwargs...) = plot(to_array(X)'; kwargs...)
 plot!(X::Trajectory; kwargs...) = plot!(to_array(X)'; kwargs...)
 plot(X::Trajectory, inds::UnitRange; kwargs...) = plot(to_array(X)[inds,:]'; kwargs...)
+
+
+## Simple constraint primitives
+"""
+$(SIGNATURES)
+Circle constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function circle_constraint(x,x0,y0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2  - r^2)
+end
+
+circle_constraint(x,c,r) = circle_constraint(x,c[1],c[2],r)
+
+"""
+$(SIGNATURES)
+Sphere constraint function (c ⩽ 0, negative is satisfying constraint)
+"""
+function sphere_constraint(x,x0,y0,z0,r)
+	return -((x[1]-x0)^2 + (x[2]-y0)^2 + (x[3]-z0)^2  - r^2)
+end
+
+function sphere_constraint(x,x0,r)
+	return -((x[1]-x0[1])^2 + (x[2]-x0[2])^2 + (x[3]-x0[3])^2-r^2)
+end

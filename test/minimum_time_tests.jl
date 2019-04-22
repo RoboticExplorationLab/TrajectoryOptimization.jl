@@ -1,4 +1,8 @@
-using Test
+import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    line_trajectory_new, total_time
+
 T = Float64
 
 # model
@@ -41,7 +45,6 @@ solve!(prob_mt,opts_altro)
 prob_mt.U[end][end]
 tt_mt = total_time(prob_mt)
 
-plot(prob_mt.U)
 @test tt_mt < 0.5*tt
 @test tt_mt < 1.0
 
@@ -86,7 +89,6 @@ dt = 0.06
 prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
-plot(prob.U)
 
 prob_mt = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)

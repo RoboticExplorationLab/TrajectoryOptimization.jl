@@ -1,16 +1,22 @@
 import TrajectoryOptimization: dynamics
+import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    line_trajectory_new, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
+    _check_jacobian, f_augmented!
+
 using RigidBodyDynamics
 
 ######## Analytical Model #############
-f = Dynamics.dubins_dynamics!
-n,m = 3,2
-model = Model(f,n,m)
+model = Dynamics.car_model
+n = 3; m = 2
 @test model.m == m
 @test model.n == n
 
 xdot = zeros(n)
 x = rand(n)
 u = rand(m)
+reset(model)
 @test evals(model) == 0
 reset(model)
 model.f(xdot,x,u)
@@ -155,9 +161,8 @@ model2.f(ẋ2,x,u)
 @inferred model2.∇f(S,x,u,dt)
 
 # Create discrete dynamics from continuous
-f = Dynamics.dubins_dynamics!
 n,m = 3,2
-model = Model(f,n,m)
+model = Dynamics.car_model
 discretizer = rk3
 model_d = Model{Discrete}(model,discretizer)
 
@@ -224,15 +229,10 @@ ẋ,ẋ2 = zeros(n), zeros(n)
 model_d.f(ẋ,x,u,dt)
 fd!(ẋ2,x,u,dt)
 @test ẋ == ẋ2
-solver = Solver(model,Dynamics.dubinscar[2],integration=:rk3,dt=dt)
 fdx = zeros(model.n,model.n); fdu = zeros(model.n,model.m)
 S = zeros(n,nm1)
 fd_jacobians!(fdx,fdu,x,u)
 @test model_d.∇f(x,u,dt)[:,1:n+m] == [fdx fdu]
-t_0 = @elapsed fd_jacobians!(fdx,fdu,x,u)
-t_1 = @elapsed model_d.∇f(S,x,u,dt)
-@test t_1*1.5 < t_0
-
 @inferred model_d.f(ẋ,x,u,dt)
 @inferred model_d.∇f(S,x,u,dt)
 

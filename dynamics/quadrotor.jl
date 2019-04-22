@@ -1,4 +1,4 @@
-function quadrotor_dynamics!(ẋ,X,u)
+function quadrotor_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -20,10 +20,10 @@ function quadrotor_dynamics!(ẋ,X,u)
       # omega2
       # omega3
 
-      x = X[1:3]
-      q = X[4:7]./norm(X[4:7]) #normalize quaternion
-      v = X[8:10]
-      omega = X[11:13]
+      # x = X[1:3]
+      q = x[4:7]./norm(x[4:7]) #normalize quaternion
+      v = x[8:10]
+      omega = x[11:13]
 
       # Parameters
       m = .5 # mass
@@ -37,12 +37,12 @@ function quadrotor_dynamics!(ẋ,X,u)
       w3 = u[3]
       w4 = u[4]
 
-      kf = 1; # 6.11*10^-8;
+      kf = 1.0; # 6.11*10^-8;
       F1 = kf*w1;
       F2 = kf*w2;
       F3 = kf*w3;
       F4 = kf*w4;
-      F = [0;0;F1+F2+F3+F4] #total rotor force in body frame
+      F = [0.;0.;F1+F2+F3+F4] #total rotor force in body frame
 
       km = 0.0245;
       M1 = km*w1;
@@ -79,58 +79,3 @@ n = 13
 m = 4
 
 quadrotor_model = Model(quadrotor_dynamics!,n,m)
-
-# Unconstrained
-Q = (1e-1)*Matrix(I,n,n)
-Q[4,4] = 1.0; Q[5,5] = 1.0; Q[6,6] = 1.0; Q[7,7] = 1.0
-R = (1.0)*Matrix(I,m,m)
-# R = (1e-1)*Matrix(I,m,m)
-Qf = (1000.0)*Matrix(I,n,n)
-tf = 5.0
-dt = 0.05
-
-# -initial state
-x0 = zeros(n)
-x0[1:3] = [0.; 0.; 0.]
-q0 = [1.;0.;0.;0.]
-x0[4:7] = q0
-
-# -final state
-xf = copy(x0)
-xf[1:3] = [0.;40.;0.] # xyz position
-xf[4:7] = q0
-
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-
-# Model + objective
-quadrotor = [model, obj_uncon]
-
-## Constrained
-
-r_quad = 3.0
-r_sphere = 3.0
-spheres = ((0.,10.,0.,r_sphere),(0.,20.,0.,r_sphere),(0.,30.,0.,r_sphere))
-n_spheres = 3
-
-# -control limits
-u_min = 0.0
-u_max = 10.0
-
-# 3 sphere obstacles
-function cI_3obs_quad(c,x,u)
-    for i = 1:n_spheres
-        c[i] = TrajectoryOptimization.sphere_constraint(x,spheres[i][1],spheres[i][2],spheres[i][3],spheres[i][4]+r_quad)
-    end
-    c
-end
-
-# unit quaternion constraint
-function unit_quaternion(c,x,u)
-    c[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
-obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cE=unit_quaternion)
-obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad)#,cE=unit_quaternion)
-
-quadrotor_unit_quaternion = [model, obj_uq]
-quadrotor_3obs = [model, obj_3obs, spheres]

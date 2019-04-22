@@ -1,10 +1,12 @@
-using Test, Random
+import TrajectoryOptimization: LQRCost, iLQRSolverOptions, AugmentedLagrangianSolverOptions,
+    ALTROSolverOptions, Problem, initial_controls!, solve!, goal_constraint, max_violation,
+    bound_constraint, ObjectiveNew, Constraint
 Random.seed!(7)
 
 # model
 T = Float64
 integration = :rk4
-model = Dynamics.quadrotor_model
+model = TrajectoryOptimization.Dynamics.quadrotor_model
 n = model.n; m = model.m
 
 # cost

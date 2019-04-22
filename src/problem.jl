@@ -313,9 +313,10 @@ function max_violation(prob::Problem{T}) where T
     end
 end
 
-include("infeasible_new.jl")
+include("infeasible.jl")
 "Create infeasible state trajectory initialization problem from problem"
 function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
+    N = prob.N
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
     # modify problem with slack control
@@ -350,6 +351,7 @@ end
 
 function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
     # modify problem with time step control
+    N = prob.N; n = prob.model.n; m = prob.model.m
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
     # modify problem with slack control
@@ -387,5 +389,5 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
         constraints=ProblemConstraints(con_prob),
         U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
         X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],
-        x0=[x0;0.0])
+        x0=[prob.x0;0.0])
 end

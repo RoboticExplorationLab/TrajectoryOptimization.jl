@@ -1,110 +1,43 @@
-"""
-$(SIGNATURES)
-Simulate system dynamics for a given control trajectory U
-Updates X by propagating the dynamics, using the controls specified in
-U
-"""
-function rollout!(res::SolverVectorResults, solver::Solver)
-    status = rollout!(res.X, res.U, solver)
+function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
+    X = prob.X; U = prob.U
+    K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    # # Update constraints
-    # update_constraints!(res,solver,res.X,res.U)
-    return status
-end
+    X̄[1] = prob.x0
 
-function rollout(solver::Solver, U::Matrix)
-    n,m,N = get_sizes(solver)
-    X = [zeros(n) for k=1:N]
-    rollout!(X, to_dvecs(U), solver)
-    return to_array(X)
-end
-
-function rollout!(X::Matrix, U::Matrix, solver::Solver)
-    X_vecs = to_dvecs(X)
-    status = rollout!(X_vecs, to_dvecs(U), solver)
-    X .= to_array(X_vecs)
-    return status
-end
-
-function rollout!(X, U, solver::Solver)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
-
-    dt = solver.dt
-
-    X[1][1:n] = solver.obj.x0
-    for k = 1:N-1
-        # Get dt if minimum time and h to state dynamics
-        if solver.state.minimum_time
-            h = U[k][m̄]
-            X[k+1][n̄] = h
-            dt = h^2
-        end
-
-        # Propagate dynamics forward
-        solver.fd(view(X[k+1],1:n), X[k][1:n], U[k][1:m], dt)
-
-        # Add infeasible controls
-        solver.state.infeasible ? X[k+1][1:n] += U[k][m̄+1:m̄+n] : nothing
-
-        # Check that rollout has not diverged
-        if ~(norm(X[k+1],Inf) < solver.opts.max_state_value && norm(U[k],Inf) < solver.opts.max_control_value)
-            return false
-        end
-    end
-
-    return true
-end
-
-"""
-$(SIGNATURES)
-Simulate system dynamics using new control trajectory comprising
-feedback gains K and feedforward gains d from backward pass
-and previous control trajectory.
-Line search option using alpha
-
-flag indicates values are finite for all time steps.
-"""
-function rollout!(res::SolverVectorResults,solver::Solver,alpha::Float64)
-    n,m,N = get_sizes(solver)
-    m̄,mm = get_num_controls(solver)
-    n̄,nn = get_num_states(solver)
-
-    dt = solver.dt
-
-    X = res.X; U = res.U; K = res.K; d = res.d; X_ = res.X_; U_ = res.U_
-
-    X_[1][1:n] = solver.obj.x0;
-
-    for k = 2:N
+    for k = 2:prob.N
         # Calculate state trajectory difference
-        δx = X_[k-1] - X[k-1]
+        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
 
         # Calculate updated control
-        U_[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
-
-        # Get dt if minimum time and h to states
-        if solver.state.minimum_time
-            h = U_[k-1][m̄]
-            X_[k][n̄] = h
-            dt = h^2
-        end
+        Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        solver.fd(view(X_[k],1:n), X_[k-1][1:n], U_[k-1][1:m], dt)
-
-        # Add infeasible controls
-        solver.state.infeasible ? X_[k][1:n] += U_[k-1][m̄.+(1:n)] : nothing
+        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], prob.dt)
 
         # Check that rollout has not diverged
-        if ~(norm(X_[k],Inf) < solver.opts.max_state_value && norm(U_[k-1],Inf) < solver.opts.max_control_value)
+        if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
             return false
         end
     end
-
-    # Update constraints
-    update_constraints!(res,solver,X_,U_)
-
     return true
+end
+
+function rollout!(prob::Problem)
+    N = prob.N
+    X = prob.X; U = prob.U
+
+    if !all(isfinite.(prob.X[1]))
+        X[1] = prob.x0
+        for k = 1:N-1
+            evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
+        end
+    end
+end
+
+function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
+    if true
+        x̄ - x
+    else
+        nothing #TODO quaternion
+    end
 end
