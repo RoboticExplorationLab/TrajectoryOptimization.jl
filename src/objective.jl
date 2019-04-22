@@ -1,61 +1,68 @@
 abstract type AbstractObjective end
 
-CostTrajectory = Vector{C} where C <: CostFunction
-
 "$(TYPEDEF) Objective: stores stage cost(s) and terminal cost functions"
-struct ObjectiveNew <: AbstractObjective
+struct Objective <: AbstractObjective
     cost::CostTrajectory
 end
 
-function ObjectiveNew(cost::CostFunction,N::Int)
-    ObjectiveNew([cost for k = 1:N])
+function Objective(cost::CostFunction,N::Int)
+    Objective([cost for k = 1:N])
 end
 
 "Input requires separate stage and terminal costs (and trajectory length)"
-function ObjectiveNew(cost::CostFunction,cost_terminal::CostFunction,N::Int)
-    ObjectiveNew([k < N ? cost : cost_terminal for k = 1:N])
+function Objective(cost::CostFunction,cost_terminal::CostFunction,N::Int)
+    Objective([k < N ? cost : cost_terminal for k = 1:N])
 end
 
 "Input requires separate stage trajectory and terminal cost"
-function ObjectiveNew(cost::CostTrajectory,cost_terminal::CostFunction)
-    ObjectiveNew([cost...,cost_terminal])
+function Objective(cost::CostTrajectory,cost_terminal::CostFunction)
+    Objective([cost...,cost_terminal])
 end
-
-# "Input requires cost function trajectory"
-# function ObjectiveNew(cost::CostTrajectory)
-#     ObjectiveNew(cost)
-# end
 
 import Base.getindex
 
-getindex(obj::ObjectiveNew,i::Int) = obj.cost[i]
+getindex(obj::Objective,i::Int) = obj.cost[i]
 
-"$(TYPEDEF) Augmented Lagrangian Objective: stores stage cost(s) and terminal cost functions"
-struct ALObjectiveNew{T} <: AbstractObjective where T
-    cost::CostTrajectory
-    constraints::ProblemConstraints
-    C::PartedVecTrajectory{T}  # Constraint values
-    ∇C::PartedMatTrajectory{T} # Constraint jacobians
-    λ::PartedVecTrajectory{T}  # Lagrange multipliers
-    μ::PartedVecTrajectory{T}  # Penalty Term
-    active_set::PartedVecTrajectory{Bool}  # Active set
+"Calculate unconstrained cost for X and U trajectories"
+function cost(obj::Objective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(obj[k],X[k],U[k])
+    end
+    J /= (N-1.0)
+    J += stage_cost(obj[N],X[N])
+    return J
 end
 
-function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,N::Int;
-        μ_init::T=1.,λ_init::T=0.) where T
-    # Get sizes
-    n,m = get_sizes(cost)
-    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    ALObjectiveNew{T}(cost,constraint,C,∇C,λ,μ,active_set)
+function cost_expansion!(Q::ExpansionTrajectory{T},obj::Objective,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    cost_expansion!(Q,obj.cost,X,U)
 end
 
-function ALObjectiveNew(cost::CostTrajectory,constraints::ProblemConstraints,
-        λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
-    # Get sizes
-    n,m = get_sizes(cost)
-    N = length(λ)
-    C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    ALObjectiveNew{T}(cost,constraint,C,∇C,λ,μ,active_set)
+function cost_expansion!(Q::ExpansionTrajectory{T},c::CostTrajectory,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        cost_expansion!(Q[k],c[k],X[k],U[k])
+    end
 end
 
-getindex(obj::ALObjectiveNew,i::Int) = obj.cost[i]
+function cost_expansion!(S::Expansion{T},obj::Objective,x::AbstractVector{T}) where T
+    cost_expansion!(S,obj.cost[end],x)
+    return nothing
+end
+
+"Calculate unconstrained cost for X and U trajectories"
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(c[k],X[k],U[k])
+    end
+    J /= (N-1.0)
+    J += stage_cost(c[N],X[N])
+    return J
+end
+
+function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    cost(obj.cost,X,U)
+end

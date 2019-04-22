@@ -1,3 +1,4 @@
+"ALTRO solve"
 function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 
     # create ALTRO problem
@@ -34,7 +35,7 @@ function process_altro_results!(prob::Problem{T},prob_altro::Problem{T},
             end
         end
 
-        # update original problem (minimum time solve will include dt controls)
+        # update original problem (minimum time solve will return dt as controls at U[k][end])
         if state.minimum_time
             for k = 1:prob.N-1
                 prob.U[k] = [prob_altro.U[k][1:prob.model.m]; prob_altro.U[k][end]^2]

@@ -23,7 +23,7 @@ int_schemes = [:midpoint, :rk3, :rk4]
 
 ## Unconstrained
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N), integration=is, x0=x0, N=N, dt=dt)
+    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
     TrajectoryOptimization.solve!(prob, solver_ilqr)
@@ -36,7 +36,7 @@ bnd = TrajectoryOptimization.bound_constraint(n, m, u_min=-u_bound, u_max=u_boun
 con = [bnd]
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N),
+    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
@@ -49,7 +49,7 @@ goal = TrajectoryOptimization.goal_constraint(xf)
 con = [bnd,goal]
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N),
+    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
@@ -59,4 +59,4 @@ for is in int_schemes
 end
 
 # Test undefined integration
-@test_throws ArgumentError TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N), integration=:bogus, N=N)
+@test_throws ArgumentError TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:bogus, N=N)

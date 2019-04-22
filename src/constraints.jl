@@ -216,15 +216,11 @@ function min_time_constraints(n::Int,m::Int,dt_max::T=1.0,dt_min::T=1.0e-3) wher
     return con_min_time_eq, con_min_time_bnd
 end
 
-
-
-
 "$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
 function generate_jacobian(f!::Function,n::Int,p::Int=n)
     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
     return ∇f!, f!
 end
-
 
 ########################
 #   Constraint Sets    #
@@ -235,6 +231,7 @@ StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
 ConstraintSetTrajectory = Vector{C} where C <: AbstractConstraintSet
 
+"Type that stores a trajectory of constraint sets"
 struct ProblemConstraints
     C::ConstraintSetTrajectory
 end
@@ -254,8 +251,6 @@ end
 function ProblemConstraints()
     ProblemConstraints(ConstraintSet[])
 end
-
-
 
 import Base.getindex
 getindex(c::ProblemConstraints,i::Int) = c.C[i]
@@ -329,6 +324,7 @@ function RigidBodyDynamics.num_constraints(C::AbstractConstraintSet)
         return 0
     end
 end
+
 labels(C::AbstractConstraintSet) = [c.label for c in C]
 terminal(C::AbstractConstraintSet) = Vector{TerminalConstraint}(filter(x->isa(x,TerminalConstraint),C))
 stage(C::AbstractConstraintSet) = Vector{Constraint}(filter(x->isa(x,Constraint),C))
@@ -336,6 +332,7 @@ inequalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Ineq
 equalities(C::AbstractConstraintSet) = filter(x->isa(x,AbstractConstraint{Equality}),C)
 bounds(C::AbstractConstraintSet) = filter(x->x.label ∈ [:terminal_bound,:bound],C)
 Base.findall(C::AbstractConstraintSet,T::Type) = isa.(C,Constraint{T})
+
 function PartedArrays.create_partition(C::AbstractConstraintSet)
     if !isempty(C)
         lens = length.(C)
@@ -352,6 +349,7 @@ function PartedArrays.create_partition(C::AbstractConstraintSet)
         return NamedTuple{(:equality,:inequality)}((1:0,1:0))
     end
 end
+
 function PartedArrays.create_partition2(C::AbstractConstraintSet,n::Int,m::Int)
     if !isempty(C)
         lens = Tuple(length.(C))

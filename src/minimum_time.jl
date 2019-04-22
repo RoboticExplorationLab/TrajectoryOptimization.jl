@@ -1,3 +1,4 @@
+"Return the total duration of trajectory"
 function total_time(prob::Problem{T}) where T
     m̄ = prob.model.m + 1
     tt = 0.0

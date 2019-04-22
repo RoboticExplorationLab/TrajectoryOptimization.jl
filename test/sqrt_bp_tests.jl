@@ -1,4 +1,4 @@
-import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem
 ## Pendulum
@@ -21,7 +21,7 @@ lqr_cost = LQRCost(Q,R,Qf,xf)
 N = 31
 U = [ones(m) for k = 1:N-1]
 dt = 0.15
-prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,dt=dt,x0=x0)
+prob = Problem(model_d,Objective(lqr_cost,N),U,dt=dt,x0=x0)
 rollout!(prob)
 
 ## unconstrained

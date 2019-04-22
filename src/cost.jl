@@ -5,21 +5,58 @@ import Base.copy
 #*********************************#
 
 abstract type CostFunction end
+CostTrajectory = Vector{C} where C <: CostFunction
 
-# "Calculate (unconstrained) cost for X and U trajectories"
-# function cost(cost::CostFunction,X::VectorTrajectory{T},U::VectorTrajectory{T})::T where T <: AbstractFloat
-#     N = length(X)
-#     J = 0.0
-#     for k = 1:N-1
-#         J += stage_cost(cost,X[k],U[k])
-#     end
-#     J /= (N-1.0)
-#     J += stage_cost(cost,X[N])
-#     return J
-# end
-#
-# cost_expansion(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = cost_expansion(cost,x,u,1)
-# stage_cost(cost::CostFunction,x::Vector{T},u::Vector{T}) where T = stage_cost(cost,x,u,1)
+
+"$(TYPEDEF) Expansion of cost function"
+struct Expansion{T<:AbstractFloat}
+    x::Vector{T}
+    u::Vector{T}
+    xx::Matrix{T}
+    uu::Matrix{T}
+    ux::Matrix{T}
+end
+
+import Base./, Base.*
+
+function *(e::Expansion{T},a::T) where T
+    e.x .*= a
+    e.u .*= a
+    e.xx .*= a
+    e.uu .*= a
+    e.ux .*= a
+    return nothing
+end
+
+function /(e::Expansion{T},a::T) where T
+    e.x ./= a
+    e.u ./= a
+    e.xx ./= a
+    e.uu ./= a
+    e.ux ./= a
+    return nothing
+end
+
+function copy(e::Expansion{T}) where T
+    Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
+end
+
+function reset!(e::Expansion)
+    !isempty(e.x) ? e.x .= zero(e.x) : nothing
+    !isempty(e.u) ? e.u .= zero(e.u) : nothing
+    !isempty(e.xx) ? e.xx .= zero(e.xx) : nothing
+    !isempty(e.uu) ? e.uu .= zero(e.uu) : nothing
+    !isempty(e.ux) ? e.ux .= zero(e.ux) : nothing
+    return nothing
+end
+
+ExpansionTrajectory{T} = Vector{Expansion{T}} where T <: AbstractFloat
+
+function reset!(et::ExpansionTrajectory)
+    for e in et
+        reset!(e)
+    end
+end
 
 """
 $(TYPEDEF)
@@ -78,30 +115,31 @@ function LQRCostTerminal(Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
 end
 
-# "Second-order Taylor expansion of cost function at time step k"
-# function cost_expansion(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     return cost.Q, cost.R, cost.H, cost.Q*x + cost.q, cost.R*u + cost.r
-# end
-#
-# function cost_expansion(cost::QuadraticCost, xN::Vector{T}) where T
-#     return cost.Qf, cost.Qf*xN + cost.qf
-# end
-#
-# function cost_expansion_gradients(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     return cost.Q*x + cost.q, cost.R*u + cost.r
-# end
-#
-# "Gradient of the cost function at a single time step"
-# gradient(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T = cost.Q*x + cost.q, cost.R*u + cost.r
-# gradient(cost::QuadraticCost, xN::Vector{T}) where T = cost.Qf*xN + cost.qf
-#
-# function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
-# end
+function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
+end
 
 function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
     0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
+
+function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
+        u::Vector{T}) where T
+    Q.x .= cost.Q*x + cost.q
+    Q.u .= cost.R*u + cost.r
+    Q.xx .= cost.Q
+    Q.uu .= cost.R
+    Q.ux .= cost.H
+    return nothing
+end
+
+function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::Vector{T}) where T
+    S.xx .= cost.Qf
+    S.x .= cost.Qf*xN + cost.qf
+    return nothing
+end
+
+
 
 function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
@@ -201,23 +239,28 @@ function auto_expansion_function(ℓ::Function,ℓf::Function,n::Int,m::Int)
     end
 end
 
-# function cost_expansion(cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     cost.expansion(x,u)
-# end
-#
-# function cost_expansion(cost::GenericCost, xN::Vector{T}) where T
-#     cost.expansion(xN)
-# end
-#
-# function cost_expansion_gradients(cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T
-#     cost_expansion(cost, x, u, k)
-# end
-#
-#
-# # TODO: Split gradient and hessian calculations
-#
-# stage_cost(cost::GenericCost, x::Vector{T}, u::Vector{T}, k::Int) where T = cost.ℓ(x,u)
+stage_cost(cost::GenericCost, x::Vector{T}, u::Vector{T}) where T = cost.ℓ(x,u)
 stage_cost(cost::GenericCost, xN::Vector{T}) where T = cost.ℓf(xN)
+
+function cost_expansion!(Q::Expansion{T}, cost::GenericCost, x::Vector{T},
+        u::Vector{T}) where T
+
+    e = cost.expansion(x,u)
+
+    Q.x .= e[4]
+    Q.u .= e[5]
+    Q.xx .= e[1]
+    Q.uu .= e[2]
+    Q.ux .= e[3]
+    return nothing
+end
+
+function cost_expansion!(S::Expansion{T}, cost::GenericCost, xN::Vector{T}) where T
+    Qf, qf = cost.expansion(xN)
+    S.xx .= Qf
+    S.x .= qf
+    return nothing
+end
 
 get_sizes(cost::GenericCost) = cost.n, cost.m
 copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))

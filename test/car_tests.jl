@@ -27,13 +27,13 @@ U0 = [ones(m) for k = 1:N-1]
 X0 = TrajectoryOptimization.line_trajectory_new(x0,xf,N)
 
 # Parallel Park
-prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N), integration=integration, x0=x0, N=N, dt=dt)
+prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=integration, x0=x0, N=N, dt=dt)
 TrajectoryOptimization.initial_controls!(prob, U0)
 TrajectoryOptimization.solve!(prob, opts_ilqr)
 @test norm(prob.X[N] - xf) < 1e-3
 
 # Infeasible parallel park
-prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.ObjectiveNew(costfun,N), integration=integration, x0=x0, N=N, dt=dt)
+prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=integration, x0=x0, N=N, dt=dt)
 TrajectoryOptimization.initial_controls!(prob, U0)
 copyto!(prob.X,X0)
 @test norm(prob.X[N] - xf) < 1e-3

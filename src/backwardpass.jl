@@ -1,10 +1,9 @@
 function backwardpass!(prob::Problem,solver::iLQRSolver)
     if solver.opts.square_root
-        ΔV = _backwardpass_sqrt!(prob,solver)
+        return _backwardpass_sqrt!(prob,solver)
     else
-        ΔV = _backwardpass!(prob,solver)
+        return _backwardpass!(prob,solver)
     end
-    return ΔV
 end
 
 function _backwardpass!(prob::Problem,solver::iLQRSolver)

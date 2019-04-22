@@ -1,4 +1,4 @@
-import TrajectoryOptimization: Model, LQRCost, Problem, ObjectiveNew, rollout!, iLQRSolverOptions,
+import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory_new, total_time
@@ -35,12 +35,12 @@ con = [bnd, goal_con]
 N = 31
 U = [ones(m) for k = 1:N-1]
 dt = 0.15
-prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
 dt = 0.15/2.0
-prob_mt = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 prob_mt.U[end][end]
 tt_mt = total_time(prob_mt)
@@ -86,11 +86,11 @@ con = [bnd, goal_con]
 N = 51
 U = [ones(m) for k = 1:N-1]
 dt = 0.06
-prob = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
-prob_mt = Problem(model_d,ObjectiveNew(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 

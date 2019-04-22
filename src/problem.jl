@@ -55,7 +55,7 @@ function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTraje
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
-Problem(model::Model{Discrete}, obj::ObjectiveNew, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model{Discrete}, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
 function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
@@ -151,52 +151,6 @@ function _validate_time(N,tf,dt)
     end
     return N,tf,dt
 end
-
-# Problem(model::Model,cost::CostFunction) = Problem{Float64}(model,cost,
-#     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
-
-# Problem(T::Type,model::Model,cost::CostFunction) = Problem{T}(model,cost,
-#     AbstractConstraint[],[],Vector[],Vector[],0,0.0)
-
-#
-#
-# """$(SIGNATURES)
-# $(TYPEDSIGNATURES)
-# Create a problem, initializing the initial state and control input trajectories to zeros"""
-# function Problem(model::Model,cost::CostFunction,N::Int,dt::T) where T
-#     X = empty_state(model.n,N)
-#     U = [zeros(model.m) for k = 1:N-1]
-#     Problem(model,cost,AbstractConstraint[],x0,X,U,N,dt)
-# end
-#
-# """$(SIGNATURES) Create am unconstrained trajectory optimization problem
-#
-# Creates a problem with discrete dynamics with timestep `dt` from `model`, minimizing the objective given by `cost`, subject
-# to an initial state `x0`. `U` is the initial guess for the control trajectory.
-# """
-# function Problem(model::Model{Discrete},cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},dt::T) where T
-#     N = length(U) + 1
-#     X = empty_state(model.n,N)
-#     Problem(model,cost,AbstractConstraint[],x0,X,deepcopy(U),N,dt)
-# end
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},dt::T) where T =
-#     Problem(model,cost,x0,to_dvecs(U),dt)
-
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},U::VectorTrajectory{T},N::Int,dt::T) where T= Problem{T}(model,
-#     cost,AbstractConstraint[],x0,Vector[],U,N,dt)
-#
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T = Problem{T}(
-#     model,cost,AbstractConstraint[],x0,X,U,length(X),0.0)
-#
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T}) where T = Problem{T}(model,cost,
-#     AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],size(U,2)+1,0.0)
-#
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},U::Matrix{T},N::Int,dt::T) where T = Problem{T}(model,cost,
-#     AbstractConstraint[],x0,Vector[],[U[:,k] for k = 1:size(U,2)],N,dt)
-#
-# Problem(model::Model,cost::CostFunction,x0::Vector{T},X::Matrix{T},U::Matrix{T}) where T = Problem{T}(
-#     model,cost,AbstractConstraint[],x0,[X[:,k] for k = 1:size(X,2)],
-#     [U[:,k] for k = 1:size(U,2)],size(X,2),0.0)
 
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
@@ -345,7 +299,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
 
     constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,Constraint[])
 
-    update_problem(prob,model=model_inf,obj=ObjectiveNew(obj_inf),
+    update_problem(prob,model=model_inf,obj=Objective(obj_inf),
         constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end
 
@@ -385,9 +339,25 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
     constrained ? push!(con_prob,prob.constraints[N]) : push!(con_prob,Constraint[])
 
     # return con_prob, obj_mt
-    update_problem(prob,model=model_min_time,obj=ObjectiveNew(obj_mt),
+    update_problem(prob,model=model_min_time,obj=Objective(obj_mt),
         constraints=ProblemConstraints(con_prob),
         U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
         X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],
         x0=[prob.x0;0.0])
+end
+
+function Expansion(prob::Problem{T}) where T
+    n = prob.model.n; m = prob.model.m
+    Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
+end
+
+function Expansion(prob::Problem{T},exp::Symbol) where T
+    n = prob.model.n; m = prob.model.m
+    if exp == :x
+        return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))
+    elseif exp == :u
+        return Expansion(zeros(T,0),zeros(T,m),zeros(T,0,0),zeros(T,m,m),zeros(T,0,0))
+    else
+        error("Invalid expansion components requested")
+    end
 end
