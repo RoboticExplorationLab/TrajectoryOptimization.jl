@@ -41,6 +41,7 @@ end
 
 function cost_expansion!(Q::ExpansionTrajectory{T},c::CostTrajectory,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
+    cost_expansion!(Q[N],c[N],X[N])
     for k = 1:N-1
         cost_expansion!(Q[k],c[k],X[k],U[k])
     end
@@ -49,18 +50,6 @@ end
 function cost_expansion!(S::Expansion{T},obj::Objective,x::AbstractVector{T}) where T
     cost_expansion!(S,obj.cost[end],x)
     return nothing
-end
-
-"Calculate unconstrained cost for X and U trajectories"
-function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-    N = length(X)
-    J = 0.0
-    for k = 1:N-1
-        J += stage_cost(c[k],X[k],U[k])
-    end
-    J /= (N-1.0)
-    J += stage_cost(c[N],X[N])
-    return J
 end
 
 function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat

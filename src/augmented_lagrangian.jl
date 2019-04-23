@@ -9,7 +9,7 @@ function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
 
     with_logger(logger) do
         for i = 1:solver.opts.iterations
-            set_intermediate_uncon_solver_tolerances!(solver,solver_uncon,i)
+            set_tolerances!(solver,solver_uncon,i)
             J = step!(prob_al, solver, solver_uncon)
 
             record_iteration!(prob, solver, J, solver_uncon)
@@ -24,8 +24,8 @@ function solve!(prob::Problem{T},opts::AugmentedLagrangianSolverOptions{T}) wher
     solve!(prob,solver)
 end
 
-"Set intermediate unconstrained solve convergence tolerances"
-function set_intermediate_uncon_solver_tolerances!(solver::AugmentedLagrangianSolver{T},
+"Set intermediate convergence tolerances for unconstrained solve"
+function set_tolerances!(solver::AugmentedLagrangianSolver{T},
         solver_uncon::AbstractSolver{T},i::Int) where T
     if i != solver.opts.iterations
         solver_uncon.opts.cost_tolerance = solver.opts.cost_tolerance_intermediate
@@ -193,13 +193,6 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjec
         Q[k].u .+= cu'g
     end
 
-    return nothing
-end
-
-function cost_expansion!(S::Expansion{T},obj::AugmentedLagrangianObjective{T},x::AbstractVector{T}) where T
-    N = length(obj.μ)
-    cost_expansion!(S,obj[N],x)
-
     c = obj.C[N]
     λ = obj.λ[N]
     μ = obj.μ[N]
@@ -207,16 +200,38 @@ function cost_expansion!(S::Expansion{T},obj::AugmentedLagrangianObjective{T},x:
     Iμ = Diagonal(a .* μ)
     cx = obj.∇C[N]
 
-    jacobian!(cx,obj.constraints[N],x)
+    jacobian!(cx,obj.constraints[N],X[N])
 
     # Second Order pieces
-    S.xx .+= cx'Iμ*cx
+    Q[N].xx .+= cx'Iμ*cx
 
     # First order pieces
-    S.x .+= cx'*(Iμ*c + λ)
+    Q[N].x .+= cx'*(Iμ*c + λ)
 
     return nothing
 end
+
+# function cost_expansion!(S::Expansion{T},obj::AugmentedLagrangianObjective{T},x::AbstractVector{T}) where T
+#     N = length(obj.μ)
+#     cost_expansion!(S,obj[N],x)
+#
+#     c = obj.C[N]
+#     λ = obj.λ[N]
+#     μ = obj.μ[N]
+#     a = active_set(c,λ)
+#     Iμ = Diagonal(a .* μ)
+#     cx = obj.∇C[N]
+#
+#     jacobian!(cx,obj.constraints[N],x)
+#
+#     # Second Order pieces
+#     S.xx .+= cx'Iμ*cx
+#
+#     # First order pieces
+#     S.x .+= cx'*(Iμ*c + λ)
+#
+#     return nothing
+# end
 
 "Update constraints trajectories"
 function update_constraints!(C::PartedVecTrajectory{T},constraints::ProblemConstraints,
@@ -279,19 +294,11 @@ end
 
 function stage_constraint_cost(c,λ,μ,
         a,x::AbstractVector{T},u::AbstractVector{T}) where T
-    # c = obj.C[k]
-    # λ = obj.λ[k]
-    # μ = obj.μ[k]
-    # a = obj.active_set[k]
     aula_cost(a,c,λ,μ)
 end
 
 function stage_constraint_cost(c,λ,μ,
         a,x::AbstractVector{T}) where T
-    # c = obj.C[end]
-    # λ = obj.λ[end]
-    # μ = obj.μ[end]
-    # a = obj.active_set[end]
     aula_cost(a,c,λ,μ)
 end
 
@@ -308,6 +315,8 @@ function cost(obj::AugmentedLagrangianObjective{T},X::VectorTrajectory{T},U::Vec
         Jc += stage_constraint_cost(obj.C[k], obj.λ[k], obj.μ[k],obj.active_set[k],X[k],U[k])
     end
     Jc /= (N-1.0)
+
     Jc += stage_constraint_cost(obj.C[N], obj.λ[N], obj.μ[N],obj.active_set[N],X[N])
+
     return J + Jc
 end

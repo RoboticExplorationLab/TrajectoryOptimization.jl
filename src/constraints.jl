@@ -216,11 +216,10 @@ function min_time_constraints(n::Int,m::Int,dt_max::T=1.0,dt_min::T=1.0e-3) wher
     return con_min_time_eq, con_min_time_bnd
 end
 
-"$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x)"
-function generate_jacobian(f!::Function,n::Int,p::Int=n)
-    ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
-    return ∇f!, f!
-end
+# function generate_jacobian(f!::Function,n::Int,p::Int=n)
+#     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
+#     return ∇f!, f!
+# end
 
 ########################
 #   Constraint Sets    #

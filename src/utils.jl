@@ -1,4 +1,4 @@
-import Base: convert, copyto!, Array, vec, println
+import Base: convert, copyto!, Array, vec, println, copy
 import LinearAlgebra: norm
 import Plots: plot, plot!
 

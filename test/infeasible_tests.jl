@@ -1,7 +1,6 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    line_trajectory_new
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,line_trajectory
 
 ## Pendulum
 T = Float64
@@ -42,7 +41,7 @@ con = [bnd, goal_con]
 N = 51
 U = [ones(m) for k = 1:N-1]
 dt = 0.1
-X0 = line_trajectory_new(x0,xf,N)
+X0 = line_trajectory(x0,xf,N)
 
 # unconstrained infeasible solve
 prob = Problem(model_d,Objective(lqr_cost,N),U,dt=dt,x0=x0)

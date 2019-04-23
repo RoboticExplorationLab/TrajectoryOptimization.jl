@@ -318,8 +318,8 @@ function Model(urdf::String,torques::Array{Float64,1})
 end
 
 
-"$(SIGNATURES) Generate a jacobian function for a given in-place function of the form f(v,x,u)"
 generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Continuous,f!,n,m,p)
+
 function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
     inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
     Z = BlockArray(zeros(p,n+m),inds)
@@ -508,7 +508,7 @@ function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m:
             ∇f!(x,u) = ∇f(x,u)
         else
             ∇f!(x,u) = begin
-                ∇f!(Z,x,u)
+                ∇f(Z,x,u)
                 return Z
             end
         end
@@ -519,11 +519,12 @@ function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m:
                 x = z[inds.x]
                 u = z[inds.u]
                 f(v,x,u)
-                ∇f!(Z,x,u)
+                ∇f(Z,x,u)
             end
         end
     end
     return ∇f!
+
 end
 
 function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
@@ -537,6 +538,8 @@ function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::I
 
         # Copy the correct method form
         ∇f!(S,x,u,dt) = ∇f(S,x,u,dt)
+         # ∇f! = ∇f
+
 
         # Implement the missing method(s)
         if forms[1]

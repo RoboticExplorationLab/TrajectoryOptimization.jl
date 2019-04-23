@@ -1,4 +1,5 @@
-function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
+"Simulate state trajectory with feedback control"
+function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
@@ -22,7 +23,7 @@ function rollout!(prob::Problem,solver::iLQRSolver,alpha::Float64)
     return true
 end
 
-function rollout!(prob::Problem)
+function rollout!(prob::Problem{T}) where T
     N = prob.N
     X = prob.X; U = prob.U
 

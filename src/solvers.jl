@@ -33,21 +33,20 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
 
-    X̄  = [zeros(T,n)   for i = 1:N]
-    Ū  = [zeros(T,m)   for i = 1:N-1]
+    X̄  = [zeros(T,n)   for k = 1:N]
+    Ū  = [zeros(T,m)   for k = 1:N-1]
 
-    K  = [zeros(T,m,n) for i = 1:N-1]
-    d  = [zeros(T,m)   for i = 1:N-1]
+    K  = [zeros(T,m,n) for k = 1:N-1]
+    d  = [zeros(T,m)   for k = 1:N-1]
 
     part_f = create_partition2(prob.model)
-    ∇F = [BlockArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
+    ∇F = [BlockArray(zeros(n,n+m+1),part_f) for k = 1:N-1]
 
-    S  = [Expansion(prob,:x) for i = 1:N]
-    Q = [Expansion(prob) for i = 1:N-1]
+    S  = [Expansion(prob,:x) for k = 1:N]
+    Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
-
 
     solver = iLQRSolver{T}(opts,stats,X̄,Ū,K,d,∇F,S,Q,ρ,dρ)
 
@@ -105,7 +104,6 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
-    # p = num_stage_constraints(prob)
 
     C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
 
@@ -196,6 +194,7 @@ end
 
 get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
+#TODO
 "$(TYPEDEF) ALTRO solver"
 struct ALTROSolver{T} <: AbstractSolver{T}
     opts::ALTROSolverOptions{T}

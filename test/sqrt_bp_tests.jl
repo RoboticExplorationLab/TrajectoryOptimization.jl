@@ -1,6 +1,7 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    cost_expansion!, ProblemConstraints
 ## Pendulum
 T = Float64
 
@@ -29,12 +30,14 @@ rollout!(prob)
 opts_ilqr = iLQRSolverOptions{T}()
 ilqr_solver = AbstractSolver(prob,opts_ilqr)
 jacobian!(prob,ilqr_solver)
+cost_expansion!(prob,ilqr_solver)
 ΔV = _backwardpass!(prob,ilqr_solver)
 
 #sqrt bp
 opts_ilqr_sqrt = iLQRSolverOptions{T}(square_root=true)
 ilqr_solver_sqrt = AbstractSolver(prob,opts_ilqr)
 jacobian!(prob,ilqr_solver_sqrt)
+cost_expansion!(prob,ilqr_solver_sqrt)
 ΔV_sqrt = _backwardpass_sqrt!(prob,ilqr_solver_sqrt)
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(ilqr_solver.K,ilqr_solver_sqrt.K))
@@ -64,6 +67,7 @@ prob_al = AugmentedLagrangianProblem(prob,solver_al)
 update_constraints!(prob_al.obj.C,prob_al.obj.constraints, prob.X, prob.U)
 update_active_set!(prob_al.obj)
 jacobian!(prob_al,solver_ilqr)
+cost_expansion!(prob_al,solver_ilqr)
 ΔV = _backwardpass!(prob_al,solver_ilqr)
 
 #bp sqrt
@@ -74,8 +78,8 @@ update_constraints!(prob_al_sqrt.obj.C,prob_al_sqrt.obj.constraints, prob_al_sqr
 prob_al.obj.C[end]
 update_active_set!(prob_al_sqrt.obj)
 jacobian!(prob_al_sqrt,solver_ilqr_sqrt)
+cost_expansion!(prob_al_sqrt,solver_ilqr_sqrt)
 ΔV_sqrt = _backwardpass_sqrt!(prob_al_sqrt,solver_ilqr_sqrt)
-
 
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(solver_ilqr.K,solver_ilqr_sqrt.K))

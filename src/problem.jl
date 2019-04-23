@@ -173,19 +173,20 @@ function update_problem(p::Problem;
     end
 end
 
-"$(SIGNATURES) Add a constraint to the problem"
-function add_constraints!(p::Problem,c::Constraint)
-    push!(p.constraints,c)
-end
-
-"$(SIGNATURES) Add a set of constraints to the problem"
-function add_constraints!(p::Problem,C::AbstractConstraintSet)
-    append!(p.constraints,C)
-end
+# "$(SIGNATURES) Add a constraint to the problem"
+# function add_constraints!(p::Problem,c::Constraint)
+#     push!(p.constraints,c)
+# end
+#
+# "$(SIGNATURES) Add a set of constraints to the problem"
+# function add_constraints!(p::Problem,C::AbstractConstraintSet)
+#     append!(p.constraints,C)
+# end
 
 "$(SIGNATURES) Add a set of constraints to the problem"
 function add_constraints!(p::Problem,C::ProblemConstraints)
-    append!(p.constraints,C)
+    # append!(p.constraints,C)
+    p.constraints .= C
 end
 
 # Problem checks
@@ -227,9 +228,6 @@ function check_problem(p::Problem)
     return flag
 end
 
-num_stage_constraints(p::Problem) = num_stage_constraints(p.constraints)
-num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints)
-
 num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for k = 1:p.N-1]
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
 
@@ -265,85 +263,6 @@ function max_violation(prob::Problem{T}) where T
     else
         return 0.
     end
-end
-
-include("infeasible.jl")
-"Create infeasible state trajectory initialization problem from problem"
-function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
-    N = prob.N
-    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
-
-    # modify problem with slack control
-    obj_inf = CostFunction[]
-    for k = 1:N-1
-        cost_inf = copy(prob.obj[k])
-        cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n)/prob.dt,dims=(1,2))
-        cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
-        cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
-        push!(obj_inf,cost_inf)
-    end
-    push!(obj_inf,copy(prob.obj[N]))
-
-    model_inf = add_slack_controls(prob.model)
-    u_slack = slack_controls(prob)
-    con_inf = infeasible_constraints(prob.model.n,prob.model.m)
-
-    con_prob = AbstractConstraintSet[]
-    constrained = is_constrained(prob)
-    for k = 1:N-1
-        _con = AbstractConstraint[]
-        constrained ? append!(_con,prob.constraints.C[k]) : nothing
-        push!(_con,con_inf)
-        push!(con_prob,_con)
-    end
-
-    constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,Constraint[])
-
-    update_problem(prob,model=model_inf,obj=Objective(obj_inf),
-        constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
-end
-
-function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
-    # modify problem with time step control
-    N = prob.N; n = prob.model.n; m = prob.model.m
-    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
-
-    # modify problem with slack control
-    obj_mt = CostFunction[]
-    for k = 1:N-1
-        cost_mt = copy(prob.obj[k])
-        cost_mt.Q = cat(cost_mt.Q,0.0,dims=(1,2))
-        cost_mt.q = [cost_mt.q; 0.0]
-        cost_mt.R = cat(cost_mt.R,2.0*R_min_time,dims=(1,2))
-        cost_mt.r = [cost_mt.r; 0.0]
-        cost_mt.H = [cost_mt.H zeros(prob.model.m); zeros(prob.model.n+1)']
-        push!(obj_mt,cost_mt)
-    end
-    cost_mt = copy(prob.obj[N])
-    cost_mt.Qf = cat(cost_mt.Qf,0.0,dims=(1,2))
-    cost_mt.qf = [cost_mt.qf; 0.0]
-    push!(obj_mt,cost_mt)
-
-    model_min_time = add_min_time_controls(prob.model)
-    con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
-
-    con_prob = AbstractConstraintSet[]
-    constrained = is_constrained(prob)
-    for k = 1:N-1
-        con_mt = AbstractConstraint[]
-        constrained ? append!(con_mt,update_constraint_set_jacobians(prob.constraints[k],prob.model.n,prob.model.n+1,prob.model.m)) : nothing
-        push!(con_mt,con_min_time_bnd)
-        k != 1 ? push!(con_mt,con_min_time_eq) : nothing
-        push!(con_prob,con_mt)
-    end
-    constrained ? push!(con_prob,prob.constraints[N]) : push!(con_prob,Constraint[])
-
-    # return con_prob, obj_mt
-    update_problem(prob,model=model_min_time,obj=Objective(obj_mt),
-        constraints=ProblemConstraints(con_prob),
-        U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
-        X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],
-        x0=[prob.x0;0.0])
 end
 
 function Expansion(prob::Problem{T}) where T

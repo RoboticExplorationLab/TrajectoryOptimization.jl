@@ -7,6 +7,17 @@ import Base.copy
 abstract type CostFunction end
 CostTrajectory = Vector{C} where C <: CostFunction
 
+"Calculate unconstrained cost for X and U trajectories"
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    N = length(X)
+    J = 0.0
+    for k = 1:N-1
+        J += stage_cost(c[k],X[k],U[k])
+    end
+    J /= (N-1.0)
+    J += stage_cost(c[N],X[N])
+    return J
+end
 
 "$(TYPEDEF) Expansion of cost function"
 struct Expansion{T<:AbstractFloat}
@@ -139,8 +150,6 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::Vector{T}) wh
     return nothing
 end
 
-
-
 function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
 end
@@ -264,210 +273,3 @@ end
 
 get_sizes(cost::GenericCost) = cost.n, cost.m
 copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
-
-# Minimum Time Cost function
-struct MinTimeCost{T} <: CostFunction
-    cost::C where C <:CostFunction
-    R_min_time::T
-end
-
-# stage_cost(cost::MinTimeCost, x::Vector{T}, u::Vector{T}, k::Int) where T = stage_cost(cost.cost,x[1:end-1],u[1:end-1],k) + cost.R_min_time*u[end]^2
-
-stage_cost(cost::MinTimeCost, xN::Vector{T}) where T = stage_cost(cost.cost,xN[1:end-1])
-
-get_sizes(cost::MinTimeCost) = get_sizes(cost.cost) .+ 1
-copy(cost::MinTimeCost) = MinTimeCost(copy(cost.cost),copy(cost.R_min_time))
-
-# """
-# $(TYPEDEF)
-# Cost function of the form
-#     `` J(X,U) + λ^T c(X,U) + \\frac{1}{2} c(X,U)^T I_{\\mu} c(X,U)``
-#     where ``X`` and ``U`` are state and control trajectories, ``J(X,U)`` is the original cost function,
-#     ``c(X,U)`` is the vector-value constraint function, μ is the penalty parameter, and ``I_{\\mu}``
-#     is a diagonal matrix that whose entries are μ for active constraints and 0 otherwise.
-#
-# Internally stores trajectories for the Lagrange multipliers.
-# $(FIELDS)
-# """
-#
-# struct ALCost{T} <: CostFunction
-#     cost::C where C<:CostFunction
-#     constraints::AbstractConstraintSet
-#     C::PartedVecTrajectory{T}  # Constraint values
-#     ∇C::PartedMatTrajectory{T} # Constraint jacobians
-#     λ::PartedVecTrajectory{T}  # Lagrange multipliers
-#     μ::PartedVecTrajectory{T}  # Penalty Term
-#     active_set::PartedVecTrajectory{Bool}  # Active set
-# end
-#
-# """$(TYPEDSIGNATURES)
-# Create an ALCost from another cost function and a set of constraints
-#     for a problem with N knot points. Allocates new memory for the internal arrays.
-# """
-# function ALCost(cost::CostFunction,constraints::AbstractConstraintSet,N::Int;
-#         μ_init::T=1.,λ_init::T=0.) where T
-#     # Get sizes
-#     n,m = get_sizes(cost)
-#     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-#     ALCost{T}(cost,constraint,C,∇C,λ,μ,active_set)
-# end
-#
-# """$(TYPEDSIGNATURES)
-# Create an ALCost from another cost function and a set of constraints
-#     for a problem with N knot points, specifying the Lagrange multipliers.
-#     Allocates new memory for the internal arrays.
-# """
-# function ALCost(cost::CostFunction,constraints::AbstractConstraintSet,
-#         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
-#     # Get sizes
-#     n,m = get_sizes(cost)
-#     N = length(λ)
-#     C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-#     ALCost{T}(cost,constraint,C,∇C,λ,μ,active_set)
-# end
-
-# "Update constraints trajectories"
-# function update_constraints!(cost::CostFunction,C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
-#         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-#     N = length(X)
-#     for k = 1:N-1
-#         evaluate!(C[k],constraints,X[k],U[k])
-#     end
-#     evaluate!(C[N],constraints,X[N])
-# end
-
-# function update_constraints!(cost::MinTimeCost{T},C::PartedVecTrajectory{T},constraints::AbstractConstraintSet,
-#         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-#     N = length(X)
-#     for k = 1:N-1
-#         evaluate!(C[k],constraints,X[k],U[k])
-#     end
-#     C[1][:min_time_eq][1] = 0.0 # no constraint at timestep one
-#     evaluate!(C[N],constraints,X[N][1:end-1])
-# end
-#
-# function update_constraints!(cost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-#     update_constraints!(cost.cost,cost.C,cost.constraints,X,U)
-# end
-#
-# "Evaluate active set constraints for entire trajectory"
-# function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
-#     N = length(c)
-#     for k = 1:N
-#         active_set!(a[k], c[k], λ[k], tol)
-#     end
-# end
-#
-# "Evaluate active set constraints for a single time step"
-# function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-#     # inequality_active!(a,c,λ,tol)
-#     a.equality .= true
-#     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-#     return nothing
-# end
-#
-# function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-#     a = BlockArray(trues(length(c)),c.parts)
-#     a.equality .= true
-#     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-#     return a
-# end
-#
-# "Cost function terms for Lagrangian and quadratic penalty"
-# function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T
-#     λ'c + 1/2*c'Diagonal(a .* μ)*c
-# end
-#
-# function stage_constraint_cost(alcost::ALCost{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
-#     c = alcost.C[k]
-#     λ = alcost.λ[k]
-#     μ = alcost.μ[k]
-#     a = alcost.active_set[k]
-#     aula_cost(a,c,λ,μ)
-# end
-#
-# function stage_constraint_cost(alcost::ALCost{T},x::AbstractVector{T}) where T
-#     c = alcost.C[end]
-#     λ = alcost.λ[end]
-#     μ = alcost.μ[end]
-#     a = alcost.active_set[end]
-#     aula_cost(a,c,λ,μ)
-# end
-#
-# function stage_cost(alcost::ALCost{T}, x::AbstractVector{T}, u::AbstractVector{T}, k::Int) where T
-#     J0 = stage_cost(alcost.cost,x,u,k)
-#     J0 + stage_constraint_cost(alcost,x,u,k)
-# end
-#
-# function stage_cost(alcost::ALCost{T}, x::AbstractVector{T}) where T
-#     J0 = stage_cost(alcost.cost,x)
-#     J0 + stage_constraint_cost(alcost,x)
-# end
-#
-# "Augmented Lagrangian cost for X and U trajectories"
-# function cost(alcost::ALCost{T},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T <: AbstractFloat
-#     N = length(X)
-#     J = cost(alcost.cost,X,U,dt)
-#     update_constraints!(alcost.cost,alcost.C,alcost.constraints, X, U)
-#
-#     update_active_set!(alcost)
-#
-#     Jc = 0.0
-#     for k = 1:N-1
-#         Jc += stage_constraint_cost(alcost,X[k],U[k],k)
-#     end
-#     Jc /= (N-1.0)
-#
-#     Jc += stage_constraint_cost(alcost,X[N])
-#     return J + Jc
-# end
-#
-# "Second-order expansion of augmented Lagrangian cost"
-# function cost_expansion(alcost::ALCost{T},
-#         x::AbstractVector{T},u::AbstractVector{T}, k::Int) where T
-#     Q,R,H,q,r = cost_expansion(alcost.cost,x,u,k)
-#
-#     c = alcost.C[k]
-#     λ = alcost.λ[k]
-#     μ = alcost.μ[k]
-#     a = active_set(c,λ)
-#     Iμ = Diagonal(a .* μ)
-#     ∇c = alcost.∇C[k]
-#     jacobian!(∇c,alcost.constraints,x,u)
-#     cx = ∇c.x
-#     cu = ∇c.u
-#
-#     # Second Order pieces
-#     Q += cx'Iμ*cx
-#     R += cu'Iμ*cu
-#     H += cu'Iμ*cx
-#
-#     # First order pieces
-#     g = (Iμ*c + λ)
-#     q += cx'g
-#     r += cu'g
-#
-#     return Q,R,H,q,r
-# end
-#
-# function cost_expansion(alcost::ALCost{T},x::AbstractVector{T}) where T
-#     Qf,qf = cost_expansion(alcost.cost,x)
-#     N = length(alcost.μ)
-#
-#     c = alcost.C[N]
-#     λ = alcost.λ[N]
-#     μ = alcost.μ[N]
-#     a = active_set(c,λ)
-#     Iμ = Diagonal(a .* μ)
-#     cx = alcost.∇C[N]
-#
-#     jacobian!(cx,alcost.constraints,x)
-#
-#     # Second Order pieces
-#     Qf += cx'Iμ*cx
-#
-#     # First order pieces
-#     qf += cx'*(Iμ*c + λ)
-#
-#     return Qf,qf
-# end

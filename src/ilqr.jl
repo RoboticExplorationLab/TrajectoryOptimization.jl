@@ -1,3 +1,4 @@
+# Generic solve methods
 function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
     solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
@@ -16,6 +17,8 @@ function solve(prob0::Problem{T},opts::AbstractSolverOptions{T})::Problem{T} whe
     return prob
 end
 
+
+"iLQR solve method"
 function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     reset!(solver)
 
@@ -53,13 +56,19 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     return J
 end
 
-
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     jacobian!(prob,solver)
+    cost_expansion!(prob,solver)
     ΔV = backwardpass!(prob,solver)
     forwardpass!(prob,solver,ΔV,J)
 end
 
+function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
+    reset!(solver.Q)
+    cost_expansion!(solver.Q,prob.obj,prob.X,prob.U)
+end
+
+"Plot state, control trajectories"
 function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
     if solver.opts.live_plotting == :state
         p = plot(prob.X,title="State trajectory")
@@ -71,7 +80,6 @@ function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
         nothing
     end
 end
-
 
 function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T) where T
     solver.stats[:iterations] += 1
@@ -154,4 +162,18 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
         solver.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
         solver.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
     end
+end
+
+"Project dynamically infeasible state trajectory into feasible space using TVLQR"
+function projection!(prob::Problem{T},opts::iLQRSolverOptions{T}) where T
+    # backward pass - project infeasible trajectory into feasible space using time varying lqr
+    solver_ilqr = AbstractSolver(prob,opts)
+    backwardpass!(prob, solver_ilqr)
+
+    # rollout
+    rollout!(prob,solver_ilqr,0.0)
+
+    # update trajectories
+    copyto!(prob.X, solver_ilqr.X̄)
+    copyto!(prob.U, solver_ilqr.Ū)
 end

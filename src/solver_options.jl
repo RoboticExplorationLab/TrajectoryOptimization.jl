@@ -1,3 +1,4 @@
+import Base.copy
 using Parameters
 
 abstract type AbstractSolverOptions{T<:Real} end
@@ -8,7 +9,7 @@ $(FIELDS)
 """
 @with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
-    
+
     "Print summary at each iteration"
     verbose::Bool=false
 
@@ -25,7 +26,7 @@ $(FIELDS)
     gradient_norm_tolerance::T = 1.0e-5
 
     "iLQR iterations"
-    iterations::Int = 500
+    iterations::Int = 300
 
     "restricts the total number of times a forward pass fails, resulting in regularization, before exiting"
     dJ_counter_limit::Int = 10

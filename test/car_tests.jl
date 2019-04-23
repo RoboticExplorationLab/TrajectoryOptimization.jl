@@ -24,7 +24,7 @@ opts_altro = TrajectoryOptimization.ALTROSolverOptions{T}(verbose=verbose,opts_a
 N = 101
 dt = 0.1
 U0 = [ones(m) for k = 1:N-1]
-X0 = TrajectoryOptimization.line_trajectory_new(x0,xf,N)
+X0 = TrajectoryOptimization.line_trajectory(x0,xf,N)
 
 # Parallel Park
 prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=integration, x0=x0, N=N, dt=dt)

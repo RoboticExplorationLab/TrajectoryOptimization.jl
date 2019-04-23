@@ -31,8 +31,6 @@ export
 # Primary types
 export
     Model,
-    Solver,
-    SolverResults,
     QuadraticCost,
     LQRCost,
     GenericCost,
@@ -89,8 +87,8 @@ export
     get_num_controls,
     init_results,
     to_array,
-    to_dvecs,
     get_N,
+    to_dvecs,
     quat2rot,
     sphere_constraint,
     circle_constraint,
@@ -98,8 +96,6 @@ export
     plot_vertical_lines!,
     convergence_rate,
     plot_obstacles,
-    generate_controller,
-    lqr,
     evals,
     reset,
     reset_evals,
@@ -112,7 +108,6 @@ export
     terminal,
     stage
 
-
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray
 VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
@@ -121,6 +116,7 @@ DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
 PartedVecTrajectory{T} = Vector{BlockVector{T,Vector{T}}}
 PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
 
+include("solver_options.jl")
 include("constraints.jl")
 include("cost.jl")
 include("model.jl")
@@ -128,7 +124,6 @@ include("integration.jl")
 include("utils.jl")
 include("objective.jl")
 include("problem.jl")
-include("solver_options.jl")
 include("solvers.jl")
 include("ilqr.jl")
 include("altro.jl")
@@ -137,37 +132,8 @@ include("forward_pass.jl")
 include("rollout.jl")
 include("augmented_lagrangian.jl")
 include("minimum_time.jl")
+include("infeasible.jl")
 include("dynamics.jl")
 include("logger.jl")
-
-# using Ipopt
-
-# DIRCOL methods
-# export
-# solve_dircol,
-# gen_usrfun,
-# DircolResults,
-# DircolVars,
-# collocation_constraints,
-# collocation_constraints!,
-# cost_gradient,
-# cost_gradient!,
-# constraint_jacobian,
-# constraint_jacobian!,
-# get_weights,
-# get_initial_state
-#
-# export
-# packZ,
-# unpackZ
-#
-# include("dircol.jl")
-# include("dircol_ipopt.jl")
-# write_ipopt_options()
-
-# if "Snopt" in keys(Pkg.installed())
-#     using Snopt # not safe for precompilation
-#     include("dircol_snopt.jl")
-# end
 
 end

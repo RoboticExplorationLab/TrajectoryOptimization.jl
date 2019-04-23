@@ -1,7 +1,7 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    line_trajectory_new, total_time
+    line_trajectory, total_time
 
 T = Float64
 

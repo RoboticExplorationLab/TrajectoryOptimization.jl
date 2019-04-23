@@ -2,10 +2,11 @@ import TrajectoryOptimization: dynamics
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    line_trajectory_new, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
+    line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
     _check_jacobian, f_augmented!
 
 using RigidBodyDynamics
+using PartedArrays
 
 ######## Analytical Model #############
 model = Dynamics.car_model
