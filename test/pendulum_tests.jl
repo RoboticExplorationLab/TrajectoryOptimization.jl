@@ -45,9 +45,6 @@ for is in int_schemes
     @test TrajectoryOptimization.max_violation(prob) < opts_al.constraint_tolerance
 end
 
-goal = TrajectoryOptimization.goal_constraint(xf)
-con = [bnd,goal]
-
 for is in int_schemes
     prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)

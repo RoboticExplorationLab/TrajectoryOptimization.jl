@@ -5,6 +5,7 @@ using DocStringExtensions
 abstract type ConstraintType end
 abstract type Equality <: ConstraintType end
 abstract type Inequality <: ConstraintType end
+abstract type Null <: ConstraintType end
 
 abstract type AbstractConstraint{S<:ConstraintType} end
 
@@ -27,6 +28,10 @@ end
 function Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol;
         inds=[collect(1:n), collect(1:m)]) where S<:ConstraintType
     Constraint{S}(c, ∇c, p, label, inds)
+end
+
+function Constraint()
+    Constraint{Null}(x->nothing, x->nothing, 0, 0, 0, :null)
 end
 
 "$(TYPEDEF) Terminal constraint"
@@ -52,6 +57,10 @@ Constraint{S}(c::Function, n::Int, p::Int, label::Symbol; kwargs...) where S<:Co
 function TerminalConstraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol;
         inds=[collect(1:n)]) where S<:ConstraintType
     TerminalConstraint{S}(c, ∇c, p, label, inds)
+end
+
+function TerminalConstraint()
+    TerminalConstraint{Null}(x->nothing,x->nothing,0,0,:null_term)
 end
 
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
@@ -228,7 +237,7 @@ ConstraintSet = Vector{AbstractConstraint{S} where S}
 AbstractConstraintSet = Vector{<:AbstractConstraint{S} where S}
 StageConstraintSet = Vector{T} where T<:Constraint
 TerminalConstraintSet = Vector{T} where T<:TerminalConstraint
-ConstraintSetTrajectory = Vector{C} where C <: AbstractConstraintSet
+ConstraintSetTrajectory = Vector{T} where T <: AbstractConstraintSet
 
 "Type that stores a trajectory of constraint sets"
 struct ProblemConstraints
@@ -240,11 +249,11 @@ function ProblemConstraints(C::AbstractConstraintSet,N::Int)
 end
 
 function ProblemConstraints(C::AbstractConstraintSet,C_term::AbstractConstraintSet,N::Int)
-    ProblemConstraints([k < N ? C : C_term for k = 1:N])
+    ProblemConstraints([k < N ? [C...,TerminalConstraint()] : [Constraint(),C_term...] for k = 1:N])
 end
 
 function ProblemConstraints(C::ConstraintSetTrajectory,C_term::AbstractConstraintSet)
-    ProblemConstraints([C...,C_term])
+    ProblemConstraints([C...,[Constraint(),C_term...]])
 end
 
 function ProblemConstraints()
