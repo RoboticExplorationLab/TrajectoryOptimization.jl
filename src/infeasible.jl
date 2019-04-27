@@ -33,6 +33,27 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
         constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end
 
+"Add slack controls to dynamics to make artificially fully actuated"
+function add_slack_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
+    n = model.n; m = model.m
+    nm = n+m
+
+    idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
+    idx2 = [(1:nm)...,2n+m+1]
+
+    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        model.f(x₊,x,u[idx.u],dt)
+        x₊ .+= u[idx.inf]
+    end
+
+    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],dt)
+        view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
+    end
+
+    AnalyticalModel{M,Discrete}(f!,∇f!,n,nm,model.r,model.params,model.info)
+end
+
 "Return a feasible problem from an infeasible problem"
 function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T

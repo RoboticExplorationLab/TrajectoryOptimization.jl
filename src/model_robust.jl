@@ -35,6 +35,7 @@ struct AnalyticalModel{M,D} <: Model{M,D}
     ∇f::Function  # dynamics jacobian
     n::Int        # number of states
     m::Int        # number of controls
+    r::Int       # number of uncertain parameters
     params::NamedTuple
     evals::Vector{Int}
     info::Dict{Symbol,Any}
@@ -50,37 +51,51 @@ struct AnalyticalModel{M,D} <: Model{M,D}
     Optionally pass in a dictionary `d` with model information.
     `check_functions` option runs verification checks on the dynamics function and Jacobian to make sure they have the correct forms.
     """
-    function AnalyticalModel{M,D}(f::Function, ∇f::Function, n::Int64, m::Int64,
+    function AnalyticalModel{M,D}(f::Function, ∇f::Function, n::Int, m::Int, r::Int,
             p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}();
             check_functions::Bool=false) where {M<:ModelType,D<:DynamicsType}
         d[:evals] = 0
         evals = [0,0]
-        if check_functions
+        if check_functions && r == 0
             # Make dynamics inplace
-            if is_inplace_dynamics(f,n,m)
+            if is_inplace_dynamics(f,n,m,r)
                 f! = f
             else
                 f! = wrap_inplace(f)
             end
+            #TODO new jacobian checks for uncertain model
             ∇f! = _check_jacobian(D,f,∇f,n,m)
-            new{M,D}(f!,∇f!,n,m,p,evals,d)
+            new{M,D}(f!,∇f!,n,m,r,p,evals,d)
         else
-            new{M,D}(f,∇f,n,m,p,evals,d)
+            new{M,D}(f,∇f,n,m,r,p,evals,d)
         end
     end
 end
 
-function AnalyticalModel{M,D}(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
+function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
     p = NamedTuple()
     ∇f, = generate_jacobian(D,f,n,m)
-    AnalyticalModel{M,D}(f,∇f,n,m,p,d)
+    AnalyticalModel{M,D}(f,∇f,n,m,r,p,d)
 end
 
-function AnalyticalModel{M,D}(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
+function AnalyticalModel{Uncertain,D}(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {D<:DynamicsType}
+    p = NamedTuple()
+    ∇f, = generate_jacobian(D,f,n,m,r)
+    AnalyticalModel{M,D}(f,∇f,n,m,r,p,d)
+end
+
+function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
     f_p(ẋ,x,u) = f(ẋ,x,u,p)
     f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
     ∇f, = generate_jacobian(D,f_p,n,m)
-    AnalyticalModel{M,D}(f_p,∇f,n,m,p,d)
+    AnalyticalModel{M,D}(f_p,∇f,n,m,r,p,d)
+end
+
+function AnalyticalModel{Uncertain,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {D<:DynamicsType}
+    f_p(ẋ,x,u) = f(ẋ,x,u,p)
+    f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
+    ∇f, = generate_jacobian(D,f_p,n,m,r)
+    AnalyticalModel{M,D}(f_p,∇f,n,m,r,p,d)
 end
 
 
@@ -90,16 +105,22 @@ Dynamics function passes in parameters:
     f(ẋ,x,u,p)
     where p in NamedTuple of parameters
 """
-Model(f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
-    AnalyticalModel{Nominal,Continuous}(f,n,m,d)
+Model(f::Function, n::Int, m::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
+    AnalyticalModel{Nominal,Continuous}(f,n,m,0,d)
+
+UncertainModel(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
+    AnalyticalModel{Uncertain,Continuous}(f,n,m,r,d)
 
 """ $(TYPEDSIGNATURES)
 Create a dynamics model, using ForwardDiff to generate the dynamics jacobian, without parameters
 Dynamics function of the form:
     f(ẋ,x,u)
 """
-Model(f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
-    AnalyticalModel{Nominal,Continuous}(f,n,m,p,d)
+Model(f::Function, n::Int, m::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
+    AnalyticalModel{Nominal,Continuous}(f,n,m,0,p,d)
+
+UncertainModel(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) =
+    AnalyticalModel{Uncertain,Continuous}(f,n,m,p,r,d)
 
 """ $(TYPEDSIGNATURES)
 Create a dynamics model with an analytical Jacobian, with parameters
@@ -108,11 +129,17 @@ Dynamics functions pass in parameters:
     ∇f(Z,x,u,p)
     where p in NamedTuple of parameters
 """
-Model(f::Function, ∇f::Function, n::Int64, m::Int64, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
+Model(f::Function, ∇f::Function, n::Int, m::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
     f_p(ẋ,x,u) = f(ẋ,x,u,p)
     f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
     ∇f_p(Z,x,u) = ∇f(Z,x,u,p)
-    AnalyticalModel{Nominal,Continuous}(f_p,∇f_p,n,m,p,d, check_functions=true); end
+    AnalyticalModel{Nominal,Continuous}(f_p,∇f_p,n,m,0,p,d, check_functions=true); end
+
+UncertainModel(f::Function, ∇f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
+    f_p(ẋ,x,u,w) = f(ẋ,x,u,w,p)
+    f_p(ẋ,x,u,w,p) = f(ẋ,x,u,w,p)
+    ∇f_p(Z,x,u,w) = ∇f(Z,x,u,w,p)
+    AnalyticalModel{Uncertain,Continuous}(f_p,∇f_p,n,m,r,p,d, check_functions=true); end
 
 """ $(TYPEDSIGNATURES)
 Create a dynamics model with an analytical Jacobian, without parameters
@@ -120,59 +147,24 @@ Dynamics functions pass of the form:
     f(ẋ,x,u)
     ∇f(Z,x,u)
 """
-Model(f::Function, ∇f::Function, n::Int64, m::Int64, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
+Model(f::Function, ∇f::Function, n::Int, m::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
     p = NamedTuple()
-    AnalyticalModel{Nominal,Continuous}(f,∇f,n,m,p,d, check_functions=true); end
+    AnalyticalModel{Nominal,Continuous}(f,∇f,n,m,0,p,d, check_functions=true); end
 
-"Add slack controls to dynamics to make artificially fully actuated"
-function add_slack_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
-    n = model.n; m = model.m
-    nm = n+m
-
-    idx = merge(create_partition((m,n),(:u,:inf)),(x=1:n,))
-    idx2 = [(1:nm)...,2n+m+1]
-
-    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        model.f(x₊,x,u[idx.u],dt)
-        x₊ .+= u[idx.inf]
-    end
-
-    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],dt)
-        view(Z,idx.x,(idx.x) .+ nm) .= Diagonal(1.0I,n)
-    end
-
-    AnalyticalModel{M,Discrete}(f!,∇f!,n,nm,model.params,model.info)
-end
-
-"Add minimum time controls to dynamics "
-function add_min_time_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
-    n = model.n; m = model.m
-    n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
-    idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
-    idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
-
-    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[end]
-        model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
-        x₊[n̄] = h
-    end
-
-    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[end]
-        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
-        Z[idx.x,n̄m̄] .*= 2*h
-        Z[n̄,n̄m̄] = 1.0
-    end
-    AnalyticalModel{M,Discrete}(f!,∇f!,n̄,m̄,model.params,model.info)
-end
-
+UncertainModel(f::Function, ∇f::Function, n::Int, m::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
+    p = NamedTuple()
+    AnalyticalModel{Uncertain,Continuous}(f,∇f,n,m,r,p,d, check_functions=true); end
 
 """ $(SIGNATURES) Evaluate the dynamics at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x,u) where M <: ModelType
+function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
     model.f(ẋ,x,u)
+    model.evals[1] += 1
+end
+
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    model.f(ẋ,x,u,w)
     model.evals[1] += 1
 end
 
@@ -181,46 +173,91 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x,u,dt) where M <: ModelType
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    model.f(ẋ,x,u,w)
+    model.evals[1] += 1
+end
+
+function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
     model.f(ẋ,x,u,dt)
+    model.evals[1] += 1
+end
+
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
+    model.f(ẋ,x,u,w,dt)
     model.evals[1] += 1
 end
 
 """ $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x,u) where M <: ModelType
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
     model.∇f(Z,ẋ,x,u)
     model.evals[1] += 1
     model.evals[2] += 1
 end
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x,u,dt) where M <: ModelType
+
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    model.∇f(Z,ẋ,x,u,w)
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
     model.∇f(Z,ẋ,x,u,dt)
     model.evals[1] += 1
     model.evals[2] += 1
 end
 
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
+    model.∇f(Z,ẋ,x,u,w,dt)
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+
 """ $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x,u) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x,u,dt) where M <: ModelType = evaluate!(Z,ẋ,model,x,u,dt)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
+
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T} = evaluate!(Z,ẋ,model,x,u,dt)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
 
 """ $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-function jacobian!(Z::AbstractMatrix,model::Model{M,Continuous},x,u) where M <: ModelType
+function jacobian!(Z::AbstractMatrix,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
     model.∇f(Z,x,u)
     model.evals[2] += 1
 end
-function jacobian!(Z::AbstractMatrix,model::Model{M,Discrete},x,u,dt) where M <: ModelType
+
+function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    model.∇f(Z,x,u,w)
+    model.evals[2] += 1
+end
+
+function jacobian!(Z::AbstractMatrix,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
     model.∇f(Z,x,u,dt)
     model.evals[2] += 1
 end
+
+function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
+    model.∇f(Z,x,u,w,dt)
+    model.evals[2] += 1
+end
+
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where {M<:ModelType,T}
     N = length(X)
     for k = 1:N-1
         jacobian!(Z[k],model,X[k],U[k],dt)
+    end
+end
+
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},W::VectorTrajectory{T},dt::T) where T
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k],W[k],dt)
     end
 end
 
@@ -235,18 +272,33 @@ reset(model::Model) = begin model.evals[1] = 0; return nothing end
 Base.length(model::Model{M,Discrete}) where M<:ModelType = model.n + model.m + 1
 Base.length(model::Model{M,Continuous}) where M<:ModelType = model.n + model.m
 
+Base.length(model::Model{Uncertain,Discrete}) = model.n + model.m + model.r + 1
+Base.length(model::Model{Uncertain,Continuous}) = model.n + model.m + model.r
+
 PartedArrays.create_partition(model::Model{M,Discrete}) where M <:ModelType = create_partition((model.n,model.m,1),(:x,:u,:dt))
 PartedArrays.create_partition2(model::Model{M,Discrete}) where M <:ModelType = create_partition2((model.n,),(model.n,model.m,1),(:x,),(:x,:u,:dt))
 PartedArrays.create_partition(model::Model{M,Continuous}) where M <:ModelType = create_partition((model.n,model.m),(:x,:u))
 PartedArrays.create_partition2(model::Model{M,Continuous}) where M <:ModelType = create_partition2((model.n,),(model.n,model.m),(:x,),(:x,:u))
+
+PartedArrays.create_partition(model::Model{Uncertain,Discrete}) = create_partition((model.n,model.m,model.r,1),(:x,:u,:w,:dt))
+PartedArrays.create_partition2(model::Model{Uncertain,Discrete}) = create_partition2((model.n,),(model.n,model.m,model.r,1),(:x,),(:x,:u,:w,:dt))
+PartedArrays.create_partition(model::Model{Uncertain,Continuous}) = create_partition((model.n,model.m,model.r),(:x,:u,:w))
+PartedArrays.create_partition2(model::Model{Uncertain,Continuous}) = create_partition2((model.n,),(model.n,model.m,model.r),(:x,),(:x,:u,:w))
+
 PartedArrays.BlockVector(model::Model) = BlockArray(zeros(length(model)),create_partition(model))
 PartedArrays.BlockVector(T::Type,model::Model) = BlockArray(zeros(T,length(model)),create_partition(model))
 PartedArrays.BlockMatrix(model::Model) = BlockArray(zeros(model.n,length(model)),create_partition2(model))
 PartedArrays.BlockMatrix(T::Type,model::Model) = BlockArray(zeros(T,model.n,length(model)),create_partition2(model))
 
 
-function dynamics(model::Model,xdot,x,u)
+function dynamics(model::Model{M,D},xdot::AbstractVector,x::AbstractVector,u::AbstractVector) where {M<:ModelType,D<:DynamicsType}
     model.f(xdot,x,u)
+    model.evals[1] += 1
+end
+
+#TODO
+function dynamics(model::Model{Uncertain,D},xdot::AbstractVector,x::AbstractVector,u::AbstractVector) where D <: DynamicsType
+    model.f(view(xdot.x),x.x,u.u,0.)
     model.evals[1] += 1
 end
 
@@ -322,7 +374,7 @@ function Model(urdf::String,torques::Array{Float64,1})
     Model(mech,torques)
 end
 
-
+#TODO uncertain version for continous model
 generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Continuous,f!,n,m,p)
 
 function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
@@ -385,6 +437,41 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
     return ∇fd!, fd_aug!
 end
 
+function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
+    inds = (x=1:n, u=n .+ (1:m),w = (n+m) .+ (1:r), dt=n+m+r+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)),xw=(1:n,(n+m) .+ (1:r)), xdt=(1:n,(n+m+r) .+ (1:1)))
+    S0 = zeros(n,n+m+r+1)
+    s = zeros(n+m+r+1)
+    ẋ0 = zeros(n)
+
+    fd_aug!(xdot,s) = fd!(xdot,view(s,inds.x),view(s,inds.u),view(s,inds.w),s[inds.dt])
+    Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
+    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[indx.w] = w
+        s[inds.dt] = dt
+        Fd!(S,ẋ,s)
+        return nothing
+    end
+    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[indx.w] = w
+        s[inds.dt] = dt
+        Fd!(S,ẋ0,s)
+        return nothing
+    end
+    ∇fd!(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[inds.w] = w
+        s[inds.dt] = dt
+        Fd!(S0,ẋ0,s)
+        return S0
+    end
+    return ∇fd!, fd_aug!
+end
+
 """$(SIGNATURES)
 Convert a continuous dynamics model into a discrete one using the given discretization function.
     The discretization function can either be one of the currently supported functions (midpoint, rk3, rk4) or a custom method that has the following form
@@ -403,7 +490,7 @@ function Model{M,Discrete}(model::Model{M,Continuous}, discretizer::Function) wh
     info_d = deepcopy(model.info)
     integration = string(discretizer)
     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
-    AnalyticalModel{M,Discrete}(fd!, ∇fd!, model.n, model.m, model.params, info_d)
+    AnalyticalModel{M,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
 end
 
 midpoint(model::Model{M,Continuous}) where M <: ModelType = Model{M,Discrete}(model, midpoint)
@@ -428,28 +515,52 @@ Determine if the dynamics in model are in place. i.e. the function call is of
 the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
 """
 function is_inplace_dynamics(model::Model)::Bool
-    x = rand(model.n)
-    u = rand(model.m)
-    xdot = rand(model.n)
-    try
-        model.f(xdot,x,u)
-    catch x
-        if x isa MethodError
-            return false
-        end
-    end
-    return true
+    is_inplace_dynamics(model.f,model.n,model.m,model.r)
+    # x = rand(model.n)
+    # u = rand(model.m)
+    # xdot = rand(model.n)
+    # if model.r == 0
+    #     try
+    #         model.f(xdot,x,u)
+    #     catch x
+    #         if x isa MethodError
+    #             return false
+    #         end
+    #     end
+    # else
+    #     w = rand(model.r)
+    #     try
+    #         model.f(xdot,x,u,w)
+    #     catch x
+    #         if x isa MethodError
+    #             return false
+    #         end
+    #     end
+    # end
+    #
+    # return true
 end
 
-function is_inplace_dynamics(f::Function,n::Int64,m::Int64)::Bool
+function is_inplace_dynamics(f::Function,n::Int,m::Int,r::Int)::Bool
     x = rand(n)
     u = rand(m)
     xdot = rand(n)
-    try
-        f(xdot,x,u)
-    catch x
-        if x isa MethodError
-            return false
+    if r == 0
+        try
+            f(xdot,x,u)
+        catch x
+            if x isa MethodError
+                return false
+            end
+        end
+    else
+        w = rand(r)
+        try
+            f(xdot,x,u,w)
+        catch x
+            if x isa MethodError
+                return false
+            end
         end
     end
     return true

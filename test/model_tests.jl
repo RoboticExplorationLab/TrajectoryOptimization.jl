@@ -142,8 +142,8 @@ S = zeros(n,n+m+1)
 
 ∇fd1!,fd1_aug! = generate_jacobian(Discrete,fd1,n,m)
 ∇fd1!(x,u,dt)
-model1 = AnalyticalModel{Nominal,Discrete}(fd1,n,m)
-model2 = AnalyticalModel{Nominal,Discrete}(fd1,∇fd1,n,m, check_functions=true)
+model1 = AnalyticalModel{Nominal,Discrete}(fd1,n,m,0)
+model2 = AnalyticalModel{Nominal,Discrete}(fd1,∇fd1,n,m,0,check_functions=true)
 @test _test_jacobian(Discrete,∇fd1) == [false,true,false]
 @test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
 
