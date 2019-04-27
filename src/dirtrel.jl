@@ -259,6 +259,13 @@ E1 = zeros(nx,nx)
 # discrete dynamics
 pendulum_discrete! = forward_euler!(pendulum_dynamics_stochastic!,dt)
 
+_∇f(z,nx) = ForwardDiff.jacobian(f_augmented!(pendulum_discrete!,nx,nu,nw),zeros(eltype(z),nx),z)
+function gen_∇f(_∇f,nx)
+    ∇f(z) = _∇f(z,nx)
+end
+∇f = gen_∇f(_∇f,nx)
+∇²f(z) = ForwardDiff.jacobian(∇f,z)
+
 # rollout initial state trajectory
 X[1] .= x0
 for k = 1:N-1
@@ -282,12 +289,33 @@ norm(dc_fd - vec(dc1))
 ###
 
 x_part = NamedTuple{(:x,:δx)}((1:nx,nx .+ (1:nx^2)))
-Xs = [BlockArray(zeros(nx+nx^2),x_part) for k = 1:N
+Xr = [BlockArray(zeros(nx+nx^2),x_part) for k = 1:N]
 
 u_part = NamedTuple{(:u,:δu)}((1:nu,nu .+ (1:nu^2)))
-Us = [BlockArray(zeros(nu+nu^2),u_part) for k = 1:N-1]
+Ur = [BlockArray(zeros(nu+nu^2),u_part) for k = 1:N-1]
 
-Xs[1].δx
-Us[1].δu
+Xr[1].δx
+Ur[1].δu
 
-typeof(Xs[1]) <: AbstractArray
+function set_controls!(Ur,U0)
+    N = length(Us)
+    for k = 1:N
+        Ur[k].u .= U0[k]
+    end
+end
+
+U0 = [rand(nu) for k = 1:N-1]
+set_controls!(Ur,U0)
+U0[1]
+Ur[1]
+
+function rollout_robust!(Xr,Ur)
+    Xr[1].x .= x0
+    for k = 1:N-1
+        pendulum_discrete!(Xr[k+1].x,dt,Xr[k].x,Ur[k].u,zeros(nw))
+    end
+end
+
+rollout_robust!(Xr,Ur)
+
+plot(Xr)
