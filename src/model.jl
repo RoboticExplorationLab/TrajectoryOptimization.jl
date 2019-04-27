@@ -6,6 +6,7 @@ abstract type Continuous <: DynamicsType end
 abstract type Discrete <: DynamicsType end
 abstract type Model{D<:DynamicsType} end
 
+
 """
 $(TYPEDEF)
 
