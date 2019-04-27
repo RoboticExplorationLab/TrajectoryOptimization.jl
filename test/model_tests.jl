@@ -3,7 +3,7 @@ import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQ
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
-    _check_jacobian, f_augmented!
+    _check_jacobian, f_augmented!, Nominal, Uncertain
 
 using RigidBodyDynamics
 using PartedArrays
@@ -142,8 +142,8 @@ S = zeros(n,n+m+1)
 
 ∇fd1!,fd1_aug! = generate_jacobian(Discrete,fd1,n,m)
 ∇fd1!(x,u,dt)
-model1 = AnalyticalModel{Discrete}(fd1,n,m)
-model2 = AnalyticalModel{Discrete}(fd1,∇fd1,n,m, check_functions=true)
+model1 = AnalyticalModel{Nominal,Discrete}(fd1,n,m)
+model2 = AnalyticalModel{Nominal,Discrete}(fd1,∇fd1,n,m, check_functions=true)
 @test _test_jacobian(Discrete,∇fd1) == [false,true,false]
 @test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
 
@@ -165,7 +165,7 @@ model2.f(ẋ2,x,u)
 n,m = 3,2
 model = Dynamics.car_model
 discretizer = rk3
-model_d = Model{Discrete}(model,discretizer)
+model_d = Model{Nominal,Discrete}(model,discretizer)
 
 # Test partitioning
 Z = BlockMatrix(model)

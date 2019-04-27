@@ -1,6 +1,6 @@
 "$(TYPEDEF) Trajectory Optimization Problem"
 struct Problem{T<:AbstractFloat}
-    model::Model{Discrete}
+    model::AbstractModel
     obj::AbstractObjective
     constraints::ProblemConstraints
     x0::Vector{T}
@@ -10,7 +10,7 @@ struct Problem{T<:AbstractFloat}
     dt::T
     tf::T
 
-    function Problem(model::Model, obj::AbstractObjective, constraints::ProblemConstraints,
+    function Problem(model::AbstractModel, obj::AbstractObjective, constraints::ProblemConstraints,
         x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where T
 
         n,m = model.n, model.m
@@ -36,7 +36,7 @@ end
 """$(TYPEDSIGNATURES)
 Create a problem from a continuous model, specifying the discretizer as a symbol
 """
-function Problem(model::Model{Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...)
+function Problem(model::Model{M,Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...) where M <: ModelType
     if isdefined(TrajectoryOptimization,integration)
         discretizer = eval(integration)
     else
@@ -49,29 +49,29 @@ end
 Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
-function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
+function Problem(model::Model{M,Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
+        N::Int=-1, dt=NaN, tf=NaN) where {M<:ModelType,T}
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
-Problem(model::Model{Discrete}, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model{M,Discrete}, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where {M<:ModelType,T} =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
+function Problem(model::Model{M,Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
+        N::Int=-1, dt=NaN, tf=NaN) where {M<:ModelType,T}
     N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
-Problem(model::Model{Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model{M,Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where {M<:ModelType,T} =
     Problem(model, obj, to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, obj::AbstractObjective;
+function Problem(model::Model{M,Discrete}, obj::AbstractObjective;
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
+        N::Int=-1, dt=NaN, tf=NaN) where {M<:ModelType,T}
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
     U0 = [zeros(T,model.m) for k = 1:N-1]

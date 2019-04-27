@@ -130,7 +130,7 @@ The previous methods all generate models with continuous dynamics (note that all
 ## From a continuous model
 Assuming we have a model of type `Model{Continuous}`, we can discretize as follows:
 ```julia
-model_discrete = Model{Discrete}(model,discretizer)
+model_discrete = Model{Nominal,Discrete}(model,discretizer)
 ```
 where `discretizer` is a function that returns a discretized version of the continuous dynamics. TrajectoryOptimization.jl offers the following integration schemes
 
@@ -145,7 +145,7 @@ params = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)
 model = Model(pendulum_dynamics_params!, n, m, params)
 
 # Discretize the continuous model
-model_discrete = Model{Discrete}(model,rk4)
+model_discrete = Model{Nominal,Discrete}(model,rk4)
 ```
 
 ## From an analytical expression
@@ -160,12 +160,12 @@ The Jacobian is similarly specified as a function of the form `∇f(Z,x,u,dt)`. 
 
 The model is then created in a similar fashion to the above methods
 ```julia
-model_discrete = AnalyticalModel{Discrete}(pendulum_discrete!,n,m)
-model_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!,n,m,params)  # if we defined this
+model_discrete = AnalyticalModel{Nominal,Discrete}(pendulum_discrete!,n,m)
+model_discrete = AnalyticalModel{Nominal,Discrete}(pendulum_discrete_params!,n,m,params)  # if we defined this
 
 # If we defined the Jacobian function we also create it as
-model_discrete = AnalyticalModel{Discrete}(pendulum_discrete!, pendulum_discrete_jacobian!, n, m)
-model_discrete = AnalyticalModel{Discrete}(pendulum_discrete_params!, pendulum_discrete_jacobian!, n, m, params)
+model_discrete = AnalyticalModel{Nominal,Discrete}(pendulum_discrete!, pendulum_discrete_jacobian!, n, m)
+model_discrete = AnalyticalModel{Nominal,Discrete}(pendulum_discrete_params!, pendulum_discrete_jacobian!, n, m, params)
 ```
 
 # Methods

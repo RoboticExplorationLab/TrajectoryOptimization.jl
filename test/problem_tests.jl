@@ -25,9 +25,9 @@ xf[4:7] = q0
 
 costfun = LQRCost(Q, R, Qf, xf)
 
-@test_nowarn Model{Discrete}(model, rk4)
+@test_nowarn Model{Nominal,Discrete}(model, rk4)
 @test_nowarn rk3(model)
-model_d = Model{Discrete}(model, rk3)
+model_d = Model{Nominal,Discrete}(model, rk3)
 
 # Create Problem
 N = 10

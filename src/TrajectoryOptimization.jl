@@ -45,6 +45,8 @@ export
     AugmentedLagrangianProblem,
     Discrete,
     Continuous,
+    Nominal,
+    Uncertain,
     Constraint,
     TerminalConstraint,
     Equality,
@@ -119,7 +121,8 @@ PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
 include("solver_options.jl")
 include("constraints.jl")
 include("cost.jl")
-include("model.jl")
+# include("model.jl")
+include("model_robust.jl")
 include("integration.jl")
 include("utils.jl")
 include("objective.jl")

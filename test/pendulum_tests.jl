@@ -18,7 +18,7 @@ opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=ver
 
 N = 51
 dt = 0.1
-U0 = [rand(m) for k = 1:N-1]
+U0 = [zeros(m) for k = 1:N-1]
 int_schemes = [:midpoint, :rk3, :rk4]
 
 ## Unconstrained

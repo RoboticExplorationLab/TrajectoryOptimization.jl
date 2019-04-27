@@ -1,6 +1,5 @@
 using ForwardDiff, Plots, LinearAlgebra, BenchmarkTools, MatrixCalculus,
     PartedArrays
-
 ## DIRTREL tests
 function pendulum_dynamics_stochastic!(ẋ,x,u,w)
     m = 1.
