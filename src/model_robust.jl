@@ -163,7 +163,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVec
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
+    model.f(ẋ,x,u,zeros(model.r))
+    model.evals[1] += 1
+end
+
+function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
     model.f(ẋ,x,u,w)
     model.evals[1] += 1
 end
@@ -173,7 +178,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector)
+    model.f(ẋ,x,u,zeros(model.r))
+    model.evals[1] += 1
+end
+
+function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector)
     model.f(ẋ,x,u,w)
     model.evals[1] += 1
 end
@@ -183,7 +193,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
+function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
+    model.f(ẋ,x,u,zeros(model.r),dt)
+    model.evals[1] += 1
+end
+
+function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
     model.f(ẋ,x,u,w,dt)
     model.evals[1] += 1
 end
@@ -197,8 +212,16 @@ function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuo
     model.evals[2] += 1
 end
 
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
-    model.∇f(Z,ẋ,x,u,w)
+function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
+    idx = NamedTuple{(:x,:u)}((1:model.n,1:model.m))
+    model.∇f(Z,ẋ[idx.x],x[idx.x],u[idx.u],zeros(model.r))
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+
+function evaluate_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    idx = NamedTuple{(:x,:u)}((1:model.n,1:model.m))
+    model.∇f(Z,ẋ[idx.x],x[idx.x],u[idx.u],w)
     model.evals[1] += 1
     model.evals[2] += 1
 end
@@ -210,7 +233,15 @@ function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete
 end
 
 function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
-    model.∇f(Z,ẋ,x,u,w,dt)
+    idx = NamedTuple{(:x,:u)}((1:model.n,1:model.m))
+    model.∇f(Z,ẋ[idx.x],x[idx.x],u[idx.u],zeros(model.r),dt)
+    model.evals[1] += 1
+    model.evals[2] += 1
+end
+
+function evaluate_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
+    idx = NamedTuple{(:x,:u)}((1:model.n,1:model.m))
+    model.∇f(Z,ẋ[idx.x],x[idx.x],u[idx.u],w,dt)
     model.evals[1] += 1
     model.evals[2] += 1
 end
@@ -219,10 +250,13 @@ end
 Keeps track of the number of evaluations
 """
 jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector) = evaluate!(Z,ẋ,model,x,u,zeros(model.r))
+jacobian_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
 
 jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T} = evaluate!(Z,ẋ,model,x,u,dt)
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
+jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,zeros(model.r),dt)
+jacobian_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
+
 
 """ $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
@@ -232,7 +266,12 @@ function jacobian!(Z::AbstractMatrix,model::Model{M,Continuous},x::AbstractVecto
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
+function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
+    model.∇f(Z,x,u,zeros(model.r))
+    model.evals[2] += 1
+end
+
+function jacobian_uncertain!(Z::AbstractMatrix,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
     model.∇f(Z,x,u,w)
     model.evals[2] += 1
 end
@@ -242,7 +281,12 @@ function jacobian!(Z::AbstractMatrix,model::Model{M,Discrete},x::AbstractVector,
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
+function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
+    model.∇f(Z,x,u,zeros(model.r),dt)
+    model.evals[2] += 1
+end
+
+function jacobian_uncertain!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
     model.∇f(Z,x,u,w,dt)
     model.evals[2] += 1
 end
@@ -254,7 +298,14 @@ function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorT
     end
 end
 
-function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},W::VectorTrajectory{T},dt::T) where T
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k],zeros(model.r),dt)
+    end
+end
+
+function jacobian_uncertain!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},W::VectorTrajectory{T},dt::T) where T
     N = length(X)
     for k = 1:N-1
         jacobian!(Z[k],model,X[k],U[k],W[k],dt)
@@ -449,14 +500,14 @@ function generate_jacobian(::Type{Uncertain},::Type{Continuous},f!::Function,n::
     ∇f!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
         s[inds.x] = x
         s[inds.u] = u
-        s[indx.w] = w
+        s[inds.w] = w
         F!(S,ẋ,s)
         return nothing
     end
     ∇f!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
         s[inds.x] = x
         s[inds.u] = u
-        s[indx.w] = w
+        s[inds.w] = w
         F!(S,ẋ0,s)
         return nothing
     end
@@ -481,7 +532,7 @@ function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::I
     ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T= begin
         s[inds.x] = x
         s[inds.u] = u
-        s[indx.w] = w
+        s[inds.w] = w
         s[inds.dt] = dt
         Fd!(S,ẋ,s)
         return nothing
@@ -489,7 +540,7 @@ function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::I
     ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
-        s[indx.w] = w
+        s[inds.w] = w
         s[inds.dt] = dt
         Fd!(S,ẋ0,s)
         return nothing

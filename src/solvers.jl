@@ -39,8 +39,7 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     K  = [zeros(T,m,n) for k = 1:N-1]
     d  = [zeros(T,m)   for k = 1:N-1]
 
-    part_f = create_partition2(prob.model)
-    ∇F = [BlockArray(zeros(n,n+m+1),part_f) for k = 1:N-1]
+    ∇F = [BlockArray(zeros(n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
 
     S  = [Expansion(prob,:x) for k = 1:N]
     Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
