@@ -38,11 +38,10 @@ Create a problem from a continuous model, specifying the discretizer as a symbol
 """
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...) where M <: ModelType
     if isdefined(TrajectoryOptimization,integration)
-        discretizer = eval(integration)
+        Problem(discretize_model(model,integration,kwargs[:dt]), obj; kwargs...)
     else
         throw(ArgumentError("$integration is not a defined integration scheme"))
     end
-    Problem(discretizer(model), obj; kwargs...)
 end
 
 """$(TYPEDSIGNATURES)

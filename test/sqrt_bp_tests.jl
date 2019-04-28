@@ -1,14 +1,15 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    cost_expansion!, ProblemConstraints
+    cost_expansion!, ProblemConstraints, discretize_model
 ## Pendulum
 T = Float64
 
 # model
 model = TrajectoryOptimization.Dynamics.car_model
 n = model.n; m = model.m
-model_d = Model{Nominal,Discrete}(model,rk4)
+dt = 0.1
+model_d = discretize_model(model,:rk4,dt)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))

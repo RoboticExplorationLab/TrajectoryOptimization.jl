@@ -1,11 +1,12 @@
 module Dynamics
 
-using TrajectoryOptimization: Model, Trajectory
+using TrajectoryOptimization: Model, UncertainModel, Trajectory
 using RigidBodyDynamics
 using LinearAlgebra
 
 export
     pendulum_model,
+    pendulum_model_uncertain,
     doublependulum_model,
     cartpole_model,
     cartpole_model_urdf,

@@ -3,11 +3,12 @@ import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQ
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
-    _check_jacobian, f_augmented!, add_slack_controls, add_min_time_controls
+    _check_jacobian, f_augmented!, add_slack_controls, add_min_time_controls, discretize_model
 
 ## Augment dynamics
+dt = 0.1
 model = Dynamics.pendulum_model
-model_d = Model{Nominal,Discrete}(model,rk4)
+model_d = discretize_model(model,:rk4,dt)
 
 # Add slack controls
 model_inf = add_slack_controls(model_d)

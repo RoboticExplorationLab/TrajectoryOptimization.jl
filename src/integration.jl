@@ -33,6 +33,15 @@ function midpoint(f!::Function, dt::Float64)
     end
 end
 
+function midpoint_uncertain(f!::Function, dt::T) where T
+    fd!(xdot,x,u,w,dt=dt) = begin
+        f!(xdot,x,u,w)
+        xdot .*= dt/2.
+        f!(xdot, x + xdot, u, w)
+        copyto!(xdot,x + xdot*dt)
+    end
+end
+
 function midpoint(f_aug!::Function)
     fd_aug!(dS, S) = begin
         dt = S[end]^2
@@ -66,6 +75,20 @@ function rk4(f!::Function, dt::Float64)
     end
 end
 
+function rk4_uncertain(f!::Function, dt::T) where T
+    # Runge-Kutta 4
+    fd!(xdot,x,u,w,dt=dt) = begin
+        k1 = zero(xdot)
+        k2 = zero(xdot)
+        k3 = zero(xdot)
+        k4 = zero(xdot)
+        f!(k1, x, u, w);         k1 *= dt;
+        f!(k2, x + k1/2, u, w); k2 *= dt;
+        f!(k3, x + k2/2, u, w); k3 *= dt;
+        f!(k4, x + k3, u, w);    k4 *= dt;
+        copyto!(xdot, x + (k1 + 2*k2 + 2*k3 + k4)/6)
+    end
+end
 
 function rk4(f_aug!::Function)
     # Runge-Kutta 4
@@ -102,6 +125,17 @@ function rk3(f!::Function, dt::Float64)
     end
 end
 
+function rk3_uncertain(f!::Function, dt::Float64)
+        # Runge-Kutta 3 (zero order hold)
+    fd!(xdot,x,u,w,dt=dt) = begin
+        k1 = k2 = k3 = zero(x)
+        f!(k1, x, u, w);               k1 *= dt;
+        f!(k2, x + k1/2, u, w);       k2 *= dt;
+        f!(k3, x - k1 + 2*k2, u, w);  k3 *= dt;
+        copyto!(xdot, x + (k1 + 4*k2 + k3)/6)
+    end
+end
+
 function rk3(f_aug!::Function)
     # Runge-Kutta 3 augmented (zero order hold)
     fd!(dS,S::Array) = begin
@@ -124,6 +158,14 @@ end
 
 function f_augmented(f::Function, n::Int, m::Int)
     f_aug(S::Array) = f(S[1:n], S[n+1:n+m])
+end
+
+function f_augmented_uncertain!(f!::Function, nx::Int, nu::Int, nw::Int)
+    f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:nx], S[nx .+ (1:nu)], S[(nx+nu) .+ (1:nw)])
+end
+
+function f_augmented(f::Function, nx::Int, nu::Int, nw::Int)
+    f_aug(S::Array) = f(S[1:nx], S[nx .+ (1:nu)], S[(nx+nu) .+ (1:nw)])
 end
 
 function ZeroOrderHoldInterpolation(t,X)

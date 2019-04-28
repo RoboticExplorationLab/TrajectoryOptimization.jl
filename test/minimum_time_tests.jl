@@ -8,7 +8,8 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
-model_d = Model{Nominal,Discrete}(model,rk4)
+dt = 0.1
+model_d = rk4(model,dt)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))
@@ -54,7 +55,8 @@ tt_mt = total_time(prob_mt)
 ## Box parallel park
 model = TrajectoryOptimization.Dynamics.car_model
 n = model.n; m = model.m
-model_d = Model{Nominal,Discrete}(model,rk4)
+dt = 0.1
+model_d = rk4(model,dt)
 
 # cost
 x0 = [0.0;0.0;0.]

@@ -3,7 +3,7 @@ import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQ
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
-    _check_jacobian, f_augmented!, Nominal, Uncertain
+    _check_jacobian, f_augmented!, Nominal, Uncertain, discretize_model
 
 using RigidBodyDynamics
 using PartedArrays
@@ -140,7 +140,7 @@ S = zeros(n,n+m+1)
 ∇fd1!, = generate_jacobian(fd1,n,m)
 @test ∇fd1!(x,u) == S[:,1:n+m]
 
-∇fd1!,fd1_aug! = generate_jacobian(Discrete,fd1,n,m)
+∇fd1!,fd1_aug! = generate_jacobian(Nominal,Discrete,fd1,n,m)
 ∇fd1!(x,u,dt)
 model1 = AnalyticalModel{Nominal,Discrete}(fd1,n,m,0)
 model2 = AnalyticalModel{Nominal,Discrete}(fd1,∇fd1,n,m,0,check_functions=true)
@@ -164,8 +164,9 @@ model2.f(ẋ2,x,u)
 # Create discrete dynamics from continuous
 n,m = 3,2
 model = Dynamics.car_model
-discretizer = rk3
-model_d = Model{Nominal,Discrete}(model,discretizer)
+dt = 1.0
+discretizer = :rk3
+model_d = discretize_model(model,discretizer,dt)
 
 # Test partitioning
 Z = BlockMatrix(model)
@@ -196,6 +197,7 @@ s = BlockVector(model_d)
 
 # Generate discrete dynamics equations
 f! = model.f
+discretizer = eval(:rk3)
 fd! = discretizer(f!, dt)
 f_aug! = f_augmented!(f!, n, m)
 fd_aug! = discretizer(f_aug!)

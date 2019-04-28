@@ -74,28 +74,28 @@ end
 
 function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
     p = NamedTuple()
-    ∇f, = generate_jacobian(D,f,n,m)
+    ∇f, = generate_jacobian(M,D,f,n,m)
     AnalyticalModel{M,D}(f,∇f,n,m,r,p,d)
 end
 
 function AnalyticalModel{Uncertain,D}(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {D<:DynamicsType}
     p = NamedTuple()
-    ∇f, = generate_jacobian(D,f,n,m,r)
-    AnalyticalModel{M,D}(f,∇f,n,m,r,p,d)
+    ∇f, = generate_jacobian(Uncertain,D,f,n,m,r)
+    AnalyticalModel{Uncertain,D}(f,∇f,n,m,r,p,d)
 end
 
 function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
     f_p(ẋ,x,u) = f(ẋ,x,u,p)
     f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
-    ∇f, = generate_jacobian(D,f_p,n,m)
+    ∇f, = generate_jacobian(M,D,f_p,n,m)
     AnalyticalModel{M,D}(f_p,∇f,n,m,r,p,d)
 end
 
 function AnalyticalModel{Uncertain,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {D<:DynamicsType}
-    f_p(ẋ,x,u) = f(ẋ,x,u,p)
-    f_p(ẋ,x,u,p) = f(ẋ,x,u,p)
-    ∇f, = generate_jacobian(D,f_p,n,m,r)
-    AnalyticalModel{M,D}(f_p,∇f,n,m,r,p,d)
+    f_p(ẋ,x,u,w) = f(ẋ,x,u,w,p)
+    f_p(ẋ,x,u,w,p) = f(ẋ,x,u,w,p)
+    ∇f, = generate_jacobian(Uncertain,D,f_p,n,m,r)
+    AnalyticalModel{Uncertain,D}(f_p,∇f,n,m,r,p,d)
 end
 
 
@@ -151,7 +151,7 @@ Model(f::Function, ∇f::Function, n::Int, m::Int, d::Dict{Symbol,Any}=Dict{Symb
     p = NamedTuple()
     AnalyticalModel{Nominal,Continuous}(f,∇f,n,m,0,p,d, check_functions=true); end
 
-UncertainModel(f::Function, ∇f::Function, n::Int, m::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
+UncertainModel(f::Function, ∇f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) = begin
     p = NamedTuple()
     AnalyticalModel{Uncertain,Continuous}(f,∇f,n,m,r,p,d, check_functions=true); end
 
@@ -310,6 +310,7 @@ struct RBDModel{M,D} <: Model{M,D}
     f::Function # continuous dynamics (ie, differential equation)
     n::Int # number of states
     m::Int # number of controls
+    r::Int # number of uncertain parameters
     mech::Mechanism  # RigidBodyDynamics Mechanism
     evals::Vector{Int}
     info::Dict{Symbol,Any}
@@ -347,7 +348,7 @@ function Model(mech::Mechanism, torques::Array)
     d = Dict{Symbol,Any}()
 
     evals = [0,]
-    RBDModel{Nominal,Continuous}(f, n, m, mech, evals, d)
+    RBDModel{Nominal,Continuous}(f, n, m, 0, mech, evals, d)
 end
 
 """
@@ -375,9 +376,9 @@ function Model(urdf::String,torques::Array{Float64,1})
 end
 
 #TODO uncertain version for continous model
-generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Continuous,f!,n,m,p)
+generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Nominal,Continuous,f!,n,m,p)
 
-function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
+function generate_jacobian(::Type{Nominal},::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
     inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
     Z = BlockArray(zeros(p,n+m),inds)
     z = zeros(n+m)
@@ -405,7 +406,7 @@ function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=
     return ∇f!, f_aug
 end
 
-function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
+function generate_jacobian(::Type{Nominal},::Type{Discrete},fd!::Function,n::Int,m::Int)
     inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
     S0 = zeros(n,n+m+1)
     s = zeros(n+m+1)
@@ -413,21 +414,21 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
 
     fd_aug!(xdot,s) = fd!(xdot,view(s,inds.x),view(s,inds.u),s[inds.dt])
     Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
-    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
         s[inds.dt] = dt
         Fd!(S,ẋ,s)
         return nothing
     end
-    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
         s[inds.dt] = dt
         Fd!(S,ẋ0,s)
         return nothing
     end
-    ∇fd!(x::AbstractVector,u::AbstractVector,dt::Float64) = begin
+    ∇fd!(x::AbstractVector,u::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
         s[inds.dt] = dt
@@ -437,7 +438,39 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
     return ∇fd!, fd_aug!
 end
 
-function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
+function generate_jacobian(::Type{Uncertain},::Type{Continuous},f!::Function,n::Int,m::Int,r::Int)
+    inds = (x=1:n, u=n .+ (1:m),w = (n+m) .+ (1:r), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)),xw=(1:n,(n+m) .+ (1:r)))
+    S0 = zeros(n,n+m+r)
+    s = zeros(n+m+r)
+    ẋ0 = zeros(n)
+
+    f_aug!(xdot,s) = f!(xdot,view(s,inds.x),view(s,inds.u),view(s,inds.w))
+    F!(S,xdot,s) = ForwardDiff.jacobian!(S,f_aug!,xdot,s)
+    ∇f!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[indx.w] = w
+        F!(S,ẋ,s)
+        return nothing
+    end
+    ∇f!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[indx.w] = w
+        F!(S,ẋ0,s)
+        return nothing
+    end
+    ∇f!(x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
+        s[inds.x] = x
+        s[inds.u] = u
+        s[inds.w] = w
+        Fd!(S0,ẋ0,s)
+        return S0
+    end
+    return ∇f!, f_aug!
+end
+
+function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
     inds = (x=1:n, u=n .+ (1:m),w = (n+m) .+ (1:r), dt=n+m+r+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)),xw=(1:n,(n+m) .+ (1:r)), xdt=(1:n,(n+m+r) .+ (1:1)))
     S0 = zeros(n,n+m+r+1)
     s = zeros(n+m+r+1)
@@ -445,7 +478,7 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
 
     fd_aug!(xdot,s) = fd!(xdot,view(s,inds.x),view(s,inds.u),view(s,inds.w),s[inds.dt])
     Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
-    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+    ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T= begin
         s[inds.x] = x
         s[inds.u] = u
         s[indx.w] = w
@@ -453,7 +486,7 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
         Fd!(S,ẋ,s)
         return nothing
     end
-    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+    ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
         s[indx.w] = w
@@ -461,7 +494,7 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int,r::Int)
         Fd!(S,ẋ0,s)
         return nothing
     end
-    ∇fd!(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::Float64) = begin
+    ∇fd!(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
         s[inds.u] = u
         s[inds.w] = w
@@ -485,24 +518,38 @@ Convert a continuous dynamics model into a discrete one using the given discreti
     end
     ```
 """
-function Model{M,Discrete}(model::Model{M,Continuous}, discretizer::Function) where M <:ModelType
-    fd!,∇fd! = discretize(model.f,discretizer,model.n,model.m)
+
+function discretize_model(model::Model{M,Continuous},discretizer::Symbol, dt::T=1.0) where {M<:ModelType,T}
+    fd!,∇fd! = discretize(model.f,discretizer,dt,model.n,model.m)
     info_d = deepcopy(model.info)
     integration = string(discretizer)
     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
     AnalyticalModel{M,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
 end
 
-midpoint(model::Model{M,Continuous}) where M <: ModelType = Model{M,Discrete}(model, midpoint)
-rk3(model::Model{M,Continuous}) where M <: ModelType = Model{M,Discrete}(model, rk3)
-rk4(model::Model{M,Continuous}) where M <:ModelType = Model{M,Discrete}(model, rk4)
+function discretize_model(model::Model{Uncertain,Continuous},discretizer::Symbol,dt::T=1.0) where T
+    fd!,∇fd! = discretize_uncertain(model.f,discretizer,dt,model.n,model.m,model.r)
+    info_d = deepcopy(model.info)
+    integration = string(discretizer)
+    info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
+    AnalyticalModel{Uncertain,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
+end
 
+midpoint(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :midpoint, dt)
+rk3(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :rk3, dt)
+rk4(model::Model{M,Continuous},dt::T) where {M <:ModelType,T} = discretize_model(model, :rk4, dt)
 
-function discretize(f::Function,discretizer::Function,n::Int,m::Int)
-    inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
-    dt = 0.1  # TODO: remove this after getting rid of old discretization code
+function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) where T
+    discretizer = eval(discretization)
     fd! = discretizer(f,dt)
-    ∇fd!, = generate_jacobian(Discrete,fd!,n,m)
+    ∇fd!, = generate_jacobian(Nominal,Discrete,fd!,n,m)
+    return fd!,∇fd!
+end
+
+function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m::Int,r::Int) where T
+    discretizer = eval(Symbol(String(discretization) * "_uncertain"))
+    fd! = discretizer(f,dt)
+    ∇fd!, = generate_jacobian(Uncertain,Discrete,fd!,n,m,r)
     return fd!,∇fd!
 end
 

@@ -1,6 +1,7 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,line_trajectory
+    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,line_trajectory,
+    discretize_model
 
 ## Pendulum
 T = Float64
@@ -8,7 +9,8 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
-model_d = Model{Nominal,Discrete}(model,rk4)
+dt = 0.1
+model_d = discretize_model(model,:rk4,dt)
 
 # cost
 x0 = [0; 0.]

@@ -13,34 +13,34 @@ function pendulum_dynamics_uncertain!(ẋ::AbstractVector{T},x::AbstractVector{T
     ẋ[2] = (u[1] - (m + w[1])*g*lc*sin(x[1]) - b*x[2])/I
 end
 
-function rk4_uncertain!(f!::Function, dt::T) where T
-    # Runge-Kutta 4
-    fd!(xdot,x,u,w,dt=dt) = begin
-        k1 = zero(xdot)
-        k2 = zero(xdot)
-        k3 = zero(xdot)
-        k4 = zero(xdot)
-        f!(k1, x, u, w);         k1 *= dt;
-        f!(k2, x + k1/2, u, w); k2 *= dt;
-        f!(k3, x + k2/2, u, w); k3 *= dt;
-        f!(k4, x + k3, u, w);    k4 *= dt;
-        copyto!(xdot, x + (k1 + 2*k2 + 2*k3 + k4)/6)
-    end
-end
+# function rk4_uncertain!(f!::Function, dt::T) where T
+#     # Runge-Kutta 4
+#     fd!(xdot,x,u,w,dt=dt) = begin
+#         k1 = zero(xdot)
+#         k2 = zero(xdot)
+#         k3 = zero(xdot)
+#         k4 = zero(xdot)
+#         f!(k1, x, u, w);         k1 *= dt;
+#         f!(k2, x + k1/2, u, w); k2 *= dt;
+#         f!(k3, x + k2/2, u, w); k3 *= dt;
+#         f!(k4, x + k3, u, w);    k4 *= dt;
+#         copyto!(xdot, x + (k1 + 2*k2 + 2*k3 + k4)/6)
+#     end
+# end
 
 
-function midpoint_uncertain!(f!::Function, dt::T) where T
-    fd!(xdot,x,u,w,dt=dt) = begin
-        f!(xdot,x,u,w)
-        xdot .*= dt/2.
-        f!(xdot, x + xdot, u, w)
-        copyto!(xdot,x + xdot*dt)
-    end
-end
+# function midpoint_uncertain!(f!::Function, dt::T) where T
+#     fd!(xdot,x,u,w,dt=dt) = begin
+#         f!(xdot,x,u,w)
+#         xdot .*= dt/2.
+#         f!(xdot, x + xdot, u, w)
+#         copyto!(xdot,x + xdot*dt)
+#     end
+# end
 
-function f_augmented_uncertain!(f!::Function, nx::Int, nu::Int, nw::Int)
-    f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:nx], S[nx .+ (1:nu)], S[(nx+nu) .+ (1:nw)])
-end
+# function f_augmented_uncertain!(f!::Function, nx::Int, nu::Int, nw::Int)
+#     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:nx], S[nx .+ (1:nu)], S[(nx+nu) .+ (1:nw)])
+# end
 
 function pack(X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
@@ -134,67 +134,67 @@ function gen_robust_cost(_rcf::Function,_dynamics::Function,
     return rcf
 end
 
-N = 5
-nx,nu,nw = 2,1,1;
-
-dt = 0.1
-x0 = [0.;0.]
-
-# allocate trajectories
-X = [zeros(nx) for k = 1:N]
-U = [ones(nu) for k = 1:N-1]
-
-# cost functions
-R = Rr = [0.1]
-Q = Qr = [10. 0.; 0. 1.]
-Qf = Qfr = [100. 0.; 0. 100.]
-
-# uncertainty
-D = [0.2^2]
-E1 = zeros(nx,nx)
-
-# discrete dynamics
-pendulum_discrete! = rk4_uncertain!(pendulum_dynamics_uncertain!,dt)
-
-# rollout initial state trajectory
-X[1] .= x0
-for k = 1:N-1
-    pendulum_discrete!(X[k+1],X[k],U[k],zeros(nw),dt)
-end
-X
-Z = pack(X,U)
-xx,uu = unpack(Z,nx,nu,N)
-
-rcf = gen_robust_cost(robust_cost,pendulum_discrete!,D,E1,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
-
-c_fd = rcf(Z)
-dc_fd = ForwardDiff.gradient(rcf,Z)
-
-###
-
-x_part = NamedTuple{(:x,:δx)}((1:nx,nx .+ (1:nx^2)))
-Xr = [BlockArray(zeros(nx+nx^2),x_part) for k = 1:N]
-
-u_part = NamedTuple{(:u,:δu)}((1:nu,nu .+ (1:nu^2)))
-Ur = [BlockArray(zeros(nu+nu^2),u_part) for k = 1:N-1]
-
-Xr[1].δx
-Ur[1].δu
-
+# N = 5
+# nx,nu,nw = 2,1,1;
+#
+# dt = 0.1
+# x0 = [0.;0.]
+#
+# # allocate trajectories
+# X = [zeros(nx) for k = 1:N]
+# U = [ones(nu) for k = 1:N-1]
+#
+# # cost functions
+# R = Rr = [0.1]
+# Q = Qr = [10. 0.; 0. 1.]
+# Qf = Qfr = [100. 0.; 0. 100.]
+#
+# # uncertainty
+# D = [0.2^2]
+# E1 = zeros(nx,nx)
+#
+# # discrete dynamics
+# pendulum_discrete! = rk4_uncertain!(pendulum_dynamics_uncertain!,dt)
+#
+# # rollout initial state trajectory
+# X[1] .= x0
+# for k = 1:N-1
+#     pendulum_discrete!(X[k+1],X[k],U[k],zeros(nw),dt)
+# end
+# X
+# Z = pack(X,U)
+# xx,uu = unpack(Z,nx,nu,N)
+#
+# rcf = gen_robust_cost(robust_cost,pendulum_discrete!,D,E1,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
+#
+# c_fd = rcf(Z)
+# dc_fd = ForwardDiff.gradient(rcf,Z)
+#
+# ###
+#
+# x_part = NamedTuple{(:x,:δx)}((1:nx,nx .+ (1:nx^2)))
+# Xr = [BlockArray(zeros(nx+nx^2),x_part) for k = 1:N]
+#
+# u_part = NamedTuple{(:u,:δu)}((1:nu,nu .+ (1:nu^2)))
+# Ur = [BlockArray(zeros(nu+nu^2),u_part) for k = 1:N-1]
+#
+# Xr[1].δx
+# Ur[1].δu
+#
 function set_controls!(Ur::PartedVecTrajectory{T},U0::VectorTrajectory{T}) where T
     N = length(Ur)
     for k = 1:N
         Ur[k].u .= U0[k]
     end
 end
-
-set_controls!(Ur,U)
-
+#
+# set_controls!(Ur,U)
+#
 function rollout_uncertain!(Xr::PartedVecTrajectory{T},Ur::PartedVecTrajectory{T},x0::AbstractArray=zeros(T,length(Xr[1].x)),dt::T=1.0) where T
     Xr[1].x .= x0
     for k = 1:N-1
         pendulum_discrete!(Xr[k+1].x,Xr[k].x,Ur[k].u,zeros(nw),dt)
     end
 end
-
-rollout_uncertain!(Xr,Ur,x0,dt)
+#
+# rollout_uncertain!(Xr,Ur,x0,dt)
