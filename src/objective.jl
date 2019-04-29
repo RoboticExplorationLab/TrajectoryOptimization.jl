@@ -55,3 +55,22 @@ end
 function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
     cost(obj.cost,X,U)
 end
+
+## Multi-Objective
+struct MultiObjective <: AbstractObjective
+    obj::Vector{T} where T <: Objective
+end
+
+function cost(multi_obj::MultiObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+    J = 0.
+    for obj in multi_obj
+        J += cost(obj.cost,X,U)
+    end
+    return J
+end
+
+function cost_expansion!(Q::ExpansionTrajectory{T},multi_obj::MultiObjective,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    for obj in multi_obj
+        cost_expansion!(Q,obj,X,U)
+    end
+end

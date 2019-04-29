@@ -136,17 +136,17 @@ end
 
 function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
         u::Vector{T}) where T
-    Q.x .= cost.Q*x + cost.q
-    Q.u .= cost.R*u + cost.r
-    Q.xx .= cost.Q
-    Q.uu .= cost.R
-    Q.ux .= cost.H
+    Q.x .+= cost.Q*x + cost.q
+    Q.u .+= cost.R*u + cost.r
+    Q.xx .+= cost.Q
+    Q.uu .+= cost.R
+    Q.ux .+= cost.H
     return nothing
 end
 
 function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::Vector{T}) where T
-    S.xx .= cost.Qf
-    S.x .= cost.Qf*xN + cost.qf
+    S.xx .+= cost.Qf
+    S.x .+= cost.Qf*xN + cost.qf
     return nothing
 end
 
@@ -256,18 +256,18 @@ function cost_expansion!(Q::Expansion{T}, cost::GenericCost, x::Vector{T},
 
     e = cost.expansion(x,u)
 
-    Q.x .= e[4]
-    Q.u .= e[5]
-    Q.xx .= e[1]
-    Q.uu .= e[2]
-    Q.ux .= e[3]
+    Q.x .+= e[4]
+    Q.u .+= e[5]
+    Q.xx .+= e[1]
+    Q.uu .+= e[2]
+    Q.ux .+= e[3]
     return nothing
 end
 
 function cost_expansion!(S::Expansion{T}, cost::GenericCost, xN::Vector{T}) where T
     Qf, qf = cost.expansion(xN)
-    S.xx .= Qf
-    S.x .= qf
+    S.xx .+= Qf
+    S.x .+= qf
     return nothing
 end
 

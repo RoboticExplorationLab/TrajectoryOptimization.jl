@@ -211,28 +211,6 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjec
     return nothing
 end
 
-# function cost_expansion!(S::Expansion{T},obj::AugmentedLagrangianObjective{T},x::AbstractVector{T}) where T
-#     N = length(obj.μ)
-#     cost_expansion!(S,obj[N],x)
-#
-#     c = obj.C[N]
-#     λ = obj.λ[N]
-#     μ = obj.μ[N]
-#     a = active_set(c,λ)
-#     Iμ = Diagonal(a .* μ)
-#     cx = obj.∇C[N]
-#
-#     jacobian!(cx,obj.constraints[N],x)
-#
-#     # Second Order pieces
-#     S.xx .+= cx'Iμ*cx
-#
-#     # First order pieces
-#     S.x .+= cx'*(Iμ*c + λ)
-#
-#     return nothing
-# end
-
 "Update constraints trajectories"
 function update_constraints!(C::PartedVecTrajectory{T},constraints::ProblemConstraints,
         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
