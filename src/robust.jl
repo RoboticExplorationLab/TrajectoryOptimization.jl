@@ -2,16 +2,16 @@ using ForwardDiff, Plots, LinearAlgebra, BenchmarkTools, MatrixCalculus,
     PartedArrays, TrajectoryOptimization
 
 ## DIRTREL tests
-function pendulum_dynamics_uncertain!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},w::AbstractVector{T}) where T
-    m = 1.
-    l = 0.5
-    b = 0.1
-    lc = 0.5
-    I = 0.25
-    g = 9.81
-    ẋ[1] = x[2]
-    ẋ[2] = (u[1] - (m + w[1])*g*lc*sin(x[1]) - b*x[2])/I
-end
+# function pendulum_dynamics_uncertain!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},w::AbstractVector{T}) where T
+#     m = 1.
+#     l = 0.5
+#     b = 0.1
+#     lc = 0.5
+#     I = 0.25
+#     g = 9.81
+#     ẋ[1] = x[2]
+#     ẋ[2] = (u[1] - (m + w[1])*g*lc*sin(x[1]) - b*x[2])/I
+# end
 
 # function rk4_uncertain!(f!::Function, dt::T) where T
 #     # Runge-Kutta 4

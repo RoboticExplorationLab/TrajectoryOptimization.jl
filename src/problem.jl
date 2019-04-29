@@ -230,8 +230,6 @@ end
 num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for k = 1:p.N-1]
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
 
-jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
-
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
 
 pos(x) = max(0,x)

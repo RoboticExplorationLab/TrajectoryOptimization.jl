@@ -236,7 +236,7 @@ function rcb_port(Z)
     return c, vec(dc), dK, vec(K)
 end
 
-N = 5
+N = 50
 nx,nu,nw = 2,1,1; nX = nx; nU = nu; nW = nw;
 
 dt = 0.1
@@ -256,7 +256,7 @@ D = [0.2^2]
 E1 = zeros(nx,nx)
 
 # discrete dynamics
-pendulum_discrete! = forward_euler!(pendulum_dynamics_stochastic!,dt)
+pendulum_discrete! = rk4_stochastic!(pendulum_dynamics_stochastic!,dt)
 
 _∇f(z,nx) = ForwardDiff.jacobian(f_augmented!(pendulum_discrete!,nx,nu,nw),zeros(eltype(z),nx),z)
 function gen_∇f(_∇f,nx)
@@ -284,6 +284,7 @@ norm(c_fd-c1)
 norm(dc_fd - vec(dc1))
 
 @benchmark ForwardDiff.gradient(rcf,$Z_aug)
+@benchmark rcb_port($Z_aug)
 
 ###
 

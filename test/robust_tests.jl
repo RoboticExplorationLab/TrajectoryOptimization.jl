@@ -24,7 +24,23 @@ prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(co
 TrajectoryOptimization.initial_controls!(prob, U0)
 
 solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
+solver_ilqr.∇F[1]
+jacobian!(solver_ilqr.∇F,prob.model,prob.X,prob.U,dt)
+
 TrajectoryOptimization.solve!(prob, solver_ilqr)
+@test norm(prob.X[N] - xf) < 1e-4
+
+m_cost = add_costs(costfun,costfun)
+@test m_cost isa MultiCost
+@test m_cost isa CostFunction
+@test length(m_cost.cost) == 2
+add_cost!(m_cost,costfun)
+@test length(m_cost.cost) == 3
+prob_new = update_problem(prob,obj=Objective(m_cost,N))
+
+TrajectoryOptimization.initial_controls!(prob_new, U0)
+solver_ilqr = TrajectoryOptimization.iLQRSolver(prob_new, opts_ilqr)
+TrajectoryOptimization.solve!(prob_new, solver_ilqr)
 @test norm(prob.X[N] - xf) < 1e-4
 
 ## Constrained
@@ -41,6 +57,8 @@ for is in [:rk3,:rk4]
     @test norm(prob.X[N] - xf) < 1e-4
     @test TrajectoryOptimization.max_violation(prob) < opts_al.constraint_tolerance
 end
+
+
 #
 # for is in int_schemes
 #     prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),

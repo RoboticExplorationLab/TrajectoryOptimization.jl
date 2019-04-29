@@ -5,6 +5,7 @@ import Base.copy
 #*********************************#
 
 abstract type CostFunction end
+
 CostTrajectory = Vector{C} where C <: CostFunction
 
 "Calculate unconstrained cost for X and U trajectories"
@@ -273,3 +274,61 @@ end
 
 get_sizes(cost::GenericCost) = cost.n, cost.m
 copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
+
+# Multi-cost
+struct MultiCost <: CostFunction
+    cost::Vector{T} where T <: CostFunction
+end
+
+function stage_cost(multi_cost::MultiCost, x::Vector{T}, u::Vector{T}) where T
+    J = 0.
+    for c in multi_cost.cost
+        J += stage_cost(c,x,u)
+    end
+    J
+end
+
+function stage_cost(multi_cost::MultiCost, xN::Vector{T}) where T
+    J = 0.
+    for cN in multi_cost.cost
+        J += stage_cost(cN,xN)
+    end
+    J
+end
+
+function cost_expansion!(Q::Expansion{T}, multi_cost::MultiCost, x::Vector{T},
+        u::Vector{T}) where T
+        for c in multi_cost.cost
+            cost_expansion!(Q,c,x,u)
+        end
+    return nothing
+end
+
+function cost_expansion!(QN::Expansion{T}, multi_cost::MultiCost, xN::Vector{T}) where T
+    for cN in multi_cost.cost
+        cost_expansion!(QN,cN,xN)
+    end
+    return nothing
+end
+
+function get_sizes(multi_cost::MultiCost)
+    error("get_sizes not implemented for multi-cost")
+end
+
+function copy(multi_cost::MultiCost)
+    return [copy(c) for c in multi_cost.cost]
+end
+
+function add_costs(c1::CostFunction,c2::CostFunction)
+    MultiCost([c1,c2])
+end
+
+function add_cost(multi_cost::MultiCost,cost::CostFunction)
+    multi_cost_copy = copy(multi_cost)
+    push!(multi_cost_copy.cost,cost)
+    multi_cost_copy
+end
+
+function add_cost!(multi_cost::MultiCost,cost::CostFunction)
+    push!(multi_cost.cost,cost)
+end

@@ -69,6 +69,7 @@ end
 
 get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
 
+jacobian!(prob::Problem{T},solver::AbstractSolver{T}) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
 "$(TYPEDEF) Augmented Lagrangian solver"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}

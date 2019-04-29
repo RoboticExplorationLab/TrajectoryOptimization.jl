@@ -56,21 +56,34 @@ function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajector
     cost(obj.cost,X,U)
 end
 
-## Multi-Objective
-struct MultiObjective <: AbstractObjective
-    obj::Vector{T} where T <: Objective
-end
-
-function cost(multi_obj::MultiObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-    J = 0.
-    for obj in multi_obj
-        J += cost(obj.cost,X,U)
-    end
-    return J
-end
-
-function cost_expansion!(Q::ExpansionTrajectory{T},multi_obj::MultiObjective,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    for obj in multi_obj
-        cost_expansion!(Q,obj,X,U)
-    end
-end
+# ## Multi-Objective
+# struct MultiObjective <: AbstractObjective
+#     obj::Vector{T} where T <: AbstractObjective
+# end
+#
+# function cost(multi_obj::MultiObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+#     J = 0.
+#     for obj in multi_obj.obj
+#         J += cost(obj.cost,X,U)
+#     end
+#     return J
+# end
+#
+# function cost_expansion!(Q::ExpansionTrajectory{T},multi_obj::MultiObjective,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+#     for obj in multi_obj.obj
+#         cost_expansion!(Q,obj,X,U)
+#     end
+# end
+#
+# function add_objectives(obj1::AbstractObjective,obj2::AbstractObjective)
+#     MultiObjective([obj1,obj2])
+# end
+#
+# function add_objective(m_obj::MultiObjective,obj::AbstractObjective)
+#     push!(m_obj.obj,obj)
+#     return m_obj
+# end
+#
+# function add_objective!(m_obj::MultiObjective,obj::AbstractObjective)
+#     push!(m_obj.obj,obj)
+# end
