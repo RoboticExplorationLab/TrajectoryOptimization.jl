@@ -78,7 +78,101 @@ obj = Objective(costfun,N)
 robust_costfun = RobustCost(prob.model.f,D,E1,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
 robust_obj = RobustObjective(obj,robust_costfun)
 
-prob = TrajectoryOptimization.Problem(model, robust_obj, integration=:rk4, x0=x0, N=N, dt=dt)
+prob = TrajectoryOptimization.Problem(model, obj, integration=:rk4, x0=x0, N=N, dt=dt)
+prob_robust = robust_problem(prob,D,E1,Q,R,Qf,Qr,Rr,Qfr)
+nδ = 2*(nx^2 + nu^2)
+n̄ = n+nδ
+@test prob_robust.model.n == nx+nδ
+@test prob_robust.model.m == nu
+@test prob_robust.model.r == size(D,1)
+@test size(prob_robust.obj.obj[1].Q) == (n̄,n̄)
+@test size(prob_robust.obj.obj[1].q,1) == (n̄)
+@test size(prob_robust.obj.obj[N].Qf) == (n̄,n̄) .- 2*nu^2
+@test size(prob_robust.obj.obj[N].qf,1) == n̄ - 2*nu^2
+@test size(prob_robust.X[1],1) == n̄
+@test size(prob_robust.X[N],1) == n̄ - 2*nu^2
+@test size(prob_robust.x0,1) == n̄
+
+Z = zeros(n,n+m+r+1)
+_Z = zeros(n,n̄+m+r+1)
+∇f = prob.model.∇f
+_∇f = update_jacobian(∇f,n,m,r)
+
+x = rand(n); u = rand(m); w = rand(r); dt = 1.0
+
+idx_x = 1:n
+idx_u = 1:m
+idx = [(idx_x)...,(n̄ .+ (idx_u))...,((n̄+m) .+ (1:r))...,(n̄+m+r+1)]
+∇f(Z,rand(n),x,u,w,dt)
+_∇f(_Z,rand(n),x,u,w,dt)
+_Z
+@test Z == view(_Z,idx_x,idx)
+_Z = zeros(n,n̄+m+r+1)
+_∇f(_Z,x,u,w,dt)
+@test Z == view(_Z,idx_x,idx)
+@test Z == view(_∇f(x,u,w,dt),idx_x,idx)
+
+x0 = ones(n)
+δx = [0.1*rand(n) for i = 1:n]
+xw = Vector[]
+
+u0 = ones(m)
+δu = [0.1*rand(m) for i = 1:m]
+uw = Vector[]
+
+push!(xw,x0)
+for i = 1:n
+    push!(xw,x0 + δx[i])
+    push!(xw,x0 - δx[i])
+end
+
+for j = 1:m
+    push!(uw,u0 + δu[j])
+    push!(uw,u0 - δu[j])
+end
+push!(uw,u0)
+
+
+xx = vcat(xw...,uw[1:2m]...)
+xxt = vcat(xw...)
+uu = uw[end]
+
+bnd = TrajectoryOptimization.bound_constraint(n, m, x_min=-1.0, x_max=1.0,u_min=-1.0, u_max=1.0,trim=true)
+goal = TrajectoryOptimization.goal_constraint(xf)
+bnd_robust = robust_constraint(bnd,n,m)
+goal_robust = robust_constraint(goal,n)
+cc = zeros(bnd_robust.p)
+CC = zeros(bnd_robust.p,n+2*(n^2+m^2)+m)
+cct = zeros(goal_robust.p)
+CCt = zeros(goal_robust.p,n+2*(n^2))
+bnd_robust.c(cc,xx,uu)
+bnd_robust.∇c(CC,xx,uu)
+cc
+CC
+
+prob.constraintgoal_robust.c(cct,xxt)
+goal_robust.∇c(CCt,xxt)
+cct
+CCt
+
+@test cc[1:n] == xw[1] - ones(n)
+@test CC[1:n,1:n] == Diagonal(ones(n))
+@test cc[n+1] == (uw[1] - ones(m))[1]
+@test CC[n+1,n + 2*n^2 + 1] == 1.0
+@test cc[(n+1) .+ (1:n)] == -ones(n) - xw[1]
+@test CC[(n+1) .+ (1:n),(1:n)] == Diagonal(-ones(n))
+@test cc[(2*n+1)+1] == (-ones(m) - uw[1])[1]
+@test CC[2n+2,n + 2*n^2 + 1] == -1.0
+
+@test cct[1:n] == xw[1] - xf
+@test cct[n .+ (1:n)] == xw[2] - xf
+@test CCt == Diagonal(ones(goal_robust.p))
+
+
+
+prob = TrajectoryOptimization.Problem(model, obj,constraints=ProblemConstraints([bnd,goal],N), integration=:rk4, x0=x0, N=N, dt=dt)
+prob_robust = robust_problem(prob,D,E1,Q,R,Qf,Qr,Rr,Qfr)
+
 TrajectoryOptimization.initial_controls!(prob, U_sol)
 rollout!(prob)
 cost(prob)
