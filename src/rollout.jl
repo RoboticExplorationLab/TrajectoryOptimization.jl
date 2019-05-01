@@ -3,7 +3,7 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    X̄[1] = prob.x0
+    X̄[1] = copy(prob.x0)
 
     for k = 2:prob.N
         # Calculate state trajectory difference
@@ -28,7 +28,7 @@ function rollout!(prob::Problem{T}) where T
     X = prob.X; U = prob.U
 
     if !all(isfinite.(prob.X[1]))
-        X[1] = prob.x0
+        X[1] = copy(prob.x0)
         for k = 1:N-1
             evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
         end

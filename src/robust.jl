@@ -181,13 +181,29 @@ function robust_cost(X::VectorTrajectory{T},U::VectorTrajectory{T},∇f::Functio
         Dx = sqrt(E[k])
         Du = sqrt(K[k]*E[k]*K[k]')
 
+        println(Dx)
+        println(Du)
+
+        x = X[k][1:nx]
+
         for i = 1:nx
-            X[k][nx .+ (((i-1)*nx + 1):(i*nx))] = Dx[:,i]
-        end
-        for j = 1:nu
-            X[k][(nx + nx^2) .+ (((j-1)*nu + 1):(j*nu))] = Du[:,j]
+            X[k][(nx + (i-1)*2*nx) .+ (1:nx)] = x + real.(Dx[:,i])
+            X[k][(nx + (i-1)*2*nx + nx) .+ (1:nx)] = x - real.(Dx[:,i])
         end
 
+        for j = 1:nu
+            X[k][(nx + 2*nx^2 + (j-1)*2*nu) .+ (1:nu)] = u + real.(Du[:,j])
+            X[k][(nx + 2*nx^2 + (j-1)*2*nu + nu) .+ (1:nu)] = u - real.(Du[:,j])
+        end
+
+    end
+    DxN = sqrt(E[N])
+
+    xN = X[N][1:nx]
+
+    for i = 1:nx
+        X[N][(nx + (i-1)*2*nx) .+ (1:nx)] = xN + real.(DxN[:,i])
+        X[N][(nx + (i-1)*2*nx + nx) .+ (1:nx)] = xN - real.(DxN[:,i])
     end
 
     ℓ = 0.
@@ -248,17 +264,19 @@ struct RobustCost <: CostFunction
 end
 
 function cost(c::RobustCost, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-    s = (c.N-1)*(c.nx+c.nu) + c.nx
-    Z = pack(X,U)
-    out = DiffResults.HessianResult(Z)
-    ForwardDiff.hessian!(out,c.ℓw,Z)
-    c.∇²ℓw .= DiffResults.hessian(out)
-    c.∇ℓw .= DiffResults.gradient(out)
     return c.ℓw(X,U)
 end
 
 function cost_expansion!(Q::ExpansionTrajectory{T},robust_cost::RobustCost,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = robust_cost.N
+
+    s = (N-1)*(robust_cost.nx+robust_cost.nu) + robust_cost.nx
+    Z = pack(X,U)
+    out = DiffResults.HessianResult(Z)
+    ForwardDiff.hessian!(out,robust_cost.ℓw,Z)
+    robust_cost.∇²ℓw .= DiffResults.hessian(out)
+    robust_cost.∇ℓw .= DiffResults.gradient(out)
+
     Qx,Qu = unpack(robust_cost.∇ℓw,robust_cost.nx,robust_cost.nu,N)
     Qxx,Qux,Quu = unpack_cost_hessian(robust_cost.∇²ℓw,robust_cost.nx,robust_cost.nu,N)
 
@@ -281,14 +299,14 @@ struct RobustObjective <: AbstractObjective
 end
 
 function cost(robust_obj::RobustObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-    J = cost(robust_obj.obj,X,U)
-    J += cost(robust_obj.robust_cost,X,U)
+    J = cost(robust_obj.robust_cost,X,U)
+    J += cost(robust_obj.obj,X,U)
     return J
 end
 
 function cost_expansion!(Q::ExpansionTrajectory{T},robust_obj::RobustObjective,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    cost_expansion!(Q,robust_obj.obj,X,U)
     cost_expansion!(Q,robust_obj.robust_cost,X,U)
+    cost_expansion!(Q,robust_obj.obj,X,U)
 end
 
 function robust_problem(prob::Problem{T},D::AbstractArray{T},
@@ -318,11 +336,15 @@ function robust_problem(prob::Problem{T},D::AbstractArray{T},
     _obj = Objective(_cost)
     robust_cost = RobustCost(prob.model.f,D,E1,Q,R,Qf,Qr,Rr,Qfr,n,m,nw,N)
 
-    #modify dynamics jacobian
+    #modify dynamics
+    function f(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},w::AbstractVector{T},dt::T) where T
+        prob.model.f(view(x₊,1:n),x[1:n],u[1:m],w,dt)
+    end
+
     ∇f = update_jacobian(model.∇f,n,m,r)
 
     # modify model state dimension
-    model_uncertain = AnalyticalModel{Uncertain,Discrete}(model.f,model.∇f,n+nδ,m,model.r,model.params,model.info)
+    model_uncertain = AnalyticalModel{Uncertain,Discrete}(f,model.∇f,n+nδ,m,model.r,model.params,model.info)
 
     con_prob = AbstractConstraintSet[]
     constrained = is_constrained(prob)
@@ -347,7 +369,8 @@ function robust_problem(prob::Problem{T},D::AbstractArray{T},
     push!(con_prob,con_uncertain)
 
     update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
-        constraints=ProblemConstraints(con_prob),X=[k != N ? [prob.X[k];zeros(nδ)] : [prob.X[k];zeros(2*n^2)] for k = 1:prob.N],x0=[prob.x0;zeros(nδ)])
+        constraints=ProblemConstraints(con_prob),X=[k != N ? [prob.X[k];ones(nδ)*NaN32] : [prob.X[k];ones(2*n^2)*NaN32] for k = 1:prob.N],
+        x0=[copy(prob.x0);ones(nδ)*NaN32])
 
 end
 
@@ -551,7 +574,7 @@ end
 # set_controls!(Ur,U)
 #
 function rollout_uncertain!(Xr::PartedVecTrajectory{T},Ur::PartedVecTrajectory{T},x0::AbstractArray=zeros(T,length(Xr[1].x)),dt::T=1.0) where T
-    Xr[1].x .= x0
+    Xr[1].x .= copy(x0)
     for k = 1:N-1
         pendulum_discrete!(Xr[k+1].x,Xr[k].x,Ur[k].u,zeros(nw),dt)
     end

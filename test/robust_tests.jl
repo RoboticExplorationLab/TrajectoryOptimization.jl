@@ -23,6 +23,7 @@ U0 = [ones(m) for k = 1:N-1]
 prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:rk4, x0=x0, N=N, dt=dt)
 TrajectoryOptimization.initial_controls!(prob, U0)
 
+plot(prob.X)
 solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
 TrajectoryOptimization.solve!(prob, solver_ilqr)
 
@@ -78,6 +79,7 @@ obj = Objective(costfun,N)
 robust_costfun = RobustCost(prob.model.f,D,E1,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
 robust_obj = RobustObjective(obj,robust_costfun)
 
+x0 = zeros(n)
 prob = TrajectoryOptimization.Problem(model, obj, integration=:rk4, x0=x0, N=N, dt=dt)
 prob_robust = robust_problem(prob,D,E1,Q,R,Qf,Qr,Rr,Qfr)
 nδ = 2*(nx^2 + nu^2)
@@ -150,7 +152,7 @@ bnd_robust.∇c(CC,xx,uu)
 cc
 CC
 
-prob.constraintgoal_robust.c(cct,xxt)
+goal_robust.c(cct,xxt)
 goal_robust.∇c(CCt,xxt)
 cct
 CCt
@@ -168,31 +170,29 @@ CCt
 @test cct[n .+ (1:n)] == xw[2] - xf
 @test CCt == Diagonal(ones(goal_robust.p))
 
-
-
+x0 = zeros(n)
 prob = TrajectoryOptimization.Problem(model, obj,constraints=ProblemConstraints([bnd,goal],N), integration=:rk4, x0=x0, N=N, dt=dt)
 prob_robust = robust_problem(prob,D,E1,Q,R,Qf,Qr,Rr,Qfr)
+prob_robust.X[N]
+TrajectoryOptimization.initial_controls!(prob_robust, U0)
+rollout!(prob_robust)
+plot(prob_robust.X[1:end-1])
+# plot(prob_robust.X[1:end-1])
+cost(prob_robust)
+prob_robust.x0
+prob_robust.obj.robust_cost.ℓw(prob_robust.X,prob_robust.U)
+cost(prob_robust.obj.obj,prob_robust.X,prob_robust.U)
 
-TrajectoryOptimization.initial_controls!(prob, U_sol)
-rollout!(prob)
-cost(prob)
-prob.obj.robust_cost.ℓw(prob.X,prob.U)
-cost(prob.obj.obj,prob.X,prob.U)
+prob_robust.X[1]
 
-prob.obj.robust_cost
-
-prob.obj.robust_cost.∇²ℓw
-Qxx, Qux, Quu = unpack_cost_hessian(prob.obj.robust_cost.∇²ℓw,nx,nu,N)
-
-solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
-
-cost_expansion!(prob,solver_ilqr)
-cost_expansion!(solver_ilqr.Q,prob.obj.robust_cost,prob.X,prob.U)
-solver_ilqr.Q
-
-
-
-
+# prob.obj.robust_cost.∇²ℓw
+# Qxx, Qux, Quu = unpack_cost_hessian(prob.obj.robust_cost.∇²ℓw,nx,nu,N)
+#
+# solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
+#
+# cost_expansion!(prob,solver_ilqr)
+# cost_expansion!(solver_ilqr.Q,prob.obj.robust_cost,prob.X,prob.U)
+# solver_ilqr.Q
 
 # Qxx, Qux, Quu = _unpack_robust_cost_hessian(c.∇²ℓw,nx,nu,N)
 # Qx, Qu = unpack(c.∇ℓw,nx,nu,N)
