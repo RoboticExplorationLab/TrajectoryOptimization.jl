@@ -114,8 +114,8 @@ VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
 MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
 AbstractVectorTrajectory{T} = Vector{V} where {V <: AbstractVector{T}, T <: Real}
 DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
-PartedVecTrajectory{T} = Vector{BlockVector{T,Vector{T}}}
-PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
+PartedVecTrajectory{T} = Vector{PartedVector{T,Vector{T}}}
+PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("solver_options.jl")
 include("constraints.jl")
