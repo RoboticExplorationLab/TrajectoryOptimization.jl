@@ -1,8 +1,9 @@
 module Dynamics
 
-using TrajectoryOptimization: Model, Trajectory
+using TrajectoryOptimization: Model, Trajectory, Constraint, Equality, Inequality, Problem
 using RigidBodyDynamics
 using LinearAlgebra
+using DocStringExtensions
 
 export
     pendulum_model,

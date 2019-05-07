@@ -100,8 +100,8 @@ xf = copy(x0)
 xf[1:3] = [0.;40.;0.] # xyz position
 xf[4:7] = q0
 
-quadrotor_cost = LQRCost(Q, R, Qf, xf)
-quadrotor_model = rk4(model)
+quadrotor_cost = TrajectoryOptimization.LQRCost(Q, R, Qf, xf)
+quadrotor_model = TrajectoryOptimization.rk4(model)
 
 
 ## Constrained
@@ -127,22 +127,4 @@ end
 con_obs = Constraint{Inequality}(cI_3obs_quad, n, m, n_spheres, :obstacles)
 N = 51
 U_hover = ones(m,N-1)*f_hover
-quadrotor_obstacles = Problem(quadrotor_model, quadrotor_cost, U_hover, constraints=[con_obs], x0=x0, N=N, tf=tf)
-
-
-# Old Stuff
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-
-# Model + objective
-quadrotor = [model, obj_uncon]
-
-# unit quaternion constraint
-function unit_quaternion(c,x,u)
-    c[1] = sqrt(x[4]^2 + x[5]^2 + x[6]^2 + x[7]^2) - 1.0
-end
-
-obj_uq = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cE=unit_quaternion)
-obj_3obs = TrajectoryOptimization.ConstrainedObjective(obj_uncon,u_min=u_min,u_max=u_max,cI=cI_3obs_quad)#,cE=unit_quaternion)
-
-quadrotor_unit_quaternion = [model, obj_uq]
-quadrotor_3obs = [model, obj_3obs, spheres]
+quadrotor_obstacles = Problem(quadrotor_model, quadrotor_cost, U_hover, constraints=TrajectoryOptimization.ProblemConstraints([con_obs],N), x0=x0, N=N, tf=tf)
