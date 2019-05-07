@@ -16,7 +16,7 @@ function default_logger(verbose::Bool)
     add_level!(logger, OuterLoop, outer_cols, outer_widths, print_color=:yellow,indent=0)
     return logger
 end
-default_logger(solver::Union{Solver,AbstractSolver}) = default_logger(solver.opts.verbose)
+default_logger(solver::Union{AbstractSolver}) = default_logger(solver.opts.verbose)
 
 function default_logger(solver::AugmentedLagrangianSolver{T}) where T
     solver.opts.verbose == false ? min_level = Logging.Warn : min_level = InnerLoop

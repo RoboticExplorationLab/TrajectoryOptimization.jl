@@ -1,7 +1,6 @@
-julia 0.7
+julia 1.0
 ForwardDiff
 RigidBodyDynamics
-JuMP
 BenchmarkTools
 DocStringExtensions
 RecipesBase
@@ -10,7 +9,6 @@ Ipopt
 StaticArrays
 Formatting
 Plots
-HDF5
 Combinatorics
 IterTools
 PartedArrays

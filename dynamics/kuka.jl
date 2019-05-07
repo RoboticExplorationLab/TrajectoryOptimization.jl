@@ -37,7 +37,7 @@ function get_kuka_ee_postition_fun(kuka::Mechanism,statecache=StateCache(kuka)) 
     ee_body, ee_point = Dynamics.get_kuka_ee(kuka)
     world = root_frame(kuka)
     nn = num_positions(kuka)
-    
+
     function ee_position(x::AbstractVector{T}) where T
         state = statecache[T]
         set_configuration!(state, x[1:nn])
@@ -117,24 +117,4 @@ end
 # Write new urdf file with correct absolute paths
 write_kuka_urdf()
 
-model = Model(urdf_kuka)
-n,m = model.n, model.m
-
-# initial and goal states
-x0 = zeros(n)
-xf = zeros(n)
-xf[1] = pi/2
-xf[2] = pi/2
-
-# costs
-Q = 1e-4*Diagonal(I,n)
-Qf = 250.0*Diagonal(I,n)
-R = 1e-4*Diagonal(I,m)
-
-# simulation
-tf = 5.0
-dt = 0.01
-
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-
-kuka = [model, obj_uncon]
+kuka_model = Model(urdf_kuka)

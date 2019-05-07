@@ -7,59 +7,39 @@ using SparseArrays
 using ForwardDiff
 using Logging
 
-disable_logging(Logging.Info)
-
-# New stuff
-@testset "Constraints" begin
-    include("constraint_tests.jl")
-end
 @testset "Logging" begin
     include("logger_tests.jl")
 end
+disable_logging(Logging.Info)
 
-# Mixed
-@testset "Simple Pendulum" begin
-    include("simple_pendulum.jl")
+@testset "Constraints" begin
+    include("constraint_tests.jl")
 end
-@testset "Dubins Car" begin
-    include("dubins_car_tests.jl")
+@testset "Model" begin
+    include("model_tests.jl")
 end
-@testset "Quadrotor" begin
-    include("quadrotor_tests.jl")
+@testset "Modified Model" begin
+    include("modified_model_tests.jl")
 end
-@testset "Constrained Objective" begin
-    include("objective_tests.jl")
+@testset "Square Root Backward Pass" begin
+    include("sqrt_bp_tests.jl")
 end
-@testset "Results" begin
-    include("results_tests.jl")
-end
-@testset "Jacobians" begin
-    include("jacobian_tests.jl")
-end
-@testset "Square Root Method" begin
-    include("sqrt_method_tests.jl")
-end
-@testset "Infeasible Start" begin
-    include("infeasible_start_tests.jl")
+@testset "Infeasible State Trajectory Initialization" begin
+    include("infeasible_tests.jl")
 end
 @testset "Minimum Time" begin
     include("minimum_time_tests.jl")
 end
-# @testset "Direct Collocation" begin
-#     include("dircol_test.jl")
-#     include("ipopt_test.jl")
-# end
+
+# Systems
+@testset "Pendulum" begin
+    include("pendulum_tests.jl")
+end
+@testset "Car" begin
+    include("car_tests.jl")
+end
+@testset "Quadrotor" begin
+    include("quadrotor_tests.jl")
+end
 
 disable_logging(Logging.Debug)
-
-"""
-# NEEDED TESTS:
-- constraint generator
-
-- Attempt undefined integration scheme
-- All dynamics
-- Custom terminal constraints in objective
-- Try/catch in solve_sqrt
-- UnconstrainedResults constructor
-- more advanced infeasible start
-"""

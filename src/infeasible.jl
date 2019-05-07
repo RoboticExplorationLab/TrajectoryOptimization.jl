@@ -1,121 +1,88 @@
-####################################
-### METHODS FOR INFEASIBLE START ###
-####################################
+"Create infeasible state trajectory initialization problem from problem"
+function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
+    N = prob.N
+    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
-"""
-$(SIGNATURES)
-    Calculate infeasible controls to produce an infeasible state trajectory
-"""
-function infeasible_controls(solver::Solver,X0::Array{Float64,2},u::Array{Float64,2})
-    ui = zeros(solver.model.n,solver.N-1) # initialize
-    m = solver.model.m
-    m̄,mm = get_num_controls(solver)
-    dt = solver.dt
-
-    x = zeros(solver.model.n,solver.N)
-    x[:,1] = solver.obj.x0
-    for k = 1:solver.N-1
-        solver.state.minimum_time ? dt = u[m̄,k]^2 : nothing
-
-        solver.fd(view(x,:,k+1),x[:,k],u[1:m,k], dt)
-
-        ui[:,k] = X0[:,k+1] - x[:,k+1]
-        x[:,k+1] += ui[:,k]
+    # modify problem with slack control
+    obj_inf = CostFunction[]
+    for k = 1:N-1
+        cost_inf = copy(prob.obj[k])
+        cost_inf.R = cat(cost_inf.R,R_inf*Diagonal(I,prob.model.n)/prob.dt,dims=(1,2))
+        cost_inf.r = [cost_inf.r; zeros(prob.model.n)]
+        cost_inf.H = [cost_inf.H; zeros(prob.model.n,prob.model.n)]
+        push!(obj_inf,cost_inf)
     end
-    ui
-end
+    push!(obj_inf,copy(prob.obj[N]))
 
-function infeasible_controls(solver::Solver,X0::Array{Float64,2})
-    u = zeros(solver.model.m,solver.N-1)
-    if solver.state.minimum_time
-        dt = get_initial_dt(solver)
-        u_dt = ones(1,solver.N-1)
-        u = [u; u_dt]
-    end
-    infeasible_controls(solver,X0,u)
-end
+    model_inf = add_slack_controls(prob.model)
+    u_slack = slack_controls(prob)
+    con_inf = infeasible_constraints(prob.model.n,prob.model.m)
 
-"""
-$(SIGNATURES)
-    Infeasible start solution is run through time varying LQR to track state and control trajectories
-"""
-function get_feasible_trajectory(results0::SolverIterResults,solver::Solver)::SolverIterResults
-    # Need to copy to avoid writing over original results
-    results = copy(results0)
-
-    get_feasible_trajectory!(results,solver)
-    return results
-end
-
-function get_feasible_trajectory!(results::SolverIterResults,solver::Solver)::Nothing
-    remove_infeasible_controls!(results,solver)
-
-    if solver.opts.feasible_projection
-        # backward pass - project infeasible trajectory into feasible space using time varying lqr
-        Δv = backwardpass!(results, solver)
-
-        # rollout
-        rollout!(results,solver,0.0)
+    con_prob = AbstractConstraintSet[]
+    constrained = is_constrained(prob)
+    for k = 1:N-1
+        _con = AbstractConstraint[]
+        constrained ? append!(_con,prob.constraints.C[k]) : nothing
+        push!(_con,con_inf)
+        push!(con_prob,_con)
     end
 
-    # update trajectories
-    copyto!(results.X, results.X_)
-    copyto!(results.U, results.U_)
+    constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,Constraint[])
 
-    # return constrained results if input was constrained
-    if !solver.state.unconstrained_original_problem
-        update_constraints!(results,solver,results.X,results.U)
-        update_jacobians!(results,solver)
-    else
-        solver.state.constrained = false
+    update_problem(prob,model=model_inf,obj=Objective(obj_inf),
+        constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+end
+
+"Return a feasible problem from an infeasible problem"
+function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
+        state::NamedTuple,opts::ALTROSolverOptions{T}) where T
+    prob_altro_feasible = prob
+
+    if state.minimum_time
+        prob_altro_feasible = minimum_time_problem(prob_altro_feasible,opts.R_minimum_time,
+            opts.dt_max,opts.dt_min)
+
+        # initialize sqrt(dt) from previous solve
+        for k = 1:prob.N-1
+            prob_altro_feasible.U[k][end] = prob_altro.U[k][end]
+            k != 1 ? prob_altro_feasible.X[k][end] = prob_altro.X[k][end] : prob_altro_feasible.X[k][end] = 0.0
+        end
+        prob_altro_feasible.X[end][end] = prob_altro.X[end][end]
     end
 
-    return nothing
+    if opts.dynamically_feasible_projection
+        projection!(prob_altro_feasible,opts.opts_al.opts_uncon)
+    end
+
+    return prob_altro_feasible
 end
 
-"""
-$(SIGNATURES)
-Linear interpolation trajectory between initial and final state(s)
-"""
-function line_trajectory(solver::Solver, method=:trapezoid)::Array{Float64,2}
-    N, = get_N(solver,method)
-    line_trajectory(solver.obj.x0,solver.obj.xf,N)
+"Calculate slack controls that produce infeasible state trajectory"
+function slack_controls(prob::Problem{T}) where T
+    N = prob.N
+    n = prob.model.n
+    m = prob.model.m
+
+    dt = prob.dt
+
+    u_slack = [zeros(n) for k = 1:N-1]#zeros(n,N-1)
+    x = [zeros(n) for k = 1:N]#zeros(n,N)
+    x[1] = prob.x0
+
+    for k = 1:N-1
+        evaluate!(x[k+1],prob.model,x[k],prob.U[k],dt)
+
+        u_slack[k] = prob.X[k+1] - x[k+1]
+        x[k+1] += u_slack[k]
+    end
+    return u_slack
 end
 
-function line_trajectory(x0::Array{Float64,1},xf::Array{Float64,1},N::Int64)::Array{Float64,2}
-    x_traj = zeros(size(x0,1),N)
+function line_trajectory(x0::Vector{T},xf::Vector{T},N::Int) where T
     t = range(0,stop=N,length=N)
-    slope = (xf-x0)./N
-    for i = 1:size(x0,1)
-        x_traj[i,:] = slope[i].*t
-    end
+    slope = (xf .- x0)./N
+    x_traj = [slope*t[k] for k = 1:N]
+    x_traj[1] = x0
+    x_traj[end] = xf
     x_traj
 end
-
-
-"""
-$(SIGNATURES)
-Generate a control trajectory that holds a mechanism in the configuration q
-"""
-function hold_trajectory(solver, mech::Mechanism, q)
-    state = MechanismState(mech)
-    nn = num_positions(state)
-    set_configuration!(state, q[1:nn])
-    vd = zero(state.q)
-    u0 = dynamics_bias(state)
-
-    n,m,N = get_sizes(solver)
-    if length(q) > m
-        throw(ArgumentError("system must be fully actuated to hold an arbitrary position ($(length(q)) should be > $m)"))
-    end
-    U0 = zeros(m,N)
-    for k = 1:N
-        U0[:,k] = u0
-    end
-    return U0
-end
-
-
-
-hold_trajectory(solver::Solver, q) = hold_trajectory(solver, solver.model.mech, q)
-hold_trajectory(solver::Solver) = hold_trajectory(solver, solver.model.mech, solver.obj.x0)

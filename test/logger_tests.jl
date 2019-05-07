@@ -1,5 +1,4 @@
 using Logging
-using Test
 import TrajectoryOptimization: LogData, cache_size, add_col!, create_header, create_row, cache_data!, clear!
 
 # Default log data
@@ -53,6 +52,7 @@ clear!(ld)
 # Logger Tests
 import TrajectoryOptimization: SolverLogger, add_level!, InnerLoop, OuterLoop,
     print_header, print_row, clear_cache!
+
 logger = SolverLogger(InnerLoop, default_width=15)
 add_level!(logger, InnerLoop, cols, width; print_color=:green, indent=4)
 @test logger.leveldata[InnerLoop].metadata.indent == 4

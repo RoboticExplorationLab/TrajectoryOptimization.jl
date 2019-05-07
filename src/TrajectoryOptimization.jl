@@ -31,18 +31,9 @@ export
 # Primary types
 export
     Model,
-    Solver,
-    SolverResults,
-    ConstrainedObjective,
-    UnconstrainedObjective,
-    LQRObjective,
     QuadraticCost,
     LQRCost,
     GenericCost,
-    ALCost,
-    ConstrainedVectorResults,
-    UnconstrainedVectorResults,
-    SolverOptions,
     Trajectory
 
 export
@@ -84,7 +75,6 @@ export
     backwardpass!,
     cost,
     max_violation,
-    update_objective,
     infeasible_control,
     line_trajectory,
     evaluate!,
@@ -97,8 +87,8 @@ export
     get_num_controls,
     init_results,
     to_array,
-    to_dvecs,
     get_N,
+    to_dvecs,
     quat2rot,
     sphere_constraint,
     circle_constraint,
@@ -106,8 +96,6 @@ export
     plot_vertical_lines!,
     convergence_rate,
     plot_obstacles,
-    generate_controller,
-    lqr,
     evals,
     reset,
     reset_evals,
@@ -120,7 +108,6 @@ export
     terminal,
     stage
 
-
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray
 VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
@@ -130,69 +117,24 @@ DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
 PartedVecTrajectory{T} = Vector{BlockVector{T,Vector{T}}}
 PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
 
-include("constraints_type.jl")
+include("solver_options.jl")
+include("constraints.jl")
 include("cost.jl")
-include("objective.jl")
 include("model.jl")
 include("integration.jl")
-include("solver.jl")
-include("results.jl")
-include("results_dircol.jl")
-include("backwardpass.jl")
-include("forwardpass.jl")
-include("constraints.jl")
-include("rollout.jl")
-#include("newton.jl")
-include("infeasible.jl")
-include("minimum_time.jl")
-include("ilqr_methods.jl")
-include("augmented_lagrangian.jl")
-include("solve.jl")
-include("controller.jl")
-
-include("problem_type.jl")
-include("solver_options_new.jl")
-include("solvers_new.jl")
-include("solvers/direct/direct_solvers.jl")
 include("utils.jl")
+include("objective.jl")
+include("problem.jl")
+include("solvers.jl")
 include("ilqr.jl")
 include("altro.jl")
-include("backwardpass_new.jl")
-include("forward_pass_new.jl")
-include("rollout_new.jl")
-include("augmented_lagrangian_new.jl")
-include("minimum_time_new.jl")
+include("backwardpass.jl")
+include("forward_pass.jl")
+include("rollout.jl")
+include("augmented_lagrangian.jl")
+include("minimum_time.jl")
+include("infeasible.jl")
 include("dynamics.jl")
 include("logger.jl")
-
-using Ipopt
-
-# DIRCOL methods
-export
-solve_dircol,
-gen_usrfun,
-DircolResults,
-DircolVars,
-collocation_constraints,
-collocation_constraints!,
-cost_gradient,
-cost_gradient!,
-constraint_jacobian,
-constraint_jacobian!,
-get_weights,
-get_initial_state
-
-export
-packZ,
-unpackZ
-
-include("dircol.jl")
-include("dircol_ipopt.jl")
-write_ipopt_options()
-
-# if "Snopt" in keys(Pkg.installed())
-#     using Snopt # not safe for precompilation
-#     include("dircol_snopt.jl")
-# end
 
 end

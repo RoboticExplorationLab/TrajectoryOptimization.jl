@@ -1,4 +1,4 @@
-function quadrotor_dynamics!(ẋ,X,u)
+function quadrotor_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -20,10 +20,10 @@ function quadrotor_dynamics!(ẋ,X,u)
       # omega2
       # omega3
 
-      x = X[1:3]
-      q = X[4:7]./norm(X[4:7]) #normalize quaternion
-      v = X[8:10]
-      omega = X[11:13]
+      # x = X[1:3]
+      q = x[4:7]./norm(x[4:7]) #normalize quaternion
+      v = x[8:10]
+      omega = x[11:13]
 
       # Parameters
       m = .5 # mass
@@ -37,12 +37,12 @@ function quadrotor_dynamics!(ẋ,X,u)
       w3 = u[3]
       w4 = u[4]
 
-      kf = 1; # 6.11*10^-8;
+      kf = 1.0; # 6.11*10^-8;
       F1 = kf*w1;
       F2 = kf*w2;
       F3 = kf*w3;
       F4 = kf*w4;
-      F = [0;0;F1+F2+F3+F4] #total rotor force in body frame
+      F = [0.;0.;F1+F2+F3+F4] #total rotor force in body frame
 
       km = 0.0245;
       M1 = km*w1;
@@ -56,13 +56,6 @@ function quadrotor_dynamics!(ẋ,X,u)
       ẋ[8:10] = [0;0;-g] + (1/m)*qrot(q,F) #acceleration in world frame
       ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
 end
-
-function quadrotor_dynamics(X,u)
-      ẋ = zeros(13,1)
-      quadrotor_dynamics!(ẋ,X,u)
-      ẋ
-end
-
 
 ## Utilities
 """

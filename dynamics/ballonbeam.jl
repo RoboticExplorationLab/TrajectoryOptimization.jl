@@ -1,6 +1,6 @@
 ## Ball on beam
-# TODO needs inplace dynamics and objective
-function ballonbeam_dynamics(x,u)
+#TODO make inplace
+function ballonbeam_dynamics(x::AbstractVector{T},u::AbstractVector{T}) where T
     g = 9.81
     m1 = .35
     m2 = 2
@@ -17,22 +17,4 @@ function ballonbeam_dynamics(x,u)
     sys = [zdot; thetadot; zddot; thetaddot];
 end
 n,m = 4,1
-model = Model(ballonbeam_dynamics,n,m)
-
-# initial and goal states
-x0 = [.1;0;0.;0.]
-xf = [.5;0.;0.;0.]
-
-# costs
-#TODO these costs are taken from the notebook
-Q = 5e-4*Diagonal(I,n)
-Qf = 500.0*Diagonal(I,n)
-R = 1e-5*Diagonal(I,m)
-
-# simulation
-tf = 1.0
-dt = 0.01
-
-obj_uncon = LQRObjective(Q, R, Qf, tf, x0, xf)
-
-ballonbeam = [model, obj_uncon]
+ballonbeam_model = Model(ballonbeam_dynamics,n,m)
