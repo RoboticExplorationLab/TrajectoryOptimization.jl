@@ -62,3 +62,5 @@ end
 function cost_gradient!(grad_f, prob::Problem, Z)
 
 end
+
+get_N(prob::Problem, solver::DIRCOLSolver) = get_N(prob.N, solver.opts.method)

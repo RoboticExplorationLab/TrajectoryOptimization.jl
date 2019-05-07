@@ -19,7 +19,6 @@ end
 #     get_N(solver.N,method)
 # end
 
-get_N(prob::Problem, solver::DIRCOLSolver) = get_N(prob.N, solver.opts.method)
 
 function get_N(N0::Int,method::Symbol)
     if method == :midpoint
