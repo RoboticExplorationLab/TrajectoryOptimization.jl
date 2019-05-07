@@ -73,13 +73,19 @@ function Primals(X::VectorTrajectory{T}, U::VectorTrajectory{T}) where T
     Primals(Z,part_z)
 end
 
-Primals(prob::Problem{T}) where T = Primals(prob.X, prob.U)
+function Primals(prob::Problem{T}, equal::Bool=false) where T
+    U = copy(prob.U)
+    if equal
+        U = push!(U, U[end])
+    end
+    Primals(prob.X, U)
+end
 
 function packZ(prob::Problem{T}) where T
     n,m,N = size(prob)
     part_z = create_partition(n,m,N,N)
     NN = N*(n+m)
-    Z = BlockArray(zeros(T,NN),part_z)
+    Z = PartedVector(zeros(T,NN),part_z)
     copyto!(Z.X, prob.X)
     copyto!(Z.U, prob.U)
     return Z

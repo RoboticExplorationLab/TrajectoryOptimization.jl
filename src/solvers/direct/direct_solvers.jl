@@ -14,7 +14,7 @@ include("primals.jl")
     opts::Dict{String,Any} = Dict{String,Any}()
 
     "Quadrature rule"
-    method::Symbol = :hermite_simpson
+
 end
 
 
@@ -30,15 +30,29 @@ struct DIRCOLSolver{T,Q} <: DirectSolver{T}
     X_::VectorTrajectory{T}
     C::PartedVecTrajectory{T}
     fVal::VectorTrajectory{T}
-    
+
 end
 
 DIRCOLSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}=DIRCOLSolverOptions{T}()) where {T,Q} = AbstractSolver(prob, opts)
 
 function AbstractSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}) where T
-    Z = Primals(prob)
-    C = BlockArray(zeros(4),NamedTuple())
-    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, C)
+    n,m,N = size(prob)
+    Z = Primals(prob, true)
+    X_ = [zeros(n) for k = 1:N-1] # midpoints
+
+    p = num_stage_constraints(prob.constraints)
+    p_N = num_terminal_constraints(prob.constraints)
+
+    c_stage = stage(prob.constraints)
+    c_term = terminal(prob.constraints)
+    c_part = create_partition(c_stage)
+    c_part2 = create_partition2(c_stage,n,m)
+
+    # Create Trajectories
+    C = [PartedVector(zeros(T,p),c_part) for k = 1:N-1]
+    C = [C...,PartedVector(T,c_term)]
+    fVal = [zeros(n) for k = 1:N]
+    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, C, fVal)
     reset!(solver)
     return solver
 end
