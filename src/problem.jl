@@ -78,6 +78,17 @@ function Problem(model::Model{Discrete}, obj::AbstractObjective;
     Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
 end
 
+"$(SIGNATURES) Pass in a cost instead of an objective"
+function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T}; kwargs...) where T
+    N = length(U0) + 1
+    obj = Objective(cost, N)
+    Problem(model, obj, U0; kwargs...)
+end
+
+Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
+    Problem(model, cost, to_dvecs(U0); kwargs...)
+
+
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
 initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
