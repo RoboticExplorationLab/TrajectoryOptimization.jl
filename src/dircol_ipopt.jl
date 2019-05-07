@@ -14,19 +14,6 @@ function init_jacobians(solver,method)
 end
 
 
-function init_jacobians(prob,solver)
-    method = solver.opts.method
-    N,N_ = get_N(prob, solver)
-    n,m = size(prob)
-    if method == :trapezoid || method == :hermite_simpson_separated
-        A = zeros(n,n+m,N_)
-        B = zeros(0,0,N_)
-    else
-        A = zeros(n,n,N_)
-        B = zeros(n,m,N_)
-    end
-    return A,B
-end
 
 function get_nG(prob::Problem, solver::DIRCOLSolver)
     n,m = size(prob)

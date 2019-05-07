@@ -234,10 +234,10 @@ PartedArrays.create_partition(model::Model{Discrete}) = create_partition((model.
 PartedArrays.create_partition2(model::Model{Discrete}) = create_partition2((model.n,),(model.n,model.m,1),(:x,),(:x,:u,:dt))
 PartedArrays.create_partition(model::Model{Continuous}) = create_partition((model.n,model.m),(:x,:u))
 PartedArrays.create_partition2(model::Model{Continuous}) = create_partition2((model.n,),(model.n,model.m),(:x,),(:x,:u))
-PartedArrays.BlockVector(model::Model) = BlockArray(zeros(length(model)),create_partition(model))
-PartedArrays.BlockVector(T::Type,model::Model) = BlockArray(zeros(T,length(model)),create_partition(model))
-PartedArrays.BlockMatrix(model::Model) = BlockArray(zeros(model.n,length(model)),create_partition2(model))
-PartedArrays.BlockMatrix(T::Type,model::Model) = BlockArray(zeros(T,model.n,length(model)),create_partition2(model))
+PartedArrays.PartedVector(model::Model) = PartedArray(zeros(length(model)),create_partition(model))
+PartedArrays.PartedVector(T::Type,model::Model) = PartedArray(zeros(T,length(model)),create_partition(model))
+PartedArrays.PartedMatrix(model::Model) = PartedArray(zeros(model.n,length(model)),create_partition2(model))
+PartedArrays.PartedMatrix(T::Type,model::Model) = PartedArray(zeros(T,model.n,length(model)),create_partition2(model))
 
 
 function dynamics(model::Model,xdot,x,u)
@@ -322,7 +322,7 @@ generate_jacobian(f!::Function,n::Int,m::Int,p::Int=n) = generate_jacobian(Conti
 
 function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=n)
     inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
-    Z = BlockArray(zeros(p,n+m),inds)
+    Z = PartedArray(zeros(p,n+m),inds)
     z = zeros(n+m)
     v0 = zeros(p)
     f_aug(dZ::AbstractVector,z::AbstractVector) = f!(dZ,view(z,inds.x), view(z,inds.u))
@@ -497,7 +497,7 @@ function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m:
         throw("Jacobians must have the method ∇f(Z,x,u)")
     else
         inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
-        Z = BlockArray(zeros(p,n+m),inds)
+        Z = PartedArray(zeros(p,n+m),inds)
         z = zeros(n+m)
 
         # Copy the correct method form
@@ -533,7 +533,7 @@ function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::I
         throw("Jacobians must have the method ∇f(Z,x,u,dt)")
     else
         inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
-        S = BlockArray(zeros(p,n+m+1),inds)
+        S = PartedArray(zeros(p,n+m+1),inds)
         s = zeros(n+m+1)
 
         # Copy the correct method form

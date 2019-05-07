@@ -265,7 +265,7 @@ function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::Abstract
 end
 
 function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-    a = BlockArray(trues(length(c)),c.parts)
+    a = PartedArray(trues(length(c)),c.parts)
     a.equality .= true
     a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
     return a

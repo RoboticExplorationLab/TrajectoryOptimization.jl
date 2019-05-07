@@ -712,7 +712,7 @@ function collocation_constraints!(solver::Solver, X, U, fVal, g_colloc, method::
         solver.state.minimum_time ? dt = U[m̄:m̄,:] : dt = ones(1,N_)*solver.dt
 
         collocation = - X[:,iUpp] + X[:,iLow] + dt[:,iLow].*(fVal[:,iLow] + 4*fVal[:,iMid] + fVal[:,iUpp])/6
-
+        
         if method == :hermite_simpson
             g .= collocation
         else
