@@ -106,7 +106,7 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     d  = [zeros(T,m)   for i = 1:N-1]
 
     part_f = create_partition2(prob.model)
-    ∇F = [BlockArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
+    ∇F = [PartedArray(zeros(n,n+m+1),part_f) for i = 1:N-1]
 
     S  = [Expansion(prob,:x) for i = 1:N]
     Q = [Expansion(prob) for i = 1:N-1]
@@ -191,16 +191,16 @@ function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,
     c_part2 = create_partition2(c_stage,n,m)
 
     # Create Trajectories
-    C          = [BlockArray(zeros(T,p),c_part)       for k = 1:N-1]
-    ∇C         = [BlockArray(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
-    λ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
-    μ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
-    active_set = [BlockArray(ones(Bool,p),c_part)     for k = 1:N-1]
-    push!(C,BlockVector(T,c_term))
-    push!(∇C,BlockMatrix(T,c_term,n,0))
-    push!(λ,BlockVector(T,c_term))
-    push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
-    push!(active_set,BlockVector(Bool,c_term))
+    C          = [PartedVector(zeros(T,p),c_part)       for k = 1:N-1]
+    ∇C         = [PartedMatrix(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
+    λ          = [PartedVector(ones(T,p),c_part) for k = 1:N-1]
+    μ          = [PartedVector(ones(T,p),c_part) for k = 1:N-1]
+    active_set = [PartedVector(ones(Bool,p),c_part)     for k = 1:N-1]
+    push!(C,PartedVector(T,c_term))
+    push!(∇C,PartedMatrix(T,c_term,n,0))
+    push!(λ,PartedVector(T,c_term))
+    push!(μ,PartedVector(ones(T,num_constraints(c_term)), create_partition(c_term)))
+    push!(active_set,PartedVector(Bool,c_term))
 
     # Initialize dual and penality values
     for k = 1:N

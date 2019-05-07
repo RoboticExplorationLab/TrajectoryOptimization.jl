@@ -236,20 +236,20 @@ function Base.split(C::AbstractConstraintSet)
 end
 
 "$(SIGNATURES) Evaluate the constraint function for all the stage-wise constraint functions in a set"
-function evaluate!(c::BlockVector, C::StageConstraintSet, x, u)
+function evaluate!(c::PartedVector, C::StageConstraintSet, x, u)
     for con in C
         con.c(c[con.label],x[con.inds[1]],u[con.inds[2]])
     end
 end
-evaluate!(c::BlockVector, C::AbstractConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
+evaluate!(c::PartedVector, C::AbstractConstraintSet, x, u) = evaluate!(c,stage(C),x,u)
 
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
-function evaluate!(c::BlockVector, C::TerminalConstraintSet, x)
+function evaluate!(c::PartedVector, C::TerminalConstraintSet, x)
     for con in C
         con.c(c[con.label], x[con.inds[1]])
     end
 end
-evaluate!(c::BlockVector, C::AbstractConstraintSet, x) = evaluate!(c,terminal(C),x)
+evaluate!(c::PartedVector, C::AbstractConstraintSet, x) = evaluate!(c,terminal(C),x)
 
 function jacobian!(Z,C::StageConstraintSet,x::Vector{T},u::Vector{T}) where T
     for con in C
@@ -291,7 +291,7 @@ function PartedArrays.create_partition(C::AbstractConstraintSet)
     if !isempty(C)
         lens = length.(C)
         part = create_partition(Tuple(lens),Tuple(labels(C)))
-        ineq = BlockArray(trues(sum(lens)),part)
+        ineq = PartedArray(trues(sum(lens)),part)
         for c in C
             if type(c) == Equality
                 copyto!(ineq[c.label], falses(length(c)))
@@ -317,10 +317,10 @@ function PartedArrays.create_partition2(C::AbstractConstraintSet,n::Int,m::Int)
     end
 end
 
-PartedArrays.BlockVector(C::AbstractConstraintSet) = BlockArray(zeros(num_constraints(C)), create_partition(C))
-PartedArrays.BlockVector(T::Type,C::AbstractConstraintSet) = BlockArray(zeros(T,num_constraints(C)), create_partition(C))
-PartedArrays.BlockMatrix(C::AbstractConstraintSet,n::Int,m::Int) = BlockArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
-PartedArrays.BlockMatrix(T::Type,C::AbstractConstraintSet,n::Int,m::Int) = BlockArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
+PartedArrays.PartedVector(C::AbstractConstraintSet) = PartedArray(zeros(num_constraints(C)), create_partition(C))
+PartedArrays.PartedVector(T::Type,C::AbstractConstraintSet) = PartedArray(zeros(T,num_constraints(C)), create_partition(C))
+PartedArrays.PartedMatrix(C::AbstractConstraintSet,n::Int,m::Int) = PartedArray(zeros(num_constraints(C),n+m), create_partition2(C,n,m))
+PartedArrays.PartedMatrix(T::Type,C::AbstractConstraintSet,n::Int,m::Int) = PartedArray(zeros(T,num_constraints(C),n+m), create_partition2(C,n,m))
 
 num_stage_constraints(C::AbstractConstraintSet) = num_constraints(stage(C))
 num_terminal_constraints(C::AbstractConstraintSet) = num_constraints(terminal(C))

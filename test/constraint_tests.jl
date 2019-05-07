@@ -125,7 +125,8 @@ bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max, trim
 v = zeros(p3)
 bnd.c(v,x,u)
 @test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
-C = BlockArray(zeros(p3,n+m),create_partition2((p3,),(n,m),(:x,),(:x,:u)))
+create_partition2((p3,),(n,m),Val((:xx,:xu)))
+C = PartedArray(zeros(p3,n+m), create_partition2((p3,),(n,m),Val((:xx,:xu))))
 bnd.∇c(C,x,u)
 @test C.xx == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
 @test C.xu == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
@@ -176,6 +177,19 @@ C2 = [con,con2,bnd,con_term,bnd_term]
 @test C2 isa AbstractConstraintSet
 @test C_term isa TerminalConstraintSet
 
+# C0 = [con2,bnd]
+# C2 isa ConstraintSet
+# CT = [C0,C,C_term]
+# C2
+# C
+# append!(C2,C)
+# @btime append!($C2,$C)
+# @btime [$C2...,$C...]
+# isa.(CT, AbstractConstraintSet)
+# typeof(CT)
+# CT isa Vector{Vector{T} where T}
+# CT isa Vector{T} where T <: Vector{<:AbstractConstraint{S} where S}
+
 @test terminal(C2) == C_term
 @test terminal(C_term) == C_term
 @test stage(C2) == C
@@ -190,10 +204,13 @@ C2 = [con,con2,bnd,con_term,bnd_term]
 @test Vector{Constraint}(stage(C2)) isa StageConstraintSet
 bounds(C2)
 
-v_stage = BlockVector(stage(C2))
-v_term = BlockVector(terminal(C2))
-v_stage2 = BlockVector(stage(C2))
-v_term2 = BlockVector(terminal(C2))
+create_partition(C)
+num_constraints(C)
+
+v_stage = PartedVector(stage(C2))
+v_term = PartedVector(terminal(C2))
+v_stage2 = PartedVector(stage(C2))
+v_term2 = PartedVector(terminal(C2))
 evaluate!(v_stage,C,x,u)
 evaluate!(v_term,C_term,x)
 evaluate!(v_stage2,C2,x,u)
@@ -201,7 +218,8 @@ evaluate!(v_term2,C2,x)
 @test v_stage == v_stage2
 @test v_term == v_term2
 
-c_jac = BlockMatrix(C,n,m)
+import PartedArrays: PartedMatrix
+c_jac = PartedMatrix(C,n,m)
 @test size(c_jac) == (p1+p2+p3,n+m)
 @test size(c_jac.custom) == (p1,n+m)
 @test size(c_jac.x) == (p1+p2+p3,n)
@@ -217,30 +235,33 @@ con_inf.c(v,x,u_inf[con_inf.inds[2]])
 @test v == [5,-5,10]
 
 C_inf = [con,con2,bnd,con_inf]
-v_stage = BlockVector(stage(C))
-v_inf = BlockVector(stage(C_inf))
+v_stage = PartedVector(stage(C))
+v_inf = PartedVector(stage(C_inf))
 TrajectoryOptimization.evaluate!(v_stage,C,x,u_inf)
 TrajectoryOptimization.evaluate!(v_inf,C_inf,x,u_inf)
 @test v_inf == [v_stage;5;-5;10]
 
-BlockVector(Int64,C_term)
+PartedVector(Int64,C_term)
 # Test constrained cost stuff
 N = 21
 p = num_constraints(C)
 c_part = create_partition(C)
+[PartedArray(zeros(p), c_part),PartedArray(zeros(p), c_part)]
+
+[PartedArray(zeros(p), c_part) for k = 1:2]
 c_part2 = create_partition2(C,n,m)
-λ = [BlockArray(zeros(p),c_part) for k = 1:N-1]
-μ = [BlockArray(ones(p),c_part) for k = 1:N-1]
-a = [BlockArray(ones(Bool,p),c_part) for k = 1:N-1]
-cval = [BlockArray(zeros(p),c_part) for k = 1:N-1]
-∇cval = [BlockArray(zeros(p,n+m),c_part2) for k = 1:N-1]
-Iμ = [BlockArray(zeros(p),c_part) for k = 1:N-1]
-push!(λ,BlockVector(C_term))
-push!(μ,BlockVector(C_term))
-push!(a,BlockVector(Bool,C_term))
-push!(cval,BlockVector(C_term))
-push!(∇cval,BlockMatrix(C_term,n,m))
-push!(Iμ,BlockVector(C_term))
+λ = [PartedArray(zeros(p),c_part) for k = 1:N-1]
+μ = [PartedArray(ones(p),c_part) for k = 1:N-1]
+a = [PartedArray(ones(Bool,p),c_part) for k = 1:N-1]
+cval = [PartedArray(zeros(p),c_part) for k = 1:N-1]
+∇cval = [PartedArray(zeros(p,n+m),c_part2) for k = 1:N-1]
+Iμ = [PartedArray(zeros(p),c_part) for k = 1:N-1]
+push!(λ,PartedVector(C_term))
+push!(μ,PartedVector(C_term))
+push!(a,PartedVector(Bool,C_term))
+push!(cval,PartedVector(C_term))
+push!(∇cval,PartedMatrix(C_term,n,m))
+push!(Iμ,PartedVector(C_term))
 X = to_dvecs(rand(n,N))
 U = to_dvecs(rand(m,N-1))
 update_constraints!(cval,C2,X,U)
@@ -266,7 +287,7 @@ dt = solver.dt
 
 # Test Constraint evaluations
 cs = zeros(obj.p)
-cs2 = BlockVector(C)
+cs2 = PartedVector(C)
 solver.c_fun(cs,x,u)
 evaluate!(cs2,C,x,u)
 @test sum(cs) ≈ sum(cs2)  # Test sum since they're ordered differently
@@ -276,7 +297,7 @@ evaluate!(cs2,C,x,u)
 
 # Test constraint jacobians
 cx,cu = zeros(obj.p,n), zeros(obj.p,m)
-cz = BlockMatrix(C,n,m)
+cz = PartedMatrix(C,n,m)
 solver.c_jacobian(cx,cu,x,u)
 jacobian!(cz,C,x,u)
 @test sum(cz) ≈ sum(cx) + sum(cu)
