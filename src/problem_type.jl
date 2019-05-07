@@ -200,7 +200,7 @@ end
 
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
-Base.copy(p::Problem) = Problem(p.model, p.cost, p.constraints, copy(p.x0),
+Base.copy(p::Problem) = Problem(p.model, p.cost, copy(p.constraints), copy(p.x0),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
