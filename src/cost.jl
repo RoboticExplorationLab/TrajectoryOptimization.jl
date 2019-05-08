@@ -150,6 +150,18 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
     return nothing
 end
 
+function gradient!(grad, cost::QuadraticCost,
+        x::AbstractVector, u::AbstractVector)
+    grad.x .= cost.Q*x + cost.q
+    grad.u .= cost.R*u + cost.r
+    return nothing
+end
+
+function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
+    grad .= cost.Qf*xN + cost.qf
+    return nothing
+end
+
 function get_sizes(cost::QuadraticCost)
     return size(cost.Q,1), size(cost.R,1)
 end
