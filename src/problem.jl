@@ -165,13 +165,15 @@ end
 
 Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
 
-Base.copy(p::Problem) = Problem(p.model, p.obj, p.constraints, copy(p.x0),
+Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
 # is_constrained(p::Problem) = !isempty(p.constraints)
 is_constrained(prob::Problem{T}) where T = !all(isempty.(prob.constraints.C))
+
+TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.constraints)
 
 function update_problem(p::Problem;
     model=p.model,obj=p.obj,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
@@ -184,11 +186,12 @@ function update_problem(p::Problem;
     end
 end
 
-# "$(SIGNATURES) Add a constraint to the problem"
-# function add_constraints!(p::Problem,c::Constraint)
-#     push!(p.constraints,c)
-# end
-#
+"$(SIGNATURES) Add a constraint to the problem"
+function add_constraints!(p::Problem, c::AbstractConstraint)
+    push!(p.constraints[1],c)
+    return nothing
+end
+
 # "$(SIGNATURES) Add a set of constraints to the problem"
 # function add_constraints!(p::Problem,C::AbstractConstraintSet)
 #     append!(p.constraints,C)
