@@ -260,8 +260,16 @@ function ProblemConstraints()
     ProblemConstraints(ConstraintSet[])
 end
 
-import Base.getindex
-getindex(c::ProblemConstraints,i::Int) = c.C[i]
+num_stage_constraints(pcon::ProblemConstraints) = map(num_stage_constraints, pcon.C)
+num_terminal_constraints(pcon::ProblemConstraints) = map(num_terminal_constraints, pcon.C)
+function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints) 
+    p = map(num_stage_constraints, pcon.C)
+    p[end] = num_terminal_constraints(pcon.C[end])
+    return p
+end
+
+Base.getindex(c::ProblemConstraints,i::Int) = c.C[i]
+Base.copy(c::ProblemConstraints) = ProblemConstraints(deepcopy(c.C))
 
 "$(SIGNATURES) Count the number of inequality and equality constraints in a constraint set.
 Returns the sizes of the constraint vector, not the number of constraint types."
