@@ -129,6 +129,13 @@ function to_dvecs(X::AbstractArray)
     [X[ax...,i] for i = 1:N]
 end
 
+function to_dvecs(X::AbstractVector, part::Vector{Int})
+	@assert sum(part) == length(X)
+	p = insert!(cumsum(part), 1, 0)
+	[view(X, p[k]+1:p[k+1]) for k = 1:length(part)]
+end
+
+
 function to_svecs(X::AbstractArray)
     N = size(X)[end]
     s = size(X)[1:end-1]
