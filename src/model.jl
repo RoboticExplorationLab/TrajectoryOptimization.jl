@@ -231,9 +231,9 @@ Base.length(model::Model{Discrete}) = model.n + model.m + 1
 Base.length(model::Model{Continuous}) = model.n + model.m
 
 PartedArrays.create_partition(model::Model{Discrete}) = create_partition((model.n,model.m,1),(:x,:u,:dt))
-PartedArrays.create_partition2(model::Model{Discrete}) = create_partition2((model.n,),(model.n,model.m,1),(:x,),(:x,:u,:dt))
+PartedArrays.create_partition2(model::Model{Discrete}) = create_partition2((model.n,),(model.n,model.m,1),Val((:xx,:xu,:xdt)))
 PartedArrays.create_partition(model::Model{Continuous}) = create_partition((model.n,model.m),(:x,:u))
-PartedArrays.create_partition2(model::Model{Continuous}) = create_partition2((model.n,),(model.n,model.m),(:x,),(:x,:u))
+PartedArrays.create_partition2(model::Model{Continuous}) = create_partition2((model.n,),(model.n,model.m),Val((:xx,:xu)))
 PartedArrays.PartedVector(model::Model) = PartedArray(zeros(length(model)),create_partition(model))
 PartedArrays.PartedVector(T::Type,model::Model) = PartedArray(zeros(T,length(model)),create_partition(model))
 PartedArrays.PartedMatrix(model::Model) = PartedArray(zeros(model.n,length(model)),create_partition2(model))
