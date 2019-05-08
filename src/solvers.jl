@@ -130,7 +130,7 @@ function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,
 
     C = [C..., PartedVector(T,c_term)]
     ∇C = [∇C..., PartedMatrix(T,c_term,n,0)]
-    λ = [λ, PartedVector(T,c_term)]
+    λ = [λ..., PartedVector(T,c_term)]
     μ = [μ..., PartedArray(ones(T,num_constraints(c_term)), create_partition(c_term))]
     active_set = [active_set..., PartedVector(Bool,c_term)]
 
@@ -163,7 +163,7 @@ function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::
 
     C          = [C..., PartedVector(T,c_term)]
     ∇C         = [∇C..., PartedMatrix(T,c_term,n,0)]
-    λ          = [λ, PartedVector(T,c_term)]
+    λ          = [λ..., PartedVector(T,c_term)]
     μ          = [μ..., PartedArray(ones(T,num_constraints(c_term)), create_partition(c_term))]
     active_set = [active_set..., PartedVector(Bool,c_term)]
 
