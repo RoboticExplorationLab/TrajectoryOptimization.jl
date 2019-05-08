@@ -7,6 +7,7 @@ using SparseArrays
 using ForwardDiff
 using Logging
 
+disable_logging(Logging.Debug)
 @testset "Logging" begin
     include("logger_tests.jl")
 end

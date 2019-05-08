@@ -29,7 +29,7 @@ dynamics(model,xdot,x,u)
 x,u = rand(n),rand(m)
 z = [x;u]
 ẋ = zeros(n)
-Z = BlockMatrix(model)
+Z = PartedMatrix(model)
 @test_nowarn model.∇f(Z,x,u)
 @test all(TrajectoryOptimization._test_jacobian(Continuous,model.∇f))
 
@@ -168,28 +168,28 @@ discretizer = rk3
 model_d = Model{Discrete}(model,discretizer)
 
 # Test partitioning
-Z = BlockMatrix(model)
+Z = PartedMatrix(model)
 @test size(Z) == (n,n+m)
 @test size(Z.xx) == (n,n)
 @test size(Z.xu) == (n,m)
-Z = BlockMatrix(Int,model)
-@test Z isa BlockMatrix{Int,Matrix{Int}}
+Z = PartedMatrix(Int,model)
+@test Z isa PartedMatrix{Int,Matrix{Int}}
 
-S = BlockMatrix(model_d)
+S = PartedMatrix(model_d)
 @test size(S) == (n,n+m+1)
 @test size(S.xx) == (n,n)
 @test size(S.xu) == (n,m)
 @test size(S.xdt) == (n,1)
-S = BlockMatrix(Int,model_d)
+S = PartedMatrix(Int,model_d)
 @test size(S) == (n,n+m+1)
 @test size(S.xx) == (n,n)
 @test size(S.xu) == (n,m)
 @test size(S.xdt) == (n,1)
-@test S isa BlockMatrix{Int,Matrix{Int}}
+@test S isa PartedMatrix{Int,Matrix{Int}}
 
-z = BlockVector(model)
+z = PartedVector(model)
 @test length(z) == n+m
-s = BlockVector(model_d)
+s = PartedVector(model_d)
 @test length(s) == n+m+1
 @test length(model) == n+m
 @test length(model_d) == n+m+1
