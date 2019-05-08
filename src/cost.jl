@@ -126,16 +126,16 @@ function LQRCostTerminal(Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
 end
 
-function stage_cost(cost::QuadraticCost, x::Vector{T}, u::Vector{T}) where T
+function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}) where T
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
 end
 
-function stage_cost(cost::QuadraticCost, xN::Vector{T}) where T
+function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
     0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
 end
 
-function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
-        u::Vector{T}) where T
+function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost,
+        x::AbstractVector{T}, u::AbstractVector{T}) where T
     Q.x .= cost.Q*x + cost.q
     Q.u .= cost.R*u + cost.r
     Q.xx .= cost.Q
@@ -144,7 +144,7 @@ function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost, x::Vector{T},
     return nothing
 end
 
-function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::Vector{T}) where T
+function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVector{T}) where T
     S.xx .= cost.Qf
     S.x .= cost.Qf*xN + cost.qf
     return nothing

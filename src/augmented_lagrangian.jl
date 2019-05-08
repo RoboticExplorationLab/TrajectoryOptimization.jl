@@ -234,8 +234,8 @@ end
 # end
 
 "Update constraints trajectories"
-function update_constraints!(C::PartedVecTrajectory{T},constraints::ProblemConstraints,
-        X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemConstraints,
+        X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
         evaluate!(C[k],constraints[k],X[k],U[k])
