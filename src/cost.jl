@@ -8,7 +8,7 @@ abstract type CostFunction end
 CostTrajectory = Vector{C} where C <: CostFunction
 
 "Calculate unconstrained cost for X and U trajectories"
-function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T
     N = length(X)
     J = 0.0
     for k = 1:N-1
