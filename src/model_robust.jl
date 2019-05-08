@@ -575,6 +575,8 @@ function discretize_model(model::Model{M,Continuous},discretizer::Symbol, dt::T=
     info_d = deepcopy(model.info)
     integration = string(discretizer)
     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
+    info_d[:fc] = model.f
+    info_d[:∇fc] = model.∇f
     AnalyticalModel{M,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
 end
 
@@ -583,6 +585,8 @@ function discretize_model(model::Model{Uncertain,Continuous},discretizer::Symbol
     info_d = deepcopy(model.info)
     integration = string(discretizer)
     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
+    info_d[:fc] = model.f
+    info_d[:∇fc] = model.∇f
     AnalyticalModel{Uncertain,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
 end
 

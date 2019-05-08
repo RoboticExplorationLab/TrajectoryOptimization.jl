@@ -25,9 +25,9 @@ struct Problem{T<:AbstractFloat}
             U = U[1:end-1]
         end
         @assert length(U) == N-1
-        if !(dt > 0)
-            throw(ArgumentError("dt must be strictly positive"))
-        end
+        # if !(dt > 0)
+        #     throw(ArgumentError("dt must be strictly positive"))
+        # end
 
         new{T}(model,obj,constraints,x0,X,U,N,dt,tf)
     end
@@ -38,7 +38,12 @@ Create a problem from a continuous model, specifying the discretizer as a symbol
 """
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...) where M <: ModelType
     if isdefined(TrajectoryOptimization,integration)
-        Problem(discretize_model(model,integration,kwargs[:dt]), obj; kwargs...)
+        if :dt in keys(kwargs)
+            Problem(discretize_model(model,integration,dt), obj; kwargs...)
+        elseif :N in keys(kwargs) && :tf in keys(kwargs)
+            dt = tf/(N-1)
+            Problem(discretize_model(model,integration,dt), obj; kwargs...)
+        end
     else
         throw(ArgumentError("$integration is not a defined integration scheme"))
     end
@@ -134,7 +139,7 @@ function _validate_time(N,tf,dt)
             end
             tf = dt*(N-1)
         else
-            throw(ArgumentError("dt must be positive for a non-minimum-time problem"))
+            @warn "dt < 0, system will run backward in time"
         end
     else
         throw(ArgumentError("Invalid input for tf"))
@@ -144,9 +149,9 @@ function _validate_time(N,tf,dt)
     if N < 0
         err = ArgumentError("$N is not a valid entry for N. Number of knot points must be a positive integer.")
         throw(err)
-    elseif dt < 0
-        err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
-        throw(err)
+    # elseif dt < 0
+    #     err = ArgumentError("$dt is not a valid entry for dt. Time step must be positive.")
+    #     throw(err)
     end
     return N,tf,dt
 end
