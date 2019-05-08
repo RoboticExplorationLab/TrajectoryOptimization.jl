@@ -40,18 +40,22 @@ function AbstractSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}) where T
     Z = Primals(prob, true)
     X_ = [zeros(n) for k = 1:N-1] # midpoints
 
-    p = num_stage_constraints(prob.constraints)
-    p_N = num_terminal_constraints(prob.constraints)
-
-    c_stage = stage(prob.constraints)
-    c_term = terminal(prob.constraints)
-    c_part = create_partition(c_stage)
-    c_part2 = create_partition2(c_stage,n,m)
+    constraints = prob.constraints
+    p = num_stage_constraints(constraints)
+    c_stage = [stage(constraints[k]) for k = 1:N-1]
+    c_part = [create_partition(c_stage[k]) for k = 1:N-1]
+    c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
 
     # Create Trajectories
-    C = [PartedVector(zeros(T,p),c_part) for k = 1:N-1]
-    C = [C...,PartedVector(T,c_term)]
+    C          = [PartedVector(zeros(T,p[k]),c_part[k])       for k = 1:N-1]
+    ∇C         = [PartedMatrix(zeros(T,p[k],n+m),c_part2[k])  for k = 1:N-1]
+
+    c_term = terminal(constraints[N])
+    p_N = num_constraints(c_term)
+    C          = [C..., PartedVector(T,c_term)]
+    ∇C         = [∇C..., PartedMatrix(T,c_term,n,0)]
     fVal = [zeros(n) for k = 1:N]
+
     solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, C, fVal)
     reset!(solver)
     return solver

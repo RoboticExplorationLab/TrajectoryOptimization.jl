@@ -27,7 +27,6 @@ end
 
 function Primals(Z::Vector{T},n::Int,m::Int) where T
     if length(Z) % (n+m) == 0
-        println("got here")
         N = length(Z) ÷ (n+m)
         uN = N
     elseif length(Z) % (n+m) == n

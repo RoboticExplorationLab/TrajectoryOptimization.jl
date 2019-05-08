@@ -1,8 +1,24 @@
-cost(prob::Problem, solver::DIRCOLSolver) = cost(prob.cost, solver.Z.X, solver.Z.U, prob.dt)
+cost(prob::Problem, solver::DIRCOLSolver) = cost(prob.obj, solver.Z.X, solver.Z.U)
 
-function constraints!(g, prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}) where T
-    g_colloc = view(g,1:n*(N-1))
+function update_constraints!(g, prob::Problem, solver::DIRCOLSolver) where T
+    n,m,N = size(prob)
+    n_colloc = n*(N-1)
+    g_colloc = view(g,1:n_colloc)
     collocation_constraints!(g_colloc, prob, solver)
+
+    X,U = solver.Z.X, solver.Z.U
+    g_custom = view(g, n_colloc + 1:length(g))
+    p = num_constraints(prob.constraints)
+    offset = 0
+    for k = 1:N
+        c = PartedVector(view(g_custom, offset .+ (1:p[k])), solver.C[k].parts)
+        if k == N
+            evaluate!(c, prob.constraints[k], X[k])
+        else
+            evaluate!(c, prob.constraints[k], X[k], U[k])
+        end
+        offset += p[k]
+    end
 end
 
 function collocation_constraints!(g, prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}) where T
@@ -38,7 +54,7 @@ function traj_points!(prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}) whe
     end
 end
 
-function dynamics!(prob::Problem, solver::DirectSolver)
+function TrajectoryOptimization.dynamics!(prob::Problem, solver::DirectSolver)
     for k = 1:prob.N
         evaluate!(solver.fVal[k], prob.model, solver.Z.X[k], solver.Z.U[k], prob.dt)
     end
@@ -59,8 +75,19 @@ function update_constraints!(g, prob::Problem, Z)
     evaluate!(g_term, prob.constraints, X[N])
 end
 
-function cost_gradient!(grad_f, prob::Problem, Z)
-
+function cost_gradient!(grad_f, prob::Problem, solver::DIRCOLSolver)
+    n,m,N = size(prob)
+    grad = reshape(grad_f, n+m, N)
+    part = (x=1:n, u=n+1:n+m)
+    X,U = Z.X, Z.U
+    for k = 1:N-1
+        grad_k = PartedVector(view(grad,:,k), part)
+        gradient!(grad_k, prob.obj[k], X[k], U[k])
+        grad_k ./= (N-1)
+    end
+    grad_k = PartedVector(view(grad,1:n,N), part)
+    gradient!(grad_k, prob.obj[N], X[N])
+    return nothing
 end
 
 get_N(prob::Problem, solver::DIRCOLSolver) = get_N(prob.N, solver.opts.method)
