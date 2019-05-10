@@ -18,9 +18,38 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
         A, B = ∇F[k].xx, ∇F[k].xu
         K[k] .= (R*dt + B'*P[k+1]*B)\(B'*P[k+1]*A)
         P[k] .= Q*dt + K[k]'*R*K[k]*dt + (A - B*K[k])'*P[k+1]*(A - B*K[k])
+        P[k] .= 0.5*(P[k] + P[k]')
     end
 
     return K, P
+end
+
+function gen_cubic_interp(X,dt)
+    N = length(X); n = length(X[1])
+
+    function interp(t)
+        j = t/dt + 1.
+        x = zeros(eltype(t),n)
+        for i = 1:n
+            x[i] = interpolate([X[k][i] for k = 1:N],BSpline(Cubic(Line(OnGrid()))))(j)
+        end
+        return x
+    end
+end
+
+function gen_zoh_interp(X,dt)
+    N = length(X); n = length(X[1])
+
+    function interp(t)
+        if (t/dt + 1.0)%floor(t/dt + 1.0) < 0.99999
+            j = convert(Int64,floor(t/dt)) + 1
+        else
+            j = convert(Int64,ceil(t/dt)) + 1
+        end
+
+        interpolate(X,BSpline(Constant()))(j)
+
+    end
 end
 
 "Robust model from model"

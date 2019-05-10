@@ -72,7 +72,7 @@ end
 
 
 X_interp = gen_cubic_interp(prob.X,prob.dt)
-U_interp = gen_cubic_interp([prob.U...,prob.U[end]],prob.dt)
+U_interp = gen_zoh_interp([prob.U...,prob.U[end]],prob.dt)
 
 # x interp
 # plot(range(0,stop=total_time(prob),length=N),to_array(prob.X)[1,:])
