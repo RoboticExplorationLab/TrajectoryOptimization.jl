@@ -1,5 +1,9 @@
 abstract type AbstractSolver{T} end
 
+jacobian!(prob::Problem{T,Continuous}, solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U)
+jacobian!(prob::Problem{T,Discrete},   solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U, prob.dt)
+
+
 "$(TYPEDEF) Iterative LQR results"
 struct iLQRSolver{T} <: AbstractSolver{T}
     opts::iLQRSolverOptions{T}
