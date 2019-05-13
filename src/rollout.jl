@@ -25,14 +25,26 @@ end
 
 function rollout!(prob::Problem{T}) where T
     N = prob.N
-    X = prob.X; U = prob.U
-
     if !all(isfinite.(prob.X[1]))
-        X[1] = prob.x0
-        for k = 1:N-1
-            evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
-        end
+        prob.X[1] = prob.x0
+        rollout!(prob.X, prob.model, prob.U, prob.dt)
     end
+end
+
+function rollout!(X::AbstractVectorTrajectory, model::Model{Discrete}, U::AbstractVectorTrajectory, dt) where T
+    N = length(X)
+    for k = 1:N-1
+        evaluate!(X[k+1], model, X[k], U[k], dt)
+    end
+end
+
+function rollout(model::Model{Discrete}, x0::Vector, U::AbstractVectorTrajectory, dt)
+    n = model.n
+    N = length(U)+1
+    X = [zero(x0) for k = 1:N]
+    X[1] = x0
+    rollout!(X, model, U, dt)
+    return X
 end
 
 function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
