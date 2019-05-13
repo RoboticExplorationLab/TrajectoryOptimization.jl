@@ -53,7 +53,3 @@ function cost_expansion!(S::Expansion{T},obj::Objective,x::AbstractVector{T}) wh
     cost_expansion!(S,obj.cost[end],x)
     return nothing
 end
-
-function cost(obj::AbstractObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-    cost(obj.cost,X,U)
-end
