@@ -262,7 +262,7 @@ end
 
 num_stage_constraints(pcon::ProblemConstraints) = map(num_stage_constraints, pcon.C)
 num_terminal_constraints(pcon::ProblemConstraints) = map(num_terminal_constraints, pcon.C)
-function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints) 
+function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)
     p = map(num_stage_constraints, pcon.C)
     p[end] = num_terminal_constraints(pcon.C[end])
     return p
@@ -316,21 +316,21 @@ function evaluate!(c::PartedVector, C::TerminalConstraintSet, x)
 end
 evaluate!(c::PartedVector, C::AbstractConstraintSet, x) = evaluate!(c,terminal(C),x)
 
-function jacobian!(Z,C::StageConstraintSet,x::Vector{T},u::Vector{T}) where T
+function jacobian!(Z,C::StageConstraintSet,x::AbstractVector{T},u::AbstractVector{T}) where T
     for con in C
         x_,u_ = x[con.inds[1]], u[con.inds[2]]
         con.∇c(Z[con.label], x_, u_)
     end
 end
 
-jacobian!(Z,C::AbstractConstraintSet,x::Vector{T},u::Vector{T}) where T = jacobian!(Z,stage(C),x,u)
+jacobian!(Z,C::AbstractConstraintSet,x::AbstractVector{T},u::AbstractVector{T}) where T = jacobian!(Z,stage(C),x,u)
 
-function jacobian!(Z,C::TerminalConstraintSet,x::Vector{T}) where T
+function jacobian!(Z,C::TerminalConstraintSet,x::AbstractVector{T}) where T
     for con in C
         con.∇c(Z[con.label], x[con.inds[1]])
     end
 end
-jacobian!(Z,C::AbstractConstraintSet,x::Vector{T}) where T = jacobian!(Z,terminal(C),x)
+jacobian!(Z,C::AbstractConstraintSet,x::AbstractVector{T}) where T = jacobian!(Z,terminal(C),x)
 
 
 function RigidBodyDynamics.num_constraints(C::AbstractConstraintSet)

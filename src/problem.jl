@@ -92,11 +92,11 @@ Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) wh
 
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-initial_controls!(prob::Problem{T}, U0::VectorTrajectory{T}) where T = copyto!(prob.U, U0)
+initial_controls!(prob::Problem{T}, U0::AbstractVectorTrajectory{T}) where T = copyto!(prob.U, U0[1:prob.N-1])
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
-initial_state!(prob::Problem{T}, X0::VectorTrajectory{T}) where T = copyto!(prob.X, X0)
+initial_state!(prob::Problem{T}, X0::AbstractVectorTrajectory{T}) where T = copyto!(prob.X, X0)
 initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, to_dvecs(X0))
 
 set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
