@@ -4,9 +4,9 @@ n = p_model.n; m = p_model.m
 x0 = [0.; 0.]
 xf = [pi; 0.]
 
-Q = 1.0Diagonal(ones(n))
+Q = 1.0*Diagonal(ones(n))
 R = 1.0*Diagonal(ones(m))
-Qf = 100.0*Diagonal(ones(n))
+Qf = 10.0*Diagonal(ones(n))
 cholesky(Qf).U
 
 N = 101
@@ -19,7 +19,6 @@ TrajectoryOptimization.initial_controls!(prob, U0)
 # rollout!(prob)
 solve!(prob,iLQRSolverOptions())
 Kd, Pd = tvlqr_dis(prob,Q,R,Qf)
-Kd, Pd = tvlqr_dis(prob,Q,R,cholesky(Qf).U)
 
 Pd_vec = [vec(Pd[k]) for k = 1:N]
 plot(Pd_vec,linetype=:steppost,legend=:top)
@@ -39,7 +38,6 @@ function _Bc(t)
     Zc[:,n .+ (1:m)]
 end
 
-
 function r_dyn(ṗ,p,t)
     P = reshape(p,n,n)
     P = 0.5*(P + P')
@@ -57,13 +55,33 @@ function r_dyn(ṗ,p,t)
     ṗ[1:n^2] = reshape(-1.0*(_Ac(t)'*P + P*_Ac(t) - P*_Bc(t)*(R\*(_Bc(t)'*P)) + Q),n^2)
 end
 
+function r_dyn_sqrt(ṡ,s,t)
+    S = reshape(s,n,n)
+
+    # ee = eigen(P)
+    # for i = 1:length(ee.values)
+    #     if ee.values[i] <= 0.
+    #         ee.values[i] = 1e-6
+    #     end
+    # end
+    # P = ee.vectors*Diagonal(ee.values)*ee.vectors'
+    # if !isposdef(P)
+    #     error("not pos def")
+    # end
+    ss = inv(S')
+    ṡ[1:n^2] = -.5*Q*ss - _Ac(t)'*S + .5*(S*S'*_Bc(t))*inv(R)*(_Bc(t)'*S);
+    # Sorig = S*S';
+end
+
 NN = floor(Int64,N)
 dt = tf/(NN-1)
 P = [zeros(n^2) for k = 1:NN]
 P[NN] = vec(Qf)
-P[NN] = vec(cholesky(Qf).U)
 
-# r_dis = rk3(r_dyn,dt)
+S = [zeros(n^2) for k = 1:NN]
+S[NN] = vec(cholesky(Qf).U)
+
+
 _t = [tf]
 
 for k = NN:-1:2
@@ -88,8 +106,33 @@ Pv = [vec(P[k]) for k = 1:NN]
 plot(Pv)
 plot!(Pd_vec,legend=:top,linetype=:stairs)
 
-Pv[1]
-Pd_vec[1]
+_t = [tf]
+
+for k = NN:-1:2
+    k1 = k2 = k3 = k4 = zero(S[k])
+    x = S[k]
+    # println(_t[1] - dt)
+    r_dyn_sqrt(k1, x, _t[1]);
+    k1 *= -dt;
+    r_dyn_sqrt(k2, x + k1/2, _t[1] - dt/2);
+    k2 *= -dt;
+    r_dyn_sqrt(k3, x + k2/2, _t[1] - dt/2);
+    k3 *= -dt;
+    r_dyn_sqrt(k4, x + k3, max(_t[1] - dt, 0.));
+    k4 *= -dt;
+    copyto!(S[k-1], x + (k1 + 2*k2 + 2*k3 + k4)/6)
+    _t[1] -= dt
+    # copyto!(P[k-1], x + k1)
+end
+
+Sv = [vec(S[k]) for k = 1:NN]
+_Sv = [vec(reshape(S[k],n,n)*reshape(S[k],n,n)') for k = 1:NN]
+plot(Sv)
+plot(_Sv)
+plot!(Pd_vec,legend=:top,linetype=:stairs)
+
+
+
 
 P = [zeros(n^2) for k = 1:NN]
 P[1] = Pv[1]
