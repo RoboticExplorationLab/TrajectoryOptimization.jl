@@ -1,6 +1,6 @@
 "$(TYPEDEF) Trajectory Optimization Problem"
-struct Problem{T<:AbstractFloat}
-    model::Model{Discrete}
+struct Problem{T<:AbstractFloat,D<:DynamicsType}
+    model::Model{D}
     obj::AbstractObjective
     constraints::ProblemConstraints
     x0::Vector{T}
@@ -10,8 +10,8 @@ struct Problem{T<:AbstractFloat}
     dt::T
     tf::T
 
-    function Problem(model::Model, obj::AbstractObjective, constraints::ProblemConstraints,
-        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where T
+    function Problem(model::Model{D}, obj::AbstractObjective, constraints::ProblemConstraints,
+        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where {T,D}
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
@@ -29,7 +29,7 @@ struct Problem{T<:AbstractFloat}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T}(model,obj,constraints,x0,X,U,N,dt,tf)
+        new{T,D}(model,obj,constraints,x0,X,U,N,dt,tf)
     end
 end
 
@@ -37,12 +37,14 @@ end
 Create a problem from a continuous model, specifying the discretizer as a symbol
 """
 function Problem(model::Model{Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...)
-    if isdefined(TrajectoryOptimization,integration)
+    if integration == :none
+        return Problem(model, obj; kwargs...)
+    elseif isdefined(TrajectoryOptimization,integration)
         discretizer = eval(integration)
+        return Problem(discretizer(model), obj; kwargs...)
     else
         throw(ArgumentError("$integration is not a defined integration scheme"))
     end
-    Problem(discretizer(model), obj; kwargs...)
 end
 
 """$(TYPEDSIGNATURES)
@@ -245,7 +247,6 @@ end
 num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for k = 1:p.N-1]
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
 
-jacobian!(prob::Problem{T},solver) where T = jacobian!(solver.∇F,prob.model,prob.X,prob.U,prob.dt)
 
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
 
