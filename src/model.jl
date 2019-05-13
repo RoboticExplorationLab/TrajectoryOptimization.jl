@@ -212,10 +212,16 @@ function jacobian!(Z::AbstractMatrix,model::Model{Discrete},x,u,dt)
     model.∇f(Z,x,u,dt)
     model.evals[2] += 1
 end
-function jacobian!(Z::PartedMatTrajectory{T},model::Model{Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
-    N = length(X)
-    for k = 1:N-1
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Discrete},X::AbstractVectorTrajectory{T},U::AbstractVectorTrajectory{T},dt::T) where T
+    uN = length(U)
+    for k = 1:uN
         jacobian!(Z[k],model,X[k],U[k],dt)
+    end
+end
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Continuous},X::AbstractVectorTrajectory{T},U::AbstractVectorTrajectory{T}) where T
+    uN = length(U)
+    for k = 1:uN
+        jacobian!(Z[k],model,X[k],U[k])
     end
 end
 
