@@ -137,7 +137,7 @@ include("infeasible.jl")
 include("dynamics.jl")
 include("logger.jl")
 
-include("solvers/direct/direct_solver.jl")
+include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/dircol_new.jl")
 
 end
