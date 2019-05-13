@@ -44,6 +44,7 @@ function Primals(Z,part_z::NamedTuple)
     Primals(Z,X,U, N==uN)
 end
 
+"Create a Primals from vectors of SubArrays. This will overwrite X and U!"
 function Primals(Z::Vector{T},X::Vector{S},U::Vector{S}) where {T,S<:SubArray}
     N = length(X)
     uN = length(U)
@@ -79,6 +80,8 @@ function Primals(prob::Problem{T}, equal::Bool=false) where T
     end
     Primals(prob.X, U)
 end
+
+Base.size(Z::Primals) = length(Z.X[1]), length(Z.U[1]), length(Z.X)
 
 function packZ(prob::Problem{T}) where T
     n,m,N = size(prob)

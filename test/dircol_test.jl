@@ -1,8 +1,11 @@
 
 # Set up problem
 prob = copy(Dynamics.quadrotor_obstacles)
+model = Dynamics.quadrotor_model
 n,m,N = size(prob)
-add_constraints!(prob, bound_constraint(n, m, u_min=0, u_max=10))
+bnd = bound_constraint(n, m, u_min=0, u_max=10)
+add_constraints!(prob, bnd)
+
 
 # initial state
 x0 = zeros(n)
@@ -18,15 +21,16 @@ xf[4:7] = q0
 # Create DIRCOL Solver
 opts = DIRCOLSolverOptions{Float64}()
 rollout!(prob)
+prob = update_problem(prob, model=model)
+pcon = prob.constraints
 dircol = DIRCOLSolver(prob, opts)
-prob.constraints
 
 N = prob.N
 length(dircol.Z.U) == N
 part_z = create_partition(n,m,N,N)
 NN = N*(n+m)
-# NN = N*n + (N-1)*m
 Z = rand(NN)
+copyto!(dircol.Z.Z, Z)
 
 # Convert Z to X,U
 Z0 = Primals(Z,n,m)
@@ -34,15 +38,26 @@ Z0 = Primals(Z,part_z)
 X = Z0.X
 U = Z0.U
 
+Primals(Z,n,m).X[1][1] = 10
+@test X[1][1] == 10
+@test Z[1] == 10
+
 Z1 = copy(Z)
-Z0 = Primals(Z1,X,U)
+Z1[1] = 100
+Z1 = Primals(Z1,X,U)
+@test Z1.Z[1] == 100
+@test Z1.X[1][1] == 100
+@test X[1][1] == 100
+
 
 # Convert fom X,U to Z
 X = [rand(n) for k = 1:N]
 U = [rand(n) for k = 1:N]
-Z = Primals(X,U)
-Primals(prob, true).U
-dircol.Z.U
+Z2 = Primals(X,U)
+@test Z2.equal == true
+@test Primals(prob, true).equal == true
+Z_rollout = Primals(prob, true)
+
 
 # Test methods
 
@@ -50,82 +65,87 @@ dircol.Z.U
 Z = dircol.Z
 Z.X isa AbstractVectorTrajectory
 typeof(Z.X) <: Vector{S} where S <: AbstractVector
-cost(prob, dircol) == cost(prob)
+initial_controls!(prob, Z.U)
+initial_state!(prob, Z.X)
+@test cost(prob, dircol) == cost(prob)
 
 # Collocation constraints
-g_colloc = zeros(n*(N-1))
-dynamics!(prob, dircol)
-traj_points!(prob, dircol)
-collocation_constraints!(g_colloc, prob, dircol)
-g_colloc
+p_colloc = n*(N-1)
+p_custom = sum(num_constraints(prob))
+g_colloc = zeros(p_colloc)
+g = zeros(p_colloc + p_custom)
+dynamics!(prob, dircol, Z_rollout)
+traj_points!(prob, dircol, Z_rollout)
+collocation_constraints!(g_colloc, prob, dircol, Z_rollout)
+@test norm(g_colloc) == 0
 
-eval_g(Z.Z,g)
-g[1:length(g_colloc)] == g_colloc
+# Normal Constraints
+dynamics!(prob, dircol, Z)
+traj_points!(prob, dircol, Z)
+g_custom = view(g, p_colloc.+(1:p_custom))
+update_constraints!(g, prob, dircol)
+update_constraints!(dircol.C, prob.constraints, Z.X, Z.U)
+p = num_constraints(prob)
+@test to_dvecs(g_custom, p) == dircol.C
 
-# All Constraints
-
-
-# Ipopt
-method = :hermite_simpson
-obj = Dynamics.quadrotor_3obs[2]
-solver = Solver(prob.model,obj,N=N,integration=:rk3)
-nG, = get_nG(solver,method)
-U = ones(m,N)*1
-X = line_trajectory(obj.x0, obj.xf, N)
-X[4,:] .= 1
-Z = packZ(X,U)
-
-eval_f, eval_g, eval_grad_f, eval_jac_g = gen_usrfun_ipopt(solver,method)
-x_L, x_U, g_L, g_U = get_bounds(solver,method)
-P = length(g_L)  # Total number of constraints
-N,N_ = get_N(solver,method)
-
-g = zeros(P)
+# Cost gradient
 grad_f = zeros(NN)
-rows = zeros(nG)
-cols = zeros(nG)
-vals = zeros(nG)
-fVal = zeros(n,N)
+cost_gradient!(grad_f, prob, dircol)
 
-eval_g(Z,g)
-g
+function eval_f(Z)
+    Z = Primals(Z, part_z)
+    cost(prob.obj, Z.X, Z.U)
+end
+eval_f(Z.Z)
+@test ForwardDiff.gradient(eval_f, Z.Z) == grad_f
 
+# Collocation Constraint jacobian
+dircol = DIRCOLSolver(prob, opts, Z)
+dynamics!(prob, dircol, Z)
+traj_points!(prob, dircol, Z)
+calculate_jacobians!(prob, dircol, Z)
 
-g_colloc = zeros((N-1)*n)
-fVal = zeros(eltype(Z),n,N)
-X_ = zeros(eltype(Z),n,N_)
-U_ = zeros(eltype(Z),m,N_)
-fVal_ = zeros(eltype(Z),n,N_)
+jac = zeros(p_colloc, NN)
+collocation_constraint_jacobian!(jac, prob, dircol)
 
-X_,U_ = get_traj_points(solver,X,U,fVal,X_,U_,method)
-get_traj_points_derivatives!(solver,X_,U_,fVal_,fVal, method)
-collocation_constraints!(solver,X_,U_,fVal_,g_colloc,method)
-g_colloc
+function jac_colloc(Z)
+    dynamics!(prob, dircol)
+    traj_points!(prob, dircol)
+    calculate_jacobians!(prob, dircol, Z)
 
-N,N_ = get_N(prob, solver)
-nG = TrajectoryOptimization.get_nG(prob, solver)
+    jac = zeros(p_colloc, NN)
+    collocation_constraints!(g_colloc, prob, dircol, Z)
+    collocation_constraint_jacobian!(jac, prob, dircol)
+    return jac
+end
+jac_colloc(Z)
 
-TrajectoryOptimization.solve_ipopt(prob, solver)
+function c_colloc(Z)
+    g_colloc = zeros(eltype(Z), p_colloc)
+    Z = Primals(Z, part_z)
+    solver = DIRCOLSolver(prob, DIRCOLSolverOptions{eltype(Z.Z)}(), Z)
+    dynamics!(prob, solver, Z)
+    traj_points!(prob, solver, Z)
+    collocation_constraints!(g_colloc, prob, solver, Z)
+    return g_colloc
+end
+c_colloc(Z.Z)
 
-fVal = zeros(n,N)
-gX_,gU_,fVal_ = TrajectoryOptimization.init_traj_points(prob,solver,fVal)
-TrajectoryOptimization.init_jacobians(prob, solver)
+@test ForwardDiff.jacobian(c_colloc, Z.Z) ≈ jac_colloc(Z)
 
+# General constraint jacobian
+jac = zeros(p_colloc+p_custom, NN)
+calculate_jacobians!(prob, dircol, Z)
+constraint_jacobian!(jac, prob, dircol, Z)
 
-include("../src/newton_nlp.jl")
-X = rand(n,N)
-U = rand(m,N)
-Z0 = PrimalVars(X, U)
-Z = packZ(X,U)
-PrimalVars(Z, n, m, N)
-@btime PrimalVars($Z, $n, $m, $N)
-
-ix, iu = get_primal_inds(n, m, N, N-1)
-z_part = (X=ix, U=iu, Z=1:NN)
-Z1 = BlockArray(Z, z_part)
-Z1.X == Z0.X
-Z1.U == Z0.U
-Z1.Z == Z
-@btime BlockArray($Z, $z_part)
-@btime $Z0.X
-@btime $Z1.X
+function c_all(Z)
+    g = zeros(eltype(Z), p_colloc+p_custom)
+    Z = Primals(Z, part_z)
+    solver = DIRCOLSolver(prob, DIRCOLSolverOptions{eltype(Z.Z)}(), Z)
+    dynamics!(prob, solver, Z)
+    traj_points!(prob, solver, Z)
+    update_constraints!(g, prob, solver, Z)
+    return g
+end
+c_all(Z.Z)
+@test ForwardDiff.jacobian(c_all, Z.Z) ≈ jac

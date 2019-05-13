@@ -28,18 +28,23 @@ struct DIRCOLSolver{T,Q} <: DirectSolver{T}
     stats::Dict{Symbol,Any}
     Z::Primals{T}
     X_::VectorTrajectory{T}
+    ∇F::PartedMatTrajectory{T}
     C::PartedVecTrajectory{T}
+    ∇C::PartedMatTrajectory{T}
     fVal::VectorTrajectory{T}
 
 end
 
-DIRCOLSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}=DIRCOLSolverOptions{T}()) where {T,Q} = AbstractSolver(prob, opts)
+DIRCOLSolver(prob::Problem, opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
+    Z::Primals{T}=Primals(prob,true)) where {T,Q} = AbstractSolver(prob, opts, Z)
 
-function AbstractSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}) where T
+type(::Primals{T}) where T = T
+
+function AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions, Z::Primals{T}=Primals(prob, true)) where T
     n,m,N = size(prob)
-    Z = Primals(prob, true)
-    X_ = [zeros(n) for k = 1:N-1] # midpoints
+    X_ = [zeros(T,n) for k = 1:N-1] # midpoints
 
+    part_f = create_partition2(prob.model)
     constraints = prob.constraints
     p = num_stage_constraints(constraints)
     c_stage = [stage(constraints[k]) for k = 1:N-1]
@@ -47,6 +52,7 @@ function AbstractSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}) where T
     c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
 
     # Create Trajectories
+    ∇F         = [PartedMatrix(zeros(T,n,n+m),part_f)           for k = 1:N]
     C          = [PartedVector(zeros(T,p[k]),c_part[k])       for k = 1:N-1]
     ∇C         = [PartedMatrix(zeros(T,p[k],n+m),c_part2[k])  for k = 1:N-1]
 
@@ -54,9 +60,9 @@ function AbstractSolver(prob::Problem{T}, opts::DIRCOLSolverOptions{T}) where T
     p_N = num_constraints(c_term)
     C          = [C..., PartedVector(T,c_term)]
     ∇C         = [∇C..., PartedMatrix(T,c_term,n,0)]
-    fVal = [zeros(n) for k = 1:N]
+    fVal = [zeros(T,n) for k = 1:N]
 
-    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, C, fVal)
+    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, ∇F, C, ∇C, fVal)
     reset!(solver)
     return solver
 end
