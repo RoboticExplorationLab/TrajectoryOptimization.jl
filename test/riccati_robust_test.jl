@@ -147,7 +147,8 @@ plot!(Pd_vec,legend=:top,linetype=:stairs)
 
 P = [zeros(n^2) for k = 1:NN]
 P[1] = Pv[1]
-
+P[1] = vec(reshape(S[1],n,n)*reshape(S[1],n,n)')
+# P[1] = vec(0.5*(reshape(Pd_vec[1],n,n) + reshape(Pd_vec[1],n,n)'))
 _t = [0.]
 for k = 1:NN-1
     k1 = k2 = k3 = k4 = zero(P[k])
@@ -163,7 +164,7 @@ for k = 1:NN-1
     copyto!(P[k+1], x + (k1 + 2*k2 + 2*k3 + k4)/6)
     _t[1] += dt
 end
-
+norm(P[1] - Pd_vec[1])
 plot(P)
 plot!(Pd_vec,legend=:top)
 
@@ -229,4 +230,13 @@ plot(hh)
 plot(ss)
 plot(pp)
 
-prob_robust = robust_problem(prob,E1,H1,D,Q,R,Qf,Q,R,Qf)
+bnd = bound_constraint(n,m,u_min=0.0,u_max=6.0,trim=true)
+goal = goal_constraint(xf)
+
+prob_con = update_problem(prob,constraints=ProblemConstraints([bnd,goal],N))
+prob_con
+# prob.N
+prob_robust = robust_problem(prob_con,E1,H1,D,Q,R,Qf,Q,R,Qf)
+prob_robust
+rollout!(prob_robust)
+plot(prob_robust.X)

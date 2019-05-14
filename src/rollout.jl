@@ -1,9 +1,10 @@
 "Simulate state trajectory with feedback control"
 function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
+    n = prob.model.n; m = prob.model.m
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    X̄[1] = copy(prob.x0)
+    initial_condition!(X̄[1],prob)
 
     for k = 2:prob.N
         # Calculate state trajectory difference
@@ -13,7 +14,7 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], prob.dt)
+        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1][1:m], prob.dt)
 
         # Check that rollout has not diverged
         if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
@@ -24,14 +25,25 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
 end
 
 function rollout!(prob::Problem{T}) where T
-    N = prob.N
+    N = prob.N; m = prob.model.m; n = prob.model.n
     X = prob.X; U = prob.U
 
     if !all(isfinite.(prob.X[1]))
-        X[1] = copy(prob.x0)
+        initial_condition!(prob.X[1],prob)
         for k = 1:N-1
-            evaluate!(X[k+1], prob.model, X[k], U[k], prob.dt)
+            evaluate!(X[k+1], prob.model, X[k], U[k][1:m], prob.dt)
         end
+    end
+end
+
+function initial_condition!(X::AbstractVector{T},prob::Problem{T}) where T
+    m = prob.model.m; n = prob.model.n
+    X[1:n] = copy(prob.x0)
+
+    m̄ = length(prob.U[1])
+    if m̄ != m
+        m_dif = m̄ - m
+        X[(n-m_dif) .+ (1:m_dif)] = prob.U[1][m .+ (1:m_dif)]
     end
 end
 
