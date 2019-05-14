@@ -1,3 +1,10 @@
+import TrajectoryOptimization: DIRCOLSolverOptions, DIRCOLSolver, Primals, gen_ipopt_functions,
+    update_problem, create_partition
+import TrajectoryOptimization: update_constraints!
+import TrajectoryOptimization: traj_points!, dynamics!, calculate_jacobians!, cost_gradient!, constraint_jacobian!,
+    collocation_constraints!, collocation_constraint_jacobian!, collocation_constraint_jacobian_sparsity!, constraint_jacobian_sparsity!,
+    get_rc
+
 
 # Set up problem
 prob = copy(Dynamics.quadrotor_obstacles)
@@ -37,6 +44,8 @@ Z0 = Primals(Z,n,m)
 Z0 = Primals(Z,part_z)
 X = Z0.X
 U = Z0.U
+@test size(Z0) == (n,m,N)
+@test length(Z0) == NN
 
 Primals(Z,n,m).X[1][1] = 10
 @test X[1][1] == 10
@@ -63,8 +72,8 @@ Z_rollout = Primals(prob, true)
 
 # Cost
 Z = dircol.Z
-Z.X isa AbstractVectorTrajectory
-typeof(Z.X) <: Vector{S} where S <: AbstractVector
+@test Z.X isa TrajectoryOptimization.AbstractVectorTrajectory
+@test typeof(Z.X) <: Vector{S} where S <: AbstractVector
 initial_controls!(prob, Z.U)
 initial_state!(prob, Z.X)
 @test cost(prob, dircol) == cost(prob)
@@ -133,6 +142,18 @@ c_colloc(Z.Z)
 
 @test ForwardDiff.jacobian(c_colloc, Z.Z) ≈ jac_colloc(Z)
 
+nG = p_colloc*2(n+m)
+jac = spzeros(p_colloc, NN)
+collocation_constraint_jacobian_sparsity!(jac, prob)
+@test nG == nnz(jac)
+row, col, inds = findnz(jac)
+v = sortperm(inds)
+r,c = row[v],col[v]
+jac_vec = zeros(nG)
+collocation_constraint_jacobian!(jac_vec, prob, dircol)
+jac2 = sparse(r,c,jac_vec)
+@test jac == jac
+
 # General constraint jacobian
 jac = zeros(p_colloc+p_custom, NN)
 calculate_jacobians!(prob, dircol, Z)
@@ -149,3 +170,31 @@ function c_all(Z)
 end
 c_all(Z.Z)
 @test ForwardDiff.jacobian(c_all, Z.Z) ≈ jac
+
+p = num_constraints(prob)
+nG = p_colloc*2(n+m) + sum(p[1:N-1])*(n+m) + p[N]*n
+jac_struct = spzeros(p_colloc+p_custom, NN)
+constraint_jacobian_sparsity!(jac_struct, prob)
+r,c = get_rc(jac_struct)
+jac_vec = zeros(nG)
+constraint_jacobian!(jac_vec, prob, dircol, dircol.Z)
+jac2 = sparse(r,c,jac_vec)
+@test jac2 == jac
+
+
+# Test Ipopt functions
+eval_f2, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions(prob, dircol)
+
+g2 = zero(g)
+grad_f2 = zero(grad_f)
+jac2 = zero(jac_vec)
+row, col = zero(jac_vec), zero(jac_vec)
+@test eval_f2(Z.Z) == eval_f(Z.Z)
+eval_g(Z.Z, g2)
+@test g ≈ g2
+eval_grad_f(Z.Z, grad_f2)
+@test grad_f ≈ grad_f2
+
+eval_jac_g(Z.Z, :Structure, row, col, jac2)
+eval_jac_g(Z.Z, :Values, r, c, jac2)
+@test sparse(row,col,jac2) == jac

@@ -18,6 +18,7 @@ function PartedArrays.create_partition(n::Int,m::Int,N::Int,uN=N-1)
     return (X=ind_x, U=ind_u)
 end
 
+# TODO: Inherit from AbstractArray
 struct Primals{T<:Real}
     Z::Vector{T}
     X::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
@@ -44,7 +45,9 @@ function Primals(Z,part_z::NamedTuple)
     Primals(Z,X,U, N==uN)
 end
 
-"Create a Primals from vectors of SubArrays. This will overwrite X and U!"
+"""Create a Primals from vectors of SubArrays.
+This is the fastest method to convert a vector Z to subarrays X,U. This will overwrite X and U!
+"""
 function Primals(Z::Vector{T},X::Vector{S},U::Vector{S}) where {T,S<:SubArray}
     N = length(X)
     uN = length(U)
@@ -82,6 +85,7 @@ function Primals(prob::Problem{T}, equal::Bool=false) where T
 end
 
 Base.size(Z::Primals) = length(Z.X[1]), length(Z.U[1]), length(Z.X)
+Base.length(Z::Primals) = length(Z.Z)
 
 function packZ(prob::Problem{T}) where T
     n,m,N = size(prob)
