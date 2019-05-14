@@ -233,43 +233,12 @@ end
 #     return nothing
 # end
 
-"Update constraints trajectories"
-function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemConstraints,
-        X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
-    N = length(X)
-    for k = 1:N-1
-        evaluate!(C[k],constraints[k],X[k],U[k])
-    end
-    evaluate!(C[N],constraints[N],X[N])
-end
-
-
-"Evaluate active set constraints for entire trajectory"
-function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
-    N = length(c)
-    for k = 1:N
-        active_set!(a[k], c[k], λ[k], tol)
-    end
-end
 
 function update_active_set!(obj::AugmentedLagrangianObjective{T},tol::T=0.0) where T
     update_active_set!(obj.active_set,obj.C,obj.λ,tol)
 end
 
-"Evaluate active set constraints for a single time step"
-function active_set!(a::AbstractVector{Bool}, c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-    # inequality_active!(a,c,λ,tol)
-    a.equality .= true
-    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-    return nothing
-end
 
-function active_set(c::AbstractVector{T}, λ::AbstractVector{T}, tol::T=0.0) where T
-    a = PartedArray(trues(length(c)),c.parts)
-    a.equality .= true
-    a.inequality .=  @. (c.inequality >= tol) | (λ.inequality > 0)
-    return a
-end
 
 "Cost function terms for Lagrangian and quadratic penalty"
 function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVector{T},μ::AbstractVector{T}) where T

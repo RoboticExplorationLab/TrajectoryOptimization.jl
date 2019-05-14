@@ -23,7 +23,7 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
     model_min_time = add_min_time_controls(prob.model)
     con_min_time_eq, con_min_time_bnd = min_time_constraints(n,m,dt_max,dt_min)
 
-    con_prob = AbstractConstraintSet[]
+    con_prob = ConstraintSet[]
     constrained = is_constrained(prob)
     for k = 1:N-1
         con_mt = AbstractConstraint[]
@@ -52,4 +52,28 @@ function total_time(prob::Problem{T}) where T
         tt = prob.dt*(prob.N-1)
     end
     return tt
+end
+
+function min_time_equality(n::Int,m::Int)
+    n̄ = n+1; m̄ = m+1; idx_h = n+m+2
+    ∇con_eq = zeros(1,idx_h)
+    ∇con_eq[1,idx_h] = 1.0
+    ∇con_eq[1,n̄] = -1.0
+
+    function con_eq(v,x,u)
+        v[1] = u[end] - x[end]
+    end
+
+    jac_eq(C,x,u) = copyto!(C, ∇con_eq)
+    Constraint{Equality}(con_eq, jac_eq, 1, :min_time_eq, [collect(1:n̄), collect(1:m̄)], :stage)
+end
+
+function mintime_bounds(prob::Problem, dt_max::T=1.0, dt_min::T=1e-3) where T
+    PC = copy(prob.constraints)
+    mt_bnd = BoundConstraint(1,1, u_max=sqrt(dt_max), u_min=sqrt(dt_min))
+    for C in PC
+        bnd = remove_bounds!(C)
+        C += [bnd; mt_bnd]
+    end
+    return PC
 end

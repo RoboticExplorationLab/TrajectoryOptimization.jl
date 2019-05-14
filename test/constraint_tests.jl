@@ -1,5 +1,6 @@
 using Test
-import TrajectoryOptimization: bound_constraint, ConstraintSet, StageConstraintSet, TerminalConstraintSet, stage, ProblemConstraints
+using ForwardDiff
+import TrajectoryOptimization: bound_constraint, ConstraintSet, stage, ProblemConstraints, BoundConstraint
 using PartedArrays
 using LinearAlgebra
 
@@ -8,25 +9,49 @@ n,m = 3,2
 # Custom Equality Constraint
 p1 = 3
 c(v,x,u) = begin v[1]  = x[1]^2 + x[2]^2 - 5; v[2:3] =  u - ones(2,1) end
+c(v,x) = c(v,x,zeros(2))
 jacob_c(x,u) = [2x[1] 2x[2] 0 0 0;
                 0     0     0 1 0;
                 0     0     0 0 1];
+jacob_c(x) = [2x[1] 2x[2] 0;
+                0     0     0;
+                0     0     0];
+
 v = zeros(p1)
 x = [1,2,3]
 u = [-5,5]
 c(v,x,u)
 @test v == [0,-6,4]
 
+c(v,x)
+@test v == [0, -1, -1]
+
+J = zeros(p1,n+m)
+J_term = zeros(p1,n)
+ForwardDiff.jacobian!(J_term,c,v,x)
+@test J_term == jacob_c(x)
+
+import TrajectoryOptimization: generate_jacobian
+∇c, = generate_jacobian(c, n, m, p1)
+methods(∇c)
+∇c(J,x,u)
+@test J == jacob_c(x,u)
+@test ∇c(J_term,x) == jacob_c(x)
+
 # Test constraint function
 con = Constraint{Equality}(c,n,m,p1,:custom)
-con.c(v,x,u)
+evaluate!(v, con, x, u)
 @test v == [0,-6,4]
+evaluate!(v, con, x)
+@test v == [0, -1, -1]
+@test length(con) == p1
 
 # Test constraint jacobian
-C = zeros(p1,n+m)
-con.∇c(C,x,u);
-@test con.∇c(x,u) == jacob_c(x,u)
-@test C == jacob_c(x,u)
+con.∇c(J,x,u);
+jacobian!(J, con, x, u)
+@test J == jacob_c(x,u)
+jacobian!(J_term, con, x)
+@test J_term == jacob_c(x)
 
 
 # Custom inequality constraint
@@ -35,43 +60,53 @@ c2(v,x,u) = begin v[1] = sin(x[1]); v[2] = sin(x[3]) end
 ∇c2(Z,x,u) = begin Z[1,1] = cos(x[1]); Z[2,3] = cos(x[3]); end
 con2 = Constraint{Inequality}(c2,∇c2,n,m,p2,:ineq)
 
+
 # Bound constraint
 x_max = [5,5,Inf]
-x_min = [-10,-5,0]
-u_max = 0
-u_min = -10
+x_min = [-10,-5,0.]
+u_max = 0.
+u_min = -10.
+
 p3 = 2(n+m)
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max, trim=false)
+bnd = BoundConstraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max, trim=false)
 v = zeros(p3)
-bnd.c(v,x,u)
+evaluate!(v, bnd, x, u)
 @test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
 C = PartedArray(zeros(p3,n+m),create_partition2((p3,),(n,m),Val((:xx,:xu))))
-bnd.∇c(C,x,u)
+jacobian!(C, bnd, x, u)
 @test C.xx == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
 @test C.xu == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
+@test length(bnd) == p3
+
+v = zeros(2n)
+evaluate!(v, bnd, x)
+@test v == [-4,-3,-Inf,-11,-7,-3]
+C = zeros(2n, n)
+@test jacobian!(C, bnd, x) == [Diagonal(I,n); -Diagonal(I,n)]
+@test length(bnd,true) == 2n
+
 
 # Trimmed bound constraint
-bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
-p3 = 2(n+m)-1
-v = zeros(p3)
-bnd.c(v,x,u)
-@test v == [-4,-3,-5,5,-11,-7,-3,-5,-15]
+# bnd = bound_constraint(n,m,x_max=x_max,x_min=x_min,u_min=u_min,u_max=u_max)
+# p3 = 2(n+m)-1
+# v = zeros(p3)
+# bnd.c(v,x,u)
+# @test v == [-4,-3,-5,5,-11,-7,-3,-5,-15]
 
 # Create Constraint Set
 C = [con,con2,bnd]
-@test C isa AbstractConstraintSet
-@test C isa StageConstraintSet
-@test !(C isa TerminalConstraintSet)
+@test C isa ConstraintSet
+C = con + con2 + bnd
+@test C isa ConstraintSet
 
 @test findall(C,Inequality) == [false,true,true]
 @test split(C) == ([con2,bnd],[con,])
-count_constraints(C)
 @test count_constraints(C) == (p2+p3,p1)
 @test inequalities(C) == [con2,bnd]
 @test equalities(C) == [con,]
 @test bounds(C) == [bnd,]
 @test labels(C) == [:custom,:ineq,:bound]
-
+@test TrajectoryOptimization.is_terminal.(C) == [true,false,true]
 
 # Terminal Constraint
 cterm(v,x) = begin v[1] = x[1] - 5; v[2] = x[1]*x[2] end
@@ -80,40 +115,36 @@ cterm(v,x) = begin v[1] = x[1] - 5; v[2] = x[1]*x[2] end
 p_term = 2
 v = zeros(p_term)
 cterm(v,x)
-con_term = TerminalConstraint{Equality}(cterm,∇cterm,n,p_term,:terminal)
+con_term = Constraint{Equality}(cterm,∇cterm,n,p_term,:terminal)
 v2 = zeros(p_term)
 con_term.c(v2,x)
 @test v == v2
 A = zeros(p_term,n)
 @test con_term.∇c(A,x) == ∇cterm(x)
 
-bnd_term = bound_constraint(n,x_max=x_max,x_min=x_min,trim=true)
-pI_N = 5
-@test length(bnd_term) == pI_N
-
-C_term = [con_term,bnd_term]
-C2 = [con,con2,bnd,con_term,bnd_term]
-@test C2 isa AbstractConstraintSet
-@test C_term isa TerminalConstraintSet
-
+C_term = [con,bnd,con_term]
+C2 = [con,con2,bnd,con_term]
+@test C2 isa ConstraintSet
 @test terminal(C2) == C_term
 @test terminal(C_term) == C_term
 @test stage(C2) == C
-@test isempty(terminal(C))
-@test isempty(stage(C_term))
-@test count_constraints(C_term) == (pI_N,p_term)
-@test count_constraints(C2) == (p2+p3+pI_N,p1+p_term)
-@test split(C2) == ([con2,bnd,bnd_term],[con,con_term])
+count_constraints(C2)
+@test split(C2) == ([con2,bnd],[con,con_term])
 @test split(C2) == (inequalities(C2),equalities(C2))
-@test bounds(C2) == [bnd,bnd_term]
-@test labels(C2) == [:custom,:ineq,:bound,:terminal,:terminal_bound]
-@test Vector{Constraint}(stage(C2)) isa StageConstraintSet
-bounds(C2)
+@test bounds(C2) == [bnd]
+@test labels(C2) == [:custom,:ineq,:bound,:terminal]
+@test TrajectoryOptimization.num_stage_constraints(C2) == p1+p2+p3
+@test TrajectoryOptimization.num_terminal_constraints(C2) == 2n + p_term + p1
 
-v_stage = PartedVector(stage(C2))
-v_term = PartedVector(terminal(C2))
-v_stage2 = PartedVector(stage(C2))
-v_term2 = PartedVector(terminal(C2))
+import TrajectoryOptimization: num_stage_constraints, num_terminal_constraints
+num_stage_constraints(C2)
+num_constraints(C2,:stage)
+
+
+v_stage = PartedVector(C2)
+v_term = PartedVector(C2,:terminal)
+v_stage2 = PartedVector(C2,:stage)
+v_term2 = PartedVector(C2,:terminal)
 evaluate!(v_stage,C,x,u)
 evaluate!(v_term,C_term,x)
 evaluate!(v_stage2,C2,x,u)
@@ -126,7 +157,20 @@ c_jac = PartedMatrix(C,n,m)
 @test size(c_jac.custom) == (p1,n+m)
 @test size(c_jac.x) == (p1+p2+p3,n)
 @test size(c_jac.u) == (p1+p2+p3,m)
+jacobian!(c_jac, C, x, u)
+@test c_jac.custom == jacob_c(x,u)
+@test c_jac.bound == [Diagonal(I,n+m); -Diagonal(I,n+m)]
 
+c_jac = PartedMatrix(C2,n,m,:terminal)
+@test size(c_jac) == (p1+2n+p_term,n)
+@test size(c_jac.custom) == (p1,n)
+@test size(c_jac.ineq) == (0,n)
+@test size(c_jac.u) == (p1+2n+p_term,0)
+@test size(c_jac.terminal) == (p_term,n)
+jacobian!(c_jac, C2, x)
+jacobian!(c_jac.custom, con, x)
+@test c_jac.custom == jacob_c(x)
+@test c_jac.bound == [Diagonal(I,n); -Diagonal(I,n)]
 
 # Augment State
 m_inf = m+n
@@ -143,27 +187,45 @@ TrajectoryOptimization.evaluate!(v_stage,C,x,u_inf)
 TrajectoryOptimization.evaluate!(v_inf,C_inf,x,u_inf)
 @test v_inf == [v_stage;5;-5;10]
 
-PartedVector(Int64,C_term)
-# Test constrained cost stuff
-N = 21
-p = num_constraints(C)
-c_part = create_partition(C)
-c_part2 = create_partition2(C,n,m)
-λ = [PartedArray(zeros(p),c_part) for k = 1:N-1]
-μ = [PartedArray(ones(p),c_part) for k = 1:N-1]
-a = [PartedArray(ones(Bool,p),c_part) for k = 1:N-1]
-cval = [PartedArray(zeros(p),c_part) for k = 1:N-1]
-∇cval = [PartedArray(zeros(p,n+m),c_part2) for k = 1:N-1]
-Iμ = [PartedArray(zeros(p),c_part) for k = 1:N-1]
-λ =  [λ...,PartedVector(C_term)]
-μ = [μ...,PartedVector(C_term)]
-a = [a..., PartedVector(Bool,C_term)]
-cval = [cval..., PartedVector(C_term)]
-∇cval = [∇cval..., PartedMatrix(C_term,n,m)]
-Iμ = [Iμ..., PartedVector(C_term)]
-X = to_dvecs(rand(n,N))
-U = to_dvecs(rand(m,N-1))
-TrajectoryOptimization.update_constraints!(cval,ProblemConstraints(C2,N),X,U)
+
+TrajectoryOptimization.min_time_constraints(n,m)
+
+TrajectoryOptimization.combine(bnd,bnd)
+hcat(bnd,bnd)
+
+C2
+C3 = copy(C2)
+@test TrajectoryOptimization.remove_bounds!(C3) == [bnd]
+@test C3 == [con,con2,con_term]
+@test pop!(C3,:ineq) == con2
+@test C3 == [con,con_term]
+
+
+# ProblemConstraints
+CS = [[con], con+con2+bnd, con+con2+bnd, con+bnd]
+@test CS isa Vector{<:ConstraintSet}
+PC = ProblemConstraints(CS)
+PC[1] += bnd
+@test PC[1] == [con,bnd]
+@test num_constraints(PC) == [p1+p3, p1+p2+p3, p1+p2+p3, p1+2n]
+PC[N] += con_term
+@test num_constraints(PC) == [p1+p3, p1+p2+p3, p1+p2+p3, p1+2n+p_term]
+PC2 = copy(PC)
+pop!(PC2[2],:ineq)
+@test num_constraints(PC2) == [p1+p3, p1+p3, p1+p2+p3, p1+2n+p_term]
+@test num_constraints(PC) == [p1+p3, p1+p2+p3, p1+p2+p3, p1+2n+p_term]
+
+N = length(PC)
+Cval, ∇Cval = TrajectoryOptimization.init_constraint_trajectories(PC,n,m,N)
+@test length.(Cval) == num_constraints(PC)
+X = [float.(x) for k = 1:N]
+U = [float.(u) for k = 1:N-1]
+TrajectoryOptimization.update_constraints!(Cval, PC, X, U)
 v = zeros(p1)
-c(v,X[5],U[5])
-@test cval[5].custom == v
+c(v,x,u)
+@test Cval[1].custom == v
+c(v,x)
+@test Cval[N].custom == v
+
+jacobian!(∇Cval, PC, X, U)
+@test ∇Cval[N] == c_jac

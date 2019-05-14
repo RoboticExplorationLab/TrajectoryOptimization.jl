@@ -195,7 +195,7 @@ function add_constraints!(p::Problem, c::AbstractConstraint)
 end
 
 # "$(SIGNATURES) Add a set of constraints to the problem"
-# function add_constraints!(p::Problem,C::AbstractConstraintSet)
+# function add_constraints!(p::Problem,C::ConstraintSet)
 #     append!(p.constraints,C)
 # end
 

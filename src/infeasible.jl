@@ -18,7 +18,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
     u_slack = slack_controls(prob)
     con_inf = infeasible_constraints(prob.model.n,prob.model.m)
 
-    con_prob = AbstractConstraintSet[]
+    con_prob = ConstraintSet[]
     constrained = is_constrained(prob)
     for k = 1:N-1
         _con = AbstractConstraint[]
