@@ -262,7 +262,7 @@ end
 
 num_stage_constraints(pcon::ProblemConstraints) = map(num_stage_constraints, pcon.C)
 num_terminal_constraints(pcon::ProblemConstraints) = map(num_terminal_constraints, pcon.C)
-function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)
+function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vector{Int}
     p = map(num_stage_constraints, pcon.C)
     p[end] = num_terminal_constraints(pcon.C[end])
     return p

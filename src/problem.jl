@@ -165,7 +165,7 @@ function _validate_time(N,tf,dt)
     return N,tf,dt
 end
 
-Base.size(p::Problem) = (p.model.n,p.model.m,p.N)
+Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
 Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
