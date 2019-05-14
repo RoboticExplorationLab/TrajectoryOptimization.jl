@@ -53,231 +53,127 @@ function gen_zoh_interp(X,dt)
 end
 
 "Robust model from model"
-function robust_model(model::Model{Uncertain,Discrete},E1::AbstractArray,H1::AbstractArray,D::AbstractArray)
+function robust_model(model::Model{Uncertain,Discrete},Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray) where T
     n = model.n; m = model.m; r = model.r
-    n̄ = n*(1 + 2*n + r)
 
     fc! = prob.model.info[:fc]
+    ∇fc! = prob.model.info[:∇fc]
     integration = prob.model.info[:integration]
 
-    f_robust = robust_dynamics(fc!,E1,H1,D,n,m,r)
-
-    discretize_model(UncertainModel(f_robust, n̄, m, r),integration,prob.dt)
+    discretize_model(robust_model(fc!,∇fc!,Q,R,D,n,m,r),integration,prob.dt)
 end
 
-function robust_model(model::Model{Uncertain,Continuous},E1::AbstractArray,H1::AbstractArray,D::AbstractArray)
+function robust_model(model::Model{Uncertain,Continuous},Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray) where T
     n = model.n; m = model.m; r = model.r
-    n̄ = n*(1 + 2*n + r)
 
-    fc! = prob.model.f
-
-    f_robust = robust_dynamics(fc!,E1,H1,D,n,m,r)
-
-    UncertainModel(f_robust, n̄, m, r)
+    robust_model(model.f,model.∇f,Q,R,D,n,m,r)
 end
 
-"Robust dynamics, includes nominal, disturbance, and cost-to-go dynamics"
-function robust_dynamics(fc::Function,fd::Function,E1::AbstractArray,H1::AbstractArray,
-        D::AbstractArray,n::Int,m::Int,r::Int)
+"Robust dynamics, includes: nominal, disturbance, and cost-to-go dynamics"
+function robust_model(f::Function,∇f::Function,Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray{T},n::Int,m::Int,r::Int) where T
+    idx = (x=1:n,u=1:m,w=1:r)
+    z_idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)))
 
-    fc_aug = f_augmented_uncertain!(fc,n,m,r) #TODO make sure existing ∇f is ForwardDiff-able, then use that
-    ∇fc(z) = ForwardDiff.jacobian(fc_aug,zeros(eltype(z),n),z)
+    Zc = zeros(n,n+m+r)
+    n̄ = n + n^2 + n*r + n^2
 
-    fd_aug = f_augmented_uncertain!(fd,n,m,r) #TODO make sure existing ∇f is ForwardDiff-able, then use that
-    ∇fd(z) = ForwardDiff.jacobian(fd_aug,zeros(eltype(z),n),z)
+    function robust_dynamics(ż,z,u,w)
+        x = z[z_idx.x]
+        E = reshape(z[z_idx.e],n,n)
+        H = reshape(z[z_idx.h],n,r)
+        S = reshape(z[z_idx.s],n,n)
+        ss = inv(S')
+        P = S*S'
 
-    idx = (x = 1:n, u = 1:m, w = 1:r, e = n .+ (1:n^2), h = (n+n^2) .+ (1:n*r), p = (n+n^2+n*r) .+ (1:n^2))
+        ∇f(Zc,x,u,w)
+        Ac = Zc[:,idx.x]
+        Bc = Zc[:,n .+ idx.u]
+        Gc = Zc[:,(n+m) .+ idx.w]
 
-    function f_robust(ẏ::AbstractVector{T},y::AbstractVector{T},u::AbstractVector{T},w::AbstractVector{T}) where T
-        "
-            y = [x;E;H;P]
-        "
-        x = y[idx.x]
+        Kc = R\(Bc'*P)
+        Acl = Ac - Bc*Kc
 
-        # E = reshape(y[idx.e],n,n)
-        # H = reshape(y[idx.h],n,r)
-        P = reshape(y[idx.p],n,n)
-
-        z = [x;u;w]
-
-        Fc = ∇fc(z)
-        Fd = ∇fd([z;dt])
-
-
-        Ac = Fc[:,idx.x]; Bc = Fc[:,n .+ idx.u]; Gc = Fc[:,(n+m) .+ idx.w]
-        Ad = Fd[:,idx.x]; Bd = Fd[:,n .+ idx.u]
-        K = Kc(Bc,P,R)
-        Accl = (Ac - Bc*K)
-
-        println("K:")
-        println(K)
-
-        # nominal dynamics
-        fc!(view(ẏ,1:n),x,u,w)
-
-        # disturbances
-        Ec!(view(ẏ,idx.e),E1,H1,Accl,Gc)
-        Hc!(view(ẏ,idx.h),H1,Accl,Gc,D)
-
-        # cost-to-go
-        Pc!(view(ẏ,idx.p),P,Ac,Bc,Q,R)
+        f(view(ż,z_idx.x),x,u,w)
+        ż[z_idx.e] = reshape(Acl*E + Gc*H' + E*Acl' + H*Gc',n^2)
+        ż[z_idx.h] = reshape(Acl*H + Gc*D,n,r)
+        ż[z_idx.s] = reshape(-.5*Q*ss - Ac'*S + .5*(P*Bc)*(R\(Bc'*S)),n^2)
     end
 
-end
-
-"Continuous-time TVLQR optimal feedback matrix"
-function Kc(B::AbstractArray,P::AbstractArray,R::AbstractArray)
-    R\(B'*P)
-end
-
-function Kc!(K::AbstractArray,B::AbstractArray,P::AbstractArray,R::AbstractArray)
-    K .= Kc(B,P,R)
-    return nothing
-end
-
-"Continuous-time TVLQR optimal cost-to-go"
-function Pc!(Ṗ::AbstractVector,P::AbstractArray,A::AbstractArray,B::AbstractArray,
-        Q::AbstractArray,R::AbstractArray)
-
-        n = size(P,1)
-        Ṗ .= -1*reshape(A'*P + P*A - P*B*(R\(B'*P)) + Q,n^2)
-end
-
-"Continuous-time disturbance dynamics"
-function Ec!(Ė::AbstractVector,E1::AbstractArray,H1::AbstractArray,Acl::AbstractArray,
-        G::AbstractArray)
-        n = size(E1,1)
-        Ė .= reshape(Acl*E1 + G*H1' + E1*Acl' + H1*G',n^2)
-end
-
-function Hc!(Ḣ::AbstractVector,H1::AbstractArray,Acl::AbstractArray,
-        G::AbstractArray,D::AbstractArray)
-        n, r = size(G)
-        Ḣ = reshape(Acl*H1 + G*D,n,r)
+    UncertainModel(robust_dynamics, n̄, m, r)
 end
 
 mutable struct RobustCost{T} <: CostFunction
-    Q::AbstractArray{T}
-    R::AbstractArray{T}
-    Qf::AbstractArray{T}
-
     Qr::AbstractArray{T}
     Rr::AbstractArray{T}
     Qrf::AbstractArray{T}
 
-    ∇fd::Function
+    Q::AbstractArray{T}
+    R::AbstractArray{T}
+    Qf::AbstractArray{T}
+
+    K::Function
+
     n::Int
     m::Int
     r::Int
     idx::NamedTuple
 end
 
-function stage_cost(cost::RobustCost, y::Vector{T}, u::Vector{T}) where T
-    idx = cost.idx; n = cost.n; m = cost.m; r = cost.r
-    x = y[idx.x]
+function RobustCost(model::Model{M,D},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},
+        Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T}) where {M,D,T}
+    n = model.n; m = model.m; r = model.r
 
-    E = reshape(y[idx.e],n,n)
-    P = reshape(y[idx.p],n,n)
-    Bd = ∇fd([x;u;zeros(r);0.])[:,n .+ (1:m)]
-    K = K(Bd,P,R)
+    idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)))
 
-    tr((cost.Qr + K'*Rr*K)*E)
+    Zc = zeros(n,n+m+r)
+
+    if D <: Continuous
+        ∇fc = model.∇fc
+    else
+        ∇fc = model.info[:∇fc]
+    end
+
+    function K(z)
+        x = z[idx.x]
+        s = z[idx.s]
+        P = reshape(s,n,n)*reshape(s,n,n)'
+
+        ∇fc(Zc,x,u,zeros(r))
+        Bc = Zc[:,n .+ (1:m)]
+
+        R\(Bc*P)
+    end
+
+    RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx)
 end
 
-function stage_cost(cost::RobustCost, yN::Vector{T}) where T
+
+function stage_cost(cost::RobustCost, z::Vector{T}, u::Vector{T}) where T
+    idx = cost.idx; n = cost.n; m = cost.m; r = cost.r
+
+    x = z[idx.x]
+    E = reshape(z[idx.e],n,n)
+
+    Kc = K(z)
+
+    tr((cost.Qr + K'*cost.Rr*K)*E)
+end
+
+function stage_cost(cost::RobustCost, zN::Vector{T}) where T
     idx = cost.idx; n = cost.n
-    E = reshape(y[idx.e],n,n)
+    E = reshape(z[idx.e],n,n)
     tr(cost.Qrf*E)
 end
 
-function cost(c::RobustCost,Y::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    N = length(Y)
+function cost(c::RobustCost,Z::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(Z)
     ℓ = 0.
     for k = 1:N-1
-        ℓ += stage_cost(c,Y[k],U[k])
+        ℓ += stage_cost(c,Z[k],U[k])
     end
-    ℓ += stage_cost(c,Y[N])
+    ℓ += stage_cost(c,Z[N])
     ℓ
 end
-
-# struct RobustCost <: CostFunction
-#     ℓw::Function
-#     ∇ℓw::AbstractArray
-#     ∇²ℓw::AbstractArray
-#     E1::AbstractArray
-#     H1::AbstractArray
-#     D::AbstractArray
-#     Q::AbstractArray
-#     R::AbstractArray
-#     Qf::AbstractArray
-#     Qr::AbstractArray
-#     Rr::AbstractArray
-#     Qfr::AbstractArray
-#     nx::Int
-#     nu::Int
-#     nw::Int
-#     N::Int
-#
-#     function RobustCost(dynamics::Function,E1,H1,D,Q,R,Qf,Qr,Rr,Qfr,nx::Int,nu::Int,nw::Int,N::Int,rcf::Function=robust_cost)
-#
-#         # augment dynamics
-#         dynamics_aug = f_augmented_uncertain!(dynamics,nx,nu,nw)
-#
-#         # create uncertain dynamics jacobian that takes a single input (and works with ForwardDiff)
-#         _∇f(z,nx) = ForwardDiff.jacobian(dynamics_aug,zeros(eltype(z),nx),z) #TODO see if this can be taken from model instead of reconstructed
-#         function gen_∇f(_∇f::Function,nx::Int)
-#             ∇f(z) = _∇f(z,nx)
-#         end
-#         ∇f = gen_∇f(_∇f,nx)
-#
-#         # create robust cost function that takes a single input
-#         function ℓw(Z::Vector{T}) where T
-#             rcf(Z,∇f,E1,D,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
-#         end
-#
-#         function ℓw(X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-#             rcf(X,U,∇f,E1,D,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
-#         end
-#
-#         # allocate memory for robust cost expansion
-#         s = (N-1)*(nx+nu) + nx
-#         ∇ℓw = zeros(s)
-#         ∇²ℓw = zeros(s,s)
-#         K = [zeros(nu,nx) for k = 1:N-1]
-#
-#         new(ℓw,∇ℓw,∇²ℓw,D,E1,Q,R,Qf,Qr,Rr,Qfr,nx,nu,nw,N)
-#     end
-# end
-#
-# function cost(c::RobustCost, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
-#     return c.ℓw(X,U)
-# end
-#
-# function cost_expansion!(Q::ExpansionTrajectory{T},robust_cost::RobustCost,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-#     N = robust_cost.N
-#
-#     s = (N-1)*(robust_cost.nx+robust_cost.nu) + robust_cost.nx
-#     Z = pack(X,U)
-#     out = DiffResults.HessianResult(Z)
-#     ForwardDiff.hessian!(out,robust_cost.ℓw,Z)
-#     robust_cost.∇²ℓw .= DiffResults.hessian(out)
-#     robust_cost.∇ℓw .= DiffResults.gradient(out)
-#
-#     Qx,Qu = unpack(robust_cost.∇ℓw,robust_cost.nx,robust_cost.nu,N)
-#     Qxx,Qux,Quu = unpack_cost_hessian(robust_cost.∇²ℓw,robust_cost.nx,robust_cost.nu,N)
-#
-#     for k = 1:N-1
-#         Q[k].x .+= Qx[k]
-#         Q[k].u .+= Qu[k]
-#         Q[k].xx .+= Qxx[k]
-#         Q[k].ux .+= Qux[k]
-#         Q[k].uu .+= Quu[k]
-#     end
-#     Q[N].x .+= Qx[N]
-#     Q[N].xx .+= Qxx[N]
-#
-#     return nothing
-# end
 
 struct RobustObjective <: AbstractObjective
     obj::AbstractObjective
@@ -296,12 +192,12 @@ function cost_expansion!(Q::ExpansionTrajectory{T},robust_obj::RobustObjective,X
 end
 
 function robust_problem(prob::Problem{T},E1::AbstractArray{T},
-    H1::AbstractArray{T},D::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
-    Qf::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T}) where T
+    H1::AbstractArray{T},D::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
+    Qf::AbstractArray{T}) where T
     N = prob.N
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
-    n = model.n; m = model.m; r = model.r
+    n = prob.model.n; m = prob.model.m; r = prob.model.r
     n_robust = 2*n^2 + n*r # number of robust parameters in state vector
 
     # modify cost
@@ -321,13 +217,9 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     _obj = Objective(_cost)
 
-    idx = (x = 1:n, u = 1:m, w = 1:r, e = n .+ (1:n^2), h = (n+n^2) .+ (1:n*r), p = (n+n^2+n*r) .+ (1:n^2))
+    model_uncertain = robust_model(prob.model,Q,R,D)
 
-    model_uncertain = robust_model(prob.model,E1,H1,D)
-
-    robust_cost = RobustCost(Q,R,Qf,Qr,Rr,Qfr,∇fc,n,m,r,idx)
-
-    model_uncertain = robust_model(prob.model,E1,H1,D)
+    robust_cost = RobustCost(prob.model,Qr,Rr,Qfr,Q,R,Qf)
 
     # con_prob = AbstractConstraintSet[]
     # constrained = is_constrained(prob)
@@ -350,12 +242,12 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     #     con_uncertain = Constraint[]
     # end
     # push!(con_prob,con_uncertain)
-    rollout!(prob)
-    K, P = tvlqr(prob,Q,R,Qf)
+    rollout_nominal!(prob)
+    K, P = tvlqr_dis(prob,Q,R,Qf)
 
     update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
         X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:prob.N],
-        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);reshape(P[1],n^2)])
+        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);reshape(sqrt(P[1]),n^2)])
 
 end
 

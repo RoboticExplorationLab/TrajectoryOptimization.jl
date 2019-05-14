@@ -35,6 +35,18 @@ function rollout!(prob::Problem{T}) where T
     end
 end
 
+function rollout_nominal!(prob::Problem{T}) where T
+    N = prob.N; n = prob.model.n
+    X = prob.X; U = prob.U
+
+    if !all(isfinite.(prob.X[1][1:n]))
+        X[1] = copy(prob.x0)
+        for k = 1:N-1
+            evaluate!(view(X[k+1],1:n), prob.model, X[k][1:n], U[k], prob.dt)
+        end
+    end
+end
+
 function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
     if true
         x̄ - x
