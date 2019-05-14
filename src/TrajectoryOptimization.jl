@@ -54,7 +54,8 @@ export
     ConstraintSet,
     StageConstraintSet,
     TerminalConstraintSet,
-    AbstractConstraintSet
+    AbstractConstraintSet,
+    Objective
 
 export
     rk3,
@@ -121,7 +122,6 @@ PartedMatTrajectory{T} = Vector{BlockMatrix{T,Matrix{T}}}
 include("solver_options.jl")
 include("constraints.jl")
 include("cost.jl")
-# include("model.jl")
 include("model_robust.jl")
 include("integration.jl")
 include("utils.jl")

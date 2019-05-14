@@ -39,9 +39,9 @@ Create a problem from a continuous model, specifying the discretizer as a symbol
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...) where M <: ModelType
     if isdefined(TrajectoryOptimization,integration)
         if :dt in keys(kwargs)
-            Problem(discretize_model(model,integration,dt), obj; kwargs...)
+            Problem(discretize_model(model,integration,kwargs[:dt]), obj; kwargs...)
         elseif :N in keys(kwargs) && :tf in keys(kwargs)
-            dt = tf/(N-1)
+            dt = kwargs[:tf]/(kwargs[:N]-1)
             Problem(discretize_model(model,integration,dt), obj; kwargs...)
         end
     else
