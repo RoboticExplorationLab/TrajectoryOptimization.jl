@@ -117,7 +117,7 @@ function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemC
         μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
-    C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob)
     AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
@@ -126,7 +126,7 @@ function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemC
     # Get sizes
     n,m = get_sizes(cost)
     N = length(λ)
-    C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
+    C,∇C,_,μ,active_set = init_constraint_trajectories(prob)
     AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 

@@ -31,18 +31,21 @@ function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
     stats = Dict{Symbol,Any}()
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
+    N = prob.N
 
-    X̄  = [zeros(T,n)   for k = 1:N]
-    Ū  = [zeros(T,m)   for k = 1:N-1]
+    nn = [length(prob.X[k]) for k = 1:N]
+    mm = [length(prob.U[k]) for k = 1:N-1]
 
-    K  = [zeros(T,m,n) for k = 1:N-1]
-    d  = [zeros(T,m)   for k = 1:N-1]
+    X̄  = [zeros(T,nn[k])   for k = 1:N]
+    Ū  = [zeros(T,mm[k])   for k = 1:N-1]
 
-    ∇F = [BlockArray(zeros(n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
+    K  = [zeros(T,mm[k],nn[k]) for k = 1:N-1]
+    d  = [zeros(T,mm[k])   for k = 1:N-1]
 
-    S  = [Expansion(prob,:x) for k = 1:N]
-    Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
+    ∇F = [BlockArray(zeros(nn[k],nn[k]+mm[k]+r),create_partition2(prob.model,nn[k],mm[k],r)) for k = 1:N-1]
+
+    S  = [Expansion(prob,:x,nn[k],0) for k = 1:N]
+    Q = [k < N ? Expansion(prob,nn[k],mm[k]) : Expansion(prob,:x,nn[k],0) for k = 1:N]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
@@ -105,54 +108,26 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
 
-    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob)
 
     AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set)
 end
 
-function init_constraint_trajectories(constraints::AbstractConstraintSet,n::Int,m::Int,N::Int;
+function init_constraint_trajectories(prob::Problem{T};
         μ_init::T=1.,λ_init::T=0.) where T
-    p = num_stage_constraints(constraints)
-    p_N = num_terminal_constraints(constraints)
-
-    # Initialize the partitions
-    c_stage = stage(constraints)
-    c_term = terminal(constraints)
-    c_part = create_partition(c_stage)
-    c_part2 = create_partition2(c_stage,n,m)
-
-    # Create Trajectories
-    C          = [BlockArray(zeros(T,p),c_part)       for k = 1:N-1]
-    ∇C         = [BlockArray(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
-    λ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
-    μ          = [BlockArray(ones(T,p),c_part) for k = 1:N-1]
-    active_set = [BlockArray(ones(Bool,p),c_part)     for k = 1:N-1]
-    push!(C,BlockVector(T,c_term))
-    push!(∇C,BlockMatrix(T,c_term,n,0))
-    push!(λ,BlockVector(T,c_term))
-    push!(μ,BlockArray(ones(T,num_constraints(c_term)), create_partition(c_term)))
-    push!(active_set,BlockVector(Bool,c_term))
-
-    # Initialize dual and penality values
-    for k = 1:N
-        λ[k] .*= λ_init
-        μ[k] .*= μ_init
-    end
-
-    return C,∇C,λ,μ,active_set
-end
-
-function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::Int,N::Int;
-        μ_init::T=1.,λ_init::T=0.) where T
+    N = prob.N
+    constraints = prob.constraints
+    nn = [length(prob.X[k]) for k = 1:N]
+    mm = [length(prob.U[k]) for k = 1:N-1]
 
     p = [num_stage_constraints(constraints[k]) for k = 1:N-1]
     c_stage = [stage(constraints[k]) for k = 1:N-1]
     c_part = [create_partition(c_stage[k]) for k = 1:N-1]
-    c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
+    c_part2 = [create_partition2(c_stage[k],nn[k],mm[k]) for k = 1:N-1]
 
     # Create Trajectories
     C          = [BlockArray(zeros(T,p[k]),c_part[k])       for k = 1:N-1]
-    ∇C         = [BlockArray(zeros(T,p[k],n+m),c_part2[k])  for k = 1:N-1]
+    ∇C         = [BlockArray(zeros(T,p[k],nn[k]+mm[k]),c_part2[k])  for k = 1:N-1]
     λ          = [BlockArray(ones(T,p[k]),c_part[k]) for k = 1:N-1]
     μ          = [BlockArray(ones(T,p[k]),c_part[k]) for k = 1:N-1]
     active_set = [BlockArray(ones(Bool,p[k]),c_part[k])     for k = 1:N-1]
@@ -161,7 +136,7 @@ function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::
     p_N = num_constraints(c_term)
 
     push!(C,BlockVector(T,c_term))
-    push!(∇C,BlockMatrix(T,c_term,n,0))
+    push!(∇C,BlockMatrix(T,c_term,nn[N],0))
     push!(λ,BlockVector(T,c_term))
     push!(μ,BlockArray(ones(T,p_N), create_partition(c_term)))
     push!(active_set,BlockVector(Bool,c_term))

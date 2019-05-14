@@ -272,8 +272,22 @@ function Expansion(prob::Problem{T}) where T
     Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
 end
 
+function Expansion(prob::Problem{T},n::Int,m::Int) where T
+    Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
+end
+
 function Expansion(prob::Problem{T},exp::Symbol) where T
     n = prob.model.n; m = prob.model.m
+    if exp == :x
+        return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))
+    elseif exp == :u
+        return Expansion(zeros(T,0),zeros(T,m),zeros(T,0,0),zeros(T,m,m),zeros(T,0,0))
+    else
+        error("Invalid expansion components requested")
+    end
+end
+
+function Expansion(prob::Problem{T},exp::Symbol,n::Int,m::Int) where T
     if exp == :x
         return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))
     elseif exp == :u

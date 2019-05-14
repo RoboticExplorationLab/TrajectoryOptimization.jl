@@ -55,7 +55,8 @@ export
     StageConstraintSet,
     TerminalConstraintSet,
     AbstractConstraintSet,
-    Objective
+    Objective,
+    ProblemConstraint
 
 export
     rk3,

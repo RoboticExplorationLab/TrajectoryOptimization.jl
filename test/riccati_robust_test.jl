@@ -240,3 +240,9 @@ prob_robust = robust_problem(prob_con,E1,H1,D,Q,R,Qf,Q,R,Qf)
 prob_robust
 rollout!(prob_robust)
 plot(prob_robust.X)
+
+ilqr_s = AbstractSolver(prob_robust,iLQRSolverOptions())
+
+jacobian!(prob_robust,ilqr_s)
+cost_expansion!(prob,solver)
+ΔV = backwardpass!(prob,solver)
