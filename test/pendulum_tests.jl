@@ -32,7 +32,7 @@ end
 
 ## Constrained
 u_bound = 3.0
-bnd = TrajectoryOptimization.bound_constraint(n, m, u_min=-u_bound, u_max=u_bound)
+bnd = BoundConstraint(n, m, u_min=-u_bound, u_max=u_bound)
 con = [bnd]
 
 for is in int_schemes

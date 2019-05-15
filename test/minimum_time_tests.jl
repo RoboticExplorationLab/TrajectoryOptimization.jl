@@ -1,6 +1,6 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory, total_time
 
 T = Float64
@@ -26,8 +26,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=
 
 # constraints
 u_bnd = 5.
-bnd = bound_constraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
-bnd
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]
 
@@ -39,11 +38,25 @@ prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(co
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
+
+PC_mt = TrajectoryOptimization.mintime_constraints(prob)
+@test length(PC_mt[1]) == 2
+@test length(PC_mt[2]) == 3
+@test length(PC_mt[N]) == 2
+
+C = prob.constraints[1]
+C2 = TrajectoryOptimization.update_constraint_set_jacobians(C, n, n+1, m)
+@test length(C2) == 2
+
 dt = 0.15/2.0
-prob_mt = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,Objective(lqr_cost,N),prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 prob_mt.U[end][end]
 tt_mt = total_time(prob_mt)
+
+n̄ = n+1
+idx = [(1:n)...,((1:m) .+ n̄)...]
+[collect(1:n);collect(1:m) .+ n̄]
 
 @test tt_mt < 0.5*tt
 @test tt_mt < 1.0
@@ -55,6 +68,7 @@ tt_mt = total_time(prob_mt)
 model = TrajectoryOptimization.Dynamics.car_model
 n = model.n; m = model.m
 model_d = Model{Discrete}(model,rk4)
+
 
 # cost
 x0 = [0.0;0.0;0.]
@@ -77,7 +91,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=
 u_bnd = 2.
 x_min = [-0.25; -0.001; -Inf]
 x_max = [0.25; 1.001; Inf]
-bnd = bound_constraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
 
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]
@@ -90,8 +104,9 @@ prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(co
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
-prob_mt = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
-solve!(prob_mt,opts_altro)
+prob_mt = Problem(model_d,Objective(lqr_cost,N),prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+solve!(prob_mt,opts_altro)  # TODO: figure out why it won't resolve
+prob_mt.U
 tt_mt = total_time(prob_mt)
 
 @test tt_mt < 0.75*tt

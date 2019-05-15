@@ -46,7 +46,7 @@ export
     Discrete,
     Continuous,
     Constraint,
-    TerminalConstraint,
+    BoundConstraint,
     Equality,
     Inequality,
     ConstraintSet,

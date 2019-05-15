@@ -31,8 +31,8 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0,res
 u_bnd = 2.
 x_min = [-10.;-10.]
 x_max = [10.;10.]
-bnd = bound_constraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
-bnd = bound_constraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]

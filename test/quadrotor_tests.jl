@@ -1,12 +1,12 @@
 import TrajectoryOptimization: LQRCost, iLQRSolverOptions, AugmentedLagrangianSolverOptions,
     ALTROSolverOptions, Problem, initial_controls!, solve!, goal_constraint, max_violation,
-    bound_constraint, Objective, Constraint
+    Objective, Constraint
 Random.seed!(7)
 
 # model
 T = Float64
 integration = :rk4
-model = Dynamics.quadrotor_model
+model = Dynamics.quadrotor_model_discrete
 n = model.n; m = model.m
 
 # cost
@@ -53,7 +53,7 @@ solve!(prob, opts_al)
 @test max_violation(prob) < opts_al.constraint_tolerance
 
 # constrained w/ final position and control limits
-bnd = bound_constraint(n,m,u_min=0.0,u_max=6.0,trim=true)
+bnd = BoundConstraint(n,m,u_min=0.0,u_max=6.0,trim=true)
 con = [bnd,goal_con]
 prob = Problem(model, Objective(costfun,N), constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)

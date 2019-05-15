@@ -1,6 +1,6 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     cost_expansion!, ProblemConstraints
 ## Pendulum
 T = Float64
@@ -53,7 +53,7 @@ opts_altro = ALTROSolverOptions{T}(opts_al=opts_al)
 
 # constraints
 u_bnd = 5.
-bnd = bound_constraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 bnd
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]
@@ -65,6 +65,7 @@ solver_ilqr = AbstractSolver(prob,opts_ilqr)
 solver_al = AbstractSolver(prob,opts_al)
 prob_al = AugmentedLagrangianProblem(prob,solver_al)
 update_constraints!(prob_al.obj.C,prob_al.obj.constraints, prob.X, prob.U)
+solver_al.C
 update_active_set!(prob_al.obj)
 jacobian!(prob_al,solver_ilqr)
 cost_expansion!(prob_al,solver_ilqr)

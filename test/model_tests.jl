@@ -1,9 +1,9 @@
 import TrajectoryOptimization: dynamics
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    bound_constraint, goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
+    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
     line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
-    _check_jacobian, f_augmented!
+    f_augmented!
 
 using RigidBodyDynamics
 using PartedArrays
@@ -67,7 +67,11 @@ Z = zeros(n,n+m)
 @test ∇f1!(x,u) == Z
 model1 = Model(f1,n,m)
 model2 = Model(f1,∇f1,n,m)
-@test model1.∇f(x,u) == model2.∇f(x,u)
+Z1 = zero(Z)
+Z2 = zero(Z)
+model1.∇f(Z1,x,u);
+model2.∇f(Z2,x,u);
+@test Z1 == Z2
 t_fd = @elapsed model1.∇f(Z,x,u)
 t_an = @elapsed model2.∇f(Z,x,u)
 @test t_an*1.5 < t_fd
@@ -100,8 +104,9 @@ f3_p(ẋ,x,u) = f3(ẋ,x,u,params)
 _check_dynamics(f3_p,n,m)
 model3 = Model(f3,n,m,params)
 model4 = Model(f3,∇f3,n,m,params)
-@test model3.∇f(x,u) == model4.∇f(x,u)
-@test model1.∇f(x,u) == model3.∇f(x,u)
+model3.∇f(Z1,x,u); model4.∇f(Z2,x,u);
+@test Z1 == Z2
+@test Z1 == Z
 model3.f(ẋ,x,u)
 model4.f(ẋ2,x,u)
 @test ẋ == ẋ2
@@ -145,7 +150,7 @@ S = zeros(n,n+m+1)
 model1 = AnalyticalModel{Discrete}(fd1,n,m)
 model2 = AnalyticalModel{Discrete}(fd1,∇fd1,n,m, check_functions=true)
 @test _test_jacobian(Discrete,∇fd1) == [false,true,false]
-@test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
+# @test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
 
 @test model1.∇f(x,u,dt)[:,1:6] == S[:,1:6]
 model2.∇f(S,x,u,dt)
