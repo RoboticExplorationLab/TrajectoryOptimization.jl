@@ -1,0 +1,15 @@
+julia 1.0
+ForwardDiff
+RigidBodyDynamics
+BenchmarkTools
+DocStringExtensions
+RecipesBase
+Interpolations
+Ipopt
+StaticArrays
+Formatting
+Plots
+Combinatorics
+IterTools
+PartedArrays
+Parameters

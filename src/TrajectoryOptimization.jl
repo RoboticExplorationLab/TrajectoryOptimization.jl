@@ -62,7 +62,6 @@ export
     rk4,
     midpoint,
     add_constraints!,
-    bound_constraint,
     goal_constraint,
     initial_controls!,
     initial_state!,
