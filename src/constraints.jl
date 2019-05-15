@@ -113,6 +113,7 @@ struct BoundConstraint{T} <: AbstractConstraint{Inequality}
     u_max::Vector{T}
     u_min::Vector{T}
     label::Symbol
+    active::NamedTuple{(:x_max, :u_max, :x_min, :u_min, :all),NTuple{5,BitArray{1}}}
     inds::Vector{Vector{Int}}
     part::NamedTuple{(:x_max, :u_max, :x_min, :u_min),NTuple{4,UnitRange{Int64}}}
 end
@@ -135,35 +136,24 @@ function BoundConstraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
      jac_B = view(jac_bnd,:,part.u_max)
 
      inds2 = [collect(1:n), collect(1:m)]
-     return BoundConstraint(x_max, x_min, u_max, u_min,:bound, inds2, part)
 
-     # # Specify which controls and states get used  TODO: Allow this as an input
-     #
-     # if trim
-     #     active = (x_max=isfinite.(x_max),u_max=isfinite.(u_max),
-     #               x_min=isfinite.(x_min),u_min=isfinite.(u_min))
-     #     lengths = [count(val) for val in values(active)]
-     #     inds = create_partition(Tuple(lengths),keys(active))
-     #     function bound_trim(v,x,u)
-     #         v[inds.x_max] = (x - x_max)[active.x_max]
-     #         v[inds.u_max] = (u - u_max)[active.u_max]
-     #         v[inds.x_min] = (x_min - x)[active.x_min]
-     #         v[inds.u_min] = (u_min - u)[active.u_min]
-     #     end
-     #     active_all = vcat(values(active)...)
-     #     ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
-     #     Constraint{Inequality}(bound_trim, ∇c_trim, count(active_all), :bound, inds2)
-     # else
-     #     # Generate function
-     #     function bound_all(v,x,u)
-     #         v[inds.x_max] = x - x_max
-     #         v[inds.u_max] = u - u_max
-     #         v[inds.x_min] = x_min - x
-     #         v[inds.u_min] = u_min - u
-     #     end
-     #     ∇c(C,x,u) = copyto!(C,jac_bnd)
-     #     Constraint{Inequality}(bound_all, ∇c, 2(n+m), :bound, inds2)
-     # end
+     # Specify which controls and states get used  TODO: Allow this as an input
+
+     if trim
+         active = (x_max=isfinite.(x_max),u_max=isfinite.(u_max),
+                   x_min=isfinite.(x_min),u_min=isfinite.(u_min))
+         lengths = [count(val) for val in values(active)]
+         part = create_partition(Tuple(lengths),keys(active))
+
+         active_all = vcat(values(active)...)
+         active = merge(active, (all=active_all,))
+         ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
+     else
+         active = (x_max=trues(n),u_max=trues(m),
+                   x_min=trues(n),u_min=trues(m),
+                   all=trues(2(n+m)))
+     end
+     return BoundConstraint(x_max, x_min, u_max, u_min, :bound, active, inds2, part)
 end
 
 function combine(bnd1::BoundConstraint, bnd2::BoundConstraint)
@@ -180,36 +170,39 @@ Base.vcat(bnd1::BoundConstraint, bnd2::BoundConstraint) = combine(bnd1, bnd2)
 
 function evaluate!(v::AbstractVector, bnd::BoundConstraint, x::AbstractVector, u::AbstractVector)
     inds = bnd.part
-    v[inds.x_max] = x - bnd.x_max
-    v[inds.u_max] = u - bnd.u_max
-    v[inds.x_min] = bnd.x_min - x
-    v[inds.u_min] = bnd.u_min - u
+    active = bnd.active
+    v[inds.x_max] = (x - bnd.x_max)[active.x_max]
+    v[inds.u_max] = (u - bnd.u_max)[active.u_max]
+    v[inds.x_min] = (bnd.x_min - x)[active.x_min]
+    v[inds.u_min] = (bnd.u_min - u)[active.u_min]
 end
 
 function evaluate!(v::AbstractVector, bnd::BoundConstraint, x::AbstractVector)
     inds = bnd.part
-    m = length(bnd.u_min)
-    v[inds.x_max] = x - bnd.x_max
-    v[inds.x_min .- m] = bnd.x_min - x
+    active = bnd.active
+    m = count(active.u_max)
+    v[inds.x_max     ] = (x - bnd.x_max)[active.x_max]
+    v[inds.x_min .- m] = (bnd.x_min - x)[active.x_min]
 end
 
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector, u::AbstractVector)
     n,m = length(bnd.x_max), length(bnd.u_max)
-    copyto!(V, [Diagonal(I,n+m); -Diagonal(I,n+m)])
+    copyto!(V, [Diagonal(I,n+m); -Diagonal(I,n+m)][bnd.active.all,:])
 end
 
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector)
     n = length(bnd.x_max)
-    copyto!(V, [Diagonal(I,n); -Diagonal(I,n)])
+    active = bnd.active
+    copyto!(V, [Diagonal(I,n)[active.x_max,:]; -Diagonal(I,n)[active.x_min,:]])
 end
 
 
 function Base.length(bnd::BoundConstraint, type=:stage)
     n,m = length(bnd.x_max), length(bnd.u_max)
     if type == :stage
-        2*(n+m)
+        count(bnd.active.all)
     elseif type == :terminal
-        2*n
+        count(bnd.active.x_max) + count(bnd.active.x_min)
     end
 end
 
@@ -254,7 +247,7 @@ function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
     terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n))
-    TerminalConstraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)])
+    Constraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)], :terminal)
 end
 
 function infeasible_constraints(n::Int, m::Int)
