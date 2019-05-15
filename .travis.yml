@@ -24,7 +24,6 @@ addons:
    - gfortran
 #before_script: # homebrew for mac
 #  - if [ $TRAVIS_OS_NAME = osx ]; then brew install gcc; fi
-  - julia -e 'cd(Pkg.dir("TrajectoryOptimization")); Pkg.add("https://github.com/bjack205/PartedArrays.jl");'
 ## uncomment the following lines to override the default test script
 #script:
 #  - julia -e 'Pkg.clone(pwd()); Pkg.build("TrajectoryOptimization"); Pkg.test("TrajectoryOptimization"; coverage=true)'
