@@ -7,13 +7,13 @@ CurrentModule = TrajectoryOptimization
 Pages = ["models.md"]
 ```
 # Overview
-The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form ẋ = f(x,u) where ẋ is the state derivative, x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.
+The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form y = f(x,u) where y is the state derivative (Continous) or the next state (Discrete), x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.
 
-TrajectoryOptimization.jl poses the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.
+TrajectoryOptimization.jl $\textit{discrete}$ trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, i.e., turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.
 
 Sometimes is it convenient to write down the difference equation directly, rather than running a differential equation through a discretizing integration method. TrajectoryOptimization.jl offers method deal directly with either continuous differential equations, or discrete difference equations.
 
-The `Model` type is parameterized by the `DynamicsType`, which is either `Continuous`, or `Discrete`. The models holds the equation f and it's Jacobian, ∇f, along with the dimensions of the state and control vectors.
+The `Model` type is parameterized by the `DynamicsType`, which is either `Continuous`, or `Discrete`. The models holds the equation f and its Jacobian, ∇f, along with the dimensions of the state and control vectors.
 
 Models can be created by writing down the dynamics analytically or be generated from a URDF file via [`RigidBodyDynamics.jl`](https://github.com/JuliaRobotics/RigidBodyDynamics.jl).
 
@@ -22,18 +22,18 @@ Models can be created by writing down the dynamics analytically or be generated 
 ## From analytical function
 Let's start by writing down a dynamics function for a simple pendulum with state [θ; ω] and a torque control input
 ```julia
-function pendulum_dynamics!(xdot,x,u)
+function pendulum_dynamics!(ẋ,x,u)
     m = 1.
     l = 0.5
     b = 0.1
     lc = 0.5
     J = 0.25
     g = 9.81
-    xdot[1] = x[2]
-    xdot[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/J
+    ẋ[1] = x[2]
+    ẋ[2] = (u[1] - m*g*lc*sin(x[1]) - b*x[2])/J
 end
 ```
-Note that the function is in-place, in that it writes the result to the first argument. It is also good practice to concretely specify the location to write to rather than using something like `xdot[1:end]` or `xdot[:]`.
+Note that the function is in-place, in that it writes the result to the first argument. It is also good practice to concretely specify the location to write to rather than using something like `ẋ[1:end]` or `ẋ[:]`.
 
 Notice that we had to specify a handful of constants when writing down the dynamics. We could have initialized them outside the scope of the function (which may result in global variables, so be careful!) or we can pass them in as a `NamedTuple` of parameters:
 ```julia
@@ -52,7 +52,7 @@ model = Model(pendulum_dynamics_params!, n, m, params)
 ```
 
 ## With analytical Jacobians
-Since we have a very simple model, writing down an analytical expression of the Jacobian is pretty easy:
+Since we have a very simple model, writing down an analytical expression of the Jacobian is straightforward:
 ```julia
 function pendulum_jacobian!(Z,x,u)
     m = 1.
@@ -97,10 +97,10 @@ model = Model(urdf)
 mech = parse_urdf(urdf)  # return a Mechanism type
 model = Model(mech)
 ```
-Now let's say we want to control an `acrobot`, which can only control the first joint. We can pass in a vector of Booleans to specify which of the joints are "active."
+Now let's say we want to control an underactuated `acrobot`, which can only control the second joint. We can pass in a vector of Booleans to specify which of the joints are "active."
 
 ```julia
-joints = [true,false]
+joints = [false,true]
 
 # From a string
 urdf = "doublependulum.urdf"
@@ -138,7 +138,7 @@ where `discretizer` is a function that returns a discretized version of the cont
 * rk3 (Third Order Runge-Kutta)
 * rk4 (Fourth Order Runge-Kutta)
 
-So to create a discrete model of the pendulum with fourth order Runge-Kutta integration we would do the following
+To create a discrete model of the pendulum with fourth order Runge-Kutta integration we would do the following
 ```julia
 # Create the continuous model (any of the previously mentioned methods would work here)
 params = (m=1, l=0.5, b=0.1, lc=0.5, J=0.25, g=9.81)
