@@ -1,4 +1,4 @@
-function quadrotor_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
+function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector) where T
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
