@@ -419,7 +419,7 @@ struct ProblemConstraints
 end
 
 function ProblemConstraints(C::ConstraintSet,N::Int)
-    ProblemConstraints([C for k = 1:N])
+    ProblemConstraints([copy(C) for k = 1:N])
 end
 
 function ProblemConstraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
@@ -442,9 +442,9 @@ function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vecto
     return p
 end
 
-Base.setindex!(pcon::ProblemConstraints, C::ConstraintSet, k::Int) = PC.C[k] = C
-Base.getindex(pcon)::ProblemConstraints,i::Int) = c.C[i]
-Base.copy(pcon::ProblemConstraints) = ProblemConstraints(deepcopy(c.C))
+Base.setindex!(pcon::ProblemConstraints, C::ConstraintSet, k::Int) = pcon.C[k] = C
+Base.getindex(pcon::ProblemConstraints,i::Int) = pcon.C[i]
+Base.copy(pcon::ProblemConstraints) = ProblemConstraints(deepcopy(pcon.C))
 Base.length(pcon::ProblemConstraints) = length(pcon.C)
 
 
@@ -458,6 +458,20 @@ function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemCons
     evaluate!(C[N],constraints[N],X[N])
 end
 
+function jacobian!(C::PartedMatTrajectory{T}, constraints::ProblemConstraints,
+        X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(C[k],constraints[k],X[k],U[k])
+    end
+    jacobian!(C[N],constraints[N],X[N])
+end
+
+
+
+###################################
+##         ACTIVE SET            ##
+###################################
 
 "Evaluate active set constraints for entire trajectory"
 function update_active_set!(a::PartedVecTrajectory{Bool},c::PartedVecTrajectory{T},λ::PartedVecTrajectory{T},tol::T=0.0) where T
