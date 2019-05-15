@@ -55,7 +55,7 @@ function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTraje
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
-    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 Problem(model::Model{Discrete}, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
@@ -66,7 +66,7 @@ function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTraje
     N = length(U0) + 1
     N, tf, dt = _validate_time(N, tf, dt)
     X0 = empty_state(model.n, N)
-    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 Problem(model::Model{Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(U0); kwargs...)
