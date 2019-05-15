@@ -332,9 +332,9 @@ function PartedArrays.create_partition(C::ConstraintSet,contype=:stage)
         lens = length.(C,contype)
         part = create_partition(Tuple(lens),Tuple(labels(C)))
         ineq = PartedArray(trues(sum(lens)),part)
-        for c in C
+        for (i,c) in enumerate(C)
             if type(c) == Equality
-                copyto!(ineq[c.label], falses(length(c)))
+                copyto!(ineq[c.label], falses(lens[i]))
             end
         end
         part_IE = (inequality=LinearIndices(ineq)[ineq],equality=LinearIndices(ineq)[.!ineq])
