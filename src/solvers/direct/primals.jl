@@ -119,3 +119,14 @@ function unpackZ(Z::Vector{<:Real}, part_z::NamedTuple)
     U = [view(Z,part_z.U[:,k]) for k = 1:uN]
     return X, U
 end
+
+function packZ(X,U, part_z)
+    n,m = length(X[1]), length(U[1])
+    N, uN = length(X), length(U)
+    Z = zeros(eltype(X[1]), N*n + uN*m)
+    for k = 1:N
+        Z[part_z.X[:,k]] = X[k]
+        Z[part_z.U[:,k]] = U[k]
+    end
+    return Z
+end
