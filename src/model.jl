@@ -57,8 +57,8 @@ struct AnalyticalModel{D} <:Model{D}
             else
                 f! = wrap_inplace(f)
             end
-            ∇f! = _check_jacobian(D,f,∇f,n,m)
-            new{D}(f!,∇f!,n,m,p,evals,d)
+            # ∇f! = _check_jacobian(D,f,∇f,n,m)
+            new{D}(f!,∇f,n,m,p,evals,d)
         else
             new{D}(f,∇f,n,m,p,evals,d)
         end
@@ -333,6 +333,7 @@ function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=
     v0 = zeros(p)
     f_aug(dZ::AbstractVector,z::AbstractVector) = f!(dZ,view(z,inds.x), view(z,inds.u))
     ∇fz(Z::AbstractMatrix,v::AbstractVector,z::AbstractVector) = ForwardDiff.jacobian!(Z,f_aug,v,z)
+
     ∇f!(Z::AbstractMatrix,v::AbstractVector,x::AbstractVector,u::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
@@ -351,6 +352,7 @@ function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=
         ∇fz(Z,v0,z)
         return Z
     end
+    ∇f!(Z::AbstractMatrix,x::AbstractVector) = ForwardDiff.jacobian!(Z,f!,v0,x)
     return ∇f!, f_aug
 end
 
@@ -495,81 +497,130 @@ function _test_jacobian(::Type{Discrete},∇f::Function)
     form[3] = hasmethod(∇f,(AbstractMatrix,AbstractVector,AbstractVector,AbstractVector,Float64))
     return form
 end
-
-_check_jacobian(f::Function,∇f::Function,n::Int,m::Int,p::Int=n) = _check_jacobian(Continuous,f,∇f,n,m,p)
-function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
-    forms = _test_jacobian(Continuous,∇f)
-    if !forms[2]
-        throw("Jacobians must have the method ∇f(Z,x,u)")
-    else
-        inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
-        Z = PartedArray(zeros(p,n+m),inds)
-        z = zeros(n+m)
-
-        # Copy the correct method form
-        ∇f!(Z,x,u) = ∇f(Z,x,u)
-
-        # Implement the missing method(s)
-        if forms[1]
-            ∇f!(x,u) = ∇f(x,u)
-        else
-            ∇f!(x,u) = begin
-                ∇f(Z,x,u)
-                return Z
-            end
-        end
-        if forms[3]
-            ∇f!(Z,v,x,u) = ∇f(Z,v,x,u)
-        else
-            ∇f!(Z,v,x,u) = begin
-                x = z[inds.x]
-                u = z[inds.u]
-                f(v,x,u)
-                ∇f(Z,x,u)
-            end
-        end
-    end
-    return ∇f!
-
-end
-
-function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
-    forms = _test_jacobian(Discrete,∇f)
-    if !forms[2]
-        throw("Jacobians must have the method ∇f(Z,x,u,dt)")
-    else
-        inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
-        S = PartedArray(zeros(p,n+m+1),inds)
-        s = zeros(n+m+1)
-
-        # Copy the correct method form
-        ∇f!(S,x,u,dt) = ∇f(S,x,u,dt)
-         # ∇f! = ∇f
-
-
-        # Implement the missing method(s)
-        if forms[1]
-            ∇f!(x,u,dt) = ∇f(x,u,dt)
-        else
-            ∇f!(x,u,dt) = begin
-                ∇f!(S,x,u,dt)
-                return S
-            end
-        end
-        if forms[3]
-            ∇f!(S,v,x,u,dt) = ∇f(S,v,x,u,dt)
-        else
-            ∇f!(S,v,x,u,dt) = begin
-                x = s[inds.x]
-                u = s[inds.u]
-                dt = s[inds.dt]
-                f(v,x,u,dt)
-                ∇f!(S,x,u,dt)
-            end
-        end
-    end
-    return ∇f!
-end
+#
+# _check_jacobian(f::Function,∇f::Function,n::Int,m::Int,p::Int=n) = _check_jacobian(Continuous,f,∇f,n,m,p)
+#
+# function _check_jacobian(::Type{Continuous},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
+#     forms = _test_jacobian(Continuous,∇f)
+#     if !forms[2]
+#         throw("Jacobians must have the method ∇f(Z,x,u)")
+#     else
+#         inds = (x=1:n,u=n .+ (1:m), px=(1:p,1:n),pu=(1:p,n .+ (1:m)))
+#         Z = PartedArray(zeros(p,n+m),inds)
+#         z = zeros(n+m)
+#
+#         # Copy the correct method form
+#         ∇f!(Z,x,u) = ∇f(Z,x,u)
+#
+#         # Implement the missing method(s)
+#         if forms[1]
+#             ex1 = :(∇f!(x,u) = ∇f(x,u))
+#         else
+#             ex1 = quote
+#                 ∇f!(x,u) = begin
+#                     ∇f(Z,x,u)
+#                     return Z
+#                 end
+#             end
+#         end
+#         if forms[3]
+#             ex2 = :(∇f!(Z,v,x,u) = ∇f(Z,v,x,u))
+#         else
+#             ex2 = quote
+#                 ∇f!(Z,v,x,u) = begin
+#                     x = z[inds.x]
+#                     u = z[inds.u]
+#                     f(v,x,u)
+#                     ∇f(Z,x,u)
+#                 end
+#             end
+#         end
+#         eval(ex1)
+#         eval(ex2)
+#     end
+#     return ∇f!
+#
+# end
+#
+# function build_jacobian(∇f::Function, ::Type{Continuous}, ::Val{(true,true,true)})
+#     ∇f! = ∇f
+#     return ∇f!
+# end
+#
+# function build_jacobian(∇f::Function, n, m, ::Type{Continuous}, ::Val{(false,true,true)})
+#     Z =
+#     ∇f!(Z,x,u) = ∇f(Z,x,u)
+#     ∇f!(x,u) = begin ∇f(Z,x,u)
+#         return Z
+#     end
+#     ∇f!(Z,v,x,u) = ∇f(Z,v,x,u)
+#     return ∇f!
+# end
+#
+# function build_jacobian(∇f::Function, ::Type{Continuous}, ::Val{(true,true,false)})
+#     ∇f!(Z,x,u) = ∇f(Z,x,u)
+#     ∇f!(x,u) = ∇f(x,u)
+#     ∇f!(Z,v,x,u) = begin
+#         x = z[inds.x]
+#         u = z[inds.u]
+#         f(v,x,u)
+#         ∇f(Z,x,u)
+#     end
+#     return ∇f!
+# end
+#
+# function build_jacobian(∇f::Function, ::Type{Continuous}, ::Val{(true,true,false)})
+#     ∇f!(Z,x,u) = ∇f(Z,x,u)
+#     ∇f!(x,u) = begin ∇f(Z,x,u)
+#         return Z
+#     end
+#     ∇f!(Z,v,x,u) = ∇f(Z,v,x,u)
+#     return ∇f!
+# end
+#
+# function _check_jacobian(::Type{Discrete},f::Function,∇f::Function,n::Int,m::Int,p::Int=n)
+#     forms = _test_jacobian(Discrete,∇f)
+#     if !forms[2]
+#         throw("Jacobians must have the method ∇f(Z,x,u,dt)")
+#     else
+#         inds = (x=1:n,u=n .+ (1:m), dt=n+m+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
+#         S = PartedArray(zeros(p,n+m+1),inds)
+#         s = zeros(n+m+1)
+#
+#         # Copy the correct method form
+#         ∇f!(S,x,u,dt) = ∇f(S,x,u,dt)
+#          # ∇f! = ∇f
+#
+#
+#         # Implement the missing method(s)
+#         if forms[1]
+#             ex1 = :(∇f!(x,u,dt) = ∇f(x,u,dt))
+#         else
+#             ex1 = quote
+#                 ∇f!(x,u,dt) = begin
+#                     ∇f!(S,x,u,dt)
+#                     return S
+#                 end
+#             end
+#         end
+#         if forms[3]
+#             ex2 = :(∇f!(S,v,x,u,dt) = ∇f(S,v,x,u,dt))
+#         else
+#             ex2 = quote
+#                 ∇f!(S,v,x,u,dt) = begin
+#                     x = s[inds.x]
+#                     u = s[inds.u]
+#                     dt = s[inds.dt]
+#                     f(v,x,u,dt)
+#                     ∇f!(S,x,u,dt)
+#                 end
+#             end
+#         end
+#         eval(ex1)
+#         eval(ex2)
+#     end
+#     return ∇f!
+# end
 
 function _check_dynamics(f::Function,n::Int,m::Int)
     no_params = hasmethod(f,(AbstractVector,AbstractVector,AbstractVector))
