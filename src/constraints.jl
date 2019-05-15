@@ -397,19 +397,20 @@ end
 
 "Return a new constraint set with modified jacobians--useful for state augmented problems"
 function update_constraint_set_jacobians(cs::ConstraintSet,n::Int,n̄::Int,m::Int)
-    idx = [(1:n)...,((1:m) .+ n̄)...]
-    _cs = []
+    idx = [collect(1:n); collect(1:m) .+ n̄]
+    _cs = GeneralConstraint[]
 
-    for con in stage(cs)
+    cs_ = copy(cs)
+    bnd = remove_bounds!(cs_)
+    for con in cs_
         _∇c(C,x,u) = con.∇c(view(C,:,idx),x,u)
-        push!(_cs,Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds))
+        _∇c(C,x) = con.∇c(C,x)
+        _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds)
     end
 
-    for con in terminal(cs)
-        push!(_cs,con)
-    end
+    _cs += bnd
 
-    return [_cs...]
+    return _cs
 end
 
 # "Type that stores a trajectory of constraint sets"
