@@ -353,9 +353,11 @@ RigidBodyDynamics model. Wrapper for a RigidBodyDynamics Mechanism
 """
 struct RBDModel{M,D} <: Model{M,D}
     f::Function # continuous dynamics (ie, differential equation)
+    ∇f::Function
     n::Int # number of states
     m::Int # number of controls
     r::Int # number of uncertain parameters
+    params::NamedTuple
     mech::Mechanism  # RigidBodyDynamics Mechanism
     evals::Vector{Int}
     info::Dict{Symbol,Any}
@@ -390,10 +392,21 @@ function Model(mech::Mechanism, torques::Array)
         dynamics!(view(ẋ,1:n), dyn, state, x, torque_matrix*u)
         return nothing
     end
+
+    f_wrap(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)])
+    _∇f(Z,z) = ForwardDiff.jacobian!(Z,f_wrap,zeros(n),z)
+    z0 = zeros(n+m)
+
+    function ∇f(Z::AbstractArray{T},x::AbstractVector{T},u::AbstractVector{T}) where T
+        z0[1:n] = x
+        z0[n .+ (1:m)] = u
+        _∇f(Z,z0)
+    end
+
     d = Dict{Symbol,Any}()
 
     evals = [0,]
-    RBDModel{Nominal,Continuous}(f, n, m, 0, mech, evals, d)
+    RBDModel{Nominal,Continuous}(f, ∇f, n, m, 0, NamedTuple(), mech, evals, d)
 end
 
 """
