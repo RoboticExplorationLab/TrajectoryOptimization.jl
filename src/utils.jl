@@ -10,6 +10,39 @@ import Plots: plot, plot!
 #     return solver.model.n, solver.model.m, solver.N
 # end
 
+"""
+$(SIGNATURES)
+Interpolate a trajectory using cubic interpolation
+"""
+function interp_traj(N::Int,tf::Float64,X::AbstractMatrix,U::AbstractMatrix)::Tuple{Matrix,Matrix}
+    if isempty(X)
+        X2 = X
+    else
+        X2 = interp_rows(N,tf,X)
+    end
+    U2 = interp_rows(N-1,tf,U)
+    return X2, U2
+end
+
+interp_traj(N::Int,tf::Float64,X::Trajectory,U::Trajectory) = interp_traj(N,tf,to_array(X),to_array(U))
+
+"""
+$(SIGNATURES)
+Interpolate the rows of a matrix using cubic interpolation
+"""
+function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
+    n,N1 = size(X)
+    t1 = range(0,stop=tf,length=N1)
+    t2 = collect(range(0,stop=tf,length=N))
+    X2 = zeros(n,N)
+    for i = 1:n
+        interp_cubic = CubicSplineInterpolation(t1, X[i,:])
+        X2[i,:] = interp_cubic(t2)
+    end
+    return X2
+end
+
+
 function get_sizes(X::Vector{T}, U::Vector{T}) where {T<:MVector}
     N = length(X)
     n,m = length(X[1]), length(U[1])

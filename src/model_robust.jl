@@ -13,18 +13,14 @@ abstract type Model{M<:ModelType,D<:DynamicsType} <: AbstractModel end
 
 """
 $(TYPEDEF)
-
 Dynamics model
-
 Holds all information required to uniquely describe a dynamic system, including
 a general nonlinear dynamics function of the form `ẋ = f(x,u)`, where x ∈ ℜⁿ are
 the states and u ∈ ℜᵐ are the controls.
-
 Dynamics function, f, should be of the form
     f(ẋ,x,u,p) for Continuous models, where ẋ is the state derivative
     f(ẋ,x,u,p,dt) for Discrete models, where ẋ is the state at the next time step
     and x is the state vector, u is the control input vector, and p is an optional `NamedTuple` of static parameters (mass, gravity, etc.)
-
 Dynamics jacobians, ∇f, should be of the form
     ∇f(Z,x,u,p) for Continuous models, and
     ∇f(Z,x,u,,p,dt) for discrete models
@@ -42,12 +38,10 @@ struct AnalyticalModel{M,D} <: Model{M,D}
 
     """ $(SIGNATURES)
     Create a dynamics model given a dynamics function and Jacobian, with n states and m controls.
-
     Dynamics function should be of the form
         f(ẋ,x,u,p) for Continuous models, where ẋ is the state derivative
         f(ẋ,x,u,p,dt) for Discrete models, where ẋ is the state at the next time step
         and x is the state vector, u is the control input vector, and p is a `NamedTuple` of static parameters (mass, gravity, etc.)
-
     Optionally pass in a dictionary `d` with model information.
     `check_functions` option runs verification checks on the dynamics function and Jacobian to make sure they have the correct forms.
     """
@@ -328,15 +322,11 @@ Base.length(model::Model{Uncertain,Continuous}) = model.n + model.m + model.r
 
 PartedArrays.create_partition(model::Model{M,Discrete}) where M <:ModelType = create_partition((model.n,model.m,1),(:x,:u,:dt))
 PartedArrays.create_partition2(model::Model{M,Discrete}) where M <:ModelType = create_partition2((model.n,),(model.n,model.m,1),(:x,),(:x,:u,:dt))
-PartedArrays.create_partition2(model::Model{M,Discrete},n::Int,m::Int,r::Int) where M <:ModelType = create_partition2((n,),(n,m,1),(:x,),(:x,:u,:dt))
-
 PartedArrays.create_partition(model::Model{M,Continuous}) where M <:ModelType = create_partition((model.n,model.m),(:x,:u))
 PartedArrays.create_partition2(model::Model{M,Continuous}) where M <:ModelType = create_partition2((model.n,),(model.n,model.m),(:x,),(:x,:u))
 
 PartedArrays.create_partition(model::Model{Uncertain,Discrete}) = create_partition((model.n,model.m,model.r,1),(:x,:u,:w,:dt))
 PartedArrays.create_partition2(model::Model{Uncertain,Discrete}) = create_partition2((model.n,),(model.n,model.m,model.r,1),(:x,),(:x,:u,:w,:dt))
-PartedArrays.create_partition2(model::Model{Uncertain,Discrete},n::Int,m::Int,r::Int) = create_partition2((n,),(n,m,r,1),(:x,),(:x,:u,:w,:dt))
-
 PartedArrays.create_partition(model::Model{Uncertain,Continuous}) = create_partition((model.n,model.m,model.r),(:x,:u,:w))
 PartedArrays.create_partition2(model::Model{Uncertain,Continuous}) = create_partition2((model.n,),(model.n,model.m,model.r),(:x,),(:x,:u,:w))
 
@@ -535,7 +525,7 @@ function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::I
     Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
     ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T= begin
         s[inds.x] = x
-        s[inds.u] = u[1:m]
+        s[inds.u] = u
         s[inds.w] = w
         s[inds.dt] = dt
         Fd!(S,ẋ,s)
@@ -543,7 +533,7 @@ function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::I
     end
     ∇fd!(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
-        s[inds.u] = u[1:m]
+        s[inds.u] = u
         s[inds.w] = w
         s[inds.dt] = dt
         Fd!(S,ẋ0,s)
@@ -551,7 +541,7 @@ function generate_jacobian(::Type{Uncertain},::Type{Discrete},fd!::Function,n::I
     end
     ∇fd!(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
         s[inds.x] = x
-        s[inds.u] = u[1:m]
+        s[inds.u] = u
         s[inds.w] = w
         s[inds.dt] = dt
         Fd!(S0,ẋ0,s)
