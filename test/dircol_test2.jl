@@ -134,3 +134,112 @@ problem.x = Zinit.Z
 solveProblem(problem)
 Zsol = Primals(problem.x, Zinit)
 plot(Zsol.X)
+
+
+
+# Manual Test
+N = 11
+n,m = 3,2
+NN = (n+m)N
+p_colloc = (N-1)*n
+P = p_colloc
+nG = p_colloc*2(n+m)
+dt = 0.05
+
+jac_struct = jac_g_structure(n,m,N)
+r,c = TrajectoryOptimization.get_rc(jac_struct)
+
+part_z = create_partition(n,m,N,N)
+X0 = [zeros(n) for k = 1:N]
+U0 = [ones(m) for k = 1:N]
+Z0 = packZ(X0, U0, part_z)
+X,U = unpackZ(Z, part_z)
+
+function eval_f(Z)
+    X,U = unpackZ(Z, part_z)
+    N = length(X)
+
+    J = 0.0
+    for k = 1:N-1
+        J += X[k]'Q*X[k] + U[k]'R*U[k]
+    end
+    J += (X[N] - xf)'Qf*(X[N] - xf)
+    return J/2
+end
+
+function eval_g(Z::Vector{T},g) where T
+    X,U = unpackZ(Z, part_z)
+    N = length(X)
+    n,m = length(X[1]), length(U[1])
+
+    fVals = [zeros(T,n) for k = 1:N]
+    for k = 1:N
+        evaluate!(fVals[k], model, X[k], U[k])
+    end
+    g_ = reshape(g, n, N-1)
+    for k = 1:N-1
+        xm = 0.5*(X[k] + X[k+1]) + dt/8*(fVals[k] - fVals[k+1])
+        um = 0.5*(U[k] + U[k+1])
+        fValm = zero(X[k])
+        evaluate!(fValm, model, xm, um)
+        g_[:,k] = X[k] - X[k+1] + dt*(fVals[k] + 4fValm + fVals[k+1])
+    end
+end
+
+eval_g2(g, Z) = eval_g(Z, g)
+
+function eval_grad_f(Z, grad_f)
+    X,U = unpackZ(Z, part_z)
+    N = length(X)
+    n,m = length(X[1]), length(U[1])
+
+    grad = reshape(grad_f, n+m, N)
+    for k = 1:N-1
+        grad[:,k] = [Q*X[k]; R*U[k]]
+    end
+    grad[:,N] = [Qf*(X[N] - xf); zeros(m)]
+end
+
+function eval_jac_g(Z, mode, row, col, val)
+    if mode == :Structure
+        copyto!(row, r)
+        copyto!(col, c)
+    else
+        jac = zeros(p_colloc, length(Z))
+        g = zeros(p_colloc)
+        ForwardDiff.jacobian!(jac, eval_g2, g, Z)
+        copyto!(val, jac[CartesianIndex.(r,c)])
+    end
+end
+
+function jac_g_structure(n,m,N)
+    p_colloc = (N-1)*n
+    NN = N*(n+m)
+    jac = spzeros(p_colloc, NN)
+
+    n_blk = 2(n+m)n
+    blk = reshape(1:n_blk, n, 2(n+m))
+    off1 = 0
+    off2 = 0
+    off = 0
+    for k = 1:N-1
+        jac[off1 .+ (1:n), off2 .+ (1:2(n+m))] = blk .+ off
+        off1 += n
+        off2 += n+m
+        off  += n_blk
+    end
+    return jac
+end
+
+grad_f = zeros(NN)
+eval_grad_f(Z, grad_f)
+ForwardDiff.gradient(eval_f, Z) ≈ grad_f
+
+g = zeros(P)
+eval_g(Z,g)
+
+row,col,val = zeros(nG), zeros(nG), zeros(nG)
+eval_jac_g(Z, :Structure, row, col, val)
+eval_jac_g(Z, :Vals, row, col, val)
+r
+c
