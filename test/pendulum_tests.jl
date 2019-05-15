@@ -13,7 +13,7 @@ xf = [pi; 0] # (ie, swing up)
 costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
 
 verbose = false
-opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-5)
+opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-6)
 opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-4)
 
 N = 51
@@ -27,7 +27,7 @@ for is in int_schemes
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
     TrajectoryOptimization.solve!(prob, solver_ilqr)
-    @test norm(prob.X[N] - xf) < 1e-4
+    @test norm(prob.X[N] - xf) < 1.0e-3
 end
 
 ## Constrained
@@ -41,7 +41,7 @@ for is in int_schemes
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
     TrajectoryOptimization.solve!(prob, solver_al)
-    @test norm(prob.X[N] - xf) < 1e-4
+    @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
     @test TrajectoryOptimization.max_violation(prob) < opts_al.constraint_tolerance
 end
 
