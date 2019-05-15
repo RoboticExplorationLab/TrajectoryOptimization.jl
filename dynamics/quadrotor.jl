@@ -1,4 +1,4 @@
-function quadrotor_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
+function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector) where T
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -78,7 +78,7 @@ end
 n = 13
 m = 4
 
-model = Model(quadrotor_dynamics!,n,m)
+quadrotor_model = Model(quadrotor_dynamics!,n,m)
 
 # Unconstrained
 Q = (1e-1)*Matrix(I,n,n)
@@ -101,7 +101,7 @@ xf[1:3] = [0.;40.;0.] # xyz position
 xf[4:7] = q0
 
 quadrotor_cost = TrajectoryOptimization.LQRCost(Q, R, Qf, xf)
-quadrotor_model = TrajectoryOptimization.rk4(model)
+quadrotor_model_discrete = TrajectoryOptimization.rk4(quadrotor_model)
 
 
 ## Constrained
@@ -127,4 +127,4 @@ end
 con_obs = Constraint{Inequality}(cI_3obs_quad, n, m, n_spheres, :obstacles)
 N = 51
 U_hover = ones(m,N-1)*f_hover
-quadrotor_obstacles = Problem(quadrotor_model, quadrotor_cost, U_hover, constraints=TrajectoryOptimization.ProblemConstraints([con_obs],N), x0=x0, N=N, tf=tf)
+quadrotor_obstacles = Problem(quadrotor_model_discrete, quadrotor_cost, U_hover, constraints=TrajectoryOptimization.ProblemConstraints([con_obs],N), x0=x0, N=N, tf=tf)

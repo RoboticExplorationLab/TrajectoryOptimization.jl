@@ -67,12 +67,13 @@ N = 51
 U = [ones(m) for k = 1:N-1]
 dt = 0.06
 prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
-
+prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(N),dt=dt,x0=x0)
+rollout!(prob)
+prob = update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
 opts = DIRCOLSolverOptions{Float64}()
-rollout!(prob)
 prob = update_problem(prob, model=model)
 pcon = prob.constraints
 dircol = DIRCOLSolver(prob, opts)
@@ -259,4 +260,169 @@ prob0.constraints
 sum(num_constraints(prob))
 
 using Ipopt
-solve!(prob, dircol)
+prob
+dircol
+problem = solve!(prob, dircol)
+
+solveProblem(problem)
+
+
+solver = dircol
+
+prob0 = copy(prob)
+bnds = remove_bounds!(prob0)
+solver0 = DIRCOLSolver(prob0, solver.opts)
+eval_f2, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions(prob0, solver0)
+
+Z0 = Primals(prob, true)
+
+NN = N*(n+m)
+p = num_constraints(prob0)
+p_colloc = num_colloc(prob0)
+p_custom = sum(p)
+P = p_colloc + p_custom
+nG = p_colloc*2(n+m) + sum(p[1:N-1])*(n+m) + p[N]*n
+nH = 0
+
+z_U, z_L, g_U, g_L = get_bounds(prob0, dircol0, bnds)
+z_U = z_U.Z
+z_L = z_L.Z
+convertInf!(z_U, 1e10)
+convertInf!(z_L, 1e10)
+g_U = vcat(zeros(p_colloc), g_U...)
+g_L = vcat(zeros(p_colloc), g_L...)
+
+Z = Z0.Z
+plot(Z0.X)
+
+
+g = zeros(P)
+grad_f = zeros(NN)
+r,c,v = zeros(nG), zeros(nG), zeros(nG)
+eval_f2(Z)
+eval_g(Z,g)
+eval_grad_f(Z, grad_f)
+eval_jac_g(Z, :Structure, r, c, v)
+eval_jac_g(Z, :Values, r, c, v)
+
+problem = Ipopt.createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
+    eval_f, eval_g, eval_grad_f, eval_jac_g)
+problem.x = Z0.Z
+
+solveProblem(problem)
+
+ilqr = iLQRSolverOptions()
+U0 = ones(m,N-1)
+initial_controls!(prob, U0)
+prob_d = rk4(prob)
+prob_sol = solve(prob_d, ilqr)
+initial_controls!(prob, prob_sol.U)
+initial_state!(prob, prob_sol.X)
+
+plot(prob_sol.X)
+
+prob
+num_constraints(prob)
+problem = solve!(prob, DIRCOLSolver(prob, opts))
+
+
+solveProblem(problem)
+Zsol = Primals(problem.x,Z0)
+
+plot(Zsol.X)
+
+
+
+# Re-create the problem with rolled out trajectory
+U0 = ones(m,N-1)
+prob = Problem(model_d,Objective(lqr_cost,N),U0,constraints=ProblemConstraints(N),dt=dt,x0=x0)
+rollout!(prob)
+prob = update_problem(prob, model=model)
+
+# Extract out X,U
+n,m,N = size(prob)
+NN = (n+m)N
+dt = prob.dt
+Z = Primals(prob, true).Z
+part_z = create_partition(n,m,N,N)
+X,U = unpackZ(Z, part_z)
+
+# Get the cost
+cost(prob.obj, X, U)
+
+# Check mipoints
+fVal = dynamics(prob, X, U)
+xs = [x[1] for x in X]
+ys = [x[2] for x in X]
+scatter(xs,ys)
+Xm = traj_points(prob, X, U, fVal)
+xm = [x[1] for x in Xm]
+ym = [x[2] for x in Xm]
+scatter!(xm,ym)
+
+# Check collocation constraints
+p_colloc = num_colloc(prob)
+p_colloc == (N-1)*n
+g = zeros(p_colloc)
+collocation_constraints(g, prob, X, U)
+x1,u1 = X[1], U[1];
+x2,u2 = X[2], U[2];
+f1,f2,fm = zero(x1), zero(x2), zero(x1);
+evaluate!(f1, model, x1, u1)
+evaluate!(f2, model, x2, u2)
+f1 == fVal[1]
+f2 == fVal[2]
+xm = 0.5*(x1+x2) + dt/8*(f1-f2)
+xm == Xm[1]
+um = (u1+u2)/2
+evaluate!(fm, model, xm, um)
+
+err1 = x2-x1 - dt/6*(f1 + 4fm + f2)
+@test norm(err1) <= 1e-15
+@test norm(g) < 1e-15
+
+# Cost gradient
+function eval_cost(Z)
+    X,U = unpackZ(Z,part_z)
+    cost(prob.obj, X, U)
+end
+grad_f = zeros(NN)
+cost_gradient!(grad_f, prob, X, U)
+@test ForwardDiff.gradient(eval_cost, Z) ≈ grad_f
+
+# Collocation jacobian
+function colloc(Z)
+    X,U = unpackZ(Z,part_z)
+    g = zeros(eltype(Z),p_colloc)
+    collocation_constraints(g, prob, X, U)
+    return g
+end
+jac_co = zeros(p_colloc, NN)
+collocation_constraint_jacobian!(jac_co, prob, X, U)
+@test ForwardDiff.jacobian(colloc, Z) ≈ jac_co
+
+jac_struct = spzeros(p_colloc, NN)
+collocation_constraint_jacobian_sparsity!(jac_struct, prob)
+get_rc(jac_struct)
+
+eval_f2, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions2(prob, solver)
+r,c,v = zeros(nG), zeros(nG), zeros(nG)
+eval_jac_g(jac_co, :Structure, r, c, v)
+
+P = p_colloc
+nG = p_colloc*2(n+m)
+nH = 0
+z_L = ones(NN)*-1e5
+z_U = ones(NN)*1e5
+g_L = zeros(P)
+g_U = zeros(P)
+problem = Ipopt.createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
+    eval_f2, eval_g, eval_grad_f, eval_jac_g)
+Zinit = Primals([zeros(n) for k = 1:N], [ones(m) for k = 1:N])
+opt_file = joinpath(root_dir(),"ipopt.opt")
+addOption(problem,"option_file_name",opt_file)
+problem.x = Zinit.Z
+
+solveProblem(problem)
+Zsol = Primals(problem.x, Z0)
+plot(Zsol.X)

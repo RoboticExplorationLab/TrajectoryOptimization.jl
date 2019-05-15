@@ -65,6 +65,7 @@ function Primals(Z::Vector{T},Z0::Primals{T}) where T
     X = deepcopy(Z0.X)
     U = deepcopy(Z0.U)
     uN = length(U)
+    N = length(X)
     for k = 1:uN
         X[k] = view(Z,X[k].indices[1])
         U[k] = view(Z,U[k].indices[1])
@@ -110,4 +111,11 @@ function packZ(prob::Problem{T}) where T
     copyto!(Z.X, prob.X)
     copyto!(Z.U, prob.U)
     return Z
+end
+
+function unpackZ(Z::Vector{<:Real}, part_z::NamedTuple)
+    N, uN = size(part_z.X,2), size(part_z.U,2)
+    X = [view(Z,part_z.X[:,k]) for k = 1:N]
+    U = [view(Z,part_z.U[:,k]) for k = 1:uN]
+    return X, U
 end

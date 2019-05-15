@@ -51,16 +51,16 @@ end
 Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
-function Problem(model::Model{Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
+function Problem(model::Model, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
-Problem(model::Model{Discrete}, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTrajectory{T};
+function Problem(model::Model, obj::AbstractObjective, U0::VectorTrajectory{T};
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N = length(U0) + 1
@@ -68,10 +68,10 @@ function Problem(model::Model{Discrete}, obj::AbstractObjective, U0::VectorTraje
     X0 = empty_state(model.n, N)
     Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
-Problem(model::Model{Discrete}, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(U0); kwargs...)
 
-function Problem(model::Model{Discrete}, obj::AbstractObjective;
+function Problem(model::Model, obj::AbstractObjective;
         constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
         N::Int=-1, dt=NaN, tf=NaN) where T
     N, tf, dt = _validate_time(N, tf, dt)
@@ -294,3 +294,7 @@ function Expansion(prob::Problem{T},exp::Symbol) where T
         error("Invalid expansion components requested")
     end
 end
+
+midpoint(prob::Problem{T,Continuous}) where T = update_problem(prob, model=midpoint(prob.model))
+rk3(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk3(prob.model))
+rk4(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk4(prob.model))

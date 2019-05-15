@@ -310,6 +310,7 @@ end
 function plot_trajectory!(X::AbstractMatrix;kwargs...)
     plot!(X[1,:],X[2,:];kwargs...)
 end
+plot_trajectory!(X::AbstractVectorTrajectory; kwargs...) = plot_trajectory!(to_array(X); kwargs...)
 
 # function plot_trajectory!(res::TrajectoryOptimization.SolverVectorResults; kwargs...)
 # 	plot_trajectory!(to_array(res.X); kwargs...)

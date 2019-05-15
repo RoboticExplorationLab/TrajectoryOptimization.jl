@@ -432,6 +432,10 @@ function ProblemConstraints(C::Vector{<:ConstraintSet},C_term::ConstraintSet)
     ProblemConstraints([C...,[Constraint(),C_term...]])
 end
 
+function ProblemConstraints(N::Int)
+    ProblemConstraints([GeneralConstraint[] for k = 1:N])
+end
+
 function ProblemConstraints()
     ProblemConstraints(ConstraintSet[])
 end
