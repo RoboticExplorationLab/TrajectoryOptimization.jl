@@ -267,9 +267,8 @@ function max_violation(prob::Problem{T}) where T
             end
         end
         if num_terminal_constraints(prob.constraints[N]) > 0
-            term_con = terminal(prob.constraints[N])
-            c = PartedVector(T,term_con)
-            evaluate!(c,term_con,prob.X[N])
+            c = PartedVector(T,prob.constraints[N],:terminal)
+            evaluate!(c,prob.constraints[N],prob.X[N])
             max_E = norm(c.equality,Inf)
             max_I = maximum(pos.(c))
             c_max = max(c_max,max(max_E,max_I))
