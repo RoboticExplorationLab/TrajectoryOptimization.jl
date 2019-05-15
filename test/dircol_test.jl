@@ -5,14 +5,16 @@ import TrajectoryOptimization: traj_points!, dynamics!, calculate_jacobians!, co
     collocation_constraints!, collocation_constraint_jacobian!, collocation_constraint_jacobian_sparsity!, constraint_jacobian_sparsity!,
     get_rc
 
+using Test
+using ForwardDiff
+using LinearAlgebra
 
 # Set up problem
 prob = copy(Dynamics.quadrotor_obstacles)
 model = Dynamics.quadrotor_model
 n,m,N = size(prob)
-bnd = bound_constraint(n, m, u_min=0, u_max=10)
+bnd = BoundConstraint(n, m, u_min=0, u_max=10)
 add_constraints!(prob, bnd)
-
 
 # initial state
 x0 = zeros(n)
@@ -24,6 +26,49 @@ x0[4:7] = q0
 xf = copy(x0)
 xf[1:3] = [0.;40.;0.] # xyz position
 xf[4:7] = q0
+
+
+
+## Box parallel park
+T = Float64
+model = TrajectoryOptimization.Dynamics.car_model
+n = model.n; m = model.m
+model_d = Model{Discrete}(model,rk4)
+
+
+# cost
+x0 = [0.0;0.0;0.]
+xf = [0.0;1.0;0.]
+tf =  3.
+Qf = 100.0*Diagonal(I,n)
+Q = (1e-2)*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
+lqr_cost = LQRCost(Q,R,Qf,xf)
+
+# options
+verbose=false
+opts_ilqr = iLQRSolverOptions{T}(verbose=false,live_plotting=:off)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,
+    iterations=30,penalty_scaling=10.0)
+opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=15.0,
+    dt_max=0.2,dt_min=1.0e-3)
+
+# constraints
+u_bnd = 2.
+x_min = [-0.25; -0.001; -Inf]
+x_max = [0.25; 1.001; Inf]
+bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+
+goal_con = goal_constraint(xf)
+con = [bnd, goal_con]
+
+# problem
+N = 51
+U = [ones(m) for k = 1:N-1]
+dt = 0.06
+prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+
+
 
 # Create DIRCOL Solver
 opts = DIRCOLSolverOptions{Float64}()
@@ -86,12 +131,13 @@ g = zeros(p_colloc + p_custom)
 dynamics!(prob, dircol, Z_rollout)
 traj_points!(prob, dircol, Z_rollout)
 collocation_constraints!(g_colloc, prob, dircol, Z_rollout)
-@test norm(g_colloc) == 0
+@test norm(g_colloc,Inf) < 1e-15
 
 # Normal Constraints
 dynamics!(prob, dircol, Z)
 traj_points!(prob, dircol, Z)
 g_custom = view(g, p_colloc.+(1:p_custom))
+prob.constraints[N]
 update_constraints!(g, prob, dircol)
 update_constraints!(dircol.C, prob.constraints, Z.X, Z.U)
 p = num_constraints(prob)
@@ -156,6 +202,8 @@ jac2 = sparse(r,c,jac_vec)
 
 # General constraint jacobian
 jac = zeros(p_colloc+p_custom, NN)
+constraint_jacobian_sparsity!(jac, prob)
+jac_co, jac_cu = partition_constraint_jacobian(jac, prob)
 calculate_jacobians!(prob, dircol, Z)
 constraint_jacobian!(jac, prob, dircol, Z)
 

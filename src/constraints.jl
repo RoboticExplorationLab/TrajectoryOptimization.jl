@@ -370,26 +370,26 @@ num_terminal_constraints(C::ConstraintSet) = num_constraints(terminal(C),:termin
 
 "$(SIGNATURES) Evaluate the constraint function for all the constraint functions in a set"
 function evaluate!(c::PartedVector, C::ConstraintSet, x, u)
-    for con in C
+    for con in stage(C)
         evaluate!(c[con.label], con, x[con.inds[1]], u[con.inds[2]])
     end
 end
 
 "$(SIGNATURES) Evaluate the constraint function for all the terminal constraint functions in a set"
 function evaluate!(c::PartedVector, C::ConstraintSet, x)
-    for con in C
+    for con in terminal(C)
         evaluate!(c[con.label], con, x[con.inds[1]])
     end
 end
 
 function jacobian!(c::PartedMatrix, C::ConstraintSet, x, u)
-    for con in C
+    for con in stage(C)
         jacobian!(c[con.label], con, x, u)
     end
 end
 
 function jacobian!(c::PartedMatrix, C::ConstraintSet, x)
-    for con in C
+    for con in terminal(C)
         jacobian!(c[con.label], con, x)
     end
 end
@@ -419,10 +419,12 @@ struct ProblemConstraints
 end
 
 function ProblemConstraints(C::ConstraintSet,N::Int)
+    C = append!(GeneralConstraint[], C)
     ProblemConstraints([copy(C) for k = 1:N])
 end
 
 function ProblemConstraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
+    C = append!(GeneralConstraint[], C)
     ProblemConstraints([k < N ? [C...,TerminalConstraint()] : [Constraint(),C_term...] for k = 1:N])
 end
 

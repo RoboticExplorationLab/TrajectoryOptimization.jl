@@ -61,3 +61,23 @@ function gen_ipopt_functions(prob::Problem, solver::DIRCOLSolver)
 
     return eval_f, eval_g, eval_grad_f, eval_jac_g
 end
+
+function remove_bounds!(prob::Problem)
+    bounds = BoundConstraint[]
+    for con in prob.constraints
+        bnd = remove_bounds!(con)
+        push!(bounds, bnd)
+    end
+end
+
+function solve!(prob::Problem, solver::DIRCOLSolver)
+    eval_f, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions(prob, solver)
+
+    NN = N*(n+m)
+    p_colloc = num_colloc(prob)
+    p_
+
+    problem = Ipopt.createProblem(NN, x_L, x_U, P, g_L, g_U, nG, nH,
+        eval_f, eval_g, eval_grad_f, eval_jac_g)
+    prob.x = Z0
+end

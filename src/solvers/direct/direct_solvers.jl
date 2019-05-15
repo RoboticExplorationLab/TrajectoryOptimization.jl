@@ -53,13 +53,13 @@ function AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions, Z::Primals{T}=
 
     # Create Trajectories
     ∇F         = [PartedMatrix(zeros(T,n,n+m),part_f)           for k = 1:N]
-    C          = [PartedVector(zeros(T,p[k]),c_part[k])       for k = 1:N-1]
-    ∇C         = [PartedMatrix(zeros(T,p[k],n+m),c_part2[k])  for k = 1:N-1]
+    C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
+    ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
+    C          = [C...,  PartedVector(T,constraints[N],:terminal)]
+    ∇C         = [∇C..., PartedMatrix(T,constraints[N],n,m,:terminal)]
 
     c_term = terminal(constraints[N])
     p_N = num_constraints(c_term)
-    C          = [C..., PartedVector(T,c_term)]
-    ∇C         = [∇C..., PartedMatrix(T,c_term,n,0)]
     fVal = [zeros(T,n) for k = 1:N]
 
     solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, ∇F, C, ∇C, fVal)

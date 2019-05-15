@@ -116,12 +116,14 @@ function constraint_jacobian!(jac, prob::Problem, solver::DirectSolver, Z::Prima
 
     off1 = p_colloc
     off2 = 0
+    ns = p[1:N-1]
+    ms = ones(Int,N-1)*(n+m)
+    b1 = p
+    b2 = ones(Int,N)*(n+m)
+    b2[N] = n
+
     for k = 1:N
-        if k == N
-            block = get_jac_block(jac_custom, k, p[k], n)
-        else
-            block = get_jac_block(jac_custom, k, p[k], n+m)
-        end
+        block = get_jac_block(jac_custom, k, b1, b2, ns, ms)
         block .= solver.∇C[k]
         off1 += p[k]
         off2 += n+m
@@ -136,10 +138,14 @@ function constraint_jacobian_sparsity!(jac::AbstractMatrix, prob::Problem)
 
     p = num_constraints(prob)
     off = p_colloc*2(n+m)
+    ns = p[1:N-1]
+    ms = ones(Int,N-1)*(n+m)
+    b1 = p
+    b2 = ones(Int,N)*(n+m)
+    b2[N] = n
     for k = 1:N
-        k == N ? b2 = n : b2 = n+m
-        n_blk = p[k]*b2
-        block = get_jac_block(jac_custom, k, p[k], b2)
+        n_blk = p[k]*b2[k]
+        block = get_jac_block(jac_custom, k, b1, b2, ns, ms)
         block .= reshape(off .+ (1:n_blk), p[k], b2)
         off += n_blk
     end
@@ -166,15 +172,18 @@ function collocation_constraints!(g, prob::Problem, solver::DIRCOLSolver{T,Hermi
     end
 end
 
-function get_jac_block(jac::AbstractMatrix, k::Int, n::Int, m::Int, off_n=n, off_m=m)
-    off1 = (k-1)*off_n
-    off2 = (k-1)*off_m
-    block = view(jac, off1 .+ (1:n), off2 .+ (1:m))
+function get_jac_block(jac::AbstractMatrix, k::Int, n::Vector{Int}, m::Vector{Int},
+        ns::Vector{Int}, ms::Vector{Int})
+    off1 = sum(ns[1:k-1])
+    off2 = sum(ms[1:k-1])
+    block = view(jac, off1 .+ (1:n[k]), off2 .+ (1:m[k]))
 end
 
-function get_jac_block(jac::AbstractVector, k::Int, n::Int, m::Int, off_n=n, off_m=m)
-    n_blk = n*m
-    block = reshape(view(jac, (k-1)*n_blk .+ (1:n_blk)), n, m)
+function get_jac_block(jac::AbstractVector, k::Int, n::Int, m::Int,
+        ns::Vector{Int}, ms::Vector{Int})
+    n_blk = n[k]*m[k]
+    off = sum(n[1:k-1] .* m[1:k-1])
+    block = reshape(view(jac, off .+ (1:n_blk)), n, m)
 end
 
 function collocation_constraint_jacobian!(jac, prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}, Z=solver.Z) where T
@@ -197,17 +206,17 @@ function collocation_constraint_jacobian!(jac, prob::Problem, solver::DIRCOLSolv
         return nothing
     end
 
-    b1 = n
-    b2 = 2(n+m)
-    off_n = n
-    off_m = n+m
+    b1 = ones(Int,N-1)*n
+    b2 = ones(Int,N-1)*2(n+m)
+    ns = ones(Int,N-1)*n
+    ms = ones(Int,N-1)*(n+m)
     for k = 1:N-1
 
         xm,um = Xm[k], 0.5*(U[k] + U[k+1])
         F1,F2 = ∇F[k], ∇F[k+1]
         jacobian!(∇Fm, prob.model, xm, um)
 
-        block = PartedArray(get_jac_block(jac, k, b1, b2, off_n, off_m), part)
+        block = PartedArray(get_jac_block(jac, k, b1, b2, ns, ms), part)
         calc_block!(block, F1,F2,∇Fm,dt)
     end
 end
@@ -217,12 +226,14 @@ function collocation_constraint_jacobian_sparsity!(jac::AbstractMatrix, prob::Pr
     n_blk = 2(n+m)n
 
     blk = 1:n_blk
-    b1, b2 = n, 2(n+m)
-    off_n, off_m = n, n+m
+    b1 = ones(Int,N-1)*n
+    b2 = ones(Int,N-1)*2(n+m)
+    ns = ones(Int,N-1)*n
+    ms = ones(Int,N-1)*(n+m)
     off = 0
     for k = 1:N-1
-        block = get_jac_block(jac, k, b1, b2, off_n, off_m)
-        block .= reshape(off .+ blk, b1, b2)
+        block = get_jac_block(jac, k, b1, b2, ns, ms)
+        block .= reshape(off .+ blk, b1[k], b2[k])
         off += n_blk
     end
 end
