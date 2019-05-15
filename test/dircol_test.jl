@@ -246,3 +246,17 @@ eval_grad_f(Z.Z, grad_f2)
 eval_jac_g(Z.Z, :Structure, row, col, jac2)
 eval_jac_g(Z.Z, :Values, r, c, jac2)
 @test sparse(row,col,jac2) == jac
+
+prob0 = copy(prob)
+remove_bounds!(prob0.constraints[2])
+bnds = remove_bounds!(prob0)
+dircol0 = DIRCOLSolver(prob0, opts)
+z_U,z_L,g_U,g_L = get_bounds(prob0, dircol0, bnds)
+vcat(g_U...)
+vcat(g_L...)
+dircol.C[1].parts
+prob0.constraints
+sum(num_constraints(prob))
+
+using Ipopt
+solve!(prob, dircol)

@@ -61,6 +61,20 @@ function Primals(Z::Vector{T},X::Vector{S},U::Vector{S}) where {T,S<:SubArray}
     Primals(Z,X,U, N==uN)
 end
 
+function Primals(Z::Vector{T},Z0::Primals{T}) where T
+    X = deepcopy(Z0.X)
+    U = deepcopy(Z0.U)
+    uN = length(U)
+    for k = 1:uN
+        X[k] = view(Z,X[k].indices[1])
+        U[k] = view(Z,U[k].indices[1])
+    end
+    if uN == N-1
+        X[N] = view(Z,X[N].indices)
+    end
+    Primals(Z,X,U, Z0.equal)
+end
+
 """ $(TYPEDSIGNATURES)
 Combine state and control trajectories.
 This is a little slow and less memory efficient than converting from a the combined vector to individual trajectories.
@@ -86,6 +100,7 @@ end
 
 Base.size(Z::Primals) = length(Z.X[1]), length(Z.U[1]), length(Z.X)
 Base.length(Z::Primals) = length(Z.Z)
+Base.copy(Z::Primals) = Primals(copy(Z.Z),Z)
 
 function packZ(prob::Problem{T}) where T
     n,m,N = size(prob)
