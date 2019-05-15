@@ -43,6 +43,7 @@ export
     AugmentedLagrangianSolver,
     AugmentedLagrangianSolverOptions,
     AugmentedLagrangianProblem,
+    ALTROSolverOptions,
     Discrete,
     Continuous,
     Constraint,
@@ -52,7 +53,9 @@ export
     ConstraintSet,
     StageConstraintSet,
     TerminalConstraintSet,
-    ConstraintSet
+    ConstraintSet,
+    Objective,
+    ProblemConstraints
 
 export
     rk3,
@@ -62,7 +65,9 @@ export
     bound_constraint,
     goal_constraint,
     initial_controls!,
-    initial_state!
+    initial_state!,
+    circle_constraint,
+    sphere_constraint
 
 
 # Primary methods
@@ -100,6 +105,7 @@ export
     reset,
     reset_evals,
     final_time,
+    total_time,
     count_constraints,
     inequalities,
     equalities,

@@ -6,7 +6,7 @@ Random.seed!(7)
 # model
 T = Float64
 integration = :rk4
-model = Dynamics.quadrotor_model_discrete
+model = Dynamics.quadrotor_model
 n = model.n; m = model.m
 
 # cost
@@ -29,8 +29,8 @@ costfun = LQRCost(Q, R, Qf, xf)
 
 # options
 verbose=false
-opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-6)
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-5,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1e-5)
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-5)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-4,cost_tolerance=1.0e-5,cost_tolerance_intermediate=1e-4)
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al)
 
 N = 101
