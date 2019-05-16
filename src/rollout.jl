@@ -46,6 +46,7 @@ function rollout(model::Model{Discrete}, x0::Vector, U::AbstractVectorTrajectory
     rollout!(X, model, U, dt)
     return X
 end
+rollout(prob::Problem{T,Discrete}) where T = rollout(prob.model, prob.x0, prob.U, prob.dt)
 
 function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
     if true
