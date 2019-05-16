@@ -13,3 +13,12 @@ end
 
 n,m = 2,1
 pendulum_model = Model(pendulum_dynamics!,n,m) # inplace model
+
+# costs
+Q = 1.0e-1*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = 1.0e-1*Diagonal(I,m)
+x0 = [0; 0.]
+xf = [pi; 0] # (ie, swing up)
+
+pendulum_costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
