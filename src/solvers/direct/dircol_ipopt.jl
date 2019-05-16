@@ -135,8 +135,7 @@ function remove_bounds!(prob::Problem)
     return bounds
 end
 
-function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundConstraint})
-    Z = solver.Z
+function get_bounds(prob::Problem, Z::Primals, bounds::Vector{<:BoundConstraint})
     n,m,N = size(Z)
     Z.equal ? uN = N : uN = N-1
     x_U = [zeros(n) for k = 1:N]
@@ -164,6 +163,10 @@ function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundC
             g_L[k].inequality .= -Inf
         end
     end
+
+    # Set Initial Condition
+    z_U.X[1] = prob.x0
+    z_L.X[1] = prob.x0
     return z_U, z_L, g_U, g_L
 end
 
