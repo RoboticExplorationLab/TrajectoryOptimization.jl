@@ -44,8 +44,13 @@ dt = 0.06
 # Re-create the problem with rolled out trajectory
 U0 = ones(m,N-1)
 prob = Problem(model_d,Objective(lqr_cost,N),U0,constraints=ProblemConstraints(N),dt=dt,x0=x0)
+prob.constraints[N] += goal_con
 rollout!(prob)
 prob = update_problem(prob, model=model)
+
+problem = TrajectoryOptimization.gen_ipopt_prob(prob)
+solveProblem(problem)
+
 
 # Extract out X,U
 n,m,N = size(prob)
@@ -123,6 +128,8 @@ z_L = ones(NN)*-1e5
 z_U = ones(NN)*1e5
 g_L = zeros(P)
 g_U = zeros(P)
+z_L[1:n] = x0
+z_U[1:n] = x0
 problem = Ipopt.createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
     eval_f2, eval_g, eval_grad_f, eval_jac_g)
 opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt")

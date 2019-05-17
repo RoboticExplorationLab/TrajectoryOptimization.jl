@@ -140,17 +140,18 @@ function gen_usrfun(model, cost, xf, N, dt)
     return eval_f, eval_g, eval_grad_f, eval_jac_g
 end
 
-xf = [pi,0]
-x0 = [0,0]
+
+x0 = [0.;0.;0.]
+xf = [0.;1.;0.]
 N = 51
-n,m = 2,1
+n,m = 3,2
 U0 = ones(m,N)
 p_colloc = (N-1)*n
 NN = N*(n+m)
 
 # New Method
-model = Dynamics.pendulum_model
-costfun = Dynamics.pendulum_costfun
+model = Dynamics.car_model
+costfun = Dynamics.car_costfun
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
 initial_controls!(prob,U0)
 X0 = rollout(prob)
@@ -158,7 +159,8 @@ dt = prob.dt
 
 ilqr = iLQRSolverOptions()
 res = solve(prob, ilqr)
-plot(res.X)
+plot()
+plot_trajectory!(res.X)
 
 # Old Method
 method = :hermite_simpson
