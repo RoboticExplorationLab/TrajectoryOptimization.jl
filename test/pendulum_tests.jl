@@ -21,6 +21,8 @@ dt = 0.1
 U0 = [rand(m) for k = 1:N-1]
 int_schemes = [:midpoint, :rk3, :rk4]
 
+prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:rk3, x0=x0, N=N, dt=dt)
+
 ## Unconstrained
 for is in int_schemes
     prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=is, x0=x0, N=N, dt=dt)

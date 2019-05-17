@@ -1,6 +1,6 @@
 "$(TYPEDEF) Trajectory Optimization Problem"
 struct Problem{T<:AbstractFloat,D<:DynamicsType}
-    model::Model{D}
+    model::AbstractModel
     obj::AbstractObjective
     constraints::ProblemConstraints
     x0::Vector{T}
@@ -10,8 +10,8 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     dt::T
     tf::T
 
-    function Problem(model::Model{D}, obj::AbstractObjective, constraints::ProblemConstraints,
-        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where {T,D}
+    function Problem(model::Model{M,D}, obj::AbstractObjective, constraints::ProblemConstraints,
+        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where {M,T,D}
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
@@ -36,7 +36,7 @@ end
 """$(TYPEDSIGNATURES)
 Create a problem from a continuous model, specifying the discretizer as a symbol
 """
-function Problem(model::Model{Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...)
+function Problem(model::Model{M,Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...) where M
     if integration == :none
         return Problem(model, obj; kwargs...)
     elseif isdefined(TrajectoryOptimization,integration)
@@ -81,25 +81,25 @@ function Problem(model::Model, obj::AbstractObjective;
 end
 
 "$(SIGNATURES) Pass in a cost instead of an objective"
-function Problem(model::Model{Discrete}, cost::CostFunction, U0::VectorTrajectory{T}; kwargs...) where T
+function Problem(model::Model{M,Discrete}, cost::CostFunction, U0::VectorTrajectory{T}; kwargs...) where {M,T}
     N = length(U0) + 1
     obj = Objective(cost, N)
     Problem(model, obj, U0; kwargs...)
 end
 
-Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
+Problem(model::Model{M,Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where {M,T} =
     Problem(model, cost, to_dvecs(U0); kwargs...)
 
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-initial_controls!(prob::Problem{T}, U0::AbstractVectorTrajectory{T}) where T = copyto!(prob.U, U0[1:prob.N-1])
-initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
+initial_controls!(prob::Problem{T,D}, U0::AbstractVectorTrajectory{T}) where {T,D} = copyto!(prob.U, U0[1:prob.N-1])
+initial_controls!(prob::Problem{T,D}, U0::Matrix{T}) where {T,D} = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
-initial_state!(prob::Problem{T}, X0::AbstractVectorTrajectory{T}) where T = copyto!(prob.X, X0)
-initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, to_dvecs(X0))
+initial_state!(prob::Problem{T,D}, X0::AbstractVectorTrajectory{T}) where {T,D} = copyto!(prob.X, X0)
+initial_state!(prob::Problem{T,D}, X0::Matrix{T}) where {T,D} = initial_state!(prob, to_dvecs(X0))
 
-set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
+set_x0!(prob::Problem{T,D}, x0::Vector{T}) where {T,D} = copyto!(prob.x0, x0)
 
 final_time(prob::Problem) = (prob.N-1) * prob.dt
 
@@ -248,11 +248,11 @@ num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for
 num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
 
 
-cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
+cost(prob::Problem{T,D}) where {T,D} = cost(prob.obj, prob.X, prob.U)::T
 
 pos(x) = max(0,x)
 
-function max_violation(prob::Problem{T}) where T
+function max_violation(prob::Problem{T,D}) where {T,D}
     if is_constrained(prob)
         N = prob.N
         c_max = 0.0
@@ -279,12 +279,12 @@ function max_violation(prob::Problem{T}) where T
     end
 end
 
-function Expansion(prob::Problem{T}) where T
+function Expansion(prob::Problem{T,D}) where {T,D}
     n = prob.model.n; m = prob.model.m
     Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
 end
 
-function Expansion(prob::Problem{T},exp::Symbol) where T
+function Expansion(prob::Problem{T,D},exp::Symbol) where {T,D}
     n = prob.model.n; m = prob.model.m
     if exp == :x
         return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))

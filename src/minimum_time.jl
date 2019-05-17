@@ -42,6 +42,28 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
         x0=[prob.x0;0.0])
 end
 
+"Add minimum time controls to dynamics "
+function add_min_time_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
+    n = model.n; m = model.m
+    n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
+    idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
+    idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
+
+    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[end]
+        model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
+        x₊[n̄] = h
+    end
+
+    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[end]
+        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
+        Z[idx.x,n̄m̄] .*= 2*h
+        Z[n̄,n̄m̄] = 1.0
+    end
+    AnalyticalModel{M,Discrete}(f!,∇f!,n̄,m̄,model.r,model.params,model.info)
+end
+
 "Return the total duration of trajectory"
 function total_time(prob::Problem{T}) where T
     m̄ = prob.model.m + 1
