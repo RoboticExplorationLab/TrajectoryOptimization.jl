@@ -169,7 +169,7 @@ model2.f(ẋ2,x,u)
 # Create discrete dynamics from continuous
 n,m = 3,2
 model = Dynamics.car_model
-discretizer = rk3
+discretizer = :rk3
 model_d = Model{Discrete}(model,discretizer)
 
 # Test partitioning
@@ -201,9 +201,9 @@ s = PartedVector(model_d)
 
 # Generate discrete dynamics equations
 f! = model.f
-fd! = discretizer(f!, dt)
+fd! = eval(discretizer)(f!, dt)
 f_aug! = f_augmented!(f!, n, m)
-fd_aug! = discretizer(f_aug!)
+fd_aug! = eval(discretizer)(f_aug!)
 nm1 = n + m + 1
 In = 1.0*Matrix(I,n,n)
 

@@ -354,13 +354,14 @@ function generate_jacobian(::Type{Continuous},f!::Function,n::Int,m::Int,p::Int=
     ∇f!(Z::AbstractMatrix,x::AbstractVector,u::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
-        ∇fz(Z,v0,z)
+        ∇fz(Z,zeros(eltype(x),p),z)
         return nothing
     end
     ∇f!(x::AbstractVector,u::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
-        ∇fz(Z,v0,z)
+        Z = PartedArray(zeros(eltype(x),p,n+m),inds)
+        ∇fz(Z,zeros(eltype(x),p),z)
         return Z
     end
     ∇f!(Z::AbstractMatrix,x::AbstractVector) = ForwardDiff.jacobian!(Z,f!,v0,x)
@@ -373,7 +374,7 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
     s = zeros(n+m+1)
     ẋ0 = zeros(n)
 
-    fd_aug!(xdot,s) = fd!(xdot,view(s,inds.x),view(s,inds.u),s[inds.dt])
+    fd_aug!(xdot,s) = fd!(xdot,s[inds.x],s[inds.u],s[inds.dt])
     Fd!(S,xdot,s) = ForwardDiff.jacobian!(S,fd_aug!,xdot,s)
     ∇fd!(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,dt::Float64) = begin
         s[inds.x] = x
@@ -386,14 +387,15 @@ function generate_jacobian(::Type{Discrete},fd!::Function,n::Int,m::Int)
         s[inds.x] = x
         s[inds.u] = u
         s[inds.dt] = dt
-        Fd!(S,ẋ0,s)
+        Fd!(S,zero(x),s)
         return nothing
     end
     ∇fd!(x::AbstractVector,u::AbstractVector,dt::Float64) = begin
         s[inds.x] = x
         s[inds.u] = u
         s[inds.dt] = dt
-        Fd!(S0,ẋ0,s)
+        S0 = zeros(eltype(x),n,n+m+1)
+        Fd!(S0,zero(x),s)
         return S0
     end
     return ∇fd!, fd_aug!
@@ -412,23 +414,33 @@ Convert a continuous dynamics model into a discrete one using the given discreti
     end
     ```
 """
-function Model{Discrete}(model::Model{Continuous}, discretizer::Function)
-    fd!,∇fd! = discretize(model.f,discretizer,model.n,model.m)
+function Model{Discrete}(model::Model{Continuous}, discretizer::Symbol)
+    fd!,∇fd! = discretize(model.f,model.∇f,discretizer,model.n,model.m)
     info_d = deepcopy(model.info)
     integration = string(discretizer)
     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
     AnalyticalModel{Discrete}(fd!, ∇fd!, model.n, model.m, model.params, info_d)
 end
 
-midpoint(model::Model{Continuous}) = Model{Discrete}(model, midpoint)
-rk3(model::Model{Continuous}) = Model{Discrete}(model, rk3)
-rk4(model::Model{Continuous}) = Model{Discrete}(model, rk4)
+midpoint(model::Model{Continuous}) = Model{Discrete}(model, :midpoint)
+rk3(model::Model{Continuous}) = Model{Discrete}(model, :rk3)
+rk4(model::Model{Continuous}) = Model{Discrete}(model, :rk4)
+rk3_implicit(model::Model{Continuous}) = Model{Discrete}(model, :rk3_implicit)
+midpoint_implicit(model::Model{Continuous}) = Model{Discrete}(model, :midpoint_implicit)
 
 
-function discretize(f::Function,discretizer::Function,n::Int,m::Int)
+
+function discretize(f::Function,∇f::Function,discretizer::Symbol,n::Int,m::Int)
     inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
     dt = 0.1  # TODO: remove this after getting rid of old discretization code
-    fd! = discretizer(f,dt)
+    if discretizer in [:rk3,:rk4,:midpoint] # ie, explicit
+        fd! = eval(discretizer)(f,dt)
+    elseif discretizer in [:rk3_implicit,:midpoint_implicit] # ie, implicit
+        fd! = eval(discretizer)(f,n,m,dt)
+    else
+        error("Integration not defined")
+    end
+
     ∇fd!, = generate_jacobian(Discrete,fd!,n,m)
     return fd!,∇fd!
 end

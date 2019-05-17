@@ -7,7 +7,7 @@ import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQ
 
 ## Augment dynamics
 model = Dynamics.pendulum_model
-model_d = Model{Discrete}(model,rk4)
+model_d = Model{Discrete}(model,:rk4)
 
 # Add slack controls
 model_inf = add_slack_controls(model_d)

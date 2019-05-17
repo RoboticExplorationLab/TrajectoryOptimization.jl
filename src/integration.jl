@@ -43,6 +43,35 @@ function midpoint(f_aug!::Function)
     end
 end
 
+function midpoint_implicit(f::Function,n::Int,m::Int,dt::T) where T
+    # get estimate of X[k+1] from explicit midpoint
+    f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)])
+    ∇f(x,u) = ForwardDiff.jacobian(f_aug,zero(x),[x;u])
+    fd(y,x,u,dt=dt) = begin
+        k1 = k2 = kg = zero(x)
+        f(k1, x, u);
+        k1 *= dt;
+        f(k2, x + k1/2, u);
+        k2 *= dt;
+        copyto!(y, x + k2)
+
+        # iterate to solve implicit midpoint step
+        for i = 1:10
+            Xm = 0.5*(x + y)
+            f(kg,Xm,u)
+            g = y - x - dt*kg
+
+            A = ∇f(Xm,u)[:,1:n]
+
+            ∇g = Diagonal(I,n) - 0.5*dt*A
+            δx = -∇g\g
+
+            y += δx
+        end
+    end
+
+end
+
 """
 $(SIGNATURES)
 In place Runge Kutta 4 integration
@@ -111,6 +140,43 @@ function rk3(f_aug!::Function)
         f_aug!(k2,S + k1/2);      k2 *= dt;
         f_aug!(k3,S - k1 + 2*k2); k3 *= dt;
         copyto!(dS, S + (k1 + 4*k2 + k3)/6)
+    end
+end
+
+function rk3_implicit(f::Function,n::Int,m::Int,dt::T) where T
+    f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)])
+    ∇f(x,u) = ForwardDiff.jacobian(f_aug,zero(x),[x;u])
+
+    fd!(xdot,x,u,dt=dt) = begin
+        # get estimate of X[k+1] from explicit rk3
+        k1 = k2 = k3 = kg1 = kg2 = kg3 = zero(x)
+        f(k1, x, u);
+        k1 *= dt;
+        f(k2, x + k1/2, u);
+        k2 *= dt;
+        f(k3, x - k1 + 2*k2, u);
+        k3 *= dt;
+        copyto!(xdot, x + (k1 + 4*k2 + k3)/6)
+
+        # iterate to solve implicit step
+        for i = 1:10
+            model.f(kg1,x,u)
+            model.f(kg3,xdot,u)
+
+            Xm = 0.5*(x + xdot) + dt/8*(kg1 - kg3)
+            model.f(kg2,Xm,u)
+
+            g = xdot - x - dt/6*kg1 - 4/6*dt*kg2 - dt/6*kg3
+
+            A1 = ∇f(Xm,u)[:,1:n]
+            A2 = ∇f(xdot,u)[:,1:n]
+
+
+            ∇g = Diagonal(I,n) - 4/6*dt*A1*(0.5*Diagonal(I,n) - dt/8*A2) - dt/6*A2
+            δx = -∇g\g
+
+            xdot += δx
+        end
     end
 end
 
