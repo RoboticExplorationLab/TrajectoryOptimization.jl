@@ -348,7 +348,12 @@ end
 
 #TODO
 function dynamics(model::Model{Uncertain,D},xdot::AbstractVector,x::AbstractVector,u::AbstractVector) where D <: DynamicsType
-    model.f(view(xdot.x),x.x,u.u,0.)
+    model.f(xdot,x,u,zeros(model.r))
+    model.evals[1] += 1
+end
+
+function dynamics(model::Model{Uncertain,D},xdot::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector) where D <: DynamicsType
+    model.f(xdot,x,u,w)
     model.evals[1] += 1
 end
 
@@ -629,11 +634,10 @@ function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) wher
 end
 
 function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m::Int,r::Int) where T
-
     if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,dt)
     elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
-        fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,n,m,dt)
+        fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,n,m,r,dt)
     else
         error("Integration not defined")
     end
@@ -641,40 +645,6 @@ function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m:
     ∇fd!, = generate_jacobian(Uncertain,Discrete,fd!,n,m,r)
     return fd!,∇fd!
 end
-
-# midpoint(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :midpoint, dt)
-# rk3(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :rk3, dt)
-# rk4(model::Model{M,Continuous},dt::T) where {M <:ModelType,T} = discretize_model(model, :rk4, dt)
-#
-# function Model{M,Discrete}(model::Model{M,Continuous}, discretizer::Symbol) where M
-#     fd!,∇fd! = discretize(model.f,model.∇f,discretizer,model.n,model.m)
-#     info_d = deepcopy(model.info)
-#     integration = string(discretizer)
-#     info_d[:integration] = Symbol(replace(integration,"TrajectoryOptimization." => ""))
-#     AnalyticalModel{M,Discrete}(fd!, ∇fd!, model.n, model.m, model.params, info_d)
-# end
-#
-# midpoint(model::Model{M,Continuous}) where M = Model{M,Discrete}(model, :midpoint)
-# rk3(model::Model{M,Continuous}) where M = Model{M,Discrete}(model, :rk3)
-# rk4(model::Model{M,Continuous}) where M = Model{M,Discrete}(model, :rk4)
-# rk3_implicit(model::Model{M,Continuous}) where M = Model{M,Discrete}(model,:rk3_implicit)
-# midpoint_implicit(model::Model{M,Continuous}) where M = Model{M,Discrete}(model, :midpoint_implicit)
-#
-#
-# function discretize(f::Function,∇f::Function,discretizer::Symbol,n::Int,m::Int)
-#     inds = (x=1:n,u=n .+ (1:m), dt=n+m .+ (1:1), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xdt=(1:n,n+m.+(1:1)))
-#     dt = 0.1  # TODO: remove this after getting rid of old discretization code
-#     if discretizer in [:rk3,:rk4,:midpoint] # ie, explicit
-#         fd! = eval(discretizer)(f,dt)
-#     elseif discretizer in [:rk3_implicit,:midpoint_implicit] # ie, implicit
-#         fd! = eval(discretizer)(f,n,m,dt)
-#     else
-#         error("Integration not defined")
-#     end
-#
-#     ∇fd!, = generate_jacobian(Discrete,fd!,n,m)
-#     return fd!,∇fd!
-# end
 
 """
 $(SIGNATURES)
