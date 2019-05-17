@@ -1,6 +1,7 @@
 module Dynamics
 
-using TrajectoryOptimization: Model, Trajectory, Constraint, Equality, Inequality, Problem
+# using TrajectoryOptimization: Model, Trajectory, Constraint, Equality, Inequality, Problem
+using TrajectoryOptimization
 using RigidBodyDynamics
 using LinearAlgebra
 using DocStringExtensions
