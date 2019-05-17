@@ -35,7 +35,7 @@ struct DIRCOLSolver{T,Q} <: DirectSolver{T}
 
 end
 
-DIRCOLSolver(prob::Problem, opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
+DIRCOLSolver(prob::Problem, opts::DIRCOLSolverOptions=DIRCOLSolverOptions{Float64}(),
     Z::Primals{T}=Primals(prob,true)) where {T,Q} = AbstractSolver(prob, opts, Z)
 
 type(::Primals{T}) where T = T

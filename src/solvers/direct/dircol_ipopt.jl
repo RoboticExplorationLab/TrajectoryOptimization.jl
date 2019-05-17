@@ -1,3 +1,4 @@
+using Ipopt
 
 function gen_ipopt_functions(prob::Problem, solver::DIRCOLSolver)
 
@@ -125,6 +126,7 @@ function gen_ipopt_functions2(prob::Problem)
 end
 
 function remove_bounds!(prob::Problem)
+    n,m,N = size(prob)
     bounds = [BoundConstraint(n,m) for k = 1:prob.N]
     for k = 1:prob.N
         bnd = remove_bounds!(prob.constraints[k])
@@ -135,8 +137,11 @@ function remove_bounds!(prob::Problem)
     return bounds
 end
 
-function get_bounds(prob::Problem, Z::Primals, bounds::Vector{<:BoundConstraint})
-    n,m,N = size(Z)
+function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundConstraint})
+    n,m,N = size(prob)
+    p_colloc = num_colloc(prob)
+    Z = solver.Z
+
     Z.equal ? uN = N : uN = N-1
     x_U = [zeros(n) for k = 1:N]
     x_L = [zeros(m) for k = 1:N]
@@ -155,6 +160,18 @@ function get_bounds(prob::Problem, Z::Primals, bounds::Vector{<:BoundConstraint}
     z_U = Primals(x_U,u_U)
     z_L = Primals(x_L,u_L)
 
+    # Set Initial Condition
+    z_U.X[1] .= prob.x0
+    z_L.X[1] .= prob.x0
+
+    # Get terminal condition
+    goal = pop!(prob.constraints[N])
+    xf = zeros(n)
+    evaluate!(xf, goal, zeros(n))
+    z_U.X[N] .= xf
+    z_L.X[N] .= xf
+
+    # Constraints
     p = num_constraints(prob)
     g_U = [PartedArray(zeros(p[k]), solver.C[k].parts) for k = 1:N]
     g_L = [PartedArray(zeros(p[k]), solver.C[k].parts) for k = 1:N]
@@ -163,11 +180,11 @@ function get_bounds(prob::Problem, Z::Primals, bounds::Vector{<:BoundConstraint}
             g_L[k].inequality .= -Inf
         end
     end
+    g_U = vcat(zeros(p_colloc), g_U...)
+    g_L = vcat(zeros(p_colloc), g_L...)
 
-    # Set Initial Condition
-    z_U.X[1] = prob.x0
-    z_L.X[1] = prob.x0
-    return z_U, z_L, g_U, g_L
+
+    return z_U.Z, z_L.Z, g_U, g_L
 end
 
 function solve!(prob::Problem, solver::DIRCOLSolver)
@@ -175,7 +192,9 @@ function solve!(prob::Problem, solver::DIRCOLSolver)
     prob0 = copy(prob)
     bnds = remove_bounds!(prob0)
     solver0 = DIRCOLSolver(prob0, solver.opts)
-    eval_f, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions(prob0, solver0)
+    # solver0 = solver
+    n,m,N = size(prob0)
+    eval_f, eval_g, eval_grad_f, eval_jac_g = gen_ipopt_functions2(prob0) #, solver0)
 
     Z0 = Primals(prob, true)
 
@@ -187,13 +206,7 @@ function solve!(prob::Problem, solver::DIRCOLSolver)
     nG = p_colloc*2(n+m) + sum(p[1:N-1])*(n+m) + p[N]*n
     nH = 0
 
-    z_U, z_L, g_U, g_L = get_bounds(prob0, dircol0, bnds)
-    z_U = z_U.Z
-    z_L = z_L.Z
-    g_U = vcat(zeros(p_colloc), g_U...)
-    g_L = vcat(zeros(p_colloc), g_L...)
-
-
+    z_U, z_L, g_U, g_L = get_bounds(prob0, solver0, bnds)
 
     problem = Ipopt.createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
         eval_f, eval_g, eval_grad_f, eval_jac_g)
@@ -213,4 +226,27 @@ function solve!(prob::Problem, solver::DIRCOLSolver)
     # end
 
     problem
+end
+
+function gen_ipopt_prob(prob::Problem)
+    prob = copy(prob)
+    n,m,N = size(prob)
+    p_colloc = num_colloc(prob)
+    NN = N*(n+m)
+    nG = p_colloc*2(n+m)
+    nH = 0
+
+    eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
+
+    solver = DIRCOLSolver(prob)
+    bnds = remove_bounds!(prob)
+    z_U, z_L, g_U, g_L = get_bounds(prob, solver, bnds)
+
+    problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, nH,
+        eval_f, eval_g, eval_grad_f, eval_jac_g)
+
+    opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
+    addOption(problem,"option_file_name",opt_file)
+
+    return problem
 end

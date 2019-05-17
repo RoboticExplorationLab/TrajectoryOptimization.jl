@@ -1,3 +1,4 @@
+import TrajectoryOptimization: to_dvecs
 using LinearAlgebra
 using PartedArrays
 using SparseArrays
@@ -59,8 +60,9 @@ function gen_usrfun(model, cost, xf, N, dt)
 
         J = 0.0
         for k = 1:N-1
-            J += X[k]'Q*X[k] + U[k]'R*U[k]
+            J += (X[k]-xf)'Q*(X[k]-xf) + U[k]'R*U[k]
         end
+        J = J/(N-1)
         J += (X[N] - xf)'Qf*(X[N] - xf)
         return J/2
     end
@@ -93,7 +95,7 @@ function gen_usrfun(model, cost, xf, N, dt)
 
         grad = reshape(grad_f, n+m, N)
         for k = 1:N-1
-            grad[:,k] = [Q*X[k]; R*U[k]]
+            grad[:,k] = [Q*(X[k] - xf); R*U[k]] ./ (N-1)
         end
         grad[:,N] = [Qf*(X[N] - xf); zeros(m)]
     end
@@ -138,31 +140,42 @@ function gen_usrfun(model, cost, xf, N, dt)
     return eval_f, eval_g, eval_grad_f, eval_jac_g
 end
 
-# Set up the problem
-model = Dynamics.pendulum_model
-costfun = Dynamics.pendulum_costfun
 xf = [pi,0]
 x0 = [0,0]
-
-
 N = 51
-n,m = model.n, model.m
-U0 = to_dvecs(ones(m,N))
+n,m = 2,1
+U0 = ones(m,N)
 p_colloc = (N-1)*n
 NN = N*(n+m)
+
+# New Method
+model = Dynamics.pendulum_model
+costfun = Dynamics.pendulum_costfun
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
 initial_controls!(prob,U0)
 X0 = rollout(prob)
 dt = prob.dt
 
-# Solve using ALTRO
 ilqr = iLQRSolverOptions()
 res = solve(prob, ilqr)
 plot(res.X)
 
+# Old Method
+method = :hermite_simpson
+model, obj = Dynamics.pendulum
+costfun = obj.cost
+solver = Solver(model, ConstrainedObjective(obj), N=N)
+X0 = to_dvecs(rollout(solver, U0))
+dt = solver.dt
+
+res, = solve(solver, U0)
+plot(res.X)
+
+
+
 # New Ipopt Functions
 part_z = create_partition(n,m,N,N)
-Z0 = pack(X0,U0,part_z)
+Z0 = pack(X0,to_dvecs(U0),part_z)
 eval_f2, eval_g2, eval_grad_f2, eval_jac_g2 = gen_usrfun(model,costfun,xf,N,dt)
 g2 = zeros(p_colloc)
 nG = p_colloc*2(n+m)
@@ -174,46 +187,59 @@ g2
 
 eval_jac_g2(Z0,:Vals,row,col,val)
 
-# z_L, z_U, g_L, g_U = TrajectoryOptimization.get_bounds(solver, method)
-z_L = ones(NN)*-1e10
-z_U = ones(NN)*1e10
+# Z_L, Z_U, G_L, G_U = TrajectoryOptimization.get_bounds(solver, method)
+z_L = ones(NN)*-1.1e20
+z_U = ones(NN)*1.1e20
 g_L = zeros(p_colloc)
 g_U = zeros(p_colloc)
 z_L[1:n] = x0
 z_U[1:n] = x0
-prob = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, 0,
+z_L[(N-1)*(n+m) .+ (1:n)] = xf
+z_U[(N-1)*(n+m) .+ (1:n)] = xf
+
+problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, 0,
     eval_f2, eval_g2, eval_grad_f2, eval_jac_g2)
 
 opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
-addOption(prob,"option_file_name",opt_file)
-solveProblem(prob)
-Zsol = prob.x
+addOption(problem,"option_file_name",opt_file)
+solveProblem(problem)
+Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
 plot!(Xsol)
 
-X0 = [zeros(n) for k = 1:N]
-U0 = [ones(m) for k = 1:N]
-Z0 = pack(X0, U0, part_z)
-X,U = unpack(Z, part_z)
 
-grad_f = zeros(NN)
-@code_warntype eval_grad_f(Z, grad_f)
-ForwardDiff.gradient(eval_f, Z) ≈ grad_f
+# Try Ipopt again
+prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
+prob = TrajectoryOptimization.update_problem(prob, model=model, constraints=ProblemConstraints(N))
+prob.constraints[N] += goal_constraint(xf)
+eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
 
-g = zeros(P)
-eval_g(Z,g)
+g = zeros(p_colloc)
+eval_f(Z0)
+eval_f2(Z0)
+eval_g2(Z0,g2)
+eval_g(Z0,g)
+g == g2
 
-row,col,val = zeros(nG), zeros(nG), zeros(nG)
-eval_jac_g(Z, :Structure, row, col, val)
-eval_jac_g(Z, :Vals, row, col, val)
-sparse(row,col,val)
-
-z_L = ones(NN)*-Inf
-z_U = ones(NN)*Inf
-problem = createProblem(NN, z_L, z_U, P, zeros(P), zeros(P), nG, 0,
+problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, 0,
     eval_f, eval_g, eval_grad_f, eval_jac_g)
-problem.x = Z
 
-opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt")
+opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
 addOption(problem,"option_file_name",opt_file)
+solveProblem(problem)
+
+Zsol = problem.x
+Xsol,Usol = unpack(Zsol,part_z)
+plot!(Xsol)
+
+prob0 = copy(prob)
+bnds = TrajectoryOptimization.remove_bounds!(prob0)
+Z_u, Z_l, G_u, G_l = TrajectoryOptimization.get_bounds(prob, dircol, bnds)
+
+opts = TrajectoryOptimization.DIRCOLSolverOptions{Float64}()
+dircol = TrajectoryOptimization.DIRCOLSolver(prob, opts)
+problem = solve!(prob, dircol)
+solveProblem(problem)
+
+problem = TrajectoryOptimization.gen_ipopt_prob(prob)
 solveProblem(problem)
