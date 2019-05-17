@@ -617,9 +617,9 @@ midpoint_implicit(model::Model{M,Continuous}) where {M,T} = discretize_model(mod
 
 
 function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) where T
-    if discretizer in [:rk3,:rk4,:midpoint] # ie, explicit
+    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(discretization)(f,dt)
-    elseif discretizer in [:rk3_implicit,:midpoint_implicit] # ie, implicit
+    elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(discretization)(f,n,m,dt)
     else
         error("Integration not defined")
@@ -630,9 +630,9 @@ end
 
 function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m::Int,r::Int) where T
 
-    if discretizer in [:rk3,:rk4,:midpoint] # ie, explicit
+    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,dt)
-    elseif discretizer in [:rk3_implicit,:midpoint_implicit] # ie, implicit
+    elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,n,m,dt)
     else
         error("Integration not defined")

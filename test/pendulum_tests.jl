@@ -21,11 +21,10 @@ dt = 0.1
 U0 = [rand(m) for k = 1:N-1]
 int_schemes = [:midpoint, :rk3, :rk4]
 
-prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:rk3, x0=x0, N=N, dt=dt)
-
 ## Unconstrained
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=is, x0=x0, N=N, dt=dt)
+    model_d = discretize_model(model,is,dt)
+    prob = TrajectoryOptimization.Problem(model_d, TrajectoryOptimization.Objective(costfun,N), x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
     TrajectoryOptimization.solve!(prob, solver_ilqr)
@@ -38,8 +37,9 @@ bnd = BoundConstraint(n, m, u_min=-u_bound, u_max=u_bound)
 con = [bnd]
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
-        constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
+    model_d = discretize_model(model,is,dt)
+    prob = TrajectoryOptimization.Problem(model_d, TrajectoryOptimization.Objective(costfun,N),
+        constraints=TrajectoryOptimization.ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
     TrajectoryOptimization.solve!(prob, solver_al)
@@ -48,14 +48,12 @@ for is in int_schemes
 end
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
-        constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
+    model_d = discretize_model(model,is,dt)
+    prob = TrajectoryOptimization.Problem(model_d, TrajectoryOptimization.Objective(costfun,N),
+        constraints=TrajectoryOptimization.ProblemConstraints(con,N),x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
     TrajectoryOptimization.solve!(prob, solver_al)
     @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
     @test TrajectoryOptimization.max_violation(prob) < opts_al.constraint_tolerance
 end
-
-# Test undefined integration
-@test_throws ArgumentError TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:bogus, N=N)
