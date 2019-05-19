@@ -1,16 +1,16 @@
 # Generic solve methods
-function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
+function solve!(prob::Problem{T,Discrete},opts::AbstractSolverOptions{T}) where T
     solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
 end
 
-function solve(prob0::Problem{T},solver::AbstractSolver)::Problem{T} where T
+function solve(prob0::Problem{T,Discrete},solver::AbstractSolver)::Problem{T} where T
     prob = copy(prob0)
     solve!(prob,solver)
     return prob
 end
 
-function solve(prob0::Problem{T},opts::AbstractSolverOptions{T})::Problem{T} where T
+function solve(prob0::Problem{T,Discrete},opts::AbstractSolverOptions{T})::Problem{T,Discrete} where T
     prob = copy(prob0)
     solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
@@ -19,7 +19,7 @@ end
 
 
 "iLQR solve method"
-function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
+function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T
     reset!(solver)
 
     n,m,N = size(prob)
@@ -56,20 +56,20 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     return J
 end
 
-function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
+function step!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}, J::T) where T
     jacobian!(prob,solver)
     cost_expansion!(prob,solver)
     ΔV = backwardpass!(prob,solver)
     forwardpass!(prob,solver,ΔV,J)
 end
 
-function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
+function cost_expansion!(prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T
     reset!(solver.Q)
     cost_expansion!(solver.Q,prob.obj,prob.X,prob.U)
 end
 
 "Plot state, control trajectories"
-function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
+function live_plotting(prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T
     if solver.opts.live_plotting == :state
         p = plot(prob.X,title="State trajectory")
         display(p)
@@ -81,7 +81,7 @@ function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
     end
 end
 
-function record_iteration!(prob::Problem{T}, solver::iLQRSolver{T}, J::T, dJ::T) where T
+function record_iteration!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}, J::T, dJ::T) where T
     solver.stats[:iterations] += 1
     push!(solver.stats[:cost], J)
     push!(solver.stats[:dJ], dJ)
@@ -165,7 +165,7 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
 end
 
 "Project dynamically infeasible state trajectory into feasible space using TVLQR"
-function projection!(prob::Problem{T},opts::iLQRSolverOptions{T}) where T
+function projection!(prob::Problem{T,Discrete},opts::iLQRSolverOptions{T}) where T
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
     solver_ilqr = AbstractSolver(prob,opts)
     backwardpass!(prob, solver_ilqr)

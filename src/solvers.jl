@@ -26,11 +26,11 @@ struct iLQRSolver{T} <: AbstractSolver{T}
 
 end
 
-function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
+function iLQRSolver(prob::Problem{T,Discrete},opts=iLQRSolverOptions{T}()) where T
      AbstractSolver(prob, opts)
 end
 
-function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,Discrete}, opts::iLQRSolverOptions{T}) where T
     # Init solver statistics
     stats = Dict{Symbol,Any}()
 
@@ -90,7 +90,7 @@ struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     active_set::PartedVecTrajectory{Bool} # active set [(p,N-1) (p_N)]
 end
 
-AugmentedLagrangianSolver(prob::Problem{T},
+AugmentedLagrangianSolver(prob::Problem{T,Discrete},
     opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where T =
     AbstractSolver(prob,opts)
 
@@ -98,7 +98,7 @@ AugmentedLagrangianSolver(prob::Problem{T},
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,Discrete}, opts::AugmentedLagrangianSolverOptions{T}) where T
     # check for conflicting convergence criteria between unconstrained solver and AL: warn
 
     # Init solver statistics
@@ -167,6 +167,6 @@ struct ALTROSolver{T} <: AbstractSolver{T}
     opts::ALTROSolverOptions{T}
 end
 
-function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,Discrete},opts::ALTROSolverOptions{T}) where T
     ALTROSolver{T}(opts)
 end

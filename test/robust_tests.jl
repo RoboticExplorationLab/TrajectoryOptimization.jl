@@ -11,12 +11,13 @@ Qf = 100.0*Diagonal(ones(n))
 N = 201
 tf = 1.0
 dt = tf/(N-1)
-U0 = [rand(m) for k = 1:N-1]
-prob = TrajectoryOptimization.Problem(p_model, TrajectoryOptimization.Objective(LQRCost(Q,R,Qf,xf),N), integration=:rk3_implicit, x0=x0, N=N, tf=tf)
+U0 = [ones(m) for k = 1:N-1]
+model_d = discretize_model(p_model,:rk3_implicit,dt)
+prob = TrajectoryOptimization.Problem(model_d, TrajectoryOptimization.Objective(LQRCost(Q,R,Qf,xf),N), x0=x0, N=N, tf=tf)
 TrajectoryOptimization.initial_controls!(prob, U0)
-# rollout!(prob)
 solve!(prob,iLQRSolverOptions())
 plot(prob.X)
+plot(prob.U)
 
 function gen_cubic_interp(X,dt)
     N = length(X); n = length(X[1])

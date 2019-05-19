@@ -1,5 +1,5 @@
 "ALTRO solve"
-function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
+function solve!(prob::Problem{T,Discrete},opts::ALTROSolverOptions{T}) where T
 
     # create ALTRO problem
     prob_altro, state = altro_problem(prob,opts)
@@ -14,7 +14,7 @@ function solve!(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 end
 
 "Processes ALTRO solve results, including: remove slack controls, add minimum time controls"
-function process_results!(prob::Problem{T},prob_altro::Problem{T},
+function process_results!(prob::Problem{T,Discrete},prob_altro::Problem{T,Discrete},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T
 
     # move results to original problem
@@ -53,7 +53,7 @@ function process_results!(prob::Problem{T},prob_altro::Problem{T},
 end
 
 "Return ALTRO problem from original problem, includes: adding slack controls, adding minimum time controls"
-function altro_problem(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
+function altro_problem(prob::Problem{T,Discrete},opts::ALTROSolverOptions{T}) where T
     prob_altro = prob
 
     # create infeasible problem

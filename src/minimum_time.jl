@@ -1,5 +1,5 @@
 "Create a minimum time problem"
-function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
+function minimum_time_problem(prob::Problem{T,Discrete},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
     # modify problem with time step control
     N = prob.N; n = prob.model.n; m = prob.model.m
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
@@ -43,7 +43,7 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
 end
 
 "Add minimum time controls to dynamics "
-function add_min_time_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
+function add_min_time_controls(model::Model{M,Discrete}) where M<:ModelType
     n = model.n; m = model.m
     n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
     idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
@@ -65,7 +65,7 @@ function add_min_time_controls(model::Model{M,D}) where {M<:ModelType,D<:Discret
 end
 
 "Return the total duration of trajectory"
-function total_time(prob::Problem{T}) where T
+function total_time(prob::Problem{T,Discrete}) where T
     m̄ = prob.model.m + 1
     tt = 0.0
     try

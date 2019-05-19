@@ -1,5 +1,5 @@
 "Create infeasible state trajectory initialization problem from problem"
-function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
+function infeasible_problem(prob::Problem{T,Discrete},R_inf::T=1.0) where T
     N = prob.N
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
@@ -34,7 +34,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
 end
 
 "Add slack controls to dynamics to make artificially fully actuated"
-function add_slack_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
+function add_slack_controls(model::Model{M,Discrete}) where M<:ModelType
     n = model.n; m = model.m
     nm = n+m
 
@@ -55,7 +55,7 @@ function add_slack_controls(model::Model{M,D}) where {M<:ModelType,D<:Discrete}
 end
 
 "Return a feasible problem from an infeasible problem"
-function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
+function infeasible_to_feasible_problem(prob::Problem{T,Discrete},prob_altro::Problem{T,Discrete},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T
     prob_altro_feasible = prob
 
@@ -79,7 +79,7 @@ function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
 end
 
 "Calculate slack controls that produce infeasible state trajectory"
-function slack_controls(prob::Problem{T}) where T
+function slack_controls(prob::Problem{T,Discrete}) where T
     N = prob.N
     n = prob.model.n
     m = prob.model.m

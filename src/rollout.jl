@@ -1,5 +1,5 @@
 "Simulate state trajectory with feedback control"
-function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
+function rollout!(prob::Problem{T,Discrete},solver::iLQRSolver{T},alpha::T=1.0) where T
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
@@ -23,7 +23,7 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
     return true
 end
 
-function rollout!(prob::Problem{T}) where T
+function rollout!(prob::Problem{T,Discrete}) where T
     N = prob.N
     if !all(isfinite.(prob.X[1]))
         prob.X[1] = prob.x0
@@ -47,10 +47,24 @@ function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajecto
     return X
 end
 
-function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
+function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T
     if true
         x̄ - x
     else
         nothing #TODO quaternion
+    end
+end
+
+function rollout_reverse!(prob::Problem{T,Discrete},xf::AbstractVector{T}) where T
+    N = prob.N
+    f = prob.model.f
+    dt = prob.dt
+
+    X = prob.X; U = prob.U
+
+    X[N] = xf
+
+    for k = N-1:-1:1
+        f(X[k],X[k+1],U[k],-dt)
     end
 end
