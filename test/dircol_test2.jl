@@ -1,3 +1,4 @@
+const TO = TrajectoryOptimization
 using ForwardDiff
 using SparseArrays
 using Test
@@ -29,10 +30,12 @@ lqr_cost = LQRCost(Q,R,Qf,xf)
 u_bnd = 2.
 x_min = [-0.25; -0.001; -Inf]
 x_max = [0.25; 1.001; Inf]
-bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=false)
 
 goal_con = goal_constraint(xf)
+obs = TO.planar_obstacle_constraint(n,m,(0.0,0.5), 0.25)
 con = [bnd, goal_con]
+con + obs
 
 # problem
 N = 51
@@ -43,14 +46,28 @@ dt = 0.06
 
 # Re-create the problem with rolled out trajectory
 U0 = ones(m,N-1)
-prob = Problem(model_d,Objective(lqr_cost,N),U0,constraints=ProblemConstraints(N),dt=dt,x0=x0)
-prob.constraints[N] += goal_con
+prob = Problem(model_d,Objective(lqr_cost,N),U0,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+# prob.constraints[N] += goal_con
 rollout!(prob)
 prob = update_problem(prob, model=model)
 
-problem = TrajectoryOptimization.gen_ipopt_prob(prob)
-solveProblem(problem)
+prob0 = copy(prob)
+bnds = TO.remove_bounds!(prob0)
+xf = TO.remove_goal_constraint!(prob0)
+sum(num_constraints(prob0))
 
+eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob0)
+g = zeros(num_colloc(prob0) + sum(num_constraints(prob0)))
+Z0 = Primals(prob0, true).Z
+eval_f(Z0)
+eval_g(Z0,g)
+prob0.constraints[N] += goal_con
+
+sol = TO.solve_ipopt(prob0)
+plot()
+plot_trajectory!(sol.X, markershape=:circle)
+TO.plot_circle!((0,0.5), 0.25)
+eval_g(sol.Z,g)
 
 # Extract out X,U
 n,m,N = size(prob)

@@ -81,7 +81,8 @@ function gen_ipopt_functions2(prob::Problem)
 
     # Get constraint jacobian sparsity structure
     jac_structure = spzeros(p_total, NN)
-    collocation_constraint_jacobian_sparsity!(jac_structure, prob)
+    # collocation_constraint_jacobian_sparsity!(jac_structure, prob)
+    constraint_jacobian_sparsity!(jac_structure, prob)
     r,c = get_rc(jac_structure)
 
     #################
@@ -97,7 +98,7 @@ function gen_ipopt_functions2(prob::Problem)
     ###########################
     function eval_g(Z, g)
         X,U = unpackZ(Z, part_z)
-        collocation_constraints!(g, prob, X, U)
+        update_constraints!(g, prob, X, U)
     end
 
 
@@ -118,7 +119,8 @@ function gen_ipopt_functions2(prob::Problem)
             copyto!(cols, c)
         else
             X,U = unpackZ(Z, part_z)
-            collocation_constraint_jacobian!(vals, prob, X, U)
+            # collocation_constraint_jacobian!(vals, prob, X, U)
+            constraint_jacobian!(vals, prob, X, U)
         end
     end
 
@@ -135,6 +137,13 @@ function remove_bounds!(prob::Problem)
         end
     end
     return bounds
+end
+
+function remove_goal_constraint!(prob::Problem)
+    xf = zero(prob.x0)
+    goal = pop!(prob.constraints[prob.N], :goal)
+    evaluate!(xf, goal, zero(xf))
+    return -xf
 end
 
 function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundConstraint})
@@ -168,8 +177,8 @@ function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundC
     goal = pop!(prob.constraints[N])
     xf = zeros(n)
     evaluate!(xf, goal, zeros(n))
-    z_U.X[N] .= xf
-    z_L.X[N] .= xf
+    z_U.X[N] .= -xf
+    z_L.X[N] .= -xf
 
     # Constraints
     p = num_constraints(prob)
@@ -183,7 +192,10 @@ function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundC
     g_U = vcat(zeros(p_colloc), g_U...)
     g_L = vcat(zeros(p_colloc), g_L...)
 
-
+    convertInf!(z_U.Z)
+    convertInf!(z_L.Z)
+    convertInf!(g_U)
+    convertInf!(g_L)
     return z_U.Z, z_L.Z, g_U, g_L
 end
 
@@ -231,18 +243,176 @@ end
 function gen_ipopt_prob(prob::Problem)
     prob = copy(prob)
     n,m,N = size(prob)
+    p = num_constraints(prob)
     p_colloc = num_colloc(prob)
+    P = p_colloc + sum(p) - n
     NN = N*(n+m)
     nG = p_colloc*2(n+m)
     nH = 0
 
-    eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
-
     solver = DIRCOLSolver(prob)
     bnds = remove_bounds!(prob)
     z_U, z_L, g_U, g_L = get_bounds(prob, solver, bnds)
+    @show P
+    @show length(g_U)
 
-    problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, nH,
+    eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
+
+    problem = createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
+        eval_f, eval_g, eval_grad_f, eval_jac_g)
+
+    opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
+    addOption(problem,"option_file_name",opt_file)
+
+    return problem
+end
+
+function solve_ipopt(prob::Problem)
+    n,m,N = size(prob)
+
+    Z0 = Primals(prob, true)
+    part_z = create_partition(n,m,N,N)
+
+    problem = gen_ipopt_prob(prob)
+    problem.x = copy(Z0.Z)
+    solveProblem(problem)
+    return Primals(problem.x, part_z)
+end
+
+
+function gen_ipopt_functions3(prob::Problem{T}) where T
+    n,m,N = size(prob)
+    NN = N*(n+m)
+    p_colloc = num_colloc(prob)
+    p = num_constraints(prob)
+    P = p_colloc + sum(p)
+    dt = prob.dt
+
+    part_z = create_partition(n,m,N,N)
+    part_f = create_partition2(prob.model)
+    constraints = prob.constraints
+    ∇F         = [PartedMatrix(zeros(T,n,n+m),part_f)           for k = 1:N]
+    ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
+    ∇C         = [∇C..., PartedMatrix(T,constraints[N],n,m,:terminal)]
+    C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
+    C          = [C...,  PartedVector(T,constraints[N],:terminal)]
+
+    jac_structure = spzeros(P, NN)
+    constraint_jacobian_sparsity!(jac_structure, prob)
+    r,c = get_rc(jac_structure)
+
+    function eval_f(Z)
+        X,U = unpack(Z,part_z)
+        cost(prob.obj, X, U)
+    end
+
+    function eval_grad_f(Z, grad_f)
+        X,U = unpack(Z, part_z)
+        cost_gradient!(grad_f, prob, X, U)
+    end
+
+    function eval_g(Z, g)
+        X,U = unpack(Z,part_z)
+        g_colloc = reshape(view(g,1:p_colloc), n, N-1)
+        g_custom = view(g,p_colloc+1:length(g))
+
+        fVal = [zero(X[1]) for k = 1:N]
+        Xm = [zero(X[1]) for k = 1:N-1]
+
+        # Calculate midpoints
+        for k = 1:N
+            evaluate!(fVal[k], prob.model, X[k], U[k])
+        end
+        for k = 1:N-1
+            Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+        end
+        fValm = zero(X[1])
+        for k = 1:N-1
+            Um = (U[k] + U[k+1])*0.5
+            evaluate!(fValm, prob.model, Xm[k], Um)
+            g_colloc[:,k] = -X[k+1] + X[k] + dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+        end
+    end
+
+    # Calculate jacobian
+    function calc_block!(vals::PartedMatrix, F1,F2,Fm,dt)
+        In = Diagonal(I, n)
+        Im = Diagonal(I, m)
+        vals.x1 .= dt/6*(F1.xx + 4Fm.xx*( dt/8*F1.xx + In/2)) + In
+        vals.u1 .= dt/6*(F1.xu + 4Fm.xx*( dt/8*F1.xu) + 4Fm.xu*(Im/2))
+        vals.x2 .= dt/6*(F2.xx + 4Fm.xx*(-dt/8*F2.xx + In/2)) - In
+        vals.u2 .= dt/6*(F2.xu + 4Fm.xx*(-dt/8*F2.xu) + 4Fm.xu*(Im/2))
+        return nothing
+    end
+
+    function eval_jac_g(Z, mode, rows, cols, vals)
+        if mode == :Structure
+            copyto!(rows,r)
+            copyto!(cols,c)
+        else
+            X,U = unpack(Z, part_z)
+
+            # Compute dynamics jacobians
+            F = [PartedMatrix(zeros(n,n+m), part_f) for k = 1:N]
+            for k = 1:N
+                jacobian!(F[k], prob.model, X[k], U[k])
+            end
+
+            # # Calculate midpoints
+            fVal = [zeros(n) for k = 1:N]
+            Xm = [zeros(n) for k = 1:N-1]
+
+            for k = 1:N
+                evaluate!(fVal[k], prob.model, X[k], U[k])
+            end
+            for k = 1:N-1
+                Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+            end
+
+            Fm = zero(∇F[1])
+            n_blk = 2(n+m)n
+            off = 0
+            In = Matrix(I,n,n)
+            Im = Matrix(I,m,m)
+            part = create_partition2((n,),(n,m,n,m), Val((:x1,:u1,:x2,:u2)))
+            for k = 1:N-1
+                block = PartedArray(reshape(view(vals, off .+ (1:n_blk)), n, 2(n+m)), part)
+                Um = (U[k] + U[k+1])/2
+                jacobian!(Fm, prob.model, Xm[k], Um)
+                calc_block!(block, F[k], F[k+1], Fm, dt)
+                off += n_blk
+            end
+        end
+
+        return nothing
+    end
+    return eval_f, eval_g, eval_grad_f, eval_jac_g
+end
+
+function gen_ipopt_prob3(prob::Problem, xf)
+    prob = copy(prob)
+    n,m,N = size(prob)
+    p = num_constraints(prob)
+    p_colloc = num_colloc(prob)
+    P = p_colloc + sum(p)
+    NN = N*(n+m)
+    nG = p_colloc*2(n+m)
+    nH = 0
+
+
+    z_U = ones(NN)*Inf
+    z_L = ones(NN)*-Inf
+    z_U[1:n] = prob.x0
+    z_L[1:n] = prob.x0
+    z_U[(N-1)*(n+m) .+ (1:n)] = xf
+    z_L[(N-1)*(n+m) .+ (1:n)] = xf
+
+    g_U = zeros(P)
+    g_L = zeros(P)
+
+    eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions3(prob)
+
+    problem = createProblem(NN, z_L, z_U, P, g_L, g_U, nG, nH,
         eval_f, eval_g, eval_grad_f, eval_jac_g)
 
     opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");

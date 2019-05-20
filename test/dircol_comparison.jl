@@ -1,4 +1,5 @@
 import TrajectoryOptimization: to_dvecs
+const TO = TrajectoryOptimization
 using LinearAlgebra
 using PartedArrays
 using SparseArrays
@@ -201,38 +202,44 @@ z_U[(N-1)*(n+m) .+ (1:n)] = xf
 
 problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, 0,
     eval_f2, eval_g2, eval_grad_f2, eval_jac_g2)
+problem.x = copy(Z0)
 
 opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
 addOption(problem,"option_file_name",opt_file)
 solveProblem(problem)
 Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
-plot!(Xsol)
-
+plot_trajectory!(Xsol)
 
 # Try Ipopt again
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
 prob = TrajectoryOptimization.update_problem(prob, model=model, constraints=ProblemConstraints(N))
 prob.constraints[N] += goal_constraint(xf)
 eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
-
-g = zeros(p_colloc)
+Z0
 eval_f(Z0)
 eval_f2(Z0)
 eval_g2(Z0,g2)
 eval_g(Z0,g)
 g == g2
 
+prob0 = copy(prob)
+solver = TO.DIRCOLSolver(prob0)
+bnds = TO.remove_bounds!(prob0)
+z_U, z_L, g_U, g_L = TO.get_bounds(prob0, solver, bnds)
+
+z_U
 problem = createProblem(NN, z_L, z_U, p_colloc, g_L, g_U, nG, 0,
     eval_f, eval_g, eval_grad_f, eval_jac_g)
-
+problem.x = Z0
 opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
 addOption(problem,"option_file_name",opt_file)
 solveProblem(problem)
 
 Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
-plot!(Xsol)
+plot_trajectory!(Xsol)
+
 
 prob0 = copy(prob)
 bnds = TrajectoryOptimization.remove_bounds!(prob0)
@@ -244,4 +251,9 @@ problem = solve!(prob, dircol)
 solveProblem(problem)
 
 problem = TrajectoryOptimization.gen_ipopt_prob(prob)
+problem.x = copy(Z0)
 solveProblem(problem)
+
+Zsol = problem.x
+Xsol,Usol = unpack(Zsol,part_z)
+plot_trajectory!(Xsol)

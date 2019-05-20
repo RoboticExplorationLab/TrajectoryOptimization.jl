@@ -95,6 +95,20 @@ function dynamics_jacobian(prob::Problem, X::AbstractVectorTrajectory{T}, U) whe
     return ∇F
 end
 
+function constraint_jacobians(prob::Problem, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory)
+    n,m,N = size(prob)
+    ∇C         = [PartedMatrix(prob.constraints[k],n,m,:stage) for k = 1:N-1]
+    ∇C         = [∇C..., PartedMatrix(prob.constraints[N],n,m,:terminal)]
+    for k = 1:N
+        if k == prob.N
+            jacobian!(∇C[k], prob.constraints[k], X[k])
+        else
+            jacobian!(∇C[k], prob.constraints[k], X[k], U[k])
+        end
+    end
+    return ∇C
+end
+
 function calculate_jacobians!(prob::Problem, solver::DirectSolver, Z=solver.Z)
     for k = 1:prob.N
         jacobian!(solver.∇F[k], prob.model, Z.X[k], Z.U[k])
@@ -143,6 +157,28 @@ function update_constraints!(g, prob::Problem, solver::DIRCOLSolver, Z::Primals=
     end
 end
 
+function update_constraints!(g, prob::Problem, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory) where T
+    n,m,N = size(prob)
+    p_colloc = n*(N-1)
+    g_colloc = view(g,1:p_colloc)
+    collocation_constraints!(g_colloc, prob, X, U)
+
+    g_custom = view(g, p_colloc + 1:length(g))
+    p = num_constraints(prob.constraints)
+    offset = 0
+    C          = [PartedVector(prob.constraints[k],:stage)     for k = 1:N-1]
+    C          = [C...,  PartedVector(prob.constraints[N],:terminal)]
+    for k = 1:N
+        c = PartedVector(view(g_custom, offset .+ (1:p[k])), C[k].parts)
+        if k == N
+            evaluate!(c, prob.constraints[k], X[k])
+        else
+            evaluate!(c, prob.constraints[k], X[k], U[k])
+        end
+        offset += p[k]
+    end
+end
+
 function partition_constraint_jacobian(jac::AbstractMatrix, prob::Problem)
     n,m,N = size(prob)
     p_colloc = (N-1)*n
@@ -157,6 +193,31 @@ function partition_constraint_jacobian(jac::AbstractVector, prob::Problem)
     jac_colloc = view(jac, 1:p_colloc*2(n+m))
     jac_custom = view(jac, p_colloc*2(n+m)+1:length(jac))
     return jac_colloc, jac_custom
+end
+
+function constraint_jacobian!(jac, prob::Problem, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory)
+    n,m,N = size(prob)
+    p_colloc = num_colloc(prob)
+    jac_colloc, jac_custom = partition_constraint_jacobian(jac, prob)
+    collocation_constraint_jacobian!(jac_colloc, prob, X, U)
+    p = num_constraints(prob)
+
+    ∇C = constraint_jacobians(prob, X, U)
+
+    off1 = p_colloc
+    off2 = 0
+    ns = p[1:N-1]
+    ms = ones(Int,N-1)*(n+m)
+    b1 = p
+    b2 = ones(Int,N)*(n+m)
+    b2[N] = n
+
+    for k = 1:N
+        block = get_jac_block(jac_custom, k, b1, b2, ns, ms)
+        block .= ∇C[k]
+        off1 += p[k]
+        off2 += n+m
+    end
 end
 
 function constraint_jacobian!(jac, prob::Problem, solver::DirectSolver, Z::Primals=solver.Z)
