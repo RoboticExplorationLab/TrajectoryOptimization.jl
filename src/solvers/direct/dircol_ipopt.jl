@@ -130,11 +130,32 @@ end
 function remove_bounds!(prob::Problem)
     n,m,N = size(prob)
     bounds = [BoundConstraint(n,m) for k = 1:prob.N]
-    for k = 1:prob.N
+
+    # Initial Time step
+    if :bound ∈ labels(prob.constraints[1])
+        bnd_init = remove_bounds!(prob.constraints[1])[1]
+    else
+        bnd_init = bounds[1]
+    end
+    bounds[1] = BoundConstraint(n,m, x_min=prob.x0, u_min=bnd_init.u_min,
+                                     x_max=prob.x0, u_max=bnd_init.u_max)
+
+    # All time steps
+    for k = 2:prob.N
         bnd = remove_bounds!(prob.constraints[k])
         if !isempty(bnd)
             bounds[k] = bnd[1]::BoundConstraint
         end
+    end
+
+    # Terminal time step
+    if :goal ∈ labels(prob.constraints[N])
+        goal = pop!(prob.constraints[N])
+        xf = zeros(n)
+        evaluate!(xf, goal, zero(xf))
+        term_bound = BoundConstraint(n,m, x_min=-xf, u_min=bounds[N-1].u_min,
+                                          x_max=-xf, u_max=bounds[N-1].u_max)
+        bounds[N] = term_bound::BoundConstraint
     end
     return bounds
 end
@@ -146,10 +167,10 @@ function remove_goal_constraint!(prob::Problem)
     return -xf
 end
 
-function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundConstraint})
+function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
     n,m,N = size(prob)
     p_colloc = num_colloc(prob)
-    Z = solver.Z
+    Z = Primals(prob, true)
 
     Z.equal ? uN = N : uN = N-1
     x_U = [zeros(n) for k = 1:N]
@@ -169,21 +190,12 @@ function get_bounds(prob::Problem, solver::DirectSolver, bounds::Vector{<:BoundC
     z_U = Primals(x_U,u_U)
     z_L = Primals(x_L,u_L)
 
-    # Set Initial Condition
-    z_U.X[1] .= prob.x0
-    z_L.X[1] .= prob.x0
-
-    # Get terminal condition
-    goal = pop!(prob.constraints[N])
-    xf = zeros(n)
-    evaluate!(xf, goal, zeros(n))
-    z_U.X[N] .= -xf
-    z_L.X[N] .= -xf
-
     # Constraints
     p = num_constraints(prob)
-    g_U = [PartedArray(zeros(p[k]), solver.C[k].parts) for k = 1:N]
-    g_L = [PartedArray(zeros(p[k]), solver.C[k].parts) for k = 1:N]
+    g_U = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    g_L = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    push!(g_U, PartedVector(prob.constraints[N], :terminal))
+    push!(g_L, PartedVector(prob.constraints[N], :terminal))
     for k = 1:N
         if p[k] > 0
             g_L[k].inequality .= -Inf
@@ -288,6 +300,7 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
     P = p_colloc + sum(p)
     dt = prob.dt
 
+    pcum = cumsum(p)
     part_z = create_partition(n,m,N,N)
     part_f = create_partition2(prob.model)
     constraints = prob.constraints
@@ -315,6 +328,9 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
         X,U = unpack(Z,part_z)
         g_colloc = reshape(view(g,1:p_colloc), n, N-1)
         g_custom = view(g,p_colloc+1:length(g))
+        insert!(pcum, 1, 0)
+        p = num_constraints(prob)
+        pcum = [0; cumsum(p)]
 
         fVal = [zero(X[1]) for k = 1:N]
         Xm = [zero(X[1]) for k = 1:N-1]
@@ -331,6 +347,19 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
             Um = (U[k] + U[k+1])*0.5
             evaluate!(fValm, prob.model, Xm[k], Um)
             g_colloc[:,k] = -X[k+1] + X[k] + dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+        end
+
+        for k = 1:N
+            if p[k] > 0
+                k == N ? part = :terminal : part = :stage
+                part_c = create_partition(prob.constraints[k], part)
+                inds = pcum[k] .+ (1:p[k])
+                if k == N
+                    evaluate!(PartedArray(view(g_custom, inds), part_c), prob.constraints[k], X[k])
+                else
+                    evaluate!(PartedArray(view(g_custom, inds), part_c), prob.constraints[k], X[k], U[k])
+                end
+            end
         end
     end
 
@@ -358,7 +387,7 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
                 jacobian!(F[k], prob.model, X[k], U[k])
             end
 
-            # # Calculate midpoints
+            # Calculate midpoints
             fVal = [zeros(n) for k = 1:N]
             Xm = [zeros(n) for k = 1:N-1]
 
@@ -369,6 +398,7 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
                 Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
             end
 
+            # Collocation jacobians
             Fm = zero(∇F[1])
             n_blk = 2(n+m)n
             off = 0
@@ -382,6 +412,23 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
                 calc_block!(block, F[k], F[k+1], Fm, dt)
                 off += n_blk
             end
+
+            # General constraint jacobians
+            p = num_constraints(prob)
+            for k = 1:N
+                if k == N
+                    n_blk = p[k]*n
+                    part_c = create_partition2(prob.constraints[k], n, m, :terminal)
+                    block = PartedArray(reshape(view(vals, off .+ (1:n_blk)), p[k], n), part_c)
+                    jacobian!(block, prob.constraints[k], X[k])
+                else
+                    n_blk = p[k]*(n+m)
+                    part_c = create_partition2(prob.constraints[k], n, m)
+                    block = PartedArray(reshape(view(vals, off .+ (1:n_blk)), p[k], n+m), part_c)
+                    jacobian!(block, prob.constraints[k], X[k], U[k])
+                end
+                off += n_blk
+            end
         end
 
         return nothing
@@ -389,26 +436,18 @@ function gen_ipopt_functions3(prob::Problem{T}) where T
     return eval_f, eval_g, eval_grad_f, eval_jac_g
 end
 
-function gen_ipopt_prob3(prob::Problem, xf)
+function solve_ipopt(prob::Problem)
     prob = copy(prob)
+    bnds = remove_bounds!(prob)
     n,m,N = size(prob)
     p = num_constraints(prob)
     p_colloc = num_colloc(prob)
     P = p_colloc + sum(p)
     NN = N*(n+m)
-    nG = p_colloc*2(n+m)
+    nG = num_colloc(prob)*2*(n + m) + sum(p[1:N-1])*(n+m) + p[N]*n
     nH = 0
 
-
-    z_U = ones(NN)*Inf
-    z_L = ones(NN)*-Inf
-    z_U[1:n] = prob.x0
-    z_L[1:n] = prob.x0
-    z_U[(N-1)*(n+m) .+ (1:n)] = xf
-    z_L[(N-1)*(n+m) .+ (1:n)] = xf
-
-    g_U = zeros(P)
-    g_L = zeros(P)
+    z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
 
     eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions3(prob)
 
@@ -417,6 +456,141 @@ function gen_ipopt_prob3(prob::Problem, xf)
 
     opt_file = joinpath(TrajectoryOptimization.root_dir(),"ipopt.opt");
     addOption(problem,"option_file_name",opt_file)
+    solveProblem(problem)
+    sol = Primals(problem.x, n, m)
+    return sol, problem
+end
 
-    return problem
+function gen_ipopt_functions3(prob::Problem{T}, solver::DIRCOLSolver) where T
+    n,m,N = size(prob)
+    NN = N*(n+m)
+    p_colloc = num_colloc(prob)
+    p = num_constraints(prob)
+    P = p_colloc + sum(p)
+    dt = prob.dt
+
+    part_f = create_partition2(prob.model)
+    part_z = create_partition(n,m,N,N)
+    pcum = cumsum(p)
+
+    jac_structure = spzeros(P, NN)
+    constraint_jacobian_sparsity!(jac_structure, prob)
+    r,c = get_rc(jac_structure)
+
+    function eval_f(Z)
+        X,U = unpack(Z,part_z)
+        cost(prob.obj, X, U)
+    end
+
+    function eval_grad_f(Z, grad_f)
+        X,U = unpack(Z, part_z)
+        cost_gradient!(grad_f, prob, X, U)
+    end
+
+    function eval_g(Z, g)
+        X,U = unpack(Z,part_z)
+        g_colloc = reshape(view(g,1:p_colloc), n, N-1)
+        g_custom = view(g,p_colloc+1:length(g))
+        insert!(pcum, 1, 0)
+        p = num_constraints(prob)
+        pcum = [0; cumsum(p)]
+
+        fVal = solver.fVal  #[zero(X[1]) for k = 1:N]
+        Xm = solver.X_  #[zero(X[1]) for k = 1:N-1]
+
+        # Calculate midpoints
+        for k = 1:N
+            evaluate!(fVal[k], prob.model, X[k], U[k])
+        end
+        for k = 1:N-1
+            Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+        end
+        fValm = zero(X[1])
+        for k = 1:N-1
+            Um = (U[k] + U[k+1])*0.5
+            evaluate!(fValm, prob.model, Xm[k], Um)
+            g_colloc[:,k] = -X[k+1] + X[k] + dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+        end
+
+        for k = 1:N
+            if p[k] > 0
+                k == N ? part = :terminal : part = :stage
+                part_c = create_partition(prob.constraints[k], part)
+                inds = pcum[k] .+ (1:p[k])
+                if k == N
+                    evaluate!(PartedArray(view(g_custom, inds), part_c), prob.constraints[k], X[k])
+                else
+                    evaluate!(PartedArray(view(g_custom, inds), part_c), prob.constraints[k], X[k], U[k])
+                end
+            end
+        end
+    end
+
+    # Calculate jacobian
+    function calc_block!(vals::PartedMatrix, F1,F2,Fm,dt)
+        In = Diagonal(I, n)
+        Im = Diagonal(I, m)
+        vals.x1 .= dt/6*(F1.xx + 4Fm.xx*( dt/8*F1.xx + In/2)) + In
+        vals.u1 .= dt/6*(F1.xu + 4Fm.xx*( dt/8*F1.xu) + 4Fm.xu*(Im/2))
+        vals.x2 .= dt/6*(F2.xx + 4Fm.xx*(-dt/8*F2.xx + In/2)) - In
+        vals.u2 .= dt/6*(F2.xu + 4Fm.xx*(-dt/8*F2.xu) + 4Fm.xu*(Im/2))
+        return nothing
+    end
+
+    function eval_jac_g(Z, mode, rows, cols, vals)
+        if mode == :Structure
+            copyto!(rows,r)
+            copyto!(cols,c)
+        else
+            X,U = unpack(Z, part_z)
+
+            # Compute dynamics jacobians
+            F = [PartedMatrix(zeros(n,n+m), part_f) for k = 1:N]
+            for k = 1:N
+                jacobian!(F[k], prob.model, X[k], U[k])
+            end
+
+            # Calculate midpoints
+            fVal = [zeros(n) for k = 1:N]
+            Xm = [zeros(n) for k = 1:N-1]
+
+            for k = 1:N
+                evaluate!(fVal[k], prob.model, X[k], U[k])
+            end
+            for k = 1:N-1
+                Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+            end
+
+            # Collocation jacobians
+            Fm = PartedMatrix(prob.model)
+            n_blk = 2(n+m)n
+            off = 0
+            In = Matrix(I,n,n)
+            Im = Matrix(I,m,m)
+            part = create_partition2((n,),(n,m,n,m), Val((:x1,:u1,:x2,:u2)))
+            for k = 1:N-1
+                block = PartedArray(reshape(view(vals, off .+ (1:n_blk)), n, 2(n+m)), part)
+                Um = (U[k] + U[k+1])/2
+                jacobian!(Fm, prob.model, Xm[k], Um)
+                @show F[k].parts
+                @show F[k+1].parts
+                @show Fm.parts
+                calc_block!(block, F[k], F[k+1], Fm, dt)
+                off += n_blk
+            end
+
+            # General constraint jacobians
+            p = num_constraints(prob)
+            for k = 1:N-1
+                n_blk = p[k]*(n+m)
+                part_c = create_partition2(prob.constraints[k], n, m)
+                block = PartedArray(reshape(view(vals, off .+ (1:n_blk)), p[k], n+m), part_c)
+                jacobian!(block, prob.constraints[k], X[k], U[k])
+                off += n_blk
+            end
+        end
+
+        return nothing
+    end
+    return eval_f, eval_g, eval_grad_f, eval_jac_g
 end

@@ -232,7 +232,7 @@ function _validate_bounds(max,min,n::Int)
     if length(max) != length(min)
         throw(DimensionMismatch("u_max and u_min must have equal length"))
     end
-    if ~all(max .> min)
+    if ~all(max .>= min)
         throw(ArgumentError("u_max must be greater than u_min"))
     end
     if length(max) != n
@@ -242,7 +242,7 @@ function _validate_bounds(max,min,n::Int)
 end
 
 function planar_obstacle_constraint(n, m, x_obs, r_obs, label=:obstacle)
-    c(v,x,u) = circle_constraint(x, x_obs, r_obs)
+    c(v,x,u) = v[1] = circle_constraint(x, x_obs, r_obs)
     # c(v,x) = circle_constraint(x, x_obs, r_obs)
     Constraint{Inequality}(c, n, m, 1, :obstacle)
 end

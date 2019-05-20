@@ -78,7 +78,7 @@ function slack_controls(prob::Problem{T}) where T
     return u_slack
 end
 
-function line_trajectory(x0::Vector{T},xf::Vector{T},N::Int) where T
+function line_trajectory(x0::Vector,xf::Vector,N::Int)
     t = range(0,stop=N,length=N)
     slope = (xf .- x0)./N
     x_traj = [slope*t[k] for k = 1:N]
