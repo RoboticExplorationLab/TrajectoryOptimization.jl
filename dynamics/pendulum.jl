@@ -27,6 +27,7 @@ function pendulum_dynamics_uncertain!(ẋ::AbstractVector{T},x::AbstractVector{T
 end
 
 n,m,r = 2,1,1
+pendulum_model_uncertain = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)
 
 function pendulum_frictionless_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
     m = 1.

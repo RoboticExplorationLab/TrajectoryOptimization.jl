@@ -35,19 +35,21 @@ function AbstractSolver(prob::Problem{T,Discrete}, opts::iLQRSolverOptions{T}) w
     stats = Dict{Symbol,Any}()
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
+    r = prob.model.r; N = prob.N
 
-    X̄  = [zeros(T,n)   for k = 1:N]
-    Ū  = [zeros(T,m)   for k = 1:N-1]
+    nn = [length(prob.X[k]) for k = 1:N]
+    mm = [length(prob.U[k]) for k = 1:N-1]
 
-    K  = [zeros(T,m,n) for k = 1:N-1]
-    d  = [zeros(T,m)   for k = 1:N-1]
+    X̄  = [zeros(T,nn[k])   for k = 1:N]
+    Ū  = [zeros(T,mm[k])   for k = 1:N-1]
 
-    part_f = create_partition2(prob.model)
-    ∇F = [PartedMatrix(zeros(n,n+m+1),part_f) for k = 1:N-1]
+    K  = [zeros(T,mm[k],nn[k]) for k = 1:N-1]
+    d  = [zeros(T,mm[k])   for k = 1:N-1]
 
-    S  = [Expansion(prob,:x) for k = 1:N]
-    Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
+    ∇F = [PartedMatrix(zeros(nn[k],nn[k]+mm[k]+r+1),create_partition2((nn[k],),(nn[k],mm[k],r,1),Val((:xx,:xu,:xw,:xdt)))) for k = 1:N-1]
+
+    S  = [Expansion(nn[k],0,T) for k = 1:N]
+    Q = [k < N ? Expansion(nn[k],mm[k],T) : Expansion(nn[N],0,T) for k = 1:N]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
@@ -107,26 +109,29 @@ function AbstractSolver(prob::Problem{T,Discrete}, opts::AugmentedLagrangianSolv
     stats_uncon = Dict{Symbol,Any}[]
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
-
-    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
+    C,∇C,λ,μ,active_set = init_constraint_trajectories(prob)
 
     AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set)
 end
 
-function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::Int,N::Int;
+function init_constraint_trajectories(prob::Problem;
         μ_init::T=1.,λ_init::T=0.) where T
+
+    N = prob.N
+    nn = [length(prob.X[k]) for k = 1:N]
+    mm = [length(prob.U[k]) for k = 1:N-1]
+    constraints = prob.constraints
 
     p = num_constraints(constraints)
     c_stage = [stage(constraints[k]) for k = 1:N-1]
     c_part = [create_partition(c_stage[k]) for k = 1:N-1]
-    c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
+    c_part2 = [create_partition2(c_stage[k],nn[k],mm[k]) for k = 1:N-1]
 
     # Create Trajectories
     C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
-    ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
+    ∇C         = [PartedMatrix(T,constraints[k],nn[k],mm[k],:stage) for k = 1:N-1]
     C          = [C...,  PartedVector(T,constraints[N],:terminal)]
-    ∇C         = [∇C..., PartedMatrix(T,constraints[N],n,m,:terminal)]
+    ∇C         = [∇C..., PartedMatrix(T,constraints[N],nn[N],0,:terminal)]
 
 
     λ          = [PartedVector(ones(T,p[k]), C[k].parts)  for k = 1:N]
@@ -159,6 +164,7 @@ function copy(r::AugmentedLagrangianSolver{T}) where T
     AugmentedLagrangianSolver{T}(deepcopy(r.C),deepcopy(r.C_prev),deepcopy(r.∇C),deepcopy(r.λ),deepcopy(r.μ),deepcopy(r.active_set))
 end
 
+# TODO this may break...
 get_sizes(solver::AugmentedLagrangianSolver{T}) where T = size(solver.∇C[1].x,2), size(solver.∇C[1].u,2), length(solver.λ)
 
 #TODO

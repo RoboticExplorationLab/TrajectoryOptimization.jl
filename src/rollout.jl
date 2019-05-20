@@ -3,7 +3,7 @@ function rollout!(prob::Problem{T,Discrete},solver::iLQRSolver{T},alpha::T=1.0) 
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    X̄[1] = prob.x0
+    initial_condition!(X̄[1],prob)
 
     for k = 2:prob.N
         # Calculate state trajectory difference
@@ -26,7 +26,7 @@ end
 function rollout!(prob::Problem{T,Discrete}) where T
     N = prob.N
     if !all(isfinite.(prob.X[1]))
-        prob.X[1] = prob.x0
+        initial_condition!(prob.X[1],prob)
         rollout!(prob.X, prob.model, prob.U, prob.dt)
     end
 end
@@ -45,6 +45,17 @@ function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajecto
     X[1] = x0
     rollout!(X, model, U, dt)
     return X
+end
+
+function initial_condition!(X::AbstractVector{T},prob::Problem{T}) where T
+    m = prob.model.m; n = prob.model.n
+    X[1:n] = copy(prob.x0)
+
+    m̄ = length(prob.U[1])
+    if m̄ != m
+        m_dif = m̄ - m
+        X[(n-m_dif) .+ (1:m_dif)] = prob.U[1][m .+ (1:m_dif)]
+    end
 end
 
 function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T

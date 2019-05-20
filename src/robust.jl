@@ -7,16 +7,14 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
     dt = prob.dt
 
     K  = [zeros(T,m,n) for k = 1:N-1]
-    ∇F = [PartedArray(zeros(T,n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
+    ∇F = [BlockArray(zeros(T,n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
     P  = [zeros(T,n,n) for k = 1:N]
 
-    # jacobian!(∇F,prob.model,prob.X,prob.U,prob.dt)
+    jacobian!(∇F,prob.model,prob.X,prob.U,prob.dt)
 
     P[N] .= Qf
 
     for k = N-1:-1:1
-        jacobian!(∇F[k],prob.model,prob.X[k],prob.U[k],prob.dt)
-
         A, B = ∇F[k].xx, ∇F[k].xu
         K[k] .= (R*dt + B'*P[k+1]*B)\(B'*P[k+1]*A)
         P[k] .= Q*dt + K[k]'*R*K[k]*dt + (A - B*K[k])'*P[k+1]*(A - B*K[k])
@@ -26,64 +24,76 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
     return K, P
 end
 
-function tvlqr_con(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T}) where T
+function tvlqr_con(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
     dt = prob.dt
 
     K  = [zeros(T,m,n) for k = 1:N-1]
-    S  = [zeros(T,n^2) for k = 1:N]
 
     X_interp = gen_cubic_interp(prob.X,prob.dt)
     U_interp = gen_zoh_interp([prob.U...,prob.U[end]],prob.dt)
 
+    f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    ∇f(x,u) = ∇f([x;u;zeros(r)])
+
     function _Ac(t)
-        Zc = zeros(n,n+m+r)
-        p_model.∇f(Zc,zeros(n),X_interp(t),U_interp(t),zeros(r))
-        Zc[:,1:n]
+        ∇f(X_interp(t),U_interp(t))[:,1:n]
     end
 
     function _Bc(t)
-        Zc = zeros(n,n+m+r)
-        p_model.∇f(Zc,zeros(n),X_interp(t),U_interp(t),zeros(r))
-        Zc[:,n .+ (1:m)]
-    end
-
-    function _Gc(t)
-        Zc = zeros(n,n+m+r)
-        p_model.∇f(Zc,zeros(n),X_interp(t),U_interp(t),zeros(r))
-        Zc[:,(n + m) .+ (1:r)]
+        ∇f(X_interp(t),U_interp(t))[:,n .+ (1:m)]
     end
 
     function r_dyn_sqrt(ṡ,s,t)
         SS = reshape(s,n,n)
         ss = inv(SS')
-        ṡ[1:n^2] = reshape(-.5*Q*ss - _Ac(t)'*SS + .5*(SS*SS'*_Bc(t))*inv(R)*(_Bc(t)'*SS),n^2)
+        ṡ[1:n^2] = vec(-.5*Q*ss - _Ac(t)'*SS + .5*(SS*SS'*_Bc(t))*inv(R)*(_Bc(t)'*SS));
     end
 
+    r_dyn_sqrt_wrap(ṡ,z) = r_dyn_sqrt(ṡ,z[1:n^2],z[n^2 + 1])
+    r_dyn_sqrt_wrap(rand(n^2),[rand(n^2);1.0])
+
+    ∇r_dyn_sqrt_wrap(z) = ForwardDiff.jacobian(r_dyn_sqrt_wrap,zeros(n^2),z)
+
+    ∇r_dyn_sqrt_wrap(s,t) = ∇r_dyn_sqrt_wrap([s;t])
+
+    ∇r_dyn_sqrt_wrap([rand(n^2);1.0])
+
+    S = [zeros(n^2) for k = 1:N]
     S[N] = vec(cholesky(Qf).U)
+    _t = [tf]
 
-    _t = [prob.tf]
-
-    # rk4
     for k = N:-1:2
-        k1 = k2 = k3 = k4 = zero(S[k])
+        # explicit midpoint
+        k1 = k2 = kg = zero(S[k])
         x = S[k]
-        println(k1)
-        println(x)
-        r_dyn_sqrt(k1, x, _t[1]);
+        r_dyn_sqrt(k1, S[k], _t[1]);
         k1 *= -dt;
-        r_dyn_sqrt(k2, x + k1/2, _t[1] - dt/2);
+        r_dyn_sqrt(k2, S[k] + k1/2, _t[1] - dt/2);
         k2 *= -dt;
-        r_dyn_sqrt(k3, x + k2/2, _t[1] - dt/2);
-        k3 *= -dt;
-        r_dyn_sqrt(k4, x + k3, max(_t[1] - dt, 0.));
-        k4 *= -dt;
-        println(k)
-        copyto!(S[k-1], x + (k1 + 2*k2 + 2*k3 + k4)/6)
+        copyto!(S[k-1], S[k] + k2)
+
+        for i = 1:10
+            Sm = 0.5*(S[k-1] + S[k])
+            tm = _t[1] - dt/2
+
+            r_dyn_sqrt(kg,Sm,tm)
+            g = S[k-1] - S[k] + dt*kg
+
+            A = ∇r_dyn_sqrt_wrap(Sm,tm)[:,1:n^2]
+
+            ∇g = Diagonal(I,n^2) + 0.5*dt*A
+            δs = -∇g\g
+
+            S[k-1] += δs
+        end
+
         _t[1] -= dt
     end
+    Ps = [reshape(S[k],n,n)*reshape(S[k],n,n)' for k = 1:N]
 
-    return K, S
+    return K, Ps
 end
 
 function gen_cubic_interp(X,dt)
@@ -119,35 +129,37 @@ function robust_model(model::Model{Uncertain,Discrete},Q::AbstractArray{T},R::Ab
     n = model.n; m = model.m; r = model.r
 
     fc! = prob.model.info[:fc]
-    ∇fc! = prob.model.info[:∇fc]
     integration = prob.model.info[:integration]
 
-    discretize_model(robust_model(fc!,∇fc!,Q,R,D,n,m,r),integration,prob.dt)
+    discretize_model(robust_model(fc!,Q,R,D,n,m,r),integration,prob.dt)
 end
 
 function robust_model(model::Model{Uncertain,Continuous},Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray) where T
     n = model.n; m = model.m; r = model.r
 
-    robust_model(model.f,model.∇f,Q,R,D,n,m,r)
+    robust_model(model.f,Q,R,D,n,m,r)
 end
 
 "Robust dynamics, includes: nominal, disturbance, and cost-to-go dynamics"
-function robust_model(f::Function,∇f::Function,Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray{T},n::Int,m::Int,r::Int) where T
+function robust_model(f::Function,Q::AbstractArray{T},R::AbstractArray{T},D::AbstractArray{T},n::Int,m::Int,r::Int) where T
     idx = (x=1:n,u=1:m,w=1:r)
     z_idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)))
 
-    Zc = zeros(n,n+m+r)
     n̄ = n + n^2 + n*r + n^2
+
+    f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+    ∇f(z) = ForwardDiff.jacobian(f_aug,zeros(eltype(z),n),z)
 
     function robust_dynamics(ż,z,u,w)
         x = z[z_idx.x]
+        u = u[1:m]
         E = reshape(z[z_idx.e],n,n)
         H = reshape(z[z_idx.h],n,r)
         S = reshape(z[z_idx.s],n,n)
         ss = inv(S')
         P = S*S'
 
-        ∇f(Zc,x,u,w)
+        Zc = ∇f([x;u;w])
         Ac = Zc[:,idx.x]
         Bc = Zc[:,n .+ idx.u]
         Gc = Zc[:,(n+m) .+ idx.w]
@@ -187,14 +199,14 @@ function stage_cost(cost::RobustCost, z::Vector{T}, u::Vector{T}) where T
     x = z[idx.x]
     E = reshape(z[idx.e],n,n)
 
-    Kc = K(z)
+    Kc = cost.K(z,u)
 
-    tr((cost.Qr + K'*cost.Rr*K)*E)
+    tr((cost.Qr + Kc'*cost.Rr*Kc)*E)
 end
 
 function stage_cost(cost::RobustCost, zN::Vector{T}) where T
     idx = cost.idx; n = cost.n
-    E = reshape(z[idx.e],n,n)
+    E = reshape(zN[idx.e],n,n)
     tr(cost.Qrf*E)
 end
 
@@ -226,7 +238,7 @@ end
 
 function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     H1::AbstractArray{T},D::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
-    Qf::AbstractArray{T}) where T
+    Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     N = prob.N
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
@@ -240,16 +252,14 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     ∇fc = prob.model.info[:∇fc]
 
-
     function K(z,u)
         x = z[idx.x]
         s = z[idx.s]
         P = reshape(s,n,n)*reshape(s,n,n)'
 
-        ∇fc(Zc,x,u,zeros(r))
+        ∇fc(Zc,x,u[1:m],zeros(r))
         Bc = Zc[:,n .+ (1:m)]
-
-        R\(Bc*P)
+        R\(Bc'*P)
     end
 
     # modify cost
@@ -259,6 +269,10 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         cost_robust.Q = cat(cost_robust.Q,Diagonal(zeros(n_robust)),dims=(1,2))
         cost_robust.q = [cost_robust.q; zeros(n_robust)]
         cost_robust.H = [cost_robust.H zeros(m,n_robust)]
+        if k == 1
+            cost_robust.R = cat(cost_robust.R,Diagonal(zeros(n^2)),dims=(1,2))
+            cost_robust.r = [cost_robust.r; zeros(n^2)]
+        end
         push!(_cost,cost_robust)
     end
 
@@ -272,53 +286,57 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     model_uncertain = robust_model(prob.model,Q,R,D)
 
     robust_cost = RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx)
-
-    con_prob = AbstractConstraintSet[]
-    constrained = is_constrained(prob)
-
-
-    s1(c,z,u) = u[m .+ (1:n^2)] - z[idx.s]
-
-    C = zeros(n^2,n + n^2 + n*r + n^2 + m + n^2)
-    function ∇s1(C,z,u)
-        C[:,(n+n^2+n*r) .+ (1:n^2)] = -1.0*Diagonal(ones(n^2))
-        C[:,(n+n^2+n*r+n^2+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
-    end
-    ctg_init = Constraint{Equality}(s1,∇s1,n + n_robust,m + n^2,n^2,:ctg)
-
-    for k = 1:N-1
-        con_uncertain = AbstractConstraint[]
-        if k == 1
-            push!(con_uncertain,ctg_init)
-        end
-        if constrained
-            for cc in prob.constraints[k]
-                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m))
-            end
-        end
-        push!(con_prob,con_uncertain)
-    end
-
-    if constrained
-        con_uncertain = AbstractConstraint[]
-        for cc in prob.constraints[N]
-            push!(con_uncertain,robust_constraint(cc,prob.model.n))
-        end
-    else
-        con_uncertain = Constraint[]
-    end
-
-    push!(con_prob,con_uncertain)
-    rollout_nominal!(prob)
+    #
+    # con_prob = AbstractConstraintSet[]
+    # constrained = is_constrained(prob)
+    #
+    #
+    # s1(c,z,u) = u[m .+ (1:n^2)] - z[idx.s]
+    #
+    # C = zeros(n^2,n + n^2 + n*r + n^2 + m + n^2)
+    # function ∇s1(C,z,u)
+    #     C[:,(n+n^2+n*r) .+ (1:n^2)] = -1.0*Diagonal(ones(n^2))
+    #     C[:,(n+n^2+n*r+n^2+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
+    # end
+    # ctg_init = Constraint{Equality}(s1,∇s1,n + n_robust,m + n^2,n^2,:ctg)
+    #
+    # for k = 1:N-1
+    #     con_uncertain = AbstractConstraint[]
+    #     if k == 1
+    #         push!(con_uncertain,ctg_init)
+    #     end
+    #     if constrained
+    #         for cc in prob.constraints[k]
+    #             push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m))
+    #         end
+    #     end
+    #     push!(con_prob,con_uncertain)
+    # end
+    #
+    # if constrained
+    #     con_uncertain = AbstractConstraint[]
+    #     for cc in prob.constraints[N]
+    #         push!(con_uncertain,robust_constraint(cc,prob.model.n))
+    #     end
+    # else
+    #     con_uncertain = Constraint[]
+    # end
+    #
+    # push!(con_prob,con_uncertain)
+    # rollout!(prob)
     # K, P = tvlqr_dis(prob,Q,R,Qf)
-    K, S = tvlqr_con(prob,Q,R,Qf)
+    K, P = tvlqr_con(prob,Q,R,Qf,xf)
+    S1 = vec(sqrt(P[1]))
 
+    # update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
+    #     constraints=ProblemConstraints(con_prob),
+    #     X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:prob.N],
+    #     U=[k == 1 ? [prob.U[k];S[1]] : prob.U[k] for k = 1:prob.N-1],
+    #     x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S[1]])
     update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
-        constraints=ProblemConstraints(con_prob),
         X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:prob.N],
-        U=[k == 1 ? [prob.U[k];S[1]] : prob.U[k] for k = 1:prob.N-1],
-        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S[1]])
-
+        U=[k==1 ? [prob.U[k];S1] : prob.U[k] for k = 1:N-1],
+        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S1])
 end
 
 function E_to_δx(E,i)

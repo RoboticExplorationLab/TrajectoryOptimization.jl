@@ -80,11 +80,11 @@ function midpoint_implicit(f::Function,n::Int,m::Int,dt::T) where T
     end
 end
 
-function midpoint_uncertain_implicit(f::Function,n::Int,m::Int,r::Int,dt::T) where T
+function midpoint_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) where T
     # get estimate of X[k+1] from explicit midpoint
     f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
-    ∇f(x,u,w) = ForwardDiff.jacobian(f_aug,zero(x),[x;u;w])
-    fd(y,x,u,dt=dt) = begin
+    ∇f(x,u,w) = ForwardDiff.jacobian(f_aug,zeros(eltype(x),n),[x;u;w])
+    fd(y,x,u,w,dt=dt) = begin
         k1 = k2 = kg = zero(x)
         f(k1, x, u, w);
         k1 *= dt;
@@ -239,7 +239,7 @@ function rk3_implicit(f::Function,n::Int,m::Int,dt::T) where T
     end
 end
 
-function rk3_uncertain_implicit(f::Function,n::Int,m::Int,r::Int,dt::T) where T
+function rk3_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) where T
     f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
     ∇f(x,u,w) = ForwardDiff.jacobian(f_aug,zero(x),[x;u;w])
 

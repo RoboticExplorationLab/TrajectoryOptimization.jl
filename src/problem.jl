@@ -92,7 +92,13 @@ Problem(model::Model{M,Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) 
 
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
-initial_controls!(prob::Problem{T,D}, U0::AbstractVectorTrajectory{T}) where {T,D} = copyto!(prob.U, U0[1:prob.N-1])
+function initial_controls!(prob::Problem{T,D}, U0::AbstractVectorTrajectory{T}) where {T,D}
+    m = prob.model.m
+    for k = 1:N-1
+        prob.U[k][1:m] .= U0[k][1:m]
+    end
+end
+
 initial_controls!(prob::Problem{T,D}, U0::Matrix{T}) where {T,D} = initial_controls!(prob, to_dvecs(U0))
 
 "$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
@@ -281,6 +287,10 @@ end
 
 function Expansion(prob::Problem{T,D}) where {T,D}
     n = prob.model.n; m = prob.model.m
+    Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
+end
+
+function Expansion(n::Int,m::Int,T::Type)
     Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
 end
 

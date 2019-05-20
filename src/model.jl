@@ -280,12 +280,12 @@ function jacobian!(Z::AbstractMatrix,model::Model{M,Discrete},x::AbstractVector,
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
+function jacobian!(Z::AbstractArray,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
     model.∇f(Z,x,u,zeros(model.r),dt)
     model.evals[2] += 1
 end
 
-function jacobian_uncertain!(Z::AbstractMatrix,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
+function jacobian_uncertain!(Z::AbstractArray,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
     model.∇f(Z,x,u,w,dt)
     model.evals[2] += 1
 end
@@ -299,7 +299,11 @@ end
 
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
     N = length(X)
-    for k = 1:N-1
+    n = model.n; m = model.m; r = model.r
+    idx = [(1:n)...,(n .+ (1:m))...,((n+m) .+ (1:r))...,size(Z[1],2)]
+    jacobian!(view(Z[1],1:n,idx),model,X[1],U[1][1:m],dt)
+
+    for k = 2:N-1
         jacobian!(Z[k],model,X[k],U[k],dt)
     end
 end
@@ -510,7 +514,7 @@ function generate_jacobian(::Type{Nominal},::Type{Discrete},fd!::Function,n::Int
 end
 
 function generate_jacobian(::Type{Uncertain},::Type{Continuous},f!::Function,n::Int,m::Int,r::Int)
-    inds = (x=1:n,u=n .+ (1:m), w=(n+m) .+ (1:r), px=(1:p,1:n),xu=(1:n,n .+ (1:m)), xw=(1:n,(n+m) .+ (1:r)))
+    inds = (x=1:n,u=n .+ (1:m), w=(n+m) .+ (1:r), xx=(1:n,1:n),xu=(1:n,n .+ (1:m)), xw=(1:n,(n+m) .+ (1:r)))
     Z = PartedArray(zeros(n,n+m+r),inds)
     z = zeros(n+m+r)
     v0 = zeros(n)
@@ -528,15 +532,15 @@ function generate_jacobian(::Type{Uncertain},::Type{Continuous},f!::Function,n::
         z[inds.x] = x
         z[inds.u] = u
         z[inds.w] = w
-        ∇fz(Z,zeros(eltype(x),p),z)
+        ∇fz(Z,zeros(eltype(x),n),z)
         return nothing
     end
     ∇f!(x::AbstractVector,u::AbstractVector,w::AbstractVector) = begin
         z[inds.x] = x
         z[inds.u] = u
         z[inds.w] = w
-        Z = PartedArray(zeros(eltype(x),p,n+m+r),inds)
-        ∇fz(Z,zeros(eltype(x),p),z)
+        Z = PartedArray(zeros(eltype(x),n,n+m+r),inds)
+        ∇fz(Z,zeros(eltype(x),n),z)
         return Z
     end
     return ∇f!, f_aug
