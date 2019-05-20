@@ -1,6 +1,8 @@
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
 using ForwardDiff
+using BenchmarkTools
+using Statistics
 using SparseArrays
 using Ipopt
 using Plots
@@ -15,7 +17,7 @@ goal_con = goal_constraint(xf)
 circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,0.5), 0.25)
 bnd = BoundConstraint(model.n, model.m, x_min=[-0.5,-0.001,-Inf], x_max=[0.5, 1.001, Inf], u_min=-2, u_max=2)
 
-N = 51
+N = 101
 n,m = model.n, model.m
 prob = Problem(rk3(model), Objective(costfun,N), constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
 prob.constraints[N] += goal_con
@@ -27,9 +29,12 @@ X0 = [zeros(model.n) for k = 1:N]
 X0 = line_trajectory(prob.x0, xf, N)
 U0 = [ones(model.m) for k = 1:N]
 Z0 = TO.pack(X0,U0)
+initial_controls!(prob, U0)
+initial_state!(prob, X0)
 
 # Solve with Ipopt
-sol, problem = TO.solve_ipopt(prob)
+opts = TO.DIRCOLSolverOptions{Float64}()
+sol, problem = solve(prob, opts)
 plot(sol.U)
 plot()
 TO.plot_circle!((0,0.5),0.25)
@@ -83,9 +88,25 @@ eval_jac_g(Z0, :Structure, rows, cols, vals); eval_jac_g3(Z0, :Structure, rows3,
 eval_jac_g(Z0, :Vals, rows, cols, vals); eval_jac_g3(Z0, :Vals, rows3, cols3, vals3);
 sparse(rows,cols,vals) ≈ sparse(rows3,cols3,vals3)
 
+@code_warntype eval_f(Z0)
+@code_warntype eval_grad_f(Z0, grad_f)
+@code_warntype eval_g3(Z0,g)
+@code_warntype eval_jac_g3(Z0, :Structure, rows, cols, vals)
+@code_warntype eval_jac_g3(Z0, :Values, rows, cols, vals)
+
+b1 = @benchmark eval_f(Z0)
+b2 = @benchmark eval_f3(Z0)
+judge(median(b2), median(b1))
+b1 = @benchmark eval_g($Z0,$g)
+b2 = @benchmark eval_g3($Z0,$g3)
+judge(median(b2), median(b1))
+b1 = @benchmark eval_jac_g($Z0,:Vals,$rows,$cols,$vals)
+b2 = @benchmark eval_jac_g3($Z0,:Vals,$rows3,$cols3,$vals3)
+judge(median(b2), median(b1))
+
 
 # Validate derivatives
-ForwardDiff.gradient(eval_f, Z0) ≈ grad_f
+ForwardDiff.gradient(eval_f3, Z0) ≈ grad_f
 
 jac = zeros(length(g),length(Z0))
 eval_g2(g,Z0) = eval_g(Z0,g)
