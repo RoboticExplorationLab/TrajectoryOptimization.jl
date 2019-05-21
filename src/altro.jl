@@ -58,7 +58,7 @@ function altro_problem(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 
     # create infeasible problem
     if !all(x->isnan(x),prob_altro.X[1])
-        println("Infeasible Solve")
+        @info "Infeasible Solve"
         prob_altro = infeasible_problem(prob_altro,opts.R_inf)
         infeasible = true
     else
@@ -67,7 +67,7 @@ function altro_problem(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
 
     # create minimum time problem
     if prob_altro.tf == 0.0
-        println("Minimum Time Solve")
+        @info "Minimum Time Solve"
         prob_altro = minimum_time_problem(prob_altro,opts.R_minimum_time,
             opts.dt_max,opts.dt_min)
         minimum_time = true
