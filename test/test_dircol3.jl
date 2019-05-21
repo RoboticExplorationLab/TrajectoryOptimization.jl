@@ -106,13 +106,19 @@ judge(median(b2), median(b1))
 
 
 # Validate derivatives
-ForwardDiff.gradient(eval_f3, Z0) ≈ grad_f
+ForwardDiff.gradient(eval_f, Z0) ≈ grad_f
 
 jac = zeros(length(g),length(Z0))
 eval_g2(g,Z0) = eval_g(Z0,g)
 eval_g2(g,Z0)
 g
 ForwardDiff.jacobian!(jac, eval_g2, g, Z0) ≈ Array(sparse(rows,cols,vals))
+jac_struct = spzeros(p_colloc + p_custom, (n+m)N)
+TO.constraint_jacobian_sparsity!(jac_struct, prob)
+Array(jac_struct)
+nG
+p_colloc*2(n+m)
+p_custom*(n+m)
 
 problem = TO.gen_ipopt_prob3(prob, xf)
 problem.x = copy(Z0)
