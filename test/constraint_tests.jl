@@ -18,8 +18,8 @@ jacob_c(x) = [2x[1] 2x[2] 0;
                 0     0     0];
 
 v = zeros(p1)
-x = [1,2,3]
-u = [-5,5]
+x = [1.,2,3]
+u = [-5.,5]
 c(v,x,u)
 @test v == [0,-6,4]
 
@@ -74,15 +74,15 @@ evaluate!(v, bnd, x, u)
 @test v == [-4,-3,-Inf,-5,5,-11,-7,-3,-5,-15]
 C = PartedArray(zeros(p3,n+m),create_partition2((p3,),(n,m),Val((:xx,:xu))))
 jacobian!(C, bnd, x, u)
-@test C.xx == [Diagonal(I,n); zeros(m,n); -Diagonal(I,n); zeros(m,n)]
-@test C.xu == [zeros(n,m); Diagonal(I,m); zeros(n,m); -Diagonal(I,m)]
+@test C.xx == [Diagonal(1I,n); zeros(m,n); -Diagonal(1I,n); zeros(m,n)]
+@test C.xu == [zeros(n,m); Diagonal(1I,m); zeros(n,m); -Diagonal(1I,m)]
 @test length(bnd) == p3
 
 v = zeros(2n)
 evaluate!(v, bnd, x)
 @test v == [-4,-3,-Inf,-11,-7,-3]
 C = zeros(2n, n)
-@test jacobian!(C, bnd, x) == [Diagonal(I,n); -Diagonal(I,n)]
+@test jacobian!(C, bnd, x) == [Diagonal(1I,n); -Diagonal(1I,n)]
 @test length(bnd,:terminal) == 2n
 
 
@@ -94,7 +94,7 @@ v = zeros(p3)
 evaluate!(v, bnd, x, u)
 @test v == [-4,-3,-5,5,-11,-7,-3,-5,-15]
 C = zeros(p3, n+m)
-jac_bnd = [Diagonal(I,n+m)[[true;true;false;true;true],:]; -Diagonal(I,n+m)]
+jac_bnd = [Diagonal(1I,n+m)[[true;true;false;true;true],:]; -Diagonal(1I,n+m)]
 @test jacobian!(C, bnd, x, u) == jac_bnd
 @test length(bnd,:stage) == p3
 
@@ -103,7 +103,7 @@ evaluate!(v, bnd, x)
 @test v == [-4,-3,-11,-7,-3]
 C = zeros(p3_N, n)
 jacobian!(C, bnd, x)
-jac_bnd_term = [Diagonal(I,n)[[true;true;false],:]; -Diagonal(I,n)]
+jac_bnd_term = [Diagonal(1I,n)[[true;true;false],:]; -Diagonal(1I,n)]
 @test C == jac_bnd_term
 
 # Create Constraint Set
