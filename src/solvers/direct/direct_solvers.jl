@@ -17,8 +17,8 @@ include("primals.jl")
     "Options dictionary for the nlp solver"
     opts::Dict{String,Any} = Dict{String,Any}()
 
-    "Quadrature rule"
-
+    "Print output to console"
+    verbose::Bool = true
 end
 
 

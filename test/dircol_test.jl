@@ -12,9 +12,6 @@ using LinearAlgebra
 using PartedArrays
 using SparseArrays
 
-import TrajectoryOptimization: DIRCOLSolver, DIRCOLSolverOptions, Primals
-
-
 # Set up problem
 model = Dynamics.car_model
 costfun = Dynamics.car_costfun
@@ -24,10 +21,10 @@ circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,0.5), 0.25)
 bnd = BoundConstraint(model.n, model.m, x_min=[-0.5,-0.001,-Inf], x_max=[0.5, 1.001, Inf], u_min=-2, u_max=2)
 
 # Initial Controls
+N = 101
 U0 = [ones(model.m) for k = 1:N]
 
 # Create Problem
-N = 101
 n,m = model.n, model.m
 prob = Problem(rk3(model), Objective(costfun,N), constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
 prob.constraints[N] += goal_con
@@ -37,7 +34,7 @@ prob = TO.update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
-opts = DIRCOLSolverOptions{Float64}()
+opts = DIRCOLSolverOptions{Float64}(verbose=false)
 pcon = prob.constraints
 dircol = TO.DIRCOLSolver(prob, opts)
 
@@ -153,7 +150,7 @@ nG_custom = sum(p[1:N-1])*(n+m) + p[N]*n
 nG = nG_colloc + nG_custom
 jac = spzeros(p_colloc+p_custom, NN)
 TO.constraint_jacobian_sparsity!(jac, prob)
-r,c = TO.get_rc(jac)
+rows,cols = TO.get_rc(jac)
 
 function jac_con(Z)
     X,U = TO.unpack(Z, part_z)
@@ -168,7 +165,7 @@ function jac_con(Z)
     jac_custom = view(jac, nG_colloc+1:length(jac))
     TO.constraint_jacobian!(jac_custom, prob, solver, X, U)
 
-    return sparse(r,c,jac)
+    return sparse(rows,cols,jac)
 end
 jac_con(Z.Z)
 
@@ -204,16 +201,28 @@ eval_jac_g(Z.Z, :Values, r, c, jac2)
 
 
 # Strip out state and control Bounds
-prob = copy(prob)
-p0 = num_constraints(prob)
-bnds = TO.remove_bounds!(prob)
-p = num_constraints(prob)
+prob0 = copy(prob)
+p0 = num_constraints(prob0)
+bnds = TO.remove_bounds!(prob0)
+p = num_constraints(prob0)
 @test p0[1] == 9
 @test p[1] == 1
 @test p[N] == 0
-z_U,z_L,g_U,g_L = TO.get_bounds(prob,bnds)
+z_U,z_L,g_U,g_L = TO.get_bounds(prob0,bnds)
 Z_U = Primals(z_U, part_z)
 Z_L = Primals(z_L, part_z)
-@test Z_U.X[1] == Z_L.X[1] == prob.x0
+@test Z_U.X[1] == Z_L.X[1] == prob0.x0
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
+
+
+# Test solve
+for i = 1:10
+    sol,solver = solve(prob, opts)
+    if solver.stats[:info] == :Solve_Succeeded
+        break
+    end
+    if i == 10
+        error("The problem should have solved successfully")
+    end
+end

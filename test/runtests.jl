@@ -43,4 +43,8 @@ end
     include("quadrotor_tests.jl")
 end
 
+# Direct Methods
+@testset "Ipopt" begin
+    include("dircol_test.jl")
+end
 disable_logging(Logging.Debug)
