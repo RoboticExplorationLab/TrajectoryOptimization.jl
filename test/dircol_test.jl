@@ -227,32 +227,6 @@ for i = 1:10
         error("The problem should have solved successfully")
     end
 end
-
-
-# MOI
-prob0 = copy(prob)
-bnds = TO.remove_bounds!(prob0)
-z_U, z_L, g_U, g_L = TO.get_bounds(prob0, bnds)
-d = TO.DirectProblem(prob0, TO.DIRCOLSolver(prob0))
-
-nlp_bounds = MOI.NLPBoundsPair.(g_L,g_U)
-block_data = MOI.NLPBlockData(nlp_bounds, d, true)
-
-solver = Ipopt.Optimizer()
-Z = MOI.add_variables(solver, NN)
-
-for i = 1:NN
-    MOI.add_constraint(solver, MOI.SingleVariable(Z[i]), MOI.LessThan(z_U[i]))
-    MOI.add_constraint(solver, MOI.SingleVariable(Z[i]), MOI.GreaterThan(z_L[i]))
-    MOI.set(solver, MOI.VariablePrimalStart(), Z[i], Z0.Z[i])
-end
-MOI.set(solver, MOI.NLPBlock(), block_data)
-MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-MOI.optimize!(solver)
-status = MOI.get(solver, MOI.TerminationStatus())
-status == MOI.OPTIMAL
-Zsol = MOI.get(solver, MOI.VariablePrimal(), Z)
-Zsol = Primals(Zsol, part_z)
-plot()
-TO.plot_circle!((0,0.5),0.25)
-plot_trajectory!(Zsol.X)
+opts = DIRCOLSolverOptions{Float64}()
+solve(prob, opts)
+TO.solve_moi(prob, opts)

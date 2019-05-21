@@ -69,3 +69,45 @@ function MOI.eval_constraint_jacobian(d::DirectProblem, jac, Z)
 end
 
 MOI.eval_hessian_lagrangian(::DirectProblem, H, x, σ, μ) = nothing
+
+function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
+    prob = copy(prob)
+    bnds = remove_bounds!(prob)
+    z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
+    n,m,N = size(prob)
+    NN = (n+m)*N
+
+    # Get initial condition
+    Z0 = Primals(prob, true)
+
+    # Create NLP Block
+    has_objective = true
+    dircol = DIRCOLSolver(prob, opts)
+    d = DirectProblem(prob, dircol)
+    nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
+    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
+
+    # Create solver
+    solver = Ipopt.Optimizer()
+    Z = MOI.add_variables(solver, NN)
+
+    # Add bound constraints
+    for i = 1:NN
+        zi = MOI.SingleVariable(Z[i])
+        MOI.add_constraint(solver, zi, MOI.LessThan(z_U[i]))
+        MOI.add_constraint(solver, zi, MOI.GreaterThan(z_L[i]))
+        MOI.set(solver, MOI.VariablePrimalStart(), Z[i], Z0.Z[i])
+    end
+
+    # Solve the problem
+    MOI.set(solver, MOI.NLPBlock(), block_data)
+    MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.optimize!(solver)
+
+    # Get the solution
+    res = MOI.get(solver, MOI.VariablePrimal(), Z)
+    res = Primals(res, d.part_z)
+
+    # Return the results
+    return res, dircol
+end
