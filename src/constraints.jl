@@ -193,7 +193,7 @@ end
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector)
     n = length(bnd.x_max)
     active = bnd.active
-    copyto!(V, [Diagonal(I,n)[active.x_max,:]; -Diagonal(I,n)[active.x_min,:]])
+    copyto!(V, [Diagonal(1I,n)[active.x_max,:]; -Diagonal(1I,n)[active.x_min,:]])
 end
 
 
