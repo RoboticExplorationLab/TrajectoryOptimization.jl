@@ -221,10 +221,12 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
     return props
 end
 
-function write_ipopt_options(
-        optfile=joinpath(root_dir(),"ipopt.opt"),
-        outfile=joinpath(root_dir(),"logs","ipopt.out"))
-    f = open(optfile,"w")
+function write_ipopt_options()
+    if !isfile(joinpath(root_dir(),"logs","ipopt.out"))
+        mkdir(joinpath(root_dir(),"logs"))
+    end
+    outfile=joinpath(root_dir(),"logs","ipopt.out")
+    f = open(outfile,"w")
     println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
     println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
     println(f,"hessian_approximation limited-memory\n")
