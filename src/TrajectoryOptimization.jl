@@ -145,5 +145,6 @@ include("logger.jl")
 include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/dircol.jl")
 include("solvers/direct/dircol_ipopt.jl")
+include("solvers/direct/moi.jl")
 
 end
