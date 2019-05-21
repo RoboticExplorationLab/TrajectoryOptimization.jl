@@ -1,4 +1,5 @@
 
+
 """ $(SIGNATURES)
 Get the row and column lists of a sparse matrix, with ordered elements
 """
@@ -64,7 +65,7 @@ end
 
 function TrajectoryOptimization.dynamics!(prob::Problem{T,Continuous}, solver::DirectSolver, X, U) where T<:AbstractFloat
     for k = 1:prob.N
-        evaluate!(solver.fVal[k], prob.model, Z.X[k], Z.U[k])
+        evaluate!(solver.fVal[k], prob.model, X[k], U[k])
     end
 end
 
@@ -171,7 +172,7 @@ function collocation_constraints!(g, prob::Problem, solver::DIRCOLSolver{T,Hermi
     for k = 1:N-1
         Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
     end
-    fValm = zero(X[1])
+    fValm = copy(fVal[1])
     for k = 1:N-1
         Um = (U[k] + U[k+1])*0.5
         evaluate!(fValm, prob.model, Xm[k], Um)

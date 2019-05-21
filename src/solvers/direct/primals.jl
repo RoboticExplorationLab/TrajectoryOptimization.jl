@@ -1,4 +1,5 @@
-
+export
+    Primals
 
 function PartedArrays.create_partition(n::Int,m::Int,N::Int,uN=N-1)
     Nx = N*n
