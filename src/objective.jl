@@ -1,5 +1,8 @@
 abstract type AbstractObjective end
 
+Base.length(obj::AbstractObjective) = length(obj.cost)
+
+
 "$(TYPEDEF) Objective: stores stage cost(s) and terminal cost functions"
 struct Objective <: AbstractObjective
     cost::CostTrajectory
