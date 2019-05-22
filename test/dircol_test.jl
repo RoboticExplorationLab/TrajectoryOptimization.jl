@@ -1,9 +1,3 @@
-# import TrajectoryOptimization: DIRCOLSolverOptions, DIRCOLSolver, Primals, gen_ipopt_functions,
-#     update_problem, create_partition
-# import TrajectoryOptimization: update_constraints!
-# import TrajectoryOptimization: traj_points!, dynamics!, calculate_jacobians!, cost_gradient!, constraint_jacobian!,
-#     collocation_constraints!, collocation_constraint_jacobian!, collocation_constraint_jacobian_sparsity!, constraint_jacobian_sparsity!,
-#     get_rc
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
 using Test

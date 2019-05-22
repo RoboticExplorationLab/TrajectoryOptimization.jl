@@ -2,9 +2,13 @@ using PartedArrays, Test, ForwardDiff
 using BenchmarkTools
 using DocStringExtensions
 
+"Sense of a constraint (inequality / equality / null)"
 abstract type ConstraintType end
+"Inequality constraints"
 abstract type Equality <: ConstraintType end
+"Equality constraints"
 abstract type Inequality <: ConstraintType end
+"An empty constraint"
 abstract type Null <: ConstraintType end
 
 abstract type GeneralConstraint end
@@ -241,13 +245,19 @@ function _validate_bounds(max,min,n::Int)
     return max, min
 end
 
+"""$(SIGNATURES)
+A constraint where x,y positions of the state must remain a distance r from a circle centered at x_obs
+Assumes x,y are the first two dimensions of the state vector
+"""
 function planar_obstacle_constraint(n, m, x_obs, r_obs, label=:obstacle)
     c(v,x,u) = v[1] = circle_constraint(x, x_obs, r_obs)
     # c(v,x) = circle_constraint(x, x_obs, r_obs)
     Constraint{Inequality}(c, n, m, 1, :obstacle)
 end
 
-
+"""$(SIGNATURES)
+Creates a terminal equality constraint specifying the goal. All states must be specified.
+"""
 function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
@@ -306,7 +316,7 @@ function Base.split(C::ConstraintSet)
     return I,E
 end
 
-function RigidBodyDynamics.num_constraints(C::ConstraintSet,type=:stage)
+function TrajectoryOptimization.num_constraints(C::ConstraintSet,type=:stage)
     if !isempty(C)
         return sum(length.(C,type))
     else
