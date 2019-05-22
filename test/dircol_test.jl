@@ -191,7 +191,7 @@ eval_grad_f(Z.Z, grad_f2)
 @test grad_f ≈ grad_f2
 
 eval_jac_g(Z.Z, :Structure, row, col, jac2)
-eval_jac_g(Z.Z, :Values, r, c, jac2)
+eval_jac_g(Z.Z, :Values, row, col, jac2)
 @test sparse(row,col,jac2) == jac_con(Z.Z)
 
 

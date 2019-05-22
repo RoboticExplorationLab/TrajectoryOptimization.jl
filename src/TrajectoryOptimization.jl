@@ -147,4 +147,5 @@ include("solvers/direct/dircol.jl")
 include("solvers/direct/dircol_ipopt.jl")
 include("solvers/direct/moi.jl")
 
+write_ipopt_options()
 end
