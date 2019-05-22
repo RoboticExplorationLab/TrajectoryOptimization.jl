@@ -189,3 +189,8 @@ pcon[2] += con + con_eq
 pop!(pcon[2], :mycon2)
 pcon[N] += con_term
 ```
+
+## Methods
+```@docs
+num_constraints
+```

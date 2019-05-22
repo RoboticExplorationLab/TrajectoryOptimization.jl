@@ -17,6 +17,7 @@ This package is a testbed for state-of-the-art trajectory optimization algorithm
 This package currently implements both indirect and direct methods for trajectory optimization:
 * Iterative LQR (iLQR): indirect method based on Differential Dynamic Programming
 * Direct Collocation: direct method that formulates the problem as an NLP and passes the problem off to a commercial NLP solver
+* ALTRO (Augmented Lagrangian Trajectory Optimizer): A novel algorithm developed by the Robotic Exploration Lab at Stanford University, which uses iLQR within an augmented Lagrangian framework combined with a "Projected Newton" direct method for solution polishing and enforcement of feasibility.
 
 Key features include the use of ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints; the use of RigidBodyDynamics to work directly from URDF files; and the ability to specify general constraints.
 
@@ -33,7 +34,7 @@ To set up and solve a trajectory optimization problem with TrajectoryOptimizatio
 
 ## Creating a Model
 There are two ways of creating a model:
-1) from an in-place analytic function of the form f(y,x,u) that operates on y
+1) from an in-place analytic function of the form f(ẋ,x,u) that operates on ẋ
 2) from a URDF file
 
 ### Analytic Models
@@ -44,9 +45,9 @@ where y ∈ Rⁿ is the state derivative vector for continuous dynamics or the n
 The Model type is then created using the following signature:
 `model = Model{D}(f,n,m)` where `n` is the dimension of the state input and `m` is the dimension of the control input, and D is a DynamicsType, either Continuous of Discrete.
 
-```@docs
+<!-- ```@docs
 Model{D}(f::Function, n::Int, m::Int)
-```
+``` -->
 
 ### URDF Model
 This package relies on RigidBodyDynamics.jl to parse URDFs and generate dynamics functions for them. There are several useful constructors:
@@ -59,7 +60,7 @@ Model(urdf::String, torques::Array)
 ```
 
 ## Creating an Objective
-The [`Objective`](@ref) defines a metric for what you want the dynamics to do. The Objective type contains a CostFunctions for each stage of the trajectory.
+The [`Objective`](@ref) defines a metric for what you want the dynamics to do. The Objective type contains a `CostFunction` for each stage of the trajectory.
 
 ### Creating a Cost Function
 A [`CostFunction`](@ref) is required for each stage of the trajectory to define an Objective. While the majority of trajectory optimization problems have quadratic objectives, TrajectoryOptimization.jl allows the user to specify any generic cost function of the form ``\ell_N(x_N) + \sum_{k=0}^N \ell_k(x_k,u_k)``. Currently GenericObjective is only supported by iLQR, and not by DIRCOL. Since iLQR relies on 2nd Order Taylor Series Expansions of the cost, the user may specify analytical functions for this expansion in order to increase performance; if the user does not specify an analytical expansion it will be generated using ForwardDiff.
@@ -85,7 +86,7 @@ With a Problem instantiated, the user can then select a solver: iLQR, AugmentedL
 ### Unconstrained Methods
 iLQR is an unconstrained solver. For unconstrained Problems simply call the `solve` method:
 ```
-solve(prob,iLQRSolverOptions())
+solve(prob, iLQRSolverOptions())
 ```
 
 ### Constrained Methods
@@ -97,7 +98,7 @@ The default constrained solver uses iLQR with an augmented Lagrangian framework 
 One of the primary disadvantages of iLQR (and most indirect methods) is that the user must specify an initial input trajectory. Specifying a good initial guess can often be difficult in practice, whereas specifying a guess for the state trajectory is typically more straightforward. To overcome this limitation, the ALTRO solver adds slack controls to the discrete dynamics $x_{k+1} = f_d(x_k,u_k) + \diag{(\tidle{u}_1,\hdots,\tidle{u}_n)}$ such that the system becomes artificially fully-actuated These slack controls are then constrained to be zero using the augmented Lagrangian method. This results in an algorithm similar to that of DIRCOL: initial solutions are dynamically infeasible but become dynamically infeasible at convergence. To solve the problem using "infeasible start", simply pass in an initial guess for the state and control:
 ```
 copyto!(prob.X,X0)
-solve(prob,ALTROSolverOptions())
+solve(prob, ALTROSolverOptions())
 ```
 
 ### Minimum Time Problem
@@ -106,5 +107,5 @@ A minimum time problem can be solved using the ALTRO solver by setting tf=:min
 ## Direct Collocation (DIRCOL)
 Problems can be solved using DIRCOL by simply calling
 ```
-solve(prob,DIRCOLSolverOptions())
+solve(prob, DIRCOLSolverOptions())
 ```

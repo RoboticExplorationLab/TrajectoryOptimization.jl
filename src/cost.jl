@@ -30,7 +30,7 @@ end
 
 import Base./, Base.*
 
-function *(e::Expansion{T},a::T) where T
+function *(e::Expansion, a::Real)
     e.x .*= a
     e.u .*= a
     e.xx .*= a
@@ -39,7 +39,7 @@ function *(e::Expansion{T},a::T) where T
     return nothing
 end
 
-function /(e::Expansion{T},a::T) where T
+function /(e::Expansion,a::Real)
     e.x ./= a
     e.u ./= a
     e.xx ./= a
@@ -81,10 +81,10 @@ mutable struct QuadraticCost{T} <: CostFunction
     H::AbstractMatrix{T}                 # Quadratic Cross-coupling for state and controls (n,m)
     q::AbstractVector{T}                 # Linear term on states (n,)
     r::AbstractVector{T}                 # Linear term on controls (m,)
-    c::T                  # constant term
+    c::T                                 # constant term
     Qf::AbstractMatrix{T}                # Quadratic final cost for terminal state (n,n)
-    qf::AbstractVector{T}               # Linear term on terminal state (n,)
-    cf::T                 # constant term (terminal)
+    qf::AbstractVector{T}                # Linear term on terminal state (n,)
+    cf::T                                # constant term (terminal)
     function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
             q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
             qf::AbstractVector{T}, cf::T) where T

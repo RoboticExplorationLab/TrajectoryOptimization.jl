@@ -21,7 +21,9 @@ x_N^T Q_f x_N + q_f^T x_N + \sum_{k=1}^{N-1} x_k^T Q_k x_k + q_k^T x_k + u_k^T R
 ```
 This type of quadratic cost is typical for trajectory optimization problems, especially when Q is positive semi-definite and R is positive definite, which is strictly convex. These problem behave well and reduce the computational requirements of taking second-order Taylor series expansions of the cost at each iteration.
 
-# Creating a Cost function
+In TrajectoryOptimization.jl we differentiate between the entire objective and the cost functions at each time step. We use `Objective` to describe the function that is being minimized, which typically consists of a sum of cost functions, with potentially some additional terms (as is the case with augmented Lagrangian objectives). Describing the Objective as a sum of individual functions allows the solvers to more efficiently compute the gradient and Hessian of the entire cost, which is block-diagonal given the Markovianity of the problem.
+
+# Cost functions
 There are several different cost function types that all inherit from `CostFunction`. The following sections detail the various methods for instantiating these cost function types.
 
 ## Quadratic Costs
@@ -52,6 +54,12 @@ qf = -Qf*xf
 cf = xf'Qf*xf/2
 costfun = QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
 ```
+Once we have defined the cost function, we can create an objective for our problem by simply copying over all time steps. Note that `QuadraticCost` is automatically defined at all time steps.
+```julia
+# Create an objective from a single cost function
+N = 51
+obj = Objective(costfun, N)
+```
 ```@docs
 QuadraticCost
 ```
@@ -59,13 +67,13 @@ QuadraticCost
 ## Generic Costs
 For general, non-linear cost functions use [GenericCost](@ref). Generic cost functions must define their second-order Taylor series expansion, either automatically using `ForwardDiff` or analytically.
 
-Let's say we wanted to use the nonlinear objective for the pendulum
+Let's say we wanted to use a nonlinear objective for the pendulum
 ```math
 cos(\theta_N) + \omega_N^2 \sum_{k=1}^{N-1} cos(\theta_k) + u_k^T R + u_k + Q ω^2
 ```
 which is small when θ = π, encouraging swing-up.
 
-We define the cost function by defining ℓ(x,u) and ``\ell_f(x)``
+We define the cost function by defining ℓ(x,u) and ℓ(x)
 ```julia
 # Define the stage and terminal cost functions
 function mycost(x,u)
@@ -117,3 +125,59 @@ end
 # Create the cost function
 nlcost = GenericCost(mycost, mycost, grad, hess, n, m)
 ```
+
+Since our cost function is defined at both stage and terminal steps, we can simply copy it over all time steps to create an objective:
+```julia
+# Create objective
+N = 51
+nlobj = Objective(nlcost, N)
+```
+
+## Methods
+All cost functions are required to define the following methods
+```julia
+stage_cost(cost, x, u)
+stage_cost(cost, xN)
+cost_expansion!(Q::Expansion, cost, x, u)
+cost_expansion(Q::Expansion, cost, xN)
+```
+
+Where the `Expansion` type is defined in the next section. This common interface allows the `Objective` to efficiently dispatch over cost functions to compute the overall cost and Taylor series expansion (i.e. gradient and Hessian).
+
+## Expansion Type
+The expansion type stores the pieces of the second order Taylor expansion of the cost, and is defined
+```julia
+struct Expansion{T<:AbstractFloat}
+    x::Vector{T}
+    u::Vector{T}
+    xx::Matrix{T}
+    uu::Matrix{T}
+    ux::Matrix{T}
+end
+```
+If we store the expansion as `Q`, then `Q.x` is the partial with respect to the control, `Q.xu` is the partial with respect to x and u, etc.
+
+# Objectives
+## Constructors
+Objectives can be created by copying a single cost function over all time steps
+```julia
+Objective(cost::CostFunction, N::Int)
+```
+
+or uniquely specifying the terminal cost function
+```julia
+Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
+```
+
+or by explicitly specifying a list of cost functions
+```julia
+Objective(costfuns::Vector{<:CostFunction})
+```
+
+## Methods
+`ProblemConstraints` extends the methods on `CostFunction` to the whole trajectory
+```julia
+cost(obj, X, U)
+cost_expansion!(Q::Vector{Expansion}, obj, X, U)
+```
+where `X` and `U` are the state and control trajectories. 

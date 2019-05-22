@@ -65,7 +65,7 @@ end
 
 function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
     reset!(solver.Q)
-    cost_expansion!(solver.Q,prob.obj,prob.X,prob.U)
+    cost_expansion!(solver.Q, prob.obj, prob.X, prob.U)
 end
 
 "Plot state, control trajectories"
