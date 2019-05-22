@@ -1,3 +1,9 @@
+export
+    set_x0!,
+    is_constrained,
+    update_problem
+
+
 "$(TYPEDEF) Trajectory Optimization Problem"
 struct Problem{T<:AbstractFloat,D<:DynamicsType}
     model::Model{D}
@@ -11,13 +17,15 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     tf::T
 
     function Problem(model::Model{D}, obj::AbstractObjective, constraints::ProblemConstraints,
-        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::T, tf::T) where {T,D}
+        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::Real, tf::Real) where {T,D}
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
         # @assert length(X[1]) == n
         # @assert length(U[1]) == m
         # @assert length(x0) == n
+        @assert length(obj) == N
+        @assert length(constraints) == N
         @assert length(X) == N
 
         if length(U) == N
@@ -33,51 +41,42 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     end
 end
 
-"""$(TYPEDSIGNATURES)
-Create a problem from a continuous model, specifying the discretizer as a symbol
-"""
-function Problem(model::Model{Continuous}, obj::AbstractObjective; integration=:rk4, kwargs...)
-    if integration == :none
-        return Problem(model, obj; kwargs...)
-    elseif isdefined(TrajectoryOptimization,integration)
-        discretizer = eval(integration)
-        return Problem(discretizer(model), obj; kwargs...)
-    else
-        throw(ArgumentError("$integration is not a defined integration scheme"))
-    end
-end
 
 """$(TYPEDSIGNATURES)
 Create Problem, optionally specifying constraints, initial state, and length.
 At least 2 of N, dt, or tf must be specified
 """
 function Problem(model::Model, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
+        N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n),
+        dt=NaN, tf=NaN, integration=:rk4) where T
     N, tf, dt = _validate_time(N, tf, dt)
+    if model isa Model{Continuous}
+        if integration == :none
+        elseif isdefined(TrajectoryOptimization,integration)
+            discretizer = eval(integration)
+            model = discretizer(model)
+        else
+            throw(ArgumentError("$integration is not a defined integration scheme"))
+        end
+    end
     Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 Problem(model::Model, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
-function Problem(model::Model, obj::AbstractObjective, U0::VectorTrajectory{T};
-        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
-    N = length(U0) + 1
-    N, tf, dt = _validate_time(N, tf, dt)
+function Problem(model::Model, obj::AbstractObjective, U0::VectorTrajectory{T}; kwargs...) where T
+    N = length(obj)
     X0 = empty_state(model.n, N)
-    Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
+    Problem(model, obj, X0, U0; kwargs...)
 end
 Problem(model::Model, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(U0); kwargs...)
 
-function Problem(model::Model, obj::AbstractObjective;
-        constraints::ProblemConstraints=ProblemConstraints(), x0::Vector{T}=zeros(model.n),
-        N::Int=-1, dt=NaN, tf=NaN) where T
-    N, tf, dt = _validate_time(N, tf, dt)
+function Problem(model::Model, obj::AbstractObjective; kwargs...)
+    N = length(obj)
+    U0 = [zeros(model.m) for k = 1:N-1]
     X0 = empty_state(model.n, N)
-    U0 = [zeros(T,model.m) for k = 1:N-1]
-    Problem(model, obj, constraints, x0, X0, U0, N, dt, tf)
+    Problem(model, obj, X0, U0; kwargs...)
 end
 
 "$(SIGNATURES) Pass in a cost instead of an objective"
@@ -90,6 +89,20 @@ end
 Problem(model::Model{Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
     Problem(model, cost, to_dvecs(U0); kwargs...)
 
+"""$(SIGNATURES)
+Create a new problem from another, specifing all fields as keyword arguments
+The `newProb` argument can be set to true if a the primal variables are to be copied, otherwise they will be passed to the modified problem.
+"""
+function update_problem(p::Problem;
+    model=p.model, obj=p.obj, constraints=p.constraints, x0=p.x0, X=p.X, U=p.U,
+    N=p.N, dt=p.dt, tf=p.tf, newProb=true)
+
+    if newProb
+        Problem(model,obj,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
+    else
+        Problem(model,obj,constraints,x0,X,U,N,dt,tf)
+    end
+end
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
 initial_controls!(prob::Problem{T}, U0::AbstractVectorTrajectory{T}) where T = copyto!(prob.U, U0[1:prob.N-1])
@@ -103,13 +116,14 @@ set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
 
 final_time(prob::Problem) = (prob.N-1) * prob.dt
 
-function change_N(prob::Problem, N::Int)
-    tf = final_time(prob)
-    dt = tf/(N-1)
-    X, U = interp_traj(N, tf, prob.X, prob.U)
-    @show length(X)
-    Problem(prob.model, prob.obj, prob.constraints, prob.x0, X, U, N, dt, tf)
-end
+# TODO: think about how to do this properly now that objective and constraints depend on N
+# function change_N(prob::Problem, N::Int)
+#     tf = final_time(prob)
+#     dt = tf/(N-1)
+#     X, U = interp_traj(N, tf, prob.X, prob.U)
+#     @show length(X)
+#     Problem(prob.model, prob.obj, prob.constraints, prob.x0, X, U, N, dt, tf)
+# end
 
 
 function _validate_time(N,tf,dt)
@@ -165,6 +179,7 @@ function _validate_time(N,tf,dt)
     return N,tf,dt
 end
 
+"$(SIGNATURES) return the number of states, number of controls, and the number of knot points"
 Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
 Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0),
@@ -172,85 +187,12 @@ Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0),
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
 
-# is_constrained(p::Problem) = !isempty(p.constraints)
+"$(SIGNATURES) Checks if a problem has any constraints"
 is_constrained(prob::Problem{T}) where T = !all(isempty.(prob.constraints.C))
 
 TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.constraints)
 
-function update_problem(p::Problem;
-    model=p.model,obj=p.obj,constraints=p.constraints,x0=p.x0,X=p.X,U=p.U,
-    N=p.N,dt=p.dt,tf=p.tf,newProb=true)
-
-    if newProb
-        Problem(model,obj,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
-    else
-        Problem(model,obj,constraints,x0,X,U,N,dt,tf)
-    end
-end
-
-"$(SIGNATURES) Add a constraint to the problem"
-function add_constraints!(p::Problem, c::AbstractConstraint)
-    push!(p.constraints[1],c)
-    return nothing
-end
-
-# "$(SIGNATURES) Add a set of constraints to the problem"
-# function add_constraints!(p::Problem,C::ConstraintSet)
-#     append!(p.constraints,C)
-# end
-
-"$(SIGNATURES) Add a set of constraints to the problem"
-function add_constraints!(p::Problem,C::ProblemConstraints)
-    # append!(p.constraints,C)
-    p.constraints .= C
-end
-
-# Problem checks
-function check_problem(p::Problem)
-    flag = true
-    ls = []
-    if model.n != length(p.X[1])
-        flag = false
-        push!(ls,"Model and state trajectory dimension mismatch")
-    end
-    if model.m != length(p.U[1])
-        flag = false
-        push!(ls,"Model and control trajectory dimension mismatch")
-    end
-    if p.N != length(p.X)
-        flag = false
-        push!(ls,"State trajectory length and knot point mismatch")
-    end
-    if p.N-1 != length(p.U)
-        flag = false
-        push!(ls,"Control trajectory length and knot point mismatch")
-    end
-    if p.N <= 0
-        flag = false
-        push!(ls,"N <= 0")
-    end
-    if p.dt <= 0.0
-        flag = false
-        push!(ls,"dt <= 0")
-    end
-
-    if !isempty(ls)
-        println("Errors with Problem: ")
-        for l in ls
-            println(l)
-        end
-    end
-
-    return flag
-end
-
-num_stage_constraints(p::Problem) = [num_stage_constraints(p.constraints[k]) for k = 1:p.N-1]
-num_terminal_constraints(p::Problem) = num_terminal_constraints(p.constraints.C[end])
-
-
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
-
-pos(x) = max(0,x)
 
 function max_violation(prob::Problem{T}) where T
     if is_constrained(prob)

@@ -10,6 +10,8 @@ import Plots: plot, plot!
 #     return solver.model.n, solver.model.m, solver.N
 # end
 
+pos(x) = max(0,x)
+
 function get_sizes(X::Vector{T}, U::Vector{T}) where {T<:MVector}
     N = length(X)
     n,m = length(X[1]), length(U[1])

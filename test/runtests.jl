@@ -22,6 +22,9 @@ end
 @testset "Modified Model" begin
     include("modified_model_tests.jl")
 end
+@testset "Problems" begin
+    include("problem_tests.jl")
+end
 @testset "Square Root Backward Pass" begin
     include("sqrt_bp_tests.jl")
 end
