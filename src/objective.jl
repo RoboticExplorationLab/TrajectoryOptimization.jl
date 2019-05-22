@@ -24,7 +24,7 @@ import Base.getindex
 getindex(obj::Objective,i::Int) = obj.cost[i]
 
 "Calculate unconstrained cost for X and U trajectories"
-function cost(obj::Objective, X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T})::T where T 
+function cost(obj::Objective, X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T})::T where T
     N = length(X)
     J = 0.0
     for k = 1:N-1
@@ -46,6 +46,7 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     cost_expansion!(Q[N],c[N],X[N])
     for k = 1:N-1
         cost_expansion!(Q[k],c[k],X[k],U[k])
+        Q[k]/(N-1.)
     end
 end
 

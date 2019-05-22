@@ -218,15 +218,15 @@ Z_L = Primals(z_L, part_z)
 
 
 # Test solve
-for i = 1:10
-    sol,solver = solve(prob, opts)
-    if solver.stats[:info] == :Solve_Succeeded
-        break
-    end
-    if i == 10
-        error("The problem should have solved successfully")
-    end
-end
-opts = DIRCOLSolverOptions{Float64}()
-solve(prob, opts)
-TO.solve_moi(prob, opts)
+# for i = 1:10
+#     sol,solver = solve(prob, opts)
+#     if solver.stats[:info] == :Solve_Succeeded
+#         break
+#     end
+#     if i == 10
+#         error("The problem should have solved successfully")
+#     end
+# end
+# opts = DIRCOLSolverOptions{Float64}()
+# solve(prob, opts)
+# TO.solve_moi(prob, opts)

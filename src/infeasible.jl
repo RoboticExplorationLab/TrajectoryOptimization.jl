@@ -21,7 +21,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
     con_prob = ConstraintSet[]
     constrained = is_constrained(prob)
     for k = 1:N-1
-        _con = AbstractConstraint[]
+        _con = GeneralConstraint[]
         constrained ? append!(_con,prob.constraints.C[k]) : nothing
         push!(_con,con_inf)
         push!(con_prob,_con)

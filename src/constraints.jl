@@ -265,13 +265,6 @@ function infeasible_constraints(n::Int, m::Int)
     Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage)
 end
 
-
-
-# function generate_jacobian(f!::Function,n::Int,p::Int=n)
-#     ∇f!(A,v,x) = ForwardDiff.jacobian!(A,f!,v,x)
-#     return ∇f!, f!
-# end
-
 ########################
 #   Constraint Sets    #
 ########################
