@@ -202,7 +202,7 @@ bnds = TO.remove_bounds!(prob0)
 p = num_constraints(prob0)
 @test p0[1] == 9
 @test p[1] == 1
-@test p[N] == 0
+@test p[N] == 1
 z_U,z_L,g_U,g_L = TO.get_bounds(prob0,bnds)
 Z_U = Primals(z_U, part_z)
 Z_L = Primals(z_L, part_z)
