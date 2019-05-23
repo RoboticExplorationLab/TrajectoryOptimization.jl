@@ -401,8 +401,8 @@ function update_constraint_set_jacobians(cs::ConstraintSet,n::Int,n̄::Int,m::In
     cs_ = copy(cs)
     bnd = remove_bounds!(cs_)
     for con in cs_
-        _∇c(C,x,u) = con.∇c(view(C,:,idx),x,u)
-        _∇c(C,x) = con.∇c(C,x)
+        _∇c(C,x,u) = con.∇c(view(C,:,idx),x[con.inds[1]],u[con.inds[2]])
+        _∇c(C,x) = con.∇c(C,x[con.inds[1]])
         _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds)
     end
 
