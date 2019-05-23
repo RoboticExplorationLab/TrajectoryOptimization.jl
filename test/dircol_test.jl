@@ -1,9 +1,3 @@
-# import TrajectoryOptimization: DIRCOLSolverOptions, DIRCOLSolver, Primals, gen_ipopt_functions,
-#     update_problem, create_partition
-# import TrajectoryOptimization: update_constraints!
-# import TrajectoryOptimization: traj_points!, dynamics!, calculate_jacobians!, cost_gradient!, constraint_jacobian!,
-#     collocation_constraints!, collocation_constraint_jacobian!, collocation_constraint_jacobian_sparsity!, constraint_jacobian_sparsity!,
-#     get_rc
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
 using Test
@@ -18,7 +12,7 @@ model = Dynamics.car_model
 costfun = Dynamics.car_costfun
 xf = [0,1.0,0]
 goal_con = goal_constraint(xf)
-circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,0.5), 0.25)
+circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,2.5), 0.25)
 bnd = BoundConstraint(model.n, model.m, x_min=[-0.5,-0.001,-Inf], x_max=[0.5, 1.001, Inf], u_min=-2, u_max=2)
 
 # Initial Controls
@@ -35,7 +29,7 @@ prob = TO.update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
-opts = DIRCOLSolverOptions{Float64}(verbose=false)
+opts = DIRCOLSolverOptions{Float64}(verbose=true)
 pcon = prob.constraints
 dircol = TO.DIRCOLSolver(prob, opts)
 
