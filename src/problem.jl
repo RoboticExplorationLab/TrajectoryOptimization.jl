@@ -93,7 +93,7 @@ Problem(model::Model{M,Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) 
 
 "$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
 function initial_controls!(prob::Problem{T,D}, U0::AbstractVectorTrajectory{T}) where {T,D}
-    m = prob.model.m
+    m = prob.model.m; N = prob.N
     for k = 1:N-1
         prob.U[k][1:m] .= U0[k][1:m]
     end

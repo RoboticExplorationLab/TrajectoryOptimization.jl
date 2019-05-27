@@ -27,8 +27,6 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        Q[k]/(N-1.) # scaling due to cost function: ℓf(xN) + 1\(N-1)Σℓ(x,u)
-
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
         Q[k].x .+= fdx'*S[k+1].x
@@ -108,8 +106,6 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     # Backward pass
     k = N-1
     while k >= 1
-        Q[k]/(N-1.)
-
         fdx, fdu = solver.∇F[k].xx, solver.∇F[k].xu
 
         Q[k].x .+= fdx'*S[k+1].x

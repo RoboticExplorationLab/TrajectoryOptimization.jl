@@ -29,6 +29,8 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T
 
     # Initial rollout
     rollout!(prob)
+    live_plotting(prob,solver)
+
     J_prev = cost(prob.obj, prob.X, prob.U)
     push!(solver.stats[:cost], J_prev)
 

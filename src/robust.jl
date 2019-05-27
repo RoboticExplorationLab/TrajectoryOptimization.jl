@@ -1,5 +1,6 @@
-using ForwardDiff, Plots, LinearAlgebra, BenchmarkTools, MatrixCalculus,
+using ForwardDiff, Plots, LinearAlgebra, BenchmarkTools,
     PartedArrays, TrajectoryOptimization
+    # MatrixCalculus
 
 "Time-varying Linear Quadratic Regulator; returns optimal linear feedback matrices and optimal cost-to-go"
 function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T}) where T

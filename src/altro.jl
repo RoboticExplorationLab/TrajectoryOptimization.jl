@@ -29,9 +29,12 @@ function process_results!(prob::Problem{T,Discrete},prob_altro::Problem{T,Discre
             # infeasible problem -> feasible problem
             prob_altro = infeasible_to_feasible_problem(prob,prob_altro,state,opts)
 
-            # secondary solve (augmented Lagrangian)
+            # # secondary solve (augmented Lagrangian)
             if opts.resolve_feasible_problem
+                @info "Feasible resolve"
                 solve!(prob_altro,opts.opts_al)
+                copyto!(prob.X,prob_altro.X,prob.model.n)
+                copyto!(prob.U,prob_altro.U,prob.model.m)
             end
         end
 
@@ -40,8 +43,8 @@ function process_results!(prob::Problem{T,Discrete},prob_altro::Problem{T,Discre
             for k = 1:prob.N-1
                 prob.U[k] = [prob_altro.U[k][1:prob.model.m]; prob_altro.U[k][end]^2]
             end
+            # copyto!(prob.X,prob_altro.X,prob.model.n)
         end
-        copyto!(prob.X,prob_altro.X,prob.model.n)
 
         # if state.projected_newton
         #     #TODO
@@ -58,7 +61,7 @@ function altro_problem(prob::Problem{T,Discrete},opts::ALTROSolverOptions{T}) wh
 
     # create infeasible problem
     if !all(x->isnan(x),prob_altro.X[1])
-        println("Infeasible Solve")
+        @info "Infeasible Solve"
         prob_altro = infeasible_problem(prob_altro,opts.R_inf)
         infeasible = true
     else
@@ -67,7 +70,7 @@ function altro_problem(prob::Problem{T,Discrete},opts::ALTROSolverOptions{T}) wh
 
     # create minimum time problem
     if prob_altro.tf == 0.0
-        println("Minimum Time Solve")
+        @info "Minimum Time Solve"
         prob_altro = minimum_time_problem(prob_altro,opts.R_minimum_time,
             opts.dt_max,opts.dt_min)
         minimum_time = true

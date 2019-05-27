@@ -1,3 +1,7 @@
+export
+    DIRCOLSolver,
+    DIRCOLSolverOptions
+
 abstract type DirectSolver{T} <: AbstractSolver{T} end
 abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
@@ -13,8 +17,8 @@ include("primals.jl")
     "Options dictionary for the nlp solver"
     opts::Dict{String,Any} = Dict{String,Any}()
 
-    "Quadrature rule"
-
+    "Print output to console"
+    verbose::Bool = true
 end
 
 
@@ -32,10 +36,10 @@ struct DIRCOLSolver{T,Q} <: DirectSolver{T}
     C::PartedVecTrajectory{T}
     ∇C::PartedMatTrajectory{T}
     fVal::VectorTrajectory{T}
-
+    p::Vector{Int}
 end
 
-DIRCOLSolver(prob::Problem, opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
+DIRCOLSolver(prob::Problem, opts::DIRCOLSolverOptions=DIRCOLSolverOptions{Float64}(),
     Z::Primals{T}=Primals(prob,true)) where {T,Q} = AbstractSolver(prob, opts, Z)
 
 type(::Primals{T}) where T = T
@@ -61,8 +65,9 @@ function AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions, Z::Primals{T}=
     c_term = terminal(constraints[N])
     p_N = num_constraints(c_term)
     fVal = [zeros(T,n) for k = 1:N]
+    p = num_constraints(prob)
 
-    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, ∇F, C, ∇C, fVal)
+    solver = DIRCOLSolver{T,HermiteSimpson}(opts, Dict{Symbol,Any}(), Z, X_, ∇F, C, ∇C, fVal, p)
     reset!(solver)
     return solver
 end

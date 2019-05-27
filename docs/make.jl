@@ -6,7 +6,7 @@ makedocs(
     sitename = "TrajectoryOptimization",
     format = Documenter.HTML(),
     modules = [TrajectoryOptimization],
-    devbranch = "restructure",
+    devbranch = "master",
     pages = [
         "index.md",
         "models.md",
@@ -22,5 +22,5 @@ makedocs(
 # for more information.
 deploydocs(
     repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git",
-    devbranch = "restructure",
+    devbranch = "master",
 )

@@ -1,4 +1,5 @@
-
+export
+    Primals
 
 function PartedArrays.create_partition(n::Int,m::Int,N::Int,uN=N-1)
     Nx = N*n
@@ -103,7 +104,7 @@ Base.size(Z::Primals) = length(Z.X[1]), length(Z.U[1]), length(Z.X)
 Base.length(Z::Primals) = length(Z.Z)
 Base.copy(Z::Primals) = Primals(copy(Z.Z),Z)
 
-function packZ(prob::Problem{T}) where T
+function pack(prob::Problem{T}) where T
     n,m,N = size(prob)
     part_z = create_partition(n,m,N,N)
     NN = N*(n+m)
@@ -113,9 +114,29 @@ function packZ(prob::Problem{T}) where T
     return Z
 end
 
-function unpackZ(Z::Vector{<:Real}, part_z::NamedTuple)
+function unpack(Z::Vector{<:Real}, part_z::NamedTuple)
     N, uN = size(part_z.X,2), size(part_z.U,2)
     X = [view(Z,part_z.X[:,k]) for k = 1:N]
     U = [view(Z,part_z.U[:,k]) for k = 1:uN]
     return X, U
+end
+
+function pack(X,U, part_z)
+    n,m = length(X[1]), length(U[1])
+    N, uN = length(X), length(U)
+    Z = zeros(eltype(X[1]), N*n + uN*m)
+    for k = 1:N
+        Z[part_z.X[:,k]] = X[k]
+        Z[part_z.U[:,k]] = U[k]
+    end
+    return Z
+end
+
+function pack(X,U)
+    n = length(X[1])
+    m = length(U[1])
+    N = length(X)
+    uN = length(U)
+    part_z = create_partition(n,m,N,uN)
+    Z = pack(X,U,part_z)
 end
