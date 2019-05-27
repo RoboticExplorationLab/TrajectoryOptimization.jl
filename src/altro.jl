@@ -25,23 +25,26 @@ function process_results!(prob::Problem{T},prob_altro::Problem{T},
         return nothing
     else
         # remove infeasible, perform feasible projection, resolve
-        # if state.infeasible
-        #     # infeasible problem -> feasible problem
-        #     prob_altro = infeasible_to_feasible_problem(prob,prob_altro,state,opts)
-        #
-        #     # secondary solve (augmented Lagrangian)
-        #     if opts.resolve_feasible_problem
-        #         solve!(prob_altro,opts.opts_al)
-        #     end
-        # end
+        if state.infeasible
+            # infeasible problem -> feasible problem
+            prob_altro = infeasible_to_feasible_problem(prob,prob_altro,state,opts)
+
+            # # secondary solve (augmented Lagrangian)
+            if opts.resolve_feasible_problem
+                println("Resolving feasible")
+                solve!(prob_altro,opts.opts_al)
+                copyto!(prob.X,prob_altro.X,prob.model.n)
+                copyto!(prob.U,prob_altro.U,prob.model.m)
+            end
+        end
 
         # update original problem (minimum time solve will return dt as controls at U[k][end])
         if state.minimum_time
             for k = 1:prob.N-1
                 prob.U[k] = [prob_altro.U[k][1:prob.model.m]; prob_altro.U[k][end]^2]
             end
+            # copyto!(prob.X,prob_altro.X,prob.model.n)
         end
-        copyto!(prob.X,prob_altro.X,prob.model.n)
 
         # if state.projected_newton
         #     #TODO

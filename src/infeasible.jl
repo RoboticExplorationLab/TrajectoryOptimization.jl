@@ -37,7 +37,7 @@ end
 "Return a feasible problem from an infeasible problem"
 function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
         state::NamedTuple,opts::ALTROSolverOptions{T}) where T
-    prob_altro_feasible = prob
+    prob_altro_feasible = copy(prob)
 
     if state.minimum_time
         prob_altro_feasible = minimum_time_problem(prob_altro_feasible,opts.R_minimum_time,
