@@ -104,7 +104,7 @@ end
 
 "$(TYPEDEF) Augmented Lagrangian Objective: stores stage cost(s) and terminal cost functions"
 struct AugmentedLagrangianObjective{T} <: AbstractObjective where T
-    cost::CostTrajectory
+    obj::AbstractObjective
     constraints::ProblemConstraints
     C::PartedVecTrajectory{T}  # Constraint values
     ∇C::PartedMatTrajectory{T} # Constraint jacobians
@@ -113,29 +113,29 @@ struct AugmentedLagrangianObjective{T} <: AbstractObjective where T
     active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
-function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemConstraints,N::Int;
+function AugmentedLagrangianObjective(obj::AbstractObjective,constraints::ProblemConstraints,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianObjective{T}(obj,constraint,C,∇C,λ,μ,active_set)
 end
 
-function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemConstraints,
+function AugmentedLagrangianObjective(obj::AbstractObjective,constraints::ProblemConstraints,
         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)
     N = length(λ)
     C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianObjective{T}(obj,constraint,C,∇C,λ,μ,active_set)
 end
 
-getindex(obj::AugmentedLagrangianObjective,i::Int) = obj.cost[i]
+getindex(obj::AugmentedLagrangianObjective,i::Int) = obj.obj.cost[i]
 
 "Generate augmented Lagrangian cost from unconstrained cost"
 function AugmentedLagrangianObjective(prob::Problem{T,Discrete},
         solver::AugmentedLagrangianSolver{T}) where T
-    AugmentedLagrangianObjective{T}(prob.obj.cost,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
+    AugmentedLagrangianObjective{T}(prob.obj,prob.constraints,solver.C,solver.∇C,solver.λ,solver.μ,solver.active_set)
 end
 
 "Generate augmented Lagrangian problem from constrained problem"
@@ -170,7 +170,7 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjec
         X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
     N = length(X)
 
-    cost_expansion!(Q, obj.cost, X, U)
+    cost_expansion!(Q, obj.obj, X, U)
 
     for k = 1:N-1
         c = obj.C[k]
@@ -250,7 +250,7 @@ end
 "Augmented Lagrangian cost for X and U trajectories"
 function cost(obj::AugmentedLagrangianObjective{T},X::VectorTrajectory{T},U::VectorTrajectory{T}) where T <: AbstractFloat
     N = length(X)
-    J = cost(obj.cost,X,U)
+    J = cost(obj.obj,X,U)
 
     update_constraints!(obj.C,obj.constraints, X, U)
     update_active_set!(obj)

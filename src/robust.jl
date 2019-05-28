@@ -272,6 +272,11 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     m1 = m + n^2
     idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)),z=(1:n̄))
 
+    rollout!(prob)
+    # K, P = tvlqr_dis(prob,Q,R,Qf)
+    K, P = tvlqr_con(prob,Q,R,Qf,xf)
+    S1 = vec(sqrt(P[1]))
+
     # generate optimal feedback matrix function
     Zc = zeros(n,n+m+r)
 
@@ -330,7 +335,17 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         C[:,(n̄+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
     end
 
-    ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg)
+    ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg_init)
+
+    function sN(c,z,u)
+        c[1:n^2] = z[idx.s] - S1
+    end
+
+    function ∇sN(C,z,u)
+        C[:,(n+n^2+n*r) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
+    end
+
+    ctg_term = Constraint{Equality}(sN,∇sN,n^2,:ctg_term,[collect(idx.s),collect(1:0)],:terminal)
 
     for k = 1:N-1
         con_uncertain = GeneralConstraint[]
@@ -346,20 +361,15 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     end
 
     con_uncertain = GeneralConstraint[]
+    push!(con_uncertain,ctg_term)
     if constrained
         for cc in prob.constraints[N]
             push!(con_uncertain,robust_constraint(cc,prob.model.n))
         end
     end
-
     push!(con_prob,con_uncertain)
 
     prob_con = ProblemConstraints(con_prob)
-
-    rollout!(prob)
-    # K, P = tvlqr_dis(prob,Q,R,Qf)
-    K, P = tvlqr_con(prob,Q,R,Qf,xf)
-    S1 = vec(sqrt(P[1]))
 
     update_problem(prob,model=_robust_model,obj=robust_obj,
         constraints=prob_con,

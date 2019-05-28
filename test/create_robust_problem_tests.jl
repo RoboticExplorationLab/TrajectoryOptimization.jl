@@ -121,6 +121,8 @@ ilqr_solver = AbstractSolver(prob_robust,iLQRSolverOptions())
 # forwardpass!(prob_robust,ilqr_solver,[0.;0.],1e8)
 #
 # cost_expansion!(ilqr_solver.Q,prob_robust.obj,prob_robust.X,prob_robust.U)
-al_solver = AbstractSolver(prob_robust,opts_al)
-prob_al = AugmentedLagrangianProblem(prob_robust,al_solver)
-solve!(prob_robust,opts_al)
+
+
+# al_solver = AbstractSolver(prob_robust,opts_al)
+# prob_al = AugmentedLagrangianProblem(prob_robust,al_solver)
+# solve!(prob_robust,opts_al)
