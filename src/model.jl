@@ -248,13 +248,13 @@ end
 """ $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
 Keeps track of the number of evaluations
 """
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector) = evaluate!(Z,ẋ,model,x,u,zeros(model.r))
-jacobian_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
+jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
+jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector) = evaluate!(Z,ẋ,model,x,u,zeros(model.r))
+jacobian_uncertain!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
 
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T} = evaluate!(Z,ẋ,model,x,u,dt)
-jacobian!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,zeros(model.r),dt)
-jacobian_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
+jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T} = evaluate!(Z,ẋ,model,x,u,dt)
+jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,zeros(model.r),dt)
+jacobian_uncertain!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
 
 
 """ $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
@@ -275,12 +275,12 @@ function jacobian_uncertain!(Z::AbstractMatrix,model::Model{Uncertain,Continuous
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractMatrix,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
+function jacobian!(Z::AbstractArray{T},model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T <: AbstractFloat}
     model.∇f(Z,x,u,dt)
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractArray,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
+function jacobian!(Z::AbstractArray{T},model::Model{Uncertain,Discrete},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T <: AbstractFloat
     model.∇f(Z,x,u,zeros(model.r),dt)
     model.evals[2] += 1
 end
@@ -617,12 +617,12 @@ function discretize_model(model::Model{Uncertain,Continuous},discretizer::Symbol
     AnalyticalModel{Uncertain,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
 end
 
-midpoint(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :midpoint, dt)
-rk3(model::Model{M,Continuous},dt::T) where {M <: ModelType,T} = discretize_model(model, :rk3, dt)
-rk4(model::Model{M,Continuous},dt::T) where {M <:ModelType,T} = discretize_model(model, :rk4, dt)
+midpoint(model::Model{M,Continuous},dt::T=1.0) where {M <: ModelType,T} = discretize_model(model, :midpoint, dt)
+rk3(model::Model{M,Continuous},dt::T=1.0) where {M <: ModelType,T} = discretize_model(model, :rk3, dt)
+rk4(model::Model{M,Continuous},dt::T=1.0) where {M <:ModelType,T} = discretize_model(model, :rk4, dt)
 
-rk3_implicit(model::Model{M,Continuous},dt::T) where {M,T} = discretize_model(model,:rk3_implicit,dt)
-midpoint_implicit(model::Model{M,Continuous}) where {M,T} = discretize_model(model,:midpoint_implicit,dt)
+rk3_implicit(model::Model{M,Continuous},dt::T=1.0) where {M,T} = discretize_model(model,:rk3_implicit,dt)
+midpoint_implicit(model::Model{M,Continuous},dt::T=1.0) where {M,T} = discretize_model(model,:midpoint_implicit,dt)
 
 
 function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) where T

@@ -8,14 +8,14 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
     dt = prob.dt
 
     K  = [zeros(T,m,n) for k = 1:N-1]
-    ∇F = [BlockArray(zeros(T,n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
+    ∇F = [PartedArray(zeros(T,n,length(prob.model)),create_partition2(prob.model)) for k = 1:N-1]
     P  = [zeros(T,n,n) for k = 1:N]
-
-    jacobian!(∇F,prob.model,prob.X,prob.U,prob.dt)
 
     P[N] .= Qf
 
     for k = N-1:-1:1
+        jacobian!(∇F[k],prob.model,prob.X[k],prob.U[k],prob.dt)
+
         A, B = ∇F[k].xx, ∇F[k].xu
         K[k] .= (R*dt + B'*P[k+1]*B)\(B'*P[k+1]*A)
         P[k] .= Q*dt + K[k]'*R*K[k]*dt + (A - B*K[k])'*P[k+1]*(A - B*K[k])
@@ -192,6 +192,26 @@ mutable struct RobustCost{T} <: CostFunction
     m::Int
     r::Int
     idx::NamedTuple
+
+    ∇c_stage::Function
+    ∇²c_stage::Function
+    ∇c_term::Function
+    ∇²c_term::Function
+end
+
+function cost(c::RobustCost,Z::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(Z)
+    ℓ = 0.
+    for k = 1:N-1
+        ℓ += stage_cost(c,Z[k],U[k])
+    end
+    ℓ += stage_cost(c,Z[N])
+    ℓ
+end
+
+struct RobustObjective <: AbstractObjective
+    obj::AbstractObjective
+    robust_cost::RobustCost
 end
 
 function stage_cost(cost::RobustCost, z::Vector{T}, u::Vector{T}) where T
@@ -211,21 +231,6 @@ function stage_cost(cost::RobustCost, zN::Vector{T}) where T
     tr(cost.Qrf*E)
 end
 
-function cost(c::RobustCost,Z::VectorTrajectory{T},U::VectorTrajectory{T}) where T
-    N = length(Z)
-    ℓ = 0.
-    for k = 1:N-1
-        ℓ += stage_cost(c,Z[k],U[k])
-    end
-    ℓ += stage_cost(c,Z[N])
-    ℓ
-end
-
-struct RobustObjective <: AbstractObjective
-    obj::AbstractObjective
-    robust_cost::RobustCost
-end
-
 function cost(robust_obj::RobustObjective, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T <: AbstractFloat
     J = cost(robust_obj.robust_cost,X,U)
     J += cost(robust_obj.obj,X,U)
@@ -237,6 +242,24 @@ function cost_expansion!(Q::ExpansionTrajectory{T},robust_obj::RobustObjective,X
     cost_expansion!(Q,robust_obj.obj,X,U)
 end
 
+function cost_expansion!(Q::ExpansionTrajectory{T},robust_cost::RobustCost,X::VectorTrajectory{T},U::VectorTrajectory{T}) where T
+    N = length(X); n = robust_cost.n; m = robust_cost.m; r = robust_cost.r
+    idx = robust_cost.idx
+    n̄ = n + n^2 + n*r + n^2
+    for k = 1:N-1
+        y = [X[k];U[k]]
+        ∇c = robust_cost.∇c_stage(y)
+        ∇²c = robust_cost.∇²c_stage(y)
+        Q[k].x .= ∇c[idx.z]
+        Q[k].u .= ∇c[n̄ .+ (1:m)]
+        Q[k].xx .= ∇²c[idx.z,idx.z]
+        Q[k].uu .= ∇²c[n̄ .+ (1:m), n̄ .+ (1:m)]
+        Q[k].ux .= ∇²c[idx.z, n̄ .+ (1:m)]'
+    end
+    Q[N].x .= robust_cost.∇c_term(X[N])
+    Q[N].xx .= robust_cost.∇²c_term(X[N])
+end
+
 function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     H1::AbstractArray{T},D::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
     Qf::AbstractArray{T},xf::AbstractVector{T}) where T
@@ -245,8 +268,9 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     n = prob.model.n; m = prob.model.m; r = prob.model.r
     n_robust = 2*n^2 + n*r # number of robust parameters in state vector
-
-    idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)))
+    n̄ = n + n_robust
+    m1 = m + n^2
+    idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)),z=(1:n̄))
 
     # generate optimal feedback matrix function
     Zc = zeros(n,n+m+r)
@@ -257,8 +281,9 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         x = z[idx.x]
         s = z[idx.s]
         P = reshape(s,n,n)*reshape(s,n,n)'
+        Zc = zeros(eltype(z),n,n+m+r)
 
-        ∇fc(Zc,x,u[1:m],zeros(r))
+        ∇fc(Zc,x,u[1:m],zeros(eltype(z),r))
         Bc = Zc[:,n .+ (1:m)]
         R\(Bc'*P)
     end
@@ -273,6 +298,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         if k == 1
             cost_robust.R = cat(cost_robust.R,Diagonal(zeros(n^2)),dims=(1,2))
             cost_robust.r = [cost_robust.r; zeros(n^2)]
+            cost_robust.H = [cost_robust.H; zeros(n^2,n̄)]
         end
         push!(_cost,cost_robust)
     end
@@ -282,60 +308,62 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     cost_robust.qf = [cost_robust.qf; zeros(n_robust)]
     push!(_cost,cost_robust)
 
+    # create robust objective
     _obj = Objective(_cost)
 
-    model_uncertain = robust_model(prob.model,Q,R,D)
+    ∇sc, ∇²sc, ∇sc_term, ∇²sc_term = gen_robust_exp_funcs(prob.model.info[:fc],idx,Qr,Rr,Qfr,n,m,r)
+    _robust_cost = RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx,∇sc,∇²sc,∇sc_term,∇²sc_term)
+    robust_obj = RobustObjective(_obj,_robust_cost)
 
-    robust_cost = RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx)
-    #
-    # con_prob = AbstractConstraintSet[]
-    # constrained = is_constrained(prob)
-    #
-    #
-    # s1(c,z,u) = u[m .+ (1:n^2)] - z[idx.s]
-    #
-    # C = zeros(n^2,n + n^2 + n*r + n^2 + m + n^2)
-    # function ∇s1(C,z,u)
-    #     C[:,(n+n^2+n*r) .+ (1:n^2)] = -1.0*Diagonal(ones(n^2))
-    #     C[:,(n+n^2+n*r+n^2+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
-    # end
-    # ctg_init = Constraint{Equality}(s1,∇s1,n + n_robust,m + n^2,n^2,:ctg)
-    #
-    # for k = 1:N-1
-    #     con_uncertain = AbstractConstraint[]
-    #     if k == 1
-    #         push!(con_uncertain,ctg_init)
-    #     end
-    #     if constrained
-    #         for cc in prob.constraints[k]
-    #             push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m))
-    #         end
-    #     end
-    #     push!(con_prob,con_uncertain)
-    # end
-    #
-    # if constrained
-    #     con_uncertain = AbstractConstraint[]
-    #     for cc in prob.constraints[N]
-    #         push!(con_uncertain,robust_constraint(cc,prob.model.n))
-    #     end
-    # else
-    #     con_uncertain = Constraint[]
-    # end
-    #
-    # push!(con_prob,con_uncertain)
-    # rollout!(prob)
+    # create robust model
+    _robust_model = robust_model(prob.model,Q,R,D)
+
+    constrained = is_constrained(prob)
+    con_prob = ConstraintSet[]
+
+    function s1(c,z,u)
+        c[1:n^2] = u[m .+ (1:n^2)] - z[idx.s]
+    end
+
+    function ∇s1(C,z,u)
+        C[:,(n+n^2+n*r) .+ (1:n^2)] = -1.0*Diagonal(ones(n^2))
+        C[:,(n̄+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
+    end
+
+    ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg)
+
+    for k = 1:N-1
+        con_uncertain = GeneralConstraint[]
+        if k == 1
+            push!(con_uncertain,ctg_init)
+        end
+        if constrained
+            for cc in prob.constraints[k]
+                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m))
+            end
+        end
+        push!(con_prob,con_uncertain)
+    end
+
+    con_uncertain = GeneralConstraint[]
+    if constrained
+        for cc in prob.constraints[N]
+            push!(con_uncertain,robust_constraint(cc,prob.model.n))
+        end
+    end
+
+    push!(con_prob,con_uncertain)
+
+    prob_con = ProblemConstraints(con_prob)
+
+    rollout!(prob)
     # K, P = tvlqr_dis(prob,Q,R,Qf)
     K, P = tvlqr_con(prob,Q,R,Qf,xf)
     S1 = vec(sqrt(P[1]))
 
-    # update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
-    #     constraints=ProblemConstraints(con_prob),
-    #     X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:prob.N],
-    #     U=[k == 1 ? [prob.U[k];S[1]] : prob.U[k] for k = 1:prob.N-1],
-    #     x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S[1]])
-    update_problem(prob,model=model_uncertain,obj=RobustObjective(_obj,robust_cost),
-        X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:prob.N],
+    update_problem(prob,model=_robust_model,obj=robust_obj,
+        constraints=prob_con,
+        X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:N],
         U=[k==1 ? [prob.U[k];S1] : prob.U[k] for k = 1:N-1],
         x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S1])
 end
@@ -568,4 +596,46 @@ function update_jacobian(_∇F::Function,n::Int,m::Int,r::Int)
         return S0
     end
     return ∇F
+end
+
+function gen_robust_exp_funcs(fc::Function,idx::NamedTuple,Qr::AbstractArray,Rr::AbstractArray,
+        Qfr::AbstractArray,n::Int,m::Int,r::Int)
+    n̄ = n+n^2+n*r+n^2
+
+    function K(z,u)
+        x = z[idx.x]
+        s = z[idx.s]
+        P = reshape(s,n,n)*reshape(s,n,n)'
+        Zc = zeros(eltype(z),n,n+m+r)
+        f_aug(q̇,q) = fc(q̇,q[1:n],q[n .+ (1:m)],zeros(eltype(q),r))
+        ∇fc(q) = ForwardDiff.jacobian(f_aug,zeros(eltype(q),n),q)
+
+        Bc = ∇fc([x;u[1:m]])[:,n .+ (1:m)]
+        R\(Bc'*P)
+    end
+
+    function stage_cost(y)
+        z = y[1:n̄]
+        u = y[n̄ .+ (1:m)]
+
+        x = z[idx.x]
+        E = reshape(z[idx.e],n,n)
+
+        Kc = K(z,u)
+
+        tr((Qr + Kc'*Rr*Kc)*E)
+    end
+
+    function stage_cost_term(z)
+        E = reshape(z[idx.e],n,n)
+        tr(Qfr*E)
+    end
+
+    ∇sc(y) = ForwardDiff.gradient(stage_cost,y)
+    ∇²sc(y) = ForwardDiff.hessian(stage_cost,y)
+
+    ∇sc_term(y) = ForwardDiff.gradient(stage_cost_term,y)
+    ∇²sc_term(y) = ForwardDiff.hessian(stage_cost_term,y)
+
+    return ∇sc, ∇²sc, ∇sc_term, ∇²sc_term
 end
