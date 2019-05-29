@@ -97,6 +97,78 @@ function tvlqr_con(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArra
     return K, Ps
 end
 
+function tvlqr_con2(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
+    dt = prob.dt
+
+    K  = [zeros(T,m,n) for k = 1:N-1]
+
+    X_interp = gen_cubic_interp(prob.X,prob.dt)
+    U_interp = gen_zoh_interp([prob.U...,prob.U[end]],prob.dt)
+
+    f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)])
+    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    ∇f(x,u) = ∇f([x;u])
+
+    function _Ac(t)
+        ∇f(X_interp(t),U_interp(t))[:,1:n]
+    end
+
+    function _Bc(t)
+        ∇f(X_interp(t),U_interp(t))[:,n .+ (1:m)]
+    end
+
+    function r_dyn_sqrt(ṡ,s,t)
+        SS = reshape(s,n,n)
+        ss = inv(SS')
+        ṡ[1:n^2] = vec(-.5*Q*ss - _Ac(t)'*SS + .5*(SS*SS'*_Bc(t))*inv(R)*(_Bc(t)'*SS));
+    end
+
+    r_dyn_sqrt_wrap(ṡ,z) = r_dyn_sqrt(ṡ,z[1:n^2],z[n^2 + 1])
+    r_dyn_sqrt_wrap(rand(n^2),[rand(n^2);1.0])
+
+    ∇r_dyn_sqrt_wrap(z) = ForwardDiff.jacobian(r_dyn_sqrt_wrap,zeros(n^2),z)
+
+    ∇r_dyn_sqrt_wrap(s,t) = ∇r_dyn_sqrt_wrap([s;t])
+
+    ∇r_dyn_sqrt_wrap([rand(n^2);1.0])
+
+    S = [zeros(n^2) for k = 1:N]
+    S[N] = vec(sqrt(Qf))
+    _t = [tf]
+
+    for k = N:-1:2
+        # explicit midpoint
+        k1 = k2 = kg = zero(S[k])
+        x = S[k]
+        r_dyn_sqrt(k1, S[k], _t[1]);
+        k1 *= -dt;
+        r_dyn_sqrt(k2, S[k] + k1/2, _t[1] - dt/2);
+        k2 *= -dt;
+        copyto!(S[k-1], S[k] + k2)
+
+        for i = 1:10
+            Sm = 0.5*(S[k-1] + S[k])
+            tm = _t[1] - dt/2
+
+            r_dyn_sqrt(kg,Sm,tm)
+            g = S[k-1] - S[k] + dt*kg
+
+            A = ∇r_dyn_sqrt_wrap(Sm,tm)[:,1:n^2]
+
+            ∇g = Diagonal(I,n^2) + 0.5*dt*A
+            δs = -∇g\g
+
+            S[k-1] += δs
+        end
+
+        _t[1] -= dt
+    end
+    Ps = [reshape(S[k],n,n)*reshape(S[k],n,n)' for k = 1:N]
+
+    return K, Ps
+end
+
 function gen_cubic_interp(X,dt)
     N = length(X); n = length(X[1])
 
@@ -275,7 +347,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     rollout!(prob)
     # K, P = tvlqr_dis(prob,Q,R,Qf)
     K, P = tvlqr_con(prob,Q,R,Qf,xf)
-    S1 = vec(sqrt(P[1]))
+    S1 = vec(cholesky(P[1]).U)
 
     # generate optimal feedback matrix function
     Zc = zeros(n,n+m+r)
@@ -337,15 +409,15 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg_init)
 
-    function sN(c,z,u)
+    function sN(c,z)
         c[1:n^2] = z[idx.s] - S1
     end
 
-    function ∇sN(C,z,u)
+    function ∇sN(C,z)
         C[:,(n+n^2+n*r) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
     end
 
-    ctg_term = Constraint{Equality}(sN,∇sN,n^2,:ctg_term,[collect(idx.s),collect(1:0)],:terminal)
+    ctg_term = Constraint{Equality}(sN,∇sN,n^2,:ctg_term,[collect(1:n̄),collect(1:0)],:terminal)
 
     for k = 1:N-1
         con_uncertain = GeneralConstraint[]

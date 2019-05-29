@@ -74,7 +74,7 @@ function rollout_reverse!(prob::Problem{T,Discrete},xf::AbstractVector{T}) where
 
     X = prob.X; U = prob.U
 
-    X[N] = xf
+    X[N] = copy(xf)
 
     for k = N-1:-1:1
         f(X[k],X[k+1],U[k],-dt)
