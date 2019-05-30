@@ -113,15 +113,15 @@ end
 plot(X_for,color=:orange,label="forward")
 plot!(X,color=:purple,style=:dash,label="backward")
 
-# function riccati(ṡ,s,x,u)
-#     S = reshape(s,n,n)
-#     F = ∇f(x,u)
-#     A = F[:,1:n]
-#     B = F[:,n .+ (1:m)]
-#
-#     Si = inv(S')
-#     ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
-# end
+function riccati(ṡ,s,x,u)
+    S = reshape(s,n,n)
+    F = ∇f(x,u)
+    A = F[:,1:n]
+    B = F[:,n .+ (1:m)]
+
+    Si = inv(S')
+    ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
+end
 
 riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
 riccati_wrap(rand(n^2),[rand(n^2);rand(n);rand(m)])
