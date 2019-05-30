@@ -5,13 +5,13 @@ fc = model.f
 n = model.n; m = model.m
 
 x0 = [0.; 0.]
-xf = [1; 0.]
+xf = [1.0; 0.]
 
 Q = 1.0*Diagonal(ones(n))
 R = 1.0*Diagonal(ones(m))
 Qf = 1000.0*Diagonal(ones(n))
 
-N = 100
+N = 101
 tf = 1.0
 dt = tf/(N-1)
 
@@ -199,12 +199,12 @@ for k = 1:N-1
     cnt = 0
     while norm(g) > 1.0e-12
         cnt += 1
-        if norm(g) > norm(gp)
-            α *= 0.9
-        else
-            α = 1.0#min(1.0,α*1.01)
-        end
-        gp = copy(g)
+        # if norm(g) > norm(gp)
+        #     α *= 0.9
+        # else
+        #     α = 1.0#min(1.0,α*1.01)
+        # end
+        # gp = copy(g)
         println(norm(g))
         if cnt > 100
             error("Integration convergence fail")

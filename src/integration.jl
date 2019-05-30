@@ -58,25 +58,27 @@ function midpoint_implicit(f::Function,n::Int,m::Int,dt::T) where T
     ∇f(x,u) = ForwardDiff.jacobian(f_aug,zero(x),[x;u])
 
     fd(y,x,u,dt=dt) = begin
-        k1 = k2 = kg = zero(x)
-        f(k1, x, u);
-        k1 *= dt;
-        f(k2, x + k1/2, u);
-        k2 *= dt;
-        copyto!(y, x)
+        fc = zero(x)
 
-        for i = 1:10
+        copyto!(y, x)
+        g = Inf
+        cnt = 0
+        while norm(g) > 1.0e-12
+            cnt += 1
+            if cnt > 1000
+                error("Integration convergence fail")
+            end
+
             Xm = 0.5*(x + y)
-            f(kg,Xm,u)
-            g = y - x - dt*kg
+            f(fc,Xm,u)
+            g = y - x - dt*fc
 
             A = ∇f(Xm,u)[:,1:n]
 
             ∇g = Diagonal(I,n) - 0.5*dt*A
-            δx = -∇g\g
+            δy = -∇g\g
 
-            println(norm(g))
-            y += δx
+            y .+= δy
         end
     end
 end
@@ -86,31 +88,28 @@ function midpoint_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) whe
     f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
     ∇f(x,u,w) = ForwardDiff.jacobian(f_aug,zeros(eltype(x),n),[x;u;w])
     fd(y,x,u,w,dt=dt) = begin
-        k1 = k2 = kg = zero(x)
-        f(k1, x, u, w);
-        k1 *= dt;
-        # f(k2, x + k1/2, u, w);
-        # k2 *= dt;
-        copyto!(y, x + k1)#+ k2)
+        fc = zero(x)
+
+        copyto!(y, x )
 
         # iterate to solve implicit midpoint step
         g = Inf
         cnt = 0
-        for i = 1:10
-            # cnt += 1
-            # if cnt > 10
-            #     error("Integration tolerance failed")
-            # end
+        while norm(g) > 1.0e-12
+            cnt += 1
+            if cnt > 1000
+                error("Integration tolerance failed")
+            end
             Xm = 0.5*(x + y)
-            f(kg,Xm,u,w)
-            g = y - x - dt*kg
+            f(fc,Xm,u,w)
+            g = y - x - dt*fc
 
             A = ∇f(Xm,u,w)[:,1:n]
 
             ∇g = Diagonal(I,n) - 0.5*dt*A
-            δx = -∇g\g
+            δy = -∇g\g
 
-            y += δx
+            y .+= δy
         end
     end
 end
@@ -213,40 +212,33 @@ function rk3_implicit(f::Function,n::Int,m::Int,dt::T) where T
     f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)])
     ∇f(x,u) = ForwardDiff.jacobian(f_aug,zero(x),[x;u])
 
-    fd!(xdot,x,u,dt=dt) = begin
-        # get estimate of X[k+1] from explicit rk3
-        k1 = k2 = k3 = kg1 = kg2 = kg3 = zero(x)
-        # f(k1, x, u);
-        # k1 *= dt;
-        # f(k2, x + k1/2, u);
-        # k2 *= dt;
-        # f(k3, x - k1 + 2*k2, u);
-        # k3 *= dt;
-        copyto!(xdot, x)# + (k1 + 4*k2 + k3)/6)
+    fd!(y,x,u,dt=dt) = begin
+        fc1 = fc2 = fc3 = zero(x)
 
         g = Inf
         cnt = 0
+        copyto!(y,x)
         while norm(g) > 1.0e-12
             cnt += 1
-            if cnt > 10
-                error("Integration tolerance failed")
+            if cnt > 1000
+                error("Integration convergence failed")
             end
-            f(kg1,x,u)
-            f(kg3,xdot,u)
+            f(fc1,x,u)
+            f(fc3,y,u)
 
-            Xm = 0.5*(x + xdot) + dt/8*(kg1 - kg3)
-            f(kg2,Xm,u)
+            Xm = 0.5*(x + y) + dt/8*(fc1 - fc3)
+            f(fc2,Xm,u)
 
-            g = xdot - x - dt/6*kg1 - 4/6*dt*kg2 - dt/6*kg3
+            g = y - x - dt/6*fc1 - 4/6*dt*fc2 - dt/6*fc3
 
             A1 = ∇f(Xm,u)[:,1:n]
             A2 = ∇f(xdot,u)[:,1:n]
 
 
             ∇g = Diagonal(I,n) - 4/6*dt*A1*(0.5*Diagonal(I,n) - dt/8*A2) - dt/6*A2
-            δx = -∇g\g
+            δy = -∇g\g
 
-            xdot += δx
+            y .+= δy
         end
     end
 end
@@ -255,40 +247,34 @@ function rk3_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) where T
     f_aug(ẋ,z) = f(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
     ∇f(x,u,w) = ForwardDiff.jacobian(f_aug,zero(x),[x;u;w])
 
-    fd!(xdot,x,u,w,dt=dt) = begin
-        # get estimate of X[k+1] from explicit rk3
-        k1 = k2 = k3 = kg1 = kg2 = kg3 = zero(x)
-        # f(k1, x, u, w);
-        # k1 *= dt;
-        # f(k2, x + k1/2, u, w);
-        # k2 *= dt;
-        # f(k3, x - k1 + 2*k2, u, w);
-        # k3 *= dt;
-        copyto!(xdot, x)# + (k1 + 4*k2 + k3)/6)
+    fd!(y,x,u,w,dt=dt) = begin
+        fc1 = fc2 = fc3 = zero(x)
 
         g = Inf
         cnt = 0
+        copyto!(y,x)
+
         while norm(g) > 1.0e-12
             cnt += 1
-            if cnt > 10
-                error("Integration tolerance failed")
+            if cnt > 1000
+                error("Integration convergence failed")
             end
-            f(kg1,x,u,w)
-            f(kg3,xdot,u,w)
+            f(fc1,x,u,w)
+            f(fc3,y,u,w)
 
-            Xm = 0.5*(x + xdot) + dt/8*(kg1 - kg3)
-            f(kg2,Xm,u,w)
+            Xm = 0.5*(x + y) + dt/8*(fc1 - fc3)
+            f(fc2,Xm,u,w)
 
-            g = xdot - x - dt/6*kg1 - 4/6*dt*kg2 - dt/6*kg3
+            g = y - x - dt/6*fc1 - 4/6*dt*fc2 - dt/6*fc3
 
             A1 = ∇f(Xm,u,w)[:,1:n]
-            A2 = ∇f(xdot,u,w)[:,1:n]
-
+            A2 = ∇f(y,u,w)[:,1:n]
 
             ∇g = Diagonal(I,n) - 4/6*dt*A1*(0.5*Diagonal(I,n) - dt/8*A2) - dt/6*A2
-            δx = -∇g\g
+            δy = -∇g\g
 
-            xdot += δx
+            y .+= δy
+            # copyto!(y,y+δy)
         end
     end
 end

@@ -1,17 +1,25 @@
-using Plots
+using Plots, ForwardDiff
 
 model = Dynamics.pendulum_model
+# model = Dynamics.doubleintegrator_model
+# model = Dynamics.car_model
 fc = model.f
 n = model.n; m = model.m
 
 x0 = [0.; 0.]
-xf = [1; 0.]
+xf = [pi; 0.]
 
+# x0 = [0.; 0.]
+# xf = [1.0; 0.]
+
+# x0 = [0.;0.;0.]
+# xf = [0.;1.;0.]
+#
 Q = 1.0*Diagonal(ones(n))
 R = 1.0*Diagonal(ones(m))
 Qf = 1000.0*Diagonal(ones(n))
 
-N = 501
+N = 201
 tf = 1.0
 dt = tf/(N-1)
 
@@ -35,17 +43,15 @@ for k = 1:N-1
     # println(k)
     fc1 = fc2 = fc3 = zero(X[k])
 
-    copyto!(X[k+1], X[k])# + k2)
+    copyto!(X[k+1], X[k])
     g = Inf
-    gp = Inf
-    α = 1.0
+
     cnt = 0
     while norm(g) > 1.0e-12
         cnt += 1
-        if cnt > 100
+        if cnt > 10
             error("Integration convergence fail")
         end
-        gp = copy(g)
 
         fc(fc1,X[k],U[k])
         fc(fc3,X[k+1],U[k])
@@ -75,18 +81,17 @@ for k = N-1:-1:1
     # println(k)
     fc1 = fc2 = fc3 = zero(X[k])
 
-    copyto!(X[k], X[k+1])# + k2)
+    copyto!(X[k], X[k+1])
     g = Inf
-    gp = Inf
-    α = 1.0
+
     cnt = 0
     while norm(g) > 1.0e-12
         cnt += 1
 
-        if cnt > 100
+        if cnt > 10
             error("Integration convergence fail")
         end
-        gp = copy(g)
+
         fc(fc1,X[k+1],U[k])
         fc(fc3,X[k],U[k])
 
@@ -108,15 +113,15 @@ end
 plot(X_for,color=:orange,label="forward")
 plot!(X,color=:purple,style=:dash,label="backward")
 
-function riccati(ṡ,s,x,u)
-    S = reshape(s,n,n)
-    F = ∇f(x,u)
-    A = F[:,1:n]
-    B = F[:,n .+ (1:m)]
-
-    Si = inv(S')
-    ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
-end
+# function riccati(ṡ,s,x,u)
+#     S = reshape(s,n,n)
+#     F = ∇f(x,u)
+#     A = F[:,1:n]
+#     B = F[:,n .+ (1:m)]
+#
+#     Si = inv(S')
+#     ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
+# end
 
 riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
 riccati_wrap(rand(n^2),[rand(n^2);rand(n);rand(m)])
@@ -138,8 +143,7 @@ for k = N-1:-1:1
 
     copyto!(S[k], S[k+1])
     g = Inf
-    gp = Inf
-    α = 1.0
+
     cnt = 0
     while norm(g) > 1.0e-12
         cnt += 1
@@ -167,7 +171,7 @@ for k = N-1:-1:1
         ∇g = Diagonal(I,n^2) + 4/6*dt*A1*(0.5*Diagonal(I,n^2) + dt/8*A2) + dt/6*A2
         δs = -∇g\g
 
-        S[k] += α*δs
+        S[k] += δs
 
     end
 end
@@ -175,7 +179,8 @@ end
 # plot(S)
 Ps = [vec(reshape(S[k],n,n)*reshape(S[k],n,n)') for k = 1:N]
 Sb = copy(S)
-plot(Ps)
+S1 = cholesky(reshape(Sb[1],n,n)*reshape(Sb[1],n,n)').U
+plot(Ps,legend=:left)
 
 # Implicit midpoint Riccati forward
 S = [zeros(n^2) for k = 1:N]
@@ -186,22 +191,20 @@ S[1] = vec(Sb[1])
 
 for k = 1:N-1
     println(k)
-    s1 = s2 = s3 = zero(S[k])
+    ss = s1 = s2 = s3 = zero(S[k])
     fc1 = fc2 = fc3 = zero(X[k])
 
     copyto!(S[k+1], S[k])
     g = Inf
-    gp = Inf
-    α = 1.0
+    α = 1.
     cnt = 0
     while norm(g) > 1.0e-12
         cnt += 1
-
-        gp = copy(g)
         println(norm(g))
         if cnt > 1000
             error("Integration convergence fail")
         end
+
         riccati(s1,S[k],X[k],U[k])
         riccati(s3,S[k+1],X[k+1],U[k])
         fc(fc1,X[k],U[k])
@@ -211,15 +214,31 @@ for k = 1:N-1
         Xm = 0.5*(X[k] + X[k+1]) + dt/8*(fc1 - fc3)
         riccati(s2,Sm,Xm,U[k])
 
-        g = S[k+1] - S[k] - dt/6*s1 - 4/6*dt*s2 - dt/6*s3
-
         A1 = ∇riccati(Sm,Xm,U[k])[:,1:n^2]
         A2 = ∇riccati(S[k+1],X[k+1],U[k])[:,1:n^2]
 
-
+        g = S[k+1] - S[k] - dt/6*s1 - 4/6*dt*s2 - dt/6*s3
         ∇g = Diagonal(I,n^2) - 4/6*dt*A1*(0.5*Diagonal(I,n^2) - dt/8*A2) - dt/6*A2
         δs = -∇g\g
 
+        # g_new = copy(g)
+        # α = 2.
+        # cnt_ls = 0
+        # while norm(g_new) >= norm(g)
+        #     α /= 2.
+        #     cnt_ls += 1
+        #     tmp = S[k+1] + α*δs
+        #     riccati(s3,tmp,X[k+1],U[k])
+        #
+        #     Sm = 0.5*(S[k] + tmp) + dt/8*(s1 - s3)
+        #     riccati(s2,Sm,Xm,U[k])
+        #     g_new = tmp - S[k] - dt/6*s1 - 4/6*dt*s2 - dt/6*s3
+        #
+        #     println(norm(g_new))
+        #     if cnt_ls > 1000
+        #         error("line search failed")
+        #     end
+        # end
         S[k+1] += α*δs
     end
 end
