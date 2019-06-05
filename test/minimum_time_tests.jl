@@ -84,7 +84,7 @@ verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=false,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,
     iterations=30,penalty_scaling=10.0)
-opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=15.0,
+opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=10.0,
     dt_max=0.2,dt_min=1.0e-3)
 
 # constraints
@@ -106,7 +106,6 @@ tt = total_time(prob)
 
 prob_mt = Problem(model_d,Objective(lqr_cost,N),prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)  # TODO: figure out why it won't resolve
-prob_mt.U
 tt_mt = total_time(prob_mt)
 
 @test tt_mt < 0.75*tt

@@ -49,6 +49,7 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     N = length(X)
     for k = 1:N-1
         cost_expansion!(Q[k],c[k],X[k],U[k])
+        Q[k]/(N-1.)
     end
     cost_expansion!(Q[N],c[N],X[N])
 end
