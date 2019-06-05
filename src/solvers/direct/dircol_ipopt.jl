@@ -232,11 +232,6 @@ function write_ipopt_options()
     println(f,"hessian_approximation limited-memory\n")
     println(f,"# Output file")
     println(f,"file_print_level 5")
-    # println(f,"output_file $(wrap_quotes(outfile))")
     println(f,"output_file"*" "*"\""*"$(outfile)"*"\"")
     close(f)
-end
-
-function wrap_quotes(s::String)
-    "\"" * s * "\""
 end

@@ -33,15 +33,6 @@ function midpoint(f!::Function, dt::Float64)
     end
 end
 
-function midpoint(f_aug!::Function)
-    fd_aug!(dS, S) = begin
-        dt = S[end]^2
-        f_aug!(dS, S)
-        dS .*= dt/2.
-        f_aug!(dS, S + dS)
-        copyto!(dS,S + dS*dt)
-    end
-end
 
 """
 $(SIGNATURES)
@@ -66,19 +57,6 @@ function rk4(f!::Function, dt::Float64)
     end
 end
 
-
-function rk4(f_aug!::Function)
-    # Runge-Kutta 4
-    fd!(dS,S::Array) = begin
-        dt = S[end]^2
-        k1 = k2 = k3 = k4 = zero(S)
-        f_aug!(k1,S);         k1 *= dt;
-        f_aug!(k2,S + k1/2); k2 *= dt;
-        f_aug!(k3,S + k2/2); k3 *= dt;
-        f_aug!(k4,S + k3);    k4 *= dt;
-        copyto!(dS, S + (k1 + 2*k2 + 2*k3 + k4)/6)
-    end
-end
 
 """
 $(SIGNATURES)
@@ -120,23 +98,4 @@ Converts a separated dynamics function into an augmented dynamics function
 """
 function f_augmented!(f!::Function, n::Int, m::Int)
     f_aug!(dS::AbstractArray, S::Array) = f!(dS, S[1:n], S[n+1:n+m])
-end
-
-function f_augmented(f::Function, n::Int, m::Int)
-    f_aug(S::Array) = f(S[1:n], S[n+1:n+m])
-end
-
-function ZeroOrderHoldInterpolation(t,X)
-    itr = interpolate(X,BSpline(Constant()))
-    dt = t[2] - t[1]
-    function zoh(t2)
-        i2 = t2./dt .+ 1
-        itr(floor.(i2))
-    end
-end
-
-function MidpointInterpolation(t,X)
-    Xm = [(X[i] + X[i+1])/2 for i = 1:length(X)-1]
-    push!(Xm,Xm[end])
-    ZeroOrderHoldInterpolation(t,Xm)
 end

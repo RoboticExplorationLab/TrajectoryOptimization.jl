@@ -162,10 +162,6 @@ function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
     return nothing
 end
 
-function get_sizes(cost::QuadraticCost)
-    return size(cost.Q,1), size(cost.R,1)
-end
-
 function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end

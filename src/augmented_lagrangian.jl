@@ -245,22 +245,6 @@ function aula_cost(a::AbstractVector{Bool},c::AbstractVector{T},λ::AbstractVect
     λ'c + 1/2*c'Diagonal(a .* μ)*c
 end
 
-function stage_constraint_cost(obj::AugmentedLagrangianObjective{T},x::AbstractVector{T},u::AbstractVector{T},k::Int) where T
-    c = obj.C[k]
-    λ = obj.λ[k]
-    μ = obj.μ[k]
-    a = obj.active_set[k]
-    aula_cost(a,c,λ,μ)
-end
-
-function stage_constraint_cost(obj::AugmentedLagrangianObjective{T},x::AbstractVector{T}) where T
-    c = obj.C[end]
-    λ = obj.λ[end]
-    μ = obj.μ[end]
-    a = obj.active_set[end]
-    aula_cost(a,c,λ,μ)
-end
-
 function stage_constraint_cost(c,λ,μ,
         a,x::AbstractVector{T},u::AbstractVector{T}) where T
     aula_cost(a,c,λ,μ)

@@ -51,23 +51,23 @@ end
 #    DYNAMICS FUNCTIONS    #
 ############################
 
-function traj_points!(prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}, X, U) where T
-    n,m,N = size(prob)
-    dt = prob.dt
-    Xm = solver.X_
-    fVal = solver.fVal
-    X,U = Z.X, Z.U
-    for k = 1:N-1
-        Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
-    end
-    return Xm
-end
-
-function TrajectoryOptimization.dynamics!(prob::Problem{T,Continuous}, solver::DirectSolver, X, U) where T<:AbstractFloat
-    for k = 1:prob.N
-        evaluate!(solver.fVal[k], prob.model, X[k], U[k])
-    end
-end
+# function traj_points!(prob::Problem, solver::DIRCOLSolver{T,HermiteSimpson}, X, U) where T
+#     n,m,N = size(prob)
+#     dt = prob.dt
+#     Xm = solver.X_
+#     fVal = solver.fVal
+#     X,U = Z.X, Z.U
+#     for k = 1:N-1
+#         Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+#     end
+#     return Xm
+# end
+#
+# function TrajectoryOptimization.dynamics!(prob::Problem{T,Continuous}, solver::DirectSolver, X, U) where T<:AbstractFloat
+#     for k = 1:prob.N
+#         evaluate!(solver.fVal[k], prob.model, X[k], U[k])
+#     end
+# end
 
 
 #####################
@@ -92,16 +92,16 @@ function update_constraints!(g, prob::Problem, solver::DIRCOLSolver, X, U) where
     end
 end
 
-function constraint_jacobians(prob::Problem, solver::DirectSolver, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory)
-    n,m,N = size(prob)
-    for k = 1:N
-        if k == prob.N
-            jacobian!(solver.∇C[k], prob.constraints[k], X[k])
-        else
-            jacobian!(solver.∇C[k], prob.constraints[k], X[k], U[k])
-        end
-    end
-end
+# function constraint_jacobians(prob::Problem, solver::DirectSolver, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory)
+#     n,m,N = size(prob)
+#     for k = 1:N
+#         if k == prob.N
+#             jacobian!(solver.∇C[k], prob.constraints[k], X[k])
+#         else
+#             jacobian!(solver.∇C[k], prob.constraints[k], X[k], U[k])
+#         end
+#     end
+# end
 
 function partition_constraint_jacobian(jac::AbstractMatrix, prob::Problem)
     n,m,N = size(prob)

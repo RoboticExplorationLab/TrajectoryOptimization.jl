@@ -72,9 +72,6 @@ function copy(r::iLQRSolver{T}) where T
     iLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.∇F),copy(r.S),copy(r.Q),copy(r.ρ),copy(r.dρ))
 end
 
-get_sizes(solver::iLQRSolver) = length(solver.X̄[1]), length(solver.Ū[2]), length(solver.X̄)
-
-
 "$(TYPEDEF) Augmented Lagrangian solver"
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
