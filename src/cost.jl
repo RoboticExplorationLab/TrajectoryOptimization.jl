@@ -28,8 +28,18 @@ struct Expansion{T<:AbstractFloat}
     ux::Matrix{T}
 end
 
-import Base./, Base.*
+function Expansion{T}(n::Int, m::Int) where T
+    x = zeros(T,n)
+    u = zeros(T,m)
+    xx = zeros(T,n,n)
+    uu = zeros(T,m,m)
+    ux = zeros(T,m,n)
+    Expansion{T}(x, u, xx, uu, ux)
+end
 
+
+
+import Base./, Base.*
 function *(e::Expansion, a::Real)
     e.x .*= a
     e.u .*= a
@@ -38,6 +48,7 @@ function *(e::Expansion, a::Real)
     e.ux .*= a
     return nothing
 end
+*(a::Real, e::Expansion) = e*a
 
 function /(e::Expansion,a::Real)
     e.x ./= a
@@ -92,6 +103,7 @@ mutable struct QuadraticCost{T} <: CostFunction
             err = ArgumentError("R must be positive definite")
             throw(err)
         end
+        # TODO: needs test
         if !ispossemidef(Q)
             err = ArgumentError("Q must be positive semi-definite")
             throw(err)
@@ -104,13 +116,19 @@ mutable struct QuadraticCost{T} <: CostFunction
     end
 end
 
+function QuadraticCost(Q,R; H=zeros(size(R,1), size(Q,1)), q=zeros(size(Q,1)),
+        r=zeros(size(R,1)), c=0.0, Qf=zero(Q), qf=zero(q), cf=0.0)
+    QuadraticCost(Q,R,H,q,r,c,Qf,qf,cf)
+end
+
+
 """
 $(SIGNATURES)
 Cost function of the form
     1/2(xₙ-x_f)ᵀ Qf (xₙ - x_f) + 1/2 ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-function LQRCost(Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+function LQRCost(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
@@ -120,7 +138,8 @@ function LQRCost(Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf
     return QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
 end
 
-function LQRCostTerminal(Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+# QUESTION: remove?
+function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
     return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
@@ -279,5 +298,4 @@ function cost_expansion!(S::Expansion{T}, cost::GenericCost, xN::Vector{T}) wher
     return nothing
 end
 
-get_sizes(cost::GenericCost) = cost.n, cost.m
-copy(cost::GenericCost) = GenericCost(copy(cost.ℓ,cost.ℓ,cost.n,cost.m))
+copy(cost::GenericCost) = GenericCost(cost.ℓ,cost.ℓ,cost.n,cost.m)
