@@ -114,6 +114,7 @@ set_x0!(prob2, rand(n))
 @test is_constrained(prob)
 prob = Problem(model_d, obj, x0=x0, tf=3)
 @test !is_constrained(prob)
+@test max_violation(prob) == 0
 
 prob = Problem(model_d, obj, U0, constraints=pcon, x0=x0, tf=3)
 rollout!(prob)

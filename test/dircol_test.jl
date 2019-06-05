@@ -58,14 +58,24 @@ Z1 = Primals(Z1,X,U)
 @test Z1.X[1][1] == 100
 @test X[1][1] == 100
 
+Z2 = Primals(Z, Z0)
+@test Z2.Z == Z
 
 # Convert fom X,U to Z
 X = [rand(n) for k = 1:N]
-U = [rand(n) for k = 1:N]
+U = [rand(m) for k = 1:N]
 Z2 = Primals(X,U)
 @test Z2.equal == true
 @test Primals(prob, true).equal == true
 Z_rollout = Primals(prob, true)
+
+Z3 = TO.pack(prob)
+@test length(Z3) == NN
+
+@test TO.pack(X,U, part_z) == Z2.Z
+@test TO.pack(X,U) == Z2.Z
+
+
 
 
 # Test methods
@@ -224,3 +234,6 @@ end
 opts = DIRCOLSolverOptions{Float64}()
 solve(prob, opts)
 TO.solve_moi(prob, opts)
+
+
+@test_nowarn TO.write_ipopt_options()

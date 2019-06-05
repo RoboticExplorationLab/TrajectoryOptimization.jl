@@ -34,6 +34,12 @@ end
 @testset "Minimum Time" begin
     include("minimum_time_tests.jl")
 end
+@testset "Costs" begin
+    include("cost_tests.jl")
+end
+@testset "Utils" begin
+    include("test_utils.jl")
+end
 
 # Systems
 @testset "Pendulum" begin
@@ -51,3 +57,31 @@ end
     include("dircol_test.jl")
 end
 disable_logging(Logging.Debug)
+
+
+#= Tests needed
+* Generic Cost
+* Expansion multiply and copy
+* Quad Cost constructor exceptions
+* AugmentedLagrangianObjective constructors
+* Sqrt bp exceptions
+* Dynamics module?
+* iLQR not inplace solves
+* iLQR live plotting
+* feedforward gradient
+* convergence criteria (max iters, dJ zero, max reg)
+* infeasible mintime
+* logger: trim entry
+* logger: print header
+* evaluate continuous dynamics
+* simultaneous jacobian! function in model
+* jacobian! on continuous dynamics for entire trajectory
+* model from urdf string (normal and underactuated)
+* wrap_inplace
+* Objective from cost and terminal cost
+* Objective from cost trajectory and terminal cost
+* Pass in costfuntion directly to problem
+* _validate_time
+* not inplace rollout
+* copy iLQR solver
+=#
