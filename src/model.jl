@@ -271,18 +271,18 @@ $(SIGNATURES)
 Model(mech::Mechanism, torques::Array{Bool, 1}) Constructor for an underactuated mechanism, where torques is a binary array
 that specifies whether a joint is actuated.
 """
-function Model(mech::Mechanism, torques::Array)
+function Model(mech::Mechanism, torques::AbstractArray)
 
     # construct a model using robot dynamics equation assembed from URDF file
     n = num_positions(mech) + num_velocities(mech) + num_additional_states(mech)
-    num_joints = length(joints(mech))  # subtract off joint to world
+    dof = num_velocities(mech) # subtract off joint to world
 
-    if length(torques) != num_joints
+    if length(torques) != dof
         error("Torque underactuation specified does not match mechanism dimensions")
     end
 
     m = convert(Int,sum(torques)) # number of actuated (ie, controllable) joints
-    torque_matrix = 1.0*Matrix(I,num_joints,num_joints)[:,torques.== 1] # matrix to convert from control inputs to mechanism joints
+    torque_matrix = Diagonal(I,dof)[:,torques.== 1] # matrix to convert from control inputs to mechanism joints
 
     statecache = StateCache(mech)
     dynamicsresultscache = DynamicsResultCache(mech)
@@ -306,7 +306,7 @@ function Model(mech::Mechanism, torques::Array)
 
     d = Dict{Symbol,Any}()
 
-    evals = [0,]
+    evals = [0,0]
     RBDModel{Continuous}(f, ∇f, n, m, NamedTuple(), mech, evals, d)
 end
 
@@ -441,20 +441,6 @@ $(SIGNATURES)
 Determine if the dynamics in model are in place. i.e. the function call is of
 the form `f!(xdot,x,u)`, where `xdot` is modified in place. Returns a boolean.
 """
-function is_inplace_dynamics(model::Model)::Bool
-    x = rand(model.n)
-    u = rand(model.m)
-    xdot = rand(model.n)
-    try
-        model.f(xdot,x,u)
-    catch x
-        if x isa MethodError
-            return false
-        end
-    end
-    return true
-end
-
 function is_inplace_dynamics(f::Function,n::Int64,m::Int64)::Bool
     x = rand(n)
     u = rand(m)
