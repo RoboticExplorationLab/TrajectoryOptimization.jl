@@ -28,7 +28,6 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
             z = 0.
             alpha = 0.0
             expected = 0.
-            println("max iter reached")
             # @logmsg InnerLoop "Max iterations (forward pass)"
             regularization_update!(solver,:increase) # increase regularization
             solver.ρ[1] += solver.opts.bp_reg_fp

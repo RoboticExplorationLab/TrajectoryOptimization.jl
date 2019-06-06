@@ -3,11 +3,11 @@ function rollout!(prob::Problem{T,Discrete},solver::iLQRSolver{T},alpha::T=1.0) 
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
 
-    initial_condition!(X̄[1],prob)
+    initial_condition!(prob,solver,alpha)
 
     for k = 2:prob.N
         # Calculate state trajectory difference
-        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
+        δx = state_diff(prob,solver,k-1)
 
         # Calculate updated control
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
@@ -26,7 +26,7 @@ end
 function rollout!(prob::Problem{T,Discrete}) where T
     N = prob.N
     if !all(isfinite.(prob.X[1]))
-        initial_condition!(prob.X[1],prob)
+        initial_condition!(prob)
         rollout!(prob.X, prob.model, prob.U, prob.dt)
     end
 end
@@ -48,20 +48,28 @@ function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajecto
 end
 rollout(prob::Problem{T,Discrete}) where T = rollout(prob.model, prob.x0, prob.U, prob.dt)
 
-function initial_condition!(X::AbstractVector{T},prob::Problem{T}) where T
-    m = prob.model.m; n = prob.model.n
+function initial_condition!(prob::Problem{T},X::Vector{T}=prob.X[1]) where T
+    n = prob.model.n
     X[1:n] = copy(prob.x0)
+end
 
+function initial_condition!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
+    m = prob.model.m; n = prob.model.n
+
+    initial_condition!(prob,solver.X̄[1])
+
+    # Modified initial state
     m̄ = length(prob.U[1])
     if m̄ != m
         m_dif = m̄ - m
-        X[(n-m_dif) .+ (1:m_dif)] = prob.U[1][m .+ (1:m_dif)]
+        δx = state_diff(prob,solver,1)
+        solver.X̄[1][n .+ (1:m_dif)] = (prob.U[1] + solver.K[1]*δx + alpha*solver.d[1])[m .+ (1:m_dif)]
     end
 end
 
-function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T
+function state_diff(prob::Problem{T,Discrete},solver::iLQRSolver{T},k::Int) where T
     if true
-        x̄ - x
+        return solver.X̄[k] - prob.X[k]
     else
         nothing #TODO quaternion
     end

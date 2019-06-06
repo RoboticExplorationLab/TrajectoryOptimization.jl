@@ -20,7 +20,7 @@ tf = 5.
 lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # options
-verbose=false
+verbose=true
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,constraint_tolerance=1.0e-5,
     cost_tolerance=1.0e-5,cost_tolerance_intermediate=1.0e-5,opts_uncon=opts_ilqr,iterations=30,

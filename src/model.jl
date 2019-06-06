@@ -163,12 +163,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVec
 end
 
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
-    model.f(ẋ,x,u,zeros(model.r))
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
     model.evals[1] += 1
 end
 
 function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
-    model.f(ẋ,x,u,w)
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],w)
     model.evals[1] += 1
 end
 
@@ -178,12 +178,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
 end
 
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector)
-    model.f(ẋ,x,u,zeros(model.r))
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
     model.evals[1] += 1
 end
 
 function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector)
-    model.f(ẋ,x,u,w)
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],w)
     model.evals[1] += 1
 end
 
@@ -193,12 +193,12 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
 end
 
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
-    model.f(ẋ,x,u,zeros(model.r),dt)
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r),dt)
     model.evals[1] += 1
 end
 
 function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
-    model.f(ẋ,x,u,w,dt)
+    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],w,dt)
     model.evals[1] += 1
 end
 
