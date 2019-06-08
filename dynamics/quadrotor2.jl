@@ -1,14 +1,5 @@
-
-quad_params = (m=0.5,
-             J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
-             Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
-             gravity=SVector(0,0,-9.81),
-             motor_dist=0.1750,
-             kf=1.0,
-             km=0.0245)
-
-include("quaternions.jl")
-function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params) where T
+using StaticArrays
+function quadrotor_dynamics2(x::AbstractVector,u::AbstractVector,params) where T
       #TODO change concatentations to make faster!
       # Quaternion representation
       # Modified from D. Mellinger, N. Michael, and V. Kumar,
@@ -31,11 +22,13 @@ function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVe
       # omega3
 
       # x = X[1:3]
-      q = normalize(Quaternion(view(x,4:7)))
+      q = normalize(Quaternion(x[SVector(4,5,6,7)]))
       # q = view(x,4:7)
       # normalize!(q)
-      v = view(x,8:10)
-      omega = view(x,11:13)
+      # v = view(x,8:10)
+      v = x[SVector(8,9,10)]
+      # omega = view(x,11:13)
+      omega = x[SVector(11,12,13)]
 
       # Parameters
       m = params[:m] # mass
@@ -50,10 +43,11 @@ function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVe
       w4 = u[4]
 
       kf = params[:kf]; # 6.11*10^-8;
-      F1 = kf*w1;
-      F2 = kf*w2;
-      F3 = kf*w3;
-      F4 = kf*w4;
+      # F = kf*u
+      F1 = kf*w1
+      F2 = kf*w2
+      F3 = kf*w3
+      F4 = kf*w4
       F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
 
       km = params[:km]
@@ -63,12 +57,12 @@ function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVe
       M4 = km*w4;
       tau = @SVector [L*(F2-F4), L*(F3-F1), (M1-M2+M3-M4)] #total rotor torque in body frame
 
-      ẋ[1:3] = v # velocity in world frame
+      xdot = v # velocity in world frame
       # ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
-      ẋ[4:7] = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
-      ẋ[8:10] = g + (1/m)*(q*F) #acceleration in world frame
-      ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
-      return tau, omega, J, Jinv
+      qdot = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
+      vdot = g + (1/m)*(q*F) #acceleration in world frame
+      ωdot = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
+      return [xdot; qdot; vdot; ωdot]
 end
 
-quadrotor_model = Model(quadrotor_dynamics!, 13, 4, quad_params)
+quadrotor_model2 = Model(quadrotor_dynamics2!, 13, 4, quad_params)
