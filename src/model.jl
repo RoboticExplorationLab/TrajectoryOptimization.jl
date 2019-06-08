@@ -171,11 +171,6 @@ function evaluate!(ẋ::AbstractVector,model::Model{Continuous},x,u)
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{Discrete},x::AbstractVector,u::AbstractVector)
-    model.f(ẋ,x,u)
-    model.evals[1] += 1
-end
-
 function evaluate!(ẋ::AbstractVector,model::Model{Discrete},x,u,dt)
     model.f(ẋ,x,u,dt)
     model.evals[1] += 1

@@ -181,6 +181,20 @@ function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
     return nothing
 end
 
+function hessian!(hess, cost::QuadraticCost,
+        x::AbstractVector, u::AbstractVector)
+    hess.xx .= cost.Q
+    hess.uu .= cost.R
+    hess.ux .= cost.H
+    hess.xu .= cost.H'
+    return nothing
+end
+
+function hessian!(hess, cost::QuadraticCost, xN::AbstractVector)
+    hess .= cost.Qf
+    return nothing
+end
+
 function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
 end

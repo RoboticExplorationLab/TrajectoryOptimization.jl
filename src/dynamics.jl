@@ -5,6 +5,7 @@ using TrajectoryOptimization
 using RigidBodyDynamics
 using LinearAlgebra
 using DocStringExtensions
+using StaticArrays
 
 export
     pendulum_model,
