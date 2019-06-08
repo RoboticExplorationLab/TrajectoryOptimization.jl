@@ -140,3 +140,75 @@ function pack(X,U)
     part_z = create_partition(n,m,N,uN)
     Z = pack(X,U,part_z)
 end
+
+
+struct PrimalDual{T} <: AbstractArray{T,1}
+    V::Vector{T}
+    Z::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    X::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
+    U::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
+    Λ::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    λ::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+end
+
+
+
+function PrimalDual(prob::Problem{T}) where T
+    n,m,N = size(prob)
+    NN = N*n + (N-1)*m
+    P = sum(num_constraints(prob)) + N*n
+
+    V = zeros(T, NN+P)
+    Z = view(V,1:NN)
+    Λ = view(V,NN .+ (1:P))
+
+    part_z = create_partition(n,m,N)
+    X = [view(V,part_z.X[:,k]) for k = 1:N]
+    U = [view(V,part_z.U[:,k]) for k = 1:N-1]
+    λ = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N-1]
+    copyto!.(X, prob.X)
+    copyto!.(U, prob.U)
+    PrimalDual(V, Z, X, U, Λ, λ)
+end
+
+function PrimalDual(V::Vector, n::Int, m::Int, N::Int, P::Int) where T
+    n,m,N = size(prob)
+    NN = N*n + (N-1)*m
+    P = sum(num_constraints(prob)) + (N-1)*n
+
+    Z = view(V,1:NN)
+    Λ = view(V,NN .+ (1:P))
+
+    part_z = create_partition(n,m,N)
+    X = [view(V,part_z.X[:,k]) for k = 1:N]
+    U = [view(V,part_z.U[:,k]) for k = 1:N-1]
+    λ = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N-1]
+    copyto!.(X, prob.X)
+    copyto!.(U, prob.U)
+    PrimalDual(V, Z, X, U, Λ, λ)
+end
+
+
+function Base.copy(V::PrimalDual)
+    V2 = copy(V.V)
+    Z = view(V2, V.Z.indices[1])
+    N = length(V.X)
+    X = [view(Z, V.X[k].indices[1]) for k = 1:N]
+    U = [view(Z, V.U[k].indices[1]) for k = 1:N-1]
+    Λ = view(V2, V.Λ.indices[1])
+    λ = [view(V2, V.λ[k].indices[1]) for k = 1:N-1]
+    PrimalDual(V2, Z, X, U, Λ, λ)
+end
+
+
+import Base: size, length, getindex, setindex
+size(V::PrimalDual) = size(V.V)
+length(V::PrimalDual) = length(V.V)
+getindex(V::PrimalDual, i::Int) = V.V[i]
+setindex!(V::PrimalDual, v, i::Int) = setindex!(V.V, v, i)
+IndexStyle(::PrimalDual) = IndexLinear()
+
++(V::PrimalDual, A::Vector) = begin V.V .+= A; V end
+
+primals(V::PrimalDual) = V.Z
+duals(V::PrimalDual) = V.Λ
