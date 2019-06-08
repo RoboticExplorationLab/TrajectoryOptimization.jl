@@ -62,8 +62,10 @@ function initial_condition!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0)
     m̄ = length(prob.U[1])
     if m̄ != m
         m_dif = m̄ - m
+        n̄ = n - m_dif
+
         δx = state_diff(prob,solver,1)
-        solver.X̄[1][n .+ (1:m_dif)] = (prob.U[1] + solver.K[1]*δx + alpha*solver.d[1])[m .+ (1:m_dif)]
+        solver.X̄[1][n̄ .+ (1:m_dif)] = (prob.U[1] + solver.K[1]*δx + alpha*solver.d[1])[m .+ (1:m_dif)]
     end
 end
 

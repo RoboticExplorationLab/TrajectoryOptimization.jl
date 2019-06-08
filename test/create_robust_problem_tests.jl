@@ -10,13 +10,12 @@ Q = 1.0*Diagonal(I,n)
 Qf = 1000.0*Diagonal(I,n)
 R = 1.0*Diagonal(I,m)
 
-Qr = copy(Q)
-Qfr = copy(Qf)
-Rr = copy(R)
+Qr = 1.0*Diagonal(I,n)
+Qfr = 1.0*Diagonal(I,n)
+Rr = 1.0*Diagonal(I,m)
 
 x0 = [0; 0.]
-xf = [1.0; 0] # (ie, swing up)
-
+xf = [1.0; 0]
 D = Diagonal((0.2^2)*ones(r))
 E1 = Diagonal(1.0e-6*ones(n))
 H1 = zeros(n,r)
@@ -27,7 +26,7 @@ verbose = true
 opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose)
 opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-3)
 
-N = 201
+N = 101
 tf = 1.0
 dt = tf/(N-1)
 U0 = [ones(m) for k = 1:N-1]
@@ -50,8 +49,8 @@ initial_controls!(prob,U0)
 # rollout!(prob)
 solve!(prob,opts_ilqr)
 plot(prob.X)
-Kd,Pd = tvlqr_dis(prob,Q,R,Qf)
-Kc,Sc = tvlqr_con_rk3_uncertain(prob,Q,R,Qf,xf)
+Kd,Pd = tvlqr_dis(prob,Qr,Rr,Qfr)
+Kc,Sc = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
 #
 Pd_vec = [vec(Pd[k]) for k = 1:N]
 Pc_vec = [vec(reshape(Sc[k],n,n)*reshape(Sc[k],n,n)') for k = 1:N]
@@ -62,10 +61,12 @@ plot(Pd_vec,label="",linetype=:steppost)
 plot!(Pc_vec,label="")
 
 #create robust problem
-prob_robust = robust_problem(prob,E1,H1,D,Q,R,Qf,Q,R,Qf,xf)
+prob_robust = robust_problem(prob,E1,H1,D,Qr,Rr,Qfr,Q,R,Qf,xf)
 
 n̄ = n + n^2 + n*r + n^2
 m1 = m + n^2
+
+@test length(prob_robust.X[1]) == n̄
 @test prob_robust.x0[(n+n^2+n*r) .+ (1:n^2)] == S1
 @test size(prob_robust.U[1]) == (m1,)
 @test prob_robust.model.n == n̄
@@ -122,7 +123,7 @@ plot(pp)
 @test prob_robust.X[1][1:n] == x0
 @test prob_robust.X[1][end-n^2+1:end] == S1
 @test prob_robust.U[1][1:m] == prob.U[1]
-@test prob_robust.X[end][1:n] == prob.X[end]
+@test isapprox(prob_robust.X[end][1:n],prob.X[end])
 
 ilqr_solver = AbstractSolver(prob_robust,iLQRSolverOptions())
 @test size(ilqr_solver.Ū[1]) == (m1,)
@@ -147,15 +148,23 @@ ilqr_solver = AbstractSolver(prob_robust,iLQRSolverOptions())
 # plot(ss)
 # plot(pp)
 
-prob_robust
+prob_robust = robust_problem(prob,E1,H1,D,Qr,Rr,Qfr,Q,R,Qf,xf)
 
+rollout!(prob_robust)
 
+J = cost(prob_robust)
 jacobian!(prob_robust,ilqr_solver)
 cost_expansion!(prob_robust,ilqr_solver)
-ilqr_solver
 ΔV = backwardpass!(prob_robust,ilqr_solver)
-forwardpass!(prob_robust,ilqr_solver,ΔV,J)
 
+ilqr_solver
+rollout!(prob_robust,ilqr_solver,0.001)
+
+plot(prob_robust.X)
+plot!(ilqr_solver.X̄)
+_J = cost(prob)
+forwardpass!(prob_robust,ilqr_solver,ΔV,J)
+prob_robust.X
 al_solver = AbstractSolver(prob_robust,opts_al)
 prob_al = AugmentedLagrangianProblem(prob_robust,al_solver)
 J = step!(prob_al, al_solver, ilqr_solver)

@@ -24,235 +24,6 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
 
     return K, P
 end
-#
-# function tvlqr_con(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
-#     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
-#     dt = prob.dt
-#
-#     K  = [zeros(T,m,n) for k = 1:N-1]
-#
-#     X_interp = gen_cubic_interp(prob.X,prob.dt)
-#     U_interp = gen_zoh_interp([prob.U...,prob.U[end]],prob.dt)
-#
-#     f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
-#     ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
-#     ∇f(x,u) = ∇f([x;u;zeros(r)])
-#
-#     function _Ac(t)
-#         ∇f(X_interp(t),U_interp(t))[:,1:n]
-#     end
-#
-#     function _Bc(t)
-#         ∇f(X_interp(t),U_interp(t))[:,n .+ (1:m)]
-#     end
-#
-#     function r_dyn_sqrt(ṡ,s,t)
-#         SS = reshape(s,n,n)
-#         ss = inv(SS')
-#         ṡ[1:n^2] = vec(-.5*Q*ss - _Ac(t)'*SS + .5*(SS*SS'*_Bc(t))*inv(R)*(_Bc(t)'*SS));
-#     end
-#
-#     r_dyn_sqrt_wrap(ṡ,z) = r_dyn_sqrt(ṡ,z[1:n^2],z[n^2 + 1])
-#     r_dyn_sqrt_wrap(rand(n^2),[rand(n^2);1.0])
-#
-#     ∇r_dyn_sqrt_wrap(z) = ForwardDiff.jacobian(r_dyn_sqrt_wrap,zeros(n^2),z)
-#
-#     ∇r_dyn_sqrt_wrap(s,t) = ∇r_dyn_sqrt_wrap([s;t])
-#
-#     ∇r_dyn_sqrt_wrap([rand(n^2);1.0])
-#
-#     S = [zeros(n^2) for k = 1:N]
-#     S[N] = vec(cholesky(Qf).U)
-#     _t = [tf]
-#
-#     for k = N:-1:2
-#         # explicit midpoint
-#         k1 = k2 = kg = zero(S[k])
-#         x = S[k]
-#         r_dyn_sqrt(k1, S[k], _t[1]);
-#         k1 *= -dt;
-#         r_dyn_sqrt(k2, S[k] + k1/2, _t[1] - dt/2);
-#         k2 *= -dt;
-#         copyto!(S[k-1], S[k] + k2)
-#
-#         for i = 1:10
-#             Sm = 0.5*(S[k-1] + S[k])
-#             tm = _t[1] - dt/2
-#
-#             r_dyn_sqrt(kg,Sm,tm)
-#             g = S[k-1] - S[k] + dt*kg
-#
-#             A = ∇r_dyn_sqrt_wrap(Sm,tm)[:,1:n^2]
-#
-#             ∇g = Diagonal(I,n^2) + 0.5*dt*A
-#             δs = -∇g\g
-#
-#             S[k-1] += δs
-#         end
-#
-#         _t[1] -= dt
-#     end
-#     Ps = [reshape(S[k],n,n)*reshape(S[k],n,n)' for k = 1:N]
-#
-#     return K, Ps
-# end
-#
-# function tvlqr_con2(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
-#     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
-#     dt = prob.dt
-#
-#     K  = [zeros(T,m,n) for k = 1:N-1]
-#
-#     X_interp = gen_cubic_interp(prob.X,prob.dt)
-#     U_interp = gen_zoh_interp([prob.U...,prob.U[end]],prob.dt)
-#
-#     f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)])
-#     ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
-#     ∇f(x,u) = ∇f([x;u])
-#
-#     function _Ac(t)
-#         ∇f(X_interp(t),U_interp(t))[:,1:n]
-#     end
-#
-#     function _Bc(t)
-#         ∇f(X_interp(t),U_interp(t))[:,n .+ (1:m)]
-#     end
-#
-#     function r_dyn_sqrt(ṡ,s,t)
-#         SS = reshape(s,n,n)
-#         ss = inv(SS')
-#         ṡ[1:n^2] = vec(-.5*Q*ss - _Ac(t)'*SS + .5*(SS*SS'*_Bc(t))*inv(R)*(_Bc(t)'*SS));
-#     end
-#
-#     r_dyn_sqrt_wrap(ṡ,z) = r_dyn_sqrt(ṡ,z[1:n^2],z[n^2 + 1])
-#     r_dyn_sqrt_wrap(rand(n^2),[rand(n^2);1.0])
-#
-#     ∇r_dyn_sqrt_wrap(z) = ForwardDiff.jacobian(r_dyn_sqrt_wrap,zeros(n^2),z)
-#
-#     ∇r_dyn_sqrt_wrap(s,t) = ∇r_dyn_sqrt_wrap([s;t])
-#
-#     ∇r_dyn_sqrt_wrap([rand(n^2);1.0])
-#
-#     S = [zeros(n^2) for k = 1:N]
-#     S[N] = vec(sqrt(Qf))
-#     _t = [tf]
-#
-#     for k = N:-1:2
-#         # explicit midpoint
-#         k1 = k2 = kg = zero(S[k])
-#         x = S[k]
-#         r_dyn_sqrt(k1, S[k], _t[1]);
-#         k1 *= -dt;
-#         r_dyn_sqrt(k2, S[k] + k1/2, _t[1] - dt/2);
-#         k2 *= -dt;
-#         copyto!(S[k-1], S[k] + k2)
-#
-#         for i = 1:10
-#             Sm = 0.5*(S[k-1] + S[k])
-#             tm = _t[1] - dt/2
-#
-#             r_dyn_sqrt(kg,Sm,tm)
-#             g = S[k-1] - S[k] + dt*kg
-#
-#             A = ∇r_dyn_sqrt_wrap(Sm,tm)[:,1:n^2]
-#
-#             ∇g = Diagonal(I,n^2) + 0.5*dt*A
-#             δs = -∇g\g
-#
-#             S[k-1] += δs
-#         end
-#
-#         _t[1] -= dt
-#     end
-#     Ps = [reshape(S[k],n,n)*reshape(S[k],n,n)' for k = 1:N]
-#
-#     return K, Ps
-# end
-
-function tvlqr_con_rk3(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
-    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
-    dt = prob.dt
-
-    K  = [zeros(T,m,n) for k = 1:N-1]
-    P = [zeros(T,n,n) for k = 1:N]
-
-    # continous time riccati
-    function riccati(ṡ,s,t)
-        S = reshape(s,n,n)
-        ṡ .= vec(-.5*Q*inv(S') - _Ac(t)'*S + .5*(S*S'*_Bc(t))*(R\(_Bc(t)'*S)));
-    end
-
-    f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)])
-    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
-    ∇f(x,u) = ∇f([x;u])
-
-    function riccati(ṡ,s,x,u)
-        S = reshape(s,n,n)
-        F = ∇f(x,u)
-        A = F[:,1:n]
-        B = F[:,n .+ (1:m)]
-
-        Si = inv(S')
-        ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
-    end
-
-    riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
-    riccati_wrap(rand(n^2),[rand(n^2);rand(n);rand(m)])
-
-    ∇riccati(z) = ForwardDiff.jacobian(riccati_wrap,zeros(eltype(z),n^2),z)
-    ∇riccati(s,x,u) = ∇riccati([s;x;u])
-
-    S = [zeros(n^2) for k = 1:N]
-    X = prob.X
-    U = prob.U
-
-    S[N] = vec(cholesky(Qf).U)
-    P[N] = Qf
-    for k = N-1:-1:1
-        println(k)
-        s1 = s2 = s3 = zero(S[k])
-        fc1 = fc2 = fc3 = zero(X[k])
-
-        copyto!(S[k], S[k+1])
-        g = Inf
-        gp = Inf
-        α = 1.0
-        cnt = 0
-        while norm(g) > 1.0e-12
-            cnt += 1
-            println(norm(g))
-
-            gp = copy(g)
-            if cnt > 1000
-                error("Integration convergence fail")
-            end
-            riccati(s1,S[k+1],X[k+1],U[k])
-            riccati(s3,S[k],X[k],U[k])
-            fc(fc1,X[k+1],U[k])
-            fc(fc3,X[k],U[k])
-
-            Sm = 0.5*(S[k+1] + S[k]) - dt/8*(s1 - s3)
-            Xm = 0.5*(X[k+1] + X[k]) - dt/8*(fc1 - fc3)
-            riccati(s2,Sm,Xm,U[k])
-
-            g = S[k] - S[k+1] + dt/6*s1 + 4/6*dt*s2 + dt/6*s3
-
-            A1 = ∇riccati(Sm,Xm,U[k])[:,1:n^2]
-            A2 = ∇riccati(S[k],X[k],U[k])[:,1:n^2]
-
-
-            ∇g = Diagonal(I,n^2) + 4/6*dt*A1*(0.5*Diagonal(I,n^2) + dt/8*A2) + dt/6*A2
-            δs = -∇g\g
-
-            S[k] += α*δs
-        end
-        P[k] = reshape(S[k],n,n)*reshape(S[k],n,n)'
-        Bc = ∇f([X[k],U[k]])[:,n .+ (1:m)]
-        K[k] = R\(Bc'*P[k])
-    end
-
-    return K, S
-end
 
 function tvlqr_sqrt_con_rk3_uncertain(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
@@ -334,36 +105,6 @@ function tvlqr_sqrt_con_rk3_uncertain(prob::Problem{T,Discrete},Q::AbstractArray
     end
 
     return K, S
-end
-
-
-
-function gen_cubic_interp(X,dt)
-    N = length(X); n = length(X[1])
-
-    function interp(t)
-        j = t/dt + 1.
-        x = zeros(eltype(t),n)
-        for i = 1:n
-            x[i] = interpolate([X[k][i] for k = 1:N],BSpline(Cubic(Line(OnGrid()))))(j)
-        end
-        return x
-    end
-end
-
-function gen_zoh_interp(X,dt)
-    N = length(X); n = length(X[1])
-
-    function interp(t)
-        if (t/dt + 1.0)%floor(t/dt + 1.0) < 0.99999
-            j = convert(Int64,floor(t/dt)) + 1
-        else
-            j = convert(Int64,ceil(t/dt)) + 1
-        end
-
-        interpolate(X,BSpline(Constant()))(j)
-
-    end
 end
 
 "Robust model from model"
@@ -492,14 +233,14 @@ function cost_expansion!(Q::ExpansionTrajectory{T},robust_cost::RobustCost,X::Ve
         y = [X[k];U[k]]
         ∇c = robust_cost.∇c_stage(y)
         ∇²c = robust_cost.∇²c_stage(y)
-        Q[k].x .= ∇c[idx.z]
-        Q[k].u .= ∇c[n̄ .+ (1:m)]
-        Q[k].xx .= ∇²c[idx.z,idx.z]
-        Q[k].uu .= ∇²c[n̄ .+ (1:m), n̄ .+ (1:m)]
-        Q[k].ux .= ∇²c[idx.z, n̄ .+ (1:m)]'
+        Q[k].x .+= ∇c[idx.z]
+        Q[k].u .+= ∇c[n̄ .+ (1:m)]
+        Q[k].xx .+= ∇²c[idx.z,idx.z]
+        Q[k].uu .+= ∇²c[n̄ .+ (1:m), n̄ .+ (1:m)]
+        Q[k].ux .+= ∇²c[idx.z, n̄ .+ (1:m)]'
     end
-    Q[N].x .= robust_cost.∇c_term(X[N])
-    Q[N].xx .= robust_cost.∇²c_term(X[N])
+    Q[N].x .+= robust_cost.∇c_term(X[N])
+    Q[N].xx .+= robust_cost.∇²c_term(X[N])
 end
 
 function robust_problem(prob::Problem{T},E1::AbstractArray{T},
@@ -515,13 +256,12 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)),z=(1:n̄))
 
     rollout!(prob)
-    _K, _S = tvlqr_sqrt_con_rk3_uncertain(prob,Q,R,Qf,xf)
+    _K, _S = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
     S1 = _S[1]
 
     # generate optimal feedback matrix function
     Zc = zeros(n,n+m+r)
 
-    # ∇fc = prob.model.info[:∇fc]
     f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)],zeros(eltype(z),r))
     ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
     ∇f(x,u) = ∇f([x;u])
@@ -530,9 +270,6 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         x = z[idx.x]
         s = z[idx.s]
         P = reshape(s,n,n)*reshape(s,n,n)'
-        # Zc = zeros(eltype(z),n,n+m+r)
-
-        # ∇fc(Zc,x,u[1:m],zeros(eltype(z),r))
         Bc = ∇f(x,u)[:,n .+ (1:m)]
         R\(Bc'*P)
     end
@@ -892,4 +629,32 @@ function gen_robust_exp_funcs(fc::Function,idx::NamedTuple,Qr::AbstractArray,Rr:
     ∇²sc_term(y) = ForwardDiff.hessian(stage_cost_term,y)
 
     return ∇sc, ∇²sc, ∇sc_term, ∇²sc_term
+end
+
+function gen_cubic_interp(X,dt)
+    N = length(X); n = length(X[1])
+
+    function interp(t)
+        j = t/dt + 1.
+        x = zeros(eltype(t),n)
+        for i = 1:n
+            x[i] = interpolate([X[k][i] for k = 1:N],BSpline(Cubic(Line(OnGrid()))))(j)
+        end
+        return x
+    end
+end
+
+function gen_zoh_interp(X,dt)
+    N = length(X); n = length(X[1])
+
+    function interp(t)
+        if (t/dt + 1.0)%floor(t/dt + 1.0) < 0.99999
+            j = convert(Int64,floor(t/dt)) + 1
+        else
+            j = convert(Int64,ceil(t/dt)) + 1
+        end
+
+        interpolate(X,BSpline(Constant()))(j)
+
+    end
 end

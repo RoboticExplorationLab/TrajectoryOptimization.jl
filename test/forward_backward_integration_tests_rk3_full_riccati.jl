@@ -17,19 +17,13 @@ xf = [pi; 0.]
 #
 Q = 1.0*Diagonal(ones(n))
 R = 1.0*Diagonal(ones(m))
-Qf = 1000.0*Diagonal(ones(n))
+Qf = 100.0*Diagonal(ones(n))
 
-N = 201
+N = 51
 tf = 1.0
 dt = tf/(N-1)
 
 U = [ones(m) for k = 1:N-1]
-
-# continous time riccati
-function riccati(ṡ,s,t)
-    S = reshape(s,n,n)
-    ṡ .= vec(-.5*Q*inv(S') - _Ac(t)'*S + .5*(S*S'*_Bc(t))*(R\(_Bc(t)'*S)));
-end
 
 f(ẋ,z) = model.f(ẋ,z[1:n],z[n .+ (1:m)])
 ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
@@ -113,14 +107,13 @@ end
 plot(X_for,color=:orange,label="forward")
 plot!(X,color=:purple,style=:dash,label="backward")
 
-function riccati(ṡ,s,x,u)
-    S = reshape(s,n,n)
+function riccati(ṗ,p,x,u)
+    P = reshape(p,n,n)
     F = ∇f(x,u)
     A = F[:,1:n]
     B = F[:,n .+ (1:m)]
 
-    Si = inv(S')
-    ṡ .= vec(-.5*Q*Si - A'*S + .5*(S*S'*B)*(R\(B'*S)))
+    ṗ .= vec(-1.0*(A'*P + P*A - P*B*(R\(B'*P)) + Q))
 end
 
 riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
@@ -134,7 +127,7 @@ S = [zeros(n^2) for k = 1:N]
 # X = prob.X
 # U = prob.U
 
-S[N] = vec(cholesky(Qf).U)
+S[N] .= vec(Qf)
 
 for k = N-1:-1:1
     println(k)
@@ -150,7 +143,8 @@ for k = N-1:-1:1
         println(norm(g))
 
         gp = copy(g)
-        if cnt > 1000
+        if cnt > 100
+            println(k)
             error("Integration convergence fail")
         end
         riccati(s1,S[k+1],X[k+1],U[k])
@@ -177,9 +171,8 @@ for k = N-1:-1:1
 end
 
 # plot(S)
-Ps = [vec(reshape(S[k],n,n)*reshape(S[k],n,n)') for k = 1:N]
+Ps = [vec(S[k]) for k = 1:N]
 Sb = copy(S)
-S1 = cholesky(reshape(Sb[1],n,n)*reshape(Sb[1],n,n)').U
 plot(Ps,legend=:left)
 
 # Implicit midpoint Riccati forward
@@ -243,7 +236,7 @@ for k = 1:N-1
     end
 end
 
-Ps_for = [vec(reshape(S[k],n,n)*reshape(S[k],n,n)') for k = 1:N]
+Ps_for = [vec(S[k]) for k = 1:N]
 
 plot(Ps,legend=:left,color=:purple,label="backward")
 plot!(Ps_for,legend=:left,color=:orange,label="forward",style=:dash)
