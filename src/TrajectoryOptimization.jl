@@ -24,6 +24,7 @@ using Plots
 using BenchmarkTools
 using PartedArrays
 using Parameters
+using Rotations
 
 export
     Dynamics
@@ -44,6 +45,9 @@ export
     AugmentedLagrangianSolverOptions,
     AugmentedLagrangianProblem,
     ALTROSolverOptions,
+    DirectSolver,
+    ProjectedNewtonSolver,
+    ProjectedNewtonSolverOptions,
     Discrete,
     Continuous,
     Constraint,
