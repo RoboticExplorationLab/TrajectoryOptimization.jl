@@ -167,9 +167,9 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
 end
 
 "Project dynamically infeasible state trajectory into feasible space using TVLQR"
-function projection!(prob::Problem{T},opts::iLQRSolverOptions{T}) where T
+function projection!(prob::Problem{T},opts::iLQRSolverOptions{T}=iLQRSolverOptions{T}()) where T
     # backward pass - project infeasible trajectory into feasible space using time varying lqr
-    solver_ilqr = AbstractSolver(prob,opts)
+    solver_ilqr = AbstractSolver(prob, opts)
     backwardpass!(prob, solver_ilqr)
 
     # rollout
