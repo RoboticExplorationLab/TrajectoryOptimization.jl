@@ -252,7 +252,7 @@ Assumes x,y are the first two dimensions of the state vector
 function planar_obstacle_constraint(n, m, x_obs, r_obs, label=:obstacle)
     c(v,x,u) = v[1] = circle_constraint(x, x_obs, r_obs)
     c(v,x) = circle_constraint(x, x_obs, r_obs)
-    Constraint{Inequality}(c, n, m, 1, :obstacle)
+    Constraint{Inequality}(c, n, m, 1, label)
 end
 
 """$(SIGNATURES)
