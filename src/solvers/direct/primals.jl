@@ -147,8 +147,11 @@ struct PrimalDual{T} <: AbstractArray{T,1}
     Z::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
     X::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
     U::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
-    Λ::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    Y::SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}
+    ν::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
     λ::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+    active_set::Vector{Bool}
+    a::Vector{SubArray{Bool,1,Vector{Bool},Tuple{UnitRange{Int}},true}}
 end
 
 
@@ -156,36 +159,48 @@ end
 function PrimalDual(prob::Problem{T}) where T
     n,m,N = size(prob)
     NN = N*n + (N-1)*m
-    P = sum(num_constraints(prob)) + N*n
+    p_colloc = N*n
+    p = num_constraints(prob)
+    pcum = insert!(cumsum(p),1,0)
+    P = sum(p) + p_colloc
 
     V = zeros(T, NN+P)
     Z = view(V,1:NN)
-    Λ = view(V,NN .+ (1:P))
+    Y = view(V,NN .+ (1:P))
 
     part_z = create_partition(n,m,N)
     X = [view(V,part_z.X[:,k]) for k = 1:N]
     U = [view(V,part_z.U[:,k]) for k = 1:N-1]
-    λ = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N-1]
+    ν = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N]
+    λ = [view(V, NN + p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
+    active_set = ones(Bool,P)
+    a = [view(active_set, p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
     copyto!.(X, prob.X)
     copyto!.(U, prob.U)
-    PrimalDual(V, Z, X, U, Λ, λ)
+    PrimalDual(V, Z, X, U, Y, ν, λ, active_set, a)
 end
 
 function PrimalDual(V::Vector, n::Int, m::Int, N::Int, P::Int) where T
     n,m,N = size(prob)
     NN = N*n + (N-1)*m
-    P = sum(num_constraints(prob)) + (N-1)*n
+    p_colloc = N*n
+    p = num_constraints(prob)
+    pcum = insert!(cumsum(p),1,0)
+    P = sum(p) + p_colloc
 
     Z = view(V,1:NN)
-    Λ = view(V,NN .+ (1:P))
+    Y = view(V,NN .+ (1:P))
 
     part_z = create_partition(n,m,N)
     X = [view(V,part_z.X[:,k]) for k = 1:N]
     U = [view(V,part_z.U[:,k]) for k = 1:N-1]
-    λ = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N-1]
+    ν = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N]
+    λ = [view(V, NN + p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
+    active_set = ones(Bool,P)
+    a = [view(active_set, p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
     copyto!.(X, prob.X)
     copyto!.(U, prob.U)
-    PrimalDual(V, Z, X, U, Λ, λ)
+    PrimalDual(V, Z, X, U, Y, ν, λ, active_set, a)
 end
 
 
@@ -195,9 +210,12 @@ function Base.copy(V::PrimalDual)
     N = length(V.X)
     X = [view(Z, V.X[k].indices[1]) for k = 1:N]
     U = [view(Z, V.U[k].indices[1]) for k = 1:N-1]
-    Λ = view(V2, V.Λ.indices[1])
-    λ = [view(V2, V.λ[k].indices[1]) for k = 1:N-1]
-    PrimalDual(V2, Z, X, U, Λ, λ)
+    Y = view(V2, V.Y.indices[1])
+    ν = [view(V2, V.ν[k].indices[1]) for k = 1:N]
+    λ = [view(V2, V.λ[k].indices[1]) for k = 1:N]
+    active_set = copy(V.active_set)
+    a = [view(active_set, V.a[k].indices[1]) for k = 1:N]
+    PrimalDual(V2, Z, X, U, Y, ν, λ, active_set, a)
 end
 
 
@@ -211,4 +229,4 @@ IndexStyle(::PrimalDual) = IndexLinear()
 +(V::PrimalDual, A::Vector) = begin V.V .+= A; V end
 
 primals(V::PrimalDual) = V.Z
-duals(V::PrimalDual) = V.Λ
+duals(V::PrimalDual) = V.Y

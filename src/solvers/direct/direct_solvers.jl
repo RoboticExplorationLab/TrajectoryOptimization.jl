@@ -14,6 +14,10 @@ include("primals.jl")
 @with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     "Print output to console"
     verbose::Bool = true
+
+    "Tolerance for checking active inequality constraints. Positive values move the boundary further into the feasible region (i.e. negative)"
+    active_set_tolerance = 1e-3
+
 end
 
 
@@ -31,6 +35,7 @@ struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     ∇F::PartedMatTrajectory{T}
     C::PartedVecTrajectory{T}
     ∇C::PartedMatTrajectory{T}
+    a::PartedVecTrajectory{Bool}
     p::Vector{Int}
 end
 
@@ -49,18 +54,20 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
 
     # Create Trajectories
     Q          = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
-    ∇F         = [PartedMatrix(zeros(n,n+m+1),part_f)       for k = 1:N-1]
+    ∇F         = [PartedMatrix(zeros(n,n+m+1),part_f)       for k = 1:N]
     C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
     ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
+    a          = [PartedVector(Bool,constraints[k],:stage)     for k = 1:N-1]
     C          = [C...,  PartedVector(T,constraints[N],:terminal)]
     ∇C         = [∇C..., PartedMatrix(T,constraints[N],n,m,:terminal)]
+    a          = [a...,  PartedVector(Bool,constraints[N],:terminal)]
 
     c_term = terminal(constraints[N])
     p_N = num_constraints(c_term)
     fVal = [zeros(T,n) for k = 1:N]
     p = num_constraints(prob)
 
-    solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, Q, fVal, ∇F, C, ∇C, p)
+    solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, Q, fVal, ∇F, C, ∇C, a, p)
     reset!(solver)
     return solver
 end

@@ -52,7 +52,7 @@ function infeasible_to_feasible_problem(prob::Problem{T},prob_altro::Problem{T},
     end
 
     if opts.dynamically_feasible_projection
-        projection!(prob_altro_feasible,opts.opts_al.opts_uncon)
+        projection!(prob_altro_feasible, opts.opts_al.opts_uncon)
     end
 
     return prob_altro_feasible
