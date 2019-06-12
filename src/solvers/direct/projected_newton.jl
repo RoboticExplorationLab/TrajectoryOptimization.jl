@@ -4,10 +4,10 @@ cost(prob::Problem, V::PrimalDual) = cost(prob.obj, V.X, V.U)
 function dynamics_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     N = prob.N
     X,U = V.X, V.U
-    solver.fVal[1] = V.X[1] - prob.x0
+    solver.fVal[1] .= V.X[1] - prob.x0
     for k = 1:N-1
          evaluate!(solver.fVal[k+1], prob.model, X[k], U[k], prob.dt)
-         solver.fVal[k+1] -= X[k+1]
+         solver.fVal[k+1] .-= X[k+1]
      end
  end
 
@@ -16,8 +16,15 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
     n,m,N = size(prob)
     X,U = V.X, V.U
     solver.∇F[1].xx .= Diagonal(I,n)
+    solver.Y[1:n,1:n] .= Diagonal(I,n)
+    off1 = n
+    off2 = 0
     for k = 1:N-1
         jacobian!(solver.∇F[k+1], prob.model, X[k], U[k], prob.dt)
+        solver.Y[off1 .+ (1:n), off2 .+ (1:n)] .= solver.∇F[k+1].xx
+        solver.Y[off1 .+ (1:n), off2 .+ (n+1:n+m)] .= solver.∇F[k+1].xu
+        off1 += n
+        off2 += n+m
     end
 end
 
@@ -27,6 +34,15 @@ function update_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=sol
         evaluate!(solver.C[k], prob.constraints[k], V.X[k], V.U[k])
     end
     evaluate!(solver.C[N], prob.constraints[N], V.X[N])
+end
+
+
+function constraint_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    n,m,N = size(prob)
+    for k = 1:N-1
+        jacobian!(solver.∇C[k], prob.constraints[k], V.X[k], V.U[k])
+    end
+    jacobian!(solver.∇C[N], prob.constraints[N], V.X[N])
 end
 
 cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V) =
@@ -365,10 +381,11 @@ function newton_step0(prob::Problem, V::PrimalDual, tol=1e-3)
     A = [H Y'; Y zeros(Pa,Pa)]
     b = [g; y]
     δV = zero(V.V)
+    @show cond(Array(Y*Y'))
     δV[aa] = -A\b
     err = A*δV[aa] + b
     println("err: ", norm(err))
-    println("max r: $norm(b)")
+    println("max r: ", norm(b))
 
 
     V1 = copy(V_)
@@ -399,6 +416,7 @@ function newton_step0(prob::Problem, V::PrimalDual, tol=1e-3)
         δV1 = α.*δV
         V1.V .= V_.V + δV1
 
+        act_set(V_, tol)
         d1 = dyn(V1)
         c1 = con(V1)
         y = [d1; c1][a]
@@ -447,4 +465,32 @@ function newton_step0(prob::Problem, V::PrimalDual, tol=1e-3)
     J = mycost(V1)
     println("New Cost: $J")
     return V1
+end
+
+function solve(prob::Problem, opts::ProjectedNewtonSolverOptions)::Problem
+    solver = ProjectedNewtonSolver(prob, opts)
+    V = solver.V
+    V1 = newton_step0(prob, V, opts.active_set_tolerance)
+    res = copy(prob)
+    copyto!(res.X, V1.X)
+    copyto!(res.U, V1.U)
+    # projection!(res)
+    return res
+end
+
+function calc_violations(solver::Union{AugmentedLagrangianSolver{T}, ProjectedNewtonSolver{T}}) where T
+    c_max = 0.0
+    C = solver.C
+    N = length(C)
+    p = length.(C)
+    v = [zeros(pi) for pi in p]
+    if length(C[1]) > 0
+        for k = 1:N
+            v[k][C[k].parts[:equality]] = abs.(C[k].equality)
+            if length(C[k].inequality) > 0
+                v[k][C[k].parts[:inequality]] = max.(C[k].inequality, 0)
+            end
+        end
+    end
+    return v
 end

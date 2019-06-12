@@ -30,13 +30,17 @@ struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     opts::ProjectedNewtonSolverOptions{T}
     stats::Dict{Symbol,Any}
     V::PrimalDual{T}
-    Q::Vector{Expansion{T}}
-    fVal::VectorTrajectory{T}
+    H::SparseMatrixCSC{T,Int}      # Cost Hessian
+    g::Vector{T}                   # Cost gradient
+    Y::SparseMatrixCSC{T,Int}      # Constraint Jacobian
+    y::Vector{T}                   # Constraint Violations
+
+    fVal::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+    # ∇F::Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P}} where P
     ∇F::PartedMatTrajectory{T}
-    C::PartedVecTrajectory{T}
-    ∇C::PartedMatTrajectory{T}
-    a::PartedVecTrajectory{Bool}
-    p::Vector{Int}
+    C::Vector{PartedArray{T,1,SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}, P} where P}
+    ∇C::Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P} where P}
+    a::Vector{Bool}
 end
 
 function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T}) where {T,D}
@@ -51,6 +55,42 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     c_stage = [stage(constraints[k]) for k = 1:N-1]
     c_part = [create_partition(c_stage[k]) for k = 1:N-1]
     c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
+
+    NN = N*n + (N-1)*m
+    p = num_constraints(prob)
+    pcum = insert!(cumsum(p),1,0)
+    P = sum(p) + N*n
+
+    # Build Blocks
+    H = spzeros(NN,NN)
+    g = zeros(NN)
+    Y = spzeros(P,NN)
+    y = zeros(P)
+    a = ones(Bool, P)
+
+    # Build views
+    fVal = [view(y,(k-1)*n .+ (1:n)) for k = 1:N]
+    C = [PartedArray(view(y, N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
+
+    # ∇F = [PartedArray(view(Y, (k-1)*n .+ (1:n), (k-1)*(n+m+1) .+ (1:n+m*(k<N)+1)), part_f) for k = 1:N]
+    ∇F = [PartedMatrix(zeros(n,n+m+1), part_f) for k = 1:N]
+    ∇C = [begin
+            if k == N
+                d2 = n
+                stage = :terminal
+            else
+                d2 = n+m
+                stage = :stage
+            end
+            part = create_partition2(constraints[k], n, m, stage)
+            PartedArray(view(Y, N*n + pcum[k] .+ (1:p[k]), (k-1)*(n+m) .+ (1:d2)), part)
+        end for k = 1:N]
+
+    # return C
+    solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, H, g, Y, y, fVal, ∇F, C, ∇C, a)
+    reset!(solver)
+    return solver
+
 
     # Create Trajectories
     Q          = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]

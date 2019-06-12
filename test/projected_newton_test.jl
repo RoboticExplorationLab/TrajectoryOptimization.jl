@@ -4,7 +4,7 @@ costfun = Dynamics.car_costfun
 xf = [0,1,0]
 N = 51
 n,m = model.n, model.m
-bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=2)
+bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=-2, u_max=2)
 bnd1 = BoundConstraint(n,m, u_min=bnd.u_min, u_max=bnd.u_max)
 goal = goal_constraint(xf)
 obs = (([0.2, 0.6], 0.25),
@@ -67,23 +67,19 @@ mycost, grad_cost, hess_cost, dyn, jacob_dynamics, constraints, jacob_con, act_s
     gen_usrfun_newton(prob)
 cost(prob,V) == mycost(Vector(V.Z))
 ForwardDiff.gradient(mycost, Vector(V.Z)) ≈ grad_cost(V)
-ForwardDiff.hessian(mycost, Vector(V.Z)) ≈ hess_cost(V)
+# ForwardDiff.hessian(mycost, Vector(V.Z)) ≈ hess_cost(V)
 jacob_dynamics(V) ≈ ForwardDiff.jacobian(dyn, Vector(V.Z))
 hess_cost(V) ≈ H
 grad_cost(V) ≈ g
 dyn(V) ≈ d
 jacob_dynamics(V) ≈ Array(D)
-H = Diagonal(H)
-Hinv = inv(H)
--D'*((D*Hinv*D')\d)
 
 solver.opts.active_set_tolerance = 0.0
-act_set(V)
+act_set(V,0.0)
 C = constraints(V)
 tmp1 = maximum(C)
+@test tmp1 == max_violation(prob)
 tmp2 = norm(d, Inf)
-findmin(C)
-V.active_set[132]
 @test max(tmp1, tmp2) == norm([d;C][V.active_set],Inf)
 solver.opts.active_set_tolerance = 1e-3
 active_set!(prob, solver)
@@ -106,7 +102,7 @@ jacobian!(solver.∇C, prob.constraints, V.X, V.U)
 
 solver = ProjectedNewtonSolver(prob)
 solver.opts.active_set_tolerance = 1e-6
-mycost, grad_cost, hess_cost, dyn, jacob_dynamics, constraints, jacob_con, act_set =
+mycost, grad_cost, hess_cost, dyn, jacob_dynamics, con, jacob_con, act_set =
     gen_usrfun_newton(prob)
 V = solver.V
 V_ = copy(V)
@@ -126,12 +122,25 @@ NN
 cond(Array(Y*Y'))
 V.active_set
 
+
+
+typeof(H)
 mycost(V)
 norm(grad_cost(V))
 norm(dyn(V),Inf)
 norm([grad_cost(V); dyn(V)])
-V1 = newton_step0(prob, V, 1e-2)
-norm(dyn(V1),Inf)
+V1 = newton_step0(prob, V, 1e-4)
+y = [dyn(V1); con(V1)]
+act_set(V1)
+norm(y[V1.active_set], Inf)
+norm(dyn(V1), Inf)
+update_constraints!(prob, solver, V1)
+max_violation(solver)
+v = calc_violations(solver)
+findmax(maximum.(v))
+v[12]
+solver.C[12]
+
 res = grad_cost(V1) + jacob_dynamics(V1)'duals(V1)
 norm(res)
 mycost(V1)
@@ -139,9 +148,9 @@ V1 = newton_step0(prob, V1)
 V1.X
 
 res = copy(prob)
-projection!(res)
 copyto!(res.X, V1.X)
 copyto!(res.U, V1.U)
+projection!(res)
 cost(res) < cost(prob)
 max_violation(res)
 max_violation(prob)
@@ -152,6 +161,19 @@ plot_circle!(obs[2]...)
 plot_trajectory!(res.X,markershape=:circle)
 plot_trajectory!(res.X)
 plot(res.U)
+
+
+# Solves
+prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
+initial_controls!(prob, ones(m,N-1))
+ilqr = iLQRSolverOptions()
+al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
+res1 = solve(prob, al)
+max_violation(res1)
+
+pn = ProjectedNewtonSolverOptions{Float64}(active_set_tolerance=1e-2)
+res2 = solve(res1, pn)
+max_violation(res2)
 
 
 # Compare
