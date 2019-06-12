@@ -226,7 +226,7 @@ getindex(V::PrimalDual, i::Int) = V.V[i]
 setindex!(V::PrimalDual, v, i::Int) = setindex!(V.V, v, i)
 IndexStyle(::PrimalDual) = IndexLinear()
 
-+(V::PrimalDual, A::Vector) = begin V.V .+= A; V end
++(V::PrimalDual, A::Vector) = begin V_ = copy(V); V_.V .+= A; V_ end
 
 primals(V::PrimalDual) = V.Z
 duals(V::PrimalDual) = V.Y

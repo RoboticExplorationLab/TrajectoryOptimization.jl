@@ -32,13 +32,47 @@ max_violation(prob)
 
 # Create PN Solver
 solver = ProjectedNewtonSolver(prob)
+NN = N*n + (N-1)*m
+p = num_constraints(prob)
+P = N*n + sum(p)
+
+# Test functions
 dynamics_constraints!(prob, solver)
 update_constraints!(prob, solver)
+active_set!(prob, solver)
+@test all(solver.a.primals)
+@test all(solver.a.ν)
+@test all(solver.a.λ[end-n+1:end])
+@test !all(solver.a.λ)
 dynamics_jacobian!(prob, solver)
-solver.∇F[1].xx == solver.Y[1:n,1:n]
-solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
+@test solver.∇F[1].xx == solver.Y[1:n,1:n]
+@test solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
 constraint_jacobian!(prob, solver)
-solver.∇C[1] == solver.Y[N*n .+ (1:4), 1:n+m]
+@test solver.∇C[1] == solver.Y[N*n .+ (1:4), 1:n+m]
+
+cost_expansion!(prob, solver)
+# Y,y = Array(Y), Array(y)
+
+# Test Constraint Violation
+solver = ProjectedNewtonSolver(prob)
+solver.opts.active_set_tolerance = 0.0
+dynamics_constraints!(prob, solver)
+update_constraints!(prob, solver)
+active_set!(prob, solver)
+Y,y = active_constraints(prob, solver)
+@test norm(y,Inf) == max_violation(prob)
+@test max_violation(solver) == max_violation(prob)
+
+# Test Projection
+solver = ProjectedNewtonSolver(prob)
+V = solver.V
+projection!(prob, solver)
+@test max_violation(solver) < max_violation(prob)
+
+# Build KKT
+cost_expansion!(prob, solver)
+δV = solveKKT(prob, solver)
+V_ = solver.V + δV
 
 
 solver.fVal

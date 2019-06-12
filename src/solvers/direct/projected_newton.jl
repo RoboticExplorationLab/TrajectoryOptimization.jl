@@ -1,6 +1,8 @@
 cost(prob::Problem, V::PrimalDual) = cost(prob.obj, V.X, V.U)
 
-
+############################
+#       CONSTRAINTS        #
+############################
 function dynamics_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     N = prob.N
     X,U = V.X, V.U
@@ -17,12 +19,14 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
     X,U = V.X, V.U
     solver.∇F[1].xx .= Diagonal(I,n)
     solver.Y[1:n,1:n] .= Diagonal(I,n)
+    part = (x=1:n, u =n .+ (1:m), x1=n+m .+ (1:n))
     off1 = n
     off2 = 0
     for k = 1:N-1
         jacobian!(solver.∇F[k+1], prob.model, X[k], U[k], prob.dt)
-        solver.Y[off1 .+ (1:n), off2 .+ (1:n)] .= solver.∇F[k+1].xx
-        solver.Y[off1 .+ (1:n), off2 .+ (n+1:n+m)] .= solver.∇F[k+1].xu
+        solver.Y[off1 .+ part.x, off2 .+ part.x] .= solver.∇F[k+1].xx
+        solver.Y[off1 .+ part.x, off2 .+ part.u] .= solver.∇F[k+1].xu
+        solver.Y[off1 .+ part.x, off2 .+ part.x1] .= -Diagonal(I,n)
         off1 += n
         off2 += n+m
     end
@@ -36,7 +40,24 @@ function update_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=sol
     evaluate!(solver.C[N], prob.constraints[N], V.X[N])
 end
 
+function active_set!(prob::Problem, solver::ProjectedNewtonSolver)
+    n,m,N = size(prob)
+    P = sum(num_constraints(prob)) + n*N
+    for k = 1:N
+        active_set!(solver.active_set[k], solver.C[k], solver.opts.active_set_tolerance)
+    end
+end
 
+function active_set!(a::AbstractVector{Bool}, c::AbstractArray{T}, tol::T=0.0) where T
+    equality, inequality = c.parts[:equality], c.parts[:inequality]
+    a[equality] .= true
+    a[inequality] .= c.inequality .>= -tol
+end
+
+
+######################################
+#       CONSTRAINT JACBOBIANS        #
+######################################
 function constraint_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     n,m,N = size(prob)
     for k = 1:N-1
@@ -45,79 +66,111 @@ function constraint_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=so
     jacobian!(solver.∇C[N], prob.constraints[N], V.X[N])
 end
 
+function active_constraints(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    n,m,N = size(prob)
+    a = solver.a.duals
+    # return view(solver.Y, a, :), view(solver.y, a)
+    return solver.Y[a,:], solver.y[a]
+end
+
+
+############################
+#      COST EXPANSION      #
+############################
 cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V) =
     cost_expansion!(solver.Q, prob.obj, V.X, V.U)
 
 
-function cost_expansion(prob::Problem, solver::ProjectedNewtonSolver) where T
+function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V) where T
     n,m,N = size(prob)
     NN = N*n + (N-1)*m
-    H = spzeros(NN, NN)
-    g = spzeros(NN)
+    H = solver.H
+    g = solver.g
 
-    Q = solver.Q
-    part = (x=1:n, u=n .+ (1:m))
+    part = (x=1:n, u=n .+ (1:m), z=1:n+m)
+    part2 = (xx=(part.x, part.x), uu=(part.u, part.u), ux=(part.u, part.x), xu=(part.x, part.u))
     off = 0
     for k = 1:N-1
-        H[off .+ part.x, off .+ part.x] = Q[k].xx
-        H[off .+ part.x, off .+ part.u] = Q[k].ux'
-        H[off .+ part.u, off .+ part.x] = Q[k].ux
-        H[off .+ part.u, off .+ part.u] = Q[k].uu
-        g[off .+ part.x] = Q[k].x
-        g[off .+ part.u] = Q[k].u
+        # H[off .+ part.x, off .+ part.x] = Q[k].xx
+        # H[off .+ part.x, off .+ part.u] = Q[k].ux'
+        # H[off .+ part.u, off .+ part.x] = Q[k].ux
+        # H[off .+ part.u, off .+ part.u] = Q[k].uu
+        hess = PartedMatrix(view(H, off .+ part.z, off .+ part.z), part2)
+        grad = PartedVector(view(g, off .+ part.z), part)
+        hessian!(hess, prob.obj[k], V.X[k], V.U[k])
+        gradient!(grad, prob.obj[k], V.X[k], V.U[k])
         off += n+m
     end
-    H[off .+ part.x, off .+ part.x] = Q[N].xx
-    g[off .+ part.x] = Q[N].x
-    return H,g
-end
-
-function residual(prob::Problem, solver::ProjectedNewtonSolver)
-    g = vcat([[q.x; q.u] for q in solver.Q]...)
-    d = vcat(solver.fVal...)
-    return norm([g;d]), norm(g), norm(d)
+    H ./= (N-1)
+    g ./= (N-1)
+    hess = PartedMatrix(view(H, off .+ part.x, off .+ part.x), part2)
+    grad = PartedVector(view(g, off .+ part.x), part)
+    hessian!(hess, prob.obj[N], V.X[N])
+    gradient!(grad, prob.obj[N], V.X[N])
 end
 
 
-function dynamics_expansion(prob::Problem, solver::ProjectedNewtonSolver)
-    n,m,N = size(prob)
-    NN = N*n + (N-1)*m
-    D = spzeros(N*n, NN)
-    d = zeros(N*n)
 
-    off1,off2 = n,0
-    part = (x=1:n, u=n .+ (1:m), z=1:n+m, x2=n+m .+ (1:n))
-    d[part.x] = solver.fVal[1]
-    D[part.x, part.z] = solver.∇F[1]
-    for k = 2:N
-        D[off1 .+ (part.x), off2 .+ (part.z)] = solver.∇F[k]
-        D[off1 .+ (part.x), off2 .+ (part.x2)] = -Diagonal(I,n)
-        d[off1 .+ (part.x)] = solver.fVal[k]
-        off1 += n
-        off2 += n+m
+######################
+#     FUNCTIONS      #
+######################
+function max_violation(solver::ProjectedNewtonSolver{T}) where T
+    c_max = 0.0
+    C = solver.C
+    N = length(C)
+    for k = 1:N
+        if length(C[k].equality) > 0
+            c_max = max(norm(C[k].equality,Inf), c_max)
+        end
+        if length(C[k].inequality) > 0
+            c_max = max(pos(maximum(C[k].inequality)), c_max)
+        end
+        c_max = max(norm(solver.fVal[k], Inf), c_max)
     end
-    return D,d
+    return c_max
 end
 
 function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
-    D,d = dynamics_expansion(prob, solver)
     Z = primals(V)
     eps_feasible = 1e-6
-    res = norm(d,Inf)
-    if solver.opts.verbose
-        println("feas: ", res)
-    end
-    while res > eps_feasible
-        δZ = - D'*((D*D')\d)
-        Z .+= δZ
+    count = 0
+    while true
         dynamics_constraints!(prob, solver, V)
+        update_constraints!(prob, solver, V)
         dynamics_jacobian!(prob, solver, V)
-        D,d = dynamics_expansion(prob, solver)
-        res = norm(d,Inf)
-        if solver.opts.verbose
-            println("feas: ", res)
+        constraint_jacobian!(prob, solver, V)
+        active_set!(prob, solver)
+        Y,y = active_constraints(prob, solver)
+
+        viol = norm(y,Inf)
+        println("feas: ", viol)
+        if viol < eps_feasible || count > 10
+            break
+        else
+            δZ = -Y'*((Y*Y')\y)
+            Z .+= δZ
+            count += 1
         end
     end
+end
+
+function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    a = solver.a
+    δV = zero(V.V)
+    λ = duals(V)[a.duals]
+    Y,y = active_constraints(prob, solver)
+    H,g = solver.H, solver.g
+    Pa = length(y)
+    A = [H Y'; Y zeros(Pa,Pa)]
+    b = [g + Y'λ; y]
+    δV[a] = -A\b
+    return δV
+end
+
+function residual(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    _,y = active_constraints(prob, solver)
+    g = solver.g
+    res = [g; y]
 end
 
 function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
@@ -272,15 +325,16 @@ function gen_usrfun_newton(prob::Problem)
     end
 
     function jacob_con(∇C, V::PrimalDual)
-        jacobian!(solver.∇C, prob.constraints, V.X, V.U)
 
         off1 = 0
         off2 = 0
         for k = 1:N-1
+            jacobian!(solver.∇C[k], prob.constraints[k], V.X[k], V.U[k])
             ∇C[off1 .+ (1:p[k]), off2 .+ (1:n+m)] .= solver.∇C[k]
             off1 += p[k]
             off2 += n+m
         end
+        jacobian!(solver.∇C[N], prob.constraints[N], V.X[N])
         ∇C[off1 .+ (1:p[N]), off2 .+ (1:n)] .= solver.∇C[N]
     end
     function jacob_con(V::PrimalDual)
@@ -298,21 +352,48 @@ function gen_usrfun_newton(prob::Problem)
     return mycost, grad_cost, hess_cost, dynamics, jacob_dynamics, constraints, jacob_con, act_set
 end
 
-function active_set!(prob::Problem, solver::ProjectedNewtonSolver,
-        V=solver.V, tol=solver.opts.active_set_tolerance)
+
+function projection2!(prob::Problem, V::PrimalDual, tol=1e-3)
     n,m,N = size(prob)
-    P = sum(num_constraints(prob)) + n*N
-    for k = 1:N
-        active_set!(V.a[k], solver.C[k], tol)
+    NN = N*n + (N-1)*m
+    p_colloc = n*N
+    P = sum(num_constraints(prob)) + p_colloc
+
+    V_ = copy(V)
+    Z_ = primals(V_)
+
+    mycost, grad_cost, hess_cost, dyn, jacob_dynamics, con, jacob_con, act_set =
+        gen_usrfun_newton(prob)
+
+    act_set(V_,tol)
+    a = V_.active_set
+    d1 = dyn(V_)
+    c1 = con(V_)
+    y = [d1; c1][a]
+    δZ = zeros(NN)
+    println("\nProjection Step:")
+    println("max y: ", norm(y, Inf))
+    # println("max residual: ", norm(grad_cost(V_) + jacob_dynamics(V_)'duals(V_)))
+    count = 0
+    while norm(y,Inf) > 1e-10
+        D = jacob_dynamics(V_)
+        C = jacob_con(V_)
+        Y = [D; C][a,:]
+
+        δZ = -Y'*((Y*Y')\y)
+        Z_ .+= δZ
+
+        d_ = dyn(V_)
+        c_ = con(V_)
+        y = [d_; c_][a]
+        println("max y: ", norm(y,Inf))
+        count += 1
+        if count > 10
+            break
+        end
     end
+    println("count: ", count)
 end
-
-function active_set!(a::AbstractVector{Bool}, c::AbstractArray{T}, tol::T=0.0) where T
-    equality, inequality = c.parts[:equality], c.parts[:inequality]
-    a[equality] .= true
-    a[inequality] .= c.inequality .>= -tol
-end
-
 
 function newton_step0(prob::Problem, V::PrimalDual, tol=1e-3)
 
@@ -493,4 +574,31 @@ function calc_violations(solver::Union{AugmentedLagrangianSolver{T}, ProjectedNe
         end
     end
     return v
+end
+
+function residual(prob::Problem, solver::ProjectedNewtonSolver)
+    g = vcat([[q.x; q.u] for q in solver.Q]...)
+    d = vcat(solver.fVal...)
+    return norm([g;d]), norm(g), norm(d)
+end
+
+
+function dynamics_expansion(prob::Problem, solver::ProjectedNewtonSolver)
+    n,m,N = size(prob)
+    NN = N*n + (N-1)*m
+    D = spzeros(N*n, NN)
+    d = zeros(N*n)
+
+    off1,off2 = n,0
+    part = (x=1:n, u=n .+ (1:m), z=1:n+m, x2=n+m .+ (1:n))
+    d[part.x] = solver.fVal[1]
+    D[part.x, part.z] = solver.∇F[1]
+    for k = 2:N
+        D[off1 .+ (part.x), off2 .+ (part.z)] = solver.∇F[k]
+        D[off1 .+ (part.x), off2 .+ (part.x2)] = -Diagonal(I,n)
+        d[off1 .+ (part.x)] = solver.fVal[k]
+        off1 += n
+        off2 += n+m
+    end
+    return D,d
 end
