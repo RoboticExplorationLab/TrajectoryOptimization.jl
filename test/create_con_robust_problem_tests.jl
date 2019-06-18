@@ -23,8 +23,8 @@ H1 = zeros(n,r)
 costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
 
 verbose = true
-opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plotting=:state)
-opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,constraint_tolerance=1.0e-4)
+opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
+opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,constraint_tolerance=1.0e-3)
 
 N = 101
 tf = 1.0
@@ -78,37 +78,15 @@ solve!(prob,opts_al)
 plot(prob.X)
 plot(prob.U)
 
-Kd,Pd = tvlqr_dis(prob,Qr,Rr,Qfr)
-Kc,Sc = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
-
 prob_robust = robust_problem(prob,E1,H1,D,Qr,Rr,Qfr,Q,R,Qf,xf)
 
 rollout!(prob_robust)
-
-# jacobian!(prob_robust,ilqr_solver)
-# cost_expansion!(prob_robust,ilqr_solver)
-# ΔV = backwardpass!(prob_robust,ilqr_solver)
-#
-# ilqr_solver
-# rollout!(prob_robust,ilqr_solver,0.01)
-#
-# plot(prob_robust.X)
-# plot!(ilqr_solver.X̄)
-# _J = cost(prob)
-# forwardpass!(prob_robust,ilqr_solver,ΔV,J)
-# prob_robust.X
 
 al_solver = AbstractSolver(prob_robust,opts_al)
 solve!(prob_robust,al_solver)
 
 
-# max_violation(al_solver)
-#
-# prob_al
-#
-# plot(prob_al.X)
-#
-#
-# plot(prob_robust.X)
-# plot!(prob_al.X)
-# solve!(prob_robust,opts_al)
+uu = [prob_robust.U[k][1:m] for k = 1:N-1]
+plot(prob.U)
+plot!(uu)
+max_violation(al_solver)

@@ -74,7 +74,7 @@ function tvlqr_sqrt_con_rk3_uncertain(prob::Problem{T,Discrete},Q::AbstractArray
         cnt = 0
         while norm(g) > 1.0e-12
             cnt += 1
-            println(norm(g))
+            # println(norm(g))
 
             if cnt > 1000
                 error("Integration convergence fail")
@@ -422,6 +422,7 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         uw = Vector[]
 
         x = z[idx.x]
+        u = u[1:m]
         E = reshape(z[idx.e],n,n)
         Ex = sqrt(E)
         _K = K(z,u)
@@ -431,12 +432,18 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         push!(uw,u)
 
         for i = 1:n
-            δx = Ex[:,i]
+            if norm(imag.(Ex[:,i])) > 0.1
+                error("imag. error")
+            end
+            δx = real.(Ex[:,i])
             push!(xw,x + δx)
             push!(xw,x - δx)
         end
         for j = 1:m
-            δu = Eu[:,j]
+            if norm(imag.(Eu[:,j])) > 0.1
+                error("imag. error")
+            end
+            δu = real.(Eu[:,j])
             push!(uw,u + δu)
             push!(xw,u - δu)
         end
@@ -457,6 +464,7 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         su = []
 
         x = z[idx.x]
+        u = u[1:m]
         E = reshape(z[idx.e],n,n)
         Ex = sqrt(E)
         _K = K(z,u)
@@ -469,14 +477,14 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         push!(su,(0,0))
 
         for i = 1:n
-            δx = Ex[:,i]
+            δx = real.(Ex[:,i])
             push!(xw,x + δx)
             push!(sx,(i,1))
             push!(xw,x - δx)
             push!(sx,(i,-1))
         end
         for j = 1:m
-            δu = Eu[:,j]
+            δu = real.(Eu[:,j])
             push!(uw,u + δu)
             push!(su,(j,1))
             push!(uw,u - δu)
@@ -486,23 +494,24 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         k = 1
         for (i,_x) in enumerate(xw)
             for (j,_u) in enumerate(uw)
+
                 _V = zeros(p,n+m)
                 idx_p = (((k-1)*p+1):k*p)
                 c.∇c(_V,_x,_u)
 
-                idx = [(1:n)...,((n + n^2 + n*r + n^2) .+ (1:m))...]
-                copyto!(view(V,idx_p,idx),_V)
+                _idx = [(1:n)...,((n + n^2 + n*r + n^2) .+ (1:m))...]
+                copyto!(view(V,idx_p,_idx),_V)
 
                 cx = _V[:,1:n]
                 cu = _V[:,n .+ (1:m)]
 
                 if i != 1
-                    idx = (n .+ (sx[i][1]-1)*n + 1): sx[i][1]*n
-                    copyto!(view(V,idx_p,idx),sx[i][2]*cx*∇E_to_δx(E,sx[i][1]))
+                    _idx = (n .+ (((sx[i][1]-1)*n + 1): sx[i][1]*n))
+                    copyto!(view(V,idx_p,_idx),sx[i][2]*cx*∇E_to_δx(E,sx[i][1]))
                 end
                 if j != 1
-                    idx = ((n + n^2 + n*r + n^2) .+ (su[i][1]-1)*m + 1): su[i][1]*m
-                    copyto!(view(V,idx_p,idx),su[i][2]*cu*∇E_to_δu(K,z,u,idx,su[i][1]))
+                    _idx = ((n + n^2 + n*r + n^2) .+ (((su[j][1]-1)*m + 1): su[j][1]*m))
+                    copyto!(view(V,idx_p,_idx),su[j][2]*cu*∇E_to_δu(K,z,u,idx,su[j][1]))
                 end
 
                 k += 1
@@ -527,9 +536,12 @@ function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
         push!(xw,x)
 
         for i = 1:n
-            δx = Ex[:,i]
+            if norm(imag.(Ex[:,i])) > 0.1
+                error("imag. error")
+            end
+            δx = real.(Ex[:,i])
             push!(xw,x + δx)
-            push!(xw,x - dx)
+            push!(xw,x - δx)
         end
 
         for (k,_x) in enumerate(xw)
@@ -549,10 +561,10 @@ function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
         push!(sx,(0,0))
 
         for i = 1:n
-            δx = Ex[:,i]
+            δx = real.(Ex[:,i])
             push!(xw,x + δx)
             push!(sx,(i,1))
-            push!(xw,x - dx)
+            push!(xw,x - δx)
             push!(sx,(i,-1))
         end
 
@@ -560,14 +572,14 @@ function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
             _V = zeros(p,n)
             idx_p = (((k-1)*p+1):k*p)
             c.∇c(_V,_x)
-            idx = (k-1)*n+1:k*n
-            copyto!(view(V,idx_p,idx),_V)
+            _idx = (k-1)*n+1:k*n
+            copyto!(view(V,idx_p,_idx),_V)
 
             cx = _V[:,1:n]
 
             if k != 1
-                idx = (n .+ (sx[k][1]-1)*n + 1): sx[k][1]*n
-                copyto!(view(V,idx_p,idx),sx[k][2]*cx*∇E_to_δx(E,sx[k][1]))
+                _idx = (n .+ (((sx[k][1]-1)*n + 1): sx[k][1]*n))
+                copyto!(view(V,idx_p,_idx),sx[k][2]*cx*∇E_to_δx(E,sx[k][1]))
             end
         end
     end

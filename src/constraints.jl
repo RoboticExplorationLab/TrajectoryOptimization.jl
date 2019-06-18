@@ -392,13 +392,13 @@ end
 
 function jacobian!(c::PartedMatrix, C::ConstraintSet, x, u)
     for con in stage(C)
-        jacobian!(c[con.label], con, x, u)
+        jacobian!(c[con.label], con, x[con.inds[1]], u[con.inds[2]])
     end
 end
 
 function jacobian!(c::PartedMatrix, C::ConstraintSet, x)
     for con in terminal(C)
-        jacobian!(c[con.label], con, x)
+        jacobian!(c[con.label], con, x[con.inds[1]])
     end
 end
 
