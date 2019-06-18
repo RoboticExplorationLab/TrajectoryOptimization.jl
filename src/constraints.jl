@@ -476,6 +476,13 @@ function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemCons
         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
+        # println(k)
+        # println(size(C[k]))
+        # println(size(X[k]))
+        # println(size(U[k]))
+        # println(constraints[k][1].inds[1])
+        # println(constraints[k][1].inds[2])
+
         evaluate!(C[k],constraints[k],X[k],U[k])
     end
     evaluate!(C[N],constraints[N],X[N])

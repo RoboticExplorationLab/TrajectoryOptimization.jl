@@ -348,7 +348,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         end
         if constrained
             for cc in prob.constraints[k]
-                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m))
+                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m,n̄))
             end
         end
         push!(con_prob,con_uncertain)
@@ -358,7 +358,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     push!(con_uncertain,ctg_term)
     if constrained
         for cc in prob.constraints[N]
-            push!(con_uncertain,robust_constraint(cc,prob.model.n))
+            push!(con_uncertain,robust_constraint(cc,prob.model.n,n̄))
         end
     end
     push!(con_prob,con_uncertain)
@@ -413,7 +413,7 @@ function ∇E_to_δu(K,z,u,idx,j)
 end
 
 "Modify constraint to evaluate all combinations of the disturbed state and control"
-function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::Int,m::Int)
+function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::Int,m::Int,n̄::Int)
     p = c.p
     p_robust = p*(2*n+1)*(2*m+1)
 
@@ -433,12 +433,12 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         for i = 1:n
             δx = Ex[:,i]
             push!(xw,x + δx)
-            push!(xw,x - dx)
+            push!(xw,x - δx)
         end
         for j = 1:m
             δu = Eu[:,j]
-            push!(uw,u + du)
-            push!(xw,u - du)
+            push!(uw,u + δu)
+            push!(xw,u - δu)
         end
 
         k = 1
@@ -450,7 +450,7 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
         end
     end
 
-    function ∇rc(V,x,u)
+    function ∇rc(V,z,u)
         xw = Vector[]
         uw = Vector[]
         sx = []
@@ -472,7 +472,7 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
             δx = Ex[:,i]
             push!(xw,x + δx)
             push!(sx,(i,1))
-            push!(xw,x - dx)
+            push!(xw,x - δx)
             push!(sx,(i,-1))
         end
         for j = 1:m
@@ -509,14 +509,15 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
             end
         end
     end
-    typeof(c)(rc,∇rc,p_robust,c.label,c.inds)
+
+    typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:m)],c.type)
 end
 
-function robust_constraint(c::AbstractConstraint,n::Int)
+function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
     p = c.p
     p_robust = p*(2*n+1)
 
-    function rc(v,x)
+    function rc(v,z)
         xw = Vector[]
 
         x = z[idx.x]
@@ -536,7 +537,7 @@ function robust_constraint(c::AbstractConstraint,n::Int)
         end
     end
 
-    function ∇rc(V,x)
+    function ∇rc(V,z)
         xw = Vector[]
         sx = []
 
@@ -571,7 +572,7 @@ function robust_constraint(c::AbstractConstraint,n::Int)
         end
     end
 
-    typeof(c)(rc,∇rc,p_robust,c.label,c.inds)
+    typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:0)],c.type)
 end
 
 "Update jacobian for robust dynamics that include δx, δu terms in state vector"

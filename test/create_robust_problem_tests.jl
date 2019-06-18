@@ -49,6 +49,7 @@ initial_controls!(prob,U0)
 # rollout!(prob)
 solve!(prob,opts_ilqr)
 plot(prob.X)
+plot(prob.U)
 Kd,Pd = tvlqr_dis(prob,Qr,Rr,Qfr)
 Kc,Sc = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
 #
