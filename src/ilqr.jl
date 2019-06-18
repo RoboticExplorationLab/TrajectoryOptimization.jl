@@ -73,10 +73,10 @@ end
 "Plot state, control trajectories"
 function live_plotting(prob::Problem{T,Discrete},solver::iLQRSolver{T}) where T
     if solver.opts.live_plotting == :state
-        p = plot(prob.X,title="State trajectory")
+        p = plot(prob.X,title="State trajectory",labels="")
         display(p)
     elseif solver.opts.live_plotting == :control
-        p = plot(prob.U,title="Control trajectory")
+        p = plot(prob.U,title="Control trajectory",labels="")
         display(p)
     else
         nothing

@@ -221,6 +221,7 @@ function rk3_implicit(f::Function,n::Int,m::Int,dt::T) where T
         while norm(g) > 1.0e-12
             cnt += 1
             if cnt > 1000
+                println("norm: \n $(norm(g))")
                 error("Integration convergence failed")
             end
             f(fc1,x,u)

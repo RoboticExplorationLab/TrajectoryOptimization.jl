@@ -258,6 +258,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     rollout!(prob)
     _K, _S = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
     S1 = _S[1]
+    SN = vec(cholesky(Qfr).U)
 
     # generate optimal feedback matrix function
     Zc = zeros(n,n+m+r)
@@ -281,6 +282,12 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         cost_robust.Q = cat(cost_robust.Q,Diagonal(zeros(n_robust)),dims=(1,2))
         cost_robust.q = [cost_robust.q; zeros(n_robust)]
         cost_robust.H = [cost_robust.H zeros(m,n_robust)]
+
+        # quadratic cost on riccati states
+        for j = (n̄-(n^2 -1)):n̄
+            cost_robust.Q[j,j] = 1.0e-3
+        end
+
         if k == 1
             cost_robust.R = cat(cost_robust.R,Diagonal(zeros(n^2)),dims=(1,2))
             cost_robust.r = [cost_robust.r; zeros(n^2)]
@@ -292,6 +299,12 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     cost_robust = copy(prob.obj[N])
     cost_robust.Qf = cat(cost_robust.Qf,Diagonal(zeros(n_robust)),dims=(1,2))
     cost_robust.qf = [cost_robust.qf; zeros(n_robust)]
+
+    # quadratic cost on riccati states
+    for j = (n̄-(n^2 -1)):n̄
+        cost_robust.Qf[j,j] = 1.0e-3
+    end
+
     push!(_cost,cost_robust)
 
     # create robust objective
@@ -319,7 +332,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
     ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg_init)
 
     function sN(c,z)
-        c[1:n^2] = z[idx.s] - S1
+        c[1:n^2] = z[idx.s] - SN
     end
 
     function ∇sN(C,z)
