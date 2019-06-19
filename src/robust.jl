@@ -141,7 +141,6 @@ function robust_model(f::Function,Q::AbstractArray{T},R::AbstractArray{T},D::Abs
         S = reshape(z[z_idx.s],n,n)
         ss = inv(S')
         P = S*S'
-        # P = Matrix(I,n,n)
 
         Zc = ∇f([x;u;w])
         Ac = Zc[:,idx.x]
@@ -285,7 +284,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
         # quadratic cost on riccati states
         for j = (n̄-(n^2 -1)):n̄
-            cost_robust.Q[j,j] = 1.0e-3
+            cost_robust.Q[j,j] = 1.0
         end
 
         if k == 1
@@ -302,7 +301,7 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     # quadratic cost on riccati states
     for j = (n̄-(n^2 -1)):n̄
-        cost_robust.Qf[j,j] = 1.0e-3
+        cost_robust.Qf[j,j] = 1.0
     end
 
     push!(_cost,cost_robust)
@@ -343,9 +342,9 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
 
     for k = 1:N-1
         con_uncertain = GeneralConstraint[]
-        if k == 1
-            push!(con_uncertain,ctg_init)
-        end
+        # if k == 1
+        #     push!(con_uncertain,ctg_init)
+        # end
         if constrained
             for cc in prob.constraints[k]
                 push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m,n̄))
@@ -372,11 +371,11 @@ function robust_problem(prob::Problem{T},E1::AbstractArray{T},
         x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S1])
 end
 
-function E_to_δx(E,i)
+function get_δx(E,i)
     sqrt(E)[:,i]
 end
 
-function ∇E_to_δx(E,i)
+function ∇δx(E,i)
     n = size(E,1)
 
     function f1(e)
@@ -389,27 +388,28 @@ function ∇E_to_δx(E,i)
     ForwardDiff.jacobian(f1,vec(E))[:,((i-1)*n + 1):i*n]
 end
 
-function E_to_δu(K,z,u,idx,j)
+function get_δu(K,z,u,idx,j)
     _K = K(z,u)
     n = size(_K,2)
     E = reshape(z[idx.e],n,n)
     sqrt(_K*E*_K')[:,j]
 end
 
-function ∇E_to_δu(K,z,u,idx,j)
+function ∇δu(K,z,u,idx,j)
     m = length(u)
 
-    function f1(z)
-        _K = K(z,u)
+    y = [z;u]
+    function f1(y)
+        _K = K(y[idx.z],y[length(idx.z)+1:end])
         n = size(_K,2)
-        E = reshape(z[idx.e],n,n)
-        ee = eigen(_K*E*_K')
-
+        E = reshape(y[idx.e],n,n)
+        tmp = _K*E*_K'
+        ee = eigen(tmp)
         b = Diagonal(sqrt.(ee.values))*ee.vectors'
         b[:,j]
     end
 
-    ForwardDiff.jacobian(f1,z)[:,((j-1)*m + 1):j*m]
+    ForwardDiff.jacobian(f1,y)
 end
 
 "Modify constraint to evaluate all combinations of the disturbed state and control"
@@ -445,7 +445,7 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
             end
             δu = real.(Eu[:,j])
             push!(uw,u + δu)
-            push!(xw,u - δu)
+            push!(uw,u - δu)
         end
 
         k = 1
@@ -504,14 +504,15 @@ function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::
 
                 cx = _V[:,1:n]
                 cu = _V[:,n .+ (1:m)]
-
-                if i != 1
-                    _idx = (n .+ (((sx[i][1]-1)*n + 1): sx[i][1]*n))
-                    copyto!(view(V,idx_p,_idx),sx[i][2]*cx*∇E_to_δx(E,sx[i][1]))
-                end
+                #
+                # if i != 1
+                #     _idx = (n .+ (((sx[i][1]-1)*n + 1): sx[i][1]*n))
+                #     copyto!(view(V,idx_p,_idx),sx[i][2]*cx*∇δx(E,sx[i][1]))
+                # end
                 if j != 1
-                    _idx = ((n + n^2 + n*r + n^2) .+ (((su[j][1]-1)*m + 1): su[j][1]*m))
-                    copyto!(view(V,idx_p,_idx),su[j][2]*cu*∇E_to_δu(K,z,u,idx,su[j][1]))
+                    # _idx = ((n + n^2 + n*r + n^2) .+ (((su[j][1]-1)*m + 1): su[j][1]*m))
+                    _idx = n .+ (1:n^2)
+                    copyto!(view(V,idx_p,_idx),su[j][2]*cu*∇δu(K,z,u,idx,su[j][1]))
                 end
 
                 k += 1
@@ -579,7 +580,7 @@ function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
 
             if k != 1
                 _idx = (n .+ (((sx[k][1]-1)*n + 1): sx[k][1]*n))
-                copyto!(view(V,idx_p,_idx),sx[k][2]*cx*∇E_to_δx(E,sx[k][1]))
+                copyto!(view(V,idx_p,_idx),sx[k][2]*cx*∇δx(E,sx[k][1]))
             end
         end
     end
@@ -656,6 +657,7 @@ function gen_robust_exp_funcs(fc::Function,idx::NamedTuple,Qr::AbstractArray,Rr:
 
     return ∇sc, ∇²sc, ∇sc_term, ∇²sc_term
 end
+
 
 function gen_cubic_interp(X,dt)
     N = length(X); n = length(X[1])

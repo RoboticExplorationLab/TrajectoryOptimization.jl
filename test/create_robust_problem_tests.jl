@@ -1,6 +1,6 @@
 using Test
 
-model = Dynamics.doubleintegrator_model_uncertain
+model = Dynamics.pendulum_model_uncertain
 n = model.n; m = model.m; r = model.r
 
 T = Float64
@@ -11,7 +11,7 @@ Qf = 1000.0*Diagonal(I,n)
 R = 1.0*Diagonal(I,m)
 
 Qr = 1.0*Diagonal(I,n)
-Qfr = 1.0*Diagonal(I,n)
+Qfr = 10.0*Diagonal(I,n)
 Rr = 1.0*Diagonal(I,m)
 
 x0 = [0; 0.]
@@ -23,8 +23,8 @@ H1 = zeros(n,r)
 costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
 
 verbose = true
-opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plotting=:state)
-opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,constraint_tolerance=1.0e-4)
+opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
+opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,constraint_tolerance=1.0e-3)
 
 N = 101
 tf = 1.0
@@ -118,8 +118,10 @@ prob_robust.X
 plot(prob_robust.X,legend=:left)
 
 idx = prob_robust.obj.robust_cost.idx
+ss = [prob_robust.X[k][idx.s] for k = 1:N]
 pp = [vec(reshape(prob_robust.X[k][idx.s],n,n)*reshape(prob_robust.X[k][idx.s],n,n)') for k = 1:N]
 plot(pp)
+plot(ss,label="")
 
 @test prob_robust.X[1][1:n] == x0
 @test prob_robust.X[1][end-n^2+1:end] == S1
@@ -166,9 +168,28 @@ rollout!(prob_robust)
 # forwardpass!(prob_robust,ilqr_solver,ΔV,J)
 # prob_robust.X
 
+opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
+opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,penalty_initial=10.,constraint_tolerance=1.0e-3)
+
 al_solver = AbstractSolver(prob_robust,opts_al)
 
 solve!(prob_robust,al_solver)
+
+
+xx = [prob_robust.X[k][1:n] for k = 1:N]
+uu = [prob_robust.U[k][1:m] for k = 1:N-1]
+
+p = plot(prob.X,title="Pendulum State",label="nominal",color=:orange,width=2)
+p = plot!(xx,color=:blue,label="robust",width=2,legend=:left)
+
+DIR = joinpath(TrajectoryOptimization.root_dir(),"results")
+savefig(joinpath(DIR,"pendulum_state2.png"))
+
+p = plot(prob.U,title="Pendulum Control",label="nominal",color=:orange,width=2)
+p = plot!(uu,color=:blue,width=2,label="robust",legend=:left)
+
+DIR = joinpath(TrajectoryOptimization.root_dir(),"results")
+savefig(joinpath(DIR,"pendulum_control2.png"))
 
 # max_violation(al_solver)
 #

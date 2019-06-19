@@ -10,11 +10,12 @@ n,m = 3,2
 
 car_model = Model(car_dynamics!,n,m)
 
-Q = (1e-2)*Diagonal(I,n)
-Qf = 1000.0*Diagonal(I,n)
-R = (1e-2)*Diagonal(I,m)
-x0 = [0.;0.;0.]
-xf = [0.;1.;0.]
-dt = 0.01
+function car_dynamics_uncertain!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector)
+    ẋ[1] = u[1]*cos(x[3]) + w[1]
+    ẋ[2] = u[1]*sin(x[3]) + w[2]
+    ẋ[3] = u[2]*w[3]
+    return nothing
+end
+n,m,r = 3,2,3
 
-car_costfun = TrajectoryOptimization.LQRCost(Q, R, Qf, xf)
+car_model_uncertain = UncertainModel(car_dynamics_uncertain!,n,m,r)
