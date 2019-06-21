@@ -15,7 +15,7 @@ Qfr = 1.0*Diagonal(I,n)
 Rr = 1.0*Diagonal(I,m)
 
 x0 = [0.; 0.; 0.; 0.]
-xf = [pi/2; 0.; 0.; 0.]
+xf = [0.; pi; 0.; 0.]
 D = Diagonal((0.2^2)*ones(r))
 E1 = Diagonal(1.0e-6*ones(n))
 H1 = zeros(n,r)
@@ -27,7 +27,7 @@ opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,live_plo
 opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,penalty_scaling=10.0,constraint_tolerance=1.0e-3)
 
 N = 201
-tf = 5.0
+tf = 2.0
 dt = tf/(N-1)
 U0 = [ones(m) for k = 1:N-1]
 

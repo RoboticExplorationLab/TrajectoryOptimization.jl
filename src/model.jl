@@ -626,7 +626,9 @@ midpoint_implicit(model::Model{M,Continuous},dt::T=1.0) where {M,T} = discretize
 
 
 function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) where T
-    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
+    if String(discretization)[1:6] == "DiffEq"
+        fd! = DiffEqIntegrator(f,dt,Symbol(split(String(discretization),"_")[2]),n,m)
+    elseif discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(discretization)(f,dt)
     elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(discretization)(f,n,m,dt)
@@ -638,7 +640,9 @@ function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) wher
 end
 
 function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m::Int,r::Int) where T
-    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
+    if String(discretization)[1:6] == "DiffEq"
+        fd! = DiffEqIntegratorUncertain(f,dt,Symbol(split(String(discretization),"_")[2]),n,m,r)
+    elseif discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,dt)
     elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,n,m,r,dt)

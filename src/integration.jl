@@ -233,7 +233,7 @@ function rk3_implicit(f::Function,n::Int,m::Int,dt::T) where T
             g = y - x - dt/6*fc1 - 4/6*dt*fc2 - dt/6*fc3
 
             A1 = ∇f(Xm,u)[:,1:n]
-            A2 = ∇f(xdot,u)[:,1:n]
+            A2 = ∇f(y,u)[:,1:n]
 
 
             ∇g = Diagonal(I,n) - 4/6*dt*A1*(0.5*Diagonal(I,n) - dt/8*A2) - dt/6*A2
@@ -258,6 +258,7 @@ function rk3_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) where T
         while norm(g) > 1.0e-12
             cnt += 1
             if cnt > 1000
+                println(norm(g))
                 error("Integration convergence failed")
             end
             f(fc1,x,u,w)
@@ -279,6 +280,47 @@ function rk3_implicit_uncertain(f::Function,n::Int,m::Int,r::Int,dt::T) where T
         end
     end
 end
+
+## DifferentialEquations.jl
+# NOTE: not fast
+function DiffEqIntegrator(f!::Function, dt::Float64, integrator::Symbol, n::Int, m::Int)
+    function f_aug(z,p,t)
+        ż = zero(z)
+        f!(view(ż,1:n),z[1:n],z[n .+ (1:m)])
+        ż
+    end
+
+    function fd_ode(y,x,u,dt=dt)
+        _tf = dt
+        _t0 = 0.
+
+        u0=vec([x;u])
+        tspan = (_t0,_tf)
+        pro = ODEProblem(f_aug,u0,tspan)
+        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt)
+        copyto!(y,sol.u[end][1:n])
+    end
+end
+
+function DiffEqIntegratorUncertain(f!::Function, dt::Float64, integrator::Symbol, n::Int, m::Int, r::Int)
+    function f_aug(z,p,t)
+        ż = zero(z)
+        f!(view(ż,1:n),z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+        ż
+    end
+
+    function fd_ode(y,x,u,w,dt=dt)
+        _tf = dt
+        _t0 = 0.
+        u0=vec([x;u;w])
+        tspan = (_t0,_tf)
+        pro = ODEProblem(f_aug,u0,tspan)
+        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt)
+        copyto!(y,sol.u[end][1:n])
+    end
+end
+
+
 
 """
 $(SIGNATURES)

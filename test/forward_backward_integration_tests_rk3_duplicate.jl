@@ -1,15 +1,13 @@
 using Plots, ForwardDiff
 
-model = Dynamics.cartpole_model
+model = Dynamics.pendulum_model
 # model = Dynamics.doubleintegrator_model
 # model = Dynamics.car_model
 fc = model.f
 n = model.n; m = model.m
 
-x0 = [0.; 0.; 0.; 0.]
-xf = [pi/2; 0.; 0.; 0.]
-# x0 = [0.; 0.]
-# xf = [pi; 0.]
+x0 = [0.; 0.]
+xf = [pi; 0.]
 
 # x0 = [0.; 0.]
 # xf = [1.0; 0.]
@@ -17,12 +15,12 @@ xf = [pi/2; 0.; 0.; 0.]
 # x0 = [0.;0.;0.]
 # xf = [0.;1.;0.]
 #
-Q = 1.0e-2*Diagonal(ones(n))
-R = 1.0e-2*Diagonal(ones(m))
+Q = 1.0*Diagonal(ones(n))
+R = 1.0*Diagonal(ones(m))
 Qf = 1000.0*Diagonal(ones(n))
 
 N = 201
-tf = 2.0
+tf = 1.0
 dt = tf/(N-1)
 
 U = [ones(m) for k = 1:N-1]
@@ -204,7 +202,6 @@ for k = 1:N-1
         cnt += 1
         println(norm(g))
         if cnt > 1000
-            println(k)
             error("Integration convergence fail")
         end
 
@@ -249,4 +246,4 @@ end
 Ps_for = [vec(reshape(S[k],n,n)*reshape(S[k],n,n)') for k = 1:N]
 
 plot(Ps,legend=:left,color=:purple,label="backward")
-plot!(Ps_for[1:199],legend=:left,color=:orange,label="forward",style=:dash)
+plot!(Ps_for,legend=:left,color=:orange,label="forward",style=:dash)
