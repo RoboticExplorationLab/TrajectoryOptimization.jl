@@ -25,168 +25,320 @@ function tvlqr_dis(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::
     return K, P
 end
 
-function tvlqr_sqrt_con_rk3(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+function tvlqr_dis_uncertain(prob::Problem{T},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T}) where T
     n = prob.model.n; m = prob.model.m; N = prob.N
     dt = prob.dt
 
     K  = [zeros(T,m,n) for k = 1:N-1]
-    P = [zeros(T,n,n) for k = 1:N]
+    Ad = [zeros(T,n,n) for k = 1:N-1]
+    Bd = [zeros(T,n,m) for k = 1:N-1]
+    Gd = [zeros(T,n,r) for k = 1:N-1]
+    P  = [zeros(T,n,n) for k = 1:N]
 
-    # continous time riccati
-    function riccati(ṡ,s,t)
-        S = reshape(s,n,n)
-        ṡ .= vec(-.5*Q*inv(S') - _Ac(t)'*S + .5*(S*S'*_Bc(t))*(R\(_Bc(t)'*S)));
+    P[N] .= Qf
+    fd = prob.model.f
+    f(ẋ,z) = fd(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    ∇f(x,u,w) = ∇f([x;u;w])
+
+    for k = N-1:-1:1
+        Fd = ∇f(prob.X[k],prob.U[k],zeros(r))
+
+        Ad[k] = Fd[:,1:n]
+        Bd[k] = Fd[:,n .+ (1:m)]
+        Gd[k] = Fd[:,(n+m) .+ (1:r)]
+        K[k] .= (R*dt + Bd[k]'*P[k+1]*Bd[k])\(Bd[k]'*P[k+1]*Ad[k])
+        P[k] .= Q*dt + K[k]'*R*K[k]*dt + (Ad[k] - Bd[k]*K[k])'*P[k+1]*(Ad[k] - Bd[k]*K[k])
+        P[k] .= 0.5*(P[k] + P[k]')
     end
+
+    return K, P, Ad, Bd, Gd
+end
+
+function tvlqr_con(prob::Problem{T,Discrete},Qr::AbstractArray{T},Rr::AbstractArray{T},
+        Qfr::AbstractArray{T},xf::AbstractVector{T},integrator::Symbol) where T
+
+    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
+
+    K = [zeros(T,m,n) for k = 1:N-1]
+    P = [zeros(T,n,n) for k = 1:N]
+    Ps = [zeros(T,n,n) for k = 1:N] # sqrt
+    P[N] = Qfr
+    Ps[N] = cholesky(Qfr).U
+
     fc = prob.model.info[:fc]
-    f(ẋ,z) = fc(ẋ,z[1:n],z[n .+ (1:m)])
+
+    # if model_type == :uncertain
+    f(ẋ,z) = fc(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    ∇f(x,u,w) = ∇f([x;u;w])
+    # else
+    # f(ẋ,z) = fc(ẋ,z[1:n],z[n .+ (1:m)])
+    # ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    # ∇f(x,u) = ∇f([x;u])
+    # end
+
+    function robust_dynamics(ż,z,u)
+        w = zeros(r)
+        x = z[1:n]
+        S = reshape(z[n .+ (1:n^2)],n,n)
+        ss = inv(S')
+        _P = S*S'
+
+        Zc = ∇f([x;u;w])
+        Ac = Zc[:,1:n]
+        Bc = Zc[:,n .+ (1:m)]
+
+        Kc = Rr\(Bc'*_P)
+        Acl = Ac - Bc*Kc
+
+        f(view(ż,1:n),[x;u;w])
+        ż[n .+ (1:n^2)] = reshape(-.5*Qr*ss - Ac'*S + .5*_P*Bc*(Rr\(Bc'*S)),n^2)
+    end
+
+    Z = [zeros(n+n^2) for k = 1:N]
+    Z[N] = [prob.X[end];vec(cholesky(Qfr).U)]
+
+    for k = N-1:-1:1
+        _u = prob.U[k]
+
+        function dyn(p,w,t)
+            ṗ = zero(p)
+            robust_dynamics(ṗ,p,_u)
+            return ṗ
+        end
+
+        _tf = dt*k
+        _t0 = dt*(k-1)
+
+        u0=vec(Z[k+1])
+        tspan = (_tf,_t0)
+        pro = ODEProblem(dyn,u0,tspan)
+        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt)
+        Z[k] = sol.u[end]
+
+        Ps[k] = reshape(Z[k][n .+ (1:n^2)],n,n)
+        P[k] = Ps[k]*Ps[k]'
+        Bc = ∇f(Z[k][1:n],_u)[:,n .+ (1:m)]
+        K[k] = Rr\(Bc'*P[k])
+    end
+
+    return K,P,Ps
+end
+
+function tvlqr_con_uncertain(prob::Problem{T,Discrete},Qr::AbstractArray{T},Rr::AbstractArray{T},
+        Qfr::AbstractArray{T},xf::AbstractVector{T},integrator::Symbol) where T
+
+    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
+
+    K = [zeros(T,m,n) for k = 1:N-1]
+    P = [zeros(T,n,n) for k = 1:N]
+    Ps = [zeros(T,n,n) for k = 1:N] # sqrt riccati
+    Āc = [zeros(T,n,n) for k = 1:N-1]
+    B̄c = [zeros(T,n,m) for k = 1:N-1]
+    Ḡc = [zeros(T,n,r) for k = 1:N-1]
+
+    P[N] = Qfr
+    Ps[N] = cholesky(Qfr).U
+
+    fc = prob.model.info[:fc]
+
+    f(ẋ,z) = fc(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
+    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
+    ∇f(x,u,w) = ∇f([x;u;w])
+
+    function robust_dynamics(ż,z,u)
+        w = zeros(r)
+        x = z[1:n]
+        S = reshape(z[n .+ (1:n^2)],n,n)
+        ss = inv(S')
+        _P = S*S'
+
+        Zc = ∇f([x;u;w])
+        Ac = Zc[:,1:n]
+        Bc = Zc[:,n .+ (1:m)]
+
+        Kc = Rr\(Bc'*_P)
+        Acl = Ac - Bc*Kc
+
+        f(view(ż,1:n),[x;u;w])
+        ż[n .+ (1:n^2)] = reshape(-.5*Qr*ss - Ac'*S + .5*_P*Bc*(Rr\(Bc'*S)),n^2)
+    end
+
+    Z = [zeros(n+n^2) for k = 1:N]
+    Z[N] = [prob.X[end];vec(cholesky(Qfr).U)]
+
+    for k = N-1:-1:1
+        _u = prob.U[k]
+
+        function dyn(p,w,t)
+            ṗ = zero(p)
+            robust_dynamics(ṗ,p,_u)
+            return ṗ
+        end
+
+        _tf = dt*k
+        _t0 = dt*(k-1)
+
+        u0=vec(Z[k+1])
+        tspan = (_tf,_t0)
+        pro = ODEProblem(dyn,u0,tspan)
+        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt)
+        Z[k] = sol.u[end]
+
+        Ps[k] = reshape(Z[k][n .+ (1:n^2)],n,n)
+        P[k] = Ps[k]*Ps[k]'
+        Fc = ∇f(Z[k][1:n],_u,zeros(r))
+        Āc[k] = Fc[:,1:n]
+        B̄c[k] = Fc[:,n .+ (1:m)]
+        Ḡc[k] = Fc[:,(n+m) .+ (1:r)]
+        K[k] = Rr\(B̄c[k]'*P[k])
+    end
+
+    return K,P,Ps,Āc,B̄c,Ḡc
+end
+
+function robust_problem(prob::Problem{T},E1::AbstractArray{T},
+    H1::AbstractArray{T},D::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
+    Qf::AbstractArray{T},xf::AbstractVector{T}) where T
+    N = prob.N
+    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
+
+    n = prob.model.n; m = prob.model.m; r = prob.model.r
+    n_robust = 2*n^2 + n*r # number of robust parameters in state vector
+    n̄ = n + n_robust
+    m1 = m + n^2
+    idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)),z=(1:n̄))
+
+    # get nominal trajectories
+    rollout!(prob)
+    if String(prob.model.info[:integration])[1:6] == "DiffEq"
+        integrator = Symbol(split(String(prob.model.info[:integration]),"_")[2])
+    else
+        @info "Defaulting Riccati solve to Implicit Midpoint"
+        integrator = :ImplicitMidpoint
+        # error("Must specific DiffEq integrator/solver (for now...)")
+    end
+    # _K, _P, _S, _A, _B, _G = tvlqr_con_uncertain(prob,Qr,Rr,Qfr,xf,integrator)
+    _K, _P, _A, _B, _G = tvlqr_dis_uncertain(prob,Qr,Rr,Qfr)
+
+    _S = [vec(cholesky(_P[k]).U) for k = 1:N]
+    S1 = vec(_S[1])
+    # S1 = vec(cholesky(_P[1]).U)
+    SN = vec(cholesky(Qfr).U)
+
+    _Z = [zeros(n̄) for k = 1:N]
+    _E = [zeros(n,n) for k = 1:N]
+    _H = [zeros(n,r) for k = 1:N]
+
+    _E[1] = E1
+    _H[1] = H1
+
+    _Z[1] = [prob.X[1];vec(_E[1]);vec(_H[1]);vec(S1)]
+
+    for k = 1:N-1
+        Acl = _A[k] - _B[k]*_K[k]
+        _E[k+1] = Acl*_E[k]*Acl' + _G[k]*_H[k]'*Acl' + Acl*_H[k]*_G[k]' + _G[k]*D*_G[k]'
+        _H[k+1] = Acl*_H[k] + _G[k]*D
+
+        _Z[k+1] = [prob.X[k+1];vec(_E[k+1]);vec(_H[k+1]);vec(_S[k+1])]
+    end
+
+
+
+    # generate optimal feedback matrix function
+    f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)],zeros(eltype(z),r))
     ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
     ∇f(x,u) = ∇f([x;u])
 
-    function riccati(ṡ,s,x,u)
-        SS = reshape(s,n,n)
-        F = ∇f(x,u)
-        A = F[:,1:n]
-        B = F[:,n .+ (1:m)]
-
-        Si = inv(SS')
-        ṡ .= vec(-.5*Q*Si - A'*SS + .5*(SS*SS'*B)*(R\(B'*SS)))
+    function K(z,u)
+        x = z[idx.x]
+        s = z[idx.s]
+        P = reshape(s,n,n)*reshape(s,n,n)'
+        Bc = ∇f(x,u)[:,n .+ (1:m)]
+        R\(Bc'*P)
     end
 
-    riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
-    riccati_wrap(rand(n^2),[rand(n^2);rand(n);rand(m)])
+    # modify cost
+    _cost = CostFunction[]
+    for k = 1:N-1
+        cost_robust = copy(prob.obj[k])
+        cost_robust.Q = cat(cost_robust.Q,Diagonal(zeros(n_robust)),dims=(1,2))
+        cost_robust.q = [cost_robust.q; zeros(n_robust)]
+        cost_robust.H = [cost_robust.H zeros(m,n_robust)]
 
-    ∇riccati(z) = ForwardDiff.jacobian(riccati_wrap,zeros(eltype(z),n^2),z)
-    ∇riccati(s,x,u) = ∇riccati([s;x;u])
-
-    S = [zeros(n^2) for k = 1:N]
-    X = prob.X
-    U = prob.U
-    S[N] = vec(cholesky(Qf).U)
-    P[N] = Qf
-    for k = N-1:-1:1
-        s1 = s2 = s3 = zero(S[k])
-        fc1 = fc2 = fc3 = zero(X[k])
-
-        copyto!(S[k], S[k+1])
-        g = Inf
-        gp = Inf
-        α = 1.0
-        cnt = 0
-        while norm(g) > 1.0e-12
-            cnt += 1
-            # println(norm(g))
-
-            if cnt > 1000
-                error("Integration convergence fail")
-            end
-            riccati(s1,S[k+1],X[k+1],U[k])
-            riccati(s3,S[k],X[k],U[k])
-            fc(fc1,X[k+1],U[k])
-            fc(fc3,X[k],U[k])
-
-            Sm = 0.5*(S[k+1] + S[k]) - dt/8*(s1 - s3)
-            Xm = 0.5*(X[k+1] + X[k]) - dt/8*(fc1 - fc3)
-            riccati(s2,Sm,Xm,U[k])
-
-            g = S[k] - S[k+1] + dt/6*s1 + 4/6*dt*s2 + dt/6*s3
-
-            A1 = ∇riccati(Sm,Xm,U[k])[:,1:n^2]
-            A2 = ∇riccati(S[k],X[k],U[k])[:,1:n^2]
-
-
-            ∇g = Diagonal(I,n^2) + 4/6*dt*A1*(0.5*Diagonal(I,n^2) + dt/8*A2) + dt/6*A2
-            δs = -∇g\g
-
-            S[k] += α*δs
+        # quadratic cost on riccati states
+        for j = (n̄-(n^2 -1)):n̄
+            cost_robust.Q[j,j] = 1.0
         end
-        P[k] = reshape(S[k],n,n)*reshape(S[k],n,n)'
-        Bc = ∇f(X[k],U[k])[:,n .+ (1:m)]
-        K[k] = R\(Bc'*P[k])
-    end
 
-    return K, S
-end
-
-function tvlqr_sqrt_con_rk3_uncertain(prob::Problem{T,Discrete},Q::AbstractArray{T},R::AbstractArray{T},Qf::AbstractArray{T},xf::AbstractVector{T}) where T
-    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
-    dt = prob.dt
-
-    K  = [zeros(T,m,n) for k = 1:N-1]
-    P = [zeros(T,n,n) for k = 1:N]
-
-    # continous time riccati
-    function riccati(ṡ,s,t)
-        S = reshape(s,n,n)
-        ṡ .= vec(-.5*Q*inv(S') - _Ac(t)'*S + .5*(S*S'*_Bc(t))*(R\(_Bc(t)'*S)));
-    end
-    fc = prob.model.info[:fc]
-    f(ẋ,z) = fc(ẋ,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
-    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
-    ∇f(x,u) = ∇f([x;u;zeros(r)])
-
-    function riccati(ṡ,s,x,u)
-        SS = reshape(s,n,n)
-        F = ∇f(x,u)
-        A = F[:,1:n]
-        B = F[:,n .+ (1:m)]
-
-        Si = inv(SS')
-        ṡ .= vec(-.5*Q*Si - A'*SS + .5*(SS*SS'*B)*(R\(B'*SS)))
-    end
-
-    riccati_wrap(ṡ,z) = riccati(ṡ,z[1:n^2],z[n^2 .+ (1:n)],z[(n^2 + n) .+ (1:m)])
-    riccati_wrap(rand(n^2),[rand(n^2);rand(n);rand(m)])
-
-    ∇riccati(z) = ForwardDiff.jacobian(riccati_wrap,zeros(eltype(z),n^2),z)
-    ∇riccati(s,x,u) = ∇riccati([s;x;u])
-
-    S = [zeros(n^2) for k = 1:N]
-    X = copy(prob.X)
-    U = copy(prob.U)
-    S[N] = vec(cholesky(Qf).U)
-    P[N] = Qf
-    for k = N-1:-1:1
-        s1 = s2 = s3 = zero(S[k])
-        fc1 = fc2 = fc3 = zero(X[k])
-
-        copyto!(S[k], S[k+1])
-        g = Inf
-        gp = Inf
-        α = 1.0
-        cnt = 0
-        while norm(g) > 1.0e-12
-            cnt += 1
-            # println(norm(g))
-
-            if cnt > 1000
-                error("Integration convergence fail")
-            end
-            riccati(s1,S[k+1],X[k+1],U[k])
-            riccati(s3,S[k],X[k],U[k])
-            fc(fc1,X[k+1],U[k],zeros(r))
-            fc(fc3,X[k],U[k],zeros(r))
-
-            Sm = 0.5*(S[k+1] + S[k]) - dt/8*(s1 - s3)
-            Xm = 0.5*(X[k+1] + X[k]) - dt/8*(fc1 - fc3)
-            riccati(s2,Sm,Xm,U[k])
-
-            g = S[k] - S[k+1] + dt/6*s1 + 4/6*dt*s2 + dt/6*s3
-
-            A1 = ∇riccati(Sm,Xm,U[k])[:,1:n^2]
-            A2 = ∇riccati(S[k],X[k],U[k])[:,1:n^2]
-
-
-            ∇g = Diagonal(I,n^2) + 4/6*dt*A1*(0.5*Diagonal(I,n^2) + dt/8*A2) + dt/6*A2
-            δs = -∇g\g
-
-            S[k] += α*δs
+        if k == 1
+            cost_robust.R = cat(cost_robust.R,Diagonal(zeros(n^2)),dims=(1,2))
+            cost_robust.r = [cost_robust.r; zeros(n^2)]
+            cost_robust.H = [cost_robust.H; zeros(n^2,n̄)]
         end
-        P[k] = reshape(S[k],n,n)*reshape(S[k],n,n)'
-        Bc = ∇f(X[k],U[k])[:,n .+ (1:m)]
-        K[k] = R\(Bc'*P[k])
+        push!(_cost,cost_robust)
     end
 
-    return K, S
+    cost_robust = copy(prob.obj[N])
+    cost_robust.Qf = cat(cost_robust.Qf,Diagonal(zeros(n_robust)),dims=(1,2))
+    cost_robust.qf = [cost_robust.qf; zeros(n_robust)]
+
+    # quadratic cost on riccati states
+    for j = (n̄-(n^2 -1)):n̄
+        cost_robust.Qf[j,j] = 1.0
+    end
+
+    push!(_cost,cost_robust)
+
+    # create robust objective
+    _obj = Objective(_cost)
+
+    ∇sc, ∇²sc, ∇sc_term, ∇²sc_term = gen_robust_exp_funcs(prob.model.info[:fc],idx,Qr,Rr,Qfr,n,m,r)
+    _robust_cost = RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx,∇sc,∇²sc,∇sc_term,∇²sc_term)
+    robust_obj = RobustObjective(_obj,_robust_cost)
+
+    # create robust model
+    _robust_model = robust_model(prob.model,Q,R,D)
+
+    constrained = is_constrained(prob)
+    con_prob = ConstraintSet[]
+
+    function sN(c,z)
+        c[1:n^2] = z[idx.s] - SN
+    end
+
+    function ∇sN(C,z)
+        C[:,(n+n^2+n*r) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
+    end
+
+    ctg_term = Constraint{Equality}(sN,∇sN,n^2,:ctg_term,[collect(1:n̄),collect(1:0)],:terminal)
+
+    for k = 1:N-1
+        con_uncertain = GeneralConstraint[]
+        if constrained
+            for cc in prob.constraints[k]
+                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m,n̄))
+            end
+        end
+        push!(con_prob,con_uncertain)
+    end
+
+    con_uncertain = GeneralConstraint[]
+    push!(con_uncertain,ctg_term)
+    if constrained
+        for cc in prob.constraints[N]
+            push!(con_uncertain,robust_constraint(cc,prob.model.n,n̄))
+        end
+    end
+    push!(con_prob,con_uncertain)
+
+    prob_con = ProblemConstraints(con_prob)
+
+    update_problem(prob,model=_robust_model,obj=robust_obj,
+        constraints=prob_con,
+        X=_Z,U=[k==1 ? [prob.U[k];S1] : prob.U[k] for k = 1:N-1],
+        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S1])
 end
 
 "Robust model from model"
@@ -233,9 +385,9 @@ function robust_model(f::Function,Q::AbstractArray{T},R::AbstractArray{T},D::Abs
         Acl = Ac - Bc*Kc
 
         f(view(ż,z_idx.x),x,u,w)
-        # ż[z_idx.e] = reshape(Acl*E + Gc*H' + E*Acl' + H*Gc',n^2)
-        # ż[z_idx.h] = reshape(Acl*H + Gc*D,n,r)
-        #ż[z_idx.s] = reshape(-.5*Q*ss - Ac'*S + .5*P*Bc*(R\(Bc'*S)),n^2)
+        ż[z_idx.e] = reshape(Acl*E + Gc*H' + E*Acl' + H*Gc',n^2)
+        ż[z_idx.h] = reshape(Acl*H + Gc*D,n,r)
+        ż[z_idx.s] = reshape(-.5*Q*ss - Ac'*S + .5*P*Bc*(R\(Bc'*S)),n^2)
     end
 
     UncertainModel(robust_dynamics, n̄, m, r)
@@ -324,379 +476,252 @@ function cost_expansion!(Q::ExpansionTrajectory{T},robust_cost::RobustCost,X::Ve
     Q[N].xx .+= robust_cost.∇²c_term(X[N])
 end
 
-function robust_problem(prob::Problem{T},E1::AbstractArray{T},
-    H1::AbstractArray{T},D::AbstractArray{T},Qr::AbstractArray{T},Rr::AbstractArray{T},Qfr::AbstractArray{T},Q::AbstractArray{T},R::AbstractArray{T},
-    Qf::AbstractArray{T},xf::AbstractVector{T}) where T
-    N = prob.N
-    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
 
-    n = prob.model.n; m = prob.model.m; r = prob.model.r
-    n_robust = 2*n^2 + n*r # number of robust parameters in state vector
-    n̄ = n + n_robust
-    m1 = m + n^2
-    idx = (x=1:n,e=(n .+ (1:n^2)),h=((n+n^2) .+ (1:n*r)),s=((n+n^2+n*r) .+ (1:n^2)),z=(1:n̄))
 
-    rollout!(prob)
-    _K, _S = tvlqr_sqrt_con_rk3_uncertain(prob,Qr,Rr,Qfr,xf)
-    S1 = _S[1]
-    SN = vec(cholesky(Qfr).U)
-
-    # generate optimal feedback matrix function
-    Zc = zeros(n,n+m+r)
-
-    f(ẋ,z) = prob.model.info[:fc](ẋ,z[1:n],z[n .+ (1:m)],zeros(eltype(z),r))
-    ∇f(z) = ForwardDiff.jacobian(f,zeros(eltype(z),n),z)
-    ∇f(x,u) = ∇f([x;u])
-
-    function K(z,u)
-        x = z[idx.x]
-        s = z[idx.s]
-        P = reshape(s,n,n)*reshape(s,n,n)'
-        Bc = ∇f(x,u)[:,n .+ (1:m)]
-        R\(Bc'*P)
-    end
-
-    # modify cost
-    _cost = CostFunction[]
-    for k = 1:N-1
-        cost_robust = copy(prob.obj[k])
-        cost_robust.Q = cat(cost_robust.Q,Diagonal(zeros(n_robust)),dims=(1,2))
-        cost_robust.q = [cost_robust.q; zeros(n_robust)]
-        cost_robust.H = [cost_robust.H zeros(m,n_robust)]
-
-        # quadratic cost on riccati states
-        for j = (n̄-(n^2 -1)):n̄
-            cost_robust.Q[j,j] = 1.0
-        end
-
-        if k == 1
-            cost_robust.R = cat(cost_robust.R,Diagonal(zeros(n^2)),dims=(1,2))
-            cost_robust.r = [cost_robust.r; zeros(n^2)]
-            cost_robust.H = [cost_robust.H; zeros(n^2,n̄)]
-        end
-        push!(_cost,cost_robust)
-    end
-
-    cost_robust = copy(prob.obj[N])
-    cost_robust.Qf = cat(cost_robust.Qf,Diagonal(zeros(n_robust)),dims=(1,2))
-    cost_robust.qf = [cost_robust.qf; zeros(n_robust)]
-
-    # quadratic cost on riccati states
-    for j = (n̄-(n^2 -1)):n̄
-        cost_robust.Qf[j,j] = 1.0
-    end
-
-    push!(_cost,cost_robust)
-
-    # create robust objective
-    _obj = Objective(_cost)
-
-    ∇sc, ∇²sc, ∇sc_term, ∇²sc_term = gen_robust_exp_funcs(prob.model.info[:fc],idx,Qr,Rr,Qfr,n,m,r)
-    _robust_cost = RobustCost(Qr,Rr,Qfr,Q,R,Qf,K,n,m,r,idx,∇sc,∇²sc,∇sc_term,∇²sc_term)
-    robust_obj = RobustObjective(_obj,_robust_cost)
-
-    # create robust model
-    _robust_model = robust_model(prob.model,Q,R,D)
-
-    constrained = is_constrained(prob)
-    con_prob = ConstraintSet[]
-
-    function s1(c,z,u)
-        c[1:n^2] = u[m .+ (1:n^2)] - z[idx.s]
-    end
-
-    function ∇s1(C,z,u)
-        C[:,(n+n^2+n*r) .+ (1:n^2)] = -1.0*Diagonal(ones(n^2))
-        C[:,(n̄+m) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
-    end
-
-    ctg_init = Constraint{Equality}(s1,∇s1,n̄,m1,n^2,:ctg_init)
-
-    function sN(c,z)
-        c[1:n^2] = z[idx.s] - SN
-    end
-
-    function ∇sN(C,z)
-        C[:,(n+n^2+n*r) .+ (1:n^2)] = 1.0*Diagonal(ones(n^2))
-    end
-
-    ctg_term = Constraint{Equality}(sN,∇sN,n^2,:ctg_term,[collect(1:n̄),collect(1:0)],:terminal)
-
-    for k = 1:N-1
-        con_uncertain = GeneralConstraint[]
-        # if k == 1
-        #     push!(con_uncertain,ctg_init)
-        # end
-        if constrained
-            for cc in prob.constraints[k]
-                push!(con_uncertain,robust_constraint(cc,K,idx,prob.model.n,prob.model.m,n̄))
-            end
-        end
-        push!(con_prob,con_uncertain)
-    end
-
-    con_uncertain = GeneralConstraint[]
-    push!(con_uncertain,ctg_term)
-    if constrained
-        for cc in prob.constraints[N]
-            push!(con_uncertain,robust_constraint(cc,prob.model.n,n̄))
-        end
-    end
-    push!(con_prob,con_uncertain)
-
-    prob_con = ProblemConstraints(con_prob)
-
-    update_problem(prob,model=_robust_model,obj=robust_obj,
-        constraints=prob_con,
-        X=[[prob.X[k];ones(n_robust)*NaN32] for k = 1:N],
-        U=[k==1 ? [prob.U[k];S1] : prob.U[k] for k = 1:N-1],
-        x0=[copy(prob.x0);reshape(E1,n^2);reshape(H1,n*r);S1])
-end
-
-function get_δx(E,i)
-    sqrt(E)[:,i]
-end
-
-function ∇δx(E,i)
-    n = size(E,1)
-
-    function f1(e)
-        ee = eigen(E)
-
-        b = Diagonal(sqrt.(ee.values))*ee.vectors'
-        b[:,i]
-    end
-
-    ForwardDiff.jacobian(f1,vec(E))[:,((i-1)*n + 1):i*n]
-end
-
-function get_δu(K,z,u,idx,j)
-    _K = K(z,u)
-    n = size(_K,2)
-    E = reshape(z[idx.e],n,n)
-    sqrt(_K*E*_K')[:,j]
-end
-
-function ∇δu(K,z,u,idx,j)
-    m = length(u)
-
-    y = [z;u]
-    function f1(y)
-        _K = K(y[idx.z],y[length(idx.z)+1:end])
-        n = size(_K,2)
-        E = reshape(y[idx.e],n,n)
-        tmp = _K*E*_K'
-        ee = eigen(tmp)
-        b = Diagonal(sqrt.(ee.values))*ee.vectors'
-        b[:,j]
-    end
-
-    ForwardDiff.jacobian(f1,y)
-end
-
-"Modify constraint to evaluate all combinations of the disturbed state and control"
-function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::Int,m::Int,n̄::Int)
-    p = c.p
-    p_robust = p*(2*n+1)*(2*m+1)
-
-    function rc(v,z,u)
-        xw = Vector[]
-        uw = Vector[]
-
-        x = z[idx.x]
-        u = u[1:m]
-        E = reshape(z[idx.e],n,n)
-        Ex = sqrt(E)
-        _K = K(z,u)
-        Eu = sqrt(_K*E*_K')
-
-        push!(xw,x)
-        push!(uw,u)
-
-        for i = 1:n
-            if norm(imag.(Ex[:,i])) > 0.1
-                error("imag. error")
-            end
-            δx = real.(Ex[:,i])
-            push!(xw,x + δx)
-            push!(xw,x - δx)
-        end
-        for j = 1:m
-            if norm(imag.(Eu[:,j])) > 0.1
-                error("imag. error")
-            end
-            δu = real.(Eu[:,j])
-            push!(uw,u + δu)
-            push!(uw,u - δu)
-        end
-
-        k = 1
-        for _x in xw
-            for _u in uw
-                c.c(view(v,((k-1)*p+1:k*p)),_x,_u)
-                k += 1
-            end
-        end
-    end
-
-    function ∇rc(V,z,u)
-        xw = Vector[]
-        uw = Vector[]
-        sx = []
-        su = []
-
-        x = z[idx.x]
-        u = u[1:m]
-        E = reshape(z[idx.e],n,n)
-        Ex = sqrt(E)
-        _K = K(z,u)
-        Eu = sqrt(_K*E*_K')
-
-        push!(xw,x)
-        push!(sx,(0,0))
-
-        push!(uw,u)
-        push!(su,(0,0))
-
-        for i = 1:n
-            δx = real.(Ex[:,i])
-            push!(xw,x + δx)
-            push!(sx,(i,1))
-            push!(xw,x - δx)
-            push!(sx,(i,-1))
-        end
-        for j = 1:m
-            δu = real.(Eu[:,j])
-            push!(uw,u + δu)
-            push!(su,(j,1))
-            push!(uw,u - δu)
-            push!(su,(j,-1))
-        end
-
-        k = 1
-        for (i,_x) in enumerate(xw)
-            for (j,_u) in enumerate(uw)
-
-                _V = zeros(p,n+m)
-                idx_p = (((k-1)*p+1):k*p)
-                c.∇c(_V,_x,_u)
-
-                _idx = [(1:n)...,((n + n^2 + n*r + n^2) .+ (1:m))...]
-                copyto!(view(V,idx_p,_idx),_V)
-
-                cx = _V[:,1:n]
-                cu = _V[:,n .+ (1:m)]
-                #
-                # if i != 1
-                #     _idx = (n .+ (((sx[i][1]-1)*n + 1): sx[i][1]*n))
-                #     copyto!(view(V,idx_p,_idx),sx[i][2]*cx*∇δx(E,sx[i][1]))
-                # end
-                if j != 1
-                    # _idx = ((n + n^2 + n*r + n^2) .+ (((su[j][1]-1)*m + 1): su[j][1]*m))
-                    _idx = n .+ (1:n^2)
-                    copyto!(view(V,idx_p,_idx),su[j][2]*cu*∇δu(K,z,u,idx,su[j][1]))
-                end
-
-                k += 1
-            end
-        end
-    end
-
-    typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:m)],c.type)
-end
-
-function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
-    p = c.p
-    p_robust = p*(2*n+1)
-
-    function rc(v,z)
-        xw = Vector[]
-
-        x = z[idx.x]
-        E = reshape(z[idx.e],n,n)
-        Ex = sqrt(E)
-
-        push!(xw,x)
-
-        for i = 1:n
-            if norm(imag.(Ex[:,i])) > 0.1
-                error("imag. error")
-            end
-            δx = real.(Ex[:,i])
-            push!(xw,x + δx)
-            push!(xw,x - δx)
-        end
-
-        for (k,_x) in enumerate(xw)
-            c.c(view(v,((k-1)*p+1:k*p)),_x)
-        end
-    end
-
-    function ∇rc(V,z)
-        xw = Vector[]
-        sx = []
-
-        x = z[idx.x]
-        E = reshape(z[idx.e],n,n)
-        Ex = sqrt(E)
-
-        push!(xw,x)
-        push!(sx,(0,0))
-
-        for i = 1:n
-            δx = real.(Ex[:,i])
-            push!(xw,x + δx)
-            push!(sx,(i,1))
-            push!(xw,x - δx)
-            push!(sx,(i,-1))
-        end
-
-        for (k,_x) in enumerate(xw)
-            _V = zeros(p,n)
-            idx_p = (((k-1)*p+1):k*p)
-            c.∇c(_V,_x)
-            _idx = (k-1)*n+1:k*n
-            copyto!(view(V,idx_p,_idx),_V)
-
-            cx = _V[:,1:n]
-
-            if k != 1
-                _idx = (n .+ (((sx[k][1]-1)*n + 1): sx[k][1]*n))
-                copyto!(view(V,idx_p,_idx),sx[k][2]*cx*∇δx(E,sx[k][1]))
-            end
-        end
-    end
-
-    typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:0)],c.type)
-end
-
-"Update jacobian for robust dynamics that include δx, δu terms in state vector"
-function update_jacobian(_∇F::Function,n::Int,m::Int,r::Int)
-    inds = (x=1:n, u=n .+ (1:m),w = (n+m) .+ (1:r), dt=n+m+r+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)),xw=(1:n,(n+m) .+ (1:r)), xdt=(1:n,(n+m+r) .+ (1:1)))
-    # nδ = 2*(n^2 + m^2)
-    n_robust = n^2 + n*r + n^2
-    S0 = zeros(n,n+n_robust+m+r+1)
-    ẋ0 = zeros(n)
-
-    idx_x = 1:n
-    idx_u = 1:m
-    idx_w = 1:r
-    idx = [(idx_x)...,((n+n_robust) .+ (idx_u))...,((n+n_robust+m) .+ (idx_w))...,(n+n_robust+m+r+1)]
-
-    ∇F(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T= begin
-        _∇F(view(S,idx_x,idx),ẋ,x,u,w,dt)
-        return nothing
-    end
-    ∇F(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
-        _∇F(view(S,idx_x,idx),ẋ0,x,u,w,dt)
-        return nothing
-    end
-    ∇F(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
-        _∇F(view(S0,idx_x,idx),ẋ0,x,u,w,dt)
-        return S0
-    end
-    return ∇F
-end
+# function get_δx(E,i)
+#     sqrt(E)[:,i]
+# end
+#
+# function ∇δx(E,i)
+#     n = size(E,1)
+#
+#     function f1(e)
+#         ee = eigen(E)
+#
+#         b = Diagonal(sqrt.(ee.values))*ee.vectors'
+#         b[:,i]
+#     end
+#
+#     ForwardDiff.jacobian(f1,vec(E))[:,((i-1)*n + 1):i*n]
+# end
+#
+# function get_δu(K,z,u,idx,j)
+#     _K = K(z,u)
+#     n = size(_K,2)
+#     E = reshape(z[idx.e],n,n)
+#     sqrt(_K*E*_K')[:,j]
+# end
+#
+# function ∇δu(K,z,u,idx,j)
+#     m = length(u)
+#
+#     y = [z;u]
+#     function f1(y)
+#         _K = K(y[idx.z],y[length(idx.z)+1:end])
+#         n = size(_K,2)
+#         E = reshape(y[idx.e],n,n)
+#         tmp = _K*E*_K'
+#         ee = eigen(tmp)
+#         b = Diagonal(sqrt.(ee.values))*ee.vectors'
+#         b[:,j]
+#     end
+#
+#     ForwardDiff.jacobian(f1,y)
+# end
+#
+# "Modify constraint to evaluate all combinations of the disturbed state and control"
+# function robust_constraint(c::AbstractConstraint,K::Function,idx::NamedTuple,n::Int,m::Int,n̄::Int)
+#     p = c.p
+#     p_robust = p*(2*n+1)*(2*m+1)
+#
+#     function rc(v,z,u)
+#         xw = Vector[]
+#         uw = Vector[]
+#
+#         x = z[idx.x]
+#         u = u[1:m]
+#         E = reshape(z[idx.e],n,n)
+#         Ex = sqrt(E)
+#         _K = K(z,u)
+#         Eu = sqrt(_K*E*_K')
+#
+#         push!(xw,x)
+#         push!(uw,u)
+#
+#         for i = 1:n
+#             if norm(imag.(Ex[:,i])) > 0.1
+#                 error("imag. error")
+#             end
+#             δx = real.(Ex[:,i])
+#             push!(xw,x + δx)
+#             push!(xw,x - δx)
+#         end
+#         for j = 1:m
+#             if norm(imag.(Eu[:,j])) > 0.1
+#                 error("imag. error")
+#             end
+#             δu = real.(Eu[:,j])
+#             push!(uw,u + δu)
+#             push!(uw,u - δu)
+#         end
+#
+#         k = 1
+#         for _x in xw
+#             for _u in uw
+#                 c.c(view(v,((k-1)*p+1:k*p)),_x,_u)
+#                 k += 1
+#             end
+#         end
+#     end
+#
+#     function ∇rc(V,z,u)
+#         xw = Vector[]
+#         uw = Vector[]
+#         sx = []
+#         su = []
+#
+#         x = z[idx.x]
+#         u = u[1:m]
+#         E = reshape(z[idx.e],n,n)
+#         Ex = sqrt(E)
+#         _K = K(z,u)
+#         Eu = sqrt(_K*E*_K')
+#
+#         push!(xw,x)
+#         push!(sx,(0,0))
+#
+#         push!(uw,u)
+#         push!(su,(0,0))
+#
+#         for i = 1:n
+#             δx = real.(Ex[:,i])
+#             push!(xw,x + δx)
+#             push!(sx,(i,1))
+#             push!(xw,x - δx)
+#             push!(sx,(i,-1))
+#         end
+#         for j = 1:m
+#             δu = real.(Eu[:,j])
+#             push!(uw,u + δu)
+#             push!(su,(j,1))
+#             push!(uw,u - δu)
+#             push!(su,(j,-1))
+#         end
+#
+#         k = 1
+#         for (i,_x) in enumerate(xw)
+#             for (j,_u) in enumerate(uw)
+#
+#                 _V = zeros(p,n+m)
+#                 idx_p = (((k-1)*p+1):k*p)
+#                 c.∇c(_V,_x,_u)
+#
+#                 _idx = [(1:n)...,((n + n^2 + n*r + n^2) .+ (1:m))...]
+#                 copyto!(view(V,idx_p,_idx),_V)
+#
+#                 cx = _V[:,1:n]
+#                 cu = _V[:,n .+ (1:m)]
+#                 #
+#                 # if i != 1
+#                 #     _idx = (n .+ (((sx[i][1]-1)*n + 1): sx[i][1]*n))
+#                 #     copyto!(view(V,idx_p,_idx),sx[i][2]*cx*∇δx(E,sx[i][1]))
+#                 # end
+#                 if j != 1
+#                     # _idx = ((n + n^2 + n*r + n^2) .+ (((su[j][1]-1)*m + 1): su[j][1]*m))
+#                     _idx = n .+ (1:n^2)
+#                     copyto!(view(V,idx_p,_idx),su[j][2]*cu*∇δu(K,z,u,idx,su[j][1]))
+#                 end
+#
+#                 k += 1
+#             end
+#         end
+#     end
+#
+#     typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:m)],c.type)
+# end
+#
+# function robust_constraint(c::AbstractConstraint,n::Int,n̄::Int)
+#     p = c.p
+#     p_robust = p*(2*n+1)
+#
+#     function rc(v,z)
+#         xw = Vector[]
+#
+#         x = z[idx.x]
+#         E = reshape(z[idx.e],n,n)
+#         Ex = sqrt(E)
+#
+#         push!(xw,x)
+#
+#         for i = 1:n
+#             if norm(imag.(Ex[:,i])) > 0.1
+#                 error("imag. error")
+#             end
+#             δx = real.(Ex[:,i])
+#             push!(xw,x + δx)
+#             push!(xw,x - δx)
+#         end
+#
+#         for (k,_x) in enumerate(xw)
+#             c.c(view(v,((k-1)*p+1:k*p)),_x)
+#         end
+#     end
+#
+#     function ∇rc(V,z)
+#         xw = Vector[]
+#         sx = []
+#
+#         x = z[idx.x]
+#         E = reshape(z[idx.e],n,n)
+#         Ex = sqrt(E)
+#
+#         push!(xw,x)
+#         push!(sx,(0,0))
+#
+#         for i = 1:n
+#             δx = real.(Ex[:,i])
+#             push!(xw,x + δx)
+#             push!(sx,(i,1))
+#             push!(xw,x - δx)
+#             push!(sx,(i,-1))
+#         end
+#
+#         for (k,_x) in enumerate(xw)
+#             _V = zeros(p,n)
+#             idx_p = (((k-1)*p+1):k*p)
+#             c.∇c(_V,_x)
+#             _idx = (k-1)*n+1:k*n
+#             copyto!(view(V,idx_p,_idx),_V)
+#
+#             cx = _V[:,1:n]
+#
+#             if k != 1
+#                 _idx = (n .+ (((sx[k][1]-1)*n + 1): sx[k][1]*n))
+#                 copyto!(view(V,idx_p,_idx),sx[k][2]*cx*∇δx(E,sx[k][1]))
+#             end
+#         end
+#     end
+#
+#     typeof(c)(rc,∇rc,p_robust,c.label,[collect(1:n̄),collect(1:0)],c.type)
+# end
+#
+# "Update jacobian for robust dynamics that include δx, δu terms in state vector"
+# function update_jacobian(_∇F::Function,n::Int,m::Int,r::Int)
+#     inds = (x=1:n, u=n .+ (1:m),w = (n+m) .+ (1:r), dt=n+m+r+1, xx=(1:n,1:n),xu=(1:n,n .+ (1:m)),xw=(1:n,(n+m) .+ (1:r)), xdt=(1:n,(n+m+r) .+ (1:1)))
+#     # nδ = 2*(n^2 + m^2)
+#     n_robust = n^2 + n*r + n^2
+#     S0 = zeros(n,n+n_robust+m+r+1)
+#     ẋ0 = zeros(n)
+#
+#     idx_x = 1:n
+#     idx_u = 1:m
+#     idx_w = 1:r
+#     idx = [(idx_x)...,((n+n_robust) .+ (idx_u))...,((n+n_robust+m) .+ (idx_w))...,(n+n_robust+m+r+1)]
+#
+#     ∇F(S::AbstractMatrix,ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T= begin
+#         _∇F(view(S,idx_x,idx),ẋ,x,u,w,dt)
+#         return nothing
+#     end
+#     ∇F(S::AbstractMatrix,x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
+#         _∇F(view(S,idx_x,idx),ẋ0,x,u,w,dt)
+#         return nothing
+#     end
+#     ∇F(x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = begin
+#         _∇F(view(S0,idx_x,idx),ẋ0,x,u,w,dt)
+#         return S0
+#     end
+#     return ∇F
+# end
 
 function gen_robust_exp_funcs(fc::Function,idx::NamedTuple,Qr::AbstractArray,Rr::AbstractArray,
         Qfr::AbstractArray,n::Int,m::Int,r::Int)

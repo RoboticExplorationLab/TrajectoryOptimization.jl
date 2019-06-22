@@ -178,7 +178,9 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
 end
 
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector)
-    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
+    # model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
+    model.f(ẋ,x[1:model.n],u[1:model.m],zeros(model.r))
+
     model.evals[1] += 1
 end
 
@@ -193,7 +195,8 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVecto
 end
 
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
-    model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r),dt)
+    # model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r),dt)
+    model.f(ẋ,x[1:model.n],u[1:model.m],zeros(model.r),dt)
     model.evals[1] += 1
 end
 

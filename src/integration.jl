@@ -315,7 +315,7 @@ function DiffEqIntegratorUncertain(f!::Function, dt::Float64, integrator::Symbol
         u0=vec([x;u;w])
         tspan = (_t0,_tf)
         pro = ODEProblem(f_aug,u0,tspan)
-        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt)
+        sol = OrdinaryDiffEq.solve(pro,eval(integrator)(),dt=dt,abs_tol=1.0e-9,rel_tol=1.0e-9)
         copyto!(y,sol.u[end][1:n])
     end
 end
