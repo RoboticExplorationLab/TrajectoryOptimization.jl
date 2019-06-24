@@ -303,9 +303,9 @@ end
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
     N = length(X)
     n = model.n; m = model.m; r = model.r
-    idx = [(1:n)...,(n .+ (1:m))...,((n+m) .+ (1:r))...,size(Z[1],2)]
+    m_e = length(U[1]) - length(U[2])
+    idx = [(1:n)...,(n .+ (1:m))...,((n+m+m_e) .+ (1:r))...,(n+m+m_e+r+1)]
     jacobian!(view(Z[1],1:n,idx),model,X[1],U[1][1:m],dt)
-
     for k = 2:N-1
         jacobian!(Z[k],model,X[k],U[k],dt)
     end
@@ -629,12 +629,13 @@ midpoint_implicit(model::Model{M,Continuous},dt::T=1.0) where {M,T} = discretize
 
 
 function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) where T
-    if String(discretization)[1:6] == "DiffEq"
-        fd! = DiffEqIntegrator(f,dt,Symbol(split(String(discretization),"_")[2]),n,m)
-    elseif discretization in [:rk3,:rk4,:midpoint] # ie, explicit
+
+    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(discretization)(f,dt)
     elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(discretization)(f,n,m,dt)
+    elseif String(discretization)[1:6] == "DiffEq"
+            fd! = DiffEqIntegrator(f,dt,Symbol(split(String(discretization),"_")[2]),n,m)
     else
         error("Integration not defined")
     end
@@ -643,12 +644,13 @@ function discretize(f::Function,discretization::Symbol,dt::T,n::Int,m::Int) wher
 end
 
 function discretize_uncertain(f::Function,discretization::Symbol,dt::T,n::Int,m::Int,r::Int) where T
-    if String(discretization)[1:6] == "DiffEq"
-        fd! = DiffEqIntegratorUncertain(f,dt,Symbol(split(String(discretization),"_")[2]),n,m,r)
-    elseif discretization in [:rk3,:rk4,:midpoint] # ie, explicit
+
+    if discretization in [:rk3,:rk4,:midpoint] # ie, explicit
             fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,dt)
     elseif discretization in [:rk3_implicit,:midpoint_implicit] # ie, implicit
         fd! = eval(Symbol(String(discretization) * "_uncertain"))(f,n,m,r,dt)
+    elseif String(discretization)[1:6] == "DiffEq"
+        fd! = DiffEqIntegratorUncertain(f,dt,Symbol(split(String(discretization),"_")[2]),n,m,r)
     else
         error("Integration not defined")
     end

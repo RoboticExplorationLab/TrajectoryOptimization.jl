@@ -19,7 +19,7 @@ end
 
 
 "iLQR solve method"
-function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T
+function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T},ro::Bool=true) where T
     reset!(solver)
 
     n,m,N = size(prob)
@@ -28,7 +28,7 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T
     logger = default_logger(solver)
 
     # Initial rollout
-    rollout!(prob)
+    ro ? rollout!(prob) : nothing
     live_plotting(prob,solver)
 
     J_prev = cost(prob.obj, prob.X, prob.U)
@@ -157,8 +157,8 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
         # @logmsg InnerLoop "Regularization Increased"
         solver.dρ[1] = max(solver.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)
         solver.ρ[1] = max(solver.ρ[1]*solver.dρ[1], solver.opts.bp_reg_min)
-        if solver.ρ[1] > solver.opts.bp_reg_max
-            @warn "Max regularization exceeded"
+        if solver.ρ[1] >= solver.opts.bp_reg_max
+            @error "Max backward pass regularization exceeded"
         end
     elseif status == :decrease # decrease regularization
         solver.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)

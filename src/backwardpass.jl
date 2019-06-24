@@ -47,6 +47,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         if !isposdef(Hermitian(Quu_reg))
             # increase regularization
             @logmsg InnerIters "Regularizing Quu "
+            # println("Time step: $k")
+            # println("cond. : $(cond(Q[k].uu))")
             regularization_update!(solver,:increase)
 
             # reset backward pass

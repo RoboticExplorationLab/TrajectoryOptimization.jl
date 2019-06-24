@@ -43,7 +43,7 @@ function step!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T},
         unconstrained_solver::AbstractSolver) where T
 
     # Solve the unconstrained problem
-    J = solve!(prob, unconstrained_solver)
+    J = solve!(prob, unconstrained_solver, false)
 
     reset!(unconstrained_solver)
 
