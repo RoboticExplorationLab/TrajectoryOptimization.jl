@@ -46,7 +46,7 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     cost_expansion!(Q[N],c[N],X[N])
     for k = 1:N-1
         cost_expansion!(Q[k],c[k],X[k],U[k])
-        Q[k]/(N-1.)
+        # Q[k]/(N-1.)
     end
 end
 

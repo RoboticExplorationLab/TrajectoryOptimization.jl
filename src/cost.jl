@@ -14,7 +14,7 @@ function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})
     for k = 1:N-1
         J += stage_cost(c[k],X[k],U[k])
     end
-    J /= (N-1.0)
+    # J /= (N-1.0)
     J += stage_cost(c[N],X[N])
     return J
 end
