@@ -43,8 +43,12 @@ end
 function active_set!(prob::Problem, solver::ProjectedNewtonSolver)
     n,m,N = size(prob)
     P = sum(num_constraints(prob)) + n*N
+    a0 = copy(solver.a)
     for k = 1:N
         active_set!(solver.active_set[k], solver.C[k], solver.opts.active_set_tolerance)
+    end
+    if a0 != solver.a
+        println("active set changed")
     end
 end
 
@@ -53,10 +57,6 @@ function active_set!(a::AbstractVector{Bool}, c::AbstractArray{T}, tol::T=0.0) w
     equality, inequality = c.parts[:equality], c.parts[:inequality]
     a[equality] .= true
     a[inequality] .= c.inequality .>= -tol
-
-    if a != a0
-        println("Active Set Changed")
-    end
 end
 
 
@@ -234,7 +234,7 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
         viol = max_violation(solver)
 
         println("cost: $J \t residual: $res \t feas: $viol")
-        if J < J0 && res < (1-α*s)*res0
+        if res < (1-α*s)*res0
             println("α: $α")
             return V_
         end
@@ -274,6 +274,7 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     # Projection
     println("\nProjection:")
     projection!(prob, solver)
+    multiplier_projection!(prob, solver)
     update!(prob, solver)
 
     # Solve KKT

@@ -4,7 +4,7 @@ costfun = Dynamics.car_costfun
 xf = [0,1,0]
 N = 51
 n,m = model.n, model.m
-bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=2)
+bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=1.5)
 bnd1 = BoundConstraint(n,m, u_min=bnd.u_min)
 bnd_x = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf])
 goal = goal_constraint(xf)
@@ -15,7 +15,7 @@ obs2 = planar_obstacle_constraint(n,m, obs[2]..., :obstacle2)
 con = ProblemConstraints(N)
 con[1] += bnd1
 for k = 2:N-1
-    con[k] += bnd1 # + obs1 + obs2
+    con[k] += bnd  + obs1 + obs2
 end
 con[N] += goal
 prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
@@ -43,12 +43,13 @@ active_set!(prob, solver)
 @test all(solver.a.primals)
 @test all(solver.a.ν)
 @test all(solver.a.λ[end-n+1:end])
-# @test !all(solver.a.λ)
+@test !all(solver.a.λ)
 dynamics_jacobian!(prob, solver)
 @test solver.∇F[1].xx == solver.Y[1:n,1:n]
 @test solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
 constraint_jacobian!(prob, solver)
-@test solver.∇C[1] == solver.Y[N*n .+ (1:4), 1:n+m]
+solver.∇C[1]
+@test solver.∇C[1] == solver.Y[N*n .+ (1:p[1]), 1:n+m]
 
 cost_expansion!(prob, solver)
 # Y,y = Array(Y), Array(y)
@@ -67,6 +68,7 @@ viol = calc_violations(solver)
 
 # Test Projection
 solver = ProjectedNewtonSolver(prob)
+solver.opts.feasibility_tolerance = 1e-10
 solver.opts.active_set_tolerance = 1e-3
 projection!(prob, solver)
 update!(prob, solver, solver.V)
@@ -87,6 +89,16 @@ solver.opts.feasibility_tolerance = 1e-10
 V_ = newton_step!(prob, solver)
 copyto!(solver.V.V, V_.V)
 V_ = newton_step!(prob, solver)
+
+
+plot()
+plot_circle!(obs[1]...)
+plot_circle!(obs[2]...)
+plot_trajectory!(prob.X,markershape=:circle)
+plot_trajectory!(V_.X,markershape=:circle)
+plot(prob.U, color=:blue)
+plot!(V_.U, color=:red)
+
 
 α = 0.5
 V_ = V0 + α*δV
