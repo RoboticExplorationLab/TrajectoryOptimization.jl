@@ -49,9 +49,14 @@ function active_set!(prob::Problem, solver::ProjectedNewtonSolver)
 end
 
 function active_set!(a::AbstractVector{Bool}, c::AbstractArray{T}, tol::T=0.0) where T
+    a0 = copy(a)
     equality, inequality = c.parts[:equality], c.parts[:inequality]
     a[equality] .= true
     a[inequality] .= c.inequality .>= -tol
+
+    if a != a0
+        println("Active Set Changed")
+    end
 end
 
 
@@ -66,7 +71,7 @@ function constraint_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=so
     jacobian!(solver.∇C[N], prob.constraints[N], V.X[N])
 end
 
-function active_constraints(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+function active_constraints(prob::Problem, solver::ProjectedNewtonSolver)
     n,m,N = size(prob)
     a = solver.a.duals
     # return view(solver.Y, a, :), view(solver.y, a)
@@ -114,6 +119,17 @@ end
 ######################
 #     FUNCTIONS      #
 ######################
+function update!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, active_set=true)
+    dynamics_constraints!(prob, solver, V)
+    update_constraints!(prob, solver, V)
+    dynamics_jacobian!(prob, solver, V)
+    constraint_jacobian!(prob, solver, V)
+    cost_expansion!(prob, solver, V)
+    if active_set
+        active_set!(prob, solver)
+    end
+end
+
 function max_violation(solver::ProjectedNewtonSolver{T}) where T
     c_max = 0.0
     C = solver.C
@@ -130,16 +146,37 @@ function max_violation(solver::ProjectedNewtonSolver{T}) where T
     return c_max
 end
 
-function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+function calc_violations(solver::ProjectedNewtonSolver{T}) where T
+    C = solver.C
+    N = length(C)
+    v = [zero(c) for c in C]
+    v = zeros(N)
+    for k = 1:N
+        if length(C[k].equality) > 0
+            v[k] = norm(C[k].equality,Inf)
+        end
+        if length(C[k].inequality) > 0
+            v[k] = max(pos(maximum(C[k].inequality)), v[k])
+        end
+    end
+    return v
+end
+
+function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, active_set_update=true)
     Z = primals(V)
-    eps_feasible = 1e-6
+    eps_feasible = solver.opts.feasibility_tolerance
     count = 0
+    cost_expansion!(prob, solver, V)
+    H = Diagonal(solver.H)
+    Hinv = inv(H)
     while true
         dynamics_constraints!(prob, solver, V)
         update_constraints!(prob, solver, V)
         dynamics_jacobian!(prob, solver, V)
         constraint_jacobian!(prob, solver, V)
-        active_set!(prob, solver)
+        if active_set_update
+            active_set!(prob, solver)
+        end
         Y,y = active_constraints(prob, solver)
 
         viol = norm(y,Inf)
@@ -168,57 +205,98 @@ function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
 end
 
 function residual(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
-    _,y = active_constraints(prob, solver)
+    a = solver.a
+    Y,y = active_constraints(prob, solver)
+    λ = duals(V)[a.duals]
     g = solver.g
-    res = [g; y]
+    res = [g + Y'λ; y]
 end
 
+
+function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
+    α = 1.0
+    s = 0.01
+    J0 = cost(prob, solver.V)
+    update!(prob, solver)
+    res0 = norm(residual(prob, solver))
+    count = 0
+    println("res0: $res0")
+    while count < 10
+        V_ = solver.V + α*δV
+        # projection!(prob, solver, V_)
+
+        # Calculate residual
+        projection!(prob, solver, V_)
+        res = multiplier_projection!(prob, solver, V_)
+        J = cost(prob, V_)
+
+        # Calculate max violation
+        viol = max_violation(solver)
+
+        println("cost: $J \t residual: $res \t feas: $viol")
+        if J < J0 && res < (1-α*s)*res0
+            println("α: $α")
+            return V_
+        end
+        count += 1
+        α /= 2
+    end
+    return solver.V
+end
+
+function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    g = solver.g
+    update!(prob, solver, V)
+    Y,y = active_constraints(prob, solver)
+    λ = duals(V)[solver.a.duals]
+
+    res0 = g + Y'λ
+    δλ = -(Y*Y')\(Y*res0)
+    λ_ = λ + δλ
+    res = g + Y'*λ_
+    copyto!(duals(V), λ_)
+    res = norm(residual(prob, solver, V))
+    return res
+end
+
+
+
+
 function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
-    J0 = cost(prob)
-
     V = solver.V
-    P = length(duals(V))
-    Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
-    cost_expansion!(Q, prob.obj, V.X, V.U)
-    dynamics_constraints!(prob, solver)
-    dynamics_jacobian!(prob, solver)
-    H,g = cost_expansion(Q)
-    D,d = dynamics_expansion(prob, solver)
 
-    # Form the KKT system
-    A = [H D'; D zeros(P,P)]
-    b = Vector([g;d])
-    println("residual: ", norm(b))
+    # Initial stats
+    update!(prob, solver)
+    J0 = cost(prob, V)
+    res0 = norm(residual(prob, solver))
+    viol0 = max_violation(solver)
 
-    # Solve the KKT system
-    δV = -A\b
+    # Projection
+    println("\nProjection:")
+    projection!(prob, solver)
+    update!(prob, solver)
 
-    V1 = copy(V)
-    V1.V .+= δV
-    dynamics_constraints!(prob, solver, V1)
-    dynamics_jacobian!(prob, solver, V1)
-    cost_expansion!(Q, prob.obj, V1.X, V1.U)
-    H,g = cost_expansion(Q)
-    D,d = dynamics_expansion(prob, solver)
-    b1 = [g;d]
-    J = cost(prob, V1)
-    println("New cost: ", J)
-    println("New res: ", norm(b1))
-    projection!(prob, solver, V1)
+    # Solve KKT
+    J1 = cost(prob, V)
+    res1 = norm(residual(prob, solver))
+    viol1 = max_violation(solver)
+    δV = solveKKT(prob, solver)
 
+    # Line Search
+    println("\nLine Search")
+    V_ = line_search(prob, solver, δV)
+    update!(prob, solver, V_)
+    J_ = cost(prob, V_)
+    res_ = norm(residual(prob, solver, V_))
+    viol_ = max_violation(solver)
 
-    H,g = cost_expansion(Q)
-    D,d = dynamics_expansion(prob, solver)
-    b2 = [g;d]
-    J = cost(prob, V1)
-    println("Post cost: ", J)
-    println("Post res: ", norm(b2))
+    # Print Stats
+    println("\nStats")
+    println("cost: $J0 → $J1 → $J_")
+    println("res: $res0 → $res1 → $res_")
+    println("viol: $viol0 → $viol1 → $viol_")
 
-
-
-    α = 1
-
-    return δV
+    return V_
 end
 
 function gen_usrfun_newton(prob::Problem)
@@ -345,7 +423,7 @@ function gen_usrfun_newton(prob::Problem)
 
     function act_set(V::PrimalDual, tol=solver.opts.active_set_tolerance)
         update_constraints!(prob, solver)
-        active_set!(prob, solver, V, tol)
+        active_set!(prob, solver)
     end
 
 
@@ -468,6 +546,8 @@ function newton_step0(prob::Problem, V::PrimalDual, tol=1e-3)
     println("err: ", norm(err))
     println("max r: ", norm(b))
 
+    return δV
+
 
     V1 = copy(V_)
     Z1 = primals(V1)
@@ -559,28 +639,26 @@ function solve(prob::Problem, opts::ProjectedNewtonSolverOptions)::Problem
     return res
 end
 
-function calc_violations(solver::Union{AugmentedLagrangianSolver{T}, ProjectedNewtonSolver{T}}) where T
-    c_max = 0.0
-    C = solver.C
-    N = length(C)
-    p = length.(C)
-    v = [zeros(pi) for pi in p]
-    if length(C[1]) > 0
-        for k = 1:N
-            v[k][C[k].parts[:equality]] = abs.(C[k].equality)
-            if length(C[k].inequality) > 0
-                v[k][C[k].parts[:inequality]] = max.(C[k].inequality, 0)
-            end
-        end
-    end
-    return v
-end
+# function calc_violations(solver::Union{AugmentedLagrangianSolver{T}, ProjectedNewtonSolver{T}}) where T
+#     c_max = 0.0
+#     C = solver.C
+#     N = length(C)
+#     p = length.(C)
+#     v = [zeros(pi) for pi in p]
+#     for k = 1:N
+#         v[k][C[k].parts[:equality]] = abs.(C[k].equality)
+#         if length(C[k].inequality) > 0
+#             v[k][C[k].parts[:inequality]] = max.(C[k].inequality, 0)
+#         end
+#     end
+#     return v
+# end
 
-function residual(prob::Problem, solver::ProjectedNewtonSolver)
-    g = vcat([[q.x; q.u] for q in solver.Q]...)
-    d = vcat(solver.fVal...)
-    return norm([g;d]), norm(g), norm(d)
-end
+# function residual(prob::Problem, solver::ProjectedNewtonSolver)
+#     g = vcat([[q.x; q.u] for q in solver.Q]...)
+#     d = vcat(solver.fVal...)
+#     return norm([g;d]), norm(g), norm(d)
+# end
 
 
 function dynamics_expansion(prob::Problem, solver::ProjectedNewtonSolver)

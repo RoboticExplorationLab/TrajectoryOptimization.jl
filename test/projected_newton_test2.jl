@@ -5,7 +5,7 @@ xf = [0,1,0]
 N = 51
 n,m = model.n, model.m
 bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=2)
-bnd1 = BoundConstraint(n,m, u_min=bnd.u_min, u_max=bnd.u_max)
+bnd1 = BoundConstraint(n,m, u_min=bnd.u_min)
 bnd_x = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf])
 goal = goal_constraint(xf)
 obs = (([0.2, 0.6], 0.25),
@@ -15,7 +15,7 @@ obs2 = planar_obstacle_constraint(n,m, obs[2]..., :obstacle2)
 con = ProblemConstraints(N)
 con[1] += bnd1
 for k = 2:N-1
-    con[k] += bnd # + obs1 + obs2
+    con[k] += bnd1 # + obs1 + obs2
 end
 con[N] += goal
 prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
@@ -43,7 +43,7 @@ active_set!(prob, solver)
 @test all(solver.a.primals)
 @test all(solver.a.ν)
 @test all(solver.a.λ[end-n+1:end])
-@test !all(solver.a.λ)
+# @test !all(solver.a.λ)
 dynamics_jacobian!(prob, solver)
 @test solver.∇F[1].xx == solver.Y[1:n,1:n]
 @test solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
@@ -60,19 +60,88 @@ dynamics_constraints!(prob, solver)
 update_constraints!(prob, solver)
 active_set!(prob, solver)
 Y,y = active_constraints(prob, solver)
+viol = calc_violations(solver)
+@test maximum(maximum.(viol)) == norm(y,Inf)
 @test norm(y,Inf) == max_violation(prob)
 @test max_violation(solver) == max_violation(prob)
 
 # Test Projection
 solver = ProjectedNewtonSolver(prob)
-V = solver.V
+solver.opts.active_set_tolerance = 1e-3
 projection!(prob, solver)
-@test max_violation(solver) < max_violation(prob)
+update!(prob, solver, solver.V)
+max_violation(solver)
+multiplier_projection!(prob, solver)
 
 # Build KKT
+V0 = copy(solver.V)
 cost_expansion!(prob, solver)
+J0 = cost(prob, V)
+res0 = norm(residual(prob, solver))
+viol0 = max_violation(solver)
 δV = solveKKT(prob, solver)
-V_ = solver.V + δV
+V_ = line_search(prob, solver, δV)
+
+solver = ProjectedNewtonSolver(prob)
+solver.opts.feasibility_tolerance = 1e-10
+V_ = newton_step!(prob, solver)
+copyto!(solver.V.V, V_.V)
+V_ = newton_step!(prob, solver)
+
+α = 0.5
+V_ = V0 + α*δV
+@test cost(prob, V_) < J0
+update!(prob, solver, V_)
+res = norm(residual(prob, solver, V_))
+(1-α*0.1)*res0
+viol = max_violation(solver)
+
+dynamics_constraints!(prob, solver, V_)
+update_constraints!(prob, solver, V_)
+dynamics_jacobian!(prob, solver, V_)
+constraint_jacobian!(prob, solver, V_)
+cost_expansion!(prob, solver, V_)
+active_set!(prob, solver)
+res = norm(residual(prob, solver, V_))
+max_violation(solver)
+J = cost(prob, V_)
+
+projection!(prob, solver, V_, false)
+dynamics_constraints!(prob, solver, V_)
+update_constraints!(prob, solver, V_)
+dynamics_jacobian!(prob, solver, V_)
+constraint_jacobian!(prob, solver, V_)
+J = cost(prob, V_)
+res = norm(residual(prob, solver, V_))
+viol = max_violation(solver)
+
+J < J0
+res < res0
+
+plot_trajectory!(V_.X)
+solver.C
+calc_violations(solver)
+
+
+# Old Method
+mycost, grad_cost, hess_cost, dyn, jacob_dynamics, constraints, jacob_con, act_set =
+    gen_usrfun_newton(prob)
+δV0 = newton_step0(prob, V)
+
+cost(prob, V_)
+norm(residual(prob, solver, V_))
+line_search(prob, solver, δV)
+update_constraints!(prob, solver, V_)
+max_violation(solver)
+projection!(prob, solver, V_, false)
+V.V ≈ V0.V
+V ≈ V0
+
+norm(residual(prob, solver, V))
+norm(residual(prob, solver, V_))
+cost(prob, V)
+cost(prob, V_)
+
 
 
 solver.fVal
