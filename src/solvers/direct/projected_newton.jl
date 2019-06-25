@@ -47,7 +47,7 @@ function active_set!(prob::Problem, solver::ProjectedNewtonSolver)
     for k = 1:N
         active_set!(solver.active_set[k], solver.C[k], solver.opts.active_set_tolerance)
     end
-    if a0 != solver.a
+    if solver.opts.verbose && a0 != solver.a
         println("active set changed")
     end
 end
@@ -166,9 +166,9 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
     Z = primals(V)
     eps_feasible = solver.opts.feasibility_tolerance
     count = 0
-    cost_expansion!(prob, solver, V)
-    H = Diagonal(solver.H)
-    Hinv = inv(H)
+    # cost_expansion!(prob, solver, V)
+    # H = Diagonal(solver.H)
+    # Hinv = inv(H)
     while true
         dynamics_constraints!(prob, solver, V)
         update_constraints!(prob, solver, V)
@@ -180,7 +180,9 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
         Y,y = active_constraints(prob, solver)
 
         viol = norm(y,Inf)
-        println("feas: ", viol)
+        if solver.opts.verbose
+            println("feas: ", viol)
+        end
         if viol < eps_feasible || count > 10
             break
         else
@@ -189,6 +191,20 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
             count += 1
         end
     end
+end
+
+function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+    g = solver.g
+    Y,y = active_constraints(prob, solver)
+    λ = duals(V)[solver.a.duals]
+
+    res0 = g + Y'λ
+    δλ = -(Y*Y')\(Y*res0)
+    λ_ = λ + δλ
+    res = g + Y'*λ_
+    copyto!(duals(V), λ_)
+    res = norm(residual(prob, solver, V))
+    return res
 end
 
 function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
@@ -220,7 +236,7 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
     update!(prob, solver)
     res0 = norm(residual(prob, solver))
     count = 0
-    println("res0: $res0")
+    solver.opts.verbose ? println("res0: $res0") : nothing
     while count < 10
         V_ = solver.V + α*δV
         # projection!(prob, solver, V_)
@@ -233,9 +249,11 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
         # Calculate max violation
         viol = max_violation(solver)
 
-        println("cost: $J \t residual: $res \t feas: $viol")
+        if solver.opts.verbose
+            println("cost: $J \t residual: $res \t feas: $viol")
+        end
         if res < (1-α*s)*res0
-            println("α: $α")
+            solver.opts.verbose ? println("α: $α") : nothing
             return V_
         end
         count += 1
@@ -244,26 +262,14 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
     return solver.V
 end
 
-function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
-    g = solver.g
-    update!(prob, solver, V)
-    Y,y = active_constraints(prob, solver)
-    λ = duals(V)[solver.a.duals]
 
-    res0 = g + Y'λ
-    δλ = -(Y*Y')\(Y*res0)
-    λ_ = λ + δλ
-    res = g + Y'*λ_
-    copyto!(duals(V), λ_)
-    res = norm(residual(prob, solver, V))
-    return res
-end
 
 
 
 
 function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     V = solver.V
+    verbose = solver.opts.verbose
 
     # Initial stats
     update!(prob, solver)
@@ -272,10 +278,10 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     viol0 = max_violation(solver)
 
     # Projection
-    println("\nProjection:")
+    verbose ? println("\nProjection:") : nothing
     projection!(prob, solver)
-    multiplier_projection!(prob, solver)
     update!(prob, solver)
+    multiplier_projection!(prob, solver)
 
     # Solve KKT
     J1 = cost(prob, V)
@@ -284,18 +290,19 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     δV = solveKKT(prob, solver)
 
     # Line Search
-    println("\nLine Search")
+    verbose ? println("\nLine Search") : nothing
     V_ = line_search(prob, solver, δV)
-    update!(prob, solver, V_)
     J_ = cost(prob, V_)
     res_ = norm(residual(prob, solver, V_))
     viol_ = max_violation(solver)
 
     # Print Stats
-    println("\nStats")
-    println("cost: $J0 → $J1 → $J_")
-    println("res: $res0 → $res1 → $res_")
-    println("viol: $viol0 → $viol1 → $viol_")
+    if verbose
+        println("\nStats")
+        println("cost: $J0 → $J1 → $J_")
+        println("res: $res0 → $res1 → $res_")
+        println("viol: $viol0 → $viol1 → $viol_")
+    end
 
     return V_
 end

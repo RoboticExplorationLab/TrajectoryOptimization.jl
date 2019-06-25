@@ -22,6 +22,9 @@ prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
 initial_controls!(prob, ones(m,N-1))
 ilqr = iLQRSolverOptions()
 al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
+al.constraint_tolerance = 1e-2
+al.constraint_tolerance_intermediate = 1e-1
+al.verbose = true
 solve!(prob, al)
 plot()
 plot_circle!(obs[1]...)
@@ -86,10 +89,16 @@ V_ = line_search(prob, solver, δV)
 
 solver = ProjectedNewtonSolver(prob)
 solver.opts.feasibility_tolerance = 1e-10
+solver.opts.verbose = false
 V_ = newton_step!(prob, solver)
+@btime newton_step!(prob, solver)
 copyto!(solver.V.V, V_.V)
 V_ = newton_step!(prob, solver)
 
+using Juno
+using Profile
+Profile.init(delay=1e-4)
+@profiler newton_step!(prob, solver)
 
 plot()
 plot_circle!(obs[1]...)
@@ -98,74 +107,3 @@ plot_trajectory!(prob.X,markershape=:circle)
 plot_trajectory!(V_.X,markershape=:circle)
 plot(prob.U, color=:blue)
 plot!(V_.U, color=:red)
-
-
-α = 0.5
-V_ = V0 + α*δV
-@test cost(prob, V_) < J0
-update!(prob, solver, V_)
-res = norm(residual(prob, solver, V_))
-(1-α*0.1)*res0
-viol = max_violation(solver)
-
-dynamics_constraints!(prob, solver, V_)
-update_constraints!(prob, solver, V_)
-dynamics_jacobian!(prob, solver, V_)
-constraint_jacobian!(prob, solver, V_)
-cost_expansion!(prob, solver, V_)
-active_set!(prob, solver)
-res = norm(residual(prob, solver, V_))
-max_violation(solver)
-J = cost(prob, V_)
-
-projection!(prob, solver, V_, false)
-dynamics_constraints!(prob, solver, V_)
-update_constraints!(prob, solver, V_)
-dynamics_jacobian!(prob, solver, V_)
-constraint_jacobian!(prob, solver, V_)
-J = cost(prob, V_)
-res = norm(residual(prob, solver, V_))
-viol = max_violation(solver)
-
-J < J0
-res < res0
-
-plot_trajectory!(V_.X)
-solver.C
-calc_violations(solver)
-
-
-# Old Method
-mycost, grad_cost, hess_cost, dyn, jacob_dynamics, constraints, jacob_con, act_set =
-    gen_usrfun_newton(prob)
-δV0 = newton_step0(prob, V)
-
-cost(prob, V_)
-norm(residual(prob, solver, V_))
-line_search(prob, solver, δV)
-update_constraints!(prob, solver, V_)
-max_violation(solver)
-projection!(prob, solver, V_, false)
-V.V ≈ V0.V
-V ≈ V0
-
-norm(residual(prob, solver, V))
-norm(residual(prob, solver, V_))
-cost(prob, V)
-cost(prob, V_)
-
-
-
-solver.fVal
-solver.C[1] .= 1
-@test solver.y[N*n .+ (1:4)] == ones(4)
-
-Y = solver.Y
-∇F =
-∇C = []
-
-solver isa Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P} where P} where {T}
-
-solver isa Array{PartedArrays.PartedArray{Float64,2,SubArray{Float64,2,SparseArrays.SparseMatrixCSC{Float64,Int64},Tuple{UnitRange{Int64},UnitRange{Int64}},false},P},1} where P
-solver isa
-println(typeof(solver))
