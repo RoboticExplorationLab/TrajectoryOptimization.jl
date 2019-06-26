@@ -125,6 +125,10 @@ function reset!(solver::ProjectedNewtonSolver{T}) where T
     solver.stats[:cost] = T[]
 end
 
+function num_active_constraints(solver::ProjectedNewtonSolver)
+    sum(solver.a.duals)
+end
+
 
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
     "NLP Solver to use. Options are (:Ipopt) (more to be added in the future)"

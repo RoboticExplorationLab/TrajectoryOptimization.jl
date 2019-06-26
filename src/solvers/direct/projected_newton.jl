@@ -307,6 +307,163 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     return V_
 end
 
+
+function buildShurCompliment(prob::Problem, solver::ProjectedNewtonSolver)
+    n,m,N = size(prob)
+
+    Hinv = inv(Diagonal(solver.H))
+    Qinv = [begin
+                off = (k-1)*(n+m) .+ (1:n);
+                Diagonal(Hinv[off,off]);
+            end for k = 1:N]
+    Rinv = [begin
+                off = (k-1)*(n+m) .+ (n+1:n+m);
+                Diagonal(Hinv[off,off]);
+            end for k = 1:N-1]
+
+    A = [F.xx for F in solver.∇F[2:end]]  # First jacobian is for initial condition
+    B = [F.xu for F in solver.∇F[2:end]]
+    C = [Array(F.x[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+    D = [Array(F.u[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+
+    P = num_active_constraints(solver)
+    S = spzeros(P,P)
+
+    _buildShurCompliment!(S, prob, solver, Qinv, Rinv, A, B, C, D)
+
+    L = chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
+
+    return Symmetric(S), L
+end
+
+function _buildShurCompliment!(S, prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D)
+    n,m,N = size(prob)
+
+    p = sum.(solver.active_set)
+    pcum = insert!(cumsum(p), 1, 0)
+
+    dinds = 1:n
+    cinds = n .+ (1:p[1])
+    S[dinds,dinds] = Qinv[1]
+    S[dinds,n .+ dinds] = Qinv[1]*A[1]'
+    S[dinds,n .+ cinds] = Qinv[1]*C[1]'
+
+    for k = 1:N-1
+        off = pcum[k] + k*n
+        dinds = off .+ (1:n)
+        cinds = off + n .+ (1:p[k])
+        S[dinds,dinds] = A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1]
+        S[dinds,cinds] = A[k]*Qinv[k]*C[k]' + B[k]*Rinv[k]*D[k]'
+        S[cinds,cinds] = C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]'
+        if k < N-1
+            S[dinds,dinds .+ (p[k] + n)] = -Qinv[k+1]*A[k+1]'
+            S[dinds, (off + p[k] + 2n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        else
+            S[dinds, (off + p[k] + n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        end
+    end
+    off = pcum[N] + N*n
+    cinds = off .+ (1:p[N])
+    S[cinds,cinds] = C[N]*Qinv[N]*C[N]'
+
+end
+
+function chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
+    n,m,N = size(prob)
+    P = num_active_constraints(solver)
+    S = LowerTriangular(zeros(P,P))
+
+    # Block indices
+    len = ones(Int,2,N-1)*n
+    p = sum.(solver.active_set)
+    len[2,:] = p[1:end-1]
+    len = append!([1,3], vec(len))
+    push!(len, p[N])
+    lcum = cumsum(len)
+    ind = [lcum[k]:lcum[k+1]-1 for k = 1:length(lcum)-1]
+
+    # Initial condition
+    G0 = cholesky(Qinv[1]).L
+    F1 = A[1]*G0
+    G1 = cholesky(Symmetric(B[1]*Rinv[1]*B[1]' + Qinv[2]))
+    L1 = C[1]*G0
+    M1 = D[1]*Rinv[1]*B[1]'/(G1.U)
+    N1 = cholesky(D[1]*Rinv[1]*D[1]' - M1*M1')
+
+    S[ind[1], ind[1]] = G0
+    S[ind[2], ind[1]] = F1
+    S[ind[2], ind[2]] = G1.L
+    S[ind[3], ind[1]] = L1
+    S[ind[3], ind[2]] = M1
+    S[ind[3], ind[3]] = N1.L
+
+
+    G_ = G1
+    M_ = M1
+    N_ = N1
+    for k = 2:N-1
+        E = -A[k]*Qinv[k]/G_.U
+        F = -E*M_'/N_.U
+        G = cholesky(Symmetric(A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1] - E*E' - F*F'))
+
+        K = -C[k]*Qinv[k]/G_.U
+        L = -K*M_'/N_.U
+        Q = inv(Qinv[k])
+        M = (C[k]*Qinv[k]*( Q - G_.U\(I - (M_'/N_.U) * (N_.L\M_) )/G_.L )*Qinv[k]*A[k]' + D[k]*Rinv[k]*B[k]')/G.U
+        N = cholesky(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K*K' - L*L' - M*M')
+
+        i = 4 + (k-2)*2
+        j = 2 + (k-2)*2
+        S[ind[i],   ind[j]  ] = E
+        S[ind[i],   ind[j+1]] = F
+        S[ind[i],   ind[j+2]] = G.L
+        S[ind[i+1], ind[j]  ] = K
+        S[ind[i+1], ind[j+1]] = L
+        S[ind[i+1], ind[j+2]] = M
+        S[ind[i+1], ind[j+3]] = N.L
+
+        G_,M_,N_ = G,M,N
+    end
+    N = prob.N
+
+    E = -C[N]*Qinv[N]/G_.U
+    F = -E*M_'/N_.U
+    G = cholesky(Symmetric(C[N]*Qinv[N]*C[N]' - E*E' - F*F'))
+
+    i = 4 + (N-2)*2
+    j = 2 + (N-2)*2
+    S[ind[i], ind[j]  ] = E
+    S[ind[i], ind[j+1]] = F
+    S[ind[i], ind[j+2]] = G.L
+
+    return S
+end
+
+
+function jacobian_permutation(prob::Problem, solver::ProjectedNewtonSolver)
+    n,m,N = size(prob)
+    inds = collect(1:length(solver.y))
+    p = num_constraints(prob)
+    pcum = insert!(cumsum(p),1,0)
+
+    off = n
+    for k = 1:N-1
+        off1 = n + (k-1)*n
+        off2 = N*n + pcum[k]
+        println(off1, " ", off2)
+        inds[off .+ (1:n)] = off1 .+ (1:n)
+        off += n
+        inds[off .+ (1:p[k])] = off2 .+ (1:p[k])
+        off += p[k]
+    end
+    return inds
+end
+
+
+
+
+
+
 function gen_usrfun_newton(prob::Problem)
     n,m,N = size(prob)
     NN = N*n + (N-1)*m

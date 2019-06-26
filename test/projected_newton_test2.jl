@@ -62,6 +62,9 @@ solver = ProjectedNewtonSolver(prob)
 solver.opts.active_set_tolerance = 0.0
 dynamics_constraints!(prob, solver)
 update_constraints!(prob, solver)
+dynamics_jacobian!(prob, solver)
+constraint_jacobian!(prob, solver)
+@btime constraint_jacobian!($prob, $solver)
 active_set!(prob, solver)
 Y,y = active_constraints(prob, solver)
 viol = calc_violations(solver)
@@ -87,6 +90,7 @@ viol0 = max_violation(solver)
 δV = solveKKT(prob, solver)
 V_ = line_search(prob, solver, δV)
 
+# Test Newton Step
 solver = ProjectedNewtonSolver(prob)
 solver.opts.feasibility_tolerance = 1e-10
 solver.opts.verbose = false
@@ -95,10 +99,76 @@ V_ = newton_step!(prob, solver)
 copyto!(solver.V.V, V_.V)
 V_ = newton_step!(prob, solver)
 
+update!(prob, solver)
+Y,y = active_constraints(prob, solver)
+@test length(y) == num_active_constraints(solver)
+sum.(solver.active_set)
+solver.active_set
+inv(prob.obj[1].Q)*(N-1)
+solver.∇C[1]
+
+num_active_constraints(solver)
+update!(prob, solver)
+inds = jacobian_permutation(prob, solver)
+@test sort(inds) == 1:length(inds)
+a_perm = solver.a.duals[inds]
+Y_perm = solver.Y[inds,:]
+Y = Array(Y_perm[a_perm,:])
+Hinv = inv(Diagonal(solver.H))
+Qinv = [begin
+            off = (k-1)*(n+m) .+ (1:n);
+            Hinv[off,off];
+        end for k = 1:N]
+Rinv = [begin
+            off = (k-1)*(n+m) .+ (n+1:n+m);
+            Hinv[off,off];
+        end for k = 1:N-1]
+A = [F.xx for F in solver.∇F[2:end]]
+B = [F.xu for F in solver.∇F[2:end]]
+C = [Array(F.x[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+D = [Array(F.u[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+S0 = Y*Hinv*Y'
+HY = Array(Hinv*Y')
+B[1]
+Y[4:6,1:8]
+HY[:,7:8]
+Y'[:,7:8]
+
+S,L = buildShurCompliment(prob, solver)
+Array(S0)[4:6,7:8]
+Array(S)[4:6,7:8]
+Array{Int}(S .≈ S0)
+S ≈ S0
+
+L0 = cholesky(Array(S)).L
+Array{Int}(L .≈ L0)
+@test L ≈ L0
+@test L*L' ≈ S
+
+len = ones(Int,2,N-1)*n
+p = sum.(solver.active_set)
+len[2,:] = p[1:end-1]
+len = append!([1,3], vec(len))
+push!(len, p[N])
+lcum = cumsum(len)
+[lcum[k]:lcum[k+1]-1 for k = 1:length(lcum)-1]
+
+
+
+len
+issymmetric()
+
+num_constraints(prob)
+sum(solver.a.duals)
+length(solver.a)
+length(solver.a.ν)
+
 using Juno
 using Profile
+using InteractiveUtils
 Profile.init(delay=1e-4)
 @profiler newton_step!(prob, solver)
+
 
 plot()
 plot_circle!(obs[1]...)
