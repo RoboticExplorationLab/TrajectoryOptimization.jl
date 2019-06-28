@@ -85,12 +85,6 @@ function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple
     AnalyticalModel{M,D}(f_p,∇f,n,m,r,p,d)
 end
 
-function AnalyticalModel{Uncertain,D}(f::Function, n::Int, m::Int, r::Int, p::NamedTuple, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {D<:DynamicsType}
-    f_p(ẋ,x,u,w) = f(ẋ,x,u,w,p)
-    f_p(ẋ,x,u,w,p) = f(ẋ,x,u,w,p)
-    ∇f, = generate_jacobian(Uncertain,D,f_p,n,m,r)
-    AnalyticalModel{Uncertain,D}(f_p,∇f,n,m,r,p,d)
-end
 
 """ $(TYPEDSIGNATURES)
 Create a dynamics model, using ForwardDiff to generate the dynamics jacobian, with parameters

@@ -1,19 +1,19 @@
-function pendulum_dynamics_uncertain(ẋ,x,u,w)
-    ẋ = zero(x)
+function pendulum_dynamics_uncertain!(ẋ,x,u,w)
     m = 1. + w[1]
     l = 0.5
     b = 0.1
     lc = 0.5
     I = 0.25
     g = 9.81
+
     ẋ[1] = x[2]
     ẋ[2] = u[1]/(m*lc*lc) - g*sin(x[1])/lc - b*x[2]/(m*lc*lc)
     return nothing
 end
 
 n = 2; m = 1; r = 1
+model = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)
 
-model = UncertainModel(pendulum_dynamics_uncertain,n,m,r)
 
 x0 = [0.;0.]
 xf = [pi;0.]
@@ -46,9 +46,9 @@ prob.constraints[N] += goal_con
 copyto!(prob.X,line_trajectory(x0,xf,N))
 
 opts = DIRCOLSolverOptions{Float64}(verbose=true)
-solve(prob,opts)
+s,slv,pr = solve(prob,opts)
 
-plot(prob.X)
+plot(s.X)
 
 
 
@@ -57,7 +57,6 @@ h_max = Inf
 h_min = 0.0
 
 # Problem
-
 
 E0 = Diagonal(1.0e-6*ones(n))
 H0 = zeros(n,r)
