@@ -115,6 +115,9 @@ solver.active_set
 inv(prob.obj[1].Q)*(N-1)
 solver.∇C[1]
 
+
+
+# Test solves
 solver = ProjectedNewtonSolver(prob)
 V = solver.V
 update!(prob, solver)
@@ -123,7 +126,7 @@ Y,y = active_constraints(prob, solver)
 
 Hinv = inv(Diagonal(solver.H))
 Qinv = [begin
-            off = (k-1)*(n+m) .+ (1:n);
+            off = (k-1)*(n+m) .+ (1:n);1
             Diagonal(Hinv[off,off]);
         end for k = 1:N]
 Rinv = [begin
@@ -142,15 +145,14 @@ S0 = Y*Hinv*Y'
 
 δV0 = solveKKT(prob, solver)
 δV0 = PrimalDual(copy(δV0), n, m, N, length(solver.y))
-@test primals(δV0) == δV[1:NN]
 @test primals(δV0) ≈ δz
 @test duals(δV0)[solver.a.duals] ≈ δλ
 
 δV1 = solveKKT_Shur(prob, solver, Hinv)
-δV1 ≈ δV0
+@test δV1 ≈ δV0
 
 δV2 = solveKKT_chol(prob, solver, Qinv, Rinv, A, B, C, D)
-δV2 ≈ δV0
+@test δV2 ≈ δV0
 
 @btime solveKKT($prob, $solver)
 @btime solveKKT_Shur($prob, $solver, $Hinv);
@@ -159,7 +161,34 @@ S0 = Y*Hinv*Y'
 S,L = buildShurCompliment(prob, solver)
 @test S ≈ S0
 @test L*L' ≈ S0
+solver.active_set[20]
+λ, λ_ = solve_cholesky(prob, solver, Qinv, Rinv, A, B, C, D)
+r = y-Y*Hinv*g
+(L\r) ≈ Array(λ_)
+(L'\λ_) ≈ Array(λ)
+δλ ≈ Array(λ)
 
+using Random
+@btime begin
+    E = [zeros(3,3) for k = 1:100]
+    for k = 1:100
+        rand!(E[k])
+    end
+    E
+end
+@btime begin
+    E = Matrix{Float64}[]
+    for k = 1:100
+        push!(E, rand(3,3))
+    end
+    E
+end
+
+@btime [rand(3,3) for k = 1:100]
+2N
+
+y_part = [sum(solver.a.A[Block(k)]) for k = 2:2N+1]
+y_part[45]
 
 solver.parts.primals
 
@@ -168,7 +197,13 @@ Array{Int}(L .≈ L0)
 @test L ≈ L0
 @test L*L' ≈ S
 
+solver.a.A[Block(6)]
+y_part = [sum(solver.a.A[Block(k)]) for k = 2:2N+1]
+@test sum(y_part) == Pa
+r1 = BlockArray(zeros(Pa), y_part)
 
+
+BlockArrays.nblocks(solver.a.A)
 y_part = ones(Int,2,N-1)*n
 p = sum.(solver.active_set)
 p = num_constraints(prob)

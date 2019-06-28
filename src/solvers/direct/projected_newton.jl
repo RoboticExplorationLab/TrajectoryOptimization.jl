@@ -476,11 +476,13 @@ function chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
     S[ind[i], ind[j+1]] = F
     S[ind[i], ind[j+2]] = G.L
 
-    return S1
+    return S
 end
 
 function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D)
     n,m,N = size(prob)
+    Nb = 2N  # number of blocks
+    p_active = sum.(solver.active_set)
     y_part = [sum(solver.a.A[Block(k)]) for k = 2:2N+1]
     Pa = sum(y_part)
 
@@ -491,53 +493,84 @@ function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv
     λ_ = BlockArray(zeros(Pa), y_part)
     λ = BlockArray(zeros(Pa), y_part)
 
+    # Init arrays
+    E = [zeros(n,n) for p in p_active]
+    F = [zeros(p,n) for p in p_active]
+    G = [cholesky(Matrix(I,n,n)) for p in p_active]
+
+    K = [zeros(p,n) for p in p_active]
+    L = [zeros(n,n) for p in p_active]
+    M = [zeros(p,n) for p in p_active]
+    H = [cholesky(Matrix(I,n,n)) for p in p_active]
+
     # Initial condition
     G0 = cholesky(Qinv[1])
     λ_[Block(1)] = G0.L\r[Block(1)]
 
-    F1 = A[1]*G0.L
-    G1 = cholesky(Symmetric(B[1]*Rinv[1]*B[1]' + Qinv[2]))
-    λ_[Block(2)] = G1.L\(r[Block(2)] - F1*λ_[Block(1)])
+    F[1] = A[1]*G0.L
+    G[1] = cholesky(Symmetric(B[1]*Rinv[1]*B[1]' + Qinv[2]))
+    λ_[Block(2)] = G[1].L\(r[Block(2)] - F[1]*λ_[Block(1)])
 
-    L1 = C[1]*G0.L
-    M1 = D[1]*Rinv[1]*B[1]'/(G1.U)
-    N1 = cholesky(D[1]*Rinv[1]*D[1]' - M1*M1')
-    λ_[Block(3)] = N1.L\(r[Block(3)] - M1*λ_[Block(2)] - L1*λ_[Block(1)])
+    L[1] = C[1]*G0.L
+    M[1] = D[1]*Rinv[1]*B[1]'/(G[1].U)
+    H[1] = cholesky(D[1]*Rinv[1]*D[1]' - M[1]*M[1]')
+    λ_[Block(3)] = H[1].L\(r[Block(3)] - M[1]*λ_[Block(2)] - L[1]*λ_[Block(1)])
 
-    G_ = G1
-    M_ = M1
-    N_ = N1
+    G_ = G[1]
+    M_ = M[1]
+    H_ = H[1]
     i = 4
-    for k = 1:N
-        E = -A[k]*Qinv[k]/G_.U
-        F = -E*M_'/N_.U
-        G = cholesky(Symmetric(A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1] - E*E' - F*F'))
-        λ_[Block(i)] = G.L\(r[Block(i)] - F*λ_[Block(i-1)] - E*λ_[Block(i-2)])
+    for k = 2:N-1
+        E[k] = -A[k]*Qinv[k]/G_.U
+        F[k] = -E[k]*M_'/H_.U
+        G[k] = cholesky(Symmetric(A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1] - E[k]*E[k]' - F[k]*F[k]'))
+        # println("\n Time Step $k")
+        # @show i
+        # @show size(F)
+        # @show size(λ_[Block(i-1)])
+        λ_[Block(i)] = G[k].L\(r[Block(i)] - F[k]*λ_[Block(i-1)] - E[k]*λ_[Block(i-2)])
         i += 1
 
-        K = -C[k]*Qinv[k]/G_.U
-        L = -K*M_'/N_.U
+        K[k] = -C[k]*Qinv[k]/G_.U
+        L[k] = -K[k]*M_'/H_.U
         Q = inv(Qinv[k])
-        M = (C[k]*Qinv[k]*( Q - G_.U\(I - (M_'/N_.U) * (N_.L\M_) )/G_.L )*Qinv[k]*A[k]' + D[k]*Rinv[k]*B[k]')/G.U
-        N = cholesky(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K*K' - L*L' - M*M')
-        @show i
-        @show size(r[Block(i)])
-        @show size(L)
-        @show size(λ_[Block(i-2)])
-        λ_[Block(i)] = N.L\(r[Block(i)] - M*λ_[Block(i-1)] - L*λ_[Block(i-2)] - K*λ_[Block(i-3)])
+        M[k] = (C[k]*Qinv[k]*( Q - G_.U\(I - (M_'/H_.U) * (H_.L\M_) )/G_.L )*Qinv[k]*A[k]' + D[k]*Rinv[k]*B[k]')/G[k].U
+        H[k] = cholesky(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K[k]*K[k]' - L[k]*L[k]' - M[k]*M[k]')
+        # @show i
+        # @show size(r[Block(i)])
+        # @show size(L)
+        # @show size(λ_[Block(i-2)])
+        λ_[Block(i)] = H[k].L\(r[Block(i)] - M[k]*λ_[Block(i-1)] - L[k]*λ_[Block(i-2)] - K[k]*λ_[Block(i-3)])
         i += 1
 
+        G_, M_, H_ = G[k], M[k], H[k]
     end
 
     # Terminal
     N = prob.N
 
-    E = -C[N]*Qinv[N]/G_.U
-    F = -E*M_'/N_.U
-    G = cholesky(Symmetric(C[N]*Qinv[N]*C[N]' - E*E' - F*F'))
-    λ_[Block(i)] = G.L\(r[Block(i)] - F*λ_[Block(i-1)] - E*λ_[Block(i-2)])
+    E[N] = -C[N]*Qinv[N]/G_.U
+    F[N] = -E[N]*M_'/H_.U
+    G[N] = cholesky(Symmetric(C[N]*Qinv[N]*C[N]' - E[N]*E[N]' - F[N]*F[N]'))
+    λ_[Block(i)] = G[N].L\(r[Block(i)] - F[N]*λ_[Block(i-1)] - E[N]*λ_[Block(i-2)])
 
-    return λ_
+    # return λ_
+
+    # BACK SUBSTITUTION
+    λ[Block(Nb)] = G[N].U\λ_[Block(Nb)]
+    λ[Block(Nb-1)] = H[N-1].U\(λ_[Block(Nb-1)] - F[N]'λ[Block(Nb)])
+    λ[Block(Nb-2)] = G[N-1].U\(λ_[Block(Nb-2)] - M[N-1]'λ[Block(Nb-1)] - E[N]'λ[Block(Nb)])
+
+    i = Nb-3
+    for k = N-2:-1:1
+        λ[Block(i)] = H[k].U\(λ_[Block(i)] - F[k+1]'λ[Block(i+1)] - L[k+1]'λ[Block(i+2)])
+        i -= 1
+        λ[Block(i)] = G[k].U\(λ_[Block(i)] - M[k]'λ[Block(i+1)] - E[k+1]'λ[Block(i+2)] - K[k+1]'λ[Block(i+3)])
+        i -= 1
+    end
+    λ[Block(1)] = G0.U\(λ_[Block(1)] - F[1]'λ[Block(2)] - L[1]'λ[Block(3)])
+
+    return λ, λ_
 
 end
 
