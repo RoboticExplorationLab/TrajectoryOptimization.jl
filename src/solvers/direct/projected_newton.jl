@@ -20,6 +20,7 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
     solver.∇F[1].xx .= Diagonal(I,n)
     solver.Y[1:n,1:n] .= Diagonal(I,n)
     part = (x=1:n, u =n .+ (1:m), x1=n+m .+ (1:n))
+    p = num_constraints(prob)
     off1 = n
     off2 = 0
     for k = 1:N-1
@@ -27,7 +28,7 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
         solver.Y[off1 .+ part.x, off2 .+ part.x] .= solver.∇F[k+1].xx
         solver.Y[off1 .+ part.x, off2 .+ part.u] .= solver.∇F[k+1].xu
         solver.Y[off1 .+ part.x, off2 .+ part.x1] .= -Diagonal(I,n)
-        off1 += n
+        off1 += n + p[k]
         off2 += n+m
     end
 end
@@ -217,6 +218,45 @@ function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     A = [H Y'; Y zeros(Pa,Pa)]
     b = [g + Y'λ; y]
     δV[a] = -A\b
+    return δV
+end
+
+function solveKKT_Shur(prob::Problem, solver::ProjectedNewtonSolver, Hinv, V=solver.V)
+    a = solver.a
+    δV = zero(V.V)
+    λ = duals(V)[a.duals]
+    Y,y = active_constraints(prob, solver)
+    g = solver.g
+
+    YHinv = Y*Hinv
+    S0 = Symmetric(YHinv*Y')
+    L = cholesky(S0)
+    δλ = L\(y-YHinv*g)
+    δz = -Hinv*(g+Y'δλ)
+
+    δV[solver.parts.primals] .= δz
+    δV[solver.parts.duals[solver.a.duals]] .= δλ
+    return δV
+end
+
+function solveKKT_chol(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D, V=solver.V)
+    a = solver.a
+    δV = zero(V.V)
+    λ = duals(V)[a.duals]
+    Y,y = active_constraints(prob, solver)
+    g = solver.g
+
+    L = chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
+    C = Cholesky(Array(L),'L',0)
+
+    YHinv = Y*Hinv
+    # S0 = L*L'
+    # δλ = L'\(L\(y-YHinv*g))
+    δλ = C\(y-YHinv*g)
+    δz = -Hinv*(g+Y'δλ)
+
+    δV[solver.parts.primals] .= δz
+    δV[solver.parts.duals[solver.a.duals]] .= δλ
     return δV
 end
 
@@ -436,7 +476,69 @@ function chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
     S[ind[i], ind[j+1]] = F
     S[ind[i], ind[j+2]] = G.L
 
-    return S
+    return S1
+end
+
+function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D)
+    n,m,N = size(prob)
+    y_part = [sum(solver.a.A[Block(k)]) for k = 2:2N+1]
+    Pa = sum(y_part)
+
+    Y,y = active_constraints(prob, solver)
+    g = solver.g
+
+    r = PseudoBlockArray(y - Y*Hinv*g, y_part)
+    λ_ = BlockArray(zeros(Pa), y_part)
+    λ = BlockArray(zeros(Pa), y_part)
+
+    # Initial condition
+    G0 = cholesky(Qinv[1])
+    λ_[Block(1)] = G0.L\r[Block(1)]
+
+    F1 = A[1]*G0.L
+    G1 = cholesky(Symmetric(B[1]*Rinv[1]*B[1]' + Qinv[2]))
+    λ_[Block(2)] = G1.L\(r[Block(2)] - F1*λ_[Block(1)])
+
+    L1 = C[1]*G0.L
+    M1 = D[1]*Rinv[1]*B[1]'/(G1.U)
+    N1 = cholesky(D[1]*Rinv[1]*D[1]' - M1*M1')
+    λ_[Block(3)] = N1.L\(r[Block(3)] - M1*λ_[Block(2)] - L1*λ_[Block(1)])
+
+    G_ = G1
+    M_ = M1
+    N_ = N1
+    i = 4
+    for k = 1:N
+        E = -A[k]*Qinv[k]/G_.U
+        F = -E*M_'/N_.U
+        G = cholesky(Symmetric(A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1] - E*E' - F*F'))
+        λ_[Block(i)] = G.L\(r[Block(i)] - F*λ_[Block(i-1)] - E*λ_[Block(i-2)])
+        i += 1
+
+        K = -C[k]*Qinv[k]/G_.U
+        L = -K*M_'/N_.U
+        Q = inv(Qinv[k])
+        M = (C[k]*Qinv[k]*( Q - G_.U\(I - (M_'/N_.U) * (N_.L\M_) )/G_.L )*Qinv[k]*A[k]' + D[k]*Rinv[k]*B[k]')/G.U
+        N = cholesky(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K*K' - L*L' - M*M')
+        @show i
+        @show size(r[Block(i)])
+        @show size(L)
+        @show size(λ_[Block(i-2)])
+        λ_[Block(i)] = N.L\(r[Block(i)] - M*λ_[Block(i-1)] - L*λ_[Block(i-2)] - K*λ_[Block(i-3)])
+        i += 1
+
+    end
+
+    # Terminal
+    N = prob.N
+
+    E = -C[N]*Qinv[N]/G_.U
+    F = -E*M_'/N_.U
+    G = cholesky(Symmetric(C[N]*Qinv[N]*C[N]' - E*E' - F*F'))
+    λ_[Block(i)] = G.L\(r[Block(i)] - F*λ_[Block(i-1)] - E*λ_[Block(i-2)])
+
+    return λ_
+
 end
 
 

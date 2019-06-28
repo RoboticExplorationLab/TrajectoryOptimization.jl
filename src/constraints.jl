@@ -116,8 +116,9 @@ struct BoundConstraint{T} <: AbstractConstraint{Inequality}
     x_min::Vector{T}
     u_max::Vector{T}
     u_min::Vector{T}
+    jac::SparseMatrixCSC{T,Int}
     label::Symbol
-    active::NamedTuple{(:x_max, :u_max, :x_min, :u_min, :all),NTuple{5,BitArray{1}}}
+    active::NamedTuple{(:x_max, :u_max, :x_min, :u_min, :all, :x_all),NTuple{6,BitArray{1}}}
     inds::Vector{Vector{Int}}
     part::NamedTuple{(:x_max, :u_max, :x_min, :u_min),NTuple{4,UnitRange{Int64}}}
 end
@@ -135,7 +136,7 @@ function BoundConstraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
      part = create_partition((n,m,n,m),(:x_max,:u_max,:x_min,:u_min))
 
      # Pre-allocate jacobian
-     jac_bnd = [Diagonal(I,n+m); -Diagonal(I,n+m)]
+     jac_bnd = [Diagonal(1.0I,n+m); -Diagonal(1.0I,n+m)]
      jac_A = view(jac_bnd,:,part.x_max)
      jac_B = view(jac_bnd,:,part.u_max)
 
@@ -150,14 +151,14 @@ function BoundConstraint(n::Int,m::Int; x_min=ones(n)*-Inf, x_max=ones(n)*Inf,
          part = create_partition(Tuple(lengths),keys(active))
 
          active_all = vcat(values(active)...)
-         active = merge(active, (all=active_all,))
+         active = merge(active, (all=active_all, x_all=[active.x_max; falses(m); active.x_min; falses(m)]))
          ∇c_trim(C,x,u) = copyto!(C,jac_bnd[active_all,:])
      else
          active = (x_max=trues(n),u_max=trues(m),
                    x_min=trues(n),u_min=trues(m),
-                   all=trues(2(n+m)))
+                   all=trues(2(n+m)), x_all=[trues(n); falses(m); trues(m); falses(m)])
      end
-     return BoundConstraint(x_max, x_min, u_max, u_min, :bound, active, inds2, part)
+     return BoundConstraint(x_max, x_min, u_max, u_min, jac_bnd, :bound, active, inds2, part)
 end
 
 function combine(bnd1::BoundConstraint, bnd2::BoundConstraint)
@@ -191,13 +192,12 @@ end
 
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector, u::AbstractVector)
     n,m = length(bnd.x_max), length(bnd.u_max)
-    copyto!(V, [Diagonal(I,n+m); -Diagonal(I,n+m)][bnd.active.all,:])
+    # TODO: avoid concatenation
+    copyto!(V, bnd.jac[bnd.active.all,:])
 end
 
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector)
-    n = length(bnd.x_max)
-    active = bnd.active
-    copyto!(V, [Diagonal(1I,n)[active.x_max,:]; -Diagonal(1I,n)[active.x_min,:]])
+    copyto!(V, bnd.jac[bnd.active.x_all])
 end
 
 

@@ -25,6 +25,7 @@ using BenchmarkTools
 using PartedArrays
 using Parameters
 using Rotations
+using BlockArrays
 
 export
     Dynamics

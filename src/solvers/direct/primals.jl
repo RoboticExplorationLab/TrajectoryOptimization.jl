@@ -198,8 +198,6 @@ function PrimalDual(V::Vector, n::Int, m::Int, N::Int, P::Int) where T
     λ = [view(V, NN + p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
     active_set = ones(Bool,P)
     a = [view(active_set, p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
-    copyto!.(X, prob.X)
-    copyto!.(U, prob.U)
     PrimalDual(V, Z, X, U, Y, ν, λ, active_set, a)
 end
 

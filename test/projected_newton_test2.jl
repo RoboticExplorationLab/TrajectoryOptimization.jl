@@ -1,4 +1,6 @@
-# Solve with ALTRO
+using BlockArrays
+
+# Set up Problem
 model = Dynamics.car_model
 costfun = Dynamics.car_costfun
 xf = [0,1,0]
@@ -19,6 +21,8 @@ for k = 2:N-1
 end
 con[N] += goal
 prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
+
+# Solve with ALTRO
 initial_controls!(prob, ones(m,N-1))
 ilqr = iLQRSolverOptions()
 al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
@@ -42,17 +46,18 @@ P = N*n + sum(p)
 # Test functions
 dynamics_constraints!(prob, solver)
 update_constraints!(prob, solver)
+solver.C[1]
 active_set!(prob, solver)
 @test all(solver.a.primals)
-@test all(solver.a.ν)
-@test all(solver.a.λ[end-n+1:end])
-@test !all(solver.a.λ)
+# @test all(solver.a.ν)
+# @test all(solver.a.λ[end-n+1:end])
+# @test !all(solver.a.λ)
 dynamics_jacobian!(prob, solver)
 @test solver.∇F[1].xx == solver.Y[1:n,1:n]
 @test solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
+
 constraint_jacobian!(prob, solver)
-solver.∇C[1]
-@test solver.∇C[1] == solver.Y[N*n .+ (1:p[1]), 1:n+m]
+@test solver.∇C[1] == solver.Y[2n .+ (1:p[1]), 1:n+m]
 
 cost_expansion!(prob, solver)
 # Y,y = Array(Y), Array(y)
@@ -64,7 +69,6 @@ dynamics_constraints!(prob, solver)
 update_constraints!(prob, solver)
 dynamics_jacobian!(prob, solver)
 constraint_jacobian!(prob, solver)
-@btime constraint_jacobian!($prob, $solver)
 active_set!(prob, solver)
 Y,y = active_constraints(prob, solver)
 viol = calc_violations(solver)
@@ -76,13 +80,16 @@ viol = calc_violations(solver)
 solver = ProjectedNewtonSolver(prob)
 solver.opts.feasibility_tolerance = 1e-10
 solver.opts.active_set_tolerance = 1e-3
+update!(prob, solver)
+Y,y = active_constraints(prob, solver)
 projection!(prob, solver)
 update!(prob, solver, solver.V)
 max_violation(solver)
 multiplier_projection!(prob, solver)
 
 # Build KKT
-V0 = copy(solver.V)
+V = solver.V
+V0 = copy(V)
 cost_expansion!(prob, solver)
 J0 = cost(prob, V)
 res0 = norm(residual(prob, solver))
@@ -99,6 +106,7 @@ V_ = newton_step!(prob, solver)
 copyto!(solver.V.V, V_.V)
 V_ = newton_step!(prob, solver)
 
+
 update!(prob, solver)
 Y,y = active_constraints(prob, solver)
 @test length(y) == num_active_constraints(solver)
@@ -107,53 +115,147 @@ solver.active_set
 inv(prob.obj[1].Q)*(N-1)
 solver.∇C[1]
 
-num_active_constraints(solver)
+solver = ProjectedNewtonSolver(prob)
+V = solver.V
 update!(prob, solver)
-inds = jacobian_permutation(prob, solver)
-@test sort(inds) == 1:length(inds)
-a_perm = solver.a.duals[inds]
-Y_perm = solver.Y[inds,:]
-Y = Array(Y_perm[a_perm,:])
+Pa = num_active_constraints(solver)
+Y,y = active_constraints(prob, solver)
+
 Hinv = inv(Diagonal(solver.H))
 Qinv = [begin
             off = (k-1)*(n+m) .+ (1:n);
-            Hinv[off,off];
+            Diagonal(Hinv[off,off]);
         end for k = 1:N]
 Rinv = [begin
             off = (k-1)*(n+m) .+ (n+1:n+m);
-            Hinv[off,off];
+            Diagonal(Hinv[off,off]);
         end for k = 1:N-1]
 A = [F.xx for F in solver.∇F[2:end]]
 B = [F.xu for F in solver.∇F[2:end]]
 C = [Array(F.x[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
 D = [Array(F.u[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+g = solver.g
+
 S0 = Y*Hinv*Y'
-HY = Array(Hinv*Y')
-B[1]
-Y[4:6,1:8]
-HY[:,7:8]
-Y'[:,7:8]
+δλ = S0\(y-Y*Hinv*g)
+δz = -Hinv*(g+Y'δλ)
+
+δV0 = solveKKT(prob, solver)
+δV0 = PrimalDual(copy(δV0), n, m, N, length(solver.y))
+@test primals(δV0) == δV[1:NN]
+@test primals(δV0) ≈ δz
+@test duals(δV0)[solver.a.duals] ≈ δλ
+
+δV1 = solveKKT_Shur(prob, solver, Hinv)
+δV1 ≈ δV0
+
+δV2 = solveKKT_chol(prob, solver, Qinv, Rinv, A, B, C, D)
+δV2 ≈ δV0
+
+@btime solveKKT($prob, $solver)
+@btime solveKKT_Shur($prob, $solver, $Hinv);
+@btime solveKKT_chol($prob, $solver, $Qinv, $Rinv, $A, $B, $C, $D);
 
 S,L = buildShurCompliment(prob, solver)
-Array(S0)[4:6,7:8]
-Array(S)[4:6,7:8]
-Array{Int}(S .≈ S0)
-S ≈ S0
+@test S ≈ S0
+@test L*L' ≈ S0
+
+
+solver.parts.primals
 
 L0 = cholesky(Array(S)).L
 Array{Int}(L .≈ L0)
 @test L ≈ L0
 @test L*L' ≈ S
 
-len = ones(Int,2,N-1)*n
+
+y_part = ones(Int,2,N-1)*n
 p = sum.(solver.active_set)
-len[2,:] = p[1:end-1]
-len = append!([1,3], vec(len))
-push!(len, p[N])
+p = num_constraints(prob)
+y_part[2,:] = p[1:end-1]
+y_part = vec(y_part)
+insert!(y_part,1,3)
+push!(y_part, p[N])
+c_blocks = push!(collect(3:2:length(y_part)),length(y_part))
+
+z_part = repeat([n,m],N-1)
+push!(z_part, n)
+NN = sum(z_part)
+P = sum(y_part)
+part_a = (primals=1:NN, duals=NN+1:NN+P, ν=NN .+ (1:N*n), λ=NN + N*n .+ (1:sum(p)))
+
+Y = PseudoBlockArray(solver.Y, y_part, z_part)
+y = PseudoBlockArray(zeros(sum(y_part)),y_part)
+a = PseudoBlockArray(ones(Bool,NN+P), [NN; y_part])
+
+∇C = [view(Y,Block(i,j)) for (i,j) in zip(c_blocks, 1:2:2N)]
+C = [view(y,Block(i)) for i in c_blocks]
+act_set = [view(a,Block(i+1)) for i in c_blocks]
+a_ = PartedVector(a,part_a)
+
+println(typeof(a_))
+∇C isa Vector{SubArray{T,2,PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int64},BlockArrays.BlockSizes{2,NTuple{2,Vector{Int}}}},NTuple{2,BlockArrays.BlockSlice{Block{1,Int64}}},false}} where T
+
+a = ones(Bool,)
+
+view(Y, Block(1,1))
+Y[Block(1,1)]
+
 lcum = cumsum(len)
-[lcum[k]:lcum[k+1]-1 for k = 1:length(lcum)-1]
+y_part = [lcum[k]:lcum[k+1]-1 for k = 1:length(lcum)-1]
 
 
+
+T = Float64
+n,m,N = size(prob)
+X_ = [zeros(T,n) for k = 1:N-1] # midpoints
+
+NN = N*n + (N-1)*m
+p = num_constraints(prob)
+pcum = insert!(cumsum(p),1,0)
+P = sum(p) + N*n
+
+V = PrimalDual(prob)
+
+part_f = create_partition2(prob.model)
+constraints = prob.constraints
+
+# Block Array partitions
+y_part = ones(Int,2,N-1)*n
+y_part[2,:] = p[1:end-1]
+y_part = vec(y_part)
+insert!(y_part,1,3)
+push!(y_part, p[N])
+c_blocks = push!(collect(3:2:length(y_part)),length(y_part))
+
+z_part = repeat([n+m],N-1)
+push!(z_part, n)
+d_blocks = insert!(collect(2:2:length(y_part)-1),1,1)
+
+
+# Build Blocks
+H = spzeros(NN,NN)
+g = zeros(NN)
+Y = PseudoBlockArray(spzeros(P,NN), y_part, z_part)
+y = PseudoBlockArray(zeros(sum(y_part)),y_part)
+a = PseudoBlockArray(ones(Bool,NN+P), [NN; y_part])
+
+
+# Build views
+fVal = [view(y,Block(i)) for i in d_blocks]
+∇F = [PartedMatrix(zeros(n,n+m+1), part_f) for k = 1:N]
+
+C = [PartedArray(view(y, Block(c_blocks[k])),
+     create_partition(constraints[k], k==N ? :terminal : :stage)) for k = 1:N]
+∇C = [PartedArray(view(Y, Block(c_blocks[k],k)),
+     create_partition2(constraints[k], n,m, k==N ? :terminal : :stage)) for k = 1:N]
+println(typeof(∇C))
+
+c_inds = [C[k].A.indices[1].indices for k = 1:N]
+d_inds = [fVal[k].indices[1].indices for k = 1:N]
+part_a = (primals=1:NN, duals=NN+1:NN+P)
+active_set = [view(a,Block(i+1)) for i in c_blocks]
+a = PartedVector(a, part_a)
 
 len
 issymmetric()

@@ -34,17 +34,17 @@ struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     V::PrimalDual{T}
     H::SparseMatrixCSC{T,Int}      # Cost Hessian
     g::Vector{T}                   # Cost gradient
-    Y::SparseMatrixCSC{T,Int}      # Constraint Jacobian
-    y::Vector{T}                   # Constraint Violations
+    Y::PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int64},BlockArrays.BlockSizes{2,NTuple{2,Vector{Int64}}}}      # Constraint Jacobian
+    y::PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}}                   # Constraint Violations
 
-    fVal::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+    fVal::Vector{SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false}}
     # ∇F::Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P}} where P
     ∇F::PartedMatTrajectory{T}
-    C::Vector{PartedArray{T,1,SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}, P} where P}
-    ∇C::Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P} where P}
-    a::PartedVector{Bool,Vector{Bool},NamedTuple{(:primals,:duals,:ν,:λ),NTuple{4,UnitRange{Int}}}}
-    active_set::Vector{PartedArray{Bool,1,SubArray{Bool,1,Vector{Bool},Tuple{UnitRange{Int}},true}, P} where P}
-    parts::NamedTuple{(:primals,:duals,:ν,:λ),NTuple{4,UnitRange{Int}}}
+    C::Vector{PartedArrays.PartedArray{T,1,SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Array{T,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false},P} where P}
+    ∇C::Vector{PartedArrays.PartedArray{T,2,SubArray{T,2,BlockArrays.PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int64},BlockArrays.BlockSizes{2,NTuple{2,Array{Int64,1}}}},NTuple{2,BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false},P} where P}
+    a::PartedArrays.PartedArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},NamedTuple{(:primals, :duals),NTuple{2,UnitRange{Int64}}}}
+    active_set::Vector{SubArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{Block{1,Int64}}},false}}
+    parts::NamedTuple{(:primals,:duals),NTuple{2,UnitRange{Int}}}
 end
 
 function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T}) where {T,D}
@@ -60,40 +60,57 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
 
     part_f = create_partition2(prob.model)
     constraints = prob.constraints
-    part_a = (primals=1:NN, duals=NN+1:NN+P, ν=NN .+ (1:N*n), λ=NN + N*n .+ (1:sum(p)))
+    part_a = (primals=1:NN, duals=NN+1:NN+P) #, ν=NN .+ (1:N*n), λ=NN + N*n .+ (1:sum(p)))
 
+    # Block Array partitions
+    y_part = ones(Int,2,N-1)*n
+    y_part[2,:] = p[1:end-1]
+    y_part = vec(y_part)
+    insert!(y_part,1,3)
+    push!(y_part, p[N])
+    c_blocks = push!(collect(3:2:length(y_part)),length(y_part))
+
+    z_part = repeat([n+m],N-1)
+    push!(z_part, n)
+    d_blocks = insert!(collect(2:2:length(y_part)-1),1,1)
 
     # Build Blocks
     H = spzeros(NN,NN)
     g = zeros(NN)
-    Y = spzeros(P,NN)
-    y = zeros(P)
-    a = PartedVector(ones(Bool, NN+P), part_a)
+    Y = PseudoBlockArray(spzeros(P,NN), y_part, z_part)
+    y = PseudoBlockArray(zeros(sum(y_part)),y_part)
+    a = PseudoBlockArray(ones(Bool,NN+P), [NN; y_part])
+
 
     # Build views
-    fVal = [view(y,(k-1)*n .+ (1:n)) for k = 1:N]
-    C = [PartedArray(view(y, N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
-    active_set = [PartedArray(view(a.A, NN + N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
-
-    # ∇F = [PartedArray(view(Y, (k-1)*n .+ (1:n), (k-1)*(n+m+1) .+ (1:n+m*(k<N)+1)), part_f) for k = 1:N]
+    fVal = [view(y,Block(i)) for i in d_blocks]
     ∇F = [PartedMatrix(zeros(n,n+m+1), part_f) for k = 1:N]
-    ∇C = [begin
-            if k == N
-                d2 = n
-                stage = :terminal
-            else
-                d2 = n+m
-                stage = :stage
-            end
-            part = create_partition2(constraints[k], n, m, stage)
-            PartedArray(view(Y, N*n + pcum[k] .+ (1:p[k]), (k-1)*(n+m) .+ (1:d2)), part)
-        end for k = 1:N]
 
-    # return C
+    C = [PartedArray(view(y, Block(c_blocks[k])),
+         create_partition(constraints[k], k==N ? :terminal : :stage)) for k = 1:N]
+    ∇C = [PartedArray(view(Y, Block(c_blocks[k],k)),
+         create_partition2(constraints[k], n,m, k==N ? :terminal : :stage)) for k = 1:N]
+
+    active_set = [view(a,Block(i+1)) for i in c_blocks]
+    a = PartedVector(a, part_a)
+
     solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, H, g, Y, y, fVal, ∇F, C, ∇C, a, active_set, part_a)
     reset!(solver)
     return solver
 
+    C = [PartedArray(view(y, N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
+    active_set = [PartedArray(view(a.A, NN + N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
+    ∇C = [begin
+    if k == N
+        d2 = n
+        stage = :terminal
+    else
+        d2 = n+m
+        stage = :stage
+    end
+    part = create_partition2(constraints[k], n, m, stage)
+    PartedArray(view(Y, N*n + pcum[k] .+ (1:p[k]), (k-1)*(n+m) .+ (1:d2)), part)
+end for k = 1:N]
 
     # Create Trajectories
     Q          = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
