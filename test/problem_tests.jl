@@ -45,9 +45,8 @@ U0 = [ones(m) for k = 1:N-1]
 X0 = [copy(x0) for k = 1:N]
 
 # Test model discretization
-@test_nowarn Model{Discrete}(model, rk4)
 @test_nowarn rk3(model)
-model_d = Model{Discrete}(model, rk3)
+model_d = rk3(model)
 
 # Create Problem from continuous model
 @test_throws ArgumentError Problem(model, obj)  # needs N and another time indicator
