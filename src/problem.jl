@@ -41,14 +41,9 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     end
 end
 
-
-"""$(TYPEDSIGNATURES)
-Create Problem, optionally specifying constraints, initial state, and length.
-At least 2 of N, dt, or tf must be specified
-"""
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n),
-        dt=NaN, tf=NaN, integration=:rk4) where {M,T}
+        dt=NaN, tf=NaN, integration=:none) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
         if integration == :none
             model = model

@@ -11,24 +11,58 @@ function pendulum_dynamics_uncertain(ẋ,x,u,w)
     return nothing
 end
 
-eig_thr = 1.0e-3
-n = 2; m = 1; r = 1# states, controls
+n = 2; m = 1; r = 1
+
+model = UncertainModel(pendulum_dynamics_uncertain,n,m,r)
+
+x0 = [0.;0.]
+xf = [pi;0.]
+
+Q = Diagonal(zeros(n))
+R = Diagonal(zeros(m))
+Qf = Diagonal(zeros(n))
+
+Q = Diagonal(0.1*ones(n))
+R = Diagonal(0.01*ones(m))
+Qf = Diagonal(100.0*ones(n))
+
+
+N = 51 # knot points
+cost_fun = LQRCost(Q,R,Qf,xf)
+obj = Objective(cost_fun,N)
+
+goal_con = goal_constraint(xf)
 
 u_max = 3.
 u_min = -3.
+bnd_con = BoundConstraint(n,m,u_min=u_min,u_max=u_max,trim=true)
+
+con = ProblemConstraints([bnd_con],N)
+
+tf0 = 2.
+
+prob = Problem(model, obj,constraints=con, N=N, tf=tf0, x0=x0)
+prob.constraints[N] += goal_con
+copyto!(prob.X,line_trajectory(x0,xf,N))
+
+opts = DIRCOLSolverOptions{Float64}(verbose=true)
+solve(prob,opts)
+
+plot(prob.X)
+
+
+
 
 h_max = Inf
 h_min = 0.0
 
 # Problem
-x0 = [0.;0.]
-xf = [pi;0.]
+
 
 E0 = Diagonal(1.0e-6*ones(n))
 H0 = zeros(n,r)
 D = Diagonal([.2^2])
 
-N = 51 # knot points
 NN = (n+m+1)*(N-1) + n # number of decision variables
 
 p = n*N + n + (N-2)# number of equality constraints: dynamics, xf, h_k = h_{k+1}
@@ -36,9 +70,6 @@ p = n*N + n + (N-2)# number of equality constraints: dynamics, xf, h_k = h_{k+1}
 # p += 2*n^2 # robust terminal constraint n^2
 p_ineq = 2*(m^2)*(N-1)*2
 
-Q = Diagonal(zeros(n))
-R = Diagonal(zeros(m))
-Qf = Diagonal(zeros(n))
 
 Q_lqr = Diagonal([10.;1.])
 R_lqr = Diagonal(0.1*ones(m))

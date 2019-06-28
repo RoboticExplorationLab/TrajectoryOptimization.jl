@@ -1,5 +1,3 @@
-
-
 """ $(SIGNATURES)
 Get the row and column lists of a sparse matrix, with ordered elements
 """

@@ -51,7 +51,6 @@ model_d = rk3(model)
 # Create Problem from continuous model
 @test_throws ArgumentError Problem(model, obj)  # needs N and another time indicator
 prob = Problem(model, obj, tf=3.0)
-@test prob.model.info[:integration] == :rk4
 @test prob.N == N
 @test prob.dt == 0.3
 
@@ -121,7 +120,7 @@ rollout!(prob)
 @test isfinite(max_violation(prob))
 
 # Test integrating the problem
-prob = Problem(model, obj, integration=:none, tf=3)
+prob = Problem(model, obj, tf=3)
 prob_d = rk3(prob)
 @test prob_d isa Problem{T,Discrete} where T
 @test prob_d.model.info[:integration] == :rk3

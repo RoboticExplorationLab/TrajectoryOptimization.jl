@@ -100,8 +100,9 @@ mutable struct QuadraticCost{T} <: CostFunction
             q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
             qf::AbstractVector{T}, cf::T) where T
         if !isposdef(R)
-            err = ArgumentError("R must be positive definite")
-            throw(err)
+            # err = ArgumentError("R must be positive definite")
+            # throw(err)
+            @warn "R is not positive definite"
         end
         # TODO: needs test
         if !ispossemidef(Q)
