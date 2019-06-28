@@ -149,20 +149,20 @@ function max_violation(solver::AugmentedLagrangianSolver{T}) where T
     c_max = 0.0
     C = solver.C
     N = length(C)
-    if length(C[1]) > 0
-        for k = 1:N-1
+    for k = 1:N
+        if length(C[k]) > 0
             c_max = max(norm(C[k].equality,Inf), c_max)
             if length(C[k].inequality) > 0
                 c_max = max(pos(maximum(C[k].inequality)), c_max)
             end
         end
     end
-    if length(solver.C[N]) > 0
-        c_max = max(norm(C[N].equality,Inf), c_max)
-        if length(C[N].inequality) > 0
-            c_max = max(pos(maximum(C[N].inequality)), c_max)
-        end
-    end
+    # if length(solver.C[N]) > 0
+    #     c_max = max(norm(C[N].equality,Inf), c_max)
+    #     if length(C[N].inequality) > 0
+    #         c_max = max(pos(maximum(C[N].inequality)), c_max)
+    #     end
+    # end
     return c_max
 end
 

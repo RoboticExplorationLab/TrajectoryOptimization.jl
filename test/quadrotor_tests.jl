@@ -82,5 +82,5 @@ initial_controls!(prob, U0)
 opts_al.constraint_tolerance=1.0e-3
 opts_al.constraint_tolerance_intermediate=1.0e-3
 solve!(prob, opts_al)
-@test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
+@test norm(prob.X[N] - xf,Inf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
