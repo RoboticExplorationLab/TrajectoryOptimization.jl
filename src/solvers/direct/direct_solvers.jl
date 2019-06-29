@@ -26,7 +26,7 @@ end
 """
 $(TYPEDEF)
 Projected Newton Solver
-Direct method developed by the Rex Lab at Stanford University
+Direct method developed by the REx Lab at Stanford University
 """
 struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     opts::ProjectedNewtonSolverOptions{T}
@@ -145,6 +145,8 @@ end
 function num_active_constraints(solver::ProjectedNewtonSolver)
     sum(solver.a.duals)
 end
+
+
 
 
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}

@@ -20,22 +20,23 @@ function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})
 end
 
 "$(TYPEDEF) Expansion of cost function"
-struct Expansion{T<:AbstractFloat}
+struct Expansion{T<:AbstractFloat,Q<:AbstractMatrix,R<:AbstractMatrix}
     x::Vector{T}
     u::Vector{T}
-    xx::Matrix{T}
-    uu::Matrix{T}
+    xx::Q
+    uu::R
     ux::Matrix{T}
 end
 
-function Expansion{T}(n::Int, m::Int) where T
+function Expansion{T,Q,R}(n::Int, m::Int) where {T,Q,R}
     x = zeros(T,n)
     u = zeros(T,m)
-    xx = zeros(T,n,n)
-    uu = zeros(T,m,m)
+    xx = Q(zeros(T,n,n))
+    uu = R(zeros(T,m,m))
     ux = zeros(T,m,n)
-    Expansion{T}(x, u, xx, uu, ux)
+    Expansion(x, u, xx, uu, ux)
 end
+Expansion{T}(n::Int, m::Int) where T = Expansion{T,Matrix{T},Matrix{T}}(n,m)
 
 
 

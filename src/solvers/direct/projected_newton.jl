@@ -3,7 +3,7 @@ cost(prob::Problem, V::PrimalDual) = cost(prob.obj, V.X, V.U)
 ############################
 #       CONSTRAINTS        #
 ############################
-function dynamics_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+function dynamics_constraints!(prob::Problem, solver::DirectSolver, V=solver.V)
     N = prob.N
     X,U = V.X, V.U
     solver.fVal[1] .= V.X[1] - prob.x0
@@ -33,7 +33,7 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
     end
 end
 
-function update_constraints!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+function update_constraints!(prob::Problem, solver::DirectSolver, V=solver.V)
     n,m,N = size(prob)
     for k = 1:N-1
         evaluate!(solver.C[k], prob.constraints[k], V.X[k], V.U[k])
@@ -64,7 +64,7 @@ end
 ######################################
 #       CONSTRAINT JACBOBIANS        #
 ######################################
-function constraint_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
+function constraint_jacobian!(prob::Problem, solver::DirectSolver, V=solver.V)
     n,m,N = size(prob)
     for k = 1:N-1
         jacobian!(solver.∇C[k], prob.constraints[k], V.X[k], V.U[k])
@@ -168,8 +168,7 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
     eps_feasible = solver.opts.feasibility_tolerance
     count = 0
     # cost_expansion!(prob, solver, V)
-    # H = Diagonal(solver.H)
-    # Hinv = inv(H)
+    H = Diagonal(solver.H)
     while true
         dynamics_constraints!(prob, solver, V)
         update_constraints!(prob, solver, V)
@@ -179,6 +178,7 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
             active_set!(prob, solver)
         end
         Y,y = active_constraints(prob, solver)
+        HinvY = H\Y'
 
         viol = norm(y,Inf)
         if solver.opts.verbose
@@ -187,7 +187,7 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
         if viol < eps_feasible || count > 10
             break
         else
-            δZ = -Y'*((Y*Y')\y)
+            δZ = -HinvY*((Y*HinvY)\y)
             Z .+= δZ
             count += 1
         end
@@ -257,6 +257,22 @@ function solveKKT_chol(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv,
 
     δV[solver.parts.primals] .= δz
     δV[solver.parts.duals[solver.a.duals]] .= δλ
+    return δV
+end
+
+function solveKKT_chol_seq(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D, V=solver.V)
+    a = solver.a
+    δV = zero(V.V)
+    λ = duals(V)[a.duals]
+    Y,y = active_constraints(prob, solver)
+    g = solver.g
+
+    YHinv = Y*Hinv
+    δλ, = solve_cholesky(prob, solver, Qinv, Rinv, A, B, C, D)
+    δz = -Hinv*(g+Y'δλ)
+
+    δV[solver.parts.primals] .= δz
+    δV[solver.parts.duals[solver.a.duals]] .= Array(δλ)
     return δV
 end
 
@@ -479,7 +495,7 @@ function chol_newton(prob, solver, Qinv, Rinv, A, B, C, D)
     return S
 end
 
-function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D)
+function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Hinv, Qinv, Rinv, A, B, C, D)
     n,m,N = size(prob)
     Nb = 2N  # number of blocks
     p_active = sum.(solver.active_set)
@@ -570,7 +586,7 @@ function solve_cholesky(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv
     end
     λ[Block(1)] = G0.U\(λ_[Block(1)] - F[1]'λ[Block(2)] - L[1]'λ[Block(3)])
 
-    return λ, λ_
+    return λ, λ_, r
 
 end
 

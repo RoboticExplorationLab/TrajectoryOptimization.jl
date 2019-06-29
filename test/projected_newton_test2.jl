@@ -139,6 +139,8 @@ C = [Array(F.x[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
 D = [Array(F.u[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
 g = solver.g
 
+typeof(Qinv)
+
 S0 = Y*Hinv*Y'
 δλ = S0\(y-Y*Hinv*g)
 δz = -Hinv*(g+Y'δλ)
@@ -154,21 +156,40 @@ S0 = Y*Hinv*Y'
 δV2 = solveKKT_chol(prob, solver, Qinv, Rinv, A, B, C, D)
 @test δV2 ≈ δV0
 
+δV3 = solveKKT_chol_seq(prob, solver, Qinv, Rinv, A, B, C, D)
+@profiler δV3 = solveKKT_chol_seq(prob, solver, Qinv, Rinv, A, B, C, D)
+@test δV3 ≈ δV0
+
 @btime solveKKT($prob, $solver)
 @btime solveKKT_Shur($prob, $solver, $Hinv);
 @btime solveKKT_chol($prob, $solver, $Qinv, $Rinv, $A, $B, $C, $D);
+@btime solveKKT_chol_seq($prob, $solver, $Qinv, $Rinv, $A, $B, $C, $D);
 
 S,L = buildShurCompliment(prob, solver)
 @test S ≈ S0
 @test L*L' ≈ S0
 solver.active_set[20]
 λ, λ_ = solve_cholesky(prob, solver, Qinv, Rinv, A, B, C, D)
+@btime solve_cholesky($prob, $solver, $Qinv, $Rinv, $A, $B, $C, $D);
+@btime begin
+    L = chol_newton($prob, $solver, $Qinv, $Rinv, $A, $B, $C, $D)
+    C = Cholesky(Array(L),'L',0)
+    YHinv = $Y*$Hinv
+    δλ = C\($y-YHinv*$g)
+end
+@btime begin
+    YHinv = $Y*$Hinv
+    S0 = Symmetric(YHinv*$Y')
+    C = cholesky(S0)
+    δλ = C\(y-YHinv*g)
+end
+
 r = y-Y*Hinv*g
 (L\r) ≈ Array(λ_)
 (L'\λ_) ≈ Array(λ)
 δλ ≈ Array(λ)
 
-using Random
+using Random, InteractiveUtils
 @btime begin
     E = [zeros(3,3) for k = 1:100]
     for k = 1:100
