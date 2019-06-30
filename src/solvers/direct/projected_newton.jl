@@ -64,19 +64,23 @@ end
 ######################################
 #       CONSTRAINT JACBOBIANS        #
 ######################################
-function constraint_jacobian!(prob::Problem, solver::DirectSolver, V=solver.V)
+function constraint_jacobian!(prob::Problem, ∇C::Vector, X, U)
     n,m,N = size(prob)
     for k = 1:N-1
-        jacobian!(solver.∇C[k], prob.constraints[k], V.X[k], V.U[k])
+        jacobian!(∇C[k], prob.constraints[k], X[k], U[k])
     end
-    jacobian!(solver.∇C[N], prob.constraints[N], V.X[N])
+    jacobian!(∇C[N], prob.constraints[N], X[N])
 end
+constraint_jacobian!(prob::Problem, solver::DirectSolver, V=solver.V) =
+    constraint_jacobian!(prob, solver.∇C, V.X, V.U)
+# constraint_jacobian!(prob::Problem, Y::KKTJacobian, V=solver.V) =
+#     constraint_jacobian!(prob, Y.∇C, V.X, V.U)
 
 function active_constraints(prob::Problem, solver::ProjectedNewtonSolver)
     n,m,N = size(prob)
     a = solver.a.duals
     # return view(solver.Y, a, :), view(solver.y, a)
-    return solver.Y[a,:], solver.y[a]
+    return solver.Y.blocks[a,:], solver.y[a]
 end
 
 
@@ -131,7 +135,7 @@ function update!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, activ
     end
 end
 
-function max_violation(solver::ProjectedNewtonSolver{T}) where T
+function max_violation(solver::DirectSolver{T}) where T
     c_max = 0.0
     C = solver.C
     N = length(C)
@@ -196,14 +200,17 @@ end
 
 function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     g = solver.g
+    a = solver.a.duals
     Y,y = active_constraints(prob, solver)
-    λ = duals(V)[solver.a.duals]
+    λ = duals(V)[a]
 
     res0 = g + Y'λ
     δλ = -(Y*Y')\(Y*res0)
     λ_ = λ + δλ
     res = g + Y'*λ_
-    copyto!(duals(V), λ_)
+    @show size(view(duals(V),a))
+    @show size(λ_)
+    copyto!(view(duals(V),a), λ_)
     res = norm(residual(prob, solver, V))
     return res
 end

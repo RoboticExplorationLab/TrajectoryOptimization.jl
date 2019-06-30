@@ -171,8 +171,21 @@ function PrimalDual(prob::Problem{T}) where T
     part_z = create_partition(n,m,N)
     X = [view(V,part_z.X[:,k]) for k = 1:N]
     U = [view(V,part_z.U[:,k]) for k = 1:N-1]
-    ν = [view(V, NN + (k-1)*n .+ (1:n)) for k = 1:N]
-    λ = [view(V, NN + p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
+
+    # Constraints
+    y_part = ones(Int,2,N-1)*n
+    y_part[2,:] = p[1:end-1]
+    y_part = vec(y_part)
+    insert!(y_part,1,3)
+    push!(y_part, p[N])
+    y_inds = cumsum(y_part)
+    insert!(y_inds,1,0)
+    y_inds = [y_inds[k]+1:y_inds[k+1] for k = 1:length(y_inds)-1]
+    ind_colloc = y_inds[insert!(collect(2:2:2N-1),1,1)]
+    ind_custom = y_inds[push!(collect(3:2:2N),2N)]
+
+    ν = [view(V, NN .+ inds) for inds in ind_colloc]
+    λ = [view(V, NN .+ inds) for inds in ind_custom]
     active_set = ones(Bool,P)
     a = [view(active_set, p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
     copyto!.(X, prob.X)

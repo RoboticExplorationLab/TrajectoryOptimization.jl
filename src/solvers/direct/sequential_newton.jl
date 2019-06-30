@@ -37,7 +37,7 @@ function SequentialNewtonSolver(prob::Problem{T}, opts::ProjectedNewtonSolverOpt
     # Costs
     Q = [Expansion{T,Diagonal,Diagonal}(n,m) for k = 1:N]
     Qinv = [Diagonal(zeros(T,n,n)) for k = 1:N]
-    Rinv = [Diagonal(zeros(T,m,m)) for k = 1:N]
+    Rinv = [Diagonal(zeros(T,m,m)) for k = 1:N-1]
 
     # Constraints
     fVal = [zeros(n) for k = 1:N]
@@ -55,16 +55,20 @@ function SequentialNewtonSolver(prob::Problem{T}, opts::ProjectedNewtonSolverOpt
     SequentialNewtonSolver(opts, stats, V, Q, Qinv, Rinv, fVal, ∇F, C, ∇C, active_set, p)
 end
 
-function dynamics_jacobian!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V)
+
+function dynamics_jacobian!(prob::Problem, ∇F, X, U)
     n,m,N = size(prob)
-    X,U = V.X, V.U
-    solver.∇F[1].xx .= Diagonal(I,n)
-    part = (x=1:n, u =n .+ (1:m), x1=n+m .+ (1:n))
-    p = solver.p
+    ∇F[1].xx .= Diagonal(I,n)
     for k = 1:N-1
         jacobian!(solver.∇F[k+1], prob.model, X[k], U[k], prob.dt)
     end
 end
+dynamics_jacobian!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V) =
+    dynamics_jacobian!(prob, solver.∇F, V.X, V.U)
+
+# dynamics_jacobian!(prob::Problem, Y::KKTJacobian, V=solver.V) =
+#     dynamics_jacobian!(prob, Y.∇F, V.X, V.U)
+
 
 function active_set!(prob::Problem, solver::SequentialNewtonSolver)
     n,m,N = size(prob)
@@ -72,6 +76,27 @@ function active_set!(prob::Problem, solver::SequentialNewtonSolver)
         active_set!(solver.active_set[k], solver.C[k], solver.opts.active_set_tolerance)
     end
 end
+# function active_set!(prob::Problem, solver::SequentialNewtonSolver, Y::KKTJacobian)
+#     n,m,N = size(prob)
+#     for k = 1:N
+#         active_set!(Y.active_set[k], solver.C[k], solver.opts.active_set_tolerance)
+#     end
+# end
+
+
+function active_constraints!(prob::Problem, solver::SequentialNewtonSolver, y)
+    N = prob.N
+    y[1] = solver.fVal[1]
+    a = solver.active_set
+
+    for k = 1:N-1
+        y[2k] = solver.fVal[k+1]
+        y[2k+1] = solver.C[k][a[k]]
+    end
+    y[end] = solver.C[N][a[N]]
+    nothing
+end
+
 
 function cost_expansion!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V)
     N = prob.N
@@ -103,7 +128,58 @@ function update!(prob::Problem, solver::SequentialNewtonSolver)
     nothing
 end
 
-function calc_residual!(prob::Problem, solver::Solver, r)
+"""
+Calculate Y'λ and store in δx and δu
+"""
+function jac_T_mult!(prob::Problem, solver::SequentialNewtonSolver, λ, δx, δu)
+    N = prob.N
+    Q = solver.Q
+    ∇F = view(solver.∇F,2:N)
+    ∇C = solver.∇C
+    a = solver.active_set
+
+    xi,ui = 1:n, n .+ (1:m)
+    C = [∇C[k][a[k],xi] for k = 1:N]
+    D = [∇C[k][a[k],ui] for k = 1:N-1]
+
+    δx[1] = λ[1] + ∇F[1].xx'λ[2] + C[1]'λ[3]
+    δu[1] =        ∇F[1].xu'λ[2] + D[1]'λ[3]
+    for k = 2:N-1
+        i = 2k
+        δx[k] = -λ[i-2] + ∇F[k].xx'λ[i] + C[k]'λ[i+1]
+        δu[k] =           ∇F[k].xu'λ[i] + D[k]'λ[i+1]
+    end
+    δx[end] = -λ[end-2] + C[N]'λ[end]
+    nothing
+end
+
+"""
+Calculate g + Y'λ, store result in x and u
+"""
+function residual!(prob::Problem, solver::SequentialNewtonSolver, vals)
+    N = prob.N
+    Q = solver.Q
+
+    # Calculate Y'λ
+    jac_T_mult!(prob, solver, vals.λ, vals.x, vals.u)
+
+    # Add g
+    for k = 1:N-1
+        vals.x[k] += Q[k].x
+        vals.u[k] += Q[k].u
+    end
+    vals.x[N] += Q[N].x
+    nothing
+end
+
+function res_norm(prob::Problem, solver::SequentialNewtonSolver, vals)
+    sqrt(norm(vals.x)^2 + norm(vals.u)^2)
+end
+
+"""
+Calculate Y*z, store result in r, where z is split into x and u
+"""
+function jac_mult!(prob::Problem, solver::SequentialNewtonSolver, x, u, r)
     N = prob.N
 
     # Extract variables from solver
@@ -111,9 +187,44 @@ function calc_residual!(prob::Problem, solver::Solver, r)
     Qinv = solver.Qinv
     Rinv = solver.Rinv
     a = solver.active_set
-    ∇F = solver.∇F
+    ∇F = view(solver.∇F,2:N)
+    fVal = view(solver.fVal,2:N)
     ∇C = solver.∇C
     c = solver.C
+
+    xi,ui = 1:n, n .+ (1:m)
+    C = [∇C[k][a[k],xi] for k = 1:N]
+    D = [∇C[k][a[k],ui] for k = 1:N-1]
+
+    # Calculate residual
+    r[1] = x[1]
+    for k = 1:N-1
+        r[2k] = (∇F[k].xx*x[k] + ∇F[k].xu*u[k] - x[k+1])
+        r[2k+1] = C[k]*x[k] + D[k]*u[k]
+    end
+    r[end] = C[N]*x[N]
+    nothing
+end
+
+"""
+Calculate y - Y*(H \\ g)
+"""
+function calc_residual!(prob::Problem, solver::SequentialNewtonSolver, r)
+    N = prob.N
+
+    # Extract variables from solver
+    Q = solver.Q
+    Qinv = solver.Qinv
+    Rinv = solver.Rinv
+    a = solver.active_set
+    ∇F = view(solver.∇F,2:N)
+    fVal = view(solver.fVal,2:N)
+    ∇C = solver.∇C
+    c = solver.C
+
+    xi,ui = 1:n, n .+ (1:m)
+    C = [∇C[k][a[k],xi] for k = 1:N]
+    D = [∇C[k][a[k],ui] for k = 1:N-1]
 
     # Calculate residual
     r[1] = solver.fVal[1] - Qinv[1]*Q[1].x
@@ -125,9 +236,206 @@ function calc_residual!(prob::Problem, solver::Solver, r)
     end
     C = ∇C[N].x[a[N],:]
     r[end] = c[N][a[N]] - C*Qinv[N]*Q[N].x
+    nothing
 end
 
-function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r)
+"""
+Calculates Hinv*Y'*((Y*Hinv*Y')\\y), which is the least norm solution to the problem
+    min xᵀHx
+     st Y*x = y
+where y is the vector of active constraints and Y is the constraint jacobian
+stores the result in vals.x and vals.u, with the intermediate lagrange multiplier store in vals.λ
+"""
+function _projection!(prob::Problem, solver::SequentialNewtonSolver, vals)
+    n,m,N = size(prob)
+    # active_constraints!(prob, solver, vals.r)
+    solve_cholesky(prob, solver, vals, vals.r)
+    Qinv, Rinv = solver.Qinv, solver.Rinv
+    λ = vals.λ
+    δx = vals.x
+    δu = vals.u
+    ∇F = view(solver.∇F,2:N)
+    ∇C = solver.∇C
+    xi,ui = 1:n, n .+ (1:m)
+    a = solver.active_set
+
+    C = [∇C[k][a[k],xi] for k = 1:N]
+    D = [∇C[k][a[k],ui] for k = 1:N-1]
+
+    # Calculate Hinv*Y'λ
+    jac_T_mult!(prob, solver, λ, δx, δu)
+    for k = 1:N-1
+        δx[k] = Qinv[k]*δx[k]
+        δu[k] = Rinv[k]*δu[k]
+    end
+    δx[N] .= Qinv[N]*δx[N]
+
+    # δx[1] = Qinv[1]*(λ[1] + ∇F[1].xx'λ[2] + C[1]'λ[3])
+    # δu[1] = Rinv[1]*(       ∇F[1].xu'λ[2] + D[1]'λ[3])
+    # for k = 2:N-1
+    #     i = 2k
+    #     δx[k] = Qinv[k]*(-λ[i-2] + ∇F[k].xx'λ[i] + C[k]'λ[i+1])
+    #     δu[k] = Rinv[k]*(          ∇F[k].xu'λ[i] + D[k]'λ[i+1])
+    # end
+    # δx[end] = Qinv[N]*(-λ[end-2] + C[N]'λ[end])
+end
+
+function projection!(prob::Problem, solver::SequentialNewtonSolver, vals, V=solver.V, active_set_update=true)
+    X,U = V.X, V.U
+    eps_feasible = solver.opts.feasibility_tolerance
+    count = 0
+    # cost_expansion!(prob, solver, V)
+    feas = Inf
+    while true
+        dynamics_constraints!(prob, solver, V)
+        update_constraints!(prob, solver, V)
+        dynamics_jacobian!(prob, solver, V)
+        constraint_jacobian!(prob, solver, V)
+        if active_set_update
+            active_set!(prob, solver)
+        end
+        active_constraints!(prob, solver, vals.r)
+
+        viol = maximum(norm.(vals.r,Inf))
+        if solver.opts.verbose
+            println("feas: ", viol)
+        end
+        if viol < eps_feasible || count > 10
+            break
+        else
+            δx = vals.x
+            δu = vals.u
+            _projection!(prob, solver, vals)
+            for k = 1:N-1
+                X[k] .-= δx[k]
+                U[k] .-= δu[k]
+            end
+            X[N] .-= vals.x[N]
+            count += 1
+        end
+    end
+end
+
+function multiplier_projection!(prob, solver::SequentialNewtonSolver, vals, V=solver.V)
+    residual!(prob, solver, vals)
+    jac_mult!(prob, solver, vals.x, vals.u, vals.r)
+    eyes = [I for k = 1:N]
+    δλ, = solve_cholesky(prob, solver, vals, vals.r, eyes, eyes)
+
+    a = solver.active_set
+
+
+    solver.V.ν[1] .-= δλ[1]
+    for k = 1:N-1
+        solver.V.ν[k+1] .-= δλ[2k]
+        λk = view(solver.V.λ[k], a[k])
+        λk .-= δλ[2k+1]
+    end
+    λk = view(solver.V.λ[N], a[N])
+    λk .-= δλ[end]
+    return δλ
+end
+
+
+function solveKKT(prob::Problem, solver::SequentialNewtonSolver, vals)
+    # Calculate r = y - Y*Hinv*g
+    calc_residual!(prob, solver, vals.r)
+
+    # Solve (Y*Hinv*Y')\r
+    δλ,λ_,r = solve_cholesky(prob, solver, vals, vals.r)
+
+    # Calculate g + Y'λ
+    copyto!(vals.λ, δλ)
+    residual!(prob, solver, vals)
+    δx = solver.Qinv .* vals.x
+    δu = solver.Rinv .* vals.u
+    return δx, δu, δλ
+end
+
+
+
+
+function newton_step!(prob::Problem, solver::SequentialNewtonSolver, vals)
+    V = solver.V
+    verbose = solver.opts.verbose
+
+    # Initial stats
+    update!(prob, solver)
+    J0 = cost(prob, V)
+    res0 = res_norm(prob, solver, vals)
+    viol0 = max_violation(solver)
+
+    # Projection
+    verbose ? println("\nProjection:") : nothing
+    projection!(prob, solver, vals)
+    update!(prob, solver)
+    multiplier_projection!(prob, solver, vals)
+
+
+    # Solve KKT
+    J1 = cost(prob, V)
+    res1 = res_norm(prob, solver, vals)
+    viol1 = max_violation(solver)
+    δx,δu,δλ = solveKKT(prob, solver, vals)
+
+    # Line Search
+    verbose ? println("\nLine Search") : nothing
+    V_ = line_search(prob, solver, δV)
+    J_ = cost(prob, V_)
+    res_ = norm(residual(prob, solver, V_))
+    viol_ = max_violation(solver)
+
+    # Print Stats
+    if verbose
+        println("\nStats")
+        println("cost: $J0 → $J1 → $J_")
+        println("res: $res0 → $res1 → $res_")
+        println("viol: $viol0 → $viol1 → $viol_")
+    end
+
+    return V_
+end
+
+
+function line_search(prob::Problem, solver::SequentialNewtonSolver, vals, δx, δu, δλ)
+    α = 1.0
+    s = 0.01
+    J0 = cost(prob, solver.V)
+    update!(prob, solver)
+    res0 = res_norm(prob, solver, vals)
+    count = 0
+    solver.opts.verbose ? println("res0: $res0") : nothing
+    while count < 10
+        X_ = X .- δx
+        U_ = U .- δu
+        λ_ = λ .- δλ
+        V_ = solver.V + α*δV
+
+        # Calculate residual
+        projection!(prob, solver, V_)
+        res = multiplier_projection!(prob, solver, V_)
+        J = cost(prob, V_)
+
+        # Calculate max violation
+        viol = max_violation(solver)
+
+        if solver.opts.verbose
+            println("cost: $J \t residual: $res \t feas: $viol")
+        end
+        if res < (1-α*s)*res0
+            solver.opts.verbose ? println("α: $α") : nothing
+            return V_
+        end
+        count += 1
+        α /= 2
+    end
+    return solver.V
+end
+
+
+
+function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r,
+        Qinv=solver.Qinv, Rinv=solver.Rinv)
     n,m,N = size(prob)
     Nb = 2N  # number of blocks
     p_active = sum.(solver.active_set)
@@ -152,8 +460,6 @@ function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r)
     # Extract variables from solver
     a = solver.active_set
     Q = solver.Q
-    Qinv = solver.Qinv
-    Rinv = solver.Rinv
     fVal = view(solver.fVal, 2:N)
     ∇F = view(solver.∇F, 2:N)
     c = solver.C
@@ -161,7 +467,11 @@ function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r)
 
     # Initial condition
     p = p_active[1]
-    G0 = cholesky(Qinv[1])
+    if Qinv[1] isa UniformScaling
+        G0 = cholesky(Diagonal(I,n))
+    else
+        G0 = cholesky(Qinv[1])
+    end
     λ_[1] = G0.L\r[1]
 
     F[1] = ∇F[1].xx*G0.L
@@ -185,8 +495,6 @@ function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r)
         p = p_active[k]
         p_ = p_active[k-1]
 
-        # C = (∇C[k].x[a[k],x])
-        # D = (∇C[k].u[a[k],u])
         C = (∇C[k].x[solver.active_set[k],:])
         D = (∇C[k].u[solver.active_set[k],:])
 
@@ -196,6 +504,7 @@ function solve_cholesky(prob::Problem, solver::SequentialNewtonSolver, vals, r)
         λ_[i] = G[k].L\(r[i] - F[k]*λ_[i-1] - E[k]*λ_[i-2])
         i += 1
 
+        K[k] = -C*Qinv[k]/G_.U
         L[k] = -K[k]*M_'/H_.U
         M[k] = (C*Qinv[k]*( solver.Q[k].xx - G_.U\(I - (M_'/H_.U) * (H_.L\M_) )/G_.L )*Qinv[k]*∇F[k].xx' + D*Rinv[k]*∇F[k].xu')/G[k].U
         H[k] = cholesky(C*Qinv[k]*C' + D*Rinv[k]*D' - K[k]*K[k]' - L[k]*L[k]' - M[k]*M[k]')
