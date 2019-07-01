@@ -2,114 +2,103 @@
 using TrajectoryOptimization, LinearAlgebra, Plots, ForwardDiff, MatrixCalculus, Ipopt, MathOptInterface, BenchmarkTools
 const MOI = MathOptInterface
 
-struct DIRTRELProblem <: MOI.AbstractNLPEvaluator
-    prob::Problem
-    p_dynamics::Int
-    p_dynamics_jac::Int
-    p_custom::Int
-    p_custom_jac::Int
-    p_robust::Int
-    p_robust_jac::Int
-    cost::Function
-    ∇cost!::Function
-    robust_cost::Function
-    ∇robust_cost::Function
-    dynamics_constraints!::Function
-    ∇dynamics_constraints!::Function
-    custom_constraints!::Function
-    ∇custom_constraints::Function
-    robust_constraints!::Function
-    ∇robust_constraints!::Function
-
-    jac_struct
-
-    packZ::Function
-    unpackZ::Function
-
-    NN::Int
-
-    enable_hessian::Bool
-end
-
+"DIRTREL Solver
+-contains parameters for initial disturbance trajectories, disturbance costs, LQR controller, and timestep bounds"
 struct DIRTRELSolver{T} <: AbstractSolver{T}
-    E0::AbstractArray
-    H0::AbstractArray
-    D::AbstractArray
+    E0::AbstractArray   # initial disturbance
+    H0::AbstractArray   # initial off-diagonal term from M (see DIRTREL)
+    D::AbstractArray    # disturbance parameter (see DIRTREL)
 
+    # Cost function
     Q::AbstractArray
     R::AbstractArray
     Qf::AbstractArray
 
+    # LQR controller
     Q_lqr::AbstractArray
     R_lqr::AbstractArray
     Qf_lqr::AbstractArray
 
+    # Robust cost
     Q_r::AbstractArray
     R_r::AbstractArray
     Qf_r::AbstractArray
 
+    # Eigen value threshold for padding individual eigen values prior to taking sqrt(E)
     eig_thr::T
 
-    integration::Symbol# Hermite-Simpson (zoh on control)
+    h_max::T # timestep upper bound
+    h_min::T # time step lower bound (h_min>0)
+end
 
-    "NLP Solver to use. Options are (:Ipopt) (more to be added in the future)"
-    nlp::Symbol
+"DIRTREL Problem
+-contains Problem, constraint dimensions/functions/jacobians/structures"
+struct DIRTRELProblem <: MOI.AbstractNLPEvaluator
+    prob::Problem                       # Trajectory Optimization problem
+    p_dynamics::Int                     # number of dynamics constraints (including timestep equality)
+    p_dynamics_jac::Int                 # number of non-zero elements in dynamics constraint jacobian
+    p_robust::Int                       # number of robust constraints
+    p_robust_jac::Int                   # number of non-zero elements in robust constraints jacobian
+    cost::Function                      # cost (currently cubic spline on quadratic stage cost :x'Qx + u'Ru; spline has + h)
+    ∇cost!::Function                    # cost gradient
+    robust_cost::Function               # robust cost from DIRTREL
+    ∇robust_cost::Function              # robust cost gradient
+    dynamics_constraints!::Function     # dynamics constraints
+    ∇dynamics_constraints!::Function    # dynamics constraint jacobian
+    robust_constraints!::Function       # robust constraints
+    ∇robust_constraints!::Function      # robust constraints jacobian
 
-    "Options dictionary for the nlp solver"
-    opts::Dict{String,Any}
+    jac_struct                          # contains index list of non-zero elements of concatenated constraint jacobian [dynamics;robust]
 
-    "Print output to console"
-    verbose::Bool
+    packZ::Function                     # stack X,U,H trajectories -> Z = [x1;u1;h1;...;xN]
+    unpackZ::Function                   # unpack Z to X,U,H trajectories -> X,U,H = Z
+
+    NN::Int                             # number of decision variables
+
+    enable_hessian::Bool
 end
 
 function DIRTRELProblem(prob::Problem,solver::DIRTRELSolver)
+    # DIRTREL problem dimensions
     n = prob.model.n; m = prob.model.m; N = prob.N
-    NN = (n+m+1)*(N-1) + n # number of decision variables
-    p_dynamics = n*(N+1) + (N-2)# number of equality constraints: dynamics, xf, h_k = h_{k+1}
+    NN = (n+m+1)*(N-1) + n  # number of decision variables
+    p_dynamics = n*(N+1) + (N-2)
     p_dynamics_jac = n*(N-1)*(n+m+1+n) + 2*n^2 + (N-2)*2
-    p_custom, p_custom_jac = 0, 0 #num_custom_constraints(prob)
     p_robust, p_robust_jac = num_robust_constraints(prob)
 
+    # Constraint jacobian sparsity structure
     idx = dynamics_constraints_sparsity(n,m,N,NN)
-    # idx_custom = custom_constraints_sparsity()
     idx_robust = robust_constraints_sparsity(prob,n,m,N,NN,p_dynamics)
     jac_struc = idx
     append!(jac_struc,idx_robust)
 
-    cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,custom_constraints!,∇custom_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ = gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_lqr,eig_thr)
+    # DIRTREL functions
+    cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ = gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_lqr,eig_thr)
 
-    DIRTRELProblem(prob,p_dynamics,p_dynamics_jac,p_custom,p_custom_jac,p_robust,p_robust_jac,cost,
-        ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,custom_constraints!,
-        ∇custom_constraints!,robust_constraints!,∇robust_constraints!,
+    DIRTRELProblem(prob,p_dynamics,p_dynamics_jac,p_robust,p_robust_jac,cost,
+        ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,
+        robust_constraints!,∇robust_constraints!,
         jac_struc,
         packZ,unpackZ,
         NN,
         false)
 end
 
-# _cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,custom_constraints!,∇custom_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ = gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,1.0e-3)
-_cost, dcost = gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,1.0e-3)
-_cost(ZZ)
-dcost(zero(ZZ),ZZ)
-
-_cost, dcost, dgdx = gen_robust_functions2(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,1.0e-3)
-_cost(ZZ)
-dcost(zero(ZZ),ZZ)
-dgdx(rand(n),rand(n),rand(m),1.0)
-
-function gen_robust_functions2(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,eig_thr=1.0e-3)
+"Generate functions needed for DIRTREL solve"
+function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,eig_thr=1.0e-3)
     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
     NN = n*N + m*(N-1) + (N-1)
 
     x0 = prob.x0
 
-    fc(z) = let
+    # Continuous dynamics (uncertain)
+    function fc(z)
         ż = zeros(eltype(z),n)
         prob.model.f(ż,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
         return ż
     end
 
-    fc(x,u,w) = let
+    function fc(x,u,w)
         ẋ = zero(x)
         prob.model.f(ẋ,x,u,w)
         return ẋ
@@ -127,7 +116,7 @@ function gen_robust_functions2(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r
     dxmdu(y,x,u,h) = h/8*(dfcdu(x,u,zeros(r)) - dfcdu(y,u,zeros(r)))
     dxmdh(y,x,u,h) = 1/8*(fc(x,u,zeros(r)) - fc(y,u,zeros(r)))
 
-    # 3rd order integration
+    # cubic interpolation on state
     F(y,x,u,h) = y - x - h/6*fc(x,u,zeros(r)) - 4*h/6*fc(xm(y,x,u,h),u,zeros(r)) - h/6*fc(y,u,zeros(r))
     F(z) = F(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
     ∇F(Z) = ForwardDiff.jacobian(F,Z)
@@ -159,176 +148,46 @@ function gen_robust_functions2(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r
         Z_traj = [k != N ? Z[((k-1)*(n+m+1) + 1):k*(n+m+1)] : Z[((k-1)*(n+m+1) + 1):NN] for k = 1:N]
     end
 
-    ℓ(x,u) = let Q=Q, R=R
+    # Cost
+    function ℓ(x,u)
         (x'*Q*x + u'*R*u)
     end
 
-    dℓdx(x,u) = let Q=Q
+    function dℓdx(x,u)
         2*Q*x
     end
 
-    dℓdu(x,u) = let R=R
+    function dℓdu(x,u)
         2*R*u
     end
 
-    gf(x) = let Qf=Qf
+    function gf(x)
         x'*Qf*x
     end
 
-    dgfdx(x) = let Qf=Qf
+    function dgfdx(x)
         2*Qf*x
     end
 
-    g(y,x,u,h) = let
+    # cubic interpolated stage cost
+    function g_stage(y,x,u,h)
         h/6*ℓ(x,u) + 4*h/6*ℓ(xm(y,x,u,h),u) + h/6*ℓ(y,u) + h
     end
 
-    g(z) = g(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
-    ∇g(z) = ForwardDiff.gradient(g,z)
+    # g(z) = g(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
+    # ∇g(z) = ForwardDiff.gradient(g,z)
+
+    # dgdx(y,x,u,h) = h/6*dℓdx(x,u) + 4*h/6*dxmdx(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)
+    # dgdy(y,x,u,h) = 4*h/6*dxmdy(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)+ h/6*dℓdx(y,u)
+    # dgdu(y,x,u,h) = h/6*dℓdu(x,u) + 4*h/6*(dxmdu(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + dℓdu(xm(y,x,u,h),u)) + h/6*dℓdu(y,u)
+    # dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dxmdh(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + 1/6*ℓ(y,u) + 1.0
 
     dgdx(y,x,u,h) = vec(h/6*dℓdx(x,u)' + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdx(y,x,u,h))
     dgdy(y,x,u,h) = vec(4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdy(y,x,u,h) + h/6*dℓdx(y,u)')
     dgdu(y,x,u,h) = vec(h/6*dℓdu(x,u)' + 4*h/6*(dℓdx(xm(y,x,u,h),u)'*dxmdu(y,x,u,h) + dℓdu(xm(y,x,u,h),u)') + h/6*dℓdu(y,u)')
     dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdh(y,x,u,h) + 1/6*ℓ(y,u) + 1.0
 
-    cost(Z) = let n=n, m=m, N=N, NN=NN, Q=Q, R=R, Qf=Qf, g=g, gf=gf
-        J = 0.
-        Z_traj = unpackZ_timestep(Z)
-
-        for k = 1:N-1
-            y = Z_traj[k+1][1:n]
-            x = Z_traj[k][1:n]
-            u = Z_traj[k][n .+ (1:m)]
-            h = Z_traj[k][n+m+1]
-            J += g(y,x,u,h)
-        end
-        xN = Z_traj[N][1:n]
-        J += gf(xN)
-
-        return J
-    end
-
-    ∇cost!(∇J,Z) = let n=n, m=m, N=N, NN=NN, Q=Q, R=R, Qf=Qf, dgdx=dgdx,dgdu=dgdu,dgdh=dgdh,dgdx=dgdx,dgfdx=dgfdx
-        Z_traj = unpackZ_timestep(Z)
-        k = 1
-        y = Z_traj[k+1][1:n]
-        x = Z_traj[k][1:n]
-        u = Z_traj[k][n .+ (1:m)]
-        h = Z_traj[k][n+m+1]
-        ∇J[1:(n+m+1+n)] = [dgdx(y,x,u,h);dgdu(y,x,u,h);dgdh(y,x,u,h);dgdx(y,x,u,h)]
-
-        for k = 2:N-1
-            y = Z_traj[k+1][1:n]
-            x = Z_traj[k][1:n]
-            u = Z_traj[k][n .+ (1:m)]
-            h = Z_traj[k][n+m+1]
-            xm = 0.5*(y+x)
-            ∇J[((k-1)*(n+m+1) + 1):(k*(n+m+1)+n)] = [dgdx(y,x,u,h);dgdu(y,x,u,h);dgdh(y,x,u,h);dgdx(y,x,u,h)]
-        end
-        xN = Z_traj[N][1:n]
-        ∇J[(NN - (n-1)):NN] = dgfdx(xN)
-
-        return nothing
-    end
-
-    return cost, ∇cost!, dgdx
-
-end
-
-function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,eig_thr=1.0e-3)
-    n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
-    NN = n*N + m*(N-1) + (N-1)
-
-    x0 = prob.x0
-
-    fc(z) = let
-        ż = zeros(eltype(z),n)
-        prob.model.f(ż,z[1:n],z[n .+ (1:m)],z[(n+m) .+ (1:r)])
-        return ż
-    end
-
-    fc(x,u,w) = let
-        ẋ = zero(x)
-        prob.model.f(ẋ,x,u,w)
-        return ẋ
-    end
-
-    ∇fc(z) = ForwardDiff.jacobian(fc,z)
-    ∇fc(x,u,w) = ∇fc([x;u;w])
-    dfcdx(x,u,w) = ∇fc(x,u,w)[:,1:n]
-    dfcdu(x,u,w) = ∇fc(x,u,w)[:,n .+ (1:m)]
-    dfcdw(x,u,w) = ∇fc(x,u,w)[:,(n+m) .+ (1:r)]
-
-    xm(y,x,u,h) = 0.5*(y + x) + h/8*(fc(x,u,zeros(r)) - fc(y,u,zeros(r)))
-    dxmdy(y,x,u,h) = 0.5*I - h/8*dfcdx(y,u,zeros(r))
-    dxmdx(y,x,u,h) = 0.5*I + h/8*dfcdx(x,u,zeros(r))
-    dxmdu(y,x,u,h) = h/8*(dfcdu(x,u,zeros(r)) - dfcdu(y,u,zeros(r)))
-    dxmdh(y,x,u,h) = 1/8*(fc(x,u,zeros(r)) - fc(y,u,zeros(r)))
-
-    # 3rd order integration
-    F(y,x,u,h) = y - x - h/6*fc(x,u,zeros(r)) - 4*h/6*fc(xm(y,x,u,h),u,zeros(r)) - h/6*fc(y,u,zeros(r))
-    F(z) = F(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
-    ∇F(Z) = ForwardDiff.jacobian(F,Z)
-    dFdy(y,x,u,h) = I - 4*h/6*dfcdx(xm(y,x,u,h),u,zeros(r))*dxmdy(y,x,u,h) - h/6*dfcdx(y,u,zeros(r))
-    dFdx(y,x,u,h) = -I - h/6*dfcdx(x,u,zeros(r)) - 4*h/6*dfcdx(xm(y,x,u,h),u,zeros(r))*dxmdx(y,x,u,h)
-    dFdu(y,x,u,h) = -h/6*dfcdu(x,u,zeros(r)) - 4*h/6*(dfcdx(xm(y,x,u,h),u,zeros(r))*dxmdu(y,x,u,h) + dfcdu(xm(y,x,u,h),u,zeros(r))) - h/6*dfcdu(y,u,zeros(r))
-    dFdh(y,x,u,h) = -1/6*fc(x,u,zeros(r)) - 4/6*fc(xm(y,x,u,h),u,zeros(r)) - 4*h/6*dfcdx(xm(y,x,u,h),u,zeros(r))*dxmdh(y,x,u,h) - 1/6*fc(y,u,zeros(r))
-    dFdw(y,x,u,h) = -h/6*dfcdw(x,u,zeros(r)) - 4*h/6*dfcdw(xm(y,x,u,h),u,zeros(r)) - h/6*dfcdw(y,u,zeros(r))
-
-    function packZ(X,U,H)
-        Z = [X[1];U[1];H[1]]
-
-        for k = 2:N-1
-            append!(Z,[X[k];U[k];H[k]])
-        end
-        append!(Z,X[N])
-
-        return Z
-    end
-
-    function unpackZ(Z)
-        X = [k != N ? Z[((k-1)*(n+m+1) + 1):k*(n+m+1)][1:n] : Z[((k-1)*(n+m+1) + 1):NN] for k = 1:N]
-        U = [Z[((k-1)*(n+m+1) + 1):k*(n+m+1)][n .+ (1:m)] for k = 1:N-1]
-        H = [Z[((k-1)*(n+m+1) + 1):k*(n+m+1)][(n+m+1)] for k = 1:N-1]
-        return X,U,H
-    end
-
-    function unpackZ_timestep(Z)
-        Z_traj = [k != N ? Z[((k-1)*(n+m+1) + 1):k*(n+m+1)] : Z[((k-1)*(n+m+1) + 1):NN] for k = 1:N]
-    end
-
-    ℓ(x,u) = let Q=Q, R=R
-        (x'*Q*x + u'*R*u)
-    end
-
-    dℓdx(x,u) = let Q=Q
-        2*Q*x
-    end
-
-    dℓdu(x,u) = let R=R
-        2*R*u
-    end
-
-    gf(x) = let Qf=Qf
-        x'*Qf*x
-    end
-
-    dgfdx(x) = let Qf=Qf
-        2*Qf*x
-    end
-
-    g(y,x,u,h) = let
-        h/6*ℓ(x,u) + 4*h/6*ℓ(xm(y,x,u,h),u) + h/6*ℓ(y,u) + h
-    end
-
-    g(z) = g(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
-    ∇g(z) = ForwardDiff.gradient(g,z)
-
-    dgdx(y,x,u,h) = vec(h/6*dℓdx(x,u)' + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdx(y,x,u,h))
-    dgdy(y,x,u,h) = zeros(n)#vec(4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdy(y,x,u,h) + h/6*dℓdx(y,u)')
-    dgdu(y,x,u,h) = zeros(m)#vec(h/6*dℓdu(x,u)' + 4*h/6*(dℓdx(xm(y,x,u,h),u)'*dxmdu(y,x,u,h) + dℓdu(xm(y,x,u,h),u)') + h/6*dℓdu(y,u)')
-    dgdh(y,x,u,h) = zeros(1)#1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdh(y,x,u,h) + 1/6*ℓ(y,u) + 1.0
-
+    # Robust cost
     robust_cost(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D
         X,U,H = unpackZ(Z)
         Ad = [-dFdy(X[k+1],X[k],U[k],H[k])\dFdx(X[k+1],X[k],U[k],H[k]) for k = 1:N-1]
@@ -350,21 +209,23 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
             P[k] = Q_lqr + K[k]'*R_lqr*K[k] + (Ad[k] - Bd[k]*K[k])'*P[k+1]*(Ad[k] - Bd[k]*K[k])
         end
 
-        ℓ = 0.
+        _ℓ = 0.
         for k = 1:N-1
             Acl = Ad[k] - Bd[k]*K[k]
             E[k+1] = Acl*E[k]*Acl' + Gd[k]*HH[k]'*Acl' + Acl*HH[k]*Gd[k]' + Gd[k]*D*Gd[k]'
             HH[k+1] = Acl*HH[k] + Gd[k]*D
-            ℓ += tr((Q_r + K[k]'*R_r*K[k])*E[k])
+            _ℓ += tr((Q_r + K[k]'*R_r*K[k])*E[k])
         end
-        ℓ += tr(Qf_r*E[N])
+        _ℓ += tr(Qf_r*E[N])
 
-        return ℓ
+        return _ℓ
     end
 
+    # Robust cost gradient
     ∇robust_cost(Z) = ForwardDiff.gradient(robust_cost,Z)
 
-    cost(Z) = let n=n, m=m, N=N, NN=NN, Q=Q, R=R, Qf=Qf
+    # Cost
+    function cost(Z)
         J = 0.
         Z_traj = unpackZ_timestep(Z)
 
@@ -373,7 +234,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
             x = Z_traj[k][1:n]
             u = Z_traj[k][n .+ (1:m)]
             h = Z_traj[k][n+m+1]
-            J += g(y,x,u,h)
+            J += g_stage(y,x,u,h)
         end
         xN = Z_traj[N][1:n]
         J += gf(xN)
@@ -381,6 +242,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return J
     end
 
+    # Cost gradient
     ∇cost!(∇J,Z) = let n=n, m=m, N=N, NN=NN, Q=Q, R=R, Qf=Qf
         Z_traj = unpackZ_timestep(Z)
         k = 1
@@ -388,17 +250,13 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         x = Z_traj[k][1:n]
         u = Z_traj[k][n .+ (1:m)]
         h = Z_traj[k][n+m+1]
-        xm = 0.5*(y+x)
-        a = dgdx(y,x,u,h)
-        println(a)
-        ∇J[1:(n+m+1+n)] = [a;dgdu(y,x,u,h);dgdh(y,x,u,h);dgdx(y,x,u,h)]
+        ∇J[1:(n+m+1+n)] = [dgdx(y,x,u,h);dgdu(y,x,u,h);dgdh(y,x,u,h);dgdx(y,x,u,h)]
 
         for k = 2:N-1
             y = Z_traj[k+1][1:n]
             x = Z_traj[k][1:n]
             u = Z_traj[k][n .+ (1:m)]
             h = Z_traj[k][n+m+1]
-            xm = 0.5*(y+x)
             ∇J[((k-1)*(n+m+1) + 1):(k*(n+m+1)+n)] = [dgdx(y,x,u,h);dgdu(y,x,u,h);dgdh(y,x,u,h);dgdx(y,x,u,h)]
         end
         xN = Z_traj[N][1:n]
@@ -407,6 +265,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return nothing
     end
 
+    # Evaluate disturbance trajectory E
     gen_E(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D
         X,U,H = unpackZ(Z)
         Ad = [-dFdy(X[k+1],X[k],U[k],H[k])\dFdx(X[k+1],X[k],U[k],H[k]) for k = 1:N-1]
@@ -440,6 +299,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return E_vec
     end
 
+    # Evaluate state disturbance trajectory δx
     gen_δx(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D, eig_thr=eig_thr
         E = gen_E(Z)
         Esqrt = zero(E)
@@ -465,8 +325,10 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return Esqrt
     end
 
+    # Gradient of disturbance trajectory wrt decision variables
     dEdZ(Z) = ForwardDiff.jacobian(gen_E,Z)
 
+    # Gradient of δx trajectory wrt decision variables
     dδxdZ(Z) = let n=n,m=m,N=N,NN=NN
         res = zeros(eltype(Z),N*n^2,NN)
         Esqrt = gen_δx(Z)
@@ -483,6 +345,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         res
     end
 
+    # Evaluate KEK trajectory (intermediate result needed for δu since matrix sqrt is not ForwardDiff compl.)
     gen_KEK(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D
         X,U,H = unpackZ(Z)
         Ad = [-dFdy(X[k+1],X[k],U[k],H[k])\dFdx(X[k+1],X[k],U[k],H[k]) for k = 1:N-1]
@@ -516,6 +379,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return KEK_vec
     end
 
+    # Evaluate δu trajectory
     gen_δu(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D, eig_thr=eig_thr
         KEK = gen_KEK(Z)
         KEKsqrt = zero(KEK)
@@ -541,8 +405,10 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return KEKsqrt
     end
 
+    # Gradient of KEK traj. wrt decision variables
     dKEKdZ(Z) = ForwardDiff.jacobian(gen_KEK,Z)
 
+    # Gradient of δu traj. wrt decision variables
     dδudZ(Z) = let n=n,m=m,N=N,NN=NN
         res = zeros(eltype(Z),(N-1)*m^2,NN)
         ∇KEK = dKEKdZ(Z)
@@ -559,6 +425,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         res
     end
 
+    # Dynamics constraints
     dynamics_constraints!(g,Z) = let n=n, m=m, N=N, NN=NN, x0=x0, xf=xf
         Z_traj = unpackZ_timestep(Z)
         k = 1
@@ -587,6 +454,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return nothing
     end
 
+    # Dynamics constraint jacobian
     ∇dynamics_constraints!(∇con,Z) = let n=n, m=m, N=N, NN=NN
         # ∇con = zeros(p,NN)
         Z_traj = unpackZ_timestep(Z)
@@ -619,6 +487,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return nothing
     end
 
+    # Robust constraints
     robust_constraints!(g,Z) = let n=n, m=m, N=N, NN=NN
         pp = 0
         shift = 0
@@ -702,6 +571,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
         return nothing
     end
 
+    # Robust constraints jacobian
     ∇robust_constraints!(G,Z) = let n=n, m=m, N=N, NN=NN
         pp = 0
         shift = 0
@@ -756,12 +626,7 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
                 C = zeros(p_con,n+m)
                 jacobian!(C,con,X[k],U[k])
                 Cx = C[:,1:n]
-
-                # @assert Cx == [0. 0.; 0. 0.]
-
                 Cu = C[:,n .+ (1:m)]
-
-                # @assert Cu == [1.0;-1.0]
 
                 for (i,xr) in enumerate(Xr)
                     for (j,ur) in enumerate(Ur)
@@ -831,12 +696,11 @@ function gen_robust_functions(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,
 
         return nothing
     end
-    custom_constraints!(z) = nothing
-    ∇custom_constraints!(z) = nothing
 
-    return cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,custom_constraints!,∇custom_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ
+    return cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ
 end
 
+"Add row and column indices to existing lists"
 function add_rows_cols!(row,col,_r,_c)
     for cc in _c
         for rr in _r
@@ -846,6 +710,7 @@ function add_rows_cols!(row,col,_r,_c)
     end
 end
 
+"Generate sparsity indices for dynamics constraint jacobian"
 function dynamics_constraints_sparsity(n,m,N,NN)
 
     row = []
@@ -883,6 +748,7 @@ function dynamics_constraints_sparsity(n,m,N,NN)
     return collect(zip(row,col))
 end
 
+"Calculate number of robust constraints and non-zero jacobian elements"
 function num_robust_constraints(prob::TrajectoryOptimization.Problem)
     n = prob.model.n; m = prob.model.m; N = prob.N
     NN = n*N + m*(N-1) + (N-1)
@@ -914,7 +780,7 @@ function num_robust_constraints(prob::TrajectoryOptimization.Problem)
     return p,p_jac
 end
 
-
+"Return robust constraint jacobian non-zero element indices"
 function robust_constraints_sparsity(prob,n,m,N,NN,shift=0)
     idx_col = 1:NN
 
@@ -963,7 +829,7 @@ function robust_constraints_sparsity(prob,n,m,N,NN,shift=0)
     return collect(zip(row,col))
 end
 
-
+"Robust constraint bounds"
 function robust_constraint_bounds(prob)
     p, = num_robust_constraints(prob)
     bL = -Inf*ones(p)
@@ -972,170 +838,117 @@ function robust_constraint_bounds(prob)
     return bL,bU
 end
 
-function primal_bounds(prob,n,m,N,u_max,u_min,h_max,h_min)
-    Z_low = [-Inf*ones(n);u_min*ones(m);h_min]
-    Z_up = [Inf*ones(n);u_max*ones(m);h_max]
+"Bounds on X, U trajectories from BoundConstraints"
+function get_XU_bounds!(prob::Problem)
+    n,m,N = size(prob)
+    bounds = [BoundConstraint(n,m) for k = 1:prob.N]
 
-    for k = 2:N-1
-        append!(Z_low,[-Inf*ones(n);u_min*ones(m);h_min])
-        append!(Z_up,[Inf*ones(n);u_max*ones(m);h_max])
+    # All time steps
+    for k = 1:prob.N
+        bnd = remove_bounds!(prob.constraints[k])
+        if !isempty(bnd)
+            bounds[k] = bnd[1]::BoundConstraint
+        end
     end
-    append!(Z_low,-Inf*ones(n))
-    append!(Z_up,Inf*ones(n))
+
+    return bounds
+end
+
+"Bounds on X,U,H trajectories"
+function primal_bounds(prob,h_max,h_min)
+    bnds = get_XU_bounds!(copy(prob))
+
+    Z_low = []
+    Z_up = []
+
+    for k = 1:N-1
+        append!(Z_low,[bnds[1].x_min;bnds[1].u_min;h_min])
+        append!(Z_up,[bnds[1].x_max;bnds[1].u_max;h_max])
+    end
+    append!(Z_low,bnds[1].x_min)
+    append!(Z_up,bnds[1].x_max)
 
     return Z_low, Z_up
 end
 
+"Dynamics constraint bounds (all zeros for equality constraints)"
 function dynamics_constraint_bounds(p::Int)
     ceq_low = zeros(p); ceq_up = zeros(p)
 
     return ceq_low,ceq_up
 end
 
-
-model = Dynamics.pendulum_model_uncertain
-n = model.n; m = model.m; r = model.r
-
-eig_thr = 1.0e-3
-n = 2; m = 1; r = 1# states, controls
-
-u_max = 3.
-u_min = -3.
-
-h_max = Inf
-h_min = 0.0
-
-# Problem
-x0 = [0.;0.]
-xf = [pi;0.]
-
-E0 = Diagonal(1.0e-6*ones(n))
-H0 = zeros(n,r)
-D = Diagonal([.2^2])
-
-N = 51 # knot points
-
-# p += 2*n^2 # robust terminal constraint n^2
-# p_ineq = 2*(m^2)*(N-1)*2
-
-Q = Diagonal(zeros(n))
-R = Diagonal(zeros(m))
-Qf = Diagonal(zeros(n))
-
-Q_lqr = Diagonal([10.;1.])
-R_lqr = Diagonal(0.1*ones(m))
-Qf_lqr = Diagonal([100.;100.])
-
-Q_r = Q_lqr
-R_r = R_lqr
-Qf_r = Qf_lqr
-
-tf0 = 2.
-dt = tf0/(N-1)
-
-# problem
-cost_fun = LQRCost(Q,R,Qf,xf)
-obj = Objective(cost_fun,N)
-
-goal_con = goal_constraint(xf)
-bnd_con = BoundConstraint(n,m,u_min=u_min,u_max=u_max,trim=true)
-con = ProblemConstraints([bnd_con],N)
-
-prob = TrajectoryOptimization.Problem(model, obj,constraints=con, N=N, tf=tf0, x0=x0, dt=dt)
-prob.constraints[N] += goal_con
-copyto!(prob.X,line_trajectory(x0,xf,N))
-
-
-X = line_trajectory(x0,xf,N)
-U = [0.01*rand(m) for k = 1:N-1]
-H = [dt*ones(1) for k = 1:N-1]
-
-solver = DIRTRELSolver(E0,H0,D,Q,R,Qf,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,eig_thr,:hs,:Ipopt,Dict{String,Any}(),true)
-pd = DIRTRELProblem(prob,solver)
-ZZ = pd.packZ(X,U,H)
-
-pd.cost(ZZ)
-
-pd.∇cost!(zeros(pd.NN),ZZ)
-
-## set up optimization (MathOptInterface)
-ZZ = pd.packZ(X,U,H)
-pd.unpackZ(ZZ)
-
+# MOI functions
+MOI.features_available(pd::DIRTRELProblem) = [:Grad, :Jac]
+MOI.initialize(pd::DIRTRELProblem, features) = nothing
+MOI.jacobian_structure(pd::DIRTRELProblem) = pd.jac_struct
+MOI.hessian_lagrangian_structure(pd::DIRTRELProblem) = []
 #
-# MOI.features_available(pr::DIRTRELProblem) = [:Grad, :Jac]
-# MOI.initialize(pr::DIRTRELProblem, features) = nothing
-# MOI.jacobian_structure(pr::DIRTRELProblem) = pr.jac_struct
-# MOI.hessian_lagrangian_structure(pr::DIRTRELProblem) = []
-# #
-# function MOI.eval_objective(pr::DIRTRELProblem, Z)
-#     return pr.cost(Z) + pr.robust_cost(Z)
-# end
-#
-# function MOI.eval_objective_gradient(pr::DIRTRELProblem, grad_f, Z)
-#     pr.∇cost!(grad_f, Z)
-#     grad_f + pr.∇robust_cost(Z)
-# end
-#
-# function MOI.eval_constraint(pr::DIRTRELProblem, g, Z)
-#     g_dynamics = view(g,1:pr.p_dynamics)
-#     g_robust = view(g,pr.p_dynamics .+ (1:pr.p_robust))
-#     pr.dynamics_constraints!(g_dynamics,Z)
-#     pr.robust_constraints!(g_robust,Z)
-# end
-#
-# function MOI.eval_constraint_jacobian(pr::DIRTRELProblem, jac, Z)
-#     jac_dynamics = view(jac,1:pr.p_dynamics_jac)
-#     jac_robust = view(jac,pr.p_dynamics_jac .+ (1:pr.p_robust_jac))
-#     pr.∇dynamics_constraints!(jac_dynamics,Z)
-#     pr.∇robust_constraints!(jac_robust,Z)
-# end
-#
-# MOI.eval_hessian_lagrangian(pr::DIRTRELProblem, H, x, σ, μ) = nothing
-# #
-# Z_low, Z_up = primal_bounds(prob,n,m,N,u_max,u_min,h_max,h_min)
-# c_low, c_up = dynamics_constraint_bounds(pd.p_dynamics)
-# r_low, r_up = robust_constraint_bounds(pd.prob)
-#
-# g_low = [c_low;r_low]; g_up = [c_up;r_up]
-#
-# nlp_bounds = MOI.NLPBoundsPair.(g_low,g_up)
-# block_data = MOI.NLPBlockData(nlp_bounds,pd,true)
-#
-# solver = Ipopt.Optimizer(tol=1.0e-3,constr_viol_tol=1.0e-2)
-#
-# Z = MOI.add_variables(solver,pd.NN)
-#
-# for i = 1:pd.NN
-#     zi = MOI.SingleVariable(Z[i])
-#     MOI.add_constraint(solver, zi, MOI.LessThan(Z_up[i]))
-#     MOI.add_constraint(solver, zi, MOI.GreaterThan(Z_low[i]))
-#     MOI.set(solver, MOI.VariablePrimalStart(), Z[i], ZZ[i])
-# end
-#
-# # Solve the problem
-# MOI.set(solver, MOI.NLPBlock(), block_data)
-# MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-# MOI.optimize!(solver)
-#
-# # Get the solution
-# res = MOI.get(solver, MOI.VariablePrimal(), Z)
-# #
-# # X,U,H = unpackZ(res)
-# # Xblk = zeros(n,N)
-# # for k = 1:N
-# #     Xblk[:,k] = X[k]
-# # end
-# # cost(ZZ)
-# # cost(res)
-# #
-# # Ublk = zeros(m,N-1)
-# # for k = 1:N-1
-# #     Ublk[:,k] = U[k]
-# # end
-# #
-# #
-# # plot(Xblk')
-# # plot(Ublk')
-# #
-# # idx
+function MOI.eval_objective(pd::DIRTRELProblem, Z)
+    return pd.cost(Z) + pd.robust_cost(Z)
+end
+
+function MOI.eval_objective_gradient(pd::DIRTRELProblem, grad_f, Z)
+    pd.∇cost!(grad_f, Z)
+    grad_f + pd.∇robust_cost(Z)
+end
+
+function MOI.eval_constraint(pd::DIRTRELProblem, g, Z)
+    g_dynamics = view(g,1:pd.p_dynamics)
+    g_robust = view(g,pd.p_dynamics .+ (1:pd.p_robust))
+    pd.dynamics_constraints!(g_dynamics,Z)
+    pd.robust_constraints!(g_robust,Z)
+end
+
+function MOI.eval_constraint_jacobian(pd::DIRTRELProblem, jac, Z)
+    jac_dynamics = view(jac,1:pd.p_dynamics_jac)
+    jac_robust = view(jac,pd.p_dynamics_jac .+ (1:pd.p_robust_jac))
+    pd.∇dynamics_constraints!(jac_dynamics,Z)
+    pd.∇robust_constraints!(jac_robust,Z)
+end
+
+MOI.eval_hessian_lagrangian(pr::DIRTRELProblem, H, x, σ, μ) = nothing
+
+"Method for solving DIRTREL problem"
+function solve!(prob::Problem,solver::DIRTRELSolver)
+    # Create DIRTREL problem
+    pd = DIRTRELProblem(prob,solver)
+
+    # Initial guess for decision variables
+    ZZ = pd.packZ(prob.X,prob.U,[prob.dt for k = 1:N-1])
+
+    # bounds on primals and jacobian block
+    Z_low, Z_up = primal_bounds(prob,solver.h_max,solver.h_min)
+    c_low, c_up = dynamics_constraint_bounds(pd.p_dynamics)
+    r_low, r_up = robust_constraint_bounds(pd.prob)
+
+    g_low = [c_low;r_low]; g_up = [c_up;r_up]
+
+    nlp_bounds = MOI.NLPBoundsPair.(g_low,g_up)
+    block_data = MOI.NLPBlockData(nlp_bounds,pd,true)
+
+    # NLP solver
+    opt_solver = Ipopt.Optimizer(tol=1.0e-3,constr_viol_tol=1.0e-2)
+
+    Z = MOI.add_variables(opt_solver,pd.NN)
+
+    for i = 1:pd.NN
+        zi = MOI.SingleVariable(Z[i])
+        MOI.add_constraint(opt_solver, zi, MOI.LessThan(Z_up[i]))
+        MOI.add_constraint(opt_solver, zi, MOI.GreaterThan(Z_low[i]))
+        MOI.set(opt_solver, MOI.VariablePrimalStart(), Z[i], ZZ[i])
+    end
+
+    # Solve the problem
+    MOI.set(opt_solver, MOI.NLPBlock(), block_data)
+    MOI.set(opt_solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.optimize!(opt_solver)
+
+    # Get the solution
+    res = MOI.get(opt_solver, MOI.VariablePrimal(), Z)
+
+    # Update problem w/ solution
+    X,U,H = pd.unpackZ(res)
+    copyto!(prob.X,X)
+    copyto!(prob.U,U)
+end

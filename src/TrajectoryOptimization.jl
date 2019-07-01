@@ -48,6 +48,7 @@ export
     DirectSolver,
     ProjectedNewtonSolver,
     ProjectedNewtonSolverOptions,
+    DIRTRELSolver,
     Discrete,
     Continuous,
     Constraint,
@@ -150,6 +151,8 @@ include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/dircol.jl")
 include("solvers/direct/dircol_ipopt.jl")
 include("solvers/direct/moi.jl")
+include("solvers/direct/dirtrel.jl")
+
 
 write_ipopt_options()
 end
