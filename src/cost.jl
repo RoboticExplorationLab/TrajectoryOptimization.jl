@@ -60,8 +60,8 @@ function /(e::Expansion,a::Real)
     return nothing
 end
 
-function copy(e::Expansion{T}) where T
-    Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
+function copy(e::Expansion)
+    Expansion(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
 end
 
 function reset!(e::Expansion)
