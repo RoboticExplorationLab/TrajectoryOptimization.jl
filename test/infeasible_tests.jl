@@ -8,7 +8,7 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
-model_d = Model{Discrete}(model,rk4)
+model_d = discretize_model(model,:rk4)
 
 # cost
 x0 = [0; 0.]

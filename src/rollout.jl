@@ -31,14 +31,14 @@ function rollout!(prob::Problem{T}) where T
     end
 end
 
-function rollout!(X::AbstractVectorTrajectory, model::Model{Discrete}, U::AbstractVectorTrajectory, dt) where T
+function rollout!(X::AbstractVectorTrajectory, model::Model{M,Discrete}, U::AbstractVectorTrajectory, dt) where {M,T}
     N = length(X)
     for k = 1:N-1
         evaluate!(X[k+1], model, X[k], U[k], dt)
     end
 end
 
-function rollout(model::Model{Discrete}, x0::Vector, U::AbstractVectorTrajectory, dt)
+function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajectory, dt) where M
     n = model.n
     N = length(U)+1
     X = [zero(x0) for k = 1:N]

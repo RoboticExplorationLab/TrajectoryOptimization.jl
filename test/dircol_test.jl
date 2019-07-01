@@ -232,8 +232,7 @@ for i = 1:10
     end
 end
 opts = DIRCOLSolverOptions{Float64}()
-solve(prob, opts)
+s, slv, pr = solve(prob, opts)
 TO.solve_moi(prob, opts)
-
 
 @test_nowarn TO.write_ipopt_options()

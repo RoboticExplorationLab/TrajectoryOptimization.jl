@@ -195,7 +195,7 @@ function AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions, Z::Primals{T}=
     c_part2 = [create_partition2(c_stage[k],n,m) for k = 1:N-1]
 
     # Create Trajectories
-    ∇F         = [PartedMatrix(zeros(T,n,n+m),part_f)           for k = 1:N]
+    ∇F         = [PartedMatrix(zeros(T,n,length(prob.model)),part_f)         for k = 1:N]
     C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
     ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
     C          = [C...,  PartedVector(T,constraints[N],:terminal)]

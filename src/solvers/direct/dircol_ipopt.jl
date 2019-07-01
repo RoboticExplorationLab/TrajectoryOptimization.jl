@@ -226,7 +226,9 @@ function write_ipopt_options()
         mkdir(joinpath(root_dir(),"logs"))
     end
     outfile=joinpath(root_dir(),"logs","ipopt.out")
-    f = open(outfile,"w")
+    optfile=joinpath(root_dir(),"ipopt.opt")
+
+    f = open(optfile,"w")
     println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
     println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
     println(f,"hessian_approximation limited-memory\n")
