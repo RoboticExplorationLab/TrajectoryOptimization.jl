@@ -157,3 +157,14 @@ begin
     copyto!(solver.V.U, prob.U)
     TO.newton_step!(prob, solver)
 end
+
+solver = SequentialNewtonSolver(prob, opts)
+V_ = TO.newton_step!(prob, solver)
+V_.X
+
+J0 = cost(prob)
+viol0 = max_violation(prob)
+res = solve(prob,solver)
+@test cost(res) < J0
+@test max_violation(res) < viol0
+@test max_violation(res) < 1e-10
