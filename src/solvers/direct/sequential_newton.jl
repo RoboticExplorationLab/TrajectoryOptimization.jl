@@ -66,6 +66,12 @@ struct SequentialNewtonSolver{T} <: DirectSolver{T}
     p::Vector{Int}
 end
 
+function size(solver::SequentialNewtonSolver)
+    n,m = length(solver.δx[1]), length(solver.δu[1])
+    N = length(solver.Q)
+    return n,m,N
+end
+
 function dual_partition(n,m,p,N)
     y_part = ones(Int,2,N-1)*n
     y_part[2,:] = p[1:end-1]
@@ -73,6 +79,12 @@ function dual_partition(n,m,p,N)
     insert!(y_part,1,3)
     push!(y_part, p[N])
     return y_part
+end
+
+function dual_partition(solver::SequentialNewtonSolver)
+    n,m,N = size(solver)
+    p_active = sum.(solver.active_set)
+    dual_partition(n,m,p_active,N)
 end
 
 function SequentialNewtonSolver(prob::Problem{T}, opts::ProjectedNewtonSolverOptions{T}) where T

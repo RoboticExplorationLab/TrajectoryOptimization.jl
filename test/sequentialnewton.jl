@@ -10,6 +10,7 @@ dynamics_jacobian!(prob, solver)
 update_constraints!(prob, solver)
 constraint_jacobian!(prob, solver)
 active_set!(prob, solver)
+set_active_set!(solver)
 cost_expansion!(prob, solver)
 invert_hessian!(prob, solver)
 
@@ -18,6 +19,53 @@ solver0 = ProjectedNewtonSolver(prob)
 update!(prob, solver0)
 solver = SequentialNewtonSolver(prob, opts)
 update!(prob, solver)
+
+# Projection
+Hinv = inv(Diagonal(solver0.H))
+Y,y = active_constraints(prob, solver0)
+δz0 = Hinv*Y'*((Y*Hinv*Y')\y0)
+
+packZ(_projection(solver)[1:2]...) ≈ δz0
+
+# Multiplier projection
+λ0 = duals(solver0.V)[solver0.a.duals]
+res0 = solver0.g + Y'λ0
+
+λa = active_duals(solver.V, solver.active_set)
+δλ = _mult_projection(solver, λa)
+vcat(δλ...) ≈ (Y*Y')\(Y*res0)
+
+# KKT solve
+S0 = Symmetric(Y*Hinv*Y')
+δλ0 = cholesky(S0)\(y0 - Y*Hinv*solver0.g)
+δz0 = -Hinv*(solver0.g + Y'δλ0)
+
+δx, δu, δλ = _solveKKT(solver)
+packZ(δx, δu) ≈ δz0
+vcat(δλ...) ≈ δλ0
+
+
+
+
+x,u = jac_T_mult(solver, active_duals(solver.V, solver.active_set))
+for k = 1:N-1
+    x[k] += solver.Q[k].x
+    u[k] += solver.Q[k].u
+end
+x[N] += solver.Q[N].x
+packZ(x,u) ≈ res0
+
+_λ = jac_mult(solver, x, u)
+vcat(_λ...) ≈ Y*res0
+
+eyes = [I for k = 1:N]
+calc_factors!(solver, eyes, eyes)
+δλ = solve_cholesky(solver, _λ)
+vcat(δλ...) ≈ (Y*Y')\(Y*res0)
+
+
+
+
 
 # Compare KKT solves
 δV0 = solveKKT(prob, solver0)
