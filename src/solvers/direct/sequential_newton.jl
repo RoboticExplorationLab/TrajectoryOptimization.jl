@@ -182,19 +182,6 @@ end
 # end
 
 
-function active_constraints!(prob::Problem, solver::SequentialNewtonSolver, y)
-    N = prob.N
-    y[1] = solver.fVal[1]
-    a = solver.active_set
-
-    for k = 1:N-1
-        y[2k] = solver.fVal[k+1]
-        y[2k+1] = solver.C[k][a[k]]
-    end
-    y[end] = solver.C[N][a[N]]
-    nothing
-end
-
 
 function cost_expansion!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V)
     N = prob.N

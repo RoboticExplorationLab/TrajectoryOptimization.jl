@@ -53,6 +53,80 @@ function _mult_projection(solver::SequentialNewtonSolver, λ)
     return δλ
 end
 
+function _solveKKT(solver::SequentialNewtonSolver)
+    # Calculate Y*Hinv*g
+    x = [zeros(n) for k = 1:N]
+    u = [zeros(m) for k = 1:N-1]
+    for k = 1:N-1
+        x[k] = solver.Qinv[k]*solver.Q[k].x
+        u[k] = solver.Rinv[k]*solver.Q[k].u
+    end
+    x[N] = solver.Qinv[N]*solver.Q[N].x
+    b0 = jac_mult(solver, x, u)
+
+    # Calculate y - Y*Hinv*g
+    y = active_constraints(solver)
+    b = y - b0
+
+    # Solve for δλ = (Y*Hinv*Y')\b
+    calc_factors!(solver)
+    δλ = solve_cholesky(solver, b)
+
+    # Solve for δz = -Hinv*(g + Y'δλ)
+    δx, δu = jac_T_mult(solver, δλ)
+    for k = 1:N-1
+        δx[k] = -solver.Qinv[k]*(δx[k] + solver.Q[k].x)
+        δu[k] = -solver.Rinv[k]*(δu[k] + solver.Q[k].u)
+    end
+    δx[N] = -solver.Qinv[N]*(δx[N] + solver.Q[N].x)
+    return δx, δu, δλ
+end
+
+function _update_primals!(V::PrimalDualVars, δx, δu)
+    N = length(V.X)
+    for k = 1:N-1
+        V.X[k] += δx[k]
+        V.U[k] += δu[k]
+    end
+    V.X[N] += δx[N]
+    return nothing
+end
+
+function +(V::PrimalDualVars{T}, δz::NTuple{2,Vector{Vector{T}}}) where T
+    V_ = copy(V)
+    _update_primals!(V_, δz[1], δz[2])
+    return V_
+end
+
+function _update_duals!(V::PrimalDualVars, δλ, active_set)
+    N = length(V.X)
+    V.λ[1] += δλ[1]
+    for k = 1:N-1
+        a = active_set[k]
+        V.λ[2k] += δλ[2k]
+        λk = view(V.λ[2k+1], a)
+        λk .+= δλ[2k+1]
+    end
+    λN = view(V.λ[2N], active_set[N])
+    λN .+= δλ[2N]
+end
+
+function +(V::PrimalDualVars, δλ::Tuple{Vector{Vector{T}},Vector{Vector{Bool}}}) where T
+    δλ,a = δλ
+    V_ = copy(V)
+    _update_duals!(V_, δλ, a)
+    return V_
+end
+
+function +(V::PrimalDualVars,
+        δV::Tuple{NTuple{3,Vector{Vector{T}}},Vector{Vector{Bool}}}) where T
+    δV,a = δV
+    δx,δu,δλ = δV
+    V_ = copy(V)
+    _update_primals!(V_, δx, δu)
+    _update_duals!(V_, δλ, a)
+    return V_
+end
 
 
 

@@ -45,23 +45,38 @@ packZ(δx, δu) ≈ δz0
 vcat(δλ...) ≈ δλ0
 
 
+# Update methods
+δV = zero(solver0.V.V)
+δV[solver0.parts.primals] .= δz0
+δV[solver0.parts.duals[solver0.a.duals]] .= δλ0
+V_0 = solver0.V + δV
+
+V_0 = solver0.V + δV
+V_ = copy(solver.V)
+_update_primals!(V_, δx, δu)
+_update_duals!(V_, δλ, solver.active_set)
+V_.X ≈ V_0.X
+V_.U ≈ V_0.U
+vcat(V_.λ...) ≈ V_0.Y
+
+V2_ = solver.V + (δx, δu)
+V2_.X == V_.X
+V2_.U == V_.U
+V2_.λ == solver.V.λ
+
+V2_ = solver.V + (δλ, solver.active_set)
+V2_.λ == V_.λ
+
+V2_ = solver.V + ((δx, δu, δλ), solver.active_set)
+V2_.X == V_.X
+V2_.U == V_.U
+V2_.λ == V_.λ
 
 
-x,u = jac_T_mult(solver, active_duals(solver.V, solver.active_set))
-for k = 1:N-1
-    x[k] += solver.Q[k].x
-    u[k] += solver.Q[k].u
-end
-x[N] += solver.Q[N].x
-packZ(x,u) ≈ res0
 
-_λ = jac_mult(solver, x, u)
-vcat(_λ...) ≈ Y*res0
 
-eyes = [I for k = 1:N]
-calc_factors!(solver, eyes, eyes)
-δλ = solve_cholesky(solver, _λ)
-vcat(δλ...) ≈ (Y*Y')\(Y*res0)
+
+
 
 
 
