@@ -12,7 +12,9 @@ struct DIRTRELSolver{T} <: AbstractSolver{T}
     # Cost function
     Q::AbstractArray
     R::AbstractArray
+    Rh::T # cost on time step h
     Qf::AbstractArray
+    xf
 
     # LQR controller
     Q_lqr::AbstractArray
@@ -73,7 +75,7 @@ function DIRTRELProblem(prob::Problem,solver::DIRTRELSolver)
     append!(jac_struc,idx_robust)
 
     # DIRTREL functions
-    cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ = gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_lqr,eig_thr)
+    cost, ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,robust_constraints!,∇robust_constraints!, packZ, unpackZ = gen_DIRTREL_funcs(prob,solver)
 
     DIRTRELProblem(prob,p_dynamics,p_dynamics_jac,p_robust,p_robust_jac,cost,
         ∇cost!, robust_cost, ∇robust_cost, dynamics_constraints!,∇dynamics_constraints!,
@@ -85,7 +87,10 @@ function DIRTRELProblem(prob::Problem,solver::DIRTRELSolver)
 end
 
 "Generate functions needed for DIRTREL solve"
-function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_r,eig_thr=1.0e-3)
+function gen_DIRTREL_funcs(prob::Problem,solver::DIRTRELSolver)
+    Q = solver.Q; R = solver.R; Rh = solver.Rh; Qf = solver.Qf; xf = solver.xf
+    E0 = solver.E0; H0 = solver.H0; D = solver.D; Q_lqr = solver.Q_lqr; R_lqr = solver.R_lqr; Qf_lqr = solver.Qf_lqr
+    Q_r = solver.Q_r; R_r = solver.R_r; Qf_r = solver.Qf_r; eig_thr = solver.eig_thr
     n = prob.model.n; m = prob.model.m; r = prob.model.r; N = prob.N
     NN = n*N + m*(N-1) + (N-1)
 
@@ -171,21 +176,21 @@ function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_
 
     # cubic interpolated stage cost
     function g_stage(y,x,u,h)
-        h/6*ℓ(x,u) + 4*h/6*ℓ(xm(y,x,u,h),u) + h/6*ℓ(y,u) + h
+        h/6*ℓ(x,u) + 4*h/6*ℓ(xm(y,x,u,h),u) + h/6*ℓ(y,u) + Rh*h
     end
 
     # g(z) = g(z[1:n],z[n .+ (1:n)],z[(n+n) .+ (1:m)],z[n+n+m+1])
     # ∇g(z) = ForwardDiff.gradient(g,z)
 
-    # dgdx(y,x,u,h) = h/6*dℓdx(x,u) + 4*h/6*dxmdx(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)
-    # dgdy(y,x,u,h) = 4*h/6*dxmdy(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)+ h/6*dℓdx(y,u)
-    # dgdu(y,x,u,h) = h/6*dℓdu(x,u) + 4*h/6*(dxmdu(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + dℓdu(xm(y,x,u,h),u)) + h/6*dℓdu(y,u)
-    # dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dxmdh(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + 1/6*ℓ(y,u) + 1.0
+    dgdx(y,x,u,h) = h/6*dℓdx(x,u) + 4*h/6*dxmdx(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)
+    dgdy(y,x,u,h) = 4*h/6*dxmdy(y,x,u,h)'*dℓdx(xm(y,x,u,h),u)+ h/6*dℓdx(y,u)
+    dgdu(y,x,u,h) = h/6*dℓdu(x,u) + 4*h/6*(dxmdu(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + dℓdu(xm(y,x,u,h),u)) + h/6*dℓdu(y,u)
+    dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dxmdh(y,x,u,h)'*dℓdx(xm(y,x,u,h),u) + 1/6*ℓ(y,u) + Rh
 
-    dgdx(y,x,u,h) = vec(h/6*dℓdx(x,u)' + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdx(y,x,u,h))
-    dgdy(y,x,u,h) = vec(4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdy(y,x,u,h) + h/6*dℓdx(y,u)')
-    dgdu(y,x,u,h) = vec(h/6*dℓdu(x,u)' + 4*h/6*(dℓdx(xm(y,x,u,h),u)'*dxmdu(y,x,u,h) + dℓdu(xm(y,x,u,h),u)') + h/6*dℓdu(y,u)')
-    dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdh(y,x,u,h) + 1/6*ℓ(y,u) + 1.0
+    # dgdx(y,x,u,h) = vec(h/6*dℓdx(x,u)' + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdx(y,x,u,h))
+    # dgdy(y,x,u,h) = vec(4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdy(y,x,u,h) + h/6*dℓdx(y,u)')
+    # dgdu(y,x,u,h) = vec(h/6*dℓdu(x,u)' + 4*h/6*(dℓdx(xm(y,x,u,h),u)'*dxmdu(y,x,u,h) + dℓdu(xm(y,x,u,h),u)') + h/6*dℓdu(y,u)')
+    # dgdh(y,x,u,h) = 1/6*ℓ(x,u) + 4/6*ℓ(xm(y,x,u,h),u) + 4*h/6*dℓdx(xm(y,x,u,h),u)'*dxmdh(y,x,u,h) + 1/6*ℓ(y,u) + Rh
 
     # Robust cost
     robust_cost(Z) = let n=n, m=m,r=r, N=N, NN=NN, Q_lqr=Q_lqr, R_lqr=R_lqr, Qf_lqr=Qf_lqr, E0=E0, H0=H0, D=D
@@ -491,13 +496,13 @@ function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_
     robust_constraints!(g,Z) = let n=n, m=m, N=N, NN=NN
         pp = 0
         shift = 0
-        δx = gen_δx(Z)
+        # δx = gen_δx(Z)
         δu = gen_δu(Z)
 
         X,U,H = unpackZ(Z)
 
         for k = 1:N-1
-            δx_k = δx[(k-1)*n^2 .+ (1:n^2)]
+            # δx_k = δx[(k-1)*n^2 .+ (1:n^2)]
             Xr = [X[k]]
             δx_sign = [0]
             # for i = 1:n
@@ -575,10 +580,10 @@ function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_
     ∇robust_constraints!(G,Z) = let n=n, m=m, N=N, NN=NN
         pp = 0
         shift = 0
-        δx = gen_δx(Z)
+        # δx = gen_δx(Z)
         δu = gen_δu(Z)
 
-        ∇δx = dδxdZ(Z)
+        # ∇δx = dδxdZ(Z)
         ∇δu = dδudZ(Z)
 
         X,U,H = unpackZ(Z)
@@ -587,13 +592,13 @@ function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_
         Im = Diagonal(ones(m))
 
         for k = 1:N-1
-            ∇δx_k = ∇δx[(k-1)*n^2 .+ (1:n^2),1:NN]
+            # ∇δx_k = ∇δx[(k-1)*n^2 .+ (1:n^2),1:NN]
             ∇δu_k = ∇δu[(k-1)*m^2 .+ (1:m^2),1:NN]
 
             x_idx = (k-1)*(n+m+1) .+ (1:n)
             u_idx = ((k-1)*(n+m+1) + n) .+ (1:m)
 
-            δx_k = δx[(k-1)*n^2 .+ (1:n^2)]
+            # δx_k = δx[(k-1)*n^2 .+ (1:n^2)]
             Xr = [X[k]]
             δx_sign = [(0,0)] # (sign,column index)
             # for i = 1:n
@@ -633,14 +638,14 @@ function gen_DIRTREL_funcs(prob,Q,R,Qf,xf,E0,H0,D,Q_lqr,R_lqr,Qf_lqr,Q_r,R_r,Qf_
                         if !(j == i && (i == 1 || j == 1))
                             # println("$i,$j")
                             if p_con != 0
-                                if i != 1
-                                    ∇δx_k_i = δx_sign[i][1]*copy(∇δx_k[(δx_sign[i][2]-1)*n .+ (1:n),1:NN])
+                                if false #i != 1
+                                    ∇δx_k_i = δx_sign[i][1]*∇δx_k[(δx_sign[i][2]-1)*n .+ (1:n),1:NN]
                                 else # no δx
                                     ∇δx_k_i = zeros(n,NN)
                                 end
 
                                 if j != 1
-                                    ∇δu_k_j = δu_sign[j][1]*copy(∇δu_k[(δu_sign[j][2]-1)*m .+ (1:m),1:NN])
+                                    ∇δu_k_j = δu_sign[j][1]*∇δu_k[(δu_sign[j][2]-1)*m .+ (1:m),1:NN]
                                 else # no δu
                                     ∇δu_k_j = zeros(m,NN)
                                 end
