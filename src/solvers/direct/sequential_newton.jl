@@ -104,7 +104,7 @@ function SequentialNewtonSolver(prob::Problem{T}, opts::ProjectedNewtonSolverOpt
     stats = Dict{Symbol,Any}()
 
     # PrimalDuals Variables
-    V = PrimalDualVars(prob)
+    V = PrimalDualVars(copy(prob))
     V_ = copy(V)
 
     # Deviations

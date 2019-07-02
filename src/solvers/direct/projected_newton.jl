@@ -232,12 +232,13 @@ function solveKKT_Shur(prob::Problem, solver::ProjectedNewtonSolver, Hinv, V=sol
     λ = duals(V)[a.duals]
     Y,y = active_constraints(prob, solver)
     g = solver.g
+    r = g + Y'λ
 
     YHinv = Y*Hinv
     S0 = Symmetric(YHinv*Y')
     L = cholesky(S0)
-    δλ = L\(y-YHinv*g)
-    δz = -Hinv*(g+Y'δλ)
+    δλ = L\(y-YHinv*r)
+    δz = -Hinv*(r+Y'δλ)
 
     δV[solver.parts.primals] .= δz
     δV[solver.parts.duals[solver.a.duals]] .= δλ

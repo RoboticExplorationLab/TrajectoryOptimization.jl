@@ -22,8 +22,8 @@ update!(prob, solver)
 
 # Projection
 Hinv = inv(Diagonal(solver0.H))
-Y,y = active_constraints(prob, solver0)
-δz0 = Hinv*Y'*((Y*Hinv*Y')\y0)
+Y,y0 = active_constraints(prob, solver0)
+δz0 = -Hinv*Y'*((Y*Hinv*Y')\y0)
 
 packZ(_projection(solver)[1:2]...) ≈ δz0
 
@@ -33,16 +33,20 @@ res0 = solver0.g + Y'λ0
 
 λa = active_duals(solver.V, solver.active_set)
 δλ = _mult_projection(solver, λa)
-vcat(δλ...) ≈ (Y*Y')\(Y*res0)
+vcat(δλ...) ≈ -(Y*Y')\(Y*res0)
 
 # KKT solve
 S0 = Symmetric(Y*Hinv*Y')
-δλ0 = cholesky(S0)\(y0 - Y*Hinv*solver0.g)
-δz0 = -Hinv*(solver0.g + Y'δλ0)
+r = solver0.g + Y'λ0
+δλ0 = cholesky(S0)\(y0 - Y*Hinv*r)
+δz0 = -Hinv*(r + Y'δλ0)
+δV1,δλ1 = solveKKT_Shur(prob,solver0,Hinv)
 
-δx, δu, δλ = _solveKKT(solver)
+δx, δu, δλ = _solveKKT(solver, λa)
 packZ(δx, δu) ≈ δz0
+packZ(δx, δu) ≈ δV1[1:NN]
 vcat(δλ...) ≈ δλ0
+vcat(δλ...) ≈ δλ1
 
 
 # Update methods
@@ -74,8 +78,83 @@ V2_.λ == V_.λ
 
 
 
+# Newton Step from beginning
+solver0 = ProjectedNewtonSolver(prob)
+update!(prob, solver0)
+solver = SequentialNewtonSolver(prob, opts)
+update!(prob, solver)
+V = solver.V
+
+# Projection
+projection!(prob, solver0)
+projection2!(prob, solver, V)
+
+# Multiplier projection
+norm(residual(prob,solver0))
+r0, δλ0 = multiplier_projection!(prob, solver0)
+res2(solver, V)
+r, δλ = multiplier_projection!(solver, V)
+r ≈ r0
+vcat(δλ...) ≈ δλ0
+
+# KKT Solve
+J0 = cost(prob, solver0.V)
+viol0 = max_violation(solver0)
+Y,y0 = active_constraints(prob, solver0)
+λ0 = duals(solver0.V)[solver0.a.duals]
+δV0,δλ0 = solveKKT_Shur(prob, solver0, Hinv)
+
+J = cost(prob, V)
+viol = max_violation(solver)
+λa = active_duals(V, solver.active_set)
+δx, δu, δλ = solveKKT(solver, V)
+
+J0 ≈ J
+viol0 ≈ viol
+packZ(δx, δu) ≈ δV0[1:NN]
+norm(vcat(δλ...) - δλ0)
+
+norm(residual(prob,solver0))
+res_init = res2(solver,V)
+
+# Line Search
+α = 0.9
+V_0 = solver0.V + α*δV0
+V_ = V + (α.*(δx,δu,δλ),solver.active_set)
+
+V_0.X ≈ V_.X
+V_0.U ≈ V_.U
+V_0.Y ≈ vcat(V_.λ...)
+
+projection!(prob, solver0, V_0)
+projection2!(prob, solver, V_)
+res0, = multiplier_projection!(prob, solver0, V_0)
+res, = multiplier_projection!(solver, V_)
+res0 ≈ res
+J0 = cost(prob, V_0)
+J = cost(prob, V_)
+J0 ≈ J
+
+line_search(prob, solver0, δV0)
+line_search(prob, solver, δx, δu, δλ)
 
 
+# Test Whole Step
+opts = ProjectedNewtonSolverOptions{Float64}(feasibility_tolerance=1e-10)
+solver0 = ProjectedNewtonSolver(prob,opts)
+newton_step!(prob, solver0)
+
+solver = SequentialNewtonSolver(prob, opts)
+newton_step2!(prob, solver)
+
+
+Y,y0 = active_constraints(prob, solver0)
+λ0 = duals(solver0.V)[solver0.a.duals]
+x,u,y = res2(solver, V)
+norm(packZ(x,u))
+norm(solver0.g + Y'λ0)
+packZ(x,u) ≈ solver0.g + Y'λ0
+y0 ≈ vcat(y...)
 
 
 
