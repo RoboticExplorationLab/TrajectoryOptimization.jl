@@ -1,4 +1,4 @@
-cost(prob::Problem, V::PrimalDual) = cost(prob.obj, V.X, V.U)
+cost(prob::Problem, V::Union{PrimalDual,PrimalDualVars}) = cost(prob.obj, V.X, V.U)
 
 ############################
 #       CONSTRAINTS        #
@@ -208,11 +208,9 @@ function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=
     δλ = -(Y*Y')\(Y*res0)
     λ_ = λ + δλ
     res = g + Y'*λ_
-    @show size(view(duals(V),a))
-    @show size(λ_)
     copyto!(view(duals(V),a), λ_)
     res = norm(residual(prob, solver, V))
-    return res
+    return res, δλ
 end
 
 function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
@@ -243,7 +241,7 @@ function solveKKT_Shur(prob::Problem, solver::ProjectedNewtonSolver, Hinv, V=sol
 
     δV[solver.parts.primals] .= δz
     δV[solver.parts.duals[solver.a.duals]] .= δλ
-    return δV
+    return δV, δλ
 end
 
 function solveKKT_chol(prob::Problem, solver::ProjectedNewtonSolver, Qinv, Rinv, A, B, C, D, V=solver.V)
@@ -306,7 +304,7 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
 
         # Calculate residual
         projection!(prob, solver, V_)
-        res = multiplier_projection!(prob, solver, V_)
+        res, = multiplier_projection!(prob, solver, V_)
         J = cost(prob, V_)
 
         # Calculate max violation
@@ -339,6 +337,7 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     J0 = cost(prob, V)
     res0 = norm(residual(prob, solver))
     viol0 = max_violation(solver)
+    Hinv = inv(Diagonal(solver.H))
 
     # Projection
     verbose ? println("\nProjection:") : nothing
@@ -350,7 +349,7 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     J1 = cost(prob, V)
     res1 = norm(residual(prob, solver))
     viol1 = max_violation(solver)
-    δV = solveKKT(prob, solver)
+    δV, = solveKKT_Shur(prob, solver, Hinv)
 
     # Line Search
     verbose ? println("\nLine Search") : nothing

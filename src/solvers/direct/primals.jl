@@ -193,11 +193,9 @@ function PrimalDual(prob::Problem{T}) where T
     PrimalDual(V, Z, X, U, Y, ν, λ, active_set, a)
 end
 
-function PrimalDual(V::Vector, n::Int, m::Int, N::Int, P::Int) where T
-    n,m,N = size(prob)
+function PrimalDual(V::Vector, n::Int, m::Int, p::Vector{Int}, N::Int) where T
     NN = N*n + (N-1)*m
     p_colloc = N*n
-    p = num_constraints(prob)
     pcum = insert!(cumsum(p),1,0)
     P = sum(p) + p_colloc
 
