@@ -1,41 +1,45 @@
+const TO = TrajectoryOptimization
+using Test, LinearAlgebra
 
+# Set up Problem
 model = Dynamics.car_model
 costfun = Dynamics.car_costfun
 xf = [0,1,0]
 N = 51
 n,m = model.n, model.m
-bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=-2, u_max=2)
-bnd1 = BoundConstraint(n,m, u_min=bnd.u_min, u_max=bnd.u_max)
+bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=1.5)
+bnd1 = BoundConstraint(n,m, u_min=bnd.u_min)
+bnd_x = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf])
 goal = goal_constraint(xf)
 obs = (([0.2, 0.6], 0.25),
        ([-0.5, 0.5], 0.4))
-obs1 = planar_obstacle_constraint(n,m, obs[1]..., :obstacle1)
-obs2 = planar_obstacle_constraint(n,m, obs[2]..., :obstacle2)
+obs1 = TO.planar_obstacle_constraint(n,m, obs[1]..., :obstacle1)
+obs2 = TO.planar_obstacle_constraint(n,m, obs[2]..., :obstacle2)
 con = ProblemConstraints(N)
 con[1] += bnd1
 for k = 2:N-1
-    con[k] += bnd + obs1 + obs2
+    con[k] += bnd  + obs1 + obs2
 end
 con[N] += goal
 prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
+
+# Solve with ALTRO
 initial_controls!(prob, ones(m,N-1))
 ilqr = iLQRSolverOptions()
 al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
+al.constraint_tolerance = 1e-2
+al.constraint_tolerance_intermediate = 1e-1
 solve!(prob, al)
-plot()
-plot_circle!(obs[1]...)
-plot_circle!(obs[2]...)
-plot_trajectory!(prob.X,markershape=:circle)
-plot(prob.U)
-max_violation(prob)
 
-solver = ProjectedNewtonSolver(prob)
+# Test Primal Dual variable
+opts = ProjectedNewtonSolverOptions{Float64}(verbose=false)
+solver = ProjectedNewtonSolver(prob,opts)
 NN = length(solver.V.Z)
-p = solver.p
+p = num_constraints(prob)
 P = sum(p) + N*n
 
 V = copy(solver.V)
-Z = primals(V)
+Z = TO.primals(V)
 @test V.X[1] == prob.X[1]
 V.X[1][1] = 100
 @test V[1] == 100
@@ -44,179 +48,74 @@ Z[2] = 150
 @test V[2] == 150
 Z .+= 1
 @test V[2] == 151
-Y = duals(V)
+Y = TO.duals(V)
 @test length(Y) == P
 
-# Reset
-V = solver.V
-@test cost(prob, V) == cost(prob)
+# Create PN Solver
+solver = ProjectedNewtonSolver(prob,opts)
+NN = N*n + (N-1)*m
+p = num_constraints(prob)
+P = N*n + sum(p)
 
-dynamics_constraints!(prob, solver)
-@test maximum(norm.(solver.fVal, Inf)) ≈ 0
-solver.fVal
-dynamics_jacobian!(prob, solver)
-solver.∇F[1]
+# Test functions
+TO.dynamics_constraints!(prob, solver)
+TO.update_constraints!(prob, solver)
+TO.active_set!(prob, solver)
+@test all(solver.a.primals)
+TO.dynamics_jacobian!(prob, solver)
+@test solver.∇F[1].xx == solver.Y[1:n,1:n]
+@test solver.∇F[2].xx == solver.Y[n .+ (1:n),1:n]
 
-cost_expansion!(prob, solver)
-H, g = cost_expansion(prob, solver)
-D, d = dynamics_expansion(prob, solver)
-projection!(prob, solver)
+TO.constraint_jacobian!(prob, solver)
+@test solver.∇C[1] == solver.Y[2n .+ (1:p[1]), 1:n+m]
 
-# Gen Newton Functions
-mycost, grad_cost, hess_cost, dyn, jacob_dynamics, constraints, jacob_con, act_set =
-    gen_usrfun_newton(prob)
-cost(prob,V) == mycost(Vector(V.Z))
-ForwardDiff.gradient(mycost, Vector(V.Z)) ≈ grad_cost(V)
-# ForwardDiff.hessian(mycost, Vector(V.Z)) ≈ hess_cost(V)
-jacob_dynamics(V) ≈ ForwardDiff.jacobian(dyn, Vector(V.Z))
-hess_cost(V) ≈ H
-grad_cost(V) ≈ g
-dyn(V) ≈ d
-jacob_dynamics(V) ≈ Array(D)
+TO.cost_expansion!(prob, solver)
 
+# Test Constraint Violation
+solver = ProjectedNewtonSolver(prob,opts)
 solver.opts.active_set_tolerance = 0.0
-act_set(V,0.0)
-C = constraints(V)
-tmp1 = maximum(C)
-@test tmp1 == max_violation(prob)
-tmp2 = norm(d, Inf)
-@test max(tmp1, tmp2) == norm([d;C][V.active_set],Inf)
+TO.dynamics_constraints!(prob, solver)
+TO.update_constraints!(prob, solver)
+TO.dynamics_jacobian!(prob, solver)
+TO.constraint_jacobian!(prob, solver)
+TO.active_set!(prob, solver)
+Y,y = TO.active_constraints(prob, solver)
+viol = TO.calc_violations(solver)
+@test maximum(maximum.(viol)) == norm(y,Inf)
+@test norm(y,Inf) == max_violation(prob)
+@test max_violation(solver) == max_violation(prob)
+
+# Test Projection
+solver = ProjectedNewtonSolver(prob,opts)
+solver.opts.feasibility_tolerance = 1e-10
 solver.opts.active_set_tolerance = 1e-3
-active_set!(prob, solver)
-@test max(tmp1, tmp2) < norm([d;C][V.active_set],Inf)
+TO.update!(prob, solver)
+Y,y = TO.active_constraints(prob, solver)
+TO.projection!(prob, solver)
+TO.update!(prob, solver, solver.V)
+@test TO.max_violation(solver) < solver.opts.feasibility_tolerance
+res0 = norm(TO.residual(prob, solver))
+res, = TO.multiplier_projection!(prob, solver)
+@test res < res0
 
-@test length(C) == sum(p)
-update_constraints!(prob, solver)
-@test C == vcat(solver.C...)
-active_set!(prob, solver)
-@test all(V.active_set[1:N*n])
-
-@test length(C) == sum(length.(V.λ))
-@test N*n == sum(length.(V.ν))
-@test length(C) + N*n == length(V.active_set)
-
-jacobian!(solver.∇C, prob.constraints, V.X, V.U)
-∇C = jacob_con(V)
-@test size(∇C) == (sum(p), NN)
-@test cat(solver.∇C..., dims=(1,2)) == ∇C
-
-solver = ProjectedNewtonSolver(prob)
-solver.opts.active_set_tolerance = 1e-6
-mycost, grad_cost, hess_cost, dyn, jacob_dynamics, con, jacob_con, act_set =
-    gen_usrfun_newton(prob)
+# Build KKT
 V = solver.V
-V_ = copy(V)
-act_set(V_,1e-6)
-a = V
-y = [dyn(V_); constraints(V_)][V_.active_set]
-Y = [jacob_dynamics(V_); jacob_con(V_)][V_.active_set,:]
-δZ = -Y'*((Y*Y')\y)
-V_.Z .+= δZ
+V0 = copy(V)
+TO.cost_expansion!(prob, solver)
+J0 = cost(prob, V)
+res0 = norm(TO.residual(prob, solver))
+viol0 = max_violation(solver)
+δV = TO.solveKKT(prob, solver)
+V_ = TO.line_search(prob, solver, δV)
+res = norm(TO.residual(prob, solver, V_))
+@test res < res0
 
-act_set(V_,1e-6)
-y2 = [dyn(V_); constraints(V_)][V_.active_set]
-norm(y2,Inf)
-norm(y,Inf)
-findmin(y)
-NN
-cond(Array(Y*Y'))
-V.active_set
-
-
-
-typeof(H)
-mycost(V)
-norm(grad_cost(V))
-norm(dyn(V),Inf)
-norm([grad_cost(V); dyn(V)])
-V1 = newton_step0(prob, V, 1e-4)
-y = [dyn(V1); con(V1)]
-act_set(V1)
-norm(y[V1.active_set], Inf)
-norm(dyn(V1), Inf)
-update_constraints!(prob, solver, V1)
-max_violation(solver)
-v = calc_violations(solver)
-findmax(maximum.(v))
-v[12]
-solver.C[12]
-
-res = grad_cost(V1) + jacob_dynamics(V1)'duals(V1)
-norm(res)
-mycost(V1)
-V1 = newton_step0(prob, V1)
-V1.X
-
-res = copy(prob)
-copyto!(res.X, V1.X)
-copyto!(res.U, V1.U)
-projection!(res)
-cost(res) < cost(prob)
-max_violation(res)
-max_violation(prob)
-
-plot()
-plot_circle!(obs[1]...)
-plot_circle!(obs[2]...)
-plot_trajectory!(res.X,markershape=:circle)
-plot_trajectory!(res.X)
-plot(res.U)
-
-
-# Solves
-prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
-initial_controls!(prob, ones(m,N-1))
-ilqr = iLQRSolverOptions()
-al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
-res1 = solve(prob, al)
-max_violation(res1)
-
-pn = ProjectedNewtonSolverOptions{Float64}(active_set_tolerance=1e-2)
-res2 = solve(res1, pn)
-max_violation(res2)
-
-
-# Compare
-cost(prob,V)
-residual(prob, solver)
-δV = newton_step!(prob, solver)
-V1 = copy(V)
-cost(prob, V1)
-V1.V .+= 0.5δV
-cost(prob, V1)
-dynamics_constraints!(prob, solver, V1)
-dynamics_jacobian!(prob, solver, V1)
-cost_expansion!(prob, solver, V1)
-projection!(prob, solver, V1)
-cost(prob, V1)
-residual(prob, solver)
-
-g = vcat([[q.x; q.u] for q in solver.Q]...)
-ForwardDiff.gradient(v->cost(prob, PrimalDual(v, n,m,N,P)), V.V)
-
-PrimalDual(V.V, n,m,N,P)
-
-
-V = solver.V
-V1 = copy(solver.V)
-V1.V .+= δV
-cost(prob, V1)
-
-
-A = [H D'; D zeros(P,P)]
-b = Vector([g; d])
-δV = -A\b
-
-V + δV
-V.Z.indices
-@btime copy($V)
-
-cost(prob)
-@btime PrimalDual(prob)
-
-struct ConstraintVals{T}
-    d::Vector{T}
-    D::SparseMatrixCSC{T, Int}
-    c::Vector{SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
-    ∇c::Vector
-end
+# Test Newton Step
+solver = ProjectedNewtonSolver(prob,opts)
+solver.opts.feasibility_tolerance = 1e-10
+solver.opts.verbose = false
+V_ = TO.newton_step!(prob, solver)
+TO.update!(prob, solver, V_)
+@test max_violation(solver) < 1e-10
+@test cost(prob, V_) < cost(prob, solver.V)
+@test norm(TO.residual(prob, solver, V_)) < 1e-4

@@ -49,6 +49,7 @@ export
     DirectSolver,
     ProjectedNewtonSolver,
     ProjectedNewtonSolverOptions,
+    SequentialNewtonSolver,
     Discrete,
     Continuous,
     Constraint,
@@ -151,6 +152,9 @@ include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/dircol.jl")
 include("solvers/direct/dircol_ipopt.jl")
 include("solvers/direct/moi.jl")
+include("solvers/direct/sequential_newton.jl")
+include("solvers/direct/sequential_newton_solve.jl")
+include("solvers/direct/projected_newton.jl")
 
 write_ipopt_options()
 end
