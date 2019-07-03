@@ -194,7 +194,7 @@ is_constrained(prob::Problem{T}) where T = !all(isempty.(prob.constraints.C))
 
 TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.constraints)
 
-cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U)::T
+cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U,get_dt_traj(prob))::T
 
 function max_violation(prob::Problem{T}) where T
     if is_constrained(prob)
@@ -242,3 +242,28 @@ end
 midpoint(prob::Problem{T,Continuous}) where T = update_problem(prob, model=midpoint(prob.model))
 rk3(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk3(prob.model))
 rk4(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk4(prob.model))
+
+"Return timestep"
+function get_dt(prob::Problem,k::Int)
+    if prob.tf == 0.
+        return prob.U[k][end]^2
+    else
+        return prob.dt
+    end
+end
+
+function get_dt(prob::Problem,U::Array,k::Int)
+    if prob.tf == 0.
+        return U[end]^2
+    else
+        return prob.dt
+    end
+end
+
+function get_dt_traj(prob::Problem)
+    [get_dt(prob,k) for k = 1:prob.N-1]
+end
+
+function get_dt_traj(prob::Problem,U::Trajectory)
+    [get_dt(prob,U[k],k) for k = 1:prob.N-1]
+end

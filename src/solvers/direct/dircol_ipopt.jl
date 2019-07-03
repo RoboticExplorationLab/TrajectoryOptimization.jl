@@ -133,12 +133,12 @@ function gen_ipopt_functions(prob::Problem{T}, solver::DIRCOLSolver) where T
 
     function eval_f(Z)
         X,U = unpack(Z,part_z)
-        cost(prob.obj, X, U)
+        cost(prob.obj, X, U, get_dt_traj(prob))
     end
 
     function eval_grad_f(Z, grad_f)
         X,U = unpack(Z, part_z)
-        cost_gradient!(grad_f, prob, X, U)
+        cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
     end
 
     function eval_g(Z, g)

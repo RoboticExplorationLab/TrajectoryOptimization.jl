@@ -23,7 +23,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
             copyto!(X̄,X)
             copyto!(Ū,U)
 
-            J = cost(prob.obj, X̄, Ū)
+            J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))
 
             z = 0.
             alpha = 0.0
@@ -48,7 +48,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
         end
 
         # Calcuate cost
-        J = cost(prob.obj, X̄, Ū)   # Unconstrained cost
+        J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))   # Unconstrained cost
 
         expected = -alpha*(ΔV[1] + alpha*ΔV[2])
         if expected > 0
