@@ -14,7 +14,6 @@ function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T},
     for k = 1:N-1
         J += stage_cost(c[k],X[k],U[k],H[k])
     end
-    J /= (N-1.0)
     J += stage_cost(c[N],X[N])
     return J
 end
@@ -94,12 +93,8 @@ mutable struct QuadraticCost{T} <: CostFunction
     q::AbstractVector{T}                 # Linear term on states (n,)
     r::AbstractVector{T}                 # Linear term on controls (m,)
     c::T                                 # constant term
-    Qf::AbstractMatrix{T}                # Quadratic final cost for terminal state (n,n)
-    qf::AbstractVector{T}                # Linear term on terminal state (n,)
-    cf::T                                # constant term (terminal)
     function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
-            q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
-            qf::AbstractVector{T}, cf::T) where T
+            q::AbstractVector{T}, r::AbstractVector{T}, c::T) where T
         if !isposdef(R)
             # err = ArgumentError("R must be positive definite")
             # throw(err)
@@ -114,17 +109,21 @@ mutable struct QuadraticCost{T} <: CostFunction
             err = ArgumentError("Qf must be positive semi-definite")
             throw(err)
         end
-        new{T}(Q,R,H,q,r,c,Qf,qf,cf)
+        new{T}(Q,R,H,q,r,c)
     end
 end
 
 get_sizes(cost::QuadraticCost) = (size(cost.Q,1),size(cost.R,1))
 
-
 function QuadraticCost(Q,R; H=zeros(size(R,1), size(Q,1)), q=zeros(size(Q,1)),
-        r=zeros(size(R,1)), c=0.0, Qf=zero(Q), qf=zero(q), cf=0.0)
-    QuadraticCost(Q,R,H,q,r,c,Qf,qf,cf)
+        r=zeros(size(R,1)), c=0.0)
+    QuadraticCost(Q,R,H,q,r,c)
 end
+
+function QuadraticCost(Q,q,c)
+    QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c)
+end
+
 
 
 """
@@ -133,21 +132,18 @@ Cost function of the form
     1/2(xₙ-x_f)ᵀ Qf (xₙ - x_f) + 1/2 ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 """
-function LQRCost(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector)
+function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
     c = 0.5*xf'*Q*xf
-    qf = -Qf*xf
-    cf = 0.5*xf'*Qf*xf
-    return QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
+    return QuadraticCost(Q, R, H, q, r, c)
 end
 
-# QUESTION: remove?
 function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
-    return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
+    return QuadraticCost(Qf,zeros(0,0),zeros(0,size(Qf,1)),qf,zeros(0),cf)
 end
 
 function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}, dt::T) where T
@@ -155,7 +151,7 @@ function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector
 end
 
 function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
-    0.5*xN'cost.Qf*xN + cost.qf'*xN + cost.cf
+    0.5*xN'cost.Q*xN + cost.q'*xN + cost.c
 end
 
 function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost,
@@ -170,8 +166,8 @@ function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost,
 end
 
 function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVector{T}) where T
-    S.xx .= cost.Qf
-    S.x .= cost.Qf*xN + cost.qf
+    S.xx .= cost.Q
+    S.x .= cost.Q*xN + cost.q
     return nothing
 end
 
@@ -183,7 +179,7 @@ function gradient!(grad, cost::QuadraticCost,
 end
 
 function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
-    grad .= cost.Qf*xN + cost.qf
+    grad .= cost.Q*xN + cost.q
     return nothing
 end
 
@@ -197,12 +193,12 @@ function hessian!(hess, cost::QuadraticCost,
 end
 
 function hessian!(hess, cost::QuadraticCost, xN::AbstractVector)
-    hess .= cost.Qf
+    hess .= cost.Q
     return nothing
 end
 
 function copy(cost::QuadraticCost)
-    return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c), copy(cost.Qf), copy(cost.qf), copy(cost.cf))
+    return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c))
 end
 
 """

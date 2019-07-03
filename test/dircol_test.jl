@@ -9,7 +9,13 @@ using Ipopt
 
 # Set up problem
 model = Dynamics.car_model
-costfun = Dynamics.car_costfun
+n,m = model.n, model.m
+Q = (1e-2)*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
+x0 = [0.;0.;0.]
+xf = [0.;1.;0.]
+
 xf = [0,1.0,0]
 goal_con = goal_constraint(xf)
 circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,2.5), 0.25)
@@ -18,10 +24,12 @@ bnd = BoundConstraint(model.n, model.m, x_min=[-0.5,-0.001,-Inf], x_max=[0.5, 1.
 # Initial Controls
 N = 101
 U0 = [ones(model.m) for k = 1:N]
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+
 
 # Create Problem
 n,m = model.n, model.m
-prob = Problem(rk3(model), Objective(costfun,N), constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
+prob = Problem(rk3(model), obj, constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
 prob.constraints[N] += goal_con
 initial_controls!(prob, U0)
 rollout!(prob)
@@ -113,11 +121,11 @@ TO.cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
 #
 # cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
 #
-# function eval_f(Z)
-#     Z = Primals(Z, part_z)
-#     cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
-# end
-# eval_f(Z.Z)
+function eval_f(Z)
+    Z = Primals(Z, part_z)
+    cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
+end
+eval_f(Z.Z)
 # @test ForwardDiff.gradient(eval_f, Z.Z) == grad_f
 
 # Collocation Constraint jacobian

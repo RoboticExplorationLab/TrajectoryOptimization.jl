@@ -51,3 +51,17 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     end
     cost_expansion!(Q[N],c[N],X[N])
 end
+
+function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int)
+    H = zeros(size(R,1),size(Q,1))
+    q = -Q*xf
+    r = zeros(size(R,1))
+    c = 0.5*xf'*Q*xf
+    qf = -Qf*xf
+    cf = 0.5*xf'*Qf*xf
+
+    ℓ = QuadraticCost(Q, R, H, q, r, c)
+    ℓN = QuadraticCost(Qf, qf, cf)
+
+    Objective([k < N ? ℓ : ℓN for k = 1:N])
+end

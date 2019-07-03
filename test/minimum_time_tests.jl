@@ -8,7 +8,7 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
-model_d = discretize_model(model,:rk4)
+model_d = rk4(model)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))
@@ -16,7 +16,6 @@ R = Array(1e-3*Diagonal(I,m))
 Qf = Array(Diagonal(I,n)*0.0)
 x0 = zeros(n)
 xf = [pi;0.0]
-lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # options
 verbose=false
@@ -33,8 +32,10 @@ con = [bnd, goal_con]
 # problem
 N = 31
 U = [ones(m) for k = 1:N-1]
+obj = LQRObjective(Q,R,Qf,xf,N)
+
 dt = 0.15
-prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
@@ -48,7 +49,7 @@ C2 = TrajectoryOptimization.update_constraint_set_jacobians(C, n, n+1, m)
 @test length(C2) == 2
 
 dt = 0.15/2.0
-prob_mt = Problem(model_d,Objective(lqr_cost,N),prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,obj,prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
@@ -59,7 +60,7 @@ idx = [(1:n)...,((1:m) .+ n̄)...]
 @test tt_mt < 0.5*tt
 @test tt_mt < 1.0
 
-@test norm(prob_mt.X[end] - xf) < 1e-3
+@test norm(prob_mt.X[end] - xf,Inf) < 1e-3
 @test max_violation(prob_mt) < opts_al.constraint_tolerance
 
 ## Box parallel park
@@ -75,7 +76,6 @@ tf =  3.
 Qf = 100.0*Diagonal(I,n)
 Q = (1e-2)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
-lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # options
 verbose=false
@@ -97,17 +97,19 @@ con = [bnd, goal_con]
 # problem
 N = 51
 U = [ones(m) for k = 1:N-1]
+obj = LQRObjective(Q,R,Qf,xf,N)
+
 dt = 0.06
-prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
-prob_mt = Problem(model_d,Objective(lqr_cost,N),prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
-solve!(prob_mt,opts_altro)  
+prob_mt = Problem(model_d,obj,prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
 @test tt_mt < 0.75*tt
 @test tt_mt < 2.1
 
-@test norm(prob_mt.X[end] - xf) < 1e-3
+@test norm(prob_mt.X[end] - xf,Inf) < 1e-3
 @test max_violation(prob_mt) < opts_al.constraint_tolerance

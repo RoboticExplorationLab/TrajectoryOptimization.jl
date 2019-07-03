@@ -10,8 +10,6 @@ R = 1.0e-1*Diagonal(I,m)
 x0 = [0; 0.]
 xf = [pi; 0] # (ie, swing up)
 
-costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
-
 verbose = false
 opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-6)
 opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-4)
@@ -20,10 +18,12 @@ N = 51
 dt = 0.1
 U0 = [rand(m) for k = 1:N-1]
 int_schemes = [:midpoint, :rk3, :rk4]
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+
 
 ## Unconstrained
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=is, x0=x0, N=N, dt=dt)
+    prob = TrajectoryOptimization.Problem(model, obj, integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_ilqr = TrajectoryOptimization.iLQRSolver(prob, opts_ilqr)
     TrajectoryOptimization.solve!(prob, solver_ilqr)
@@ -37,7 +37,7 @@ goal = goal_constraint(xf)
 con = [bnd]
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
+    prob = TrajectoryOptimization.Problem(model, obj,
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
@@ -47,7 +47,7 @@ for is in int_schemes
 end
 
 for is in int_schemes
-    prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
+    prob = TrajectoryOptimization.Problem(model, obj,
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
     prob.constraints[N] += goal
@@ -58,4 +58,4 @@ for is in int_schemes
 end
 
 # Test undefined integration
-@test_throws ArgumentError TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N), integration=:bogus, N=N)
+@test_throws ArgumentError TrajectoryOptimization.Problem(model, obj, integration=:bogus, N=N)

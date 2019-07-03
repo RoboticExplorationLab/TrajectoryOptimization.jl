@@ -26,8 +26,6 @@ xf = copy(x0)
 xf[1:3] = [0.;50.;0.] # xyz position
 xf[4:7] = q0
 
-costfun = LQRCost(Q, R, Qf, xf)
-
 # options
 verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-5)
@@ -37,9 +35,11 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al)
 N = 101
 dt = 0.05
 U0 = [0.5*9.81/4.0*ones(m) for k = 1:N-1]
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+
 
 # unconstrained
-prob = Problem(model_d, Objective(costfun,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, obj, x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_ilqr)
 @test norm(prob.X[N] - xf) < 5.0e-3
@@ -47,7 +47,7 @@ solve!(prob, opts_ilqr)
 # constrained w/ final position
 goal_con = goal_constraint(xf)
 con = [goal_con]
-prob = Problem(model_d, Objective(costfun,N),constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, obj,constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_al)
 @test norm(prob.X[N] - xf,Inf) < opts_al.constraint_tolerance
@@ -56,7 +56,7 @@ solve!(prob, opts_al)
 # constrained w/ final position and control limits
 bnd = BoundConstraint(n,m,u_min=0.0,u_max=15.0,trim=true)
 con = [bnd,goal_con]
-prob = Problem(model_d, Objective(costfun,N), constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, obj, constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_al)
 @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
@@ -78,7 +78,7 @@ end
 obs = Constraint{Inequality}(sphere_obs3,n,m,n_spheres,:obs)
 con = [bnd,obs,goal_con]
 prob_con = ProblemConstraints(con,N)
-prob = Problem(model_d, Objective(costfun,N), constraints=ProblemConstraints(con,N),x0=x0, N=N, dt=dt)
+prob = Problem(model_d, obj, constraints=ProblemConstraints(con,N),x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 opts_al.constraint_tolerance=1.0e-3
 opts_al.constraint_tolerance_intermediate=1.0e-3

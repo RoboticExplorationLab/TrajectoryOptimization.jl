@@ -17,7 +17,6 @@ Q = 1e-3*Matrix(I,n,n)
 Qf = 1000.0*Matrix(I,n,n)
 R = 1e-2*Matrix(I,m,m)
 tf = 5.
-lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # options
 verbose=false
@@ -43,14 +42,16 @@ N = 51
 U = [ones(m) for k = 1:N-1]
 dt = 0.1
 X0 = line_trajectory(x0,xf,N)
+obj = LQRObjective(Q,R,Qf,xf,N)
 
+prob_inf = infeasible_problem(prob)
 # unconstrained infeasible solve
-prob = Problem(model_d,Objective(lqr_cost,N),U,dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,dt=dt,x0=x0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 @test norm(prob.X[end] - xf) < 1.0e-3
 
-prob_resolve = Problem(model_d,Objective(lqr_cost,N),U,dt=dt,x0=x0)
+prob_resolve = Problem(model_d,obj,U,dt=dt,x0=x0)
 copyto!(prob_resolve.X,X0)
 solve!(prob_resolve,opts_altro_resolve)
 @test norm(prob_resolve.X[end] - xf) < 1.0e-3
@@ -58,14 +59,14 @@ solve!(prob_resolve,opts_altro_resolve)
 @test norm(prob.X[end] - prob_resolve.X[end]) < 1.0e-5
 
 # constrained infeasible solve
-prob = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 copyto!(prob.X,X0)
 solve!(prob,opts_altro)
 
 @test norm(prob.X[end] - xf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
 
-prob_resolve = Problem(model_d,Objective(lqr_cost,N),U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob_resolve = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
 copyto!(prob_resolve.X,X0)
 solve!(prob_resolve,opts_altro_resolve)
 
@@ -91,7 +92,6 @@ xf[4:7] = q0;
 Q = (1.0e-4)*Diagonal(I,n)
 R = (1.0e-3)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
-_cost = LQRCost(Q, R, Qf, xf);
 
 r_quad = 2.
 r_cylinder = 2.
@@ -157,7 +157,7 @@ verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,iterations=300,live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    iterations=40,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1.0e-6,constraint_tolerance=1.0e-4,penalty_scaling=10.,penalty_initial=1.)
+    iterations=40,cost_tolerance=1.0e-5,cost_tolerance_intermediate=1.0e-4,constraint_tolerance=1.0e-3,penalty_scaling=10.,penalty_initial=1.)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,resolve_feasible_problem=false,opts_al=opts_al,R_inf=0.001);
 opts_altro_resolve = ALTROSolverOptions{T}(verbose=verbose,resolve_feasible_problem=false,opts_al=opts_al,R_inf=0.001);
@@ -167,8 +167,7 @@ tf = 5.0
 dt = tf/(N-1) # total time
 
 U = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
-obj = Objective(_cost,N) # objective with same stagewise costs
-
+obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
 con_set = ProblemConstraints(con,N) # constraint trajectory
 
 prob = Problem(model,obj, constraints=con_set, x0=x0, integration=:rk4, N=N, dt=dt)
@@ -188,7 +187,7 @@ solve!(prob,opts_altro)
 @test norm(prob.X[N] - xf,Inf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
 
-prob_resolve = Problem(model,obj, constraints=con_set, x0=x0, integration=:rk4, N=N, dt=dt)
+prob_resolve = Problem(model, obj, constraints=con_set, x0=x0, integration=:rk4, N=N, dt=dt)
 initial_controls!(prob_resolve,U); # initialize problem with controls
 
 copyto!(prob_resolve.X,X0)
@@ -197,4 +196,4 @@ solve!(prob_resolve,opts_altro_resolve)
 @test norm(prob_resolve.X[N] - xf,Inf) < opts_al.constraint_tolerance
 @test max_violation(prob_resolve) < opts_al.constraint_tolerance
 
-@test norm(prob.X[end] - prob_resolve.X[end]) < 1.0e-5
+@test norm(prob.X[end] - prob_resolve.X[end]) < 1.0e-3

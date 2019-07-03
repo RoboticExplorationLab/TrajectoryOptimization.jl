@@ -116,8 +116,6 @@ initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, t
 
 set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
 
-final_time(prob::Problem) = (prob.N-1) * prob.dt
-
 # TODO: think about how to do this properly now that objective and constraints depend on N
 # function change_N(prob::Problem, N::Int)
 #     tf = final_time(prob)
@@ -267,3 +265,5 @@ end
 function get_dt_traj(prob::Problem,U::Trajectory)
     [get_dt(prob,U[k],k) for k = 1:prob.N-1]
 end
+
+final_time(prob::Problem) = sum(get_dt_traj(prob))

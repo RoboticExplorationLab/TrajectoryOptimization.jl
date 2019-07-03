@@ -142,8 +142,8 @@ function cost_expansion!(S::Expansion{T}, cost::MinTimeCost, xN::Vector{T}) wher
     R_min_time = cost.R_min_time
 
     idx = 1:n
-    S.xx[idx,idx] = cost.cost.Qf
-    S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
+    S.xx[idx,idx] = cost.cost.Q
+    S.x[idx] = cost.cost.Q*xN[idx] + cost.cost.q
     S.xx[end,end] = R_min_time
     S.x[end] = R_min_time*xN[end]
 
