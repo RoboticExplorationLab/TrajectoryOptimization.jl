@@ -1,5 +1,5 @@
 "Augmented Lagrangian solve"
-function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
+function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T}) where T<:AbstractFloat
     reset!(solver)
 
     solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
@@ -13,13 +13,15 @@ function solve!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}) where T
             J = step!(prob_al, solver, solver_uncon)
 
             record_iteration!(prob, solver, J, solver_uncon)
+            converged = evaluate_convergence(solver)
             println(logger,OuterLoop)
-            evaluate_convergence(solver) ? break : nothing
+            converged ? break : nothing
         end
     end
+    return solver
 end
 
-function solve!(prob::Problem{T},opts::AugmentedLagrangianSolverOptions{T}) where T
+function solve!(prob::Problem{T,Discrete},opts::AugmentedLagrangianSolverOptions{T}) where T<:AbstractFloat
     !is_constrained(prob) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
 end
@@ -57,7 +59,12 @@ end
 
 "Evaluate maximum constraint violation as metric for Augmented Lagrangian solve convergence"
 function evaluate_convergence(solver::AugmentedLagrangianSolver{T}) where T
-    solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false
+    converged = false
+    if solver.opts.kickout_max_penalty
+        converged = (max_penalty(solver) == solver.opts.penalty_max ?
+            begin @logmsg OuterLoop "Max Penalty"; true end : false)
+    end
+    converged || (solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false)
 end
 
 function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T,
@@ -75,6 +82,10 @@ function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T
     @logmsg OuterLoop :total value=solver.stats[:iterations_total]
     @logmsg OuterLoop :cost value=J
     @logmsg OuterLoop :c_max value=c_max
+end
+
+function max_penalty(solver::AugmentedLagrangianSolver)
+    maximum(maximum(solver.μ))
 end
 
 "Saturate a vector element-wise with upper and lower bounds"
