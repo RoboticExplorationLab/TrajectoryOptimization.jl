@@ -377,9 +377,9 @@ function calc_factors!(solver::SequentialNewtonSolver, Qinv=solver.Qinv, Rinv=so
 
     # Initial condition
     if Qinv[1] isa UniformScaling
-        G0 = cholesky(Array(Diagonal(I,n)))
+        G0 = cholesky_reg(Array(Diagonal(I,n)))
     else
-        G0 = cholesky(Array(Qinv[1]))
+        G0 = cholesky_reg(Array(Qinv[1]))
     end
 
     F[1] = ∇F[1].xx*G0.L
@@ -397,13 +397,15 @@ function calc_factors!(solver::SequentialNewtonSolver, Qinv=solver.Qinv, Rinv=so
     for k = 2:N-1
         E[k] = -∇F[k].xx*Qinv[k]/G_.U
         F[k] = -E[k]*M_'/H_.U
-        G[k] = cholesky(Symmetric(∇F[k].xx*Qinv[k]*∇F[k].xx' + ∇F[k].xu*Rinv[k]*∇F[k].xu' + Qinv[k+1] - E[k]*E[k]' - F[k]*F[k]'))
+        G[k] = cholesky_reg(Symmetric(∇F[k].xx*Qinv[k]*∇F[k].xx' + ∇F[k].xu*Rinv[k]*∇F[k].xu' + Qinv[k+1] - E[k]*E[k]' - F[k]*F[k]'))
+        # G[k].info != 0 ? println("failed G cholesky at k = $k") : nothing
         i += 1
 
         K[k] = -C[k]*Qinv[k]/G_.U
         L[k] = -K[k]*M_'/H_.U
         M[k] = (C[k]*Qinv[k]*( solver.Q[k].xx - G_.U\(I - (M_'/H_.U) * (H_.L\M_) )/G_.L )*Qinv[k]*∇F[k].xx' + D[k]*Rinv[k]*∇F[k].xu')/G[k].U
-        H[k] = cholesky(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K[k]*K[k]' - L[k]*L[k]' - M[k]*M[k]')
+        H[k] = cholesky_reg(C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]' - K[k]*K[k]' - L[k]*L[k]' - M[k]*M[k]')
+        H[k].info != 0 ? println("failed H cholesky at k = $k") : nothing
         i += 1
 
         G_, M_, H_ = G[k], M[k], H[k]
@@ -412,13 +414,25 @@ function calc_factors!(solver::SequentialNewtonSolver, Qinv=solver.Qinv, Rinv=so
     # Terminal
     E[N] = -C[N]*Qinv[N]/G_.U
     F[N] = -E[N]*M_'/H_.U
-    G[N] = cholesky(Symmetric(C[N]*Qinv[N]*C[N]' - E[N]*E[N]' - F[N]*F[N]'))
+    G[N] = cholesky_reg(Symmetric(C[N]*Qinv[N]*C[N]' - E[N]*E[N]' - F[N]*F[N]'))
+    G[N].info != 0 ? println("failed G cholesky at k = N") : nothing
 
     # Append G0 onto the end
     push!(G, G0)
 
     return nothing
 end
+
+function cholesky_reg(A::AbstractMatrix)
+    C = cholesky(A, check=false)
+    if C.info != 0 && false
+        E = eigen(A)
+        v = min(minimum(E.values),-1e-2)
+        cholesky(A - 2I*v)
+    end
+    return C
+end
+
 
 """
 Solve the system S*δλ = r

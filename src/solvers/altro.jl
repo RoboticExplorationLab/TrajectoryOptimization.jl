@@ -71,6 +71,8 @@ struct ALTROSolver{T} <: AbstractSolver{T}
     solver_pn::SequentialNewtonSolver{T}
 end
 
+ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts)
+
 function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     stats = Dict{Symbol,Any}()
     solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)

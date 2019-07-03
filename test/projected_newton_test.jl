@@ -30,6 +30,12 @@ al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
 al.constraint_tolerance = 1e-2
 al.constraint_tolerance_intermediate = 1e-1
 solve!(prob, al)
+max_violation(prob)
+
+solver = SequentialNewtonSolver(prob, opts)
+solve(prob, solver)
+
+
 
 # Test Primal Dual variable
 opts = ProjectedNewtonSolverOptions{Float64}(verbose=false)
@@ -113,7 +119,7 @@ res = norm(TO.residual(prob, solver, V_))
 # Test Newton Step
 solver = ProjectedNewtonSolver(prob,opts)
 solver.opts.feasibility_tolerance = 1e-10
-solver.opts.verbose = false
+solver.opts.verbose = true
 V_ = TO.newton_step!(prob, solver)
 TO.update!(prob, solver, V_)
 @test max_violation(solver) < 1e-10

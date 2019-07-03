@@ -3,6 +3,15 @@
 #     SOLVE METHODS      #
 ##########################
 
+
+function solve!(prob::Problem{T,Discrete}, solver::SequentialNewtonSolver) where T
+    V_ = newton_step!(prob, solver)
+    copyto!(prob.X, V_.X)
+    copyto!(prob.U, V_.U)
+    projection!(prob)
+    return solver
+end
+
 """
 Take a Projected Newton step using a purely sequential method (never forms block arrays)
 """

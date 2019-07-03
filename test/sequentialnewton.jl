@@ -1,4 +1,5 @@
 import TrajectoryOptimization: primals, duals, packZ, update!
+using BlockArrays
 
 # Create solver
 opts = ProjectedNewtonSolverOptions{Float64}()
@@ -26,6 +27,8 @@ Y,y0 = TO.active_constraints(prob, solver0)
 δz0 = -Hinv*Y'*((Y*Hinv*Y')\y0)
 
 @test packZ(TO._projection(solver)[1:2]...) ≈ δz0
+L = TO.buildL(solver)
+@test L*L' ≈ Y*Hinv*Y'
 
 # Multiplier projection
 λ0 = duals(solver0.V)[solver0.a.duals]
@@ -48,6 +51,9 @@ r = solver0.g + Y'λ0
 @test vcat(δλ...) ≈ δλ0
 @test vcat(δλ...) ≈ δλ1
 
+@btime TO.solveKKT_Shur($prob,$solver0,$Hinv)
+
+@btime TO.solveKKT($solver, $solver.V)
 
 # Update methods
 δV = zero(solver0.V.V)
@@ -79,7 +85,10 @@ V2_ = solver.V + ((δx, δu, δλ), solver.active_set)
 
 
 # Newton Step from beginning
-opts.verbose = false
+opts = ProjectedNewtonSolverOptions{Float64}()
+opts.verbose = true
+opts.feasibility_tolerance = 1e-10
+opts.active_set_tolerance = 1e-4
 solver0 = ProjectedNewtonSolver(prob, opts)
 update!(prob, solver0)
 solver = SequentialNewtonSolver(prob, opts)
@@ -119,6 +128,8 @@ res_init = TO.res2(solver,V)
 @test norm(TO.residual(prob,solver0)) ≈ res_init
 
 # Line Search
+TO.update!(prob, solver0)
+TO.update!(prob, solver)
 α = 0.9
 V_0 = solver0.V + α*δV0
 V_ = V + (α.*(δx,δu,δλ),solver.active_set)
@@ -126,6 +137,62 @@ V_ = V + (α.*(δx,δu,δλ),solver.active_set)
 @test V_0.X ≈ V_.X
 @test V_0.U ≈ V_.U
 @test V_0.Y ≈ vcat(V_.λ...)
+
+
+TO.dynamics_constraints!(prob, solver0, V_0)
+TO.update_constraints!(prob, solver0, V_0)
+TO.dynamics_jacobian!(prob, solver0, V_0)
+TO.constraint_jacobian!(prob, solver0, V_0)
+TO.active_set!(prob, solver0)
+Y0,y0 = TO.active_constraints(prob,solver0)
+viol0 = norm(y,Inf)
+S0 = Y0*Hinv*Y0'
+δZ = -Hinv*Y0'*((Y0*Hinv*Y0')\y0)
+δλ0 = (Y0*Hinv*Y0')\y0
+
+TO.dynamics_constraints!(prob, solver, V_)
+TO.update_constraints!(prob, solver, V_)
+TO.dynamics_jacobian!(prob, solver, V_)
+TO.constraint_jacobian!(prob, solver, V_)
+TO.active_set!(prob, solver)
+TO.cost_expansion!(prob, solver, V_)
+y = TO.active_constraints(solver)
+maximum(norm.(y,Inf))
+x,u = TO._projection(solver)
+
+
+@btime TO.calc_factors!($solver)
+@btime cholesky(Symmetric(S0))
+@btime
+TO.calc_factors!(solver)
+δλ = TO.solve_cholesky(solver,y)
+vcat(δλ...) ≈ δλ0
+vcat(y...) ≈ y0
+packZ(x,u) ≈ δZ
+
+Y = TO.buildY(solver)
+Y ≈ Y0
+L = TO.buildL(solver)
+
+L0 = cholesky(Symmetric(Array(S0))).L
+L0 = PseudoBlockArray(Array(L0),y_part,y_part)
+
+D = L0 .≈ Array(L)
+D = PseudoBlockArray(Array(D),y_part,y_part)
+D[Block(6,5)]
+
+norm(Array(L0) - Array(L),Inf)
+L0[Block(2N,2N)] ≈ L[Block(6,5)]
+
+y_part = TO.dual_partition(solver)
+[all(D[Block(i,j)]) for i=1:2N,j=1:2N]
+
+L0 = PseudoBlockArray(L,y_part,y_part)
+L0[Block(6,5)] - L[Block(6,5)]
+
+all(D[Block(6,5)])
+[all(D[Block(k,k)]) for k = 1:2N-2]
+Array{Int}(L*L' .≈ (Y*Hinv*Y'))
 
 TO.projection!(prob, solver0, V_0)
 TO.projection!(prob, solver, V_)
@@ -142,7 +209,8 @@ TO.line_search(prob, solver, δx, δu, δλ)
 
 # Test Whole Step
 opts = ProjectedNewtonSolverOptions{Float64}(feasibility_tolerance=1e-10)
-opts.verbose = false
+opts.verbose = true
+opts.active_set_tolerance = 1e-4
 
 solver0 = ProjectedNewtonSolver(prob,opts)
 begin

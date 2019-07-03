@@ -329,3 +329,58 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
 
     return V_
 end
+
+function buildL(L::KKTFactors,y_part)
+    Pa = sum(y_part)
+    S = PseudoBlockArray(zeros(Pa,Pa),y_part,y_part)
+    N = length(y_part) ÷ 2
+
+    S[Block(1,1)] = L.G[end].L
+    S[Block(2,1)] = L.F[1]
+    S[Block(2,2)] = L.G[1].L
+    S[Block(3,1)] = L.L[1]
+    S[Block(3,2)] = L.M[1]
+    S[Block(3,3)] = L.H[1].L
+    for k = 2:N-1
+        S[Block(2k,2k-2)] = L.E[k]
+        S[Block(2k,2k-1)] = L.F[k]
+        S[Block(2k,2k  )] = L.G[k].L
+        S[Block(2k+1,2k-2)] = L.K[k]
+        S[Block(2k+1,2k-1)] = L.L[k]
+        S[Block(2k+1,2k-0)] = L.M[k]
+        S[Block(2k+1,2k+1)] = L.H[k].L
+    end
+    S[Block(2N,2N-2)] = L.E[N]
+    S[Block(2N,2N-1)] = L.F[N]
+    S[Block(2N,2N-0)] = L.G[N].L
+    return S
+end
+buildL(solver::SequentialNewtonSolver) = buildL(solver.L, dual_partition(solver))
+
+function buildY(solver::SequentialNewtonSolver)
+    n,m,N = size(solver)
+    y_part = dual_partition(solver)
+    z_part = repeat([n,m],N-1)
+    push!(z_part,n)
+    NN = sum(z_part)
+    Pa = sum(y_part)
+
+    # Get Active Jacobians
+    xi,ui = 1:n, n .+ (1:m)
+    a = solver.active_set
+    C = [solver.∇C[k][a[k],1:n] for k = 1:N]
+    D = [solver.∇C[k][a[k],n+1:n+m] for k = 1:N-1]
+
+    Y = PseudoBlockArray(zeros(Pa,NN),y_part,z_part)
+
+    Y[Block(1,1)] = Diagonal(I,n)
+    for k = 1:N-1
+        Y[Block(2k,2k-1)] = solver.∇F[k+1].xx
+        Y[Block(2k,2k-0)] = solver.∇F[k+1].xu
+        Y[Block(2k,2k+1)] = -Diagonal(I,n)
+        Y[Block(2k+1,2k-1)] = C[k]
+        Y[Block(2k+1,2k-0)] = D[k]
+    end
+    Y[Block(2N,2N-1)] = C[N]
+    return Y
+end
