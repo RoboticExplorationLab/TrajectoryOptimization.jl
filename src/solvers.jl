@@ -17,6 +17,26 @@ include("solvers/direct/projected_newton.jl")
 
 include("solvers/altro.jl")
 
+# Generic methods for calling solve
+
+function solve!(prob::Problem, opts::AbstractSolverOptions)
+    solver = AbstractSolver(prob, opts)
+    solve!(prob, solver)
+end
+
+function solve(prob::Problem, opts::AbstractSolverOptions)
+    prob0 = copy(prob)
+    solver = solve!(prob0, opts)
+    return prob0, solver
+end
+
+function solve(prob::Problem, solver::AbstractSolver)
+    prob0 = copy(prob)
+    solver = solve!(prob0, solver)
+    return prob0, solver
+end
+
+
 jacobian!(prob::Problem{T,Continuous}, solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U)
 jacobian!(prob::Problem{T,Discrete},   solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U, prob.dt)
 
