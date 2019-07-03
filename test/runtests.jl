@@ -53,11 +53,10 @@ end
 end
 
 # Direct Methods
-@testset "Ipopt" begin
+@testset "DIRCOL" begin
     include("dircol_test.jl")
 end
 disable_logging(Logging.Debug)
-
 
 #= Tests needed
 * Generic Cost

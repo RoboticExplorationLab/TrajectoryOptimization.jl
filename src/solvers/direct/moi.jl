@@ -88,7 +88,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
     # Create solver
-    solver = Ipopt.Optimizer()
+    solver = eval(opts.nlp).Optimizer()
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -110,4 +110,12 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
 
     # Return the results
     return res, dircol
+end
+
+function solve!(prob::Problem,opts::DIRCOLSolverOptions)
+    res, dircol = solve_moi(prob, opts)
+    copyto!(prob.X,res.X)
+    copyto!(prob.U,res.U[1:prob.N-1])
+
+    return dircol
 end

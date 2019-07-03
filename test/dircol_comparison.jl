@@ -215,7 +215,7 @@ plot_trajectory!(Xsol)
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
 prob = TrajectoryOptimization.update_problem(prob, model=model, constraints=ProblemConstraints(N))
 prob.constraints[N] += goal_constraint(xf)
-eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_ipopt_functions2(prob)
+eval_f, eval_g, eval_grad_f, eval_jac_g = TrajectoryOptimization.gen_dircol_functions2(prob)
 Z0
 eval_f(Z0)
 eval_f2(Z0)

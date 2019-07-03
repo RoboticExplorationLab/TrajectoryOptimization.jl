@@ -73,9 +73,9 @@ TO.cost_expansion!(E, cost_term, x)
 @test E.xx == Qf
 
 grad = PartedVector(zeros(n+m), create_partition((n,m),(:x,:u)))
-TO.gradient!(grad, quadcost, x, u)
-@test grad.x == Q*x
-@test grad.u == R*u
+TO.gradient!(grad, quadcost, x, u, dt)
+@test grad.x == dt*Q*x
+@test grad.u == dt*R*u
 
 grad = zeros(n)
 TO.gradient!(grad, cost_term, x)

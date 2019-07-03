@@ -87,3 +87,13 @@ function line_trajectory(x0::Vector,xf::Vector,N::Int)
     x_traj[end] = xf
     x_traj
 end
+
+function line_trajectory!(X::VectorTrajectory,x0::Vector,xf::Vector)
+    N = length(X)
+    t = range(0,stop=N,length=N)
+    slope = (xf .- x0)./N
+    copyto!(X,[slope*t[k] for k = 1:N])
+    X[1] .= x0
+    X[end] .= xf
+    return nothing
+end

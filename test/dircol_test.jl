@@ -192,7 +192,7 @@ g = c_all(Z.Z)
 @test ForwardDiff.jacobian(c_all, Z.Z) ≈ jac_con(Z.Z)
 
 # Test Ipopt functions
-eval_f2, eval_g, eval_grad_f, eval_jac_g = TO.gen_ipopt_functions(prob, dircol)
+eval_f2, eval_g, eval_grad_f, eval_jac_g = TO.gen_dircol_functions(prob, dircol)
 
 g2 = zero(g)
 grad_f2 = zero(grad_f)
@@ -224,19 +224,16 @@ Z_L = Primals(z_L, part_z)
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
 
-
 # Test solve
 for i = 1:10
-    sol,solver = solve(prob, opts)
-    if solver.stats[:info] == :Solve_Succeeded
-        break
-    end
-    if i == 10
-        # error("The problem should have solved successfully")
-    end
+    dircol = solve!(prob, opts)
+    # if dircol.stats[:info] == :Solve_Succeeded
+    #     break
+    # end
+    # if i == 10
+    #     # error("The problem should have solved successfully")
+    # end
 end
-opts = DIRCOLSolverOptions{Float64}()
-s, slv, pr = solve(prob, opts)
-# TO.solve_moi(prob, opts)
 
+# dircol = solve!(prob, opts)
 @test_nowarn TO.write_ipopt_options()
