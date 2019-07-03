@@ -33,6 +33,7 @@ end
 ## Constrained
 u_bound = 3.0
 bnd = BoundConstraint(n, m, u_min=-u_bound, u_max=u_bound)
+goal = goal_constraint(xf)
 con = [bnd]
 
 for is in int_schemes
@@ -41,7 +42,7 @@ for is in int_schemes
     TrajectoryOptimization.initial_controls!(prob, U0)
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
     TrajectoryOptimization.solve!(prob, solver_al)
-    @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
+    @test norm(prob.X[N] - xf,Inf) < 1.0e-3
     @test TrajectoryOptimization.max_violation(prob) < opts_al.constraint_tolerance
 end
 
@@ -49,6 +50,7 @@ for is in int_schemes
     prob = TrajectoryOptimization.Problem(model, TrajectoryOptimization.Objective(costfun,N),
         constraints=TrajectoryOptimization.ProblemConstraints(con,N),integration=is, x0=x0, N=N, dt=dt)
     TrajectoryOptimization.initial_controls!(prob, U0)
+    prob.constraints[N] += goal
     solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
     TrajectoryOptimization.solve!(prob, solver_al)
     @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance

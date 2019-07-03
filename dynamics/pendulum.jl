@@ -14,11 +14,18 @@ end
 n,m = 2,1
 pendulum_model = Model(pendulum_dynamics!,n,m) # inplace model
 
-# costs
-Q = 1.0e-1*Diagonal(I,n)
-Qf = 1000.0*Diagonal(I,n)
-R = 1.0e-1*Diagonal(I,m)
-x0 = [0; 0.]
-xf = [pi; 0] # (ie, swing up)
+function pendulum_dynamics_uncertain!(ẋ,x,u,w)
+    m = 1. + w[1]
+    l = 0.5
+    b = 0.1
+    lc = 0.5
+    I = 0.25
+    g = 9.81
 
-pendulum_costfun = TrajectoryOptimization.LQRCost(Q,R,Qf,xf)
+    ẋ[1] = x[2]
+    ẋ[2] = u[1]/(m*lc*lc) - g*sin(x[1])/lc - b*x[2]/(m*lc*lc)
+    return nothing
+end
+
+n = 2; m = 1; r = 1
+pendulum_model_uncertain = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)

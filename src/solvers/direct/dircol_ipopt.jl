@@ -133,12 +133,12 @@ function gen_ipopt_functions(prob::Problem{T}, solver::DIRCOLSolver) where T
 
     function eval_f(Z)
         X,U = unpack(Z,part_z)
-        cost(prob.obj, X, U)
+        cost(prob.obj, X, U, get_dt_traj(prob))
     end
 
     function eval_grad_f(Z, grad_f)
         X,U = unpack(Z, part_z)
-        cost_gradient!(grad_f, prob, X, U)
+        cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
     end
 
     function eval_g(Z, g)
@@ -226,7 +226,9 @@ function write_ipopt_options()
         mkdir(joinpath(root_dir(),"logs"))
     end
     outfile=joinpath(root_dir(),"logs","ipopt.out")
-    f = open(outfile,"w")
+    optfile=joinpath(root_dir(),"ipopt.opt")
+
+    f = open(optfile,"w")
     println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
     println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
     println(f,"hessian_approximation limited-memory\n")

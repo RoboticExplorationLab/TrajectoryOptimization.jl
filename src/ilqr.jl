@@ -31,7 +31,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
     rollout!(prob)
     live_plotting(prob,solver)
 
-    J_prev = cost(prob.obj, prob.X, prob.U)
+    J_prev = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))
     push!(solver.stats[:cost], J_prev)
 
     with_logger(logger) do
@@ -67,7 +67,7 @@ end
 
 function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
     reset!(solver.Q)
-    cost_expansion!(solver.Q, prob.obj, prob.X, prob.U)
+    cost_expansion!(solver.Q, prob.obj, prob.X, prob.U, get_dt_traj(prob))
 end
 
 "Plot state, control trajectories"

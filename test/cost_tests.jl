@@ -52,16 +52,18 @@ cost_term = TO.LQRCostTerminal(Qf, xf)
 
 # Test costs
 x,u = rand(n), rand(m)
-@test TO.stage_cost(quadcost,x,u) == 0.5*(x'Q*x + u'R*u)
+dt = rand(1)[1]
+@test TO.stage_cost(quadcost,x,u,dt) == 0.5*(x'Q*x + u'R*u)*dt
 @test TO.stage_cost(quadcost,x) == 0
 @test TO.stage_cost(cost_term,x) ≈ 0.5*(x-xf)'Qf*(x-xf)
 
+
 # Test expansion functions
 E = TO.Expansion{Float64}(n,m)
-TO.cost_expansion!(E, quadcost, x, u)
-@test E.x == Q*x
-@test E.xx == Q
-@test E.ux == zeros(m,n)
+TO.cost_expansion!(E, quadcost, x, u, dt)
+@test E.x == Q*x*dt
+@test E.xx == Q*dt
+@test E.ux == zeros(m,n)*dt
 @test u == R*u
 
 TO.reset!(E)

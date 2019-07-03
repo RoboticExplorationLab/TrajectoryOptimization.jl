@@ -50,6 +50,7 @@ export
     ProjectedNewtonSolver,
     ProjectedNewtonSolverOptions,
     SequentialNewtonSolver,
+    DIRTRELSolver,
     Discrete,
     Continuous,
     Constraint,

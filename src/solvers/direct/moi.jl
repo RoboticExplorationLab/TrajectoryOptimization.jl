@@ -1,7 +1,7 @@
 using MathOptInterface
 const MOI = MathOptInterface
 
-struct DirectProblem{T} <: MOI.AbstractNLPEvaluator
+struct DIRCOLProblem{T} <: MOI.AbstractNLPEvaluator
     prob::Problem{T,Continuous}
     solver::DIRCOLSolver{T,HermiteSimpson}
     jac_struct::Vector{NTuple{2,Int}}
@@ -10,7 +10,7 @@ struct DirectProblem{T} <: MOI.AbstractNLPEvaluator
     nG::NTuple{2,Int}   # (total constraint jacobian, nG_colloc)
 end
 
-function DirectProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,HermiteSimpson}) where T
+function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,HermiteSimpson}) where T
     n,m,N = size(prob)
     p = num_constraints(prob)
     p_colloc = num_colloc(prob)
@@ -27,26 +27,26 @@ function DirectProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,Hermi
     jac_struct = collect(zip(r,c))
     num_con = (P,p_colloc)
     num_jac = (nG, nG_colloc)
-    DirectProblem(prob, solver, jac_struct, part_z, num_con, num_jac)
+    DIRCOLProblem(prob, solver, jac_struct, part_z, num_con, num_jac)
 end
 
-MOI.features_available(d::DirectProblem) = [:Grad, :Jac]
-MOI.initialize(d::DirectProblem, features) = nothing
+MOI.features_available(d::DIRCOLProblem) = [:Grad, :Jac]
+MOI.initialize(d::DIRCOLProblem, features) = nothing
 
-MOI.jacobian_structure(d::DirectProblem) = d.jac_struct
-MOI.hessian_lagrangian_structure(d::DirectProblem) = []
+MOI.jacobian_structure(d::DIRCOLProblem) = d.jac_struct
+MOI.hessian_lagrangian_structure(d::DIRCOLProblem) = []
 
-function MOI.eval_objective(d::DirectProblem, Z)
+function MOI.eval_objective(d::DIRCOLProblem, Z)
     X,U = unpack(Z, d.part_z)
-    cost(d.prob.obj, X, U)
+    cost(d.prob.obj, X, U, get_dt_traj(d.prob))
 end
 
-function MOI.eval_objective_gradient(d::DirectProblem, grad_f, Z)
+function MOI.eval_objective_gradient(d::DIRCOLProblem, grad_f, Z)
     X,U = unpack(Z, d.part_z)
-    cost_gradient!(grad_f, d.prob, X, U)
+    cost_gradient!(grad_f, d.prob, X, U, get_dt_traj(d.prob))
 end
 
-function MOI.eval_constraint(d::DirectProblem, g, Z)
+function MOI.eval_constraint(d::DIRCOLProblem, g, Z)
     X,U = unpack(Z, d.part_z)
     P,p_colloc = d.p
     g_colloc = view(g, 1:p_colloc)
@@ -56,7 +56,7 @@ function MOI.eval_constraint(d::DirectProblem, g, Z)
     update_constraints!(g_custom, d.prob, d.solver, X, U)
 end
 
-function MOI.eval_constraint_jacobian(d::DirectProblem, jac, Z)
+function MOI.eval_constraint_jacobian(d::DIRCOLProblem, jac, Z)
     X,U = unpack(Z, d.part_z)
     n,m = size(d.prob)
     P,p_colloc = d.p
@@ -68,7 +68,7 @@ function MOI.eval_constraint_jacobian(d::DirectProblem, jac, Z)
     constraint_jacobian!(jac_custom, d.prob, d.solver, X, U)
 end
 
-MOI.eval_hessian_lagrangian(::DirectProblem, H, x, σ, μ) = nothing
+MOI.eval_hessian_lagrangian(::DIRCOLProblem, H, x, σ, μ) = nothing
 
 function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     prob = copy(prob)
@@ -83,7 +83,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     # Create NLP Block
     has_objective = true
     dircol = DIRCOLSolver(prob, opts)
-    d = DirectProblem(prob, dircol)
+    d = DIRCOLProblem(prob, dircol)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 

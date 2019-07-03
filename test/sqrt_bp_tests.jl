@@ -9,7 +9,7 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.car_model
 n = model.n; m = model.m
-model_d = Model{Discrete}(model,rk4)
+model_d = discretize_model(model,:rk4)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))

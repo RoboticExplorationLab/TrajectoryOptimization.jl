@@ -64,7 +64,7 @@ function process_results!(prob::Problem{T},prob_altro::Problem{T},
 
             # # secondary solve (augmented Lagrangian)
             if opts.resolve_feasible_problem
-                println("Resolving feasible")
+                # println("Resolving feasible")
                 solve!(prob_altro,opts.opts_al)
                 copyto!(prob.X,prob_altro.X,prob.model.n)
                 copyto!(prob.U,prob_altro.U,prob.model.m)

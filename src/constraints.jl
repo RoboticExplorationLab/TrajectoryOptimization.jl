@@ -197,7 +197,7 @@ function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector, u
 end
 
 function jacobian!(V::AbstractMatrix, bnd::BoundConstraint, x::AbstractVector)
-    copyto!(V, bnd.jac[bnd.active.x_all])
+    copyto!(V, bnd.jac[bnd.active.x_all,1:length(x)])
 end
 
 

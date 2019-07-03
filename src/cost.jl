@@ -8,11 +8,11 @@ abstract type CostFunction end
 CostTrajectory = Vector{C} where C <: CostFunction
 
 "Calculate unconstrained cost for X and U trajectories"
-function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T})::T where T
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T},H::Vector{T})::T where T
     N = length(X)
     J = 0.0
     for k = 1:N-1
-        J += stage_cost(c[k],X[k],U[k])
+        J += stage_cost(c[k],X[k],U[k],H[k])
     end
     J /= (N-1.0)
     J += stage_cost(c[N],X[N])
@@ -60,8 +60,8 @@ function /(e::Expansion,a::Real)
     return nothing
 end
 
-function copy(e::Expansion{T}) where T
-    Expansion{T}(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
+function copy(e::Expansion)
+    Expansion(copy(e.x),copy(e.u),copy(e.xx),copy(e.uu),copy(e.ux))
 end
 
 function reset!(e::Expansion)
@@ -101,8 +101,9 @@ mutable struct QuadraticCost{T} <: CostFunction
             q::AbstractVector{T}, r::AbstractVector{T}, c::T, Qf::AbstractMatrix{T},
             qf::AbstractVector{T}, cf::T) where T
         if !isposdef(R)
-            err = ArgumentError("R must be positive definite")
-            throw(err)
+            # err = ArgumentError("R must be positive definite")
+            # throw(err)
+            @warn "R is not positive definite"
         end
         # TODO: needs test
         if !ispossemidef(Q)
@@ -116,6 +117,9 @@ mutable struct QuadraticCost{T} <: CostFunction
         new{T}(Q,R,H,q,r,c,Qf,qf,cf)
     end
 end
+
+get_sizes(cost::QuadraticCost) = (size(cost.Q,1),size(cost.R,1))
+
 
 function QuadraticCost(Q,R; H=zeros(size(R,1), size(Q,1)), q=zeros(size(Q,1)),
         r=zeros(size(R,1)), c=0.0, Qf=zero(Q), qf=zero(q), cf=0.0)
@@ -146,8 +150,8 @@ function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     return QuadraticCost(zeros(0,0),zeros(0,0),zeros(0,0),zeros(0),zeros(0),0.,Qf,qf,cf)
 end
 
-function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}) where T
-    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c
+function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}, dt::T) where T
+    (0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + u'*cost.H*x)*dt
 end
 
 function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
@@ -155,12 +159,13 @@ function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
 end
 
 function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost,
-        x::AbstractVector{T}, u::AbstractVector{T}) where T
-    Q.x .= cost.Q*x + cost.q
-    Q.u .= cost.R*u + cost.r
+        x::AbstractVector{T}, u::AbstractVector{T}, dt::T) where T
+    Q.x .= cost.Q*x + cost.q + cost.H'*u
+    Q.u .= cost.R*u + cost.r + cost.H*x
     Q.xx .= cost.Q
     Q.uu .= cost.R
     Q.ux .= cost.H
+    Q*dt
     return nothing
 end
 
@@ -171,9 +176,9 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
 end
 
 function gradient!(grad, cost::QuadraticCost,
-        x::AbstractVector, u::AbstractVector)
-    grad.x .= cost.Q*x + cost.q
-    grad.u .= cost.R*u + cost.r
+        x::AbstractVector, u::AbstractVector, dt)
+    grad.x .= (cost.Q*x + cost.q + cost.H'*u)*dt
+    grad.u .= (cost.R*u + cost.r + cost.H*x)*dt
     return nothing
 end
 

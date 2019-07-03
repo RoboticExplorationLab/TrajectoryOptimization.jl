@@ -7,6 +7,7 @@ Random.seed!(7)
 T = Float64
 integration = :rk4
 model = Dynamics.quadrotor_model
+model_d = discretize_model(model,integration)
 n = model.n; m = model.m
 
 # cost
@@ -34,11 +35,11 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al)
 
 N = 101
-dt = 0.1
+dt = 0.05
 U0 = [0.5*9.81/4.0*ones(m) for k = 1:N-1]
 
 # unconstrained
-prob = Problem(model, Objective(costfun,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, Objective(costfun,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_ilqr)
 @test norm(prob.X[N] - xf) < 5.0e-3
@@ -46,16 +47,16 @@ solve!(prob, opts_ilqr)
 # constrained w/ final position
 goal_con = goal_constraint(xf)
 con = [goal_con]
-prob = Problem(model, Objective(costfun,N),constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, Objective(costfun,N),constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_al)
-@test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
+@test norm(prob.X[N] - xf,Inf) < opts_al.constraint_tolerance
 @test max_violation(prob) < opts_al.constraint_tolerance
 
 # constrained w/ final position and control limits
-bnd = BoundConstraint(n,m,u_min=0.0,u_max=6.0,trim=true)
+bnd = BoundConstraint(n,m,u_min=0.0,u_max=15.0,trim=true)
 con = [bnd,goal_con]
-prob = Problem(model, Objective(costfun,N), constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
+prob = Problem(model_d, Objective(costfun,N), constraints=ProblemConstraints(con,N), x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 solve!(prob, opts_al)
 @test norm(prob.X[N] - xf) < opts_al.constraint_tolerance
@@ -77,7 +78,7 @@ end
 obs = Constraint{Inequality}(sphere_obs3,n,m,n_spheres,:obs)
 con = [bnd,obs,goal_con]
 prob_con = ProblemConstraints(con,N)
-prob = Problem(model, Objective(costfun,N), constraints=ProblemConstraints(con,N),x0=x0, N=N, dt=dt)
+prob = Problem(model_d, Objective(costfun,N), constraints=ProblemConstraints(con,N),x0=x0, N=N, dt=dt)
 initial_controls!(prob, U0)
 opts_al.constraint_tolerance=1.0e-3
 opts_al.constraint_tolerance_intermediate=1.0e-3
