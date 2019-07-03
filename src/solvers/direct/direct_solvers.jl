@@ -1,6 +1,6 @@
+
 export
-    DIRCOLSolver,
-    DIRCOLSolverOptions
+    DIRCOLSolver
 
 abstract type DirectSolver{T} <: AbstractSolver{T} end
 abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
@@ -9,7 +9,6 @@ abstract type QuadratureRule end
 abstract type HermiteSimpson <: QuadratureRule end
 
 include("primals.jl")
-
 
 @with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     "Print output to console"
@@ -21,7 +20,6 @@ include("primals.jl")
     "Tolerance for constraint feasibility during projection"
     feasibility_tolerance = 1e-6
 end
-
 
 """
 $(TYPEDEF)
@@ -148,7 +146,6 @@ end
 
 
 
-
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
     "NLP Solver to use. Options are (:Ipopt) (more to be added in the future)"
     nlp::Symbol = :Ipopt
@@ -159,6 +156,7 @@ end
     "Print output to console"
     verbose::Bool = true
 end
+
 
 
 """

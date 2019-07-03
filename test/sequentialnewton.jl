@@ -1,261 +1,238 @@
+import TrajectoryOptimization: primals, duals, packZ, update!
+using BlockArrays
 
 # Create solver
 opts = ProjectedNewtonSolverOptions{Float64}()
 solver = SequentialNewtonSolver(prob,opts)
-
-# Test update functions
-dynamics_constraints!(prob, solver)
-dynamics_jacobian!(prob, solver)
-update_constraints!(prob, solver)
-constraint_jacobian!(prob, solver)
-active_set!(prob, solver)
-cost_expansion!(prob, solver)
-invert_hessian!(prob, solver)
-
-# Init solvers
-solver = SequentialNewtonSolver(prob, opts)
-update!(prob, solver)
-solver0 = ProjectedNewtonSolver(prob)
-update!(prob, solver0)
-
-# Compare KKT solves
-δV0 = solveKKT(prob, solver0)
-Hinv = inv(Diagonal(solver0.H))
-Y,y = active_constraints(prob, solver0)
-# λ0, λ0_ = solve_cholesky(prob, solver0, Qinv, Rinv, A, B, C, D)
-r0 = y - Y*Hinv*solver0.g
-λ0 = (Y*Hinv*Y')\r0
-
-
-
-p_active = sum.(solver.active_set)
-y_part = ones(Int,2,N-1)*n
-y_part[2,:] = p_active[1:end-1]
-y_part = vec(y_part)
-insert!(y_part,1,3)
-push!(y_part, p[N])
 NN = N*n + (N-1)*m
 
-begin
-    E = [zeros(n,n) for p in p_active]
-    F = [zeros(n,p) for p in p_active]
-    G = [cholesky(Matrix(I,n,n)) for p in p_active]
+# Test update functions
+TO.dynamics_constraints!(prob, solver)
+TO.dynamics_jacobian!(prob, solver)
+TO.update_constraints!(prob, solver)
+TO.constraint_jacobian!(prob, solver)
+TO.active_set!(prob, solver)
+TO.cost_expansion!(prob, solver)
+TO.invert_hessian!(prob, solver)
 
-    K = [zeros(p,n) for p in p_active]
-    L = [zeros(p,p) for p in p_active]
-    M = [zeros(p,n) for p in p_active]
-    H = [cholesky(Matrix(I,p,p)) for p in p_active]
-
-    r = [zeros(y) for y in y_part]
-    λ_ = deepcopy(r)
-    λ = deepcopy(r)
-    z = [zeros(n+m*(k<N)) for k = 1:N]
-    x,u = [zeros(n) for k = 1:N], [zeros(m) for k = 1:N-1]
-
-    vals = (E=E,F=F,G=G,K=K,L=L,M=M,H=H,
-        r=r, λ_=λ_, λ=λ, z=z, x=x, u=u)
-end
-
-
-# Solve KKT system
-solver0 = ProjectedNewtonSolver(prob, opts)
-update!(prob, solver0)
-δV0 = solveKKT(prob, solver0)
-δV0[NN+1:end][solver0.a.duals] ≈ λ0
-
+# Init solvers
+solver0 = ProjectedNewtonSolver(prob,opts)
+TO.update!(prob, solver0)
 solver = SequentialNewtonSolver(prob, opts)
-update!(prob, solver)
-δx,δu,δλ = solveKKT(prob, solver, vals)
-δz = [[x;u] for (x,u) in zip(δx[1:N-1], δu)]
-push!(δz,δx[N])
-vcat(δz...) ≈ -δV0[1:NN]
-vcat(δλ...) ≈ δV0[NN+1:end][solver0.a.duals]
+TO.update!(prob, solver)
 
-solver.V.X .+ δx
+# Projection
+Hinv = inv(Diagonal(solver0.H))
+Y,y0 = TO.active_constraints(prob, solver0)
+δz0 = -Hinv*Y'*((Y*Hinv*Y')\y0)
 
-
-# Test projection
-active_constraints!(prob, solver, vals.r)
-vcat(vals.r...) ≈ y
-λ,λ_,r = solve_cholesky(prob, solver, vals, vals.r)
-vcat(λ...) ≈ (Y*Hinv*Y')\y
-
-solver0 = ProjectedNewtonSolver(prob)
-solver0.opts.feasibility_tolerance = 1e-10
-update!(prob, solver0)
-projection!(prob, solver0)
-max_violation(solver0)
-
-solver = SequentialNewtonSolver(prob, opts)
-solver.opts.feasibility_tolerance = 1e-10
-solver.opts.verbose = true
-update!(prob, solver)
-projection!(prob, solver, vals)
-max_violation(solver) - max_violation(solver0) < 1e-16
-
-
-# Residual
-residual!(prob, solver, vals)
-res_norm(prob, solver, vals)
-norm([vals.x, vals.u])
-norm(residual(prob, solver0))
-@btime sqrt(norm($vals.x)^2 + norm($vals.u)^2)
-@btime norm([norm($vals.x),norm($vals.u)])
-
+@test packZ(TO._projection(solver)[1:2]...) ≈ δz0
+L = TO.buildL(solver)
+@test L*L' ≈ Y*Hinv*Y'
 
 # Multiplier projection
-solver0 = ProjectedNewtonSolver(prob)
-update!(prob, solver0)
-Y,y = active_constraints(prob, solver0)
 λ0 = duals(solver0.V)[solver0.a.duals]
 res0 = solver0.g + Y'λ0
--(Y*Y')\(Y*res0)
+
+λa = TO.active_duals(solver.V, solver.active_set)
+δλ = TO._mult_projection(solver, λa)
+@test vcat(δλ...) ≈ -(Y*Y')\(Y*res0)
+
+# KKT solve
+S0 = Symmetric(Y*Hinv*Y')
+r = solver0.g + Y'λ0
+δλ0 = cholesky(S0)\(y0 - Y*Hinv*r)
+δz0 = -Hinv*(r + Y'δλ0)
+δV1,δλ1 = TO.solveKKT_Shur(prob,solver0,Hinv)
+
+δx, δu, δλ = TO._solveKKT(solver, λa)
+@test packZ(δx, δu) ≈ δz0
+@test packZ(δx, δu) ≈ δV1[1:NN]
+@test vcat(δλ...) ≈ δλ0
+@test vcat(δλ...) ≈ δλ1
+
+@btime TO.solveKKT_Shur($prob,$solver0,$Hinv)
+
+@btime TO.solveKKT($solver, $solver.V)
+
+# Update methods
+δV = zero(solver0.V.V)
+δV[solver0.parts.primals] .= δz0
+δV[solver0.parts.duals[solver0.a.duals]] .= δλ0
+V_0 = solver0.V + δV
+
+V_0 = solver0.V + δV
+V_ = copy(solver.V)
+TO._update_primals!(V_, δx, δu)
+TO._update_duals!(V_, δλ, solver.active_set)
+@test V_.X ≈ V_0.X
+@test V_.U ≈ V_0.U
+@test vcat(V_.λ...) ≈ V_0.Y
+
+V2_ = solver.V + (δx, δu)
+@test V2_.X == V_.X
+@test V2_.U == V_.U
+@test V2_.λ == solver.V.λ
+
+V2_ = solver.V + (δλ, solver.active_set)
+@test V2_.λ == V_.λ
+
+V2_ = solver.V + ((δx, δu, δλ), solver.active_set)
+@test V2_.X == V_.X
+@test V2_.U == V_.U
+@test V2_.λ == V_.λ
 
 
-solver = SequentialNewtonSolver(prob, opts)
-update!(prob, solver)
-vals.λ .*= 0
-residual!(prob, solver, vals)
-z = [[x;u] for (x,u) in zip(vals.x[1:N-1], vals.u)]
-push!(z,vals.x[N])
-vcat(z...) ≈ solver0.g + Y'λ0
 
-jac_mult!(prob, solver, vals.x, vals.u, vals.r)
-vcat(vals.r...) ≈ Y*(solver0.g + Y'λ0)
-
-eyes = [I for k = 1:N]
-δλ, = solve_cholesky(prob, solver, vals, vals.r, eyes, eyes)
-vcat(δλ...) ≈ (Y*Y')\(Y*(solver0.g+Y'λ0))
-vcat(δλ...)
-
-
-# Compare Multiplier Projection
-solver0 = ProjectedNewtonSolver(prob)
+# Newton Step from beginning
+opts = ProjectedNewtonSolverOptions{Float64}()
+opts.verbose = true
+opts.feasibility_tolerance = 1e-10
+opts.active_set_tolerance = 1e-4
+solver0 = ProjectedNewtonSolver(prob, opts)
 update!(prob, solver0)
-δλ0 = multiplier_projection!(prob, solver0)
-duals(solver0.V)
-
 solver = SequentialNewtonSolver(prob, opts)
 update!(prob, solver)
-vals.λ .*= 0
-δλ = multiplier_projection!(prob, solver, vals)
-vcat(δλ...) ≈ -δλ0
-duals(solver.V) ≈ duals(solver0.V)
+V = solver.V
+
+# Projection
+TO.projection!(prob, solver0)
+TO.projection!(prob, solver, V)
+
+# Multiplier projection
+norm(TO.residual(prob,solver0))
+r0, δλ0 = TO.multiplier_projection!(prob, solver0)
+TO.res2(solver, V)
+r, δλ = TO.multiplier_projection!(solver, V)
+@test r ≈ r0
+@test vcat(δλ...) ≈ δλ0
+
+# KKT Solve
+J0 = cost(prob, solver0.V)
+viol0 = max_violation(solver0)
+Y,y0 = TO.active_constraints(prob, solver0)
+λ0 = duals(solver0.V)[solver0.a.duals]
+δV0,δλ0 = TO.solveKKT_Shur(prob, solver0, Hinv)
+
+J = cost(prob, V)
+viol = max_violation(solver)
+λa = TO.active_duals(V, solver.active_set)
+δx, δu, δλ = TO.solveKKT(solver, V)
+
+@test J0 ≈ J
+@test viol0 ≈ viol
+@test packZ(δx, δu) ≈ δV0[1:NN]
+@test norm(vcat(δλ...) - δλ0) < 1e-10
+
+res_init = TO.res2(solver,V)
+@test norm(TO.residual(prob,solver0)) ≈ res_init
+
+# Line Search
+TO.update!(prob, solver0)
+TO.update!(prob, solver)
+α = 0.9
+V_0 = solver0.V + α*δV0
+V_ = V + (α.*(δx,δu,δλ),solver.active_set)
+
+@test V_0.X ≈ V_.X
+@test V_0.U ≈ V_.U
+@test V_0.Y ≈ vcat(V_.λ...)
 
 
+TO.dynamics_constraints!(prob, solver0, V_0)
+TO.update_constraints!(prob, solver0, V_0)
+TO.dynamics_jacobian!(prob, solver0, V_0)
+TO.constraint_jacobian!(prob, solver0, V_0)
+TO.active_set!(prob, solver0)
+Y0,y0 = TO.active_constraints(prob,solver0)
+viol0 = norm(y,Inf)
+S0 = Y0*Hinv*Y0'
+δZ = -Hinv*Y0'*((Y0*Hinv*Y0')\y0)
+δλ0 = (Y0*Hinv*Y0')\y0
 
-# Test full newton step
+TO.dynamics_constraints!(prob, solver, V_)
+TO.update_constraints!(prob, solver, V_)
+TO.dynamics_jacobian!(prob, solver, V_)
+TO.constraint_jacobian!(prob, solver, V_)
+TO.active_set!(prob, solver)
+TO.cost_expansion!(prob, solver, V_)
+y = TO.active_constraints(solver)
+maximum(norm.(y,Inf))
+x,u = TO._projection(solver)
+
+
+@btime TO.calc_factors!($solver)
+@btime cholesky(Symmetric(S0))
+@btime
+TO.calc_factors!(solver)
+δλ = TO.solve_cholesky(solver,y)
+vcat(δλ...) ≈ δλ0
+vcat(y...) ≈ y0
+packZ(x,u) ≈ δZ
+
+Y = TO.buildY(solver)
+Y ≈ Y0
+L = TO.buildL(solver)
+
+L0 = cholesky(Symmetric(Array(S0))).L
+L0 = PseudoBlockArray(Array(L0),y_part,y_part)
+
+D = L0 .≈ Array(L)
+D = PseudoBlockArray(Array(D),y_part,y_part)
+D[Block(6,5)]
+
+norm(Array(L0) - Array(L),Inf)
+L0[Block(2N,2N)] ≈ L[Block(6,5)]
+
+y_part = TO.dual_partition(solver)
+[all(D[Block(i,j)]) for i=1:2N,j=1:2N]
+
+L0 = PseudoBlockArray(L,y_part,y_part)
+L0[Block(6,5)] - L[Block(6,5)]
+
+all(D[Block(6,5)])
+[all(D[Block(k,k)]) for k = 1:2N-2]
+Array{Int}(L*L' .≈ (Y*Hinv*Y'))
+
+TO.projection!(prob, solver0, V_0)
+TO.projection!(prob, solver, V_)
+res0, = TO.multiplier_projection!(prob, solver0, V_0)
+res, = TO.multiplier_projection!(solver, V_)
+@test res0 ≈ res
+J0 = cost(prob, V_0)
+J = cost(prob, V_)
+@test J0 ≈ J
+
+TO.line_search(prob, solver0, δV0)
+TO.line_search(prob, solver, δx, δu, δλ)
+
+
+# Test Whole Step
+opts = ProjectedNewtonSolverOptions{Float64}(feasibility_tolerance=1e-10)
+opts.verbose = true
+opts.active_set_tolerance = 1e-4
+
 solver0 = ProjectedNewtonSolver(prob,opts)
-newton_step!(prob, solver0)
+begin
+    copyto!.(solver0.V.X, prob.X)
+    copyto!.(solver0.V.U, prob.U)
+    TO.newton_step!(prob, solver0)
+end
 
 solver = SequentialNewtonSolver(prob, opts)
-newton_step!(prob, solver, vals)
-
-
-
-
-
-
-
-
-
-@btime res_norm($prob, $solver, $vals)
-@btime norm([$vals.x; $vals.u])
-@btime norm(residual($prob, $solver0))
-
-jac_mult!(prob, solver, vals.λ, vals.x, vals.u)
-solver.Qinv .* vals.x
-solver.Rinv .* vals.u
-
-V0 = PrimalDual(prob)
-solver0.opts.verbose = false
-solver.opts.verbose = false
-@btime begin
-    copyto!($solver0.V.V, $V0.V)
-    projection!($prob, $solver0)
-end
-@btime begin
-    copyto!($solver.V.V, $V0.V)
-    projection!($prob, $solver, $vals)
+begin
+    copyto!(solver.V.X, prob.X)
+    copyto!(solver.V.U, prob.U)
+    TO.newton_step!(prob, solver)
 end
 
-solver0.Y.blocks
-solver0.a.duals
-solver0.Y.blocks[solver0.a.duals,:]
-solver0.y.blocks[solver0.a.duals]
+solver = SequentialNewtonSolver(prob, opts)
+V_ = TO.newton_step!(prob, solver)
+V_.X
 
-@btime projection!($prob, $solver, $vals)
-@btime begin
-    Y,y = active_constraints(prob, solver0)
-    HinvY = $Hinv*Y'
-    HinvY*((Y*HinvY)\y)
-end
-z = [[vals.x[k]; vals.u[k]] for k = 1:N-1]
-push!(z,vals.x[N])
-vcat(z...) ≈ Hinv*Y'*((Y*Hinv*Y')\y)
-
-
-C = [solver.∇C[k][a[k],1:n] for k = 1:N]
-D = [solver.∇C[k][a[k],4:5] for k = 1:N-1]
-a = solver.active_set
-part_z = (x=1:n,u=n+1:n+m)
-ai = [collect(1:p) for p in num_constraints(prob)]
-@btime C2 = [view($solver.∇C[k],$a[k],:) for k = 1:N]
-for k = 1:N
-    C2[k].indices[1] = findall(a[k])
-end
-
-
-struct KKTFactors{T}
-    E::MatrixTrajectory{T}
-    F::MatrixTrajectory{T}
-    G::Vector{Cholesky{T,Matrix{T}}}
-    K::MatrixTrajectory{T}
-    L::MatrixTrajectory{T}
-    M::MatrixTrajectory{T}
-    H::Vector{Cholesky{T,Matrix{T}}}
-    y_part::Vector{Int}
-end
-
-function KKTFactors(n::Int, m::Int, p::Vector{Int}, N::Int)
-    E = [zeros(n,n) for p in p_active]
-    F = [zeros(n,p) for p in p_active]
-    G = [cholesky(Matrix(I,n,n)) for p in p_active]
-
-    K = [zeros(p,n) for p in p_active]
-    L = [zeros(p,p) for p in p_active]
-    M = [zeros(p,n) for p in p_active]
-    H = [cholesky(Matrix(I,p,p)) for p in p_active]
-
-    y_part = ones(Int,2,N-1)*n
-    y_part[2,:] = p[1:end-1]
-    y_part = vec(y_part)
-    insert!(y_part,1,3)
-    push!(y_part, p[N])
-
-    KKTFactors(E,F,G,K,L,M,H,y_part)
-end
-
-struct KKTJacobian{T}
-    ∇F::Vector{PartedArray{T,2,Matrix{T},P}} where P
-    ∇C::Vector{PartedArray{T,2,Matrix{T},P} where P}
-    active_set::Vector{Vector{Bool}}
-end
-
-function KKTJacobian(prob::Problem)
-    n,m,N = size(prob)
-    part_f = create_partition2(prob.model)
-    constraints = prob.constraints
-
-    ∇F = [PartedMatrix(zeros(n,n+m+1),part_f) for k = 1:N]
-    ∇C = [PartedMatrix(con,n,m) for con in constraints.C]
-    ∇C[N] = PartedMatrix(constraints[N],n,m,:terminal)
-    active_set = [ones(Bool,pk) for pk in p]
-
-    KKTJacobian(∇F, ∇C, active_set)
-end
-
-function *(Y::KKTJacobian, r::AbstractVector{<:AbstractVector})
-    N = length(Y.∇F)
-
-    for k = 1:N
+J0 = cost(prob)
+viol0 = max_violation(prob)
+res = solve(prob,solver)
+@test cost(res) < J0
+@test max_violation(res) < viol0
+@test max_violation(res) < 1e-10
