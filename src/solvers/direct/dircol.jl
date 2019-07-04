@@ -32,11 +32,10 @@ cost(prob::Problem, Z::Primals) = cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
 function cost_gradient!(grad_f, prob::Problem, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory, H::Vector)
     n,m,N = size(prob)
     grad = reshape(grad_f, n+m, N)
-    part = (x=1:n, u=n+1:n+m)
+    part = (x=1:n, u=n .+ (1:m))
     for k = 1:N-1
         grad_k = PartedVector(view(grad,:,k), part)
         gradient!(grad_k, prob.obj[k], X[k], U[k], get_dt(prob,k))
-        grad_k ./= (N-1)
     end
     grad_k = PartedVector(view(grad,1:n,N), part)
     gradient!(grad_k, prob.obj[N], X[N])

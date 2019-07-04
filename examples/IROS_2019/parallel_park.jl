@@ -10,18 +10,27 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr
 opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=10.0,
     dt_max=0.2,dt_min=1.0e-3)
 
-# solve
-prob = copy(Problems.box_parallel_park_problem)
-solve!(prob,opts_altro)
-tt = total_time(prob)
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:tol=>1.0e-3,:constr_viol_tol=>1.0e-3))
 
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>1.0e-3,
+        :Major_feasibility_tolerance=>1.0e-3, :Minor_feasibility_tolerance=>1.0e-3))
+
+# ALTRO w/o Newton
+prob_altro = copy(Problems.box_parallel_park_problem)
+p1, s1 = solve(prob_altro, opts_altro)
+# @btime p1, s1 = solve($prob_altro, $opts_altro)
+
+# DIRCOL w/ Ipopt
+prob_ipopt = update_problem(copy(Problems.box_parallel_park_problem),model=Dynamics.car_model) # get continuous time model
+p2, s2 = solve(prob_ipopt, opts_ipopt)
+# @btime p2, s2 = solve($prob_ipopt, $opts_ipopt)
+
+# DIRCOL w/ SNOPT
+prob_snopt = update_problem(copy(Problems.box_parallel_park_problem),model=Dynamics.car_model) # get continuous time model
+p3, s3 = solve(prob_snopt, opts_snopt)
+# @btime p3, s3 = solve($prob_snopt, $opts_snopt)
+
+## Minimum Time
 prob_mt = copy(Problems.box_parallel_park_min_time_problem)
 initial_controls!(prob_mt,prob.U)
 solve!(prob_mt,opts_altro)
-tt_mt = total_time(prob_mt)
-
-@test tt_mt < 0.75*tt
-@test tt_mt < 2.1
-
-@test norm(prob_mt.X[end] - xf,Inf) < 1e-3
-@test max_violation(prob_mt) < opts_al.constraint_tolerance
