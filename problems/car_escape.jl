@@ -64,3 +64,12 @@ X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.
 X0 = interp_rows(N,tf,Array(X_guess'))
 
 copyto!(car_escape_problem.X,X0)
+
+# plot escape
+function plot_escape()
+    plot(labels="")
+    plot_obstacles(circle_escape,:grey)
+    plot!(X0[1,:],X0[2,:],width=2,color=:purple,label="X_guess",axis=:off)
+    plot!((x0[1],x0[1]),marker=:circle,color=:red,label="start")
+    plot!((xf[1],xf[2]),marker=:circle,color=:green,label="goal",legend=:left)
+end

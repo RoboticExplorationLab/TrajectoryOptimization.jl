@@ -1,3 +1,5 @@
+using BenchmarkTools, Plots, SNOPT7
+
 # Car escape
 T = Float64
 
@@ -11,6 +13,22 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-3);
 
-prob = copy(Problems.car_escape_problem)
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:tol=>1.0e-3,:constr_viol_tol=>1.0e-3))
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_optimality_tolerance=>1.0e-3,
+        :Major_feasibility_tolerance=>1.0e-3, :Minor_feasibility_tolerance=>1.0e-3))
 
-solve!(prob, opts_altro)
+
+# ALTRO w/o Newton
+prob_altro = copy(Problems.car_escape_problem)
+solve!(prob_altro, opts_altro)
+
+# DIRCOL w/ Ipopt
+prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+solve!(prob_ipopt, opts_ipopt)
+
+# DIRCOL w/ SNOPT
+prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+solve!(prob_snopt, opts_snopt)
+
+
+# Problems.plot_escape()

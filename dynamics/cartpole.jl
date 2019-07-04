@@ -7,8 +7,8 @@ urdf_cartpole = joinpath(urdf_folder, "cartpole.urdf")
 cartpole_model_urdf = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
 
 function cartpole_dynamics!(ẋ::AbstractVector{T}, x::AbstractVector{T}, u::AbstractVector{T}) where T
-    mc = 10.0  # mass of the cart in kg (10)
-    mp = 1.0    # mass of the pole (point mass at the end) in kg
+    mc = 1.0  # mass of the cart in kg (10)
+    mp = 0.2    # mass of the pole (point mass at the end) in kg
     l = 0.5   # length of the pole in m
     g = 9.81  # gravity m/s^2
 
