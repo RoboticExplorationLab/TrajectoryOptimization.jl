@@ -13,6 +13,6 @@ A library of solvers for trajectory optimization problems written in Julia. Curr
   * Square-root methods for improved numerical conditioning
 
 Direct Collocation (DIRCOL)
-  * Interfaces to [IPOPT](https://github.com/coin-or/Ipopt) and [SNOPT](http://www.sbsi-sol-optimize.com/asp/sol_products_snopt_desc.htm) solvers
+  * Interfaces to Nonlinear Programming solvers (e.g.,[IPOPT](https://github.com/coin-or/Ipopt), [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/)) via [MathOptInterface](https://github.com/JuliaOpt/MathOptInterface.jl)
 
-All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of cost or constraint functions, and dynamics can be computed directly from a URDF file via [RigidBodyDynamics.jl](https://github.com/JuliaRobotics/RigidBodyDynamics.jl).
+All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of dynamics, cost, or constraint functions, and dynamics can be computed directly from a URDF file via [RigidBodyDynamics.jl](https://github.com/JuliaRobotics/RigidBodyDynamics.jl).
