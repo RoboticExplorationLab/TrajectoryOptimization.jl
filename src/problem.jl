@@ -10,6 +10,7 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     obj::AbstractObjective
     constraints::ProblemConstraints
     x0::Vector{T}
+    xf::Vector{T}
     X::VectorTrajectory{T}
     U::VectorTrajectory{T}
     N::Int
@@ -17,7 +18,7 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     tf::T
 
     function Problem(model::Model{M,D}, obj::AbstractObjective, constraints::ProblemConstraints,
-        x0::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::Real, tf::Real) where {M,T,D}
+        x0::Vector{T},xf::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::Real, tf::Real) where {M,T,D}
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
@@ -37,12 +38,12 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T,D}(model,obj,constraints,x0,X,U,N,dt,tf)
+        new{T,D}(model,obj,constraints,x0,xf,X,U,N,dt,tf)
     end
 end
 
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n),
+        N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n), xf::Vector{T}=zeros(model.n),
         dt=NaN, tf=NaN, integration=:none) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
         if integration == :none
@@ -53,14 +54,14 @@ function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorT
         else
             throw(ArgumentError("$integration is not a defined integration scheme"))
         end
-    Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
+    Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 
 function Problem(model::Model{M,Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n),
-        dt=NaN, tf=NaN, integration=:rk4) where {M,T}
+        xf::Vector{T}=zeros(model.n), dt=NaN, tf=NaN, integration=:rk4) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
-    Problem(model, obj, constraints, x0, deepcopy(X0), deepcopy(U0), N, dt, tf)
+    Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 
 Problem(model::Model, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
@@ -96,13 +97,13 @@ Create a new problem from another, specifing all fields as keyword arguments
 The `newProb` argument can be set to true if a the primal variables are to be copied, otherwise they will be passed to the modified problem.
 """
 function update_problem(p::Problem;
-    model=p.model, obj=p.obj, constraints=p.constraints, x0=p.x0, X=p.X, U=p.U,
+    model=p.model, obj=p.obj, constraints=p.constraints, x0=p.x0, xf=p.xf, X=p.X, U=p.U,
     N=p.N, dt=p.dt, tf=p.tf, newProb=true)
 
     if newProb
-        Problem(model,obj,constraints,x0,deepcopy(X),deepcopy(U),N,dt,tf)
+        Problem(model,obj,constraints,x0,xf,deepcopy(X),deepcopy(U),N,dt,tf)
     else
-        Problem(model,obj,constraints,x0,X,U,N,dt,tf)
+        Problem(model,obj,constraints,x0,xf,X,U,N,dt,tf)
     end
 end
 
@@ -182,7 +183,7 @@ end
 "$(SIGNATURES) return the number of states, number of controls, and the number of knot points"
 Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
-Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0),
+Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0), copy(p.xf),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]

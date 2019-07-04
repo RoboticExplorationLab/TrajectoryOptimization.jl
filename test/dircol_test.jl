@@ -1,4 +1,5 @@
 using TrajectoryOptimization
+import TrajectoryOptimization: get_dt_traj
 const TO = TrajectoryOptimization
 using Test
 using ForwardDiff
@@ -37,7 +38,7 @@ prob = TO.update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
-opts = DIRCOLSolverOptions{Float64}(verbose=true)
+opts = TO.DIRCOLSolverOptions{Float64}(verbose=true)
 pcon = prob.constraints
 dircol = TO.DIRCOLSolver(prob, opts)
 

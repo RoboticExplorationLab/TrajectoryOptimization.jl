@@ -37,8 +37,6 @@ function Expansion{T,Q,R}(n::Int, m::Int) where {T,Q,R}
 end
 Expansion{T}(n::Int, m::Int) where T = Expansion{T,Matrix{T},Matrix{T}}(n,m)
 
-
-
 import Base./, Base.*
 function *(e::Expansion, a::Real)
     e.x .*= a
@@ -96,19 +94,13 @@ mutable struct QuadraticCost{T} <: CostFunction
     function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
             q::AbstractVector{T}, r::AbstractVector{T}, c::T) where T
         if !isposdef(R)
-            # err = ArgumentError("R must be positive definite")
-            # throw(err)
             @warn "R is not positive definite"
         end
-        # TODO: needs test
         if !ispossemidef(Q)
             err = ArgumentError("Q must be positive semi-definite")
             throw(err)
         end
-        if !ispossemidef(Qf)
-            err = ArgumentError("Qf must be positive semi-definite")
-            throw(err)
-        end
+
         new{T}(Q,R,H,q,r,c)
     end
 end
@@ -123,7 +115,6 @@ end
 function QuadraticCost(Q,q,c)
     QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c)
 end
-
 
 
 """
