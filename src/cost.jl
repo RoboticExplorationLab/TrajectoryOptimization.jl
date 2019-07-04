@@ -137,6 +137,10 @@ function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     return QuadraticCost(Qf,zeros(0,0),zeros(0,size(Qf,1)),qf,zeros(0),cf)
 end
 
+function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}) where T
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + u'*cost.H*x
+end
+
 function stage_cost(cost::QuadraticCost, x::AbstractVector{T}, u::AbstractVector{T}, dt::T) where T
     (0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + u'*cost.H*x)*dt
 end

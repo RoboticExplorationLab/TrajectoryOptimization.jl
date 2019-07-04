@@ -7,6 +7,7 @@ abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
 abstract type QuadratureRule end
 abstract type HermiteSimpson <: QuadratureRule end
+abstract type Midpoint <: QuadratureRule end
 
 include("primals.jl")
 
