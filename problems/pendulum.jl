@@ -18,3 +18,4 @@ obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
 pendulum_problem = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
 initial_controls!(pendulum_problem, U0)
+rollout!(pendulum_problem)

@@ -19,3 +19,4 @@ obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
 cartpole_problem = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
 initial_controls!(cartpole_problem, U0)
+rollout!(cartpole_problem)

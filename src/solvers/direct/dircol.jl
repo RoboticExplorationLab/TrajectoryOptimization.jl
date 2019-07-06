@@ -22,7 +22,7 @@ num_colloc(prob::Problem)::Int = (prob.N-1)*prob.model.n
 #######################
 
 "Generate state midpoint according to quadrature rule"
-function gen_xm(prob::Problem,solver::DIRCOLSolver{T,HermiteSimpson}) where T
+function gen_xm_cubic(prob::Problem)
     ẋ = zeros(prob.model.n); ẏ = zeros(prob.model.n)
 
     function xm(y,x,v,u,h)
@@ -33,9 +33,20 @@ function gen_xm(prob::Problem,solver::DIRCOLSolver{T,HermiteSimpson}) where T
     end
 end
 
-function gen_xm(prob::Problem,solver::DIRCOLSolver{T,Midpoint}) where T
-    function xm(y,x,v,u,h)
-        0.5*(y+x)
+function gen_stage_cost(prob::Problem)
+    xm = gen_xm_cubic(prob)
+    obj = prob.obj
+
+    function cost(X,U,H)
+        N = length(X)
+        J = 0.0
+        for k = 1:N-1
+            Xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
+            Um = 0.5*(U[k] + U[k+1])
+            J += H[k]/6*(stage_cost(obj[k],X[k],U[k]) + 4*stage_cost(obj[k],Xm,Um) + stage_cost(obj[k],X[k+1],U[k+1]))
+        end
+        J += stage_cost(obj[N],X[N])
+        return J
     end
 end
 
@@ -75,9 +86,9 @@ function gen_stage_cost_gradient(prob::Problem)
     nn = 2*(n+m)
     _tmp_ = zeros(n)
 
-    function _cost_grad!(∇g,prob,X,U,H)
+    function _cost_grad!(∇g,X,U,H)
         shift = 0
-        ∇g .= 0
+        ∇g .= 0 # set all to zero, for additive inplace operations
         for k = 1:N-1
             obj = prob.obj[k]
             x = X[k]; y = X[k+1]; u = U[k]; v = U[k+1]; h = H[k]

@@ -18,6 +18,7 @@ include("../problems/doublependulum.jl")
 include("../problems/acrobot.jl")
 include("../problems/car_escape.jl")
 include("../problems/quadrotor_maze.jl")
+include("../problems/kuka.jl")
 include("../problems/kuka_obstacles.jl")
 
 export

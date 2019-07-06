@@ -3,7 +3,7 @@ const MOI = MathOptInterface
 
 struct DIRCOLProblem{T} <: MOI.AbstractNLPEvaluator
     prob::Problem{T,Continuous}
-    xm::Function
+    cost::Function
     cost_gradient!::Function
     solver::DIRCOLSolver{T,HermiteSimpson}
     jac_struct::Vector{NTuple{2,Int}}
@@ -29,32 +29,20 @@ function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,Hermi
     jac_struct = collect(zip(r,c))
     num_con = (P,p_colloc)
     num_jac = (nG, nG_colloc)
-    DIRCOLProblem(prob, gen_xm(prob,solver), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac)
+    DIRCOLProblem(prob, gen_stage_cost(prob), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac)
 end
-
-function cost(solver::DIRCOLSolver{T,HermiteSimpson},obj,xm::Function,X,U,H) where T
-    N = length(X)
-    J = 0.0
-    for k = 1:N-1
-        Xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
-        Um = 0.5*(U[k] + U[k+1])
-        J += H[k]/6*(stage_cost(obj[k],X[k],U[k]) + 4*stage_cost(obj[k],Xm,Um) + stage_cost(obj[k],X[k+1],U[k+1]))
-    end
-    J += stage_cost(obj[N],X[N])
-    return J
-end
-
-function cost(solver::DIRCOLSolver{T,Midpoint},obj,xm,X,U,H) where T
-    N = length(X)
-    J = 0.0
-    for k = 1:N-1
-        xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
-        um = 0.5*(U[k] + U[k+1])
-        J += stage_cost(obj[k],xm,um,H[k])
-    end
-    J += stage_cost(obj[N],X[N])
-    return J
-end
+#
+# function cost(solver::DIRCOLSolver{T,HermiteSimpson},obj,xm::Function,X,U,H) where T
+#     N = length(X)
+#     J = 0.0
+#     for k = 1:N-1
+#         Xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
+#         Um = 0.5*(U[k] + U[k+1])
+#         J += H[k]/6*(stage_cost(obj[k],X[k],U[k]) + 4*stage_cost(obj[k],Xm,Um) + stage_cost(obj[k],X[k+1],U[k+1]))
+#     end
+#     J += stage_cost(obj[N],X[N])
+#     return J
+# end
 
 MOI.features_available(d::DIRCOLProblem) = [:Grad, :Jac]
 MOI.initialize(d::DIRCOLProblem, features) = nothing
@@ -64,21 +52,19 @@ MOI.hessian_lagrangian_structure(d::DIRCOLProblem) = []
 
 function MOI.eval_objective(d::DIRCOLProblem, Z)
     X,U = unpack(Z, d.part_z)
-    # cost(d.prob.obj, X, U, get_dt_traj(d.prob))
-    cost(d.solver,d.prob.obj,d.xm, X, U, get_dt_traj(d.prob))
+    d.cost(X, U, get_dt_traj(d.prob))
 end
 
 function MOI.eval_objective_gradient(d::DIRCOLProblem, grad_f, Z)
     X,U = unpack(Z, d.part_z)
-    # cost_gradient!(grad_f, d.prob, X, U, get_dt_traj(d.prob))
-    d.cost_gradient!(grad_f,d.prob,X,U,get_dt_traj(d.prob))
+    d.cost_gradient!(grad_f,X,U,get_dt_traj(d.prob))
 end
 
 function MOI.eval_constraint(d::DIRCOLProblem, g, Z)
     X,U = unpack(Z, d.part_z)
     P,p_colloc = d.p
     g_colloc = view(g, 1:p_colloc)
-    g_custom = view(g, p_colloc+1:P)
+    g_custom = view(g, (p_colloc+1):P)
 
     collocation_constraints!(g_colloc, d.prob, d.solver, X, U)
     update_constraints!(g_custom, d.prob, d.solver, X, U)
@@ -128,6 +114,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     end
 
     # Solve the problem
+    @info "DIRCOL solve using " * String(opts.nlp)
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     MOI.optimize!(solver)

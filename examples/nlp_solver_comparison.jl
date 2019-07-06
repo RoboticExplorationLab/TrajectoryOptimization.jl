@@ -20,15 +20,12 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Majo
 
 # ALTRO w/o Newton
 prob_altro = copy(Problems.doubleintegrator_problem)
-@btime p1, s1 = solve($prob_altro, $opts_altro)
-
+@benchmark p1, s1 = solve($prob_altro, $opts_altro)
 
 # DIRCOL w/ Ipopt
 prob_ipopt = update_problem(copy(Problems.doubleintegrator_problem),model=Dynamics.doubleintegrator_model) # get continuous time model
-@btime p2, s2 = solve($prob_ipopt, $opts_ipopt)
+@benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 
 # DIRCOL w/ SNOPT
 prob_snopt = update_problem(copy(Problems.doubleintegrator_problem),model=Dynamics.doubleintegrator_model) # get continuous time model
-@btime p3, s3 = solve(prob_snopt, opts_snopt)
-
-p3, s3 = solve(prob_snopt, opts_snopt)
+@benchmark p3, s3 = solve($prob_snopt, $opts_snopt)

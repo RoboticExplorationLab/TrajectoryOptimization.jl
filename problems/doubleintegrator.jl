@@ -13,7 +13,7 @@ xf = [1.; 0] # (ie, swing up)
 
 N = 21
 dt = 0.1
-U0 = [0.01*rand(m) for k = 1:N-1]
+U0 = [0.001*rand(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
 u_max = 3.
@@ -26,3 +26,4 @@ constraints = ProblemConstraints([bnd],N)
 doubleintegrator_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
 doubleintegrator_problem.constraints[N] += goal
 initial_controls!(doubleintegrator_problem, U0)
+rollout!(doubleintegrator_problem)

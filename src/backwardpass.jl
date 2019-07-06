@@ -36,14 +36,19 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         Q[k].ux .+= fdu'*S[k+1].xx*fdx
 
         if solver.opts.bp_reg_type == :state
+            # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*fdu'*fdu,check=false)
             Quu_reg = Q[k].uu + solver.ρ[1]*fdu'*fdu
             Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
+            # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
             Quu_reg = Q[k].uu + solver.ρ[1]*I
             Qux_reg = Q[k].ux
         end
 
+
+
         # Regularization
+        # if Quu_reg.info == -1
         if !isposdef(Hermitian(Quu_reg))
             # increase regularization
             @logmsg InnerIters "Regularizing Quu "
@@ -57,8 +62,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         end
 
         # Compute gains
-        K[k] = -Quu_reg\Qux_reg
-        d[k] = -Quu_reg\Q[k].u
+        K[k] = -1.0*(Quu_reg\Qux_reg)
+        d[k] = -1.0*(Quu_reg\Q[k].u)
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
         S[k].x .= Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'*Q[k].u + Q[k].ux'*d[k]

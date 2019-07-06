@@ -28,7 +28,7 @@ function cartpole_dynamics!(ẋ::AbstractVector{T}, x::AbstractVector{T}, u::Abs
     G = [0; mp*g*l*s]
     B = [1; 0]
 
-    qdd = -H\(C*qd + G - B*U')
+    qdd = -H\(C*qd + G - B*u[1])
 
     ẋ[1:2] = qd
     ẋ[3:4] = qdd

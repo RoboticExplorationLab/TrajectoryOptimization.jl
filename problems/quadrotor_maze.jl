@@ -23,7 +23,7 @@ Qf = 1000.0*Diagonal(I,n)
 # constraints
 r_quad = 2.
 r_cylinder = 2.
-cylinders = []
+maze_cylinders = []
 zh = 3
 l1 = 5
 l2 = 4
@@ -31,42 +31,42 @@ l3 = 5
 l4 = 10
 
 for i = range(-25,stop=-10,length=l1)
-    push!(cylinders,(i, 10,r_cylinder))
+    push!(maze_cylinders,(i, 10,r_cylinder))
 end
 
 for i = range(10,stop=25,length=l1)
-    push!(cylinders,(i, 10, r_cylinder))
+    push!(maze_cylinders,(i, 10, r_cylinder))
 end
 
 for i = range(-7.5,stop=7.5,length=l3)
-    push!(cylinders,(i, 30, r_cylinder))
+    push!(maze_cylinders,(i, 30, r_cylinder))
 end
 
 for i = range(-25,stop=-10,length=l1)
-    push!(cylinders,(i, 50, r_cylinder))
+    push!(maze_cylinders,(i, 50, r_cylinder))
 end
 
 for i = range(10,stop=25,length=l1)
-    push!(cylinders,(i, 50, r_cylinder))
+    push!(maze_cylinders,(i, 50, r_cylinder))
 end
 
 for i = range(10+2*r_cylinder,stop=50-2*r_cylinder,length=l4)
-    push!(cylinders,(-25, i, r_cylinder))
+    push!(maze_cylinders,(-25, i, r_cylinder))
 end
 
 for i = range(10+2*r_cylinder,stop=50-2*r_cylinder,length=l4)
-    push!(cylinders,(25, i, r_cylinder))
+    push!(maze_cylinders,(25, i, r_cylinder))
 end
 
-n_cylinders = length(cylinders)
+n_maze_cylinders = length(maze_cylinders)
 
 function cI_maze(c,x,u)
-    for i = 1:n_cylinders
-        c[i] = circle_constraint(x,cylinders[i][1],cylinders[i][2],cylinders[i][3]+r_quad)
+    for i = 1:n_maze_cylinders
+        c[i] = circle_constraint(x,maze_cylinders[i][1],maze_cylinders[i][2],maze_cylinders[i][3]+r_quad)
     end
 end
 
-maze = Constraint{Inequality}(cI_maze,n,m,n_cylinders,:maze)
+maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
 u_max = 10.
