@@ -35,7 +35,7 @@ U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 dt = 0.15
-prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=Constraints(con,N),dt=dt,x0=x0)
 prob.constraints[N] += goal_con
 solve!(prob,opts_altro)
 tt = total_time(prob)
@@ -50,7 +50,7 @@ C2 = TrajectoryOptimization.update_constraint_set_jacobians(C, n, n+1, m)
 @test length(C2) == 2
 
 dt = 0.15/2.0
-prob_mt = Problem(model_d,obj,prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,obj,prob.U,constraints=Constraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
@@ -77,3 +77,17 @@ dircol = DIRCOLSolver(prob, opts)
 d = DIRCOLProblem(update_problem(prob,model=Dynamics.pendulum_model), dircol)
 
 is_terminal(prob.constraints[N][1])#(zeros(2),rand(n),rand(m))
+
+for k = 1:N
+    for con in prob.constraints[k]
+        if con isa BoundConstraint
+            println("success")
+        end
+    end
+end
+bounds(prob.constraints[2])
+prob
+
+prob_c = update_problem(prob,model=Dynamics.pendulum_model)
+
+minimum_time_problem(prob_c)

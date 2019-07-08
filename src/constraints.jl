@@ -326,6 +326,7 @@ bounds(C::ConstraintSet) = filter(x->isa(x,BoundConstraint),C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,AbstractConstraint{T})
 terminal(C::ConstraintSet) = filter(is_terminal,C)
 stage(C::ConstraintSet) = filter(is_stage,C)
+
 function remove_bounds!(C::ConstraintSet)
     bnds = bounds(C)
     filter!(x->!isa(x,BoundConstraint),C)
@@ -432,39 +433,39 @@ end
 Collection of constraints for a trajectory optimization problem.
     Essentially a list of `ConstraintSets` for each time step
 """
-struct ProblemConstraints
+struct Constraints
     C::Vector{<:ConstraintSet}
 end
 
 """Copy a ConstraintSet over all time steps"""
-function ProblemConstraints(C::ConstraintSet,N::Int)
+function Constraints(C::ConstraintSet,N::Int)
     C = append!(GeneralConstraint[], C)
-    ProblemConstraints([copy(C) for k = 1:N])
+    Constraints([copy(C) for k = 1:N])
 end
 
 """Copy a ConstraintSet over all stage time steps, with a unique terminal constraint set"""
-function ProblemConstraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
+function Constraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
     C = append!(GeneralConstraint[], C)
     C_term = append!(GeneralConstraint[], C_term)
-    ProblemConstraints([k < N ? C : C_term for k = 1:N])
+    Constraints([k < N ? C : C_term for k = 1:N])
 end
 
-"""Create an empty set of ProblemConstraints for a problem with size N"""
-function ProblemConstraints(N::Int)
-    ProblemConstraints([GeneralConstraint[] for k = 1:N])
+"""Create an empty set of Constraints for a problem with size N"""
+function Constraints(N::Int)
+    Constraints([GeneralConstraint[] for k = 1:N])
 end
 
-function ProblemConstraints()
-    ProblemConstraints(ConstraintSet[])
+function Constraints()
+    Constraints(ConstraintSet[])
 end
 
-num_stage_constraints(pcon::ProblemConstraints) = map(num_stage_constraints, pcon.C)
-num_terminal_constraints(pcon::ProblemConstraints) = map(num_terminal_constraints, pcon.C)
+num_stage_constraints(pcon::Constraints) = map(num_stage_constraints, pcon.C)
+num_terminal_constraints(pcon::Constraints) = map(num_terminal_constraints, pcon.C)
 
 """$(SIGNATURES)
 Count the number of constraints at each time step.
 """
-function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vector{Int}
+function TrajectoryOptimization.num_constraints(pcon::Constraints)::Vector{Int}
     N = length(pcon.C)
     p = zeros(Int,N)
     for k = 1:N-1
@@ -478,14 +479,25 @@ function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vecto
     return p
 end
 
-Base.setindex!(pcon::ProblemConstraints, C::ConstraintSet, k::Int) = pcon.C[k] = C
-Base.getindex(pcon::ProblemConstraints,i::Int) = pcon.C[i]
-Base.copy(pcon::ProblemConstraints) = ProblemConstraints(deepcopy(pcon.C))
-Base.length(pcon::ProblemConstraints) = length(pcon.C)
+Base.setindex!(pcon::Constraints, C::ConstraintSet, k::Int) = pcon.C[k] = C
+Base.getindex(pcon::Constraints,i::Int) = pcon.C[i]
+Base.copy(pcon::Constraints) = Constraints(deepcopy(pcon.C))
+Base.length(pcon::Constraints) = length(pcon.C)
+
+function has_bounds(C::Constraints)
+    for k = 1:length(C)
+        for con in C[k]
+            if con isa BoundConstraint
+                return true
+            end
+        end
+    end
+    return false
+end
 
 
-"Update constraints trajectories from ProblemConstraints"
-function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemConstraints,
+"Update constraints trajectories from Constraints"
+function update_constraints!(C::PartedVecTrajectory{T}, constraints::Constraints,
         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
@@ -494,8 +506,8 @@ function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemCons
     evaluate!(C[N],constraints[N],X[N])
 end
 
-"Compute constraint Jacobians from ProblemConstraints"
-function jacobian!(C::PartedMatTrajectory{T}, constraints::ProblemConstraints,
+"Compute constraint Jacobians from Constraints"
+function jacobian!(C::PartedMatTrajectory{T}, constraints::Constraints,
         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1

@@ -21,7 +21,7 @@ u_min = -3.
 
 bnd = BoundConstraint(n,m,u_max=u_max, u_min=u_min,trim=true)
 goal = goal_constraint(xf)
-constraints = ProblemConstraints([bnd],N)
+constraints = Constraints([bnd],N)
 
 doubleintegrator_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
 doubleintegrator_problem.constraints[N] += goal

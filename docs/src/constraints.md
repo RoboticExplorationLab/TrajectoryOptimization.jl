@@ -166,24 +166,24 @@ PartedMatrix(C::ConstraintSet, type=:stage)
 ```
 
 # Problem Constraints
-A `Problem` is made up of individual `ConstraintSet`s at each of the `N` time steps, allowing for different constraints along the trajectory. The collection of `ConstraintSet`s is captured in the `ProblemConstraints` type. There are several methods for constructing `ProblemConstraints`:
+A `Problem` is made up of individual `ConstraintSet`s at each of the `N` time steps, allowing for different constraints along the trajectory. The collection of `ConstraintSet`s is captured in the `Constraints` type. There are several methods for constructing `Constraints`:
 ```julia
 # Create an empty set
-ProblemConstraints(N)
+Constraints(N)
 
 # Copy a single ConstraintSet over every time step
-ProblemConstraints(constraints, N)
+Constraints(constraints, N)
 
 # Use a different set at the terminal time step
-ProblemConstraints(constraints, constraints_term, N)
+Constraints(constraints, constraints_term, N)
 
 # Create from a Vector of Constraint Sets
-ProblemConstraints([constraints, constraints, constraints, constraints_term])
+Constraints([constraints, constraints, constraints, constraints_term])
 ```
 
 You can easily add or remove constraints from time steps using `+` and `pop!` on the appropriate time step:
 ```julia
-pcon = ProblemConstraints(N)
+pcon = Constraints(N)
 pcon[1] += con
 pcon[2] += con + con_eq
 pop!(pcon[2], :mycon2)

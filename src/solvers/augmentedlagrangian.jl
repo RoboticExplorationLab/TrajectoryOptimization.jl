@@ -108,7 +108,7 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 end
 
 
-function init_constraint_trajectories(constraints::ProblemConstraints,n::Int,m::Int,N::Int;
+function init_constraint_trajectories(constraints::Constraints,n::Int,m::Int,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
 
     p = num_constraints(constraints)

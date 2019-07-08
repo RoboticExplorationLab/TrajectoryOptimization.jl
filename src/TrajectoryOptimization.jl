@@ -65,7 +65,7 @@ export
     TerminalConstraintSet,
     ConstraintSet,
     Objective,
-    ProblemConstraints
+    Constraints
 
 export
     rk3,

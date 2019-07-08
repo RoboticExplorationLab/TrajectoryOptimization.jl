@@ -40,7 +40,7 @@ obj = LQRObjective(Q,R,Qf,xf,N)
 
 goal_con = goal_constraint(xf)
 bnd_con = BoundConstraint(n,m,u_min=u_min,u_max=u_max,trim=true)
-con = ProblemConstraints([bnd_con],N)
+con = Constraints([bnd_con],N)
 
 prob = TrajectoryOptimization.Problem(model, obj,constraints=con, N=N, tf=tf0, x0=x0, dt=dt)
 prob.constraints[N] += goal_con # add goal constraint

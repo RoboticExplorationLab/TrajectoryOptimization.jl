@@ -26,7 +26,7 @@ goal_con = goal_constraint(xf)
 N = 51
 U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
-constraints = ProblemConstraints([bnd],N)
+constraints = Constraints([bnd],N)
 dt = 0.06
 
 box_parallel_park_problem = Problem(model_d,obj,U,constraints=copy(constraints),dt=dt,x0=x0,xf=xf)

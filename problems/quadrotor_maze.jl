@@ -87,7 +87,7 @@ dt = tf/(N-1) # total time
 
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
-constraints = ProblemConstraints([maze],N) # constraint trajectory
+constraints = Constraints([maze],N) # constraint trajectory
 
 quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
 initial_controls!(quadrotor_maze_problem,U_hover); # initialize problem with controls

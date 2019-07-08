@@ -41,7 +41,7 @@ solve!(prob_resolve,opts_altro_resolve)
 u_bnd = 3.
 bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 goal = goal_constraint(xf)
-constraints = ProblemConstraints([bnd],N)
+constraints = Constraints([bnd],N)
 
 prob = update_problem(copy(Problems.pendulum_problem),constraints=copy(constraints))
 prob.constraints[N] += goal

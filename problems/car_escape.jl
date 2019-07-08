@@ -54,7 +54,7 @@ N = 101
 tf = 3.0
 U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
-constraints = ProblemConstraints([trap],N)
+constraints = Constraints([trap],N)
 
 car_escape_problem = Problem(model_d,obj,constraints=constraints,N=N,tf=tf,x0=x0,xf=xf)
 car_escape_problem.constraints[N] += goal

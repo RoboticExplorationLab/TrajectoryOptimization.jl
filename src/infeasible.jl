@@ -30,7 +30,7 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
     constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,GeneralConstraint[])
 
     update_problem(prob,model=model_inf,obj=Objective(obj_inf),
-        constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+        constraints=Constraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end
 
 

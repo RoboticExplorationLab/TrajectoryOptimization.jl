@@ -30,7 +30,7 @@ obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
 # Create Problem
 n,m = model.n, model.m
-prob = Problem(rk3(model), obj, constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
+prob = Problem(rk3(model), obj, constraints=Constraints([bnd,circle_con],N), N=N, tf=3.0)
 prob.constraints[N] += goal_con
 initial_controls!(prob, U0)
 rollout!(prob)

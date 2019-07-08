@@ -180,7 +180,7 @@ dt = 0.01 # total time
 U_hold = hold_trajectory(n,m,N, kuka, x0[1:7])
 obj = LQRObjective(Q,R,Qf,xf,N) # objective with same stagewise costs
 
-con_set = ProblemConstraints(con,N) # constraint trajectory
+con_set = Constraints(con,N) # constraint trajectory
 
 prob = Problem(model,obj, x0=x0, integration=:rk4, N=N, dt=dt)
 initial_controls!(prob, U_hold); # initialize problem with controls

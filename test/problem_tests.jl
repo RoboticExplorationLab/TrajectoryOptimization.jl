@@ -31,7 +31,7 @@ bnd = BoundConstraint(n,m, u_min=0, u_max=10)
 goal = goal_constraint(xf)
 obs = planar_obstacle_constraint(n,m, [1,1], 0.5)
 constraints = bnd + goal + obs
-pcon = ProblemConstraints(bnd+obs, obs+goal, N)
+pcon = Constraints(bnd+obs, obs+goal, N)
 @test length(pcon) == N
 num_constraints(pcon)
 @test num_constraints(pcon) == [ones(N-1)*(2m+1); n+1]

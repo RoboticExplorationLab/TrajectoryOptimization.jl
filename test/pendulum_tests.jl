@@ -24,7 +24,7 @@ u_bound = 3.0
 bnd = BoundConstraint(n, m, u_min=-u_bound, u_max=u_bound)
 goal = goal_constraint(xf)
 
-constraints = ProblemConstraints([bnd],N)
+constraints = Constraints([bnd],N)
 
 for is in int_schemes
     prob = update_problem(copy(Problems.pendulum_problem),model=discretize_model(model,is),constraints=copy(constraints))

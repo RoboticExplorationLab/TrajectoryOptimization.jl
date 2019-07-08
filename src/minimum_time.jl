@@ -3,6 +3,7 @@ function minimum_time_problem(prob::Problem{T,Discrete},R_min_time::T=1.0,dt_max
     # modify problem with time step control
     N = prob.N; n = prob.model.n; m = prob.model.m
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
+    @assert has_bounds(prob.constraints)
 
     # modify problem with slack control
     obj_mt = CostFunction[]
@@ -39,6 +40,7 @@ function minimum_time_problem(prob::Problem{T,Continuous},R_min_time::T=1.0,dt_m
     # modify problem with time step control
     N = prob.N; n = prob.model.n; m = prob.model.m
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
+    @assert has_bounds(prob.constraints)
 
     # modify problem with slack control
     obj_mt = CostFunction[]
@@ -50,25 +52,22 @@ function minimum_time_problem(prob::Problem{T,Continuous},R_min_time::T=1.0,dt_m
     push!(obj_mt,MinTimeCost(cost_mt,R_min_time))
 
     model_min_time = add_min_time_controls(prob.model)
-    constraints = mintime_constraints(prob,dt_max,dt_min)
 
-    # con_prob = ConstraintSet[]
-    # constrained = is_constrained(prob)
-    # for k = 1:N-1
-    #     con_mt = AbstractConstraint[]
-    #     constrained ? append!(con_mt,update_constraint_set_jacobians(prob.constraints[k],prob.model.n,prob.model.n+1,prob.model.m)) : nothing
-    #     push!(con_mt,con_min_time_bnd)
-    #     k != 1 ? push!(con_mt,con_min_time_eq) : nothing
-    #     push!(con_prob,con_mt)
-    # end
-    # constrained ? push!(con_prob,prob.constraints[N]) : push!(con_prob,Constraint[])
+    constraints = ConstraintSet[]
+    for k = 1:prob.N
+        con_mt = GeneralConstraint[]
+        for con in prob.constraints[k]
+            if con isa BoundConstraint
+                con = BoundConstraint(length(con.x_max),length(con.u_max)+1; x_min=bnd.x_min, x_max=bnd.x_max,
+                    u_min=[con.u_min;sqrt(dt_min)], u_max=[con.u_max;sqrt(dt_max)], trim=true)
+            end
+            push!(con_mt,con)
+        end
+        push!(constraints,con_mt)
+    end
 
-    # return con_prob, obj_mt
-    update_problem(prob,model=model_min_time,obj=Objective(obj_mt),
-        constraints=constraints,
-        U=[[prob.U[k];sqrt(prob.dt)] for k = 1:prob.N-1],
-        X=[[prob.X[k];sqrt(prob.dt)] for k = 1:prob.N],
-        x0=[prob.x0;0.0])
+    update_problem(prob,model=model_min_time,obj=Objective(obj_mt),constraints=Constraints(constraints),
+        U=[k != N ? [prob.U[k];sqrt(prob.dt)] : [prob.U[k-1];sqrt(prob.dt)] for k = 1:prob.N-1])
 end
 
 "Return the total duration of trajectory"
@@ -108,7 +107,7 @@ end
 function add_min_time_controls(model::Model{Nominal,Continuous})
     m̄ = model.m+1;
 
-    AnalyticalModel{Nominal,Continuous}(model.f!,model.∇f!,model.n,m̄,model.r,model.params,model.info)
+    AnalyticalModel{Nominal,Continuous}(model.f,model.∇f,model.n,m̄,model.r,model.params,model.info)
 end
 
 function mintime_equality(n::Int,m::Int)

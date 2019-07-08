@@ -8,7 +8,7 @@ export
 struct Problem{T<:AbstractFloat,D<:DynamicsType}
     model::AbstractModel
     obj::AbstractObjective
-    constraints::ProblemConstraints
+    constraints::Constraints
     x0::Vector{T}
     xf::Vector{T}
     X::VectorTrajectory{T}
@@ -17,7 +17,7 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
     dt::T
     tf::T
 
-    function Problem(model::Model{M,D}, obj::AbstractObjective, constraints::ProblemConstraints,
+    function Problem(model::Model{M,D}, obj::AbstractObjective, constraints::Constraints,
         x0::Vector{T},xf::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::Real, tf::Real) where {M,T,D}
 
         n,m = model.n, model.m
@@ -43,7 +43,7 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
 end
 
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n), xf::Vector{T}=zeros(model.n),
+        N::Int=length(obj), constraints::Constraints=Constraints(N), x0::Vector{T}=zeros(model.n), xf::Vector{T}=zeros(model.n),
         dt=NaN, tf=NaN, integration=:none) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
         if integration == :none
@@ -58,7 +58,7 @@ function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorT
 end
 
 function Problem(model::Model{M,Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        N::Int=length(obj), constraints::ProblemConstraints=ProblemConstraints(N), x0::Vector{T}=zeros(model.n),
+        N::Int=length(obj), constraints::Constraints=Constraints(N), x0::Vector{T}=zeros(model.n),
         xf::Vector{T}=zeros(model.n), dt=NaN, tf=NaN, integration=:rk4) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)

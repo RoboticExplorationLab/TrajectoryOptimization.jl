@@ -35,7 +35,7 @@ U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 dt = 0.15
-prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=Constraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
@@ -49,7 +49,7 @@ C2 = TrajectoryOptimization.update_constraint_set_jacobians(C, n, n+1, m)
 @test length(C2) == 2
 
 dt = 0.15/2.0
-prob_mt = Problem(model_d,obj,prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,obj,prob.U,constraints=Constraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
@@ -100,11 +100,11 @@ U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 dt = 0.06
-prob = Problem(model_d,obj,U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,constraints=Constraints(con,N),dt=dt,x0=x0)
 solve!(prob,opts_altro)
 tt = total_time(prob)
 
-prob_mt = Problem(model_d,obj,prob.U,constraints=ProblemConstraints(con,N),dt=dt,x0=x0,tf=:min)
+prob_mt = Problem(model_d,obj,prob.U,constraints=Constraints(con,N),dt=dt,x0=x0,tf=:min)
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
