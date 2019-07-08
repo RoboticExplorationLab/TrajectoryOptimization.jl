@@ -36,8 +36,7 @@ tf0 = 2.
 dt = tf0/(N-1)
 
 # problem
-cost_fun = LQRCost(Q,R,Qf,xf)
-obj = Objective(cost_fun,N)
+obj = LQRObjective(Q,R,Qf,xf,N)
 
 goal_con = goal_constraint(xf)
 bnd_con = BoundConstraint(n,m,u_min=u_min,u_max=u_max,trim=true)

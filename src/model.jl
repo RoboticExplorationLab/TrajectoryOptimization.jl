@@ -746,25 +746,3 @@ function add_slack_controls(model::Model{Nominal,D}) where D<:Discrete
 
     AnalyticalModel{Nominal,Discrete}(f!,∇f!,n,nm,model.r,model.params,model.info)
 end
-
-"Add minimum time controls to dynamics "
-function add_min_time_controls(model::Model{Nominal,D}) where D<:Discrete
-    n = model.n; m = model.m
-    n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
-    idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
-    idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
-
-    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[end]
-        model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
-        x₊[n̄] = h
-    end
-
-    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
-        h = u[end]
-        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
-        Z[idx.x,n̄m̄] .*= 2*h
-        Z[n̄,n̄m̄] = 1.0
-    end
-    AnalyticalModel{Nominal,Discrete}(f!,∇f!,n̄,m̄,model.r,model.params,model.info)
-end

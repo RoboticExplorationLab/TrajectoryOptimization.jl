@@ -31,18 +31,6 @@ function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,Hermi
     num_jac = (nG, nG_colloc)
     DIRCOLProblem(prob, gen_stage_cost(prob), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac)
 end
-#
-# function cost(solver::DIRCOLSolver{T,HermiteSimpson},obj,xm::Function,X,U,H) where T
-#     N = length(X)
-#     J = 0.0
-#     for k = 1:N-1
-#         Xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
-#         Um = 0.5*(U[k] + U[k+1])
-#         J += H[k]/6*(stage_cost(obj[k],X[k],U[k]) + 4*stage_cost(obj[k],Xm,Um) + stage_cost(obj[k],X[k+1],U[k+1]))
-#     end
-#     J += stage_cost(obj[N],X[N])
-#     return J
-# end
 
 MOI.features_available(d::DIRCOLProblem) = [:Grad, :Jac]
 MOI.initialize(d::DIRCOLProblem, features) = nothing
@@ -128,6 +116,10 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
 end
 
 function solve!(prob::Problem,opts::DIRCOLSolverOptions)
+    # check for minimum time problem
+    if prob.tf == 0.
+        error("Minimum Time DIRCOL solve not implemented")
+    end
     res, dircol = solve_moi(prob, opts)
     copyto!(prob.X,res.X)
     copyto!(prob.U,res.U[1:prob.N-1])

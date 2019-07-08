@@ -52,44 +52,46 @@ struct Constraint{S} <: AbstractConstraint{S}
     label::Symbol
     inds::Vector{Vector{Int}}
     type::Symbol
+    inputs::Symbol
+
     function Constraint{S}(c::Function, ∇c::Function, p::Int, label::Symbol,
-            inds::Vector{Vector{Int}}, type::Symbol) where S <: ConstraintType
+            inds::Vector{Vector{Int}}, type::Symbol, inputs::Symbol) where S <: ConstraintType
         if type ∉ [:all,:stage,:terminal]
             ArgumentError(string(type) * " is not a supported constraint type")
         end
-        new{S}(c,∇c,p,label,inds,type)
+        new{S}(c,∇c,p,label,inds,type,inputs)
     end
 end
 
 "$(TYPEDEF) Create a stage-wise constraint, using ForwardDiff to generate the Jacobian"
 function Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c)) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,m,p)
-    Constraint{S}(c, ∇c, p, label, inds, term)
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint using ForwardDiff"
 function Constraint{S}(c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=:terminal) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=:terminal, inputs=:x) where S<:ConstraintType
     m = 0
     ∇c,c_aug = generate_jacobian(c,n,m,p)
-    Constraint{S}(c, ∇c, p, label, inds, term)
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "$(TYPEDEF) Create a constraint, providing an analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c)) where S<:ConstraintType
-    Constraint{S}(c, ∇c, p, label, inds, term)
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint with analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:0)], term=:terminal) where S<:ConstraintType
-    Constraint{S}(c, ∇c, p, label, inds, term)
+        inds=[collect(1:n), collect(1:0)], term=:terminal, inputs=:x) where S<:ConstraintType
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 function Constraint()
-    Constraint{Null}(x->nothing, x->nothing, 0, 0, 0, :null, term)
+    Constraint{Null}(x->nothing, x->nothing, 0, 0, 0, :null, term, :null)
 end
 
 evaluate!(v::AbstractVector, con::Constraint, x::AbstractVector, u::AbstractVector) = is_stage(con) ? con.c(v, x, u) : nothing
@@ -262,7 +264,7 @@ function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
     terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n))
-    Constraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)], :terminal)
+    Constraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)], :terminal, :x)
 end
 
 function infeasible_constraints(n::Int, m::Int)
@@ -272,7 +274,7 @@ function infeasible_constraints(n::Int, m::Int)
     ∇inf[:,idx_inf] = Diagonal(1.0I,n)
     inf_con(v,x,u) = copyto!(v, u)
     inf_jac(C,x,u) = copyto!(C, ∇inf)
-    Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage)
+    Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage, :u)
 end
 
 ########################
@@ -417,7 +419,7 @@ function update_constraint_set_jacobians(cs::ConstraintSet,n::Int,n̄::Int,m::In
     for con in cs_
         _∇c(C,x,u) = con.∇c(view(C,:,idx),x[con.inds[1]],u[con.inds[2]])
         _∇c(C,x) = con.∇c(C,x[con.inds[1]])
-        _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds)
+        _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds,inputs=con.inputs)
     end
 
     _cs += bnd
