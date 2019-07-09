@@ -29,3 +29,5 @@ prob_ipopt = update_problem(copy(Problems.doubleintegrator_problem),model=Dynami
 # DIRCOL w/ SNOPT
 prob_snopt = update_problem(copy(Problems.doubleintegrator_problem),model=Dynamics.doubleintegrator_model) # get continuous time model
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
+
+p3, s3 = solve(prob_snopt, opts_snopt)

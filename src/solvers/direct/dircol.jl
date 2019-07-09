@@ -421,7 +421,7 @@ function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
 
     Z.equal ? uN = N : uN = N-1
     x_U = [zeros(n) for k = 1:N]
-    x_L = [zeros(m) for k = 1:N]
+    x_L = [zeros(n) for k = 1:N]
     u_U = [zeros(m) for k = 1:uN]
     u_L = [zeros(m) for k = 1:uN]
     for k = 1:uN
