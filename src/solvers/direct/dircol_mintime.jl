@@ -63,7 +63,7 @@ function gen_stage_cost_gradient_min_time(prob::Problem,R_min_time::T) where T
     dgdy(obj,y,x,v,u,h) = h/6*(4.0*dxmdy(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v))+ dℓdx(obj,y,v))
     dgdu(obj,y,x,v,u,h) = h/6*(dℓdu(obj,x,u) + 4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))))
     dgdv(obj,y,x,v,u,h) = h/6*(4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))) + dℓdu(obj,y,v))
-    dgdh(obj,y,x,v,u,h) = 1/6*(stage_cost(obj,x,u) + 4*stage_cost(obj,xm(y,x,v,u,h),0.5*(u+v)) + stage_cost(obj,y,v)) + 4*h/6*dxmdh(y,x,v,u,h)'*dℓdx(xm(y,x,v,u,h),0.5*(u+v)) + R_min_time
+    dgdh(obj,y,x,v,u,h) = 1/6*(stage_cost(obj,x,u) + 4*stage_cost(obj,xm(y,x,v,u,h),0.5*(u+v)) + stage_cost(obj,y,v)) + 4*h/6*dxmdh(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + R_min_time
 
     nn = 2*(n+m) + 1
     _tmp_ = zeros(n)
@@ -74,13 +74,16 @@ function gen_stage_cost_gradient_min_time(prob::Problem,R_min_time::T) where T
         for k = 1:N-1
             obj = prob.obj[k]
             x = X[k]; y = X[k+1]; u = U[k]; v = U[k+1]; h = H[k]
-            ∇g[shift .+ (1:nn)][1:n] += dgdx(obj,y,x,v,u,h)
-            ∇g[shift .+ (1:nn)][n .+ (1:m)] += dgdu(obj,y,x,v,u,h)
-            ∇g[shift .+ (1:nn)][n+m+1] += dgdh(obj,y,x,v,u,h)
-            ∇g[shift .+ (1:nn)][(n+m+1) .+ (1:n)] += dgdy(obj,y,x,v,u,h)
-            ∇g[shift .+ (1:nn)][(2*n+m+1) .+ (1:m)] += dgdv(obj,y,x,v,u,h)
+            _∇g = view(∇g,shift .+ (1:nn))
+
+            _∇g[1:n] += dgdx(obj,y,x,v,u,h)
+            _∇g[n .+ (1:m)] += dgdu(obj,y,x,v,u,h)
+            _∇g[n+m+1] += dgdh(obj,y,x,v,u,h)
+            _∇g[(n+m+1) .+ (1:n)] += dgdy(obj,y,x,v,u,h)
+            _∇g[(2*n+m+1) .+ (1:m)] += dgdv(obj,y,x,v,u,h)
 
             shift += (n+m+1)
+
         end
 
         gradient!(_tmp_, prob.obj[N], X[N])
@@ -141,37 +144,54 @@ end
 #    COLLOCATION CONSTRAINTS    #
 #################################
 
-function collocation_constraints!(g, prob::Problem, solver::DIRCOLSolverMT{T,HermiteSimpson}, X, U) where T
+function collocation_constraints!(g, prob::Problem, solver::DIRCOLSolverMT{T,HermiteSimpson}, X, U, H) where T
     n,m,N = size(prob)
-    dt = prob.dt
     fVal = solver.fVal  #[zero(X[1]) for k = 1:N]
     Xm = solver.X_  #[zero(X[1]) for k = 1:N-1]
     g_colloc = reshape(g, n, N-1)
 
-    # Calculate midpoints
     for k = 1:N
         evaluate!(fVal[k], prob.model, X[k], U[k])
     end
+    # Calculate midpoints
     for k = 1:N-1
-        Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+        Xm[k] = (X[k] + X[k+1])/2 + H[k]/8*(fVal[k] - fVal[k+1])
     end
+
+
     fValm = copy(fVal[1])
     for k = 1:N-1
         Um = (U[k] + U[k+1])*0.5
         evaluate!(fValm, prob.model, Xm[k], Um)
-        g_colloc[:,k] = -X[k+1] + X[k] + dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+        g_colloc[:,k] = -X[k+1] + X[k] + H[k]*(fVal[k] + 4*fValm + fVal[k+1])/6
     end
 end
 
-function collocation_constraint_jacobian!(jac, prob::Problem, solver::DIRCOLSolverMT{T,HermiteSimpson}, X, U) where T
-    n,m,N = size(prob)
-    dt = prob.dt
+# Calculate jacobian
+function calc_blockMT!(vals::PartedMatrix,f1,f2,fm,F1,F2,Fm,dt)
+    n,m = size(F1.xu)
+    In = Diagonal(I, n)
+    Im = Diagonal(I, m)
+    vals.x1 .= dt/6*(F1.xx + 4Fm.xx*( dt/8*F1.xx + In/2)) + In
+    vals.u1 .= dt/6*(F1.xu + 4Fm.xx*( dt/8*F1.xu) + 4Fm.xu*(Im/2))
+    vals.h .= 1/6*(f1 + 4*fm + f2) + 4*dt/6*Fm.xx*(1/8*(f1 - f2))
+    vals.x2 .= dt/6*(F2.xx + 4Fm.xx*(-dt/8*F2.xx + In/2)) - In
+    vals.u2 .= dt/6*(F2.xu + 4Fm.xx*(-dt/8*F2.xu) + 4Fm.xu*(Im/2))
+    return nothing
+end
 
+# PartedMatrixMT(model::Model) = PartedArray(zeros(model.n,length(model)+1),create_partition2((model.n,),(model.n,model.m,1),Val((:xx,:xu,:xh))))
+
+function collocation_constraint_jacobian!(jac, prob::Problem, solver::DIRCOLSolverMT{T,HermiteSimpson}, X, U, H) where T
+    n,m,N = size(prob)
+
+    fm = zeros(n)
     # Compute dynamics jacobians
     F = solver.∇F
     for k = 1:N
         jacobian!(F[k], prob.model, X[k], U[k])
     end
+
 
     # Calculate midpoints
     fVal = solver.fVal  # [zeros(n) for k = 1:N]
@@ -180,22 +200,23 @@ function collocation_constraint_jacobian!(jac, prob::Problem, solver::DIRCOLSolv
         evaluate!(fVal[k], prob.model, X[k], U[k])
     end
     for k = 1:N-1
-        Xm[k] = (X[k] + X[k+1])/2 + dt/8*(fVal[k] - fVal[k+1])
+        Xm[k] = (X[k] + X[k+1])/2 + H[k]/8*(fVal[k] - fVal[k+1])
     end
 
 
     # Collocation jacobians
     Fm = PartedMatrix(prob.model)
-    n_blk = 2(n+m)n
+    n_blk = n*(2*n + 2*m + 1)
     off = 0
     In = Matrix(I,n,n)
     Im = Matrix(I,m,m)
-    part = create_partition2((n,),(n,m,n,m), Val((:x1,:u1,:x2,:u2)))
+    part = create_partition2((n,),(n,m,1,n,m), Val((:x1,:u1,:h,:x2,:u2)))
     for k = 1:N-1
-        block = PartedArray(reshape(view(jac, off .+ (1:n_blk)), n, 2(n+m)), part)
+        block = PartedArray(reshape(view(jac, off .+ (1:n_blk)), n, 2(n+m)+1), part)
         Um = (U[k] + U[k+1])/2
+        evaluate!(fm, prob.model, Xm[k], Um)
         jacobian!(Fm, prob.model, Xm[k], Um)
-        calc_block!(block, F[k], F[k+1], Fm, dt)
+        calc_blockMT!(block, fVal[k], fVal[k+1],fm, F[k], F[k+1], Fm, H[k])
         off += n_blk
     end
 end
@@ -208,7 +229,7 @@ function collocation_constraint_jacobian_sparsityMT!(prob::Problem, r_shift=0)
     c_shift = 0
     for k = 1:N-1
         r_idx = r_shift .+ (1:n)
-        c_idx = c_shift .+ [(1:(n+m))...,((1+n+m) .+ (1:n+m))...]
+        c_idx = c_shift .+ (1:(n+m+1+n+m))
         add_rows_cols!(row,col,r_idx,c_idx)
         r_shift += n
         c_shift += (n+m+1)
@@ -217,11 +238,17 @@ function collocation_constraint_jacobian_sparsityMT!(prob::Problem, r_shift=0)
     return collect(zip(row,col))
 end
 
+function h_eq_constraints!(g,prob,solver,H)
+    n,m,N = size(prob)
+    for k = 1:N-2
+        g[k] = H[k] - H[k+1]
+    end
+end
+
 function h_eq_constraint_jacobian!(jac,prob,solver,H)
     shift = 0
-    ∇c = [1.0;-1.0]
-    for k = 1:N-2
-        jac[shift .+ (1:2)] = ∇c
+    for k = 1:prob.N-2
+        jac[shift .+ (1:2)] = [1.0;-1.0]
         shift += 2
     end
 end
@@ -233,7 +260,7 @@ function h_eq_constraint_sparsityMT!(prob,r_shift=0)
 
     c_shift = n+m+1
     for k = 1:N-2
-        r_idx = r_shift
+        r_idx = r_shift .+ (1:1)
         c_idx = c_shift .+ [0, (n+m+1)]
         add_rows_cols!(row,col,r_idx,c_idx)
         r_shift += 1
@@ -257,8 +284,8 @@ function get_boundsMT(prob::Problem, bounds::Vector{<:BoundConstraint},h_max,h_m
     x_L = [zeros(n) for k = 1:N]
     u_U = [zeros(m) for k = 1:uN]
     u_L = [zeros(m) for k = 1:uN]
-    h_U = [zeros(1) for k = 1:hN]
-    h_L = [zeros(1) for k = 1:hN]
+    h_U = zeros(hN)
+    h_L = zeros(hN)
 
     for k = 1:uN
         x_U[k] = bounds[k].x_max
@@ -274,6 +301,7 @@ function get_boundsMT(prob::Problem, bounds::Vector{<:BoundConstraint},h_max,h_m
         x_U = bounds[N].x_max
         x_L = bounds[N].x_min
     end
+
     z_U = PrimalsMT(x_U,u_U,h_U)
     z_L = PrimalsMT(x_L,u_L,h_L)
 
@@ -288,6 +316,9 @@ function get_boundsMT(prob::Problem, bounds::Vector{<:BoundConstraint},h_max,h_m
             g_L[k].inequality .= -Inf
         end
     end
+
+    # g_U = vcat(zeros(p_colloc), g_U...)
+    # g_L = vcat(zeros(p_colloc), g_L...)
     g_U = vcat(zeros(p_colloc), g_U..., zeros(N-2))
     g_L = vcat(zeros(p_colloc), g_L..., zeros(N-2))
 

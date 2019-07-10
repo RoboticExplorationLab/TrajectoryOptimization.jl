@@ -6,7 +6,7 @@ struct DIRCOLProblemMT{T} <: MOI.AbstractNLPEvaluator
     cost::Function
     cost_gradient!::Function
     solver::DIRCOLSolverMT{T,HermiteSimpson}
-    jac_struct::Vector{NTuple{2,Int}}
+    jac_struct
     part_z::NamedTuple{(:X,:U,:H), NTuple{3,Matrix{Int}}}
     p::NTuple{4,Int}    # (total constraints, p_colloc, p_custom, p_h)
     nG::NTuple{4,Int}   # (total constraint jacobian, nG_colloc, nG_custom, nG_h)
@@ -22,7 +22,7 @@ function DIRCOLProblemMT(prob::Problem{T,Continuous}, solver::DIRCOLSolverMT{T,H
 
     NN = N*(n+m) + (N-1)
 
-    nG_colloc = p_colloc*2*(n + m)
+    nG_colloc = p_colloc*2*(n + m) + p_colloc
     nG_custom = sum(p[1:N-1])*(n+m) + p[N]*n
     nG_h = (N-2)*2
     nG = nG_colloc + nG_custom + nG_h
@@ -65,8 +65,8 @@ function MOI.eval_constraint(d::DIRCOLProblemMT, g, Z)
     g_custom = view(g, p_colloc .+ (1:p_custom))
     g_h = view(g, (p_colloc+p_custom) .+ (1:p_h))
 
-    collocation_constraintsMT!(g_colloc, d.prob, d.solver, X, U)
-    update_constraintsMT!(g_custom, d.prob, d.solver, X, U)
+    collocation_constraints!(g_colloc, d.prob, d.solver, X, U, H)
+    update_constraints!(g_custom, d.prob, d.solver, X, U)
     h_eq_constraints!(g_h,d.prob,d.solver,H)
 end
 
@@ -79,7 +79,7 @@ function MOI.eval_constraint_jacobian(d::DIRCOLProblemMT, jac, Z)
     jac_custom = view(jac, nG_colloc .+ (1:nG_custom))
     jac_h = view(jac, (nG_colloc+nG_custom) .+ (1:nG_h))
 
-    collocation_constraint_jacobian!(jac_colloc, d.prob, d.solver, X, U)
+    collocation_constraint_jacobian!(jac_colloc, d.prob, d.solver, X, U, H)
     constraint_jacobian!(jac_custom, d.prob, d.solver, X, U)
     h_eq_constraint_jacobian!(jac_h,d.prob,d.solver,H)
 end
@@ -130,7 +130,6 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverMTOptions)
 end
 
 function solve!(prob::Problem,opts::DIRCOLSolverMTOptions)
-    # check for minimum time problem
     res, dircol = solve_moi(prob, opts)
     copyto!(prob.X,res.X)
     copyto!(prob.U,res.U[1:prob.N-1])

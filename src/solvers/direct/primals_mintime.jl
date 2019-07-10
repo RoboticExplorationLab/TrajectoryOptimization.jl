@@ -1,8 +1,8 @@
 export
-    Primals
+    PrimalsMT
 
 # For Minimum Time DIRCOL
-function PartedArrays.create_partition(n::Int,m::Int,q::Int,N::Int,uN=N-1,hN=N-1)
+function PartedArrays.create_partition(n::Int,m::Int,q::Int,N::Int,uN::Int,hN::Int)
     @assert hN <= uN
     @assert uN <= N
     Nx = N*n
@@ -32,27 +32,17 @@ struct PrimalsMT{T<:Real}
     Z::Vector{T}
     X::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
     U::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
-    H::Vector{SubArray{T,1,Vector{T},Tuple{Vector{Int}},false}}
+    H
     equal::Bool
 end
 
-# function Primals(Z::Vector{T},n::Int,m::Int) where T
-#     if length(Z) % (n+m) == 0
-#         N = length(Z) ÷ (n+m)
-#         uN = N
-#     elseif length(Z) % (n+m) == n
-#         N = length(Z) ÷ (n+m) + 1
-#         uN = N-1
-#     end
-#     part_z = create_partition(n,m,N,uN)
-#     Primals(Z,part_z)
-# end
+
 
 function PrimalsMT(Z,part_z::NamedTuple)
     N, uN, hN = size(part_z.X,2), size(part_z.U,2), size(part_z.H,2)
     X = [view(Z,part_z.X[:,k]) for k = 1:N]
     U = [view(Z,part_z.U[:,k]) for k = 1:uN]
-    H = [view(Z,part_z.H[:,k]) for k = 1:hN]
+    H = [view(Z,part_z.H[:,k])[1] for k = 1:hN]
 
     PrimalsMT(Z,X,U,H, N==uN)
 end
@@ -60,7 +50,7 @@ end
 """Create a Primals from vectors of SubArrays.
 This is the fastest method to convert a vector Z to subarrays X,U. This will overwrite X and U!
 """
-function PrimalsMT(Z::Vector{T},X::Vector{S},U::Vector{S}, H::Vector{S}) where {T,S<:SubArray}
+function PrimalsMT(Z::Vector{T},X::Vector{S},U::Vector{S}, H::Vector{T}) where {T,S<:SubArray}
     N = length(X)
     uN = length(U)
     hN = length(H)
@@ -68,7 +58,7 @@ function PrimalsMT(Z::Vector{T},X::Vector{S},U::Vector{S}, H::Vector{S}) where {
         X[k] = view(Z,X[k].indices[1])
         U[k] = view(Z,U[k].indices[1])
         if k <= hN
-            H[k] = view(Z,H[k].indices[1])
+            H[k] = view(Z,H[k].indices[1])[1]
         end
     end
     if uN == N-1
@@ -88,7 +78,7 @@ function PrimalsMT(Z::Vector{T},Z0::Primals{T}) where T
         X[k] = view(Z,X[k].indices[1])
         U[k] = view(Z,U[k].indices[1])
         if k <= hN
-            H[k] = view(Z,H[k].indices[1])
+            H[k] = view(Z,H[k].indices[1])[1]
         end
     end
     if uN == N-1
@@ -101,7 +91,7 @@ end
 Combine state and control trajectories.
 This is a little slow and less memory efficient than converting from a the combined vector to individual trajectories.
 """
-function PrimalsMT(X::VectorTrajectory{T}, U::VectorTrajectory{T}, H::VectorTrajectory{T}) where T
+function PrimalsMT(X::VectorTrajectory{T}, U::VectorTrajectory{T}, H::Vector{T}) where T
     N,uN,hN = length(X), length(U), length(H)
     n,m = length(X[1]), length(U[1])
     NN = N*n + uN*m + hN
@@ -138,7 +128,7 @@ function unpackMT(Z::Vector{<:Real}, part_z::NamedTuple)
     N, uN, hN = size(part_z.X,2), size(part_z.U,2), size(part_z.H,2)
     X = [view(Z,part_z.X[:,k]) for k = 1:N]
     U = [view(Z,part_z.U[:,k]) for k = 1:uN]
-    H = [view(Z,part_z.H[:,k]) for k = 1:hN]
+    H = [view(Z,part_z.H[:,k])[1] for k = 1:hN]
 
     return X, U, H
 end
