@@ -211,7 +211,7 @@ function PrimalDual(V::Vector, n::Int, m::Int, p::Vector{Int}, N::Int) where T
     a = [view(active_set, p_colloc + pcum[k] .+ (1:p[k])) for k = 1:N]
     PrimalDual(V, Z, X, U, Y, ν, λ, active_set, a)
 end
-
+PrimalDual(V::Vector, prob::Problem) = PrimalDual(V, prob.model.n, prob.model.m, num_constraints(prob), prob.N)
 
 function Base.copy(V::PrimalDual)
     V2 = copy(V.V)
