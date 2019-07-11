@@ -64,7 +64,7 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     y_part = ones(Int,2,N-1)*n
     y_part[2,:] = p[1:end-1]
     y_part = vec(y_part)
-    insert!(y_part,1,3)
+    insert!(y_part,1,n)
     push!(y_part, p[N])
     c_blocks = push!(collect(3:2:length(y_part)),length(y_part))
 
