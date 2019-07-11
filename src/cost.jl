@@ -8,11 +8,11 @@ abstract type CostFunction end
 CostTrajectory = Vector{C} where C <: CostFunction
 
 "Calculate unconstrained cost for X and U trajectories"
-function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T},H::Vector{T})::T where T
+function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T},dt::Vector{T})::T where T
     N = length(X)
     J = 0.0
     for k = 1:N-1
-        J += stage_cost(c[k],X[k],U[k],H[k])
+        J += stage_cost(c[k],X[k],U[k],dt[k])
     end
     J += stage_cost(c[N],X[N])
     return J

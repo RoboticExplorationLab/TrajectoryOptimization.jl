@@ -68,7 +68,7 @@ struct ALTROSolver{T} <: AbstractSolver{T}
     opts::ALTROSolverOptions{T}
     stats::Dict{Symbol,Any}
     solver_al::AugmentedLagrangianSolver{T}
-    solver_pn::SequentialNewtonSolver{T}
+    solver_pn::ProjectedNewtonSolver{T}
 end
 
 ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts)
@@ -76,6 +76,6 @@ ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts
 function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
     stats = Dict{Symbol,Any}()
     solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
-    solver_pn = SequentialNewtonSolver(prob, opts.opts_pn)
+    solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)
     ALTROSolver{T}(opts,stats,solver_al,solver_pn)
 end
