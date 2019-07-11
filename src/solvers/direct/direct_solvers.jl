@@ -79,7 +79,6 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     y = PseudoBlockArray(zeros(sum(y_part)),y_part)
     a = PseudoBlockArray(ones(Bool,NN+P), [NN; y_part])
 
-
     # Build views
     fVal = [view(y,Block(i)) for i in d_blocks]
     ∇F = [PartedMatrix(zeros(n,n+m+1), part_f) for k = 1:N]
@@ -93,39 +92,6 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     a = PartedVector(a, part_a)
 
     solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, H, g, Y, y, fVal, ∇F, C, ∇C, a, active_set, part_a)
-    reset!(solver)
-    return solver
-
-    C = [PartedArray(view(y, N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
-    active_set = [PartedArray(view(a.A, NN + N*n + pcum[k] .+ (1:p[k])), create_partition(constraints[k], k==N ? :terminal : :stage))  for k = 1:N]
-    ∇C = [begin
-    if k == N
-        d2 = n
-        stage = :terminal
-    else
-        d2 = n+m
-        stage = :stage
-    end
-    part = create_partition2(constraints[k], n, m, stage)
-    PartedArray(view(Y, N*n + pcum[k] .+ (1:p[k]), (k-1)*(n+m) .+ (1:d2)), part)
-end for k = 1:N]
-
-    # Create Trajectories
-    Q          = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
-    ∇F         = [PartedMatrix(zeros(n,n+m+1),part_f)       for k = 1:N]
-    C          = [PartedVector(T,constraints[k],:stage)     for k = 1:N-1]
-    ∇C         = [PartedMatrix(T,constraints[k],n,m,:stage) for k = 1:N-1]
-    a          = [PartedVector(Bool,constraints[k],:stage)     for k = 1:N-1]
-    C          = [C...,  PartedVector(T,constraints[N],:terminal)]
-    ∇C         = [∇C..., PartedMatrix(T,constraints[N],n,m,:terminal)]
-    a          = [a...,  PartedVector(Bool,constraints[N],:terminal)]
-
-    c_term = terminal(constraints[N])
-    p_N = num_constraints(c_term)
-    fVal = [zeros(T,n) for k = 1:N]
-    p = num_constraints(prob)
-
-    solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, Q, fVal, ∇F, C, ∇C, a, p)
     reset!(solver)
     return solver
 end

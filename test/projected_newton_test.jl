@@ -47,8 +47,6 @@ p = num_constraints(prob)
 P = sum(p) + N*n
 
 
-TO.newton_step!(prob, solver)
-
 V = copy(solver.V)
 Z = TO.primals(V)
 @test V.X[1] == prob.X[1]
@@ -122,8 +120,48 @@ TO.projection!(prob, solver)
 TO.update!(prob, solver, solver.V)
 @test TO.max_violation(solver) < solver.opts.feasibility_tolerance
 res0 = norm(TO.residual(prob, solver))
+res,δλ = TO.multiplier_projection!(prob, solver)
+@test res < res0
+
+solver = ProjectedNewtonSolver(prob,opts)
+λ0 = copy(solver.V.Y)
+V0 = copy(solver.V.V)
+solver.opts.feasibility_tolerance = 1e-10
+solver.opts.active_set_tolerance = 1e-3
+TO.update!(prob, solver)
+Y,y = TO.active_constraints(prob, solver)
+TO.primaldual_projection!(prob, solver)
+solver.V.Y
+
+TO.update!(prob, solver, solver.V)
+@test TO.max_violation(solver) < solver.opts.feasibility_tolerance
+res0 = norm(TO.residual(prob, solver))
 res, = TO.multiplier_projection!(prob, solver)
 @test res < res0
+TO.duals(solver.V)[solver.a.duals]
+typeof(cholesky(Symmetric(Y*Hinv*Y')))
+
+solver.opts.verbose = false
+@btime begin
+    copyto!($solver.V.V, $V0)
+    TO.projection!($prob, $solver)
+end
+
+@btime begin
+    copyto!($solver.V.V, $V0)
+    TO.primaldual_projection!($prob, $solver)
+end
+begin
+    copyto!(solver.V.V, V0)
+    TO.primaldual_projection!(prob, solver)
+    res, = TO.multiplier_projection!(prob, solver)
+end
+begin
+    copyto!(solver.V.V, V0)
+    TO.projection!(prob, solver)
+    res, = TO.multiplier_projection!(prob, solver)
+end
+zero(TO.duals(solver.V))
 
 # Build KKT
 Hinv = inv(Diagonal(Array(solver.H)))
