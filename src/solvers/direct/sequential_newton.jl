@@ -216,8 +216,9 @@ end
 function dynamics_jacobian!(prob::Problem, ∇F, X, U)
     n,m,N = size(prob)
     ∇F[1].xx .= Diagonal(I,n)
+    dt = get_dt_traj(prob,U)
     for k = 1:N-1
-        jacobian!(∇F[k+1], prob.model, X[k], U[k], prob.dt)
+        jacobian!(∇F[k+1], prob.model, X[k], U[k], dt[k])
     end
 end
 dynamics_jacobian!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V) =
@@ -260,10 +261,9 @@ end
 
 function cost_expansion!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V)
     N = prob.N
-    X,U = V.X, V.U
+    X,U, dt = V.X, V.U, get_dt_traj(prob,V.U)
     for k = 1:N-1
-        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k], prob.dt)
-        solver.Q[k] / (N-1)
+        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k], dt[k])
     end
     cost_expansion!(solver.Q[N], prob.obj[N], X[N])
 end

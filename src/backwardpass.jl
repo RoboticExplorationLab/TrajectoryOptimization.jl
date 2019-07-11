@@ -41,7 +41,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
             Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Q[k].uu + solver.ρ[1]*I
+            Quu_reg = Q[k].uu + solver.ρ[1]*Diagonal(ones(prob.model.m))
             Qux_reg = Q[k].ux
         end
 
@@ -51,6 +51,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         # if Quu_reg.info == -1
         if !isposdef(Hermitian(Quu_reg))
             # increase regularization
+
             @logmsg InnerIters "Regularizing Quu "
             regularization_update!(solver,:increase)
 

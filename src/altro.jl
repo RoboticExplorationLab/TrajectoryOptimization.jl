@@ -26,7 +26,7 @@ function solve!(prob::Problem, opts::ALTROSolverOptions) where T
     time_al = time() - t_al
 
     t_pn = time()
-    pn_solver = SequentialNewtonSolver(prob_altro, opts.opts_pn)
+    pn_solver = ProjectedNewtonSolver(prob_altro, opts.opts_pn)
     if opts.projected_newton
         @info "Projected Newton solve..."
         solver = solve!(prob_altro, pn_solver)

@@ -26,4 +26,3 @@ constraints = Constraints([bnd],N)
 doubleintegrator_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
 doubleintegrator_problem.constraints[N] += goal
 initial_controls!(doubleintegrator_problem, U0)
-rollout!(doubleintegrator_problem)

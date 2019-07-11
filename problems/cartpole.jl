@@ -16,7 +16,8 @@ tf = 5.
 dt = tf/(N-1)
 U0 = [0.01*rand(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+goal = goal_constraint(xf)
 
 cartpole_problem = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+cartpole_problem.constraints[N] += goal
 initial_controls!(cartpole_problem, U0)
-rollout!(cartpole_problem)

@@ -1,14 +1,14 @@
-cost(prob::Problem, V::Union{PrimalDual,PrimalDualVars}) = cost(prob.obj, V.X, V.U)
+cost(prob::Problem, V::Union{PrimalDual,PrimalDualVars}) = cost(prob.obj, V.X, V.U, get_dt_traj(prob,V.U))
 
 ############################
 #       CONSTRAINTS        #
 ############################
 function dynamics_constraints!(prob::Problem, solver::DirectSolver, V=solver.V)
     N = prob.N
-    X,U = V.X, V.U
+    X,U,dt = V.X, V.U, get_dt_traj(prob,V.U)
     solver.fVal[1] .= V.X[1] - prob.x0
     for k = 1:N-1
-         evaluate!(solver.fVal[k+1], prob.model, X[k], U[k], prob.dt)
+         evaluate!(solver.fVal[k+1], prob.model, X[k], U[k],dt[k])
          solver.fVal[k+1] .-= X[k+1]
      end
  end
@@ -16,7 +16,7 @@ function dynamics_constraints!(prob::Problem, solver::DirectSolver, V=solver.V)
 
 function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     n,m,N = size(prob)
-    X,U = V.X, V.U
+    X,U, dt = V.X, V.U, get_dt_traj(prob,V.U)
     solver.∇F[1].xx .= Diagonal(I,n)
     solver.Y[1:n,1:n] .= Diagonal(I,n)
     part = (x=1:n, u =n .+ (1:m), x1=n+m .+ (1:n))
@@ -24,7 +24,7 @@ function dynamics_jacobian!(prob::Problem, solver::ProjectedNewtonSolver, V=solv
     off1 = n
     off2 = 0
     for k = 1:N-1
-        jacobian!(solver.∇F[k+1], prob.model, X[k], U[k], prob.dt)
+        jacobian!(solver.∇F[k+1], prob.model, X[k], U[k], dt[k])
         solver.Y[off1 .+ part.x, off2 .+ part.x] .= solver.∇F[k+1].xx
         solver.Y[off1 .+ part.x, off2 .+ part.u] .= solver.∇F[k+1].xu
         solver.Y[off1 .+ part.x, off2 .+ part.x1] .= -Diagonal(I,n)
@@ -93,8 +93,7 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
     NN = N*n + (N-1)*m
     H = solver.H
     g = solver.g
-    dt = prob.dt
-
+    dt = get_dt_traj(prob,V.U)
     part = (x=1:n, u=n .+ (1:m), z=1:n+m)
     part2 = (xx=(part.x, part.x), uu=(part.u, part.u), ux=(part.u, part.x), xu=(part.x, part.u))
     off = 0
@@ -105,12 +104,14 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
         # H[off .+ part.u, off .+ part.u] = Q[k].uu
         hess = PartedMatrix(view(H, off .+ part.z, off .+ part.z), part2)
         grad = PartedVector(view(g, off .+ part.z), part)
-        hessian!(hess, prob.obj[k], V.X[k], V.U[k], dt)
-        gradient!(grad, prob.obj[k], V.X[k], V.U[k], dt)
+        hessian!(hess, prob.obj[k], V.X[k], V.U[k])
+        gradient!(grad, prob.obj[k], V.X[k], V.U[k])
+        hess .*= dt[k]
+        grad .*= dt[k]
         off += n+m
     end
-    H ./= (N-1)
-    g ./= (N-1)
+    # H .*= prob.dt
+    # g .*= prob.dt
     hess = PartedMatrix(view(H, off .+ part.x, off .+ part.x), part2)
     grad = PartedVector(view(g, off .+ part.x), part)
     hessian!(hess, prob.obj[N], V.X[N])

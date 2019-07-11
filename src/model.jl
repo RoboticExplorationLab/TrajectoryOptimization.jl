@@ -50,7 +50,7 @@ struct AnalyticalModel{M,D} <: Model{M,D}
             p::NamedTuple=NamedTuple(), d::Dict{Symbol,Any}=Dict{Symbol,Any}();
             check_functions::Bool=false) where {M<:ModelType,D<:DynamicsType}
         d[:evals] = 0
-        evals = [0,0]
+        evals = [0;0]
         if check_functions
             # Make dynamics inplace
             if is_inplace_dynamics(f,n,m,r)
@@ -409,7 +409,7 @@ function Model(mech::Mechanism, torques::Array)
 
     d = Dict{Symbol,Any}()
 
-    evals = [0,]
+    evals = [0;0]
     RBDModel{Nominal,Continuous}(f, ∇f, n, m, 0, NamedTuple(), mech, evals, d)
 end
 

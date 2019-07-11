@@ -31,8 +31,3 @@ dt = 0.06
 
 box_parallel_park_problem = Problem(model_d,obj,U,constraints=copy(constraints),dt=dt,x0=x0,xf=xf)
 box_parallel_park_problem.constraints[N] += goal_con
-rollout!(box_parallel_park_problem)
-
-box_parallel_park_min_time_problem = Problem(model_d,obj,U,constraints=copy(constraints),dt=dt,x0=x0,xf=xf,tf=:min)
-box_parallel_park_min_time_problem.constraints[N] += goal_con
-rollout!(box_parallel_park_min_time_problem)
