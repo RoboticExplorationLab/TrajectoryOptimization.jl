@@ -29,11 +29,10 @@ plot(prob_mt.X)
 solve!(prob_mt,opts_d_mt)
 plot(prob_mt.U)
 
-# PartedMatrix(prob_mt.model)
-# PartedMatrixMT(prob_mt.model)
-#
-# aa = PartedArray(zeros(model.n,length(model)+1),create_partition2((model.n,),(model.n,model.m,1),Val((:xx,:xu,:xh))))
-#
-# aa.xh
-#
-# part = create_partition2((n,),(n,m,1,n,m), Val((:x1,:u1,:h,:x2,:u2)))
+
+prob = copy(Problems.box_parallel_park_problem)
+prob_mt = update_problem(prob,model=Dynamics.car_model)
+
+solve!(prob_mt,opts_d_mt)
+
+plot(prob_mt.U)

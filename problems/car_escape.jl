@@ -61,15 +61,17 @@ car_escape_problem.constraints[N] += goal
 initial_controls!(car_escape_problem, U);
 
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
-X0 = interp_rows(N,tf,Array(X_guess'))
+X0_escape = interp_rows(N,tf,Array(X_guess'))
 
-copyto!(car_escape_problem.X,X0)
+copyto!(car_escape_problem.X,X0_escape)
 
 # plot escape
-function plot_escape()
+function plot_escape(X,x0=x0,xf=xf,X0=X0_escape)
+    X_array = to_array(X)
     plot(labels="")
-    plot_obstacles(circle_escape,:grey)
+    plot_obstacles(circles_escape,:grey)
     plot!(X0[1,:],X0[2,:],width=2,color=:purple,label="X_guess",axis=:off)
-    plot!((x0[1],x0[1]),marker=:circle,color=:red,label="start")
-    plot!((xf[1],xf[2]),marker=:circle,color=:green,label="goal",legend=:left)
+    plot!((x0[1],x0[2]),marker=:circle,color=:red,label="")
+    plot!((xf[1],xf[2]),marker=:circle,color=:green,label="",legend=:left)
+    plot!(X_array[1,:],X_array[2,:],color=:blue,width=2,label="Solution")
 end

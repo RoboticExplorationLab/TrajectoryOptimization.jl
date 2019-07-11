@@ -19,10 +19,13 @@ xf[4:7] = q0;
 Q = (1.0e-4)*Diagonal(I,n)
 R = (1.0e-3)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
+# Q = (1.0)*Diagonal(I,n)
+# R = (1.0)*Diagonal(I,m)
+# Qf = 1000.0*Diagonal(I,n)
 
 # constraints
-r_quad = 2.
-r_cylinder = 2.
+r_quad_maze = 2.
+r_cylinder_maze = 2.
 maze_cylinders = []
 zh = 3
 l1 = 5
@@ -31,45 +34,45 @@ l3 = 5
 l4 = 10
 
 for i = range(-25,stop=-10,length=l1)
-    push!(maze_cylinders,(i, 10,r_cylinder))
+    push!(maze_cylinders,(i, 10,r_cylinder_maze))
 end
 
 for i = range(10,stop=25,length=l1)
-    push!(maze_cylinders,(i, 10, r_cylinder))
+    push!(maze_cylinders,(i, 10, r_cylinder_maze))
 end
 
 for i = range(-7.5,stop=7.5,length=l3)
-    push!(maze_cylinders,(i, 30, r_cylinder))
+    push!(maze_cylinders,(i, 30, r_cylinder_maze))
 end
 
 for i = range(-25,stop=-10,length=l1)
-    push!(maze_cylinders,(i, 50, r_cylinder))
+    push!(maze_cylinders,(i, 50, r_cylinder_maze))
 end
 
 for i = range(10,stop=25,length=l1)
-    push!(maze_cylinders,(i, 50, r_cylinder))
+    push!(maze_cylinders,(i, 50, r_cylinder_maze))
 end
 
-for i = range(10+2*r_cylinder,stop=50-2*r_cylinder,length=l4)
-    push!(maze_cylinders,(-25, i, r_cylinder))
+for i = range(10+2*r_cylinder_maze,stop=50-2*r_cylinder_maze,length=l4)
+    push!(maze_cylinders,(-25, i, r_cylinder_maze))
 end
 
-for i = range(10+2*r_cylinder,stop=50-2*r_cylinder,length=l4)
-    push!(maze_cylinders,(25, i, r_cylinder))
+for i = range(10+2*r_cylinder_maze,stop=50-2*r_cylinder_maze,length=l4)
+    push!(maze_cylinders,(25, i, r_cylinder_maze))
 end
 
 n_maze_cylinders = length(maze_cylinders)
 
 function cI_maze(c,x,u)
     for i = 1:n_maze_cylinders
-        c[i] = circle_constraint(x,maze_cylinders[i][1],maze_cylinders[i][2],maze_cylinders[i][3]+r_quad)
+        c[i] = circle_constraint(x,maze_cylinders[i][1],maze_cylinders[i][2],maze_cylinders[i][3]+r_quad_maze)
     end
 end
 
 maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
-u_max = 10.
+u_max = 25.
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 
@@ -80,16 +83,16 @@ bnd = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max,trim=t
 goal = goal_constraint(xf)
 
 
-
-N = 101 # number of knot points
+N = 121 # number of knot points
 tf = 5.0
 dt = tf/(N-1) # total time
 
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
-constraints = Constraints([maze],N) # constraint trajectory
+constraints = Constraints([bnd,maze],N) # constraint trajectory
 
 quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
+quadrotor_maze_problem.constraints[N] += goal
 initial_controls!(quadrotor_maze_problem,U_hover); # initialize problem with controls
 
 X_guess = zeros(n,7)
