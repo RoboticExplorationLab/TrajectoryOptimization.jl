@@ -27,11 +27,11 @@ import Base.getindex
 getindex(obj::Objective,i::Int) = obj.cost[i]
 
 "$(TYPEDSIGNATURES) Calculate cost over entire state and control trajectories"
-function cost(obj::Objective, X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T},H::Vector{T})::T where T
+function cost(obj::Objective, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory, dt::Vector)
     N = length(X)
     J = 0.0
     for k = 1:N-1
-        J += stage_cost(obj[k],X[k],U[k],H[k])
+        J += stage_cost(obj[k],X[k],U[k],dt[k])
     end
     J += stage_cost(obj[N],X[N])
     return J

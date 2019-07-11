@@ -251,7 +251,7 @@ function get_dt(prob::Problem,k::Int)
     end
 end
 
-function get_dt(prob::Problem,U::Array,k::Int)
+function get_dt(prob::Problem,U::AbstractArray,k::Int)
     if prob.tf == 0.
         return U[end]^2
     else
