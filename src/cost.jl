@@ -167,9 +167,9 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
 end
 
 function gradient!(grad, cost::QuadraticCost,
-        x::AbstractVector, u::AbstractVector, dt)
-    grad.x .= (cost.Q*x + cost.q + cost.H'*u)*dt
-    grad.u .= (cost.R*u + cost.r + cost.H*x)*dt
+        x::AbstractVector, u::AbstractVector)
+    grad.x .= (cost.Q*x + cost.q + cost.H'*u)
+    grad.u .= (cost.R*u + cost.r + cost.H*x)
     return nothing
 end
 
@@ -179,11 +179,11 @@ function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
 end
 
 function hessian!(hess, cost::QuadraticCost,
-        x::AbstractVector, u::AbstractVector, dt)
-    hess.xx .= cost.Q*dt
-    hess.uu .= cost.R*dt
-    hess.ux .= cost.H*dt
-    hess.xu .= cost.H'*dt
+        x::AbstractVector, u::AbstractVector)
+    hess.xx .= cost.Q
+    hess.uu .= cost.R
+    hess.ux .= cost.H
+    hess.xu .= cost.H'
     return nothing
 end
 
