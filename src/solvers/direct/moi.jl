@@ -3,6 +3,8 @@ const MOI = MathOptInterface
 
 struct DIRCOLProblem{T} <: MOI.AbstractNLPEvaluator
     prob::Problem{T,Continuous}
+    cost::Function
+    cost_gradient!::Function
     solver::DIRCOLSolver{T,HermiteSimpson}
     jac_struct::Vector{NTuple{2,Int}}
     part_z::NamedTuple{(:X,:U), NTuple{2,Matrix{Int}}}
@@ -27,7 +29,7 @@ function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,Hermi
     jac_struct = collect(zip(r,c))
     num_con = (P,p_colloc)
     num_jac = (nG, nG_colloc)
-    DIRCOLProblem(prob, solver, jac_struct, part_z, num_con, num_jac)
+    DIRCOLProblem(prob, gen_stage_cost(prob), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac)
 end
 
 MOI.features_available(d::DIRCOLProblem) = [:Grad, :Jac]
@@ -38,19 +40,19 @@ MOI.hessian_lagrangian_structure(d::DIRCOLProblem) = []
 
 function MOI.eval_objective(d::DIRCOLProblem, Z)
     X,U = unpack(Z, d.part_z)
-    cost(d.prob.obj, X, U, get_dt_traj(d.prob))
+    d.cost(X, U, get_dt_traj(d.prob))
 end
 
 function MOI.eval_objective_gradient(d::DIRCOLProblem, grad_f, Z)
     X,U = unpack(Z, d.part_z)
-    cost_gradient!(grad_f, d.prob, X, U, get_dt_traj(d.prob))
+    d.cost_gradient!(grad_f,X,U,get_dt_traj(d.prob))
 end
 
 function MOI.eval_constraint(d::DIRCOLProblem, g, Z)
     X,U = unpack(Z, d.part_z)
     P,p_colloc = d.p
     g_colloc = view(g, 1:p_colloc)
-    g_custom = view(g, p_colloc+1:P)
+    g_custom = view(g, (p_colloc+1):P)
 
     collocation_constraints!(g_colloc, d.prob, d.solver, X, U)
     update_constraints!(g_custom, d.prob, d.solver, X, U)
@@ -88,7 +90,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
     # Create solver
-    solver = Ipopt.Optimizer()
+    solver = eval(opts.nlp).Optimizer(;opts.opts...)
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -100,6 +102,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     end
 
     # Solve the problem
+    @info "DIRCOL solve using " * String(opts.nlp)
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     MOI.optimize!(solver)
@@ -110,4 +113,16 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
 
     # Return the results
     return res, dircol
+end
+
+function solve!(prob::Problem,opts::DIRCOLSolverOptions)
+    # check for minimum time problem
+    if prob.tf == 0.
+        error("Minimum Time DIRCOL solve not implemented")
+    end
+    res, dircol = solve_moi(prob, opts)
+    copyto!(prob.X,res.X)
+    copyto!(prob.U,res.U[1:prob.N-1])
+
+    return dircol
 end

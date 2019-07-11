@@ -116,7 +116,7 @@ end
 "$(TYPEDEF) Augmented Lagrangian Objective: stores stage cost(s) and terminal cost functions"
 struct AugmentedLagrangianObjective{T} <: AbstractObjective where T
     cost::CostTrajectory
-    constraints::ProblemConstraints
+    constraints::Constraints
     C::PartedVecTrajectory{T}  # Constraint values
     ∇C::PartedMatTrajectory{T} # Constraint jacobians
     λ::PartedVecTrajectory{T}  # Lagrange multipliers
@@ -124,7 +124,7 @@ struct AugmentedLagrangianObjective{T} <: AbstractObjective where T
     active_set::PartedVecTrajectory{Bool}  # Active set
 end
 
-function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemConstraints,N::Int;
+function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::Constraints,N::Int;
         μ_init::T=1.,λ_init::T=0.) where T
     # Get sizes
     n,m = get_sizes(cost)
@@ -132,7 +132,7 @@ function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemC
     AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
 end
 
-function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::ProblemConstraints,
+function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::Constraints,
         λ::PartedVecTrajectory{T}; μ_init::T=1.) where T
     # Get sizes
     n,m = get_sizes(cost)
@@ -152,7 +152,7 @@ end
 "Generate augmented Lagrangian problem from constrained problem"
 function AugmentedLagrangianProblem(prob::Problem{T},solver::AugmentedLagrangianSolver{T}) where T
     obj_al = AugmentedLagrangianObjective(prob,solver)
-    prob_al = update_problem(prob,obj=obj_al,constraints=ProblemConstraints(prob.N),newProb=false)
+    prob_al = update_problem(prob,obj=obj_al,constraints=Constraints(prob.N),newProb=false)
 end
 
 "Evaluate maximum constraint violation"
@@ -216,33 +216,9 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjec
     return nothing
 end
 
-# function cost_expansion!(S::Expansion{T},obj::AugmentedLagrangianObjective{T},x::AbstractVector{T}) where T
-#     N = length(obj.μ)
-#     cost_expansion!(S,obj[N],x)
-#
-#     c = obj.C[N]
-#     λ = obj.λ[N]
-#     μ = obj.μ[N]
-#     a = active_set(c,λ)
-#     Iμ = Diagonal(a .* μ)
-#     cx = obj.∇C[N]
-#
-#     jacobian!(cx,obj.constraints[N],x)
-#
-#     # Second Order pieces
-#     S.xx .+= cx'Iμ*cx
-#
-#     # First order pieces
-#     S.x .+= cx'*(Iμ*c + λ)
-#
-#     return nothing
-# end
-
-
 function update_active_set!(obj::AugmentedLagrangianObjective{T},tol::T=0.0) where T
     update_active_set!(obj.active_set,obj.C,obj.λ,tol)
 end
-
 
 
 "Cost function terms for Lagrangian and quadratic penalty"

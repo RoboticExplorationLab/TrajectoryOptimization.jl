@@ -1,25 +1,17 @@
 "Create a minimum time problem"
-function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
+function minimum_time_problem(prob::Problem{T,Discrete},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
     # modify problem with time step control
     N = prob.N; n = prob.model.n; m = prob.model.m
     @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
+    @assert has_bounds(prob.constraints)
 
     # modify problem with slack control
     obj_mt = CostFunction[]
     for k = 1:N-1
         cost_mt = copy(prob.obj[k])
-        # cost_mt.Q = cat(cost_mt.Q,0.0,dims=(1,2))
-        # cost_mt.q = [cost_mt.q; 0.0]
-        # cost_mt.R = cat(cost_mt.R,2.0*R_min_time,dims=(1,2))
-        # cost_mt.r = [cost_mt.r; 0.0]
-        # cost_mt.H = [cost_mt.H zeros(prob.model.m); zeros(prob.model.n+1)']
-        # push!(obj_mt,cost_mt)
         push!(obj_mt,MinTimeCost(cost_mt,R_min_time))
     end
     cost_mt = copy(prob.obj[N])
-    # cost_mt.Qf = cat(cost_mt.Qf,0.0,dims=(1,2))
-    # cost_mt.qf = [cost_mt.qf; 0.0]
-    # push!(obj_mt,cost_mt)
     push!(obj_mt,MinTimeCost(cost_mt,R_min_time))
 
     model_min_time = add_min_time_controls(prob.model)
@@ -44,6 +36,40 @@ function minimum_time_problem(prob::Problem{T},R_min_time::T=1.0,dt_max::T=1.0,d
         x0=[prob.x0;0.0])
 end
 
+function minimum_time_problem(prob::Problem{T,Continuous},R_min_time::T=1.0,dt_max::T=1.0,dt_min::T=1.0e-3) where T
+    # modify problem with time step control
+    N = prob.N; n = prob.model.n; m = prob.model.m
+    @assert all([prob.obj[k] isa QuadraticCost for k = 1:N]) #TODO generic cost
+    @assert has_bounds(prob.constraints)
+
+    # modify problem with slack control
+    obj_mt = CostFunction[]
+    for k = 1:N-1
+        cost_mt = copy(prob.obj[k])
+        push!(obj_mt,MinTimeCost(cost_mt,R_min_time))
+    end
+    cost_mt = copy(prob.obj[N])
+    push!(obj_mt,MinTimeCost(cost_mt,R_min_time))
+
+    model_min_time = add_min_time_controls(prob.model)
+
+    constraints = ConstraintSet[]
+    for k = 1:prob.N
+        con_mt = GeneralConstraint[]
+        for con in prob.constraints[k]
+            if con isa BoundConstraint
+                con = BoundConstraint(length(con.x_max),length(con.u_max)+1; x_min=bnd.x_min, x_max=bnd.x_max,
+                    u_min=[con.u_min;sqrt(dt_min)], u_max=[con.u_max;sqrt(dt_max)], trim=true)
+            end
+            push!(con_mt,con)
+        end
+        push!(constraints,con_mt)
+    end
+
+    update_problem(prob,model=model_min_time,obj=Objective(obj_mt),constraints=Constraints(constraints),
+        U=[k != N ? [prob.U[k];sqrt(prob.dt)] : [prob.U[k-1];sqrt(prob.dt)] for k = 1:prob.N-1])
+end
+
 "Return the total duration of trajectory"
 function total_time(prob::Problem{T}) where T
     m̄ = prob.model.m + 1
@@ -54,6 +80,34 @@ function total_time(prob::Problem{T}) where T
         tt = prob.dt*(prob.N-1)
     end
     return tt
+end
+
+"Add minimum time controls to dynamics "
+function add_min_time_controls(model::Model{Nominal,Discrete})
+    n = model.n; m = model.m
+    n̄ = n+1; m̄ = m+1; n̄m̄ = n̄+m̄
+    idx = merge(create_partition((m,1),(:u,:mintime)),(x=1:n,))
+    idx2 = [idx.x...,(idx.u .+ n̄)...,n̄m̄]
+
+    function f!(x₊::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[end]
+        model.f(view(x₊,idx.x),x[idx.x],u[idx.u],h^2)
+        x₊[n̄] = h
+    end
+
+    function ∇f!(Z::AbstractMatrix{T},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T
+        h = u[end]
+        model.∇f(view(Z,idx.x,idx2),x[idx.x],u[idx.u],h^2)
+        Z[idx.x,n̄m̄] .*= 2*h
+        Z[n̄,n̄m̄] = 1.0
+    end
+    AnalyticalModel{Nominal,Discrete}(f!,∇f!,n̄,m̄,model.r,model.params,model.info)
+end
+
+function add_min_time_controls(model::Model{Nominal,Continuous})
+    m̄ = model.m+1;
+
+    AnalyticalModel{Nominal,Continuous}(model.f,model.∇f,model.n,m̄,model.r,model.params,model.info)
 end
 
 function mintime_equality(n::Int,m::Int)
@@ -67,7 +121,7 @@ function mintime_equality(n::Int,m::Int)
     end
 
     jac_eq(C,x,u) = copyto!(C, ∇con_eq)
-    Constraint{Equality}(con_eq, jac_eq, 1, :min_time_eq, [collect(1:n̄), collect(1:m̄)], :stage)
+    Constraint{Equality}(con_eq, jac_eq, 1, :min_time_eq, [collect(1:n̄), collect(1:m̄)], :stage, :xu)
 end
 
 function mintime_constraints(prob::Problem, dt_max::T=1.0, dt_min::T=1e-3) where T
@@ -142,8 +196,8 @@ function cost_expansion!(S::Expansion{T}, cost::MinTimeCost, xN::Vector{T}) wher
     R_min_time = cost.R_min_time
 
     idx = 1:n
-    S.xx[idx,idx] = cost.cost.Qf
-    S.x[idx] = cost.cost.Qf*xN[idx] + cost.cost.qf
+    S.xx[idx,idx] = cost.cost.Q
+    S.x[idx] = cost.cost.Q*xN[idx] + cost.cost.q
     S.xx[end,end] = R_min_time
     S.x[end] = R_min_time*xN[end]
 

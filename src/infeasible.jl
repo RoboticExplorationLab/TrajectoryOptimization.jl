@@ -27,10 +27,10 @@ function infeasible_problem(prob::Problem{T},R_inf::T=1.0) where T
         push!(con_prob,_con)
     end
 
-    constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,Constraint[])
+    constrained ? push!(con_prob,prob.constraints.C[N]) : push!(con_prob,GeneralConstraint[])
 
     update_problem(prob,model=model_inf,obj=Objective(obj_inf),
-        constraints=ProblemConstraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
+        constraints=Constraints(con_prob),U=[[prob.U[k];u_slack[k]] for k = 1:prob.N-1])
 end
 
 
@@ -86,4 +86,14 @@ function line_trajectory(x0::Vector,xf::Vector,N::Int)
     x_traj[1] = x0
     x_traj[end] = xf
     x_traj
+end
+
+function line_trajectory!(X::VectorTrajectory,x0::Vector,xf::Vector)
+    N = length(X)
+    t = range(0,stop=N,length=N)
+    slope = (xf .- x0)./N
+    copyto!(X,[slope*t[k] for k = 1:N])
+    X[1] .= x0
+    X[end] .= xf
+    return nothing
 end

@@ -20,7 +20,7 @@ obs = (([0.2, 0.6], 0.25),
        ([-0.5, 0.5], 0.4))
 obs1 = TO.planar_obstacle_constraint(n,m, obs[1]..., :obstacle1)
 obs2 = TO.planar_obstacle_constraint(n,m, obs[2]..., :obstacle2)
-con = ProblemConstraints(N)
+con = Constraints(N)
 con[1] += bnd1
 for k = 2:N-1
     con[k] += bnd  + obs1 + obs2

@@ -21,8 +21,90 @@ num_colloc(prob::Problem)::Int = (prob.N-1)*prob.model.n
 #   COST FUNCTIONS    #
 #######################
 
-cost(prob::Problem, solver::DIRCOLSolver) = cost(prob, solver.Z)
+"Generate state midpoint according to quadrature rule"
+function gen_xm_cubic(prob::Problem)
+    ẋ = zeros(prob.model.n); ẏ = zeros(prob.model.n)
 
+    function xm(y,x,v,u,h)
+        prob.model.f(ẋ,x,u)
+        prob.model.f(ẏ,y,v)
+
+        0.5*(y+x) + h/8*(ẋ - ẏ)
+    end
+end
+
+function gen_stage_cost(prob::Problem)
+    xm = gen_xm_cubic(prob)
+    obj = prob.obj
+
+    function cost(X,U,H)
+        N = length(X)
+        J = 0.0
+        for k = 1:N-1
+            Xm = xm(X[k+1],X[k],U[k+1],U[k],H[k])
+            Um = 0.5*(U[k] + U[k+1])
+            J += H[k]/6*(stage_cost(obj[k],X[k],U[k]) + 4*stage_cost(obj[k],Xm,Um) + stage_cost(obj[k],X[k+1],U[k+1]))
+        end
+        J += stage_cost(obj[N],X[N])
+        return J
+    end
+end
+
+function gen_stage_cost_gradient(prob::Problem)
+    n = prob.model.n; m = prob.model.m; N = prob.N
+    function fc(z)
+        ż = zeros(eltype(z),n)
+        prob.model.f(ż,z[1:n],z[n .+ (1:m)])
+        return ż
+    end
+
+    function fc(x,u)
+        ẋ = zero(x)
+        prob.model.f(ẋ,x,u)
+        return ẋ
+    end
+
+    ∇fc(z) = ForwardDiff.jacobian(fc,z)
+    ∇fc(x,u) = ∇fc([x;u])
+    dfcdx(x,u) = ∇fc(x,u)[:,1:n]
+    dfcdu(x,u) = ∇fc(x,u)[:,n .+ (1:m)]
+
+    xm(y,x,v,u,h) = 0.5*(y + x) + h/8*(fc(x,u) - fc(y,v))
+    dxmdy(y,x,v,u,h) = 0.5*I - h/8*dfcdx(y,v)
+    dxmdx(y,x,v,u,h) = 0.5*I + h/8*dfcdx(x,u)
+    dxmdv(y,x,v,u,h) = -h/8*dfcdu(y,v)
+    dxmdu(y,x,v,u,h) = h/8*dfcdu(x,u)
+
+    dℓdx(obj,x,u) = obj.Q*x + obj.q + obj.H'*u
+    dℓdu(obj,x,u) = obj.R*u + obj.r + obj.H*x
+
+    dgdx(obj,y,x,v,u,h) = h/6*(dℓdx(obj,x,u) + 4*dxmdx(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)))
+    dgdy(obj,y,x,v,u,h) = h/6*(4.0*dxmdy(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v))+ dℓdx(obj,y,v))
+    dgdu(obj,y,x,v,u,h) = h/6*(dℓdu(obj,x,u) + 4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))))
+    dgdv(obj,y,x,v,u,h) = h/6*(4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))) + dℓdu(obj,y,v))
+
+    nn = 2*(n+m)
+    _tmp_ = zeros(n)
+
+    function _cost_grad!(∇g,X,U,H)
+        shift = 0
+        ∇g .= 0 # set all to zero, for additive inplace operations
+        for k = 1:N-1
+            obj = prob.obj[k]
+            x = X[k]; y = X[k+1]; u = U[k]; v = U[k+1]; h = H[k]
+            ∇g[shift .+ (1:nn)][1:n] += dgdx(obj,y,x,v,u,h)
+            ∇g[shift .+ (1:nn)][n .+ (1:m)] += dgdu(obj,y,x,v,u,h)
+            ∇g[shift .+ (1:nn)][(n+m) .+ (1:n)] += dgdy(obj,y,x,v,u,h)
+            ∇g[shift .+ (1:nn)][(2*n+m) .+ (1:m)] += dgdv(obj,y,x,v,u,h)
+            shift += (n+m)
+        end
+
+        gradient!(_tmp_, prob.obj[N], X[N])
+        ∇g[(N-1)*(n+m) .+ (1:n)] += _tmp_
+    end
+end
+
+cost(prob::Problem, solver::DIRCOLSolver) = cost(prob, solver.Z)
 cost(prob::Problem, Z::Primals) = cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
 
 
@@ -33,11 +115,10 @@ cost(prob::Problem, Z::Primals) = cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
 function cost_gradient!(grad_f, prob::Problem, X::AbstractVectorTrajectory, U::AbstractVectorTrajectory, H::Vector)
     n,m,N = size(prob)
     grad = reshape(grad_f, n+m, N)
-    part = (x=1:n, u=n+1:n+m)
+    part = (x=1:n, u=n .+ (1:m))
     for k = 1:N-1
         grad_k = PartedVector(view(grad,:,k), part)
         gradient!(grad_k, prob.obj[k], X[k], U[k], get_dt(prob,k))
-        grad_k ./= (N-1)
     end
     grad_k = PartedVector(view(grad,1:n,N), part)
     gradient!(grad_k, prob.obj[N], X[N])
@@ -240,4 +321,139 @@ function collocation_constraint_jacobian_sparsity!(jac::AbstractMatrix, prob::Pr
         off1 += n
         off2 += n+m
     end
+end
+
+# generate DIRCOL functions
+function gen_dircol_functions(prob::Problem{T}, solver::DIRCOLSolver) where T
+    n,m,N = size(prob)
+    NN = N*(n+m)
+    p_colloc = num_colloc(prob)
+    p = num_constraints(prob)
+    P = p_colloc + sum(p)
+    dt = prob.dt
+
+    part_f = create_partition2(prob.model)
+    part_z = create_partition(n,m,N,N)
+    pcum = cumsum(p)
+
+    jac_structure = spzeros(P, NN)
+    constraint_jacobian_sparsity!(jac_structure, prob)
+    r,c = get_rc(jac_structure)
+
+    function eval_f(Z)
+        X,U = unpack(Z,part_z)
+        cost(prob.obj, X, U, get_dt_traj(prob))
+    end
+
+    function eval_grad_f(Z, grad_f)
+        X,U = unpack(Z, part_z)
+        cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
+    end
+
+    function eval_g(Z, g)
+        X,U = unpack(Z,part_z)
+        g_colloc = view(g,1:p_colloc)
+        g_custom = view(g,p_colloc+1:length(g))
+
+        collocation_constraints!(g_colloc, prob, solver, X, U)
+        update_constraints!(g_custom, prob, solver, X, U)
+    end
+
+
+    function eval_jac_g(Z, mode, rows, cols, vals)
+        if mode == :Structure
+            copyto!(rows,r)
+            copyto!(cols,c)
+        else
+            X,U = unpack(Z, part_z)
+
+            nG_colloc = p_colloc * 2(n+m)
+            jac_colloc = view(vals, 1:nG_colloc)
+            collocation_constraint_jacobian!(jac_colloc, prob, solver, X, U)
+
+            # General constraint jacobians
+            jac_custom = view(vals, nG_colloc+1:length(vals))
+            constraint_jacobian!(jac_custom, prob, solver, X, U)
+        end
+
+        return nothing
+    end
+    return eval_f, eval_g, eval_grad_f, eval_jac_g
+end
+
+function remove_bounds!(prob::Problem)
+    n,m,N = size(prob)
+    bounds = [BoundConstraint(n,m) for k = 1:prob.N]
+
+    # Initial Time step
+    if :bound ∈ labels(prob.constraints[1])
+        bnd_init = remove_bounds!(prob.constraints[1])[1]
+    else
+        bnd_init = bounds[1]
+    end
+    bounds[1] = BoundConstraint(n,m, x_min=prob.x0, u_min=bnd_init.u_min,
+                                     x_max=prob.x0, u_max=bnd_init.u_max)
+
+    # All time steps
+    for k = 2:prob.N
+        bnd = remove_bounds!(prob.constraints[k])
+        if !isempty(bnd)
+            bounds[k] = bnd[1]::BoundConstraint
+        end
+    end
+
+    # Terminal time step
+    if :goal ∈ labels(prob.constraints[N])
+        goal = pop!(prob.constraints[N])
+        xf = zeros(n)
+        evaluate!(xf, goal, zero(xf))
+        term_bound = BoundConstraint(n,m, x_min=-xf, u_min=bounds[N-1].u_min,
+                                          x_max=-xf, u_max=bounds[N-1].u_max)
+        bounds[N] = term_bound::BoundConstraint
+    end
+    return bounds
+end
+
+function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
+    n,m,N = size(prob)
+    p_colloc = num_colloc(prob)
+    Z = Primals(prob, true)
+
+    Z.equal ? uN = N : uN = N-1
+    x_U = [zeros(n) for k = 1:N]
+    x_L = [zeros(n) for k = 1:N]
+    u_U = [zeros(m) for k = 1:uN]
+    u_L = [zeros(m) for k = 1:uN]
+    for k = 1:uN
+        x_U[k] = bounds[k].x_max
+        x_L[k] = bounds[k].x_min
+        u_U[k] = bounds[k].u_max
+        u_L[k] = bounds[k].u_min
+    end
+    if !Z.equal
+        x_U = bounds[N].x_max
+        x_L = bounds[N].x_min
+    end
+    z_U = Primals(x_U,u_U)
+    z_L = Primals(x_L,u_L)
+
+    # Constraints
+    p = num_constraints(prob)
+    g_U = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    g_L = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    push!(g_U, PartedVector(prob.constraints[N], :terminal))
+    push!(g_L, PartedVector(prob.constraints[N], :terminal))
+    for k = 1:N
+        if p[k] > 0
+            g_L[k].inequality .= -Inf
+        end
+    end
+    g_U = vcat(zeros(p_colloc), g_U...)
+    g_L = vcat(zeros(p_colloc), g_L...)
+
+    convertInf!(z_U.Z)
+    convertInf!(z_L.Z)
+    convertInf!(g_U)
+    convertInf!(g_L)
+    return z_U.Z, z_L.Z, g_U, g_L
 end

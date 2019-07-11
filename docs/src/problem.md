@@ -11,7 +11,7 @@ The [Problem](@ref) type represents the trajectory optimization problem to be so
 
 * Dynamics model: the system that is being controlled, specified by differential or difference equations.
 * Objective: a collection of CostFunction's to be minimized of the form ``\ell_N(x_N) + \sum_{k=0}^N \ell(x_k,u_k)``
-* ProblemConstraints: Optional stage wise constraints of the form ``c_k(x_k,u_k)`` or ``c_N(x_N)``.
+* Constraints: Optional stage wise constraints of the form ``c_k(x_k,u_k)`` or ``c_N(x_N)``.
 * Initial state: all trajectory optimization algorithms require the initial state.
 * N: the number of knot points (or number of discretization points)
 * dt: the time step used for discretizing the continuous dynamics

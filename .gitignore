@@ -9,3 +9,4 @@ deps/deps.jl
 ipopt.opt
 ipopt.out
 temp/
+fort.10

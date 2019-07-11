@@ -1,4 +1,5 @@
 using TrajectoryOptimization
+import TrajectoryOptimization: get_dt_traj
 const TO = TrajectoryOptimization
 using Test
 using ForwardDiff
@@ -9,7 +10,13 @@ using Ipopt
 
 # Set up problem
 model = Dynamics.car_model
-costfun = Dynamics.car_costfun
+n,m = model.n, model.m
+Q = (1e-2)*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
+x0 = [0.;0.;0.]
+xf = [0.;1.;0.]
+
 xf = [0,1.0,0]
 goal_con = goal_constraint(xf)
 circle_con = TO.planar_obstacle_constraint(model.n, model.m, (0,2.5), 0.25)
@@ -18,10 +25,12 @@ bnd = BoundConstraint(model.n, model.m, x_min=[-0.5,-0.001,-Inf], x_max=[0.5, 1.
 # Initial Controls
 N = 101
 U0 = [ones(model.m) for k = 1:N]
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+
 
 # Create Problem
 n,m = model.n, model.m
-prob = Problem(rk3(model), Objective(costfun,N), constraints=ProblemConstraints([bnd,circle_con],N), N=N, tf=3.0)
+prob = Problem(rk3(model), obj, constraints=Constraints([bnd,circle_con],N), N=N, tf=3.0)
 prob.constraints[N] += goal_con
 initial_controls!(prob, U0)
 rollout!(prob)
@@ -29,7 +38,7 @@ prob = TO.update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
-opts = DIRCOLSolverOptions{Float64}(verbose=true)
+opts = TO.DIRCOLSolverOptions{Float64}(verbose=true)
 pcon = prob.constraints
 dircol = TO.DIRCOLSolver(prob, opts)
 
@@ -113,11 +122,11 @@ TO.cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
 #
 # cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
 #
-# function eval_f(Z)
-#     Z = Primals(Z, part_z)
-#     cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
-# end
-# eval_f(Z.Z)
+function eval_f(Z)
+    Z = Primals(Z, part_z)
+    cost(prob.obj, Z.X, Z.U, get_dt_traj(prob))
+end
+eval_f(Z.Z)
 # @test ForwardDiff.gradient(eval_f, Z.Z) == grad_f
 
 # Collocation Constraint jacobian
@@ -192,7 +201,7 @@ g = c_all(Z.Z)
 @test ForwardDiff.jacobian(c_all, Z.Z) ≈ jac_con(Z.Z)
 
 # Test Ipopt functions
-eval_f2, eval_g, eval_grad_f, eval_jac_g = TO.gen_ipopt_functions(prob, dircol)
+eval_f2, eval_g, eval_grad_f, eval_jac_g = TO.gen_dircol_functions(prob, dircol)
 
 g2 = zero(g)
 grad_f2 = zero(grad_f)
@@ -224,19 +233,16 @@ Z_L = Primals(z_L, part_z)
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
 
-
 # Test solve
-for i = 1:10
-    sol,solver = solve(prob, opts)
-    if solver.stats[:info] == :Solve_Succeeded
-        break
-    end
-    if i == 10
-        # error("The problem should have solved successfully")
-    end
-end
-opts = DIRCOLSolverOptions{Float64}()
-s, slv, pr = solve(prob, opts)
-# TO.solve_moi(prob, opts)
+# for i = 1:10
+#     dircol = solve!(prob, opts)
+#     # if dircol.stats[:info] == :Solve_Succeeded
+#     #     break
+#     # end
+#     # if i == 10
+#     #     # error("The problem should have solved successfully")
+#     # end
+# end
 
-@test_nowarn TO.write_ipopt_options()
+# dircol = solve!(prob, opts)
+# @test_nowarn TO.write_ipopt_options()

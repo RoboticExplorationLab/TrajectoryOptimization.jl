@@ -17,6 +17,11 @@ include("solvers/direct/projected_newton.jl")
 
 include("solvers/altro.jl")
 
+include("solvers/direct/primals_mintime.jl")
+include("solvers/direct/direct_solvers_mintime.jl")
+include("solvers/direct/dircol_mintime.jl")
+include("solvers/direct/moi_mintime.jl")
+
 # Generic methods for calling solve
 
 function solve!(prob::Problem, opts::AbstractSolverOptions)
@@ -51,35 +56,3 @@ function check_convergence_criteria(opts_uncon::AbstractSolverOptions{T},cost_to
     end
     return nothing
 end
-# function init_constraint_trajectories(constraints::ConstraintSet,n::Int,m::Int,N::Int;
-#         μ_init::T=1.,λ_init::T=0.) where T
-#     p = num_stage_constraints(constraints)
-#     p_N = num_terminal_constraints(constraints)
-#
-#     # Initialize the partitions
-#     c_stage = stage(constraints)
-#     c_term = terminal(constraints)
-#     c_part = create_partition(c_stage)
-#     c_part2 = create_partition2(c_stage,n,m)
-#
-#     # Create Trajectories
-#     C          = [PartedVector(zeros(T,p),c_part)       for k = 1:N-1]
-#     ∇C         = [PartedMatrix(zeros(T,p,n+m),c_part2)  for k = 1:N-1]
-#     λ          = [PartedVector(ones(T,p),c_part) for k = 1:N-1]
-#     μ          = [PartedVector(ones(T,p),c_part) for k = 1:N-1]
-#     active_set = [PartedVector(ones(Bool,p),c_part)     for k = 1:N-1]
-#
-#     C = [C..., PartedVector(T,c_term)]
-#     ∇C = [∇C..., PartedMatrix(T,c_term,n,0)]
-#     λ = [λ..., PartedVector(T,c_term)]
-#     μ = [μ..., PartedArray(ones(T,num_constraints(c_term)), create_partition(c_term))]
-#     active_set = [active_set..., PartedVector(Bool,c_term)]
-#
-#     # Initialize dual and penality values
-#     for k = 1:N
-#         λ[k] .*= λ_init
-#         μ[k] .*= μ_init
-#     end
-#
-#     return C,∇C,λ,μ,active_set
-# end

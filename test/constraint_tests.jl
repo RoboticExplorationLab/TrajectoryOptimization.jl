@@ -1,6 +1,6 @@
 using Test
 using ForwardDiff
-import TrajectoryOptimization: ConstraintSet, stage, ProblemConstraints, BoundConstraint
+import TrajectoryOptimization: ConstraintSet, stage, Constraints, BoundConstraint
 using PartedArrays
 using LinearAlgebra
 
@@ -214,11 +214,11 @@ C3 = copy(C2)
 @test C3 == [con,con_term]
 
 
-# ProblemConstraints
+# Constraints
 CS = [[con], con+con2+bnd, con+con2+bnd, con+bnd]
 N = length(CS)
 @test CS isa Vector{<:ConstraintSet}
-PC = ProblemConstraints(CS)
+PC = Constraints(CS)
 PC[1] += bnd
 @test PC[1] == [con,bnd]
 @test num_constraints(PC) == [p1+p3, p1+p2+p3, p1+p2+p3, p1+p3_N]

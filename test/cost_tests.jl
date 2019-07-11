@@ -3,7 +3,13 @@ const TO = TrajectoryOptimization
 # Get the model
 model = Dynamics.car_model
 n,m = model.n, model.m
-costfun = Dynamics.car_costfun
+Q = (1e-2)*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = (1e-2)*Diagonal(I,m)
+x0 = [0.;0.;0.]
+xf = [0.;1.;0.]
+
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
 # Test Expansion
 Q = TO.Expansion{Float64}(n,m)
@@ -29,32 +35,33 @@ q = ones(n)
 r = zeros(m)
 Qf = Diagonal(I,n)*100.
 qf = zeros(n)
-quadcost = QuadraticCost(Q, R, H, q, r, 0., Qf, qf, 0.)
+quadcost = QuadraticCost(Q, R, H, q, r, 0.)
+quadcost_f = QuadraticCost(Qf, qf, 0.)
 @test quadcost.c == 0
 @test quadcost.Q == Q
 @test quadcost.R isa Diagonal
+@test quadcost_f.c == 0
+@test quadcost_f.Q == Qf
+@test quadcost_f.q == qf
 
 quadcost = QuadraticCost(Q,R)
 @test quadcost.R isa Diagonal
-@test quadcost.Qf == zeros(n,n)
-@test quadcost.Qf isa Diagonal
 @test quadcost.H == zeros(m,n)
 
 # LQR Cost
 xf = [0,1,0]
-lqrcost = LQRCost(Q,R,Qf,xf)
+lqrcost = LQRCost(Q,R,xf)
 @test lqrcost.Q == Q
 @test lqrcost.q == -Q*xf
 
 cost_term = TO.LQRCostTerminal(Qf, xf)
-@test cost_term.Q == zeros(0,0)
-@test cost_term.Qf == Qf
+@test cost_term.Q == Qf
+@test cost_term.q == -Qf*xf
 
 # Test costs
 x,u = rand(n), rand(m)
 dt = rand(1)[1]
 @test TO.stage_cost(quadcost,x,u,dt) == 0.5*(x'Q*x + u'R*u)*dt
-@test TO.stage_cost(quadcost,x) == 0
 @test TO.stage_cost(cost_term,x) ≈ 0.5*(x-xf)'Qf*(x-xf)
 
 
@@ -73,9 +80,9 @@ TO.cost_expansion!(E, cost_term, x)
 @test E.xx == Qf
 
 grad = PartedVector(zeros(n+m), create_partition((n,m),(:x,:u)))
-TO.gradient!(grad, quadcost, x, u)
-@test grad.x == Q*x
-@test grad.u == R*u
+TO.gradient!(grad, quadcost, x, u, dt)
+@test grad.x == dt*Q*x
+@test grad.u == dt*R*u
 
 grad = zeros(n)
 TO.gradient!(grad, cost_term, x)

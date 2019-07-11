@@ -2,11 +2,11 @@
 function solve!(prob::Problem, opts::ALTROSolverOptions) where T
     t0 = time()
 
-    # Create ALTRO solver
-    solver = ALTROSolver(prob, opts)
-
     # create ALTRO problem
     prob_altro, state = altro_problem(prob,opts)
+
+    # Create ALTRO solver
+    solver = ALTROSolver(prob_altro, opts)
 
     # Set terminal condition if using projected newton
     if opts.projected_newton

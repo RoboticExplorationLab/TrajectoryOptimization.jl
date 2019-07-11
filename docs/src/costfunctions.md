@@ -175,7 +175,7 @@ Objective(costfuns::Vector{<:CostFunction})
 ```
 
 ## Methods
-`ProblemConstraints` extends the methods on `CostFunction` to the whole trajectory
+`Constraints` extends the methods on `CostFunction` to the whole trajectory
 ```julia
 cost(obj, X, U)
 cost_expansion!(Q::Vector{Expansion}, obj, X, U)

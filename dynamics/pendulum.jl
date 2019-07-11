@@ -14,6 +14,7 @@ end
 n,m = 2,1
 pendulum_model = Model(pendulum_dynamics!,n,m) # inplace model
 
+# unknown mass
 function pendulum_dynamics_uncertain!(ẋ,x,u,w)
     m = 1. + w[1]
     l = 0.5

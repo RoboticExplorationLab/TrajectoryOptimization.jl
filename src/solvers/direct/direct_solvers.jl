@@ -1,4 +1,3 @@
-
 export
     DIRCOLSolver
 
@@ -7,6 +6,7 @@ abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
 abstract type QuadratureRule end
 abstract type HermiteSimpson <: QuadratureRule end
+abstract type Midpoint <: QuadratureRule end
 
 include("primals.jl")
 
@@ -147,11 +147,11 @@ end
 
 
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
-    "NLP Solver to use. Options are (:Ipopt) (more to be added in the future)"
+    "NLP Solver to use. See MathOptInterface for available NLP solvers"
     nlp::Symbol = :Ipopt
 
     "Options dictionary for the nlp solver"
-    opts::Dict{String,Any} = Dict{String,Any}()
+    opts::Dict{Symbol,Any} = Dict{Symbol,Any}()
 
     "Print output to console"
     verbose::Bool = true

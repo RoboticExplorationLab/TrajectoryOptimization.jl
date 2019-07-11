@@ -28,13 +28,15 @@ using Rotations
 using BlockArrays
 
 export
-    Dynamics
+    Dynamics,
+    Problems
 
 # Primary types
 export
     Model,
     QuadraticCost,
     LQRCost,
+    LQRObjective,
     GenericCost,
     Trajectory
 
@@ -46,7 +48,8 @@ export
     AugmentedLagrangianSolverOptions,
     AugmentedLagrangianProblem,
     ALTROSolverOptions,
-    DirectSolver,
+    DIRCOLSolver,
+    DIRCOLSolverOptions,
     ProjectedNewtonSolver,
     ProjectedNewtonSolverOptions,
     SequentialNewtonSolver,
@@ -62,7 +65,7 @@ export
     TerminalConstraintSet,
     ConstraintSet,
     Objective,
-    ProblemConstraints
+    Constraints
 
 export
     rk3,
@@ -118,7 +121,8 @@ export
     bounds,
     labels,
     terminal,
-    stage
+    stage,
+    interp_rows
 
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray
@@ -146,6 +150,7 @@ include("augmented_lagrangian.jl")
 include("minimum_time.jl")
 include("infeasible.jl")
 include("dynamics.jl")
+include("problems.jl")
 include("logger.jl")
 
 

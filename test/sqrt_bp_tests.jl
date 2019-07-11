@@ -1,7 +1,7 @@
 import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
     AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
     goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    cost_expansion!, ProblemConstraints
+    cost_expansion!, Constraints
 const TO = TrajectoryOptimization
 ## Pendulum
 T = Float64
@@ -17,13 +17,13 @@ R = Array(1e-3*Diagonal(I,m))
 Qf = Array(Diagonal(I,n)*100.0)
 x0 = zeros(n)
 xf = [0.0;1.0;0.0]
-lqr_cost = LQRCost(Q,R,Qf,xf)
 
 # problem
 N = 31
 U = [ones(m) for k = 1:N-1]
+obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 dt = 0.15
-prob = Problem(model_d,Objective(lqr_cost,N),U,dt=dt,x0=x0)
+prob = Problem(model_d,obj,U,dt=dt,x0=x0)
 rollout!(prob)
 
 ## unconstrained
@@ -58,7 +58,7 @@ bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
 bnd
 goal_con = goal_constraint(xf)
 con = [bnd, goal_con]
-prob = update_problem(prob,constraints=ProblemConstraints(con,N))
+prob = update_problem(prob,constraints=Constraints(con,N))
 rollout!(prob)
 
 #bp

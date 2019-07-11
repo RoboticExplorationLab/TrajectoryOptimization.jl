@@ -321,7 +321,7 @@ function gen_DIRTREL_funcs(prob::Problem,solver::DIRTRELSolver)
                         _eig.values[i] = eig_thr
                     end
                 end
-                Esqrt[(k-1)*n^2 .+ (1:n^2)] = Diagonal(sqrt.(_eig.values))*_eig.vectors'
+                Esqrt[(k-1)*n^2 .+ (1:n^2)] = _eig.vectors*Diagonal(sqrt.(_eig.values))*_eig.vectors'
             else
                 Esqrt[(k-1)*n^2 .+ (1:n^2)] = real.(vec(sqrt(ee)))
             end
@@ -400,7 +400,7 @@ function gen_DIRTREL_funcs(prob::Problem,solver::DIRTRELSolver)
                         _eig.values[i] = eig_thr
                     end
                 end
-                KEKsqrt[(k-1)*m^2 .+ (1:m^2)] = Diagonal(sqrt.(_eig.values))*_eig.vectors'
+                KEKsqrt[(k-1)*m^2 .+ (1:m^2)] = _eig.vectors*Diagonal(sqrt.(_eig.values))*_eig.vectors'
             else
                 KEKsqrt[(k-1)*m^2 .+ (1:m^2)] = real.(vec(sqrt(kek)))
             end

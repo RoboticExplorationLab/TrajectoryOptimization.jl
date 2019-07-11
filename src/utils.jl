@@ -26,6 +26,10 @@ function to_array(X::Vector{<:AbstractArray})
     Y
 end
 
+function to_array(X::Vector{T}) where T
+    return X
+end
+
 function vec(A::Trajectory)
 	vec(to_array(A))
 end

@@ -52,44 +52,46 @@ struct Constraint{S} <: AbstractConstraint{S}
     label::Symbol
     inds::Vector{Vector{Int}}
     type::Symbol
+    inputs::Symbol
+
     function Constraint{S}(c::Function, ∇c::Function, p::Int, label::Symbol,
-            inds::Vector{Vector{Int}}, type::Symbol) where S <: ConstraintType
+            inds::Vector{Vector{Int}}, type::Symbol, inputs::Symbol) where S <: ConstraintType
         if type ∉ [:all,:stage,:terminal]
             ArgumentError(string(type) * " is not a supported constraint type")
         end
-        new{S}(c,∇c,p,label,inds,type)
+        new{S}(c,∇c,p,label,inds,type,inputs)
     end
 end
 
 "$(TYPEDEF) Create a stage-wise constraint, using ForwardDiff to generate the Jacobian"
 function Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c)) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
     ∇c,c_aug = generate_jacobian(c,n,m,p)
-    Constraint{S}(c, ∇c, p, label, inds, term)
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint using ForwardDiff"
 function Constraint{S}(c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=:terminal) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=:terminal, inputs=:x) where S<:ConstraintType
     m = 0
     ∇c,c_aug = generate_jacobian(c,n,m,p)
-    Constraint{S}(c, ∇c, p, label, inds, term)
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "$(TYPEDEF) Create a constraint, providing an analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c)) where S<:ConstraintType
-    Constraint{S}(c, ∇c, p, label, inds, term)
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint with analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:0)], term=:terminal) where S<:ConstraintType
-    Constraint{S}(c, ∇c, p, label, inds, term)
+        inds=[collect(1:n), collect(1:0)], term=:terminal, inputs=:x) where S<:ConstraintType
+    Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 function Constraint()
-    Constraint{Null}(x->nothing, x->nothing, 0, 0, 0, :null, term)
+    Constraint{Null}(x->nothing, x->nothing, 0, 0, 0, :null, term, :null)
 end
 
 evaluate!(v::AbstractVector, con::Constraint, x::AbstractVector, u::AbstractVector) = is_stage(con) ? con.c(v, x, u) : nothing
@@ -262,7 +264,7 @@ function goal_constraint(xf::Vector{T}) where T
     n = length(xf)
     terminal_constraint(v,xN) = copyto!(v,xN-xf)
     terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n))
-    Constraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)], :terminal)
+    Constraint{Equality}(terminal_constraint, terminal_jacobian, n, :goal, [collect(1:n),collect(1:0)], :terminal, :x)
 end
 
 function infeasible_constraints(n::Int, m::Int)
@@ -272,7 +274,7 @@ function infeasible_constraints(n::Int, m::Int)
     ∇inf[:,idx_inf] = Diagonal(1.0I,n)
     inf_con(v,x,u) = copyto!(v, u)
     inf_jac(C,x,u) = copyto!(C, ∇inf)
-    Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage)
+    Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage, :u)
 end
 
 ########################
@@ -324,6 +326,7 @@ bounds(C::ConstraintSet) = filter(x->isa(x,BoundConstraint),C)
 Base.findall(C::ConstraintSet,T::Type) = isa.(C,AbstractConstraint{T})
 terminal(C::ConstraintSet) = filter(is_terminal,C)
 stage(C::ConstraintSet) = filter(is_stage,C)
+
 function remove_bounds!(C::ConstraintSet)
     bnds = bounds(C)
     filter!(x->!isa(x,BoundConstraint),C)
@@ -417,7 +420,7 @@ function update_constraint_set_jacobians(cs::ConstraintSet,n::Int,n̄::Int,m::In
     for con in cs_
         _∇c(C,x,u) = con.∇c(view(C,:,idx),x[con.inds[1]],u[con.inds[2]])
         _∇c(C,x) = con.∇c(C,x[con.inds[1]])
-        _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds)
+        _cs += Constraint{type(con)}(con.c,_∇c,n,m,con.p,con.label,inds=con.inds,inputs=con.inputs)
     end
 
     _cs += bnd
@@ -430,39 +433,39 @@ end
 Collection of constraints for a trajectory optimization problem.
     Essentially a list of `ConstraintSets` for each time step
 """
-struct ProblemConstraints
+struct Constraints
     C::Vector{<:ConstraintSet}
 end
 
 """Copy a ConstraintSet over all time steps"""
-function ProblemConstraints(C::ConstraintSet,N::Int)
+function Constraints(C::ConstraintSet,N::Int)
     C = append!(GeneralConstraint[], C)
-    ProblemConstraints([copy(C) for k = 1:N])
+    Constraints([copy(C) for k = 1:N])
 end
 
 """Copy a ConstraintSet over all stage time steps, with a unique terminal constraint set"""
-function ProblemConstraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
+function Constraints(C::ConstraintSet,C_term::ConstraintSet,N::Int)
     C = append!(GeneralConstraint[], C)
     C_term = append!(GeneralConstraint[], C_term)
-    ProblemConstraints([k < N ? C : C_term for k = 1:N])
+    Constraints([k < N ? C : C_term for k = 1:N])
 end
 
-"""Create an empty set of ProblemConstraints for a problem with size N"""
-function ProblemConstraints(N::Int)
-    ProblemConstraints([GeneralConstraint[] for k = 1:N])
+"""Create an empty set of Constraints for a problem with size N"""
+function Constraints(N::Int)
+    Constraints([GeneralConstraint[] for k = 1:N])
 end
 
-function ProblemConstraints()
-    ProblemConstraints(ConstraintSet[])
+function Constraints()
+    Constraints(ConstraintSet[])
 end
 
-num_stage_constraints(pcon::ProblemConstraints) = map(num_stage_constraints, pcon.C)
-num_terminal_constraints(pcon::ProblemConstraints) = map(num_terminal_constraints, pcon.C)
+num_stage_constraints(pcon::Constraints) = map(num_stage_constraints, pcon.C)
+num_terminal_constraints(pcon::Constraints) = map(num_terminal_constraints, pcon.C)
 
 """$(SIGNATURES)
 Count the number of constraints at each time step.
 """
-function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vector{Int}
+function TrajectoryOptimization.num_constraints(pcon::Constraints)::Vector{Int}
     N = length(pcon.C)
     p = zeros(Int,N)
     for k = 1:N-1
@@ -476,14 +479,25 @@ function TrajectoryOptimization.num_constraints(pcon::ProblemConstraints)::Vecto
     return p
 end
 
-Base.setindex!(pcon::ProblemConstraints, C::ConstraintSet, k::Int) = pcon.C[k] = C
-Base.getindex(pcon::ProblemConstraints,i::Int) = pcon.C[i]
-Base.copy(pcon::ProblemConstraints) = ProblemConstraints(deepcopy(pcon.C))
-Base.length(pcon::ProblemConstraints) = length(pcon.C)
+Base.setindex!(pcon::Constraints, C::ConstraintSet, k::Int) = pcon.C[k] = C
+Base.getindex(pcon::Constraints,i::Int) = pcon.C[i]
+Base.copy(pcon::Constraints) = Constraints(deepcopy(pcon.C))
+Base.length(pcon::Constraints) = length(pcon.C)
+
+function has_bounds(C::Constraints)
+    for k = 1:length(C)
+        for con in C[k]
+            if con isa BoundConstraint
+                return true
+            end
+        end
+    end
+    return false
+end
 
 
-"Update constraints trajectories from ProblemConstraints"
-function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemConstraints,
+"Update constraints trajectories from Constraints"
+function update_constraints!(C::PartedVecTrajectory{T}, constraints::Constraints,
         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
@@ -492,8 +506,8 @@ function update_constraints!(C::PartedVecTrajectory{T}, constraints::ProblemCons
     evaluate!(C[N],constraints[N],X[N])
 end
 
-"Compute constraint Jacobians from ProblemConstraints"
-function jacobian!(C::PartedMatTrajectory{T}, constraints::ProblemConstraints,
+"Compute constraint Jacobians from Constraints"
+function jacobian!(C::PartedMatTrajectory{T}, constraints::Constraints,
         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}) where T
     N = length(X)
     for k = 1:N-1
