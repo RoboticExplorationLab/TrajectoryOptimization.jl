@@ -24,11 +24,56 @@ TO.update!(prob, solver)
 # Projection
 Hinv = inv(Diagonal(solver0.H))
 Y,y0 = TO.active_constraints(prob, solver0)
-δz0 = -Hinv*Y'*((Y*Hinv*Y')\y0)
+S0 = Y*Hinv*Y'
+δz0 = -Hinv*Y'*(S0\y0)
 
-@test packZ(TO._projection(solver)[1:2]...) ≈ δz0
-L = TO.buildL(solver)
-@test L*L' ≈ Y*Hinv*Y'
+y = TO.active_constraints(solver)
+vcat(y...) ≈ y0
+TO.calc_factors!(solver)
+
+L = Array(TO.buildL(solver))
+L - cholesky(Symmetric(Array(S0))).L
+
+a = solver.active_set
+S = TO.buildS(solver,C,D)
+S = zero(S0)
+S = zero(Array(S))
+TO.buildS!(S,solver,C,D)
+@btime TO.buildS!($S,$solver,$C,$D)
+@btime TO.buildS($solver,$C,$D)
+@btime $Y*$Hinv*$Y'
+
+Hinv = Diagonal(Array(Hinv))
+nnz(Y)/length(Y)
+Y = Array(Y)
+
+S ≈ S0
+S = TO.buildShurCompliment(prob, solver)
+@btime TO.buildShurCompliment($prob, $solver)
+
+y_part = TO.dual_partition(solver)
+Pa = sum(y_part)
+S = BlockArray(zeros(Pa,Pa),y_part,y_part)
+S[Block(2,2)]
+view(S,Block(2,2)).indices
+
+S_part = TO.Sinds(solver)
+S = zeros(Pa,Pa)
+using Profile
+Profile.init(n=10000000,delay=1e-9)
+@profiler [TO.buildS!(S,solver,A,B,C,D,S_part) for k = 1:100]
+@code_warntype TO.buildS!(S,solver,A,B,C,D,S_part)
+@which TO.buildS!(S,solver,A,B,C,D,S_part)
+Symmetric(S) ≈ S0
+A = [solver.∇F[k].xx for k = 2:N]
+B = [solver.∇F[k].xu for k = 2:N]
+
+@btime TO.buildS!($S,$solver,$A,$B,$C,$D,$S_part)
+@btime $Y*$Hinv*$Y'
+
+@btime cholesky(Symmetric($S0))
+
+S0_ = BlockArray(S0,y_part,y_part)
 
 # Multiplier projection
 λ0 = duals(solver0.V)[solver0.a.duals]

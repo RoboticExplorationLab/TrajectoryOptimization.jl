@@ -1,10 +1,15 @@
 const TO = TrajectoryOptimization
 using Test, LinearAlgebra
 
+
 # Set up Problem
 model = Dynamics.car_model
 costfun = Dynamics.car_costfun
+Q = Diagonal(I,n)*0.01
+R = Diagonal(I,m)*0.01
+Qf = Diagonal(I,n)*1.0
 xf = [0,1,0]
+costfun = LQRCost(Q,R,Qf,xf)
 N = 51
 n,m = model.n, model.m
 bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=1.5)
@@ -27,7 +32,7 @@ prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
 initial_controls!(prob, ones(m,N-1))
 ilqr = iLQRSolverOptions()
 al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
-al.constraint_tolerance = 1e-2
+al.constraint_tolerance = 1e-3
 al.constraint_tolerance_intermediate = 1e-1
 solve!(prob, al)
 max_violation(prob)

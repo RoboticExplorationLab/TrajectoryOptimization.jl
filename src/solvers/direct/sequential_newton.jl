@@ -130,6 +130,11 @@ function size(solver::SequentialNewtonSolver)
     return n,m,N
 end
 
+function num_active_constraints(solver::SequentialNewtonSolver)
+    n,m,N = size(solver)
+    sum(sum.(solver.active)) + N*n
+end
+
 """
 Construct 2N partition of dual variables (n,n,p1,n,p2,n,p3,...,n,pN-1,pN)
 """
@@ -257,7 +262,7 @@ function cost_expansion!(prob::Problem, solver::SequentialNewtonSolver, V=solver
     N = prob.N
     X,U = V.X, V.U
     for k = 1:N-1
-        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k])
+        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k], prob.dt)
         solver.Q[k] / (N-1)
     end
     cost_expansion!(solver.Q[N], prob.obj[N], X[N])
@@ -398,7 +403,7 @@ function calc_factors!(solver::SequentialNewtonSolver, Qinv=solver.Qinv, Rinv=so
         E[k] = -∇F[k].xx*Qinv[k]/G_.U
         F[k] = -E[k]*M_'/H_.U
         G[k] = cholesky_reg(Symmetric(∇F[k].xx*Qinv[k]*∇F[k].xx' + ∇F[k].xu*Rinv[k]*∇F[k].xu' + Qinv[k+1] - E[k]*E[k]' - F[k]*F[k]'))
-        # G[k].info != 0 ? println("failed G cholesky at k = $k") : nothing
+        G[k].info != 0 ? println("failed G cholesky at k = $k") : nothing
         i += 1
 
         K[k] = -C[k]*Qinv[k]/G_.U
@@ -424,7 +429,7 @@ function calc_factors!(solver::SequentialNewtonSolver, Qinv=solver.Qinv, Rinv=so
 end
 
 function cholesky_reg(A::AbstractMatrix)
-    C = cholesky(A, check=false)
+    C = cholesky(A, check=true)
     if C.info != 0 && false
         E = eigen(A)
         v = min(minimum(E.values),-1e-2)

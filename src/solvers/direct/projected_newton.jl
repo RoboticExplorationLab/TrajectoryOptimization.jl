@@ -93,6 +93,7 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
     NN = N*n + (N-1)*m
     H = solver.H
     g = solver.g
+    dt = prob.dt
 
     part = (x=1:n, u=n .+ (1:m), z=1:n+m)
     part2 = (xx=(part.x, part.x), uu=(part.u, part.u), ux=(part.u, part.x), xu=(part.x, part.u))
@@ -104,8 +105,8 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
         # H[off .+ part.u, off .+ part.u] = Q[k].uu
         hess = PartedMatrix(view(H, off .+ part.z, off .+ part.z), part2)
         grad = PartedVector(view(g, off .+ part.z), part)
-        hessian!(hess, prob.obj[k], V.X[k], V.U[k])
-        gradient!(grad, prob.obj[k], V.X[k], V.U[k])
+        hessian!(hess, prob.obj[k], V.X[k], V.U[k], dt)
+        gradient!(grad, prob.obj[k], V.X[k], V.U[k], dt)
         off += n+m
     end
     H ./= (N-1)
@@ -357,13 +358,8 @@ function buildL(L::KKTFactors,y_part)
 end
 buildL(solver::SequentialNewtonSolver) = buildL(solver.L, dual_partition(solver))
 
-function buildY(solver::SequentialNewtonSolver)
+function buildY!(Y,solver::SequentialNewtonSolver)
     n,m,N = size(solver)
-    y_part = dual_partition(solver)
-    z_part = repeat([n,m],N-1)
-    push!(z_part,n)
-    NN = sum(z_part)
-    Pa = sum(y_part)
 
     # Get Active Jacobians
     xi,ui = 1:n, n .+ (1:m)
@@ -371,7 +367,6 @@ function buildY(solver::SequentialNewtonSolver)
     C = [solver.∇C[k][a[k],1:n] for k = 1:N]
     D = [solver.∇C[k][a[k],n+1:n+m] for k = 1:N-1]
 
-    Y = PseudoBlockArray(zeros(Pa,NN),y_part,z_part)
 
     Y[Block(1,1)] = Diagonal(I,n)
     for k = 1:N-1
@@ -383,4 +378,186 @@ function buildY(solver::SequentialNewtonSolver)
     end
     Y[Block(2N,2N-1)] = C[N]
     return Y
+end
+function buildY(solver::SequentialNewtonSolver)
+    y_part = dual_partition(solver)
+    z_part = repeat([n,m],N-1)
+    push!(z_part,n)
+    NN = sum(z_part)
+    Pa = sum(y_part)
+
+    Y = PseudoBlockArray(zeros(Pa,NN),y_part,z_part)
+    buildY!(Y,solver)
+    return Y
+end
+
+
+function buildS!(S,solver::SequentialNewtonSolver,C,D)
+    n,m,N = size(solver)
+    Qinv = solver.Qinv
+    Rinv = solver.Rinv
+    ∇F = view(solver.∇F,2:N)
+    p = sum.(solver.active_set)
+    pcum = insert!(cumsum(p), 1, 0)
+
+    dinds = 1:n
+    cinds = n .+ (1:p[1])
+    S[dinds,dinds] = Qinv[1]
+    S[dinds,n .+ dinds] = Qinv[1]*∇F[1].xx'
+    S[dinds,n .+ cinds] = Qinv[1]*C[1]'
+
+    for k = 1:N-1
+        off = pcum[k] + k*n
+        dinds = off .+ (1:n)
+        cinds = off + n .+ (1:p[k])
+        S[dinds,dinds] = ∇F[k].xx*Qinv[k]*∇F[k].xx' + ∇F[k].xu*Rinv[k]*∇F[k].xu' + Qinv[k+1]
+        S[dinds,cinds] = ∇F[k].xx*Qinv[k]*C[k]'     + ∇F[k].xu*Rinv[k]*D[k]'
+        S[cinds,cinds] = C[k]*Qinv[k]*C[k]'         + D[k]*Rinv[k]*D[k]'
+        if k < N-1
+            S[dinds,dinds .+ (p[k] + n)] = -Qinv[k+1]*∇F[k+1].xx'
+            S[dinds, (off + p[k] + 2n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        else
+            S[dinds, (off + p[k] + n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        end
+    end
+    off = pcum[N] + N*n
+    cinds = off .+ (1:p[N])
+    S[cinds,cinds] = C[N]*Qinv[N]*C[N]'
+    return S
+    return Symmetric(S)
+end
+function buildS(solver::SequentialNewtonSolver)
+    y_part = dual_partition(solver)
+
+    Pa = sum(y_part)
+    S = zeros(Pa,Pa)
+
+    C = [solver.∇C[k][a[k],1:n] for k = 1:N]
+    D = [solver.∇C[k][a[k],n+1:n+m] for k = 1:N-1]
+
+    buildS!(solver,C,D)
+    return S
+end
+
+function Sinds(solver::SequentialNewtonSolver)
+    n,m,N = size(solver)
+    y_part = dual_partition(solver)
+    inds = create_partition(Tuple(y_part))
+
+    A = [(0:0,0:0) for k = 1:N]
+    B = [(0:0,0:0) for k = 1:N]
+    C = [(0:0,0:0) for k = 1:N]
+    D = [(0:0,0:0) for k = 1:N]
+    E = [(0:0,0:0) for k = 1:N]
+
+    n,m,N = size(solver)
+    p = sum.(solver.active_set)
+    pcum = insert!(cumsum(p), 1, 0)
+
+    dinds = 1:n
+    cinds = n .+ (1:p[1])
+    A[1] = (dinds,dinds)
+    D[1] = (dinds,n .+ dinds)
+    E[1] = (dinds,n .+ cinds)
+
+    for k = 1:N-1
+        off = pcum[k] + k*n
+        dinds = off .+ (1:n)
+        cinds = off + n .+ (1:p[k])
+        A[k+1] = (dinds,dinds)
+        B[k+1] = (dinds,cinds)
+        C[k+1] = (cinds,cinds)
+        if k < N-1
+            D[k+1] = (dinds, dinds .+ (p[k] + n))
+            E[k+1] = (dinds, (off + p[k] + 2n) .+ (1:p[k+1]))
+        else
+            E[k+1] = (dinds, (off + p[k] + n) .+ (1:p[k+1]))
+        end
+    end
+    off = pcum[N] + N*n
+    cinds = off .+ (1:p[N])
+    C[1,1] = (cinds,cinds)
+    S_part = (A=A,B=B,C=C,D=D,E=E)
+end
+
+function buildS!(S, solver, A, B, C, D, inds::NamedTuple)
+    N = length(solver.Q)
+    Qinv = solver.Qinv
+    Rinv = solver.Rinv
+    ∇F = view(solver.∇F,2:N)
+
+    S[inds.A[1]...] = Qinv[1]
+    S[inds.D[1]...] = Qinv[1]*A[1]'
+    S[inds.E[1]...] = Qinv[1]*C[1]'
+
+    for k = 1:N-1
+        S[inds.A[k+1]...] = A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1]
+        S[inds.B[k+1]...] = A[k]*Qinv[k]*C[k]'     + B[k]*Rinv[k]*D[k]'
+        S[inds.C[k+1]...] = C[k]*Qinv[k]*C[k]'         + D[k]*Rinv[k]*D[k]'
+        if k < N-1
+            S[inds.D[k+1]...] = -Qinv[k+1]*∇F[k+1].xx'
+            S[inds.E[k+1]...] = -Qinv[k+1]*C[k+1]'
+        else
+            S[inds.E[k+1]...] = -Qinv[k+1]*C[k+1]'
+        end
+    end
+    S[inds.C[1]...] = C[N]*Qinv[N]*C[N]'
+    Symmetric(S)
+    return nothing
+    # return Symmetric(S)
+end
+
+
+
+
+
+function buildShurCompliment(prob::Problem, solver::SequentialNewtonSolver)
+    n,m,N = size(prob)
+
+    Qinv = solver.Qinv
+    Rinv = solver.Rinv
+
+    A = [F.xx for F in solver.∇F[2:end]]  # First jacobian is for initial condition
+    B = [F.xu for F in solver.∇F[2:end]]
+    C = [Array(F.x[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+    D = [Array(F.u[a,:]) for (F,a) in zip(solver.∇C, solver.active_set)]
+
+    P = num_active_constraints(solver)
+    S = spzeros(P,P)
+
+    _buildShurCompliment!(S, prob, solver, Qinv, Rinv, A, B, C, D)
+
+    return Symmetric(S)
+end
+
+function _buildShurCompliment!(S, prob::Problem, solver::SequentialNewtonSolver, Qinv, Rinv, A, B, C, D)
+    n,m,N = size(prob)
+
+    p = sum.(solver.active_set)
+    pcum = insert!(cumsum(p), 1, 0)
+
+    dinds = 1:n
+    cinds = n .+ (1:p[1])
+    S[dinds,dinds] = Qinv[1]
+    S[dinds,n .+ dinds] = Qinv[1]*A[1]'
+    S[dinds,n .+ cinds] = Qinv[1]*C[1]'
+
+    for k = 1:N-1
+        off = pcum[k] + k*n
+        dinds = off .+ (1:n)
+        cinds = off + n .+ (1:p[k])
+        S[dinds,dinds] = A[k]*Qinv[k]*A[k]' + B[k]*Rinv[k]*B[k]' + Qinv[k+1]
+        S[dinds,cinds] = A[k]*Qinv[k]*C[k]' + B[k]*Rinv[k]*D[k]'
+        S[cinds,cinds] = C[k]*Qinv[k]*C[k]' + D[k]*Rinv[k]*D[k]'
+        if k < N-1
+            S[dinds,dinds .+ (p[k] + n)] = -Qinv[k+1]*A[k+1]'
+            S[dinds, (off + p[k] + 2n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        else
+            S[dinds, (off + p[k] + n) .+ (1:p[k+1])] = -Qinv[k+1]*C[k+1]'
+        end
+    end
+    off = pcum[N] + N*n
+    cinds = off .+ (1:p[N])
+    S[cinds,cinds] = C[N]*Qinv[N]*C[N]'
+
 end
