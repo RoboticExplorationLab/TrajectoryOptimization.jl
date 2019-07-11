@@ -1,3 +1,17 @@
+
+
+############################
+#          SOLVE           #
+############################
+function solve!(prob::Problem, solver::ProjectedNewtonSolver)
+    V_ = newton_step!(prob, solver)
+    copyto!(prob.X, V_.X)
+    copyto!(prob.U, V_.U)
+    projection!(prob)
+    return solver
+end
+
+
 cost(prob::Problem, V::Union{PrimalDual,PrimalDualVars}) = cost(prob.obj, V.X, V.U, get_dt_traj(prob,V.U))
 
 ############################
@@ -5,10 +19,10 @@ cost(prob::Problem, V::Union{PrimalDual,PrimalDualVars}) = cost(prob.obj, V.X, V
 ############################
 function dynamics_constraints!(prob::Problem, solver::DirectSolver, V=solver.V)
     N = prob.N
-    X,U,dt = V.X, V.U, get_dt_traj(prob,V.U)
+    X,U,dt = V.X, V.U, get_dt_traj(prob, V.U)
     solver.fVal[1] .= V.X[1] - prob.x0
     for k = 1:N-1
-         evaluate!(solver.fVal[k+1], prob.model, X[k], U[k],dt[k])
+         evaluate!(solver.fVal[k+1], prob.model, X[k], U[k], dt[k])
          solver.fVal[k+1] .-= X[k+1]
      end
  end
@@ -267,6 +281,7 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
 
         # Calculate residual
         projection!(prob, solver, V_)
+        cost_expansion!(prob, solver, V_)
         res, = multiplier_projection!(prob, solver, V_)
         J = cost(prob, V_)
 

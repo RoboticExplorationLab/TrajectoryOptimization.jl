@@ -1,16 +1,17 @@
 const TO = TrajectoryOptimization
 using Test, LinearAlgebra
+using ForwardDiff
 
 
 # Set up Problem
 model = Dynamics.car_model
-costfun = Dynamics.car_costfun
+n,m = model.n, model.m
+N = 51
 Q = Diagonal(I,n)*0.01
 R = Diagonal(I,m)*0.01
-Qf = Diagonal(I,n)*1.0
+Qf = Diagonal(I,n)*0.01
 xf = [0,1,0]
-costfun = LQRCost(Q,R,Qf,xf)
-N = 51
+obj = LQRObjective(Q,R,Qf,xf,N)
 n,m = model.n, model.m
 bnd = BoundConstraint(n,m, x_min=[-0.5, -0.01, -Inf], x_max=[0.5, 1.01, Inf], u_min=[0.1,-2], u_max=1.5)
 bnd1 = BoundConstraint(n,m, u_min=bnd.u_min)
@@ -26,7 +27,7 @@ for k = 2:N-1
     con[k] += bnd  + obs1 + obs2
 end
 con[N] += goal
-prob = Problem(rk4(model), Objective(costfun, N), constraints=con, tf=3)
+prob = Problem(rk4(model), obj, constraints=con, tf=3)
 
 # Solve with ALTRO
 initial_controls!(prob, ones(m,N-1))
@@ -37,17 +38,16 @@ al.constraint_tolerance_intermediate = 1e-1
 solve!(prob, al)
 max_violation(prob)
 
-solver = SequentialNewtonSolver(prob, opts)
-solve(prob, solver)
-
-
 
 # Test Primal Dual variable
-opts = ProjectedNewtonSolverOptions{Float64}(verbose=false)
+opts = ProjectedNewtonSolverOptions{Float64}(verbose=true)
 solver = ProjectedNewtonSolver(prob,opts)
 NN = length(solver.V.Z)
 p = num_constraints(prob)
 P = sum(p) + N*n
+
+
+TO.newton_step!(prob, solver)
 
 V = copy(solver.V)
 Z = TO.primals(V)
@@ -82,6 +82,22 @@ TO.constraint_jacobian!(prob, solver)
 
 TO.cost_expansion!(prob, solver)
 
+
+# Check cost gradient and hessian
+solver = ProjectedNewtonSolver(prob,opts)
+V0 = copy(solver.V.V)
+TO.PrimalDual(V0,prob)
+TO.cost_expansion!(prob, solver)
+
+function evalcost(V)
+    cost(prob, TO.PrimalDual(V,prob))
+end
+@test evalcost(V0) == cost(prob, solver.V)
+@test ForwardDiff.gradient(evalcost, V0)[1:NN] ≈ solver.g
+@test solver.H[1:n,1:n] == Q*prob.dt
+@test solver.H[n .+ (1:m), n .+ (1:m)] == R*prob.dt
+@test solver.H[end-n+1:end, end-n+1:end] == Qf
+
 # Test Constraint Violation
 solver = ProjectedNewtonSolver(prob,opts)
 solver.opts.active_set_tolerance = 0.0
@@ -110,13 +126,20 @@ res, = TO.multiplier_projection!(prob, solver)
 @test res < res0
 
 # Build KKT
-V = solver.V
-V0 = copy(V)
+Hinv = inv(Diagonal(Array(solver.H)))
 TO.cost_expansion!(prob, solver)
 J0 = cost(prob, V)
 res0 = norm(TO.residual(prob, solver))
+@test res0 == res
 viol0 = max_violation(solver)
-δV = TO.solveKKT(prob, solver)
+TO.cost_expansion!(prob, solver)
+δV, = TO.solveKKT_Shur(prob, solver, Hinv)
+V_ = solver.V + 0.5*δV
+TO.projection!(prob, solver, V_)
+TO.cost_expansion!(prob, solver, V_)
+TO.multiplier_projection!(prob, solver, V_)
+
+
 V_ = TO.line_search(prob, solver, δV)
 res = norm(TO.residual(prob, solver, V_))
 @test res < res0
@@ -129,4 +152,16 @@ V_ = TO.newton_step!(prob, solver)
 TO.update!(prob, solver, V_)
 @test max_violation(solver) < 1e-10
 @test cost(prob, V_) < cost(prob, solver.V)
+cost(prob, V_) - cost(prob, solver.V)
 @test norm(TO.residual(prob, solver, V_)) < 1e-4
+
+using Plots
+
+plot()
+TO.plot_circle!(obs[1]...)
+TO.plot_circle!(obs[2]...)
+plot_trajectory!(prob.X)
+plot_trajectory!(V_.X)
+
+plot(prob.U)
+plot!(V_.U)
