@@ -115,8 +115,8 @@ p = num_constraints(prob)
 @test p == dircol.p
 
 # Cost gradient
-grad_f = zeros(NN)
-TO.cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
+# grad_f = zeros(NN)
+# TO.cost_gradient!(grad_f, prob, X, U, get_dt_traj(prob))
 
 # Z = Primals(Z, part_z)
 #
@@ -210,8 +210,8 @@ row, col = zeros(nG), zeros(nG)
 @test eval_f2(Z.Z) == eval_f(Z.Z)
 eval_g(Z.Z, g2)
 @test g ≈ g2
-eval_grad_f(Z.Z, grad_f2)
-@test grad_f ≈ grad_f2
+# eval_grad_f(Z.Z, grad_f2)
+# @test grad_f ≈ grad_f2
 
 eval_jac_g(Z.Z, :Structure, row, col, jac2)
 eval_jac_g(Z.Z, :Values, row, col, jac2)

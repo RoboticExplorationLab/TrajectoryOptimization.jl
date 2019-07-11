@@ -7,7 +7,7 @@ function solve!(prob::Problem, solver::ProjectedNewtonSolver)
     V_ = newton_step!(prob, solver)
     copyto!(prob.X, V_.X)
     copyto!(prob.U, V_.U)
-    projection!(prob)
+    # projection!(prob)
     return solver
 end
 
