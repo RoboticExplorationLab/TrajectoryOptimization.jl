@@ -20,9 +20,7 @@ include("../problems/car_escape.jl")
 include("../problems/car_3obs.jl")
 include("../problems/quadrotor_maze.jl")
 include("../problems/quadrotor_wall.jl")
-
-# include("../problems/kuka.jl")
-# include("../problems/kuka_obstacles.jl")
+include("../problems/kuka_obstacles.jl")
 
 export
     doubleintegrator_problem,
@@ -33,11 +31,13 @@ export
     acrobot_problem,
     car_escape_problem,
     car_3obs_problem,
-    quadrotor_maze_problem
-    # quadrotor_wall_problem
+    quadrotor_maze_problem,
+    quadrotor_wall_problem,
+    kuka_obstacles_problem
 
 export
     plot_escape,
-    plot_car_3obj
+    plot_car_3obj,
+    kuka_obstacles_objects
 
 end

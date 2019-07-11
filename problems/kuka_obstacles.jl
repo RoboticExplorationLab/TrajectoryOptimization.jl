@@ -1,10 +1,4 @@
-using MeshCatMechanisms
-using MeshCat
-using RigidBodyDynamics
-using GeometryTypes
-using CoordinateTransformations
-using TrajectoryOptimization
-
+# Kuka w/ obstacles
 model = Dynamics.kuka_model
 model_d = rk3(model)
 n,m = model.n, model.m
@@ -12,33 +6,9 @@ n,m = model.n, model.m
 T = Float64
 
 kuka = parse_urdf(Dynamics.urdf_kuka,remove_fixed_tree_joints=false)
-kuka_visuals = URDFVisuals(Dynamics.urdf_kuka)
-state = MechanismState(kuka)
-nn = num_positions(state)
+kuka_state = MechanismState(kuka)
+nn_kuka = num_positions(kuka_state)
 world = root_frame(kuka)
-
-# Create Visualizer
-vis = Visualizer()
-mvis = MechanismVisualizer(kuka, kuka_visuals, vis[:base])
-open(vis)
-# IJuliaCell(vis)
-green_ = MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0))
-red_ = MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0))
-body_collision = MeshPhongMaterial(color=RGBA(1, 0, 0, 0.5))
-blue_ = MeshPhongMaterial(color=RGBA(0, 0, 1, 0.5))
-orange_ = MeshPhongMaterial(color=RGBA(233/255, 164/255, 16/255, 1.0))
-black_ = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
-black_transparent = MeshPhongMaterial(color=RGBA(0, 0, 0, 0.1))
-
-function plot_sphere(vis::MechanismVisualizer,frame::CartesianFrame3D,center,radius,mat,name="")
-    geom = HyperSphere(Point3f0(center), convert(Float32,radius))
-    setelement!(vis,frame,geom,mat,name)
-end
-
-function plot_cylinder(vis::MechanismVisualizer,frame::CartesianFrame3D,c1,c2,radius,mat,name="")
-    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
-    setelement!(vis,frame,geom,mat,name)
-end
 
 # Collision Bubbles
 function kuka_points(kuka,plot=false)
@@ -68,7 +38,7 @@ end
 
 function calc_kuka_points(x::Vector{T},points) where T
     state = state_cache[T]
-    set_configuration!(state,x[1:nn])
+    set_configuration!(state,x[1:nn_kuka])
     [RigidBodyDynamics.transform(state,point,world).v for point in points]
 end
 
@@ -85,9 +55,6 @@ function generate_collision_constraint(kuka::Mechanism, circles, cylinders=[])
 
         # Get current world location of points along arm
         arm_points = calc_kuka_points(x[1:nn],points)
-        # println(size(c))
-        # println(num_points)
-        # println(num_obstacles)
         C = reshape(view(c,1:num_points*num_obstacles),num_points,num_obstacles)
         for i = 1:nCircle
             c_obstacle = view(C,1:num_points,i)
@@ -105,27 +72,12 @@ function generate_collision_constraint(kuka::Mechanism, circles, cylinders=[])
     end
 end
 
-function addcircles!(vis,circles)
-    world = root_frame(kuka)
-    for (i,circle) in enumerate(circles)
-        p = Point3D(world,collect(circle[1:3]))
-        setelement!(vis,p,circle[4],"obs$i")
-    end
-end
-
-function addcylinders!(vis,cylinders,height=1.5)
-    for (i,cyl) in enumerate(cylinders)
-        plot_cylinder(vis,world,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],blue_,"cyl_$i")
-    end
-end
-
 function hold_trajectory(n,m,N, mech::Mechanism, q)
     state = MechanismState(mech)
     nn = num_positions(state)
     set_configuration!(state, q[1:nn])
     vd = zero(state.q)
     u0 = dynamics_bias(state)
-
 
     if length(q) > m
         throw(ArgumentError("system must be fully actuated to hold an arbitrary position ($(length(q)) should be > $m)"))
@@ -141,18 +93,15 @@ ee_fun = Dynamics.get_kuka_ee_postition_fun(kuka)
 
 # Add obstacles
 d = 0.25
-circles2 = Vector{Float64}[]
-push!(circles2,[d,0.0,1.2,0.2])
-push!(circles2,[0,-d,0.4,0.15])
-push!(circles2,[0,-d,1.2,0.15])
-addcircles!(mvis,circles2)
+circles_kuka = Vector{Float64}[]
+push!(circles_kuka,[d,0.0,1.2,0.2])
+push!(circles_kuka,[0,-d,0.4,0.15])
+push!(circles_kuka,[0,-d,1.2,0.15])
 
-cylinders = [[d,-d,0.08],[d,d,0.08],[-d,-d,0.08]]
-addcylinders!(mvis,cylinders)
+cylinders_kuka = [[d,-d,0.08],[d,d,0.08],[-d,-d,0.08]]
 
 points,radii,frames = kuka_points(kuka,false)
 
-# Build the Objective
 x0 = zeros(n)
 x0[2] = pi/2
 x0[3] = pi/2
@@ -162,13 +111,13 @@ xf[1] = pi/2
 xf[4] = pi/2
 
 state_cache = StateCache(kuka)
-num_obstacles = length(circles2)+length(cylinders)
+num_obstacles = length(circles_kuka)+length(cylinders_kuka)
 c = zeros(length(points)*num_obstacles)
-cI_arm_obstacles = generate_collision_constraint(kuka,circles2,cylinders)
+cI_arm_obstacles = generate_collision_constraint(kuka,circles_kuka,cylinders_kuka)
 
 obs = Constraint{Inequality}(cI_arm_obstacles,n,m,length(points)*num_obstacles,:obs)
 bnd = BoundConstraint(n,m,u_min=-80.,u_max=80.,trim=true)
-con = [obs,bnd];
+con = [obs,bnd]
 
 Q = Diagonal([ones(7); ones(7)*100])
 Qf = 10.0*Diagonal(I,n)
@@ -177,34 +126,16 @@ tf = 5.0
 xf_ee = Dynamics.end_effector_function(xf)
 x0_ee = Dynamics.end_effector_function(x0)
 
-verbose=false
-opts_ilqr = iLQRSolverOptions{T}(verbose=true,iterations=300,live_plotting=:off)
-
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,opts_uncon=opts_ilqr,
-    iterations=20,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1.0e-5,constraint_tolerance=1.0e-3,penalty_scaling=50.,penalty_initial=0.01)
-
-opts_altro = ALTROSolverOptions{T}(verbose=true,resolve_feasible_problem=false,opts_al=opts_al,R_inf=0.01);
-
 N = 41 # number of knot points
-dt = 0.01 # total time
+dt = tf/(N-1)
 
 U_hold = hold_trajectory(n,m,N, kuka, x0[1:7])
-obj = LQRObjective(Q,R,Qf,xf,N) # objective with same stagewise costs
+obj = LQRObjective(Q,R,Qf,xf,N)
 
-constraints = Constraints(con,N) # constraint trajectory
+constraints = Constraints(con,N)
 goal = goal_constraint(xf)
-prob = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
-prob.constraints[N] += goal
-initial_controls!(prob, U_hold); # initialize problem with controls
+kuka_obstacles_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt, constraints=constraints)
+kuka_obstacles_problem.constraints[N] += goal
+initial_controls!(kuka_obstacles_problem, U_hold)
 
-p1, s1 = solve(prob, opts_altro)
-p1.X
-q = [p1.X[k][1:7] for k = 1:N]
-t = range(0,stop=tf,length=N)
-
-setanimation!(mvis,t,q)
-
-
-set_configuration!(mvis,xf[1:7])
-
-xf
+kuka_obstacles_objects = (circles_kuka,cylinders_kuka)
