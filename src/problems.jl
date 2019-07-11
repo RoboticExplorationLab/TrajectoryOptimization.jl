@@ -19,7 +19,6 @@ include("../problems/acrobot.jl")
 include("../problems/car_escape.jl")
 include("../problems/car_3obs.jl")
 include("../problems/quadrotor_maze.jl")
-include("../problems/quadrotor_wall.jl")
 include("../problems/kuka_obstacles.jl")
 
 export
@@ -32,12 +31,12 @@ export
     car_escape_problem,
     car_3obs_problem,
     quadrotor_maze_problem,
-    quadrotor_wall_problem,
     kuka_obstacles_problem
 
 export
     plot_escape,
     plot_car_3obj,
+    quadrotor_maze_objects,
     kuka_obstacles_objects
 
 end

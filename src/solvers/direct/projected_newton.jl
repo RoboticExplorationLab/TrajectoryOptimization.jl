@@ -108,8 +108,8 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
         gradient!(grad, prob.obj[k], V.X[k], V.U[k])
         off += n+m
     end
-    H ./= (N-1)
-    g ./= (N-1)
+    H .*= prob.dt
+    g .*= prob.dt
     hess = PartedMatrix(view(H, off .+ part.x, off .+ part.x), part2)
     grad = PartedVector(view(g, off .+ part.x), part)
     hessian!(hess, prob.obj[N], V.X[N])

@@ -16,6 +16,7 @@ xf[1:3] = [0.;60.; 10.]
 xf[4:7] = q0;
 
 # cost
+# cost
 Q = (1.0e-4)*Diagonal(I,n)
 R = (1.0e-3)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
@@ -24,7 +25,7 @@ Qf = 1000.0*Diagonal(I,n)
 # Qf = 1000.0*Diagonal(I,n)
 
 # constraints
-r_quad_maze = 2.
+r_quad_maze = 1.0
 r_cylinder_maze = 2.
 maze_cylinders = []
 zh = 3
@@ -72,7 +73,7 @@ end
 maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
-u_max = 25.
+u_max = 10.
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 
@@ -83,7 +84,7 @@ bnd = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max,trim=t
 goal = goal_constraint(xf)
 
 
-N = 121 # number of knot points
+N = 101 # number of knot points
 tf = 5.0
 dt = tf/(N-1) # total time
 
@@ -103,3 +104,5 @@ X_guess[1:3,2:6] .= [0 -12.5 -20 -12.5 0 ;15 20 30 40 45 ;10 10 10 10 10]
 X_guess[4:7,:] .= q0
 X0 = interp_rows(N,tf,X_guess);
 copyto!(quadrotor_maze_problem.X,X0)
+
+quadrotor_maze_objects = maze_cylinders

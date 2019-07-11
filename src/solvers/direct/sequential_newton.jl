@@ -255,10 +255,10 @@ end
 
 function cost_expansion!(prob::Problem, solver::SequentialNewtonSolver, V=solver.V)
     N = prob.N
-    X,U = V.X, V.U
+    X,U, H = V.X, V.U, get_dt_traj(prob,V.U)
     for k = 1:N-1
-        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k])
-        solver.Q[k] / (N-1)
+        cost_expansion!(solver.Q[k], prob.obj[k], X[k], U[k], H[k])
+        solver.Q[k]
     end
     cost_expansion!(solver.Q[N], prob.obj[N], X[N])
 end

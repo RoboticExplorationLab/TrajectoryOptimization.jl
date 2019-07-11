@@ -8,9 +8,9 @@ verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,constraint_tolerance=1.0e-3,penalty_scaling=10.,penalty_initial=1.)
+    cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,constraint_tolerance=1.0e-6,penalty_scaling=10.,penalty_initial=1.)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al);
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,projected_newton=true,opts_al=opts_al);
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>1.0e-3,:constr_viol_tol=>1.0e-3))
 
