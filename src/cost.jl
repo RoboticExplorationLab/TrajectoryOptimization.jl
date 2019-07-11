@@ -188,11 +188,11 @@ function gradient!(grad, cost::QuadraticCost, xN::AbstractVector)
 end
 
 function hessian!(hess, cost::QuadraticCost,
-        x::AbstractVector, u::AbstractVector)
-    hess.xx .= cost.Q
-    hess.uu .= cost.R
-    hess.ux .= cost.H
-    hess.xu .= cost.H'
+        x::AbstractVector, u::AbstractVector, dt)
+    hess.xx .= cost.Q*dt
+    hess.uu .= cost.R*dt
+    hess.ux .= cost.H*dt
+    hess.xu .= cost.H'*dt
     return nothing
 end
 
