@@ -484,7 +484,6 @@ function buildS!(S, solver, A, B, C, D, inds::NamedTuple)
     N = length(solver.Q)
     Qinv = solver.Qinv
     Rinv = solver.Rinv
-    ∇F = view(solver.∇F,2:N)
 
     S[inds.A[1]...] = Qinv[1]
     S[inds.D[1]...] = Qinv[1]*A[1]'
@@ -495,7 +494,7 @@ function buildS!(S, solver, A, B, C, D, inds::NamedTuple)
         S[inds.B[k+1]...] = A[k]*Qinv[k]*C[k]'     + B[k]*Rinv[k]*D[k]'
         S[inds.C[k+1]...] = C[k]*Qinv[k]*C[k]'         + D[k]*Rinv[k]*D[k]'
         if k < N-1
-            S[inds.D[k+1]...] = -Qinv[k+1]*∇F[k+1].xx'
+            S[inds.D[k+1]...] = -Qinv[k+1]*A[k+1]'
             S[inds.E[k+1]...] = -Qinv[k+1]*C[k+1]'
         else
             S[inds.E[k+1]...] = -Qinv[k+1]*C[k+1]'

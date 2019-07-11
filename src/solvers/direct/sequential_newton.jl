@@ -64,8 +64,8 @@ struct SequentialNewtonSolver{T} <: DirectSolver{T}
     Rinv::Vector{Diagonal{T,Vector{T}}}
     fVal::Vector{Vector{T}}
     ∇F::Vector{PartedArray{T,2,Matrix{T},P}} where P
-    C#::PartedVecTrajectory{T}
-    ∇C#::Vector{PartedArray{T,2,Matrix{T},P} where P}
+    C::PartedVecTrajectory{T}
+    ∇C::Vector{PartedArray{T,2,Matrix{T},P} where P}
     active_set::Vector{Vector{Bool}}
     p::Vector{Int}
 end
@@ -132,7 +132,7 @@ end
 
 function num_active_constraints(solver::SequentialNewtonSolver)
     n,m,N = size(solver)
-    sum(sum.(solver.active)) + N*n
+    sum(sum.(solver.active_set)) + N*n
 end
 
 """
