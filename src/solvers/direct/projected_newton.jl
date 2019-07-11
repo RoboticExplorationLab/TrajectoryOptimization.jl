@@ -211,6 +211,48 @@ function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, a
     end
 end
 
+function primaldual_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, active_set_update=true)
+    Z = primals(V)
+    λ = duals(V)
+    a = solver.a.duals
+    eps_feasible = solver.opts.feasibility_tolerance
+    count = 0
+    # cost_expansion!(prob, solver, V)
+    H = Diagonal(solver.H)
+    while true
+        dynamics_constraints!(prob, solver, V)
+        update_constraints!(prob, solver, V)
+        dynamics_jacobian!(prob, solver, V)
+        constraint_jacobian!(prob, solver, V)
+        if active_set_update
+            active_set!(prob, solver)
+        end
+        Y,y = active_constraints(prob, solver)
+        HinvY = H\Y'
+
+        viol = norm(y,Inf)
+        if solver.opts.verbose
+            println("feas: ", viol)
+        end
+        if viol < eps_feasible || count > 10
+            break
+        else
+            λa = view(λ,a)
+
+            S = cholesky(Symmetric(Y*HinvY))
+            δλ = S\y
+            δZ = -HinvY*δλ
+
+            Z .+= δZ
+            λa .+= δλ
+            count += 1
+
+            solver.stats[:S] = S
+        end
+    end
+end
+
+
 function multiplier_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     g = solver.g
     a = solver.a.duals
@@ -239,6 +281,7 @@ function solveKKT(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V)
     return δV
 end
 
+using SuiteSparse
 function solveKKT_Shur(prob::Problem, solver::ProjectedNewtonSolver, Hinv, V=solver.V)
     a = solver.a
     δV = zero(V.V)
@@ -248,8 +291,7 @@ function solveKKT_Shur(prob::Problem, solver::ProjectedNewtonSolver, Hinv, V=sol
     r = g + Y'λ
 
     YHinv = Y*Hinv
-    S0 = Symmetric(YHinv*Y')
-    L = cholesky(S0)
+    L = solver.stats[:S]::SuiteSparse.CHOLMOD.Factor{Float64}
     δλ = L\(y-YHinv*r)
     δz = -Hinv*(r+Y'δλ)
 
@@ -304,8 +346,6 @@ end
 
 
 
-
-
 function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     V = solver.V
     verbose = solver.opts.verbose
@@ -319,8 +359,8 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
 
     # Projection
     verbose ? println("\nProjection:") : nothing
-    projection!(prob, solver)
-    update!(prob, solver)
+    primaldual_projection!(prob, solver)
+    cost_expansion!(prob, solver)
     multiplier_projection!(prob, solver)
 
     # Solve KKT
