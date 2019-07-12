@@ -61,8 +61,8 @@ function gen_stage_cost_gradient_min_time(prob::Problem,R_min_time::T) where T
 
     dgdx(obj,y,x,v,u,h) = h/6*(dℓdx(obj,x,u) + 4*dxmdx(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)))
     dgdy(obj,y,x,v,u,h) = h/6*(4.0*dxmdy(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v))+ dℓdx(obj,y,v))
-    dgdu(obj,y,x,v,u,h) = h/6*(dℓdu(obj,x,u) + 4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))))
-    dgdv(obj,y,x,v,u,h) = h/6*(4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))) + dℓdu(obj,y,v))
+    dgdu(obj,y,x,v,u,h) = h/6*(dℓdu(obj,x,u) + 4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + 0.5*dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))))
+    dgdv(obj,y,x,v,u,h) = h/6*(4*(dxmdv(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + 0.5*dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))) + dℓdu(obj,y,v))
     dgdh(obj,y,x,v,u,h) = 1/6*(stage_cost(obj,x,u) + 4*stage_cost(obj,xm(y,x,v,u,h),0.5*(u+v)) + stage_cost(obj,y,v)) + 4*h/6*dxmdh(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + R_min_time
 
     nn = 2*(n+m) + 1

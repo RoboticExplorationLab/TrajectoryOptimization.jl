@@ -3,8 +3,8 @@ using BenchmarkTools, Plots, SNOPT7
 T = Float64
 
 # options
-max_con_viol = 1.0e-6
-verbose=true
+max_con_viol = 1.0e-8
+verbose=false
 
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
@@ -13,7 +13,7 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,projected_newton=true,projected_newton_tolerance=1.0e-6,opts_al=opts_al,opts_pn=opts_pn);
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,projected_newton=true,projected_newton_tolerance=1.0e-3,opts_al=opts_al,opts_pn=opts_pn);
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
