@@ -108,6 +108,7 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
     H = solver.H
     g = solver.g
     dt = get_dt_traj(prob,V.U)
+
     part = (x=1:n, u=n .+ (1:m), z=1:n+m)
     part2 = (xx=(part.x, part.x), uu=(part.u, part.u), ux=(part.u, part.x), xu=(part.x, part.u))
     off = 0
@@ -180,6 +181,125 @@ function calc_violations(solver::ProjectedNewtonSolver{T}) where T
     return v
 end
 
+function projection_solve!(prob, solver, V=solver.V, active_set_update=true)
+    eps_feasible = solver.opts.feasibility_tolerance
+    viol = norm(solver.y[solver.a.duals], Inf)
+    max_projection_iters = 10
+
+    count = 0
+    while count < max_projection_iters && viol > eps_feasible
+        viol = _projection_solve!(prob, solver, V, active_set_update)
+    end
+    return viol
+end
+
+
+function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
+        V=solver.V, active_set_update=true)
+    Z = primals(V)
+    λ = duals(V)
+    a = solver.a.duals
+    max_refinements = 10
+    convergence_rate_threshold = 1.1
+    ρ = 1e-4
+
+    # cost_expansion!(prob, solver, V)
+    H = Diagonal(solver.H)
+
+    dynamics_constraints!(prob, solver, V)
+    update_constraints!(prob, solver, V)
+    dynamics_jacobian!(prob, solver, V)
+    constraint_jacobian!(prob, solver, V)
+    if active_set_update
+        active_set!(prob, solver)
+    end
+    Y,y = active_constraints(prob, solver)
+    viol0 = norm(y,Inf)
+    if solver.opts.verbose
+        println("feas0: $viol0")
+    end
+
+    HinvY = H\Y'
+    S = Symmetric(Y*HinvY)
+    Sreg = cholesky(S + ρ*I)
+    viol_prev = viol0
+    count = 0
+    while count < max_refinements
+        viol = _projection_linesearch!(prob, solver, V, (S,Sreg), HinvY)
+        convergence_rate = log10(viol)/log10(viol_prev)
+        viol_prev = viol
+        count += 1
+
+        if solver.opts.verbose
+            println("conv rate: $convergence_rate")
+        end
+
+        if convergence_rate < convergence_rate_threshold ||
+                       viol < solver.opts.feasibility_tolerance
+            break
+        end
+        count += 1
+    end
+    return viol_prev
+end
+
+function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
+        V, S, HinvY)
+    a = solver.a.duals
+    y = solver.y[a]
+    viol0 = norm(y,Inf)
+    viol = Inf
+    ρ = 1e-4
+
+    Z = primals(V)
+    V_ = copy(V)
+    Z_ = primals(V_)
+    α = 1.0
+    ϕ = 0.5
+    count = 1
+    while true
+        δλ = reg_solve(S[1],y,S[2])
+        δZ = -HinvY*δλ
+        Z_ .= Z + α*δZ
+
+        dynamics_constraints!(prob, solver, V_)
+        update_constraints!(prob, solver, V_)
+        y = solver.y[a]
+        viol = norm(y,Inf)
+
+        if solver.opts.verbose
+            println("feas: $viol")
+        end
+        if viol < viol0 || count > 10
+            break
+        else
+            count += 1
+            α *= ϕ
+        end
+    end
+    copyto!(Z,Z_)
+    return viol
+end
+
+reg_solve(A, b, reg::Real, tol=1e-10, max_iters=10) = reg_solve(A, b, A + reg*I, tol, max_iters)
+function reg_solve(A, b, B, tol=1e-10, max_iters=10)
+    x = B\b
+    count = 0
+    while count < max_iters
+        r = b - A*x
+        if norm(r) < tol
+            break
+        else
+            x += B\r
+            count += 1
+        end
+    end
+    println("iters = $count")
+    return x
+end
+
+
+
 function projection!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, active_set_update=true)
     Z = primals(V)
     eps_feasible = solver.opts.feasibility_tolerance
@@ -235,6 +355,9 @@ function primaldual_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=
             println("feas: ", viol)
         end
         if viol < eps_feasible || count > 10
+            if count == 0
+                solver.stats[:S] = cholesky(Symmetric(Y*HinvY))
+            end
             break
         else
             λa = view(λ,a)
