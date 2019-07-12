@@ -24,7 +24,7 @@ xf = Problems.pendulum_problem.xf
 N = Problems.pendulum_problem.N
 goal = goal_constraint(xf)
 
-# ALTRO w/o Newton
+# ALTRO w/ Newton
 prob_altro = copy(Problems.pendulum_problem)
 prob_altro.constraints[N] += goal
 @time p1, s1 = solve(prob_altro, opts_altro)
