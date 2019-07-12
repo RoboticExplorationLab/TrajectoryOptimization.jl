@@ -6,7 +6,7 @@ n = model.n; m = model.m
 
 # costs
 Q = 1.0*Diagonal(I,n)
-Qf = 0.0*Diagonal(I,n)
+Qf = 1.0*Diagonal(I,n)
 R = 1.0e-1*Diagonal(I,m)
 x0 = [0; 0.]
 xf = [1.; 0] # (ie, swing up)

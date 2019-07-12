@@ -4,23 +4,25 @@ using MeshCatMechanisms, MeshCat, GeometryTypes
 T = Float64
 
 # options
+max_con_viol = 1.0e-8
 verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,iterations=300,live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    iterations=20,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1.0e-5,constraint_tolerance=1.0e-3,penalty_scaling=50.,penalty_initial=0.01)
+    iterations=20,cost_tolerance=1.0e-6,cost_tolerance_intermediate=1.0e-5,constraint_tolerance=max_con_viol,penalty_scaling=50.,penalty_initial=0.01)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,resolve_feasible_problem=false,opts_al=opts_al,R_inf=0.01);
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-3);
 
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>1.0e-3,:constr_viol_tol=>1.0e-3))
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>1.0e-3,
-        :Major_feasibility_tolerance=>1.0e-3, :Minor_feasibility_tolerance=>1.0e-3))
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
+        :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
 
 
 # ALTRO w/o Newton
 prob_altro = copy(Problems.kuka_obstacles_problem)
-p1, s1 = solve(prob_altro, opts_altro)
+@time p1, s1 = solve(prob_altro, opts_altro)
 # @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation(p1)
 plot(p1.X,title="Kuka state (ALTRO)")
@@ -30,7 +32,7 @@ plot(p1.U,title="Kuka control (ALTRO)")
 prob_ipopt = copy(Problems.kuka_obstacles_problem)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.kuka_model)
-p2, s2 = solve(prob_ipopt, opts_ipopt)
+@time p2, s2 = solve(prob_ipopt, opts_ipopt)
 # @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation(p2)
 plot(p2.X,title="Kuka state (Ipopt)")
@@ -40,7 +42,7 @@ plot(p2.U,title="Kuka control (Ipopt)")
 prob_snopt = copy(Problems.kuka_obstacles_problem)
 rollout!(prob_snopt)
 prob_snopt = update_problem(prob_snopt,model=Dynamics.kuka_model) # get continuous time model
-p3, s3 = solve(prob_snopt, opts_snopt)
+@time p3, s3 = solve(prob_snopt, opts_snopt)
 # @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation(p3)
 plot(p3.X,title="Kuka state (SNOPT)")
@@ -87,4 +89,4 @@ function visualize_kuka_obstacles(prob,circles_kuka,cylinders_kuka)
     setanimation!(mvis,t,q)
 end
 
-visualize_kuka_obstacles(p3,Problems.kuka_obstacles_objects[1],Problems.kuka_obstacles_objects[2])
+visualize_kuka_obstacles(p1,Problems.kuka_obstacles_objects[1],Problems.kuka_obstacles_objects[2])
