@@ -32,7 +32,7 @@ initial_controls!(prob, ones(m,N-1))
 ilqr = iLQRSolverOptions()
 al = AugmentedLagrangianSolverOptions(opts_uncon=ilqr)
 al.penalty_initial = 0.001
-al.constraint_tolerance = 1e-3
+al.constraint_tolerance = 1e-2
 al.constraint_tolerance_intermediate = 1e-2
 al.verbose = true
 res, = solve(prob, al)
@@ -59,14 +59,17 @@ viol0 = norm(y,Inf)
 HinvY = Diagonal(solver.H)\Y'
 S = cholesky(Symmetric(Y*HinvY))
 
-solver.opts.feasibility_tolerance = 1e-10
+solver.opts.feasibility_tolerance = 1e-12
 solver.opts.verbose = true
+solver.opts.active_set_tolerance = 1e-6
 begin
     copyto!(solver.V.V, V0)
     TO.update!(res, solver)
     TO.projection_solve!(prob, solver)
 end
-TO._projection_solve!(prob, solver)
+copyto!(solver.V.V, V0)
+TO.update!(res, solver)
+TO._projection_solve!(prob, solver, solver.V, true)
 TO._projection_linesearch!(prob, solver, solver.V, S, Hinv*Y')
 
 dZ = -Hinv*Y'*(S\y)
