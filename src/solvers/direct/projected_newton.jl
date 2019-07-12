@@ -202,7 +202,7 @@ function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
     a = solver.a.duals
     max_refinements = 10
     convergence_rate_threshold = 1.1
-    ρ = 1e-4
+    ρ = 1e-2
 
     # cost_expansion!(prob, solver, V)
     H = Diagonal(solver.H)
@@ -239,7 +239,6 @@ function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
                        viol < solver.opts.feasibility_tolerance
             break
         end
-        count += 1
     end
 
     solver.stats[:S] = Sreg
@@ -261,7 +260,7 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
     ϕ = 0.5
     count = 1
     while true
-        δλ = reg_solve(S[1],y,S[2])
+        δλ = reg_solve(S[1],y,S[2],1e-8,20)
         δZ = -HinvY*δλ
         Z_ .= Z + α*δZ
 
