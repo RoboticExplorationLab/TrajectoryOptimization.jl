@@ -24,7 +24,7 @@ include("../problems/kuka_obstacles.jl")
 export
     doubleintegrator_problem,
     pendulum_problem,
-    box_parallel_park_problem,
+    parallel_park_problem,
     cartpole_problem,
     doublependulum_problem,
     acrobot_problem,

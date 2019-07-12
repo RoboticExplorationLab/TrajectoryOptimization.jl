@@ -1,4 +1,4 @@
-# Box parallel park
+# parallel park
 T = Float64
 
 # model
@@ -16,9 +16,11 @@ R = (1e-2)*Diagonal(I,m)
 
 # constraints
 u_bnd = 2.
-x_min = [-0.25; -0.001; -Inf]
-x_max = [0.25; 1.001; Inf]
-bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+# x_min = [-0.25; -0.001; -Inf]
+# x_max = [0.25; 1.001; Inf]
+# bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
+
 
 goal_con = goal_constraint(xf)
 
@@ -29,5 +31,5 @@ obj = LQRObjective(Q,R,Qf,xf,N)
 constraints = Constraints([bnd],N)
 dt = 0.06
 
-box_parallel_park_problem = Problem(model_d,obj,U,constraints=copy(constraints),dt=dt,x0=x0,xf=xf)
-box_parallel_park_problem.constraints[N] += goal_con
+parallel_park_problem = Problem(model_d,obj,U,constraints=copy(constraints),dt=dt,x0=x0,xf=xf)
+parallel_park_problem.constraints[N] += goal_con
