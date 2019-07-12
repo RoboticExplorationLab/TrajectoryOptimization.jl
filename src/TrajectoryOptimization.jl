@@ -17,6 +17,7 @@ using LinearAlgebra
 using Statistics
 using Random
 using SparseArrays
+using SuiteSparse
 using StaticArrays
 using Logging
 using Formatting
