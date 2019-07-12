@@ -141,27 +141,7 @@ res, = TO.multiplier_projection!(prob, solver)
 TO.duals(solver.V)[solver.a.duals]
 typeof(cholesky(Symmetric(Y*Hinv*Y')))
 
-solver.opts.verbose = false
-@btime begin
-    copyto!($solver.V.V, $V0)
-    TO.projection!($prob, $solver)
-end
 
-@btime begin
-    copyto!($solver.V.V, $V0)
-    TO.primaldual_projection!($prob, $solver)
-end
-begin
-    copyto!(solver.V.V, V0)
-    TO.primaldual_projection!(prob, solver)
-    res, = TO.multiplier_projection!(prob, solver)
-end
-begin
-    copyto!(solver.V.V, V0)
-    TO.projection!(prob, solver)
-    res, = TO.multiplier_projection!(prob, solver)
-end
-zero(TO.duals(solver.V))
 
 # Build KKT
 Hinv = inv(Diagonal(Array(solver.H)))
