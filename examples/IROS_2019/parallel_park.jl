@@ -12,10 +12,10 @@ opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
     iterations=30,penalty_scaling=10.0,constraint_tolerance=max_con_viol)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=1.0e-6)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_time=10.0,
-    dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-3)
+    dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-5)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 

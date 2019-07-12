@@ -189,6 +189,7 @@ function projection_solve!(prob, solver, V=solver.V, active_set_update=true)
     count = 0
     while count < max_projection_iters && viol > eps_feasible
         viol = _projection_solve!(prob, solver, V, active_set_update)
+        count += 1
     end
     return viol
 end
@@ -240,6 +241,8 @@ function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
         end
         count += 1
     end
+
+    solver.stats[:S] = Sreg
     return viol_prev
 end
 
@@ -339,6 +342,7 @@ function primaldual_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=
     count = 0
     # cost_expansion!(prob, solver, V)
     H = Diagonal(solver.H)
+
     while true
         dynamics_constraints!(prob, solver, V)
         update_constraints!(prob, solver, V)
@@ -442,10 +446,11 @@ function line_search(prob::Problem, solver::ProjectedNewtonSolver, δV)
     solver.opts.verbose ? println("res0: $res0") : nothing
     while count < 10
         V_ = solver.V + α*δV
-        # projection!(prob, solver, V_)
 
         # Calculate residual
         projection!(prob, solver, V_)
+        # projection_solve!(prob, solver, V_)
+
         cost_expansion!(prob, solver, V_)
         res, = multiplier_projection!(prob, solver, V_)
         J = cost(prob, V_)
@@ -482,7 +487,13 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
 
     # Projection
     verbose ? println("\nProjection:") : nothing
-    primaldual_projection!(prob, solver)
+    # primaldual_projection!(prob, solver)
+    projection_solve!(prob, solver)
+
+    if solver.opts.solve_type == :feasible
+        return solver.V
+    end
+
     cost_expansion!(prob, solver)
     multiplier_projection!(prob, solver)
 

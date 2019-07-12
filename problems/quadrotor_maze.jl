@@ -79,8 +79,8 @@ x_min = -Inf*ones(model.n)
 
 x_max[1:3] = [25.0; Inf; 20]
 x_min[1:3] = [-25.0; -Inf; 0.]
-bnd = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max,trim=true)
-
+bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
+bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
 goal = goal_constraint(xf)
 
 
@@ -90,10 +90,14 @@ dt = tf/(N-1) # total time
 
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
-constraints = Constraints([bnd,maze],N) # constraint trajectory
+constraints = Constraints(N) # constraint trajectory
+constraints[1] += bnd1
+for k = 2:N-1
+    constraints[k] += bnd2 + maze
+end
+constraints[N] += goal
 
 quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-quadrotor_maze_problem.constraints[N] += goal
 initial_controls!(quadrotor_maze_problem,U_hover); # initialize problem with controls
 
 X_guess = zeros(n,7)

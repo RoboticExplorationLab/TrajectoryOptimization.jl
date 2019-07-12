@@ -4,20 +4,24 @@ using FileIO, MeshIO, GeometryTypes, CoordinateTransformations
 T = Float64
 
 # options
-verbose=true
+max_con_viol = 1.0e-8
+verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,iterations=300,live_plotting=:off,square_root=false)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    iterations=40,cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,constraint_tolerance=1.0e-3,penalty_scaling=10.,penalty_initial=1.)
+    iterations=40,cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,constraint_tolerance=max_con_viol,penalty_scaling=10.,penalty_initial=1.)
 
-opts_altro
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>1.0e-3,:constr_viol_tol=>1.0e-3))
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol, solve_type=:optimal)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>1.0e-3,
-        :Major_feasibility_tolerance=>1.0e-3, :Minor_feasibility_tolerance=>1.0e-3))
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-3,resolve_feasible_problem=false,opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-3);
+
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
+        :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
 
 
-# ALTRO w/o Newton
+# ALTRO w Newton
 prob_altro = copy(Problems.quadrotor_maze_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 # @benchmark p1, s1 = solve($prob_altro, $opts_altro)

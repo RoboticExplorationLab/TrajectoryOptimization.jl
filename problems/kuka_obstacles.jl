@@ -115,9 +115,6 @@ num_obstacles = length(circles_kuka)+length(cylinders_kuka)
 c = zeros(length(points)*num_obstacles)
 cI_arm_obstacles = generate_collision_constraint(kuka,circles_kuka,cylinders_kuka)
 
-obs = Constraint{Inequality}(cI_arm_obstacles,n,m,length(points)*num_obstacles,:obs)
-bnd = BoundConstraint(n,m,u_min=-80.,u_max=80.,trim=true)
-con = [obs,bnd]
 
 Q = Diagonal([ones(7); ones(7)*100])
 Qf = 10.0*Diagonal(I,n)
@@ -132,10 +129,17 @@ dt = tf/(N-1)
 U_hold = hold_trajectory(n,m,N, kuka, x0[1:7])
 obj = LQRObjective(Q,R,Qf,xf,N)
 
-constraints = Constraints(con,N)
+obs = Constraint{Inequality}(cI_arm_obstacles,n,m,length(points)*num_obstacles,:obs)
+bnd = BoundConstraint(n,m,u_min=-80.,u_max=80.,trim=true)
 goal = goal_constraint(xf)
+constraints = Constraints(N)
+constraints[1] += bnd
+for k = 2:N-1
+    constraints[k] += bnd + obs
+end
+constraints[N] += goal
+
 kuka_obstacles_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt, constraints=constraints)
-kuka_obstacles_problem.constraints[N] += goal
 initial_controls!(kuka_obstacles_problem, U_hold)
 
 kuka_obstacles_objects = (circles_kuka,cylinders_kuka)

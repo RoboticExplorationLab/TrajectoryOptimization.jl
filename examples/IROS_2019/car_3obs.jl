@@ -12,7 +12,7 @@ opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-2,constraint_tolerance=max_con_viol,penalty_scaling=50.,penalty_initial=10.)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-3);
 
@@ -24,7 +24,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Majo
 x0 = Problems.car_3obs_problem.x0
 xf = Problems.car_3obs_problem.xf
 
-# ALTRO w/o Newton
+# ALTRO w/ Newton
 prob_altro = copy(Problems.car_3obs_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 # @benchmark p1, s1 = solve($prob_altro, $opts_altro)
@@ -50,3 +50,4 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 max_violation(p3)
 
 Problems.plot_car_3obj(p3.X,x0,xf)
+plot(p3.U)

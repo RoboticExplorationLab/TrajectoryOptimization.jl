@@ -47,17 +47,20 @@ function cI_escape(c,x,u)
 end
 
 trap = Constraint{Inequality}(cI_escape,n,m,n_circles_escape,:trap)
-
 goal = goal_constraint(xf)
 
 N = 101
 tf = 3.0
 U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
-constraints = Constraints([trap],N)
+
+constraints = Constraints(N)
+for k = 2:N-1
+    constraints[k] += trap
+end
+constraints[N] += goal
 
 car_escape_problem = Problem(model_d,obj,constraints=constraints,N=N,tf=tf,x0=x0,xf=xf)
-car_escape_problem.constraints[N] += goal
 initial_controls!(car_escape_problem, U);
 
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]

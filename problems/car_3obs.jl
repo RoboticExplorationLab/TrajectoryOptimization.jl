@@ -34,11 +34,15 @@ U = [0.01*ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 obj = LQRObjective(Q,R,Qf,xf,N) # objective with same stagewise costs
-constraints = Constraints([obs],N) # constraints at each stage
+
 goal = goal_constraint(xf)
+constraints = Constraints(N) # constraints at each stage
+for k = 2:N-1
+    constraints[k] += obs
+end
+constraints[N] += goal
 
 car_3obs_problem = Problem(model_d,obj, constraints=constraints, x0=x0, N=N, dt=dt, xf=xf)
-car_3obs_problem.constraints[N] += goal
 
 initial_controls!(car_3obs_problem,U); # initialize problem with controls
 

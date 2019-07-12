@@ -14,6 +14,9 @@ include("primals.jl")
     "Print output to console"
     verbose::Bool = true
 
+    "Solve type, feasibile or optimal"
+    solve_type::Symbol = :feasible
+
     "Tolerance for checking active inequality constraints. Positive values move the boundary further into the feasible region (i.e. negative)"
     active_set_tolerance = 1e-3
 
