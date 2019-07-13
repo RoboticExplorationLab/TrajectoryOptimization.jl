@@ -45,12 +45,3 @@ To set up and solve a trajectory optimization problem with `TrajectoryOptimizati
 5) Select a solver
 6) Solve the problem
 7) Analyze the solution
-
-```@docs
-set_x0!
-size(::Problem)
-```
-
-```@docs
-Problem
-```
