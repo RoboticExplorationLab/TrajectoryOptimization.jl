@@ -66,6 +66,7 @@ struct AnalyticalModel{M,D} <: Model{M,D}
     end
 end
 
+"Docstring for this guy"
 function AnalyticalModel{M,D}(f::Function, n::Int, m::Int, r::Int, d::Dict{Symbol,Any}=Dict{Symbol,Any}()) where {M<:ModelType,D<:DynamicsType}
     p = NamedTuple()
     ∇f, = generate_jacobian(M,D,f,n,m)
@@ -142,7 +143,11 @@ UncertainModel(f::Function, ∇f::Function, n::Int, m::Int, r::Int, d::Dict{Symb
     p = NamedTuple()
     AnalyticalModel{Uncertain,Continuous}(f,∇f,n,m,r,p,d, check_functions=true); end
 
-""" $(SIGNATURES) Evaluate the dynamics at state `x` and control `x`
+
+""" ```julia
+evaluate!(ẋ, model::Model{M,Continuous}, x, u)
+```
+Evaluate the continuous dynamics at state `x` and control `u`
 Keeps track of the number of evaluations
 """
 function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
@@ -150,6 +155,52 @@ function evaluate!(ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVec
     model.evals[1] += 1
 end
 
+""" ```julia
+evaluate!(ẋ, model::Model{M,Discrete}, x, u, dt)
+```
+ Evaluate the discrete dynamics at state `x` and control `u` and time step `dt`
+Keeps track of the number of evaluations
+"""
+function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
+    model.f(ẋ,x,u,dt)
+    model.evals[1] += 1
+end
+
+""" ```julia
+jacobian!(Z, model::Model{M,Continuous}, x, u)
+```
+Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+function jacobian!(Z::AbstractMatrix,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
+    model.∇f(Z,x,u)
+    model.evals[2] += 1
+end
+
+""" ```julia
+jacobian!(Z, model::Model{M,Discrete}, x, u, dt)
+```
+Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
+Keeps track of the number of evaluations
+"""
+function jacobian!(Z::AbstractArray{T},model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T <: AbstractFloat}
+    model.∇f(Z,x,u,dt)
+    model.evals[2] += 1
+end
+
+""" ```julia
+jacobian!(Z::PartedVecTrajectory, model::Model{M,Discrete}, X, U, dt)
+```
+Evaluate discrete dynamics Jacobian along entire trajectory
+"""
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k],dt[k])
+    end
+end
+
+# Uncertain Dynamics
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
     model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
     model.evals[1] += 1
@@ -157,11 +208,6 @@ end
 
 function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
     model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],w)
-    model.evals[1] += 1
-end
-
-function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector) where M <: ModelType
-    model.f(ẋ,x,u)
     model.evals[1] += 1
 end
 
@@ -177,11 +223,6 @@ function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete
     model.evals[1] += 1
 end
 
-function evaluate!(ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
-    model.f(ẋ,x,u,dt)
-    model.evals[1] += 1
-end
-
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T
     # model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r),dt)
     model.f(ẋ,x[1:model.n],u[1:model.m],zeros(model.r),dt)
@@ -191,15 +232,6 @@ end
 function evaluate_uncertain!(ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T
     model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],w,dt)
     model.evals[1] += 1
-end
-
-""" $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
-Keeps track of the number of evaluations
-"""
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
-    model.∇f(Z,ẋ,x,u)
-    model.evals[1] += 1
-    model.evals[2] += 1
 end
 
 function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
@@ -212,12 +244,6 @@ end
 function evaluate_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector)
     idx = NamedTuple{(:x,:u)}((1:model.n,1:model.m))
     model.∇f(Z,ẋ[idx.x],x[idx.x],u[idx.u],w)
-    model.evals[1] += 1
-    model.evals[2] += 1
-end
-
-function evaluate!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T}
-    model.∇f(Z,ẋ,x,u,dt)
     model.evals[1] += 1
     model.evals[2] += 1
 end
@@ -235,26 +261,14 @@ function evaluate_uncertain!(Z::AbstractMatrix,ẋ::AbstractVector,model::Model{
     model.evals[1] += 1
     model.evals[2] += 1
 end
-
-""" $(SIGNATURES) Evaluate the dynamics and dynamics Jacobian simultaneously at state `x` and control `x`
-Keeps track of the number of evaluations
-"""
-jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType = evaluate!(Z,ẋ,model,x,u)
 jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector) = evaluate!(Z,ẋ,model,x,u,zeros(model.r))
 jacobian_uncertain!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector,w::AbstractVector) = evaluate!(Z,ẋ,model,x,u,w)
-
-jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T} = evaluate!(Z,ẋ,model,x,u,dt)
 jacobian!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,zeros(model.r),dt)
 jacobian_uncertain!(Z::AbstractArray,ẋ::AbstractVector,model::Model{Uncertain,Discrete},x::AbstractVector,u::AbstractVector,w::AbstractVector,dt::T) where T = evaluate!(Z,ẋ,model,x,u,w,dt)
 
 
-""" $(SIGNATURES) Evaluate the dynamics Jacobian simultaneously at state `x` and control `x`
-Keeps track of the number of evaluations
-"""
-function jacobian!(Z::AbstractMatrix,model::Model{M,Continuous},x::AbstractVector,u::AbstractVector) where M <: ModelType
-    model.∇f(Z,x,u)
-    model.evals[2] += 1
-end
+
+
 
 function jacobian!(Z::AbstractMatrix,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
     model.∇f(Z,x,u,zeros(model.r))
@@ -266,10 +280,6 @@ function jacobian_uncertain!(Z::AbstractMatrix,model::Model{Uncertain,Continuous
     model.evals[2] += 1
 end
 
-function jacobian!(Z::AbstractArray{T},model::Model{M,Discrete},x::AbstractVector,u::AbstractVector,dt::T) where {M <: ModelType,T <: AbstractFloat}
-    model.∇f(Z,x,u,dt)
-    model.evals[2] += 1
-end
 
 function jacobian!(Z::AbstractArray{T},model::Model{Uncertain,Discrete},x::AbstractVector{T},u::AbstractVector{T},dt::T) where T <: AbstractFloat
     model.∇f(Z,x,u,zeros(model.r),dt)
@@ -281,12 +291,6 @@ function jacobian_uncertain!(Z::AbstractArray,model::Model{Uncertain,Discrete},x
     model.evals[2] += 1
 end
 
-function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where {M<:ModelType,T}
-    N = length(X)
-    for k = 1:N-1
-        jacobian!(Z[k],model,X[k],U[k],dt)
-    end
-end
 
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
     N = length(X)
@@ -307,7 +311,7 @@ function jacobian_uncertain!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Di
 end
 
 """ $(SIGNATURES) Return the number of dynamics evaluations """
-evals(model::Model) = model.evals[1]
+evals(model::Model)::Int = model.evals[1]
 
 """ $(SIGNATURES) Reset the evaluation counts for the model """
 reset(model::Model) = begin model.evals[1] = 0; return nothing end
