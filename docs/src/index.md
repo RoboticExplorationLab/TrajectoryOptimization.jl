@@ -54,7 +54,3 @@ size(::Problem)
 ```@docs
 Problem
 ```
-
-## [Creating an Objective](@id objective_section)
-
-## [Instantiate a Problem](@id problem_section)

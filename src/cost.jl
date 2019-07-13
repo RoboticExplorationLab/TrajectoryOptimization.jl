@@ -7,7 +7,6 @@ import Base.copy
 abstract type CostFunction end
 CostTrajectory = Vector{C} where C <: CostFunction
 
-"Calculate unconstrained cost for X and U trajectories"
 function cost(c::CostTrajectory, X::VectorTrajectory{T}, U::VectorTrajectory{T},dt::Vector{T})::T where T
     N = length(X)
     J = 0.0
@@ -78,11 +77,35 @@ function reset!(et::ExpansionTrajectory)
     end
 end
 
+
+
+#######################################################
+#              COST FUNCTION INTERFACE                #
+#######################################################
+
+"$(SIGNATURES) Evaluate the cost at state `x` and control `u`"
+stage_cost(cost::CostFunction, x, u) = 0.0
+"$(SIGNATURES) Evaluate the cost at the terminal state `xN`"
+stage_cost(cost::CostFunction, xN) = 0.0
+"$(SIGNATURES) Evaluate the second order expansion at state `x` and control `u`"
+cost_expansion!(Q::Expansion, cost::CostFunction, x, u) = nothing
+"$(SIGNATURES) Evaluate the second order expansion at the terminal state `xN`"
+cost_expansion!(Q::Expansion, cost::CostFunction, xN) = nothing
+
+
 """
 $(TYPEDEF)
 Cost function of the form
     1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
+
+Constructor use any of the following constructors:
+```julia
+QuadraticCost(Q, R, H, q, r, c)
+QuadraticCost(Q, R; H, q, r, c)
+QuadraticCost(Q, q, c)
+```
+Any optional or omitted values will be set to zero(s).
 """
 mutable struct QuadraticCost{T} <: CostFunction
     Q::AbstractMatrix{T}                 # Quadratic stage cost for states (n,n)
@@ -120,8 +143,8 @@ end
 """
 $(SIGNATURES)
 Cost function of the form
-    1/2(xₙ-x_f)ᵀ Qf (xₙ - x_f) + 1/2 ∫ ( (x-x_f)ᵀQ(x-xf) + uᵀRu ) dt from 0 to tf
-R must be positive definite, Q and Qf must be positive semidefinite
+``(x-x_f)^T Q (x_x_f) + u^T R u``
+R must be positive definite, Q must be positive semidefinite
 """
 function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
     H = zeros(size(R,1),size(Q,1))
@@ -131,6 +154,12 @@ function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
     return QuadraticCost(Q, R, H, q, r, c)
 end
 
+"""
+$(SIGNATURES)
+Cost function of the form
+``(x-x_f)^T Q (x_x_f)``
+Q must be positive semidefinite
+"""
 function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
