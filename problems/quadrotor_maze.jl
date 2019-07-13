@@ -17,21 +17,22 @@ xf[4:7] = q0;
 
 # cost
 # cost
-Q = (1.0e-4)*Diagonal(I,n)
-R = (1.0e-3)*Diagonal(I,m)
+Q = (1.0e-3)*Diagonal(I,n)
+Q[4:7,4:7] = (1.0e-2)*Diagonal(I,4)
+R = (1.0e-4)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
 # Q = (1.0)*Diagonal(I,n)
 # R = (1.0)*Diagonal(I,m)
 # Qf = 1000.0*Diagonal(I,n)
 
 # constraints
-r_quad_maze = 1.0
-r_cylinder_maze = 2.
+r_quad_maze = 2.0
+r_cylinder_maze = 2.0
 maze_cylinders = []
 zh = 3
 l1 = 5
 l2 = 4
-l3 = 5
+l3 = 4
 l4 = 10
 
 for i = range(-25,stop=-10,length=l1)
@@ -42,7 +43,7 @@ for i = range(10,stop=25,length=l1)
     push!(maze_cylinders,(i, 10, r_cylinder_maze))
 end
 
-for i = range(-7.5,stop=7.5,length=l3)
+for i = range(-5,stop=5,length=l3)
     push!(maze_cylinders,(i, 30, r_cylinder_maze))
 end
 
@@ -73,7 +74,7 @@ end
 maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
-u_max = 10.
+u_max = 50.
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 
@@ -81,7 +82,7 @@ x_max[1:3] = [25.0; Inf; 20]
 x_min[1:3] = [-25.0; -Inf; 0.]
 bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
 bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
-goal = goal_constraint(xf)
+# goal = goal_constraint(xf)
 
 
 N = 101 # number of knot points
@@ -90,6 +91,19 @@ dt = tf/(N-1) # total time
 
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
+
+# don't constraint quaternion state
+function quadrotor_goal_constraint(xf::Vector{T}) where T
+    n = length(xf)
+    p = length(xf) - 4
+    idx = [(1:3)...,(8:13)...]
+    terminal_constraint(v,xN) = copyto!(v,xN[idx]-xf[idx])
+    terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n)[idx,:])
+    Constraint{Equality}(terminal_constraint, terminal_jacobian, p, :goal_quad, [collect(1:n),collect(1:0)], :terminal, :x)
+end
+
+goal = quadrotor_goal_constraint(xf)
+
 constraints = Constraints(N) # constraint trajectory
 constraints[1] += bnd1
 for k = 2:N-1

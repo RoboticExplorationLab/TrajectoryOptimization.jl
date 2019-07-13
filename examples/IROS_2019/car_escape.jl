@@ -12,7 +12,7 @@ opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-2,constraint_tolerance=max_con_viol,penalty_scaling=50.,penalty_initial=10.)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol, solve_type=:feasible)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-3,resolve_feasible_problem=false,opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-3);
 

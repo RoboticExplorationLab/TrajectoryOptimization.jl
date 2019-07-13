@@ -195,7 +195,7 @@ TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.con
 
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U,get_dt_traj(prob))::T
 
-function max_violation(prob::Problem)
+function max_violation(prob::Problem{T}) where T
     if is_constrained(prob)
         N = prob.N
         c_max = 0.0
