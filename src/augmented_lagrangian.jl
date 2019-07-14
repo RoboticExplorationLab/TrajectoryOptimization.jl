@@ -172,10 +172,10 @@ function max_violation(solver::AugmentedLagrangianSolver{T}) where T
 end
 
 function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjective{T},
-        X::VectorTrajectory{T},U::VectorTrajectory{T},H::Vector{T}) where T
+        X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where T
     N = length(X)
 
-    cost_expansion!(Q, obj.cost, X, U, H)
+    cost_expansion!(Q, obj.cost, X, U, dt)
 
     for k = 1:N-1
         c = obj.C[k]
@@ -236,10 +236,9 @@ function stage_constraint_cost(c,λ,μ,
     aula_cost(a,c,λ,μ)
 end
 
-"Augmented Lagrangian cost for X and U trajectories"
-function cost(obj::AugmentedLagrangianObjective{T},X::VectorTrajectory{T},U::VectorTrajectory{T}, H::Vector{T}) where T <: AbstractFloat
+function cost(obj::AugmentedLagrangianObjective{T}, X::VectorTrajectory{T}, U::VectorTrajectory{T}, dt::Vector{T}) where T <: AbstractFloat
     N = length(X)
-    J = cost(obj.cost,X,U,H)
+    J = cost(obj.cost,X,U,dt)
 
     update_constraints!(obj.C,obj.constraints, X, U)
     update_active_set!(obj)

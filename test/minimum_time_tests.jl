@@ -57,7 +57,6 @@ prob_mt = Problem(model_d,obj,prob.U,constraints=constraints,dt=dt,x0=x0,tf=:min
 solve!(prob_mt,opts_altro)
 tt_mt = total_time(prob_mt)
 
-plot(prob_mt.U)
 n̄ = n+1
 idx = [(1:n)...,((1:m) .+ n̄)...]
 [collect(1:n);collect(1:m) .+ n̄]

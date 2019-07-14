@@ -4,7 +4,35 @@ export
     update_problem
 
 
-"$(TYPEDEF) Trajectory Optimization Problem"
+"""$(TYPEDEF) Trajectory Optimization Problem.
+Contains the full definition of a trajectory optimization problem, including:
+* dynamics model (`Model`). Can be either continuous or discrete.
+* objective (`Objective`)
+* constraints (`Constraints`)
+* initial and final states
+* Primal variables (state and control trajectories)
+* Discretization information: knot points (`N`), time step (`dt`), and total time (`tf`)
+
+# Constructors:
+```julia
+Problem(model, obj X0, U0; integration, constraints, x0, xf, dt, tf, N)
+Problem(model, obj, U0; integration, constraints, x0, xf, dt, tf, N)
+Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
+```
+# Arguments
+* `model`: Dynamics model. Can be either `Discrete` or `Continuous`
+* `obj`: Objective
+* `X0`: Initial state trajectory. If omitted it will be initialized with NaNs, to be later overwritten by the solver.
+* `U0`: Initial control trajectory. If omitted it will be initialized with zeros.
+* `x0`: Initial state. Defaults to zeros.
+* `xf`: Final state. Defaults to zeros.
+* `dt`: Time step
+* `tf`: Final time. Set to zero to specify a time penalized problem.
+* `N`: Number of knot points. Defaults to 51, unless specified by `dt` and `tf`.
+* `integration`: One of the defined integration types to discretize the continuous dynamics model. Defaults to `:none`, which will pass in the continuous dynamics (eg. for DIRCOL)
+Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
+At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
+"""
 struct Problem{T<:AbstractFloat,D<:DynamicsType}
     model::AbstractModel
     obj::AbstractObjective
@@ -43,23 +71,24 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
 end
 
 function Problem(model::Model{M,Continuous}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
-        N::Int=length(obj), constraints::Constraints=Constraints(N), x0::Vector{T}=zeros(model.n), xf::Vector{T}=zeros(model.n),
+        N::Int=length(obj), constraints::Constraints=Constraints(N),
+        x0::Vector{T}=zeros(model.n), xf::Vector{T}=zeros(model.n),
         dt=NaN, tf=NaN, integration=:none) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
-        if integration == :none
-            model = model
-        elseif isdefined(TrajectoryOptimization,integration)
-            discretizer = eval(integration)
-            model = discretizer(model)
-        else
-            throw(ArgumentError("$integration is not a defined integration scheme"))
-        end
+    if integration == :none
+        model = model
+    elseif isdefined(TrajectoryOptimization,integration)
+        discretizer = eval(integration)
+        model = discretizer(model)
+    else
+        throw(ArgumentError("$integration is not a defined integration scheme"))
+    end
     Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 
 function Problem(model::Model{M,Discrete}, obj::AbstractObjective, X0::VectorTrajectory{T}, U0::VectorTrajectory{T};
         N::Int=length(obj), constraints::Constraints=Constraints(N), x0::Vector{T}=zeros(model.n),
-        xf::Vector{T}=zeros(model.n), dt=NaN, tf=NaN, integration=:rk4) where {M,T}
+        xf::Vector{T}=zeros(model.n), dt=NaN, tf=NaN) where {M,T}
     N, tf, dt = _validate_time(N, tf, dt)
     Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
@@ -82,6 +111,7 @@ function Problem(model::Model, obj::AbstractObjective; kwargs...)
     Problem(model, obj, X0, U0; kwargs...)
 end
 
+# QUESTION: Remove these constructors?
 "$(SIGNATURES) Pass in a cost instead of an objective"
 function Problem(model::Model{Nominal,Discrete}, cost::CostFunction, U0::VectorTrajectory{T}; kwargs...) where T
     N = length(U0) + 1
@@ -92,7 +122,10 @@ end
 Problem(model::Model{Nominal,Discrete}, cost::CostFunction, U0::Matrix{T}; kwargs...) where T =
     Problem(model, cost, to_dvecs(U0); kwargs...)
 
-"""$(SIGNATURES)
+
+"""```julia
+update_problem(prob; kwargs...)
+```
 Create a new problem from another, specifing all fields as keyword arguments
 The `newProb` argument can be set to true if a the primal variables are to be copied, otherwise they will be passed to the modified problem.
 """
@@ -107,14 +140,15 @@ function update_problem(p::Problem;
     end
 end
 
-"$(TYPEDSIGNATURES) Set the initial control trajectory for a problem"
+"$(SIGNATURES) Set the initial control trajectory for a problem. U0 can be either a `Matrix` or a `Vector{Vector}`"
 initial_controls!(prob::Problem{T}, U0::AbstractVectorTrajectory{T}) where T = copyto!(prob.U, U0[1:prob.N-1])
 initial_controls!(prob::Problem{T}, U0::Matrix{T}) where T = initial_controls!(prob, to_dvecs(U0))
 
-"$(TYPEDSIGNATURES) Set the initial state trajectory for a problem"
-initial_state!(prob::Problem{T}, X0::AbstractVectorTrajectory{T}) where T = copyto!(prob.X, X0)
-initial_state!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, to_dvecs(X0))
+"$(SIGNATURES) Set the initial state trajectory for a problem. X0 can be either a `Matrix` or a `Vector{Vector}`"
+initial_states!(prob::Problem{T}, X0::AbstractVectorTrajectory{T}) where T = copyto!(prob.X, X0)
+initial_states!(prob::Problem{T}, X0::Matrix{T}) where T = initial_state!(prob, to_dvecs(X0))
 
+"$(SIGNATURES) Set the initial state"
 set_x0!(prob::Problem{T}, x0::Vector{T}) where T = copyto!(prob.x0, x0)
 
 # TODO: think about how to do this properly now that objective and constraints depend on N
@@ -180,9 +214,13 @@ function _validate_time(N,tf,dt)
     return N,tf,dt
 end
 
-"$(SIGNATURES) return the number of states, number of controls, and the number of knot points"
+"""```
+n,m,N = size(p::Problem)
+```
+Return the number of states (n), number of controls (m), and the number of knot points (N)"""
 Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
+"$(TYPEDSIGNATURES) Copy a problem"
 Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0), copy(p.xf),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
@@ -193,9 +231,10 @@ is_constrained(prob::Problem{T}) where T = !all(isempty.(prob.constraints.C))
 
 TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.constraints)
 
-cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U,get_dt_traj(prob))::T
+"$(TYPEDSIGNATURES) Evaluate the current cost for the problem"
+cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))::T
 
-function max_violation(prob::Problem{T}) where T
+function max_violation(prob::Problem{T})::T where T
     if is_constrained(prob)
         N = prob.N
         c_max = 0.0
@@ -267,4 +306,5 @@ function get_dt_traj(prob::Problem,U::Trajectory)
     [get_dt(prob,U[k],k) for k = 1:prob.N-1]
 end
 
+"$(SIGNATURES) Get the total time for tje trajectory (applicable for time-penalized problems)"
 final_time(prob::Problem) = sum(get_dt_traj(prob))

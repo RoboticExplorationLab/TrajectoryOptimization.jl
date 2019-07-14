@@ -1,4 +1,4 @@
-# 2. Setting up a Cost Function
+# [2. Setting up an Objective](@id objective_section)
 
 ```@meta
 CurrentModule = TrajectoryOptimization
@@ -8,12 +8,12 @@ CurrentModule = TrajectoryOptimization
 Pages = ["costfunctions.md"]
 ```
 
-# Overview
+## Overview
 All trajectory optimization problems require a cost function at each stage of the trajectory. Cost functions must be scalar-valued. We assume general cost functions of the form,
 ```math
 \ell_f(x_N) + \sum_{k=1}^{N-1} \ell_k(x_k,u_k)
 ```
-It is very important to note that ``\ell_k(x_k,u_k)`` is ONLY a function of ``x_k`` and ``u_k``, i.e. no coupling across time-steps is permitted. This is a requirement for Differential Dynamic Programming methods such as iLQR, but could be relaxed for methods that parameterize both states and controls, such as DIRCOL (although this is currently not supported). In general, any coupling between adjacent time-steps can be resolved by augmenting the state and defining the appropriate dynamics (this is the method we use to solve minimum time problems).
+It is very important to note that ``\ell_k(x_k,u_k)`` is ONLY a function of ``x_k`` and ``u_k``, i.e. no coupling across time-steps is permitted. This is a requirement for Differential Dynamic Programming methods such as iLQR, but could be relaxed for methods that parameterize both states and controls, such as DIRCOL. In general, any coupling between adjacent time-steps can be resolved by augmenting the state and defining the appropriate dynamics (this is the method we use to solve minimum time problems).
 
 In general, trajectory optimization will take a second order Taylor series approximation of the cost function, resulting in a quadratic cost function of the form
 ```math
@@ -23,16 +23,15 @@ This type of quadratic cost is typical for trajectory optimization problems, esp
 
 In TrajectoryOptimization.jl we differentiate between the entire objective and the cost functions at each time step. We use `Objective` to describe the function that is being minimized, which typically consists of a sum of cost functions, with potentially some additional terms (as is the case with augmented Lagrangian objectives). Describing the Objective as a sum of individual functions allows the solvers to more efficiently compute the gradient and Hessian of the entire cost, which is block-diagonal given the Markovianity of the problem.
 
-# Cost functions
+## Cost functions
 There are several different cost function types that all inherit from `CostFunction`. The following sections detail the various methods for instantiating these cost function types.
 
-## Quadratic Costs
-Quadratic costs are the most standard cost function and excellent place to start. Let's assume we are creating an LQR tracking cost of the form
+### Quadratic Costs
+[`Quadratic costs`](@ref QuadraticCost) are the most standard cost function and excellent place to start. Let's assume we are creating an LQR tracking cost of the form
 ```math
 (x_N - x_f)^T Q_f (x_N - x_f) + \sum_{k=1}^{N-1} (x_k - x_f)^T Q (x_k - x_f) + u_k^T R u_k
 ```
-for the simple pendulum with the goal of doing a swing-up. To do this we have a very convenient constructor
-
+for the simple pendulum with the goal of doing a swing-up. To do this we have very convenient constructors [`LQRCost`](@ref) and [`LQRCostTerminal`](@ref):
 ```julia
 using LinearAlgebra
 n,m = 2,1
@@ -40,7 +39,8 @@ Q = Diagonal(0.1I,n)
 R = Diagonal(0.1I,m)
 Qf = Diagonal(1000I,n)
 xf = [π,0]
-costfun = LQRCost(Q,R,Qf,xf)
+costfun = LQRCost(Q,R,Qf)
+costfun_term = LQRCostTerminal(Qf,xf)
 ```
 It is HIGHLY recommended to specify any special structure, such as `Diagonal`, especially since these matrices are almost always diagonal.
 
@@ -52,24 +52,40 @@ r = zeros(m)
 c = xf'Q*xf/2
 qf = -Qf*xf
 cf = xf'Qf*xf/2
-costfun = QuadraticCost(Q, R, H, q, r, c, Qf, qf, cf)
+costfun      = QuadraticCost(Q, R, H, q, r, c)
+costfun_term = QuadraticCost(Qf, R*0, H, qf, r*0, cf)
 ```
-Once we have defined the cost function, we can create an objective for our problem by simply copying over all time steps. Note that `QuadraticCost` is automatically defined at all time steps.
+The `QuadraticCost` constructor also supports keyword arguments and one that allows for only `Q,q` and `c`.:
+```julia
+costfun      = QuadraticCost(Q, R, q=q, c=c)
+costfun_term = QuadraticCost(Q, q, c)
+```
+
+Once we have defined the cost function, we can create an objective for our problem by simply copying over all time steps (except for the terminal).
 ```julia
 # Create an objective from a single cost function
 N = 51
-obj = Objective(costfun, N)
-```
-```@docs
-QuadraticCost
+obj = Objective(costfun, costfun_term, N)
 ```
 
-## Generic Costs
-For general, non-linear cost functions use [GenericCost](@ref). Generic cost functions must define their second-order Taylor series expansion, either automatically using `ForwardDiff` or analytically.
+There's also a convenient constructor that builds an [`LQRObjective`](@ref)
+```julia
+obj = LQRObjective(Q, R, Qf, xf, N)
+```
+
+```@docs
+QuadraticCost
+LQRCost
+LQRCostTerminal
+LQRObjective
+```
+
+### Generic Costs (Experimental)
+For general, non-linear cost functions use [`GenericCost`](@ref). Generic cost functions must define their second-order Taylor series expansion, either automatically using `ForwardDiff` or analytically.
 
 Let's say we wanted to use a nonlinear objective for the pendulum
 ```math
-cos(\theta_N) + \omega_N^2 \sum_{k=1}^{N-1} cos(\theta_k) + u_k^T R + u_k + Q ω^2
+cos(\theta_N) + \omega_N^2 \sum_{k=1}^{N-1} cos(\theta_k) + u_k^T R u_k + Q ω^2
 ```
 which is small when θ = π, encouraging swing-up.
 
@@ -133,7 +149,11 @@ N = 51
 nlobj = Objective(nlcost, N)
 ```
 
-## Methods
+```@docs
+GenericCost
+```
+
+### Cost Function Interface
 All cost functions are required to define the following methods
 ```julia
 stage_cost(cost, x, u)
@@ -141,24 +161,17 @@ stage_cost(cost, xN)
 cost_expansion!(Q::Expansion, cost, x, u)
 cost_expansion(Q::Expansion, cost, xN)
 ```
+and inherit from `CostFunction`.
 
-Where the `Expansion` type is defined in the next section. This common interface allows the `Objective` to efficiently dispatch over cost functions to compute the overall cost and Taylor series expansion (i.e. gradient and Hessian).
+The `Expansion` type is defined in the next section. This common interface allows the `Objective` to efficiently dispatch over cost functions to compute the overall cost and Taylor series expansion (i.e. gradient and Hessian).
 
-## Expansion Type
-The expansion type stores the pieces of the second order Taylor expansion of the cost, and is defined
-```julia
-struct Expansion{T<:AbstractFloat}
-    x::Vector{T}
-    u::Vector{T}
-    xx::Matrix{T}
-    uu::Matrix{T}
-    ux::Matrix{T}
-end
-```
+### Expansion Type
+The expansion type stores the pieces of the second order Taylor expansion of the cost.
+
 If we store the expansion as `Q`, then `Q.x` is the partial with respect to the control, `Q.xu` is the partial with respect to x and u, etc.
 
-# Objectives
-## Constructors
+## Objectives
+### Constructors
 Objectives can be created by copying a single cost function over all time steps
 ```julia
 Objective(cost::CostFunction, N::Int)
@@ -174,10 +187,18 @@ or by explicitly specifying a list of cost functions
 Objective(costfuns::Vector{<:CostFunction})
 ```
 
-## Methods
+### Methods
 `Constraints` extends the methods on `CostFunction` to the whole trajectory
 ```julia
 cost(obj, X, U)
 cost_expansion!(Q::Vector{Expansion}, obj, X, U)
 ```
-where `X` and `U` are the state and control trajectories. 
+where `X` and `U` are the state and control trajectories.
+
+
+## API
+```@docs
+cost
+stage_cost
+cost_expansion!
+```

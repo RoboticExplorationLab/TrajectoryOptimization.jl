@@ -1,4 +1,4 @@
-# 4. Add Constraints
+# [3. Creating Constraints](@id constraint_section)
 ```@meta
 CurrentModule = TrajectoryOptimization
 ```
@@ -9,20 +9,19 @@ Pages = ["constraints.md"]
 
 # Constraint Type
 ```@docs
-Constraint
 ConstraintType
 Equality
 Inequality
 ```
-All constraint types inherit from `AbstractConstraint` and are parameterized by [ConstraintType](@ref), which specifies the type of constraint, `Inequality` or `Equality`. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vector or scalar-valued). Each constraint has the following interface:
+All constraints inherit from `AbstractConstraint` and are parameterized by [`ConstraintType`](@ref), which specifies the type of constraint, `Inequality` or `Equality`. This allows the software to easily dispatch over the type of constraint. Each constraint type represents a vector-valued constraint. The intention is that each constraint type represent one line in constraints of problem definition (where they may be vector or scalar-valued). Each constraint has the following interface:
 
-`evaluate!(v, con, x, u)`: Stage constraint
-`evaluate!(v, con, x)`: Terminal constraint
-`jacobian!(V, con, x, u)`: Jacobian wrt states and controls at a stage time step
-`jacobian!(V, con, x)`: Jacobian wrt terminal state at terminal time step
-`is_terminal(con)`: Boolean true if the constraint is defined at the terminal time step
-`is_stage(con)`: Boolean true if the constraint is defined at the stage time steps
-`length(con)`: Number of constraints (length of the output vector)
+* `evaluate!(v, con, x, u)`: Stage constraint  
+* `evaluate!(v, con, x)`: Terminal constraint  
+* `jacobian!(V, con, x, u)`: Jacobian wrt states and controls at a stage time step  
+* `jacobian!(V, con, x)`: Jacobian wrt terminal state at terminal time step  
+* `is_terminal(con)`: Boolean true if the constraint is defined at the terminal time step  
+* `is_stage(con)`: Boolean true if the constraint is defined at the stage time steps  
+* `length(con)`: Number of constraints (length of the output vector)  
 
 There are currently two types of constraints implemented
 ```@docs
@@ -94,14 +93,6 @@ con.label == :all  # true
 
 The type can easily be checked with the `is_terminal` and `is_stage` commands.
 
-### Constructors
-In summary, here are the constructors:
-```
-Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol) where S<:ConstraintType
-Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol) where S<:ConstraintType
-Constraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol) where S<:ConstraintType
-Constraint{S}(c::Function, n::Int, p::Int, label::Symbol) where S<:ConstraintType
-```
 
 ### Methods
 Given that constraints can apply at any time step, we assume that there is the same number of constraints for both stage and terminal time steps. The `length` method can also accept either `:stage` or `:terminal` as a second argument to specify which length you want (since one may be zero). e.g.
@@ -127,7 +118,7 @@ BoundConstraint(n, m; x_min, x_max, u_min, x_max)
 ```
 The bounds can be given by vectors of the appropriate length, using ±Inf for unbounded values, or a scalar can be passed in when all the states have the same bound. If left blank, the value is assumed to be unbounded.
 
-Working from the previous examples, let's say we have ``-1 \geq x_1 \leq 1, x_3 \leq 10, -15 \geq u \leq 12``:
+Working from the previous examples, let's say we have ``-1 \leq x_1 \leq 1, x_3 \leq 10, -15 \leq u \leq 12``:
 ```julia
 # Create a bound constraint
 bnd = BoundConstraint(n, m, x_min=[-1,-Inf,-Inf], x_max=[1,Inf,10],
@@ -152,6 +143,7 @@ constraints_term = con + con_term + bnd
 
 There are several functions provided to work with `ConstraintSets`
 ```@docs
+TrajectoryOptimization.num_constraints(C::ConstraintSet, type)
 Base.pop!(C::ConstraintSet, label::Symbol)
 evaluate!(c::PartedVector, C::ConstraintSet, x, u)
 evaluate!(c::PartedVector, C::ConstraintSet, x)
@@ -192,5 +184,5 @@ pcon[N] += con_term
 
 ## Methods
 ```@docs
-num_constraints
+TrajectoryOptimization.num_constraints(::Constraints)
 ```

@@ -10,6 +10,7 @@ abstract type Midpoint <: QuadratureRule end
 
 include("primals.jl")
 
+"$(TYPEDEF) Solver options for the Projected Newton solver"
 @with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     "Print output to console"
     verbose::Bool = true
@@ -28,6 +29,12 @@ end
 $(TYPEDEF)
 Projected Newton Solver
 Direct method developed by the REx Lab at Stanford University
+
+Achieves machine-level constraint satisfaction by projecting onto the feasible subspace.
+    It can also take a full Newton step by solving the KKT system.
+
+This solver is to be used exlusively for solutions that are close to the optimal solution.
+    It is intended to be used as a "solution polishing" method for augmented Lagrangian methods.
 """
 struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     opts::ProjectedNewtonSolverOptions{T}
@@ -114,7 +121,7 @@ function num_active_constraints(solver::ProjectedNewtonSolver)
 end
 
 
-
+"$(TYPEDEF) Solver options for the Direct Collocation solver. Most options are passed to the NLP through the `opts` dictionary"
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
     "NLP Solver to use. See MathOptInterface for available NLP solvers"
     nlp::Symbol = :Ipopt
@@ -132,6 +139,7 @@ end
 $(TYPEDEF)
 Direct Collocation Solver.
 Uses a commerical NLP solver to solve the Trajectory Optimization problem.
+Uses the MathOptInterface to interface with the NLP.
 """
 struct DIRCOLSolver{T,Q} <: DirectSolver{T}
     opts::DIRCOLSolverOptions{T}
