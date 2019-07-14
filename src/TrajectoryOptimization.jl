@@ -135,6 +135,7 @@ PartedVecTrajectory{T} = Vector{PartedVector{T,Vector{T}}}
 PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("constraints.jl")
+include("constraint_sets.jl")
 include("cost.jl")
 include("model.jl")
 include("integration.jl")

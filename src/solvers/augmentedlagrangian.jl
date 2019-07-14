@@ -3,72 +3,96 @@
 
 """$(TYPEDEF)
 Solver options for the augmented Lagrangian solver.
-    Augmented Lagrangian is a general method for solving constrained problems by solving a sequence of unconstrained problems.
 $(FIELDS)
 """
 @with_kw mutable struct AugmentedLagrangianSolverOptions{T} <: AbstractSolverOptions{T}
-    "Print summary at each iteration"
+    "Print summary at each iteration."
     verbose::Bool=false
 
-    "unconstrained solver options"
+    "unconstrained solver options."
     opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
-    "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve"
+    "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve."
     cost_tolerance::T = 1.0e-4
 
-    "dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve"
+    "dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve."
     cost_tolerance_intermediate::T = 1.0e-3
 
-    "gradient_norm < ϵ, gradient norm convergence criteria"
+    "gradient_norm < ϵ, gradient norm convergence criteria."
     gradient_norm_tolerance::T = 1.0e-5
 
-    "gradient_norm_int < ϵ, gradient norm intermediate convergence criteria"
+    "gradient_norm_int < ϵ, gradient norm intermediate convergence criteria."
     gradient_norm_tolerance_intermediate::T = 1.0e-5
 
-    "max(constraint) < ϵ, constraint convergence criteria"
+    "max(constraint) < ϵ, constraint convergence criteria."
     constraint_tolerance::T = 1.0e-3
 
-    "max(constraint) < ϵ_int, intermediate constraint convergence criteria"
+    "max(constraint) < ϵ_int, intermediate constraint convergence criteria."
     constraint_tolerance_intermediate::T = 1.0e-3
 
-    "maximum outerloop updates"
+    "maximum outerloop updates."
     iterations::Int = 30
 
-    "minimum Lagrange multiplier"
+    "minimum Lagrange multiplier."
     dual_min::T = -1.0e8
 
-    "maximum Lagrange multiplier"
+    "maximum Lagrange multiplier."
     dual_max::T = 1.0e8
 
-    "maximum penalty term"
+    "maximum penalty term."
     penalty_max::T = 1.0e8
 
-    "initial penalty term"
+    "initial penalty term."
     penalty_initial::T = 1.0
 
-    "penalty update multiplier; penalty_scaling > 0"
+    "penalty update multiplier; penalty_scaling > 0."
     penalty_scaling::T = 10.0
 
-    "penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)"
+    "penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)."
     penalty_scaling_no::T = 1.0
 
-    "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1"
+    "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1."
     constraint_decrease_ratio::T = 0.25
 
-    "type of outer loop update (default, feedback)"
+    "type of outer loop update (default, feedback)."
     outer_loop_update_type::Symbol = :default
 
-    "numerical tolerance for constraint violation"
+    "numerical tolerance for constraint violation."
     active_constraint_tolerance::T = 0.0
 
-    "terminal solve when maximum penalty is reached"
+    "terminal solve when maximum penalty is reached."
     kickout_max_penalty::Bool = false
 
 end
 
 
 
-"$(TYPEDEF) Augmented Lagrangian solver"
+@doc raw""" ```julia
+struct AugmentedLagrangianSolver <: TrajectoryOptimization.AbstractSolver{T}
+```
+Augmented Lagrangian (AL) is a standard tool for constrained optimization. For a trajectory optimization problem of the form:
+```math
+\begin{equation*}
+\begin{aligned}
+  \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
+  \textrm{s.t.}            \quad & x_{k+1} = f(x_k, u_k), \\
+                                 & g_k(x_k,u_k) \leq 0, \\
+                                 & h_k(x_k,u_k) = 0.
+\end{aligned}
+\end{equation*}
+```
+AL methods form the following augmented Lagrangian function:
+```math
+\begin{align*}
+    \ell_f(x_N) + &λ_N^T c_N(x_N) + c_N(x_N)^T I_{\mu_N} c_N(x_N) \\
+           & + \sum_{k=0}^{N-1} \ell_k(x_k,u_k,dt) + λ_k^T c_k(x_k,u_k) + c_k(x_k,u_k)^T I_{\mu_k} c_k(x_k,u_k)
+\end{align*}
+```
+
+This function is then minimized with respect to the primal variables using any unconstrained minimization solver (e.g. iLQR).
+    After a local minima is found, the AL method updates the Lagrange multipliers λ and the penalty terms μ and repeats the unconstrained minimization.
+    AL methods have superlinear convergence as long as the penalty term μ is updated each iteration.
+"""
 struct AugmentedLagrangianSolver{T} <: AbstractSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
     stats::Dict{Symbol,Any}

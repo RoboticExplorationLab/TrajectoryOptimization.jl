@@ -1,4 +1,4 @@
-# [3. Setting up a Problem](@id problem_section)
+# [4. Setting up a Problem](@id problem_section)
 ```@meta
 CurrentModule = TrajectoryOptimization
 ```
