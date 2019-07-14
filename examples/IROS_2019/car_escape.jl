@@ -16,7 +16,7 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
     penalty_scaling=50.,
     penalty_initial=10.)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol, solve_type=:feasible)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,

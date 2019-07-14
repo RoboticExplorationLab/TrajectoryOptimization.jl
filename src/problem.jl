@@ -234,7 +234,6 @@ TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.con
 "$(TYPEDSIGNATURES) Evaluate the current cost for the problem"
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))::T
 
-"$(TYPEDSIGNATURES) Evaluate the maximum contraint violation"
 function max_violation(prob::Problem{T})::T where T
     if is_constrained(prob)
         N = prob.N

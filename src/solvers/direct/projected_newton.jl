@@ -119,10 +119,10 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
         # H[off .+ part.u, off .+ part.u] = Q[k].uu
         hess = PartedMatrix(view(H, off .+ part.z, off .+ part.z), part2)
         grad = PartedVector(view(g, off .+ part.z), part)
-        hessian!(hess, prob.obj[k], V.X[k], V.U[k])
-        gradient!(grad, prob.obj[k], V.X[k], V.U[k])
-        hess .*= dt[k]
-        grad .*= dt[k]
+        hessian!(hess, prob.obj[k], V.X[k], V.U[k],dt[k])
+        gradient!(grad, prob.obj[k], V.X[k], V.U[k],dt[k])
+        # hess .*= dt[k]
+        # grad .*= dt[k]
         off += n+m
     end
     # H .*= prob.dt
@@ -260,7 +260,7 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
     ϕ = 0.5
     count = 1
     while true
-        δλ = reg_solve(S[1],y,S[2],1e-8,20)
+        δλ = reg_solve(S[1],y,S[2],1e-8,25)
         δZ = -HinvY*δλ
         Z_ .= Z + α*δZ
 
@@ -289,6 +289,8 @@ function reg_solve(A, b, B, tol=1e-10, max_iters=10)
     count = 0
     while count < max_iters
         r = b - A*x
+        # println("r_norm = $(norm(r))")
+
         if norm(r) < tol
             break
         else
@@ -296,7 +298,8 @@ function reg_solve(A, b, B, tol=1e-10, max_iters=10)
             count += 1
         end
     end
-    println("iters = $count")
+    # println("iters = $count")
+
     return x
 end
 
@@ -339,6 +342,8 @@ function primaldual_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=
     a = solver.a.duals
     eps_feasible = solver.opts.feasibility_tolerance
     count = 0
+    ρ = 1e-6
+
     # cost_expansion!(prob, solver, V)
     H = Diagonal(solver.H)
 
@@ -359,13 +364,13 @@ function primaldual_projection!(prob::Problem, solver::ProjectedNewtonSolver, V=
         end
         if viol < eps_feasible || count > 10
             if count == 0
-                solver.stats[:S] = cholesky(Symmetric(Y*HinvY))
+                solver.stats[:S] = cholesky(Symmetric(Y*HinvY) + ρ*I)
             end
             break
         else
             λa = view(λ,a)
 
-            S = cholesky(Symmetric(Y*HinvY))
+            S = cholesky(Symmetric(Y*HinvY) + ρ*I)
             δλ = S\y
             δZ = -HinvY*δλ
 
@@ -488,6 +493,7 @@ function newton_step!(prob::Problem, solver::ProjectedNewtonSolver)
     verbose ? println("\nProjection:") : nothing
     # primaldual_projection!(prob, solver)
     projection_solve!(prob, solver)
+
 
     if solver.opts.solve_type == :feasible
         return solver.V

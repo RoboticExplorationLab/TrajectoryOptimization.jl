@@ -204,7 +204,7 @@ g = c_all(Z.Z)
 eval_f2, eval_g, eval_grad_f, eval_jac_g = TO.gen_dircol_functions(prob, dircol)
 
 g2 = zero(g)
-grad_f2 = zero(grad_f)
+# grad_f2 = zero(grad_f)
 jac2 = zeros(nG)
 row, col = zeros(nG), zeros(nG)
 @test eval_f2(Z.Z) == eval_f(Z.Z)

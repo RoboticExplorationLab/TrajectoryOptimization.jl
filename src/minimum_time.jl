@@ -176,7 +176,7 @@ function cost_expansion!(Q::Expansion{T}, cost::MinTimeCost,
     Q.uu[idx.u,idx.u] .= cost.cost.R*dt
     Q.ux[idx.u,idx.x] .= cost.cost.H*dt
 
-    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u],dt)
+    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
     tmp = 2.0*τ*Qu
 
     Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
@@ -200,6 +200,86 @@ function cost_expansion!(S::Expansion{T}, cost::MinTimeCost, xN::Vector{T}) wher
     S.x[idx] = cost.cost.Q*xN[idx] + cost.cost.q
     S.xx[end,end] = R_min_time
     S.x[end] = R_min_time*xN[end]
+
+    return nothing
+end
+
+function gradient!(grad, cost::MinTimeCost,
+        x::AbstractVector, u::AbstractVector,dt)
+
+    @assert cost.cost isa QuadraticCost
+    n,m = get_sizes(cost.cost)
+    idx = (x=1:n,u=1:m)
+    R_min_time = cost.R_min_time
+    τ = u[end]
+    dt = τ^2
+    Qx = cost.cost.Q*x[idx.x] + cost.cost.q + cost.cost.H'*u[idx.u]
+    Qu = cost.cost.R*u[idx.u] + cost.cost.r + cost.cost.H*x[idx.x]
+    Q.x[idx.x] .= Qx*dt
+    Q.u[idx.u] .= Qu*dt
+
+    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+    tmp = 2.0*τ*Qu
+
+    Q.u[end] = τ*(2.0*ℓ1 + R_min_time)
+    Q.x[end] = R_min_time*x[end]
+
+    return nothing
+end
+
+function gradient!(grad, cost::MinTimeCost, xN::AbstractVector)
+    R_min_time = cost.R_min_time
+
+    idx = 1:n
+    grad[idx] = cost.cost.Q*xN[idx] + cost.cost.q
+    grad[end] = R_min_time*xN[end]
+
+    return nothing
+end
+
+function hessian!(hess, cost::MinTimeCost,
+        x::AbstractVector, u::AbstractVector, dt)
+
+        @assert cost.cost isa QuadraticCost
+        n,m = get_sizes(cost.cost)
+        idx = (x=1:n,u=1:m)
+        R_min_time = cost.R_min_time
+        τ = u[end]
+        dt = τ^2
+
+        hess.xx[idx.x,idx.x] .= cost.cost.Q*dt
+        hess.uu[idx.u,idx.u] .= cost.cost.R*dt
+        hess.ux[idx.u,idx.x] .= cost.cost.H*dt
+
+        ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+        tmp = 2.0*τ*Qu
+
+
+        hess.uu[idx.u,end] = tmp
+        hess.uu[end,idx.u] = tmp'
+        hess.uu[end,end] = (2.0*ℓ1 + R_min_time)
+        Qx = cost.cost.Q*x[idx.x] + cost.cost.q + cost.cost.H'*u[idx.u]
+        hess.ux[end,idx.x] = 2.0*τ*Qx'
+
+        hess.xx[end,end] = R_min_time
+
+    return nothing
+end
+
+function hessian!(hess, cost::MinTimeCost, xN::AbstractVector)
+    @assert cost.cost isa QuadraticCost
+    n,m = get_sizes(cost.cost)
+    idx = (x=1:n,u=1:m)
+    R_min_time = cost.R_min_time
+    τ = u[end]
+    dt = τ^2
+
+    hess[idx.x,idx.x] .= cost.cost.Q*dt
+
+    ℓ1 = stage_cost(cost.cost,x[idx.x],u[idx.u])
+    Qx = cost.cost.Q*x[idx.x] + cost.cost.q + cost.cost.H'*u[idx.u]
+
+    hess[end,end] = R_min_time
 
     return nothing
 end

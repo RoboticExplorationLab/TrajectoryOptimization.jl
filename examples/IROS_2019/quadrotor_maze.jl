@@ -1,5 +1,5 @@
 using BenchmarkTools, SNOPT7, Plots
-using FileIO, MeshIO, GeometryTypes, CoordinateTransformations
+using FileIO, MeshIO, GeometryTypes, CoordinateTransformations, MeshCat
 # Quadrotor in Maze
 T = Float64
 
@@ -9,27 +9,27 @@ verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,iterations=300,live_plotting=:off,square_root=false)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    iterations=40,cost_tolerance=1.0e-4,cost_tolerance_intermediate=1.0e-3,constraint_tolerance=max_con_viol,penalty_scaling=10.,penalty_initial=1.)
+    iterations=40,cost_tolerance=1.0e-5,cost_tolerance_intermediate=1.0e-4,constraint_tolerance=max_con_viol,penalty_scaling=10.,penalty_initial=1.)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol, solve_type=:optimal)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol, solve_type=:feasible)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-3,resolve_feasible_problem=false,opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-3);
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-8,resolve_feasible_problem=false,
+    opts_pn=opts_pn,projected_newton=true,projected_newton_tolerance=1.0e-4);
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
-        :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
-
+        :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol, :Iterations_limit=>500000, :Major_iterations_limit=>250))
 
 # ALTRO w Newton
 prob_altro = copy(Problems.quadrotor_maze_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 # @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation(p1)
+
 X1 = to_array(p1.X)
 plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
 plot(p1.U,title="Quadrotor control (ALTRO)")
-
 
 # DIRCOL w/ Ipopt
 prob_ipopt = update_problem(copy(Problems.quadrotor_maze_problem),model=Dynamics.quadrotor_model) # get continuous time model
@@ -64,22 +64,28 @@ function addcylinders!(vis,cylinders,height=1.5)
 end
 
 function visualize_quadrotor_maze(prob)
+    vis = Visualizer()
+    open(vis)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
     obj = joinpath(urdf_folder, "quadrotor_base.obj")
 
-    robot_obj = FileIO.load(obj);
+    quad_scaling = 0.7
+    robot_obj = FileIO.load(obj)
+    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
 
-    sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.2)) # trajectory points
-    sphere_medium = HyperSphere(Point3f0(0), convert(Float32,0.5));
 
-    vis = Visualizer()
-    open(vis)
+    sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.25)) # trajectory points
+    sphere_medium = HyperSphere(Point3f0(0), convert(Float32,2.0));
+
+
     obstacles = vis["obs"]
     traj = vis["traj"]
     robot = vis["robot"]
     setobject!(vis["robot"]["quad"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)));
+    # setobject!(vis["robot"]["ball"],sphere_medium,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.5)));
+
     settransform!(vis["/Cameras/default"], compose(Translation(0., 72., 60.),LinearMap(RotX(pi/7.5)*RotZ(pi/2))))
     addcylinders!(vis,Problems.quadrotor_maze_objects,16.0)
     traj = vis["traj"]
@@ -98,4 +104,4 @@ function visualize_quadrotor_maze(prob)
     MeshCat.setanimation!(vis,anim)
 end
 
-visualize_quadrotor_maze(p1)
+visualize_quadrotor_maze(p3)
