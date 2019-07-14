@@ -2,7 +2,7 @@ using BenchmarkTools, Plots, SNOPT7
 
 # options
 T = Float64
-max_con_viol = 1.0e-8
+max_con_viol = 1.0e-6
 dt_max = 0.2
 dt_min = 1.0e-3
 verbose=false
@@ -14,8 +14,8 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_time=10.0,
-    dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-5)
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_time=12.5,
+    dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-4)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt, opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
@@ -29,7 +29,7 @@ opts_mt_snopt = DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(
 
 ## Solver comparison
 
-# ALTRO w/o Newton
+# ALTRO w/ Newton
 prob_altro = copy(Problems.parallel_park_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 # @benchmark p1, s1 = solve($prob_altro, $opts_altro)
@@ -62,15 +62,16 @@ plot(p3.U,title="Parallel Park - (SNOPT)")
 
 ## Minimum Time
 
-# ALTRO w/o Newton
+# ALTRO w/ Newton
 prob_mt_altro = update_problem(copy(Problems.parallel_park_problem),tf=0.) # make minimum time problem by setting tf = 0
 initial_controls!(prob_mt_altro,p1.U)
-p4, s4 = solve(prob_mt_altro,opts_altro)
+@time p4, s4 = solve(prob_mt_altro,opts_altro)
 # @benchmark p4, s4 = solve($prob_mt_altro, $opts_altro)
 max_violation(p4)
-X4 = to_array(p4.X)
+total_time(p4)
 plot(X4[1,:],X4[2,:],title="Parallel Park Min. Time - (ALTRO)")
 plot(p4.U,title="Parallel Park Min. Time - (ALTRO)")
+
 
 # DIRCOL w/ Ipopt
 prob_mt_ipopt = copy(Problems.parallel_park_problem)
@@ -80,6 +81,7 @@ prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car_model) # get con
 @time p5, s5 = solve(prob_mt_ipopt, opts_mt_ipopt)
 # @benchmark p5, s5 = solve($prob_mt_ipopt, $opts_mt_ipopt)
 max_violation(p5)
+total_time(p5)
 X5 = to_array(p5.X)
 plot(X5[1,:],X5[2,:],title="Parallel Park Min. Time - (Ipopt)")
 plot(p5.U,title="Parallel Park Min. Time - (Ipopt)")
@@ -92,6 +94,7 @@ prob_mt_snopt = update_problem(prob_mt_snopt,model=Dynamics.car_model) # get con
 @time p6, s6 = solve(prob_mt_snopt, opts_mt_snopt)
 # @benchmark p6, s6 = solve($prob_mt_snopt, $opts_mt_snopt)
 max_violation(p6)
+total_time(p6)
 X6 = to_array(p6.X)
 plot(X6[1,:],X6[2,:],title="Parallel Park Min. Time - (SNOPT)")
 plot(p6.U,title="Parallel Park Min. Time- (SNOPT)")
