@@ -120,7 +120,7 @@ Z_inf = zeros(model_inf.n,model_inf.n+model_inf.m+1)
 evaluate!(x_d,model_d,x,u,1.0)
 evaluate!(x_inf,model_inf,x,u_inf,1.0)
 
-evaluate!(Z_d,rand(model_d.n),model_d,x,u,1.0)
+jacobian!(Z_d,model_d,x,u,1.0)
 model_inf.∇f(Z_inf,x,u_inf,1.0)
 
 @test x_inf == x_d + u_inf[model_d.m+1:end]
@@ -146,7 +146,7 @@ Z_mintime = zeros(model_mintime.n,model_mintime.n+model_mintime.m)
 evaluate!(x_d,model_d,x,u,dt)
 evaluate!(x₊_mintime,model_mintime,x_mintime,u_mintime,Inf) # note we can use Inf here since dt input is not used
 
-evaluate!(Z_d,rand(model_d.n),model_d,x,u,dt)
+jacobian!(Z_d,model_d,x,u,dt)
 model_mintime.∇f(Z_mintime,x_mintime,u_mintime,Inf)
 
 @test isapprox(x₊_mintime[1:model_d.n],x_d)
@@ -164,7 +164,6 @@ dt = 0.75
 x = rand(model_d.n)
 u = rand(model_d.m)
 u_altro = sqrt(dt)*ones(model_altro.m); u_altro[1:model_d.m] .= u
-u_altro
 x_d = zeros(model_d.n)
 x_altro = rand(model_altro.n); x_altro[1:model_d.n] .= x
 x₊_altro = zeros(model_altro.n)
@@ -177,7 +176,7 @@ Z_altro = zeros(model_altro.n,model_altro.n+model_altro.m)
 evaluate!(x_d,model_d,x,u,dt)
 evaluate!(x₊_altro,model_altro,x_altro,u_altro,Inf) # note we can use Inf here since dt input is not used
 
-evaluate!(Z_d,rand(model_d.n),model_d,x,u,dt)
+jacobian!(Z_d,model_d,x,u,dt)
 model_altro.∇f(Z_altro,x_altro,u_altro,Inf)
 
 @test isapprox(x₊_altro[1:model_d.n],x_d + u_altro[(1:model_d.n) .+ model_d.n])

@@ -60,7 +60,7 @@ $(FIELDS)
 
     "constraint satisfaction tolerance that triggers the projected newton solver.
     If set to a non-positive number it will kick out when the maximum penalty is reached."
-    projected_newton_tolerance::T = 1e-3
+    projected_newton_tolerance::T = 1.0e-3
 
 end
 

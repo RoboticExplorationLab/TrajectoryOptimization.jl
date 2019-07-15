@@ -80,9 +80,9 @@ TO.cost_expansion!(E, cost_term, x)
 @test E.xx == Qf
 
 grad = PartedVector(zeros(n+m), create_partition((n,m),(:x,:u)))
-TO.gradient!(grad, quadcost, x, u)
-@test grad.x == Q*x
-@test grad.u == R*u
+TO.gradient!(grad, quadcost, x, u, dt)
+@test grad.x == dt*Q*x
+@test grad.u == dt*R*u
 
 grad = zeros(n)
 TO.gradient!(grad, cost_term, x)
@@ -143,3 +143,40 @@ TO.cost_expansion!(E, nlcost2, x, u)
 
 nlcost3 = copy(nlcost)
 @test TO.stage_cost(nlcost3,x,u) == TO.stage_cost(nlcost,x,u)
+
+# Minimum time
+n = 4
+m = 2
+N = 10
+Q = Diagonal(ones(n))
+R = Diagonal(ones(m))
+Qf = 0.7*Diagonal(ones(n))
+xf = rand(n)
+
+_x = rand(n+1)
+_u = rand(m+1)
+dt = 0.134
+
+part_mt = (x=1:(n+1), u=(n+1) .+ (1:(m+1)))
+part2_mt = (xx=(part_mt.x, part_mt.x), uu=(part_mt.u, part_mt.u), ux=(part_mt.u, part_mt.x), xu=(part_mt.x, part_mt.u))
+_cost = LQRCost(Q,R,xf)
+_cost_term = TO.LQRCostTerminal(Qf,xf)
+_cost_mt = TO.MinTimeCost(_cost,1.6)
+_cost_term_mt = TO.MinTimeCost(_cost_term,1.6)
+
+EE = TO.Expansion{Float64}(n+1,m+1)
+grad_mt = zeros(n+1+m+1)
+grad_term_mt = zeros(n+1)
+hess_mt = PartedMatrix(zeros(n+1+m+1,n+1+m+1),part2_mt)
+hess_term_mt = zeros(n+1,n+1)
+cost_expansion!(EE, _cost_mt, _x, _u, dt)
+TO.gradient!(grad_mt,_cost_mt,_x,_u,dt)
+TO.gradient!(grad_term_mt,_cost_term_mt,_x)
+TO.hessian!(hess_mt,_cost_mt,_x,_u,dt)
+TO.hessian!(hess_term_mt,_cost_term_mt,_x)
+
+@test isapprox(EE.x,grad_mt[1:(n+1)])
+@test isapprox(EE.u,grad_mt[(n+1) .+ (1:(m+1))])
+@test isapprox(EE.xx,hess_mt.xx)
+@test isapprox(EE.uu,hess_mt.uu)
+@test isapprox(EE.ux,hess_mt.ux)

@@ -83,14 +83,16 @@ end
 #              COST FUNCTION INTERFACE                #
 #######################################################
 
-"$(SIGNATURES) Evaluate the cost at state `x` and control `u`"
-stage_cost(cost::CostFunction, x, u) = 0.0
-"$(SIGNATURES) Evaluate the cost at the terminal state `xN`"
-stage_cost(cost::CostFunction, xN) = 0.0
-"$(SIGNATURES) Evaluate the second order expansion at state `x` and control `u`"
-cost_expansion!(Q::Expansion, cost::CostFunction, x, u) = nothing
-"$(SIGNATURES) Evaluate the second order expansion at the terminal state `xN`"
-cost_expansion!(Q::Expansion, cost::CostFunction, xN) = nothing
+#TODO this documentation breaks functionality by create ambiguous methods...
+
+# "$(SIGNATURES) Evaluate the cost at state `x` and control `u`"
+# stage_cost(cost::CostFunction, x, u) = 0.0
+# "$(SIGNATURES) Evaluate the cost at the terminal state `xN`"
+# stage_cost(cost::CostFunction, xN) = 0.0
+# "$(SIGNATURES) Evaluate the second order expansion at state `x` and control `u`"
+# cost_expansion!(Q::Expansion, cost::CostFunction, x, u) = nothing
+# "$(SIGNATURES) Evaluate the second order expansion at the terminal state `xN`"
+# cost_expansion!(Q::Expansion, cost::CostFunction, xN) = nothing
 
 
 """

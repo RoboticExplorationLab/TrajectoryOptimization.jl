@@ -26,8 +26,6 @@ function gen_xm_cubic(prob::Problem)
     ẋ = zeros(prob.model.n); ẏ = zeros(prob.model.n)
 
     function xm(y,x,v,u,h)
-        ẋ = zero(x); ẏ = zero(y)
-
         prob.model.f(ẋ,x,u)
         prob.model.f(ẏ,y,v)
 
@@ -77,33 +75,16 @@ function gen_stage_cost_gradient(prob::Problem)
     dxmdv(y,x,v,u,h) = -h/8*dfcdu(y,v)
     dxmdu(y,x,v,u,h) = h/8*dfcdu(x,u)
 
-    # xm_aug(zz) = xm(zz[1:n],zz[n .+ (1:n)],zz[(2n) .+ (1:m)],zz[(2n+m) .+ (1:m)],zz[(2n+2m)+1])
-    # yy = rand(n); xx = rand(n); vv = rand(m); uu = rand(m); ddt = .23
-    # XM = ForwardDiff.jacobian(xm_aug,[yy;xx;vv;uu;ddt])
-    # @assert isapprox(XM[:,1:n],dxmdy(yy,xx,vv,uu,ddt))
-    # @assert isapprox(XM[:,n .+ (1:n)],dxmdx(yy,xx,vv,uu,ddt))
-    # @assert isapprox(XM[:,(2n) .+ (1:m)],dxmdv(yy,xx,vv,uu,ddt))
-    # @assert isapprox(XM[:,(2n+m) .+ (1:m)],dxmdu(yy,xx,vv,uu,ddt))
-    # isapprox(XM[:,(2n+2m) + 1],dxmdh(yy,xx,vv,uu,ddt))
 
-    # _obj = LQRObjective(3.2*Diagonal(ones(n)),1.7*Diagonal(ones(m)),16.4*Diagonal(ones(n)),rand(n),5)[1]
 
     dℓdx(obj,x,u) = obj.Q*x + obj.q + obj.H'*u
     dℓdu(obj,x,u) = obj.R*u + obj.r + obj.H*x
-
-    # gg(y,x,v,u,h) = h/6*(stage_cost(_obj,x,u) + 4*stage_cost(_obj,xm(y,x,v,u,h),0.5*(u+v)) + stage_cost(_obj,y,v))
-    # gg_aug(zz) = gg(zz[1:n],zz[n .+ (1:n)],zz[(2n) .+ (1:m)],zz[(2n+m) .+ (1:m)],zz[(2n+2m)+1])
 
     dgdx(obj,y,x,v,u,h) = h/6*(dℓdx(obj,x,u) + 4*dxmdx(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)))
     dgdy(obj,y,x,v,u,h) = h/6*(4.0*dxmdy(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v))+ dℓdx(obj,y,v))
     dgdu(obj,y,x,v,u,h) = h/6*(dℓdu(obj,x,u) + 4*(dxmdu(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + 0.5*dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))))
     dgdv(obj,y,x,v,u,h) = h/6*(4*(dxmdv(y,x,v,u,h)'*dℓdx(obj,xm(y,x,v,u,h),0.5*(u+v)) + 0.5*dℓdu(obj,xm(y,x,v,u,h),0.5*(u+v))) + dℓdu(obj,y,v))
 
-    # GM = ForwardDiff.gradient(gg_aug,[yy;xx;vv;uu;ddt])
-    # @assert isapprox(GM[1:n],dgdy(_obj,yy,xx,vv,uu,ddt))
-    # @assert isapprox(GM[n .+ (1:n)],dgdx(_obj,yy,xx,vv,uu,ddt))
-    # @assert isapprox(GM[(2n) .+ (1:m)],dgdv(_obj,yy,xx,vv,uu,ddt))
-    # @assert isapprox(GM[(2n+m) .+ (1:m)],dgdu(_obj,yy,xx,vv,uu,ddt))
 
     nn = 2*(n+m)
     _tmp_ = zeros(n)
@@ -114,11 +95,25 @@ function gen_stage_cost_gradient(prob::Problem)
         for k = 1:N-1
             obj = prob.obj[k]
             x = X[k]; y = X[k+1]; u = U[k]; v = U[k+1]; h = H[k]
+
+            _xm = xm(y,x,v,u,h)
+            _um = 0.5*(u+v)
+            _dℓdx = dℓdx(obj,x,u)
+            _dℓdu = dℓdu(obj,x,u)
+            _dℓdy = dℓdx(obj,y,v)
+            _dℓdv = dℓdu(obj,y,v)
+            _dℓmdx = dℓdx(obj,_xm,_um)
+            _dℓmdu = dℓdu(obj,_xm,_um)
+            _dxmdx = dxmdx(y,x,v,u,h)
+            _dxmdy = dxmdy(y,x,v,u,h)
+            _dxmdu = dxmdu(y,x,v,u,h)
+            _dxmdv = dxmdv(y,x,v,u,h)
+
             _∇g = view(∇g,shift .+ (1:nn))
-            _∇g[1:n] += dgdx(obj,y,x,v,u,h)
-            _∇g[n .+ (1:m)] += dgdu(obj,y,x,v,u,h)
-            _∇g[(n+m) .+ (1:n)] += dgdy(obj,y,x,v,u,h)
-            _∇g[(2*n+m) .+ (1:m)] += dgdv(obj,y,x,v,u,h)
+            _∇g[1:n] += h/6*(_dℓdx + 4*_dxmdx'*_dℓmdx)
+            _∇g[n .+ (1:m)] += h/6*(_dℓdu + 4*(_dxmdu'*_dℓmdx + 0.5*_dℓmdu))
+            _∇g[(n+m) .+ (1:n)] += h/6*(4.0*_dxmdy'*_dℓmdx + dℓdx(obj,y,v))
+            _∇g[(2*n+m) .+ (1:m)] += h/6*(4*(_dxmdv'*_dℓmdx + 0.5*_dℓmdu) + dℓdu(obj,y,v))
             shift += (n+m)
         end
 

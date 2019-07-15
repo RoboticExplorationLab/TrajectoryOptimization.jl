@@ -15,6 +15,9 @@ include("primals.jl")
     "Print output to console"
     verbose::Bool = true
 
+    "Number of Newton steps"
+    n_steps::Int = 1
+
     "Solve type, feasibile or optimal"
     solve_type::Symbol = :feasible
 
@@ -23,6 +26,7 @@ include("primals.jl")
 
     "Tolerance for constraint feasibility during projection"
     feasibility_tolerance = 1e-6
+
 end
 
 """
@@ -36,7 +40,7 @@ Achieves machine-level constraint satisfaction by projecting onto the feasible s
 This solver is to be used exlusively for solutions that are close to the optimal solution.
     It is intended to be used as a "solution polishing" method for augmented Lagrangian methods.
 """
-struct ProjectedNewtonSolver{T} <: DirectSolver{T}
+mutable struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     opts::ProjectedNewtonSolverOptions{T}
     stats::Dict{Symbol,Any}
     V::PrimalDual{T}

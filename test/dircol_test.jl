@@ -95,7 +95,7 @@ X,U = Z.X, Z.U
 @test Z.X isa TrajectoryOptimization.AbstractVectorTrajectory
 @test typeof(Z.X) <: Vector{S} where S <: AbstractVector
 initial_controls!(prob, Z.U)
-initial_state!(prob, Z.X)
+TO.initial_states!(prob, Z.X)
 @test cost(prob, dircol) == cost(prob)
 
 # Collocation constraints

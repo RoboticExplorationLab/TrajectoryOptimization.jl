@@ -132,7 +132,10 @@ end
 function solve!(prob::Problem,opts::DIRCOLSolverMTOptions)
     res, dircol = solve_moi(prob, opts)
     copyto!(prob.X,res.X)
-    copyto!(prob.U,res.U[1:prob.N-1])
+    # copyto!(prob.U,res.U[1:prob.N-1])
+    for k = 1:prob.N-1
+        prob.U[k] = [res.U[k]; res.H[k]]
+    end
 
     return dircol
 end

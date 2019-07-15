@@ -291,22 +291,28 @@ function jacobian_uncertain!(Z::AbstractArray,model::Model{Uncertain,Discrete},x
     model.evals[2] += 1
 end
 
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt) where {M<:ModelType,T}
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k],dt[k])
+    end
+end
 
-function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::T) where T
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt) where T
     N = length(X)
     n = model.n; m = model.m; r = model.r
     m_e = length(U[1]) - length(U[2])
     idx = [(1:n)...,(n .+ (1:m))...,((n+m+m_e) .+ (1:r))...,(n+m+m_e+r+1)]
-    jacobian!(view(Z[1],1:n,idx),model,X[1],U[1][1:m],dt)
+    jacobian!(view(Z[1],1:n,idx),model,X[1],U[1][1:m],dt[1])
     for k = 2:N-1
-        jacobian!(Z[k],model,X[k],U[k],dt)
+        jacobian!(Z[k],model,X[k],U[k],dt[k])
     end
 end
 
-function jacobian_uncertain!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},W::VectorTrajectory{T},dt::T) where T
+function jacobian_uncertain!(Z::PartedMatTrajectory{T},model::Model{Uncertain,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},W::VectorTrajectory{T},dt) where T
     N = length(X)
     for k = 1:N-1
-        jacobian!(Z[k],model,X[k],U[k],W[k],dt)
+        jacobian!(Z[k],model,X[k],U[k],W[k],dt[k])
     end
 end
 
