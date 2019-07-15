@@ -9,7 +9,7 @@ Pages = ["models.md"]
 ## Overview
 The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form y = f(x,u) where y is the state derivative (Continous) or the next state (Discrete), x an n-dimentional state vector, and u in an m-dimensional control input vector. The function f can be any nonlinear function.
 
-TrajectoryOptimization.jl $\textit{discrete}$ trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, i.e., turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.
+TrajectoryOptimization.jl solves the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, i.e., turning the continuous time differential equation into a discrete time difference equation of the form x[k+1] = f(x[k],u[k]), where k is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods.
 
 Sometimes is it convenient to write down the difference equation directly, rather than running a differential equation through a discretizing integration method. TrajectoryOptimization.jl offers method deal directly with either continuous differential equations, or discrete difference equations.
 

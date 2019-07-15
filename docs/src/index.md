@@ -7,6 +7,7 @@ CurrentModule = TrajectoryOptimization
 Documentation for TrajectoryOptimization.jl
 
 ```@contents
+Pages = ["index.md"]
 ```
 
 
@@ -40,8 +41,7 @@ To set up and solve a trajectory optimization problem with `TrajectoryOptimizati
 
 1) Create a [Model](@ref model_section)
 2) Create an [Objective](@ref objective_section)
-3) (Optionally) Add constraints
+3) (Optionally) Add [constraints](@ref constraint_section)
 4) Instantiate a [Problem](@ref problem_section)
-5) Select a solver
+5) Select a [solver](@ref solver_section)
 6) Solve the problem
-7) Analyze the solution

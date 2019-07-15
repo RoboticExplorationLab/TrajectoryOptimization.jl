@@ -159,6 +159,8 @@ function init_constraint_trajectories(constraints::Constraints,n::Int,m::Int,N::
 
     return C,∇C,λ,μ,active_set
 end
+AugmentedLagrangianSolver(prob::Problem, opts::AugmentedLagrangianSolverOptions) =
+    AbstractSolver(prob, opts)
 
 function reset!(solver::AugmentedLagrangianSolver{T}) where T
     solver.stats[:iterations]       = 0
