@@ -41,13 +41,11 @@ MOI.hessian_lagrangian_structure(d::DIRCOLProblem) = []
 function MOI.eval_objective(d::DIRCOLProblem, Z)
     X,U = unpack(Z, d.part_z)
     d.cost(X, U, get_dt_traj(d.prob))
-    # cost(d.prob.obj,X,U,get_dt_traj(d.prob,U))
 end
 
 function MOI.eval_objective_gradient(d::DIRCOLProblem, grad_f, Z)
     X,U = unpack(Z, d.part_z)
     d.cost_gradient!(grad_f,X,U,get_dt_traj(d.prob))
-    # cost_gradient!(grad_f,d.prob,X,U,get_dt_traj(d.prob,U))
 end
 
 function MOI.eval_constraint(d::DIRCOLProblem, g, Z)

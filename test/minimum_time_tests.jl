@@ -124,5 +124,3 @@ tt_mt = total_time(prob_mt)
 
 @test norm(prob_mt.X[end] - xf,Inf) < 1e-3
 @test max_violation(prob_mt) < opts_al.constraint_tolerance
-
-plot(prob_mt.U)

@@ -25,7 +25,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     resolve_feasible_problem=false,
     opts_pn=opts_pn,
     projected_newton=true,
-    projected_newton_tolerance=1.0e-5);
+    projected_newton_tolerance=1.0e-3);
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
@@ -52,6 +52,14 @@ max_violation(p1)
 Problems.plot_escape(p1.X,x0,xf)
 
 
+s1
+t_span_al = range(0,stop=s1.stats[:time_al],length=s1.solver_al.stats[:iterations])
+t_span_pn = range(s1.stats[:time_al],stop=s1.stats[:time],length=s1.solver_pn.stats[:iterations]+1)
+t_span = [t_span_al;t_span_pn[2:end]]
+c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
+
+scatter(t_span,c_span,color=:orange,width=2,yscale=:log10,ylim=[1.0e-9,1.0e-1])
+
 # DIRCOL w/ Ipopt
 prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
@@ -65,6 +73,9 @@ prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation(p3)
 Problems.plot_escape(p3.X,x0,xf)
+
+@time p3, s3 = solve!(prob_snopt, opts_snopt)
+s3
 
 # AL-iLQR
 prob_altro = copy(Problems.car_escape_problem)
