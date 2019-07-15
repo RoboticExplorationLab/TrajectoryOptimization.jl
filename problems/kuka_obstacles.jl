@@ -130,7 +130,7 @@ U_hold = hold_trajectory(n,m,N, kuka, x0[1:7])
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 obs = Constraint{Inequality}(cI_arm_obstacles,n,m,length(points)*num_obstacles,:obs)
-bnd = BoundConstraint(n,m,u_min=-80.,u_max=80.,trim=true)
+bnd = BoundConstraint(n,m,u_min=-1000.,u_max=1000.)
 goal = goal_constraint(xf)
 constraints = Constraints(N)
 constraints[1] += bnd

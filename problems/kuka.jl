@@ -1,8 +1,8 @@
-using MeshCatMechanisms
-using MeshCat
-using RigidBodyDynamics
-using GeometryTypes
-using CoordinateTransformations
+# using MeshCatMechanisms
+# using MeshCat
+# using RigidBodyDynamics
+# using GeometryTypes
+# using CoordinateTransformations
 
 kuka = parse_urdf(Dynamics.urdf_kuka,remove_fixed_tree_joints=false)
 
@@ -31,7 +31,7 @@ x0_ee = Dynamics.end_effector_function(x0);
 
 goal = goal_constraint(xf)
 
-N = 51 # number of knot points
+N = 41 # number of knot points
 dt = tf/(N-1)# total time
 
 U_hold = Dynamics.hold_trajectory(n,m,N, kuka, x0[1:7])

@@ -269,13 +269,13 @@ end
 
 function hessian!(hess, cost::MinTimeCost, xN::AbstractVector)
     @assert cost.cost isa QuadraticCost
-    n,m = get_sizes(cost.cost)
-    idx = (x=1:n,u=1:m)
-    R_min_time = cost.R_min_time
-    τ = u[end]
-    dt = τ^2
 
-    hess[idx.x,idx.x] .= cost.cost.Q*dt
+    n, = get_sizes(cost.cost)
+    R_min_time = cost.R_min_time
+
+    idx = 1:n
+    hess[idx,idx] = cost.cost.Q
+
     hess[end,end] = R_min_time
 
     return nothing
