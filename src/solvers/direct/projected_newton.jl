@@ -4,11 +4,25 @@
 #          SOLVE           #
 ############################
 function solve!(prob::Problem, solver::ProjectedNewtonSolver)
-    V_ = newton_step!(prob, solver)
-    copyto!(prob.X, V_.X)
-    copyto!(prob.U, V_.U)
-    # projection!(prob)
+    for i = 1:solver.opts.n_steps
+        V_ = newton_step!(prob, solver)
+        copyto!(prob.X, V_.X)
+        copyto!(prob.U, V_.U)
+
+        record_iteration!(prob,solver)
+        solver.stats[:c_max][end] <= solver.opts.feasibility_tolerance ? break : nothing
+    end
+
     return solver
+end
+
+function record_iteration!(prob::Problem, solver::ProjectedNewtonSolver)
+    J = cost(prob)
+    c_max = max_violation(prob)
+
+    solver.stats[:iterations] += 1
+    push!(solver.stats[:cost],J)
+    push!(solver.stats[:c_max],c_max)
 end
 
 
@@ -121,12 +135,10 @@ function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.
         grad = PartedVector(view(g, off .+ part.z), part)
         hessian!(hess, prob.obj[k], V.X[k], V.U[k],dt[k])
         gradient!(grad, prob.obj[k], V.X[k], V.U[k],dt[k])
-        # hess .*= dt[k]
-        # grad .*= dt[k]
+
         off += n+m
     end
-    # H .*= prob.dt
-    # g .*= prob.dt
+
     hess = PartedMatrix(view(H, off .+ part.x, off .+ part.x), part2)
     grad = PartedVector(view(g, off .+ part.x), part)
     hessian!(hess, prob.obj[N], V.X[N])

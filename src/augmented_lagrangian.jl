@@ -13,9 +13,12 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
             J = step!(prob_al, solver, solver_uncon)
 
             record_iteration!(prob, solver, J, solver_uncon)
+
             converged = evaluate_convergence(solver)
             println(logger,OuterLoop)
             converged ? break : nothing
+
+            reset!(solver_uncon)
         end
     end
     return solver
@@ -46,8 +49,6 @@ function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
 
     # Solve the unconstrained problem
     J = solve!(prob, unconstrained_solver)
-
-    reset!(unconstrained_solver)
 
     # Outer loop update
     dual_update!(prob, solver)

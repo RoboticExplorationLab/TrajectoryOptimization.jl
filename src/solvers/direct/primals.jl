@@ -155,7 +155,6 @@ struct PrimalDual{T} <: AbstractArray{T,1}
 end
 
 
-
 function PrimalDual(prob::Problem{T}) where T
     n,m,N = size(prob)
     NN = N*n + (N-1)*m
@@ -226,7 +225,6 @@ function Base.copy(V::PrimalDual)
     a = [view(active_set, V.a[k].indices[1]) for k = 1:N]
     PrimalDual(V2, Z, X, U, Y, ν, λ, active_set, a)
 end
-
 
 import Base: size, length, getindex, setindex
 size(V::PrimalDual) = size(V.V)
