@@ -22,19 +22,77 @@ include("solvers/direct/direct_solvers_mintime.jl")
 include("solvers/direct/dircol_mintime.jl")
 include("solvers/direct/moi_mintime.jl")
 
-# Generic methods for calling solve
 
+# Solver interface
+"""$(SIGNATURES)
+Solve trajectory optimization problem `prob` using `solver`.
+    The problem will be modified in place, with the solution stored in `prob.X` and `prob.U`.
+    The solver will also be modified, and may either return the same solver or a new one that may or may not be the same type as the one given.
+"""
+solve!(prob::Problem, solver::AbstractSolver)::AbstractSolver = return solver
+
+"```
+AbstractSolver(prob::Problem, opts::AbstractSolverOptions)::AbsractSolver
+```
+Create a solver, with the type specified by the type of the solver options `opts` "
+AbstractSolver(::Problem, ::AbstractSolverOptions)::AbstractSolver =
+    error("Can't create an Abstract Solver without knowing the type of the Solver Options")
+
+"```
+reset!(solver::AbstractSolver)
+```
+Reset the solver, including initial values for the fields and solve statistics"
+reset!(::AbstractSolver) = nothing
+
+"```
+copy(solver::AbstractSolver)::AbstractSolver
+```
+Create a copy of the solver with zero associated memory between the two solvers"
+copy(::AbstractSolver)::AbstractSolver = error("Cannot copy `AbstractSolver`")
+
+"```
+size(solver::AbstractSolver)::NTuple{3,Int}
+```
+ Return the number of controls (n), number of states (m), and the number of knot points (N) as a tuple, i.e. (n,m,N)"
+size(::AbstractSolver)::NTuple{3,Int} = error("`AbstractSolver` has no size")
+
+
+
+# Generic methods for calling solve
+"""```
+solve!(prob, opts)::AbstractSolver
+```
+Solve the trajectory optimization problem `prob` using the solver specified by solver options `opts`.
+    The problem will be modified in place, storing the solution in `prob.X` and `prob.U`.
+"""
 function solve!(prob::Problem, opts::AbstractSolverOptions)
     solver = AbstractSolver(prob, opts)
     solve!(prob, solver)
 end
 
+"""```
+solve(prob, opts)::Tuple{Problem,AbstractSolver}
+```
+Solve the trajectory optimization problem `prob` using the solver specified by solver options `opts`.
+    The problem will not be modified in place,
+    and will instead return a new problem with the solution in `prob.X` and `prob.U`,
+    along with the solver.
+"""
 function solve(prob::Problem, opts::AbstractSolverOptions)
     prob0 = copy(prob)
     solver = solve!(prob0, opts)
     return prob0, solver
 end
 
+"""```
+solve(prob, solver)::Tuple{Problem,AbstractSolver}
+```
+Solve the trajectory optimization problem `prob` using `solver`.
+    The problem will not be modified in place,
+    and will instead return a new problem with the solution in `prob.X` and `prob.U`,
+    along with the solver. The solver will be modified in place,
+        and may or may not be the same solver returned.
+"""
 function solve(prob::Problem, solver::AbstractSolver)
     prob0 = copy(prob)
     solver = solve!(prob0, solver)

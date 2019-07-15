@@ -1,7 +1,10 @@
 using Logging
 
+"Log Level for outer loop iterations (e.g. Augmented Lagrangian). LogLevel(-100)"
 const OuterLoop = LogLevel(-100)
+"Log Level for inner loop iterations (e.g. iLQR). LogLevel(-200)"
 const InnerLoop = LogLevel(-200)
+"Log Level for internal solve methods (e.g. forward pass for iLQR). LogLevel(-500)"
 const InnerIters = LogLevel(-500)
 
 function default_logger(verbose::Bool)
@@ -41,6 +44,13 @@ are the column widths, and `print` will turn on/off printing the column.
 
 All values can be cached at any moment in time to accumulate a history of the
 data.
+
+# Constructors
+```julia
+LogData(metadata::NamedTuple=(color=:default, header_frequency=10, indent=0))
+LogData(cols, widths; do_print=trues(length(cols)), vartypes=fill(Any, length(cols)),
+    color=:default, header_frequency=10, indent=0)
+```
 """
 struct LogData
     cols::Vector{Symbol}
