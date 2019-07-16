@@ -89,7 +89,6 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
-    # Create solver
     solver = eval(opts.nlp).Optimizer(;opts.opts...)
     Z = MOI.add_variables(solver, NN)
 
@@ -114,8 +113,11 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     res = MOI.get(solver, MOI.VariablePrimal(), Z)
     res = Primals(res, d.part_z)
 
+    dircol.stats[:status] = MOI.get(solver, MOI.TerminationStatus())
+
     # Return the results
     return res, dircol
+
 end
 
 function solve!(prob::Problem,opts::DIRCOLSolverOptions)

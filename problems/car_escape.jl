@@ -1,5 +1,4 @@
 # Car Escape
-Random.seed!(1)
 T = Float64;
 
 # model
@@ -53,7 +52,7 @@ goal = goal_constraint(xf)
 
 N = 101
 tf = 3.0
-U = [ones(m) + rand(m)/3 for k = 1:N-1]
+U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 constraints = Constraints(N)
