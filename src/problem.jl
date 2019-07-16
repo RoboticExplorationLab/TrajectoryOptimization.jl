@@ -33,7 +33,7 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct Problem{T<:AbstractFloat,D<:DynamicsType}
+mutable struct Problem{T<:AbstractFloat,D<:DynamicsType}
     model::AbstractModel
     obj::AbstractObjective
     constraints::Constraints
@@ -307,7 +307,7 @@ function get_dt_traj(prob::Problem)
 end
 
 function get_dt_traj(prob::Problem,U::Trajectory)
-    [get_dt(prob,U[k],k) for k = 1:prob.N-1]
+    [get_dt(prob,U[k]) for k = 1:prob.N-1]
 end
 
 "$(SIGNATURES) Get the total time for tje trajectory (applicable for time-penalized problems)"

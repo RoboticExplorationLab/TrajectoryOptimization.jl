@@ -33,7 +33,7 @@ end
 function rollout!(X::AbstractVectorTrajectory, model::Model{M,Discrete}, U::AbstractVectorTrajectory, dt) where {M,T}
     N = length(X)
     for k = 1:N-1
-        evaluate!(X[k+1], model, X[k], U[k], dt)
+        evaluate!(X[k+1], model, X[k], U[k], dt[k])
     end
 end
 

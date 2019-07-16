@@ -148,7 +148,7 @@ Direct Collocation Solver.
 Uses a commerical NLP solver to solve the Trajectory Optimization problem.
 Uses the MathOptInterface to interface with the NLP.
 """
-struct DIRCOLSolver{T,Q} <: DirectSolver{T}
+mutable struct DIRCOLSolver{T,Q} <: DirectSolver{T}
     opts::DIRCOLSolverOptions{T}
     stats::Dict{Symbol,Any}
     Z::Primals{T}
@@ -194,8 +194,9 @@ function AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions, Z::Primals{T}=
 end
 
 function reset!(solver::DIRCOLSolver{T,Q}) where {T, Q<:QuadratureRule}
-    state = Dict{Symbol,Any}(:iterations=>0, :c_max=>T[], :cost=>T[])
+    # state = Dict{Symbol,Any}(:iterations=>0, :c_max=>T[], :cost=>T[])
     solver.stats[:iterations] = 0
     solver.stats[:c_max] = T[]
     solver.stats[:cost] = T[]
+    solver.stats[:iter_time] = T[]
 end

@@ -6,25 +6,33 @@ T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
-opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
+    live_plotting=:off)
 
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    cost_tolerance=1.0e-5,cost_tolerance_intermediate=1.0e-2,constraint_tolerance=max_con_viol,
-    penalty_scaling=100.,penalty_initial=1.)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
+    opts_uncon=opts_ilqr,
+    cost_tolerance=1.0e-5,
+    cost_tolerance_intermediate=1.0e-2,
+    constraint_tolerance=max_con_viol,
+    penalty_scaling=100.,
+    penalty_initial=1.)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
+    feasibility_tolerance=max_con_viol)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,
-    projected_newton=true,projected_newton_tolerance=1.0e-6);
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,
+    opts_al=opts_al,
+    opts_pn=opts_pn,
+    projected_newton=true,
+    projected_newton_tolerance=1.0e-4);
 
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
-    opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
+    nlp=:Ipopt,
+    feasibility_tolerance=max_con_viol)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7,
-    opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,
-    :Major_optimality_tolerance=>max_con_viol,:Major_feasibility_tolerance=>max_con_viol,
-    :Minor_feasibility_tolerance=>max_con_viol))
-
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+    nlp=:SNOPT7,
+    feasibility_tolerance=max_con_viol)
 
 
 # ALTRO w/ Newton
@@ -33,7 +41,7 @@ prob_altro = copy(Problems.acrobot_problem)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 plot(p1.X,title="Acrobot state (ALTRO)")
 plot(p1.U,title="Acrobot control (ALTRO)")
-max_violation(p1)
+max_violation_direct(p1)
 
 # DIRCOL w/ Ipopt
 prob_ipopt = copy(Problems.acrobot_problem)
@@ -43,7 +51,9 @@ prob_ipopt = update_problem(prob_ipopt,model=Dynamics.acrobot_model) # get conti
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 plot(p2.X,title="Acrobot state (Ipopt)")
 plot(p2.U,title="Acrobot control (Ipopt)")
-max_violation(p2)
+max_violation_direct(p2)
+# s2.stats[:c_max][end]
+# parse_ipopt_summary()[:c_max][end]
 
 # DIRCOL w/ SNOPT
 prob_snopt = copy(Problems.acrobot_problem)
@@ -53,4 +63,7 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.acrobot_model) # get conti
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 plot(p3.X,title="Acrobot state (SNOPT)")
 plot(p3.U,title="Acrobot control (SNOPT)")
-max_violation(p3)
+max_violation_direct(p3)
+# s3.stats[:c_max][end]
+# parse_snopt_summary()[:c_max][end]
+# parse_snopt_summary()[:c_max][end]*norm(s3.Z.Z) # try to account for snopt c_max scaling
