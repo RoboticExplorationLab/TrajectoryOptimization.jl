@@ -225,16 +225,5 @@ Z_L = Primals(z_L, part_z)
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
 
-# Test solve
-# for i = 1:10
-#     dircol = solve!(prob, opts)
-#     # if dircol.stats[:info] == :Solve_Succeeded
-#     #     break
-#     # end
-#     # if i == 10
-#     #     # error("The problem should have solved successfully")
-#     # end
-# end
-
-# dircol = solve!(prob, opts)
-# @test_nowarn TO.write_ipopt_options()
+@test_nowarn solve!(prob, opts)
+@test_nowarn TO.write_ipopt_options()
