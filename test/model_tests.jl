@@ -191,45 +191,13 @@ s = PartedVector(model_d)
 @test length(model_d) == n+m+1
 
 # Generate discrete dynamics equations
-f! = model.f
-fd! = eval(discretizer)(f!, dt)
-f_aug! = TO.f_augmented!(f!, n, m)
-fd_aug! = eval(discretizer)(f_aug!)
 nm1 = n + m + 1
 In = 1.0*Matrix(I,n,n)
-
-# Initialize discrete and continuous dynamics Jacobians
-Jd = zeros(nm1, nm1)
-Sd = zeros(nm1)
-Sdotd = zero(Sd)
-Fd!(Jd,Sdotd,Sd) = ForwardDiff.jacobian!(Jd,fd_aug!,Sdotd,Sd)
-Sdotd
-
-function fd_jacobians!(fdx,fdu,x,u)
-
-    # Assign state, control (and dt) to augmented vector
-    Sd[1:n] = x
-    Sd[n+1:n+m] = u[1:m]
-    Sd[end] = √dt
-
-    # Calculate Jacobian
-    Fd!(Jd,Sdotd,Sd)
-
-    fdx[1:n,1:n] = Jd[1:n,1:n]
-    fdu[1:n,1:m] = Jd[1:n,n.+(1:m)]
-end
-
-# Test against previous method
-x,u = rand(n),rand(m)
-ẋ,ẋ2 = zeros(n), zeros(n)
+x,u = rand(n), rand(m)
 
 model_d.f(ẋ,x,u,dt)
-fd!(ẋ2,x,u,dt)
-@test ẋ == ẋ2
 fdx = zeros(model.n,model.n); fdu = zeros(model.n,model.m)
 S = zeros(n,nm1)
-fd_jacobians!(fdx,fdu,x,u)
-@test model_d.∇f(x,u,dt)[:,1:n+m] == [fdx fdu]
 @inferred model_d.f(ẋ,x,u,dt)
 @inferred model_d.∇f(S,x,u,dt)
 
