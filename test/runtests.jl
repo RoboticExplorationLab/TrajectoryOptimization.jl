@@ -8,6 +8,7 @@ using SparseArrays
 using ForwardDiff
 using Logging
 using PartedArrays
+using SNOPT7
 const TO = TrajectoryOptimization
 
 disable_logging(Logging.Debug)
