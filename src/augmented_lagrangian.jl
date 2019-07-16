@@ -48,7 +48,8 @@ function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
         unconstrained_solver::AbstractSolver) where T
 
     # Solve the unconstrained problem
-    J = solve!(prob, unconstrained_solver)
+    solve!(prob, unconstrained_solver)
+    J = cost(prob)
 
     # Outer loop update
     dual_update!(prob, solver)

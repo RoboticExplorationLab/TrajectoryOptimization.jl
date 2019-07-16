@@ -36,7 +36,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
             evaluate_convergence(solver) ? break : nothing
         end
     end
-    return J
+    return solver 
 end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
