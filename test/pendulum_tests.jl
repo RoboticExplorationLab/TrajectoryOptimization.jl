@@ -5,7 +5,7 @@ verbose = false
 opts_ilqr = TrajectoryOptimization.iLQRSolverOptions{T}(verbose=verbose,cost_tolerance=1.0e-6)
 opts_al = TrajectoryOptimization.AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,constraint_tolerance=1.0e-4)
 
-int_schemes = [:midpoint, :rk3, :rk4]
+int_schemes = [:midpoint, :rk3, :rk4, :rk3_implicit, :midpoint_implicit]
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
 xf = Problems.pendulum_problem.xf
@@ -45,3 +45,38 @@ end
 
 # Test undefined integration
 @test_throws ArgumentError TrajectoryOptimization.Problem(model, Problems.pendulum_problem.obj, integration=:bogus, N=N)
+
+# Test different solve methods
+prob = copy(Problems.pendulum_problem)
+prob = update_problem(prob, constraints=constraints)
+solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
+out = solve!(prob, solver_al)
+@test out isa AugmentedLagrangianSolver
+
+prob = copy(Problems.pendulum_problem)
+prob = update_problem(prob, constraints=constraints)
+out = solve!(prob, opts_al)
+@test out isa AugmentedLagrangianSolver
+
+prob = copy(Problems.pendulum_problem)
+prob = update_problem(prob, constraints=constraints)
+solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
+out = solve(prob, solver_al)
+@test out isa Tuple{Problem, AugmentedLagrangianSolver}
+@test isnan(cost(prob))
+
+out = solve(prob, opts_al)
+@test out isa Tuple{Problem, AugmentedLagrangianSolver}
+@test isnan(cost(prob))
+
+
+# Test unconstrained
+prob = copy(Problems.pendulum_problem)
+solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
+@test !is_constrained(prob)
+out = solve!(prob, solver_al)
+@test out isa AugmentedLagrangianSolver
+
+prob = copy(Problems.pendulum_problem)
+out = solve!(prob, opts_al)
+@test out isa iLQRSolver
