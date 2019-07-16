@@ -3,12 +3,12 @@
 #            CUSTOM TYPES                #
 ##########################################
 
-# struct PrimalDualVars{T}
-#     X::VectorTrajectory{T}
-#     U::VectorTrajectory{T}
-#     λ::Matrix{Vector{T}}
-# end
-#
+struct PrimalDualVars{T}
+    X::VectorTrajectory{T}
+    U::VectorTrajectory{T}
+    λ::Matrix{Vector{T}}
+end
+
 # function PrimalDualVars(prob::Problem)
 #     n,m,N = size(prob)
 #     X = prob.X
@@ -24,15 +24,15 @@
 #     PrimalDualVars(deepcopy(V.X), deepcopy(V.U), deepcopy(V.λ))
 # end
 #
-# struct KKTFactors{T}
-#     E::MatrixTrajectory{T}
-#     F::MatrixTrajectory{T}
-#     G::Vector{Cholesky{T,Matrix{T}}}
-#     K::MatrixTrajectory{T}
-#     L::MatrixTrajectory{T}
-#     M::MatrixTrajectory{T}
-#     H::Vector{Cholesky{T,Matrix{T}}}
-# end
+struct KKTFactors{T}
+    E::MatrixTrajectory{T}
+    F::MatrixTrajectory{T}
+    G::Vector{Cholesky{T,Matrix{T}}}
+    K::MatrixTrajectory{T}
+    L::MatrixTrajectory{T}
+    M::MatrixTrajectory{T}
+    H::Vector{Cholesky{T,Matrix{T}}}
+end
 #
 # function KKTFactors(n,m,p_active,N)
 #     E = [zeros(n,n) for p in p_active]
@@ -48,27 +48,27 @@
 #
 #
 #
-# struct SequentialNewtonSolver{T} <: DirectSolver{T}
-#     opts::ProjectedNewtonSolverOptions{T}
-#     stats::Dict{Symbol,Any}
-#     V::PrimalDualVars{T}
-#     V_::PrimalDualVars{T}
-#     δx::VectorTrajectory{T}
-#     δu::VectorTrajectory{T}
-#     δλ::Matrix{Vector{T}}
-#     r::Matrix{Vector{T}}
-#     L::KKTFactors{T}
-#
-#     Q::Vector{Expansion{T,Diagonal{T,Vector{T}},Diagonal{T,Vector{T}}}}
-#     Qinv::Vector{Diagonal{T,Vector{T}}}
-#     Rinv::Vector{Diagonal{T,Vector{T}}}
-#     fVal::Vector{Vector{T}}
-#     ∇F::Vector{PartedArray{T,2,Matrix{T},P}} where P
-#     C::PartedVecTrajectory{T}
-#     ∇C::Vector{PartedArray{T,2,Matrix{T},P} where P}
-#     active_set::Vector{Vector{Bool}}
-#     p::Vector{Int}
-# end
+struct SequentialNewtonSolver{T} <: DirectSolver{T}
+    opts::ProjectedNewtonSolverOptions{T}
+    stats::Dict{Symbol,Any}
+    V::PrimalDualVars{T}
+    V_::PrimalDualVars{T}
+    δx::VectorTrajectory{T}
+    δu::VectorTrajectory{T}
+    δλ::Matrix{Vector{T}}
+    r::Matrix{Vector{T}}
+    L::KKTFactors{T}
+
+    Q::Vector{Expansion{T,Diagonal{T,Vector{T}},Diagonal{T,Vector{T}}}}
+    Qinv::Vector{Diagonal{T,Vector{T}}}
+    Rinv::Vector{Diagonal{T,Vector{T}}}
+    fVal::Vector{Vector{T}}
+    ∇F::Vector{PartedArray{T,2,Matrix{T},P}} where P
+    C::PartedVecTrajectory{T}
+    ∇C::Vector{PartedArray{T,2,Matrix{T},P} where P}
+    active_set::Vector{Vector{Bool}}
+    p::Vector{Int}
+end
 #
 # function SequentialNewtonSolver(prob::Problem{T}, opts::ProjectedNewtonSolverOptions{T}) where T
 #     n,m,N = size(prob)
