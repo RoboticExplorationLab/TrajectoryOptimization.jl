@@ -113,10 +113,15 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
+
+    # solve
     t0 = time()
     d.solver.stats[:iter_time] = [t0]
     MOI.optimize!(solver)
     d.solver.stats[:time] = time() - t0
+
+    d.solver.stats[:iter_time] .-= d.solver.stats[:iter_time][2]
+    deleteat!(d.solver.stats[:iter_time],1)
 
     # Get the solution
     res = MOI.get(solver, MOI.VariablePrimal(), Z)
@@ -153,7 +158,10 @@ function nlp_options(opts::DIRCOLSolverOptions)
         !opts.verbose ? opts.opts[:print_level] = 0 : nothing
         opts.feasibility_tolerance > 0. ? opts.opts[:constr_viol_tol] = opts.feasibility_tolerance : nothing
     elseif opts.nlp == :SNOPT7
-        !opts.verbose ? opts.opts[:Major_print_level] = 0 : nothing
+        if !opts.verbose
+            opts.opts[:Major_print_level] = 0
+            opts.opts[:Minor_print_level] = 0
+        end
         opts.feasibility_tolerance > 0. ? opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance : nothing
     else
         error("Nonlinear solver not implemented")
