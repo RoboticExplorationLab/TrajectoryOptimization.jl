@@ -115,7 +115,7 @@ function iLQRSolver(prob::Problem{T},opts=iLQRSolverOptions{T}()) where T
      AbstractSolver(prob, opts)
 end
 
-function AbstractSolver(prob::Problem{T}, opts::iLQRSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,D}, opts::iLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # Init solver statistics
     stats = Dict{Symbol,Any}()
 

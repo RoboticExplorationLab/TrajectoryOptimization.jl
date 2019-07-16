@@ -1,4 +1,3 @@
-using Logging
 import TrajectoryOptimization: LogData, cache_size, add_col!, create_header, create_row, cache_data!, clear!
 
 # Default log data

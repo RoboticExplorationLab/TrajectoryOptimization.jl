@@ -1,4 +1,3 @@
-const TO = TrajectoryOptimization
 
 # Set up Problem
 model = Dynamics.car_model

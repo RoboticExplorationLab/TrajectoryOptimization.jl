@@ -1,12 +1,3 @@
-import TrajectoryOptimization: dynamics
-import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
-    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    line_trajectory, total_time, generate_jacobian, _check_dynamics, AnalyticalModel, _test_jacobian,
-    f_augmented!, Nominal, discretize_model
-
-using RigidBodyDynamics
-using PartedArrays
 
 ######## Analytical Model #############
 model = Dynamics.car_model
@@ -101,7 +92,7 @@ end
 f3_p(ẋ,x,u) = f3(ẋ,x,u,params)
 ∇f3!, = generate_jacobian(f3_p,n,m)
 @test ∇f3!(x,u) == Z
-_check_dynamics(f3_p,n,m)
+TO._check_dynamics(f3_p,n,m)
 model3 = Model(f3,n,m,params)
 model4 = Model(f3,∇f3,n,m,params)
 model3.∇f(Z1,x,u); model4.∇f(Z2,x,u);
@@ -145,11 +136,11 @@ S = zeros(n,n+m+1)
 ∇fd1!, = generate_jacobian(fd1,n,m)
 @test ∇fd1!(x,u) == S[:,1:n+m]
 
-∇fd1!,fd1_aug! = generate_jacobian(Nominal,Discrete,fd1,n,m)
+∇fd1!,fd1_aug! = TO.generate_jacobian(Nominal,Discrete,fd1,n,m)
 ∇fd1!(x,u,dt)
 model1 = AnalyticalModel{Nominal,Discrete}(fd1,n,m,0)
 model2 = AnalyticalModel{Nominal,Discrete}(fd1,∇fd1,n,m,0, check_functions=true)
-@test _test_jacobian(Discrete,∇fd1) == [false,true,false]
+@test TO._test_jacobian(Discrete,∇fd1) == [false,true,false]
 # @test_nowarn _check_jacobian(Discrete,fd1,∇fd1,n,m)
 
 @test model1.∇f(x,u,dt)[:,1:6] == S[:,1:6]
@@ -202,7 +193,7 @@ s = PartedVector(model_d)
 # Generate discrete dynamics equations
 f! = model.f
 fd! = eval(discretizer)(f!, dt)
-f_aug! = f_augmented!(f!, n, m)
+f_aug! = TO.f_augmented!(f!, n, m)
 fd_aug! = eval(discretizer)(f_aug!)
 nm1 = n + m + 1
 In = 1.0*Matrix(I,n,n)

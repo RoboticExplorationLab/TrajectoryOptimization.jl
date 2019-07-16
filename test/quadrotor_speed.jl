@@ -1,6 +1,3 @@
-using PartedArrays, LinearAlgebra, BenchmarkTools, StaticArrays
-const TO = TrajectoryOptimization
-import TrajectoryOptimization: rk4!
 
 quad = Dynamics.quadrotor_model
 quad2 = Dynamics.quadrotor_model2

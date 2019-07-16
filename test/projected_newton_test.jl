@@ -1,7 +1,3 @@
-const TO = TrajectoryOptimization
-using Test, LinearAlgebra
-using ForwardDiff
-
 
 # Set up Problem
 model = Dynamics.car_model

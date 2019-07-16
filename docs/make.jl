@@ -4,16 +4,16 @@ using RigidBodyDynamics
 
 makedocs(
     sitename = "TrajectoryOptimization",
-    format = Documenter.HTML(),
-    modules = [TrajectoryOptimization],
-    devbranch = "master",
+    format = Documenter.HTML(prettyurls = false),
     pages = [
-        "index.md",
+        "Introduction" => "index.md",
         "models.md",
         "costfunctions.md",
         "constraints.md",
         "problem.md",
-        "solvers.md"
+        "solvers.md",
+        "solving.md",
+        "advanced.md",
     ]
 )
 

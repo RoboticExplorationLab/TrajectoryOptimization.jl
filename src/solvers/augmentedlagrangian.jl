@@ -115,7 +115,7 @@ AugmentedLagrangianSolver(prob::Problem{T},
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,D}, opts::AugmentedLagrangianSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # check for conflicting convergence criteria between unconstrained solver and AL: warn
 
     # Init solver statistics

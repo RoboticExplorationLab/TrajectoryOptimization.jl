@@ -1,4 +1,3 @@
-const TO = TrajectoryOptimization
 using Plots
 
 @test TO.pos(10) == 10

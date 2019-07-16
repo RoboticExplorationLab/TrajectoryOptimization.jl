@@ -1,15 +1,10 @@
-import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
-    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    cost_expansion!, Constraints
-const TO = TrajectoryOptimization
 ## Pendulum
 T = Float64
 
 # model
 model = TrajectoryOptimization.Dynamics.car_model
 n = model.n; m = model.m
-model_d = discretize_model(model,:rk4)
+model_d = TO.discretize_model(model,:rk4)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))
@@ -29,17 +24,17 @@ rollout!(prob)
 ## unconstrained
 #bp
 opts_ilqr = iLQRSolverOptions{T}()
-ilqr_solver = AbstractSolver(prob,opts_ilqr)
+ilqr_solver = iLQRSolver(prob,opts_ilqr)
 jacobian!(prob,ilqr_solver)
-cost_expansion!(prob,ilqr_solver)
-ΔV = _backwardpass!(prob,ilqr_solver)
+TO.cost_expansion!(prob,ilqr_solver)
+ΔV = TO._backwardpass!(prob,ilqr_solver)
 
 #sqrt bp
 opts_ilqr_sqrt = iLQRSolverOptions{T}(square_root=true)
-ilqr_solver_sqrt = AbstractSolver(prob,opts_ilqr)
+ilqr_solver_sqrt = iLQRSolver(prob,opts_ilqr)
 jacobian!(prob,ilqr_solver_sqrt)
-cost_expansion!(prob,ilqr_solver_sqrt)
-ΔV_sqrt = _backwardpass_sqrt!(prob,ilqr_solver_sqrt)
+TO.cost_expansion!(prob,ilqr_solver_sqrt)
+ΔV_sqrt = TO._backwardpass_sqrt!(prob,ilqr_solver_sqrt)
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(ilqr_solver.K,ilqr_solver_sqrt.K))
 @test all(isapprox(ilqr_solver.d,ilqr_solver_sqrt.d))
@@ -62,26 +57,25 @@ prob = update_problem(prob,constraints=Constraints(con,N))
 rollout!(prob)
 
 #bp
-solver_ilqr = AbstractSolver(prob,opts_ilqr)
-solver_al = AbstractSolver(prob,opts_al)
+solver_ilqr = iLQRSolver(prob,opts_ilqr)
+solver_al = AugmentedLagrangianSolver(prob,opts_al)
 prob_al = TO.AugmentedLagrangianProblem(prob,solver_al)
-update_constraints!(prob_al.obj.C,prob_al.obj.constraints, prob.X, prob.U)
-solver_al.C
-update_active_set!(prob_al.obj)
+TO.update_constraints!(prob_al.obj.C,prob_al.obj.constraints, prob.X, prob.U)
+TO.update_active_set!(prob_al.obj)
 jacobian!(prob_al,solver_ilqr)
-cost_expansion!(prob_al,solver_ilqr)
-ΔV = _backwardpass!(prob_al,solver_ilqr)
+TO.cost_expansion!(prob_al,solver_ilqr)
+ΔV = TO._backwardpass!(prob_al,solver_ilqr)
 
 #bp sqrt
-solver_ilqr_sqrt = AbstractSolver(prob,opts_ilqr)
-solver_al_sqrt = AbstractSolver(prob,opts_al)
+solver_ilqr_sqrt = iLQRSolver(prob,opts_ilqr)
+solver_al_sqrt = AugmentedLagrangianSolver(prob,opts_al)
 prob_al_sqrt = TO.AugmentedLagrangianProblem(prob,solver_al_sqrt)
-update_constraints!(prob_al_sqrt.obj.C,prob_al_sqrt.obj.constraints, prob_al_sqrt.X, prob_al_sqrt.U)
-prob_al.obj.C[end]
-update_active_set!(prob_al_sqrt.obj)
+TO.update_constraints!(prob_al_sqrt.obj.C,prob_al_sqrt.obj.constraints, prob_al_sqrt.X, prob_al_sqrt.U)
+TO.update_active_set!(prob_al_sqrt.obj)
 jacobian!(prob_al_sqrt,solver_ilqr_sqrt)
-cost_expansion!(prob_al_sqrt,solver_ilqr_sqrt)
-ΔV_sqrt = _backwardpass_sqrt!(prob_al_sqrt,solver_ilqr_sqrt)
+TO.cost_expansion!(prob_al_sqrt,solver_ilqr_sqrt)
+ΔV_sqrt = TO._backwardpass_sqrt!(prob_al_sqrt,solver_ilqr_sqrt)
+prob_al_sqrt.obj[N-1].Q
 
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(solver_ilqr.K,solver_ilqr_sqrt.K))
