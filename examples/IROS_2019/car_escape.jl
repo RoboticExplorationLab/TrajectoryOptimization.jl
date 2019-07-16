@@ -11,9 +11,9 @@ opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-4,
-    cost_tolerance_intermediate=1.0e-2,
+    cost_tolerance_intermediate=1.0e-3,
     constraint_tolerance=max_con_viol,
-    penalty_scaling=50.,
+    penalty_scaling=25.,
     penalty_initial=10.)
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
@@ -21,25 +21,22 @@ opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
-    R_inf=1.0e-3,
+    R_inf=1.0e-6,
     resolve_feasible_problem=false,
     opts_pn=opts_pn,
     projected_newton=true,
-    projected_newton_tolerance=1.0e-3);
+    projected_newton_tolerance=1.0e-4);
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
     opts=Dict(:print_level=>3,
-        :tol=>max_con_viol,
         :constr_viol_tol=>max_con_viol))
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
     opts=Dict(:Major_print_level=>0,
         :Minor_print_level=>0,
-        :Major_optimality_tolerance=>max_con_viol,
-        :Major_feasibility_tolerance=>max_con_viol,
-        :Minor_feasibility_tolerance=>max_con_viol))
+        :Major_feasibility_tolerance=>max_con_viol))
 
 x0 = Problems.car_escape_problem.x0
 xf = Problems.car_escape_problem.xf
@@ -51,15 +48,6 @@ prob_altro = copy(Problems.car_escape_problem)
 max_violation(p1)
 Problems.plot_escape(p1.X,x0,xf)
 
-
-s1
-t_span_al = range(0,stop=s1.stats[:time_al],length=s1.solver_al.stats[:iterations])
-t_span_pn = range(s1.stats[:time_al],stop=s1.stats[:time],length=s1.solver_pn.stats[:iterations]+1)
-t_span = [t_span_al;t_span_pn[2:end]]
-c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
-
-scatter(t_span,c_span,color=:orange,width=2,yscale=:log10,ylim=[1.0e-9,1.0e-1])
-
 # DIRCOL w/ Ipopt
 prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
@@ -68,14 +56,15 @@ max_violation(p2)
 Problems.plot_escape(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
+
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+    nlp=:SNOPT7,
+    opts=Dict(:Print_file=>1))
 prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation(p3)
 Problems.plot_escape(p3.X,x0,xf)
-
-@time p3, s3 = solve!(prob_snopt, opts_snopt)
-s3
 
 # AL-iLQR
 prob_altro = copy(Problems.car_escape_problem)
@@ -132,3 +121,18 @@ a = Axis([p; t0; t1; t4; t3; g],
 # Save to tikz format
 # NOTE: To fix the problem with the legend for the start and goal points, replace \addplot+ with \addplot in the tikz file
 save(joinpath(paper,"escape_traj.tikz"), a, include_preamble=false)
+
+# Max constraint plot
+t_pn = s1.stats[:time_al]
+t_span_al = range(0,stop=s1.stats[:time_al],length=s1.solver_al.stats[:iterations])
+t_span_pn = range(t_pn,stop=s1.stats[:time],length=s1.solver_pn.stats[:iterations]+1)
+t_span = [t_span_al;t_span_pn[2:end]]
+c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
+
+plot(t_span,c_span,title="Car Escape c_max",xlabel="time (s)",marker=:circle,color=:orange,width=2,yscale=:log10,ylim=[1.0e-9,1.0],label="ALTRO")
+
+snopt_res = parse_snopt_summary(joinpath(pwd(),"fort.1"))
+t_span_snopt = range(0,stop=s3.stats[:time],length=length(snopt_res[:c_max]))
+plot!(t_span_snopt,snopt_res[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:green,label="SNOPT")
+
+plot!(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),color=:red,linestyle=:dash,label="Projected Newton",width=2)

@@ -9,6 +9,7 @@ using RigidBodyDynamics
 using LinearAlgebra
 using ForwardDiff
 using Plots
+using Random
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")

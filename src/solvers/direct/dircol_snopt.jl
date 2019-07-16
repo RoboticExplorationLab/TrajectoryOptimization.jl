@@ -24,8 +24,22 @@ function parse_snopt_summary(file=joinpath(pwd(),"snopt.out"))
     function store_itervals(ln::String)
         vals = split(ln)
 
+        if vals[6][1] == "("[1]
+
+            idx = -1
+            for i = 2:length(vals[6])
+                if vals[6][i] == ")"[1] && idx == -1
+                    idx = i-1
+                    break
+                end
+            end
+            _c = vals[6][2:idx]
+
+        else
+            _c = vals[6]
+        end
         push!(obj, parse(Float64,vals[8])) # Merit function
-        push!(c_max, parse(Float64,vals[6]))
+        push!(c_max, parse(Float64,_c))
 
         next_line = false
     end

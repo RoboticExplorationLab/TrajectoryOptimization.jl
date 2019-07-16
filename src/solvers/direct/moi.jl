@@ -105,7 +105,10 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     @info "DIRCOL solve using " * String(opts.nlp)
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    t0 = time()
     MOI.optimize!(solver)
+    dircol.stats[:time] = time() - t0
 
     # Get the solution
     res = MOI.get(solver, MOI.VariablePrimal(), Z)

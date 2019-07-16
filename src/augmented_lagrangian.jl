@@ -77,6 +77,7 @@ function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T
     push!(solver.stats[:iterations_inner], unconstrained_solver.stats[:iterations])
     push!(solver.stats[:cost],J)
     push!(solver.stats[:c_max],c_max)
+    push!(solver.stats[:penalty_max],max_penalty(solver))
     push!(solver.stats_uncon, unconstrained_solver.stats)
 
     @logmsg OuterLoop :iter value=solver.stats[:iterations]

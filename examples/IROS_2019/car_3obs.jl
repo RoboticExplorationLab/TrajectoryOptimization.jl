@@ -61,7 +61,3 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 max_violation(p3)
 
 Problems.plot_car_3obj(p3.X,x0,xf)
-
-d = parse_snopt_summary()
-
-parse_ipopt_summary()

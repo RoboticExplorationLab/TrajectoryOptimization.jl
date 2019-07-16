@@ -82,7 +82,7 @@ end
 
 ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts)
 
-function AbstractSolver(prob::Problem{T},opts::ALTROSolverOptions{T}) where T
+function AbstractSolver(prob::Problem{T,D},opts::ALTROSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     stats = Dict{Symbol,Any}()
     solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
     solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)

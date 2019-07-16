@@ -120,7 +120,7 @@ function AbstractSolver(prob::Problem{T}, opts::AugmentedLagrangianSolverOptions
 
     # Init solver statistics
     stats = Dict{Symbol,Any}(:iterations=>0,:iterations_total=>0,
-        :iterations_inner=>Int[],:cost=>T[],:c_max=>T[])
+        :iterations_inner=>Int[],:cost=>T[],:c_max=>T[],:penalty_max=>[])
     stats_uncon = Dict{Symbol,Any}[]
 
     # Init solver results
@@ -168,6 +168,7 @@ function reset!(solver::AugmentedLagrangianSolver{T}) where T
     solver.stats[:iterations_inner] = T[]
     solver.stats[:cost]             = T[]
     solver.stats[:c_max]            = T[]
+    solver.stats[:penalty_max]      = T[]
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.λ[k] .*= 0
