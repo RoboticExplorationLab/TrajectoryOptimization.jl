@@ -20,11 +20,10 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_inf=1.0e-8,
     projected_newton_tolerance=1.0e-4)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
-    opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+    opts=Dict(:max_iter=>10000,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7,
-    opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
-    :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol,
+    opts=Dict(:Major_feasibility_tolerance=>max_con_viol,
     :Iterations_limit=>500000, :Major_iterations_limit=>250))
 
 # ALTRO w Newton
@@ -32,6 +31,8 @@ prob_altro = copy(Problems.quadrotor_maze_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation(p1)
+max_violation_dynamics(p1)
+max_violation_direct(p1)
 
 X1 = to_array(p1.X)
 plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
@@ -51,12 +52,33 @@ prob_snopt = update_problem(copy(Problems.quadrotor_maze_problem),model=Dynamics
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation(p3)
+max_violation_dynamics(p3)
 X3 = to_array(p3.X)
 plot(X3[1:3,:]',title="Quadrotor position (SNOPT)")
 plot(p3.U,title="Quadrotor control (SNOPT)")
 
-# Visualization
 
+# c_max plot
+# Max constraint plot
+t_pn = s1.stats[:time_al]
+t_span_al = range(0,stop=s1.stats[:time_al],length=s1.solver_al.stats[:iterations])
+t_span_pn = range(t_pn,stop=s1.stats[:time],length=s1.solver_pn.stats[:iterations]+1)
+t_span = [t_span_al;t_span_pn[2:end]]
+c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
+
+p = plot(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),color=:red,linestyle=:dash,label="Projected Newton",width=2)
+
+# note: make sure snopt.out was updated by running with verbose=true
+snopt_res = parse_snopt_summary(joinpath(pwd(),"snopt.out"))
+t_span_snopt = range(0,stop=s3.stats[:time],length=length(snopt_res[:c_max]))
+p = plot!(t_span_snopt,snopt_res[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:green,label="SNOPT")
+
+p = plot!(t_span,c_span,title="Quadrotor Maze c_max",xlabel="time (s)",marker=:circle,color=:orange,width=2,yscale=:log10,ylim=[1.0e-9,1.0],label="ALTRO")
+
+savefig(p,joinpath(pwd(),"examples/IROS_2019/quadrotor_maze_c_max.png"))
+
+
+# Visualization
 function plot_cylinder(vis,c1,c2,radius,mat,name="")
     geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
     setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))

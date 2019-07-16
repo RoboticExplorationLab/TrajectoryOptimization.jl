@@ -49,9 +49,9 @@ max_violation(p1)
 Problems.plot_escape(p1.X,x0,xf)
 
 # DIRCOL w/ Ipopt
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=:Ipopt,
-    opts=Dict(:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+# opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
+#     nlp=:Ipopt,
+#     opts=Dict(:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
 initial_controls!(prob_ipopt,[prob_ipopt.U[k] + rand(prob_ipopt.model.m)/3 for k = 1:prob_ipopt.N-1]) # add random noise to help Ipopt
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
@@ -60,7 +60,8 @@ max_violation(p2)
 Problems.plot_escape(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7,opts=Dict(:Major_feasibility_tolerance=>max_con_viol))
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7,
+#     opts=Dict(:Major_feasibility_tolerance=>max_con_viol))
 prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
 initial_controls!(prob_snopt,[prob_snopt.U[k] + rand(prob_snopt.model.m)/3 for k = 1:prob_snopt.N-1]) # add random noise to help SNOPT
 
@@ -134,10 +135,12 @@ c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
 
 p = plot(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),color=:red,linestyle=:dash,label="Projected Newton",width=2)
 
+# note: make sure ipopt.out was updated
 ipopt_res = parse_ipopt_summary()
 t_span_ipopt = range(0,stop=s2.stats[:time],length=length(ipopt_res[:c_max]))
 p = plot!(t_span_ipopt,ipopt_res[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:blue,label="Ipopt")
 
+# note: make sure snopt.out was updated
 snopt_res = parse_snopt_summary(joinpath(pwd(),"snopt.out"))
 t_span_snopt = range(0,stop=s3.stats[:time],length=length(snopt_res[:c_max]))
 p = plot!(t_span_snopt,snopt_res[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:green,label="SNOPT")

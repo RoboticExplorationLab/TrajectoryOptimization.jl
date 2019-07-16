@@ -1,3 +1,54 @@
+function max_violation_dynamics(prob::Problem{T,Discrete})::T where T <: AbstractFloat
+    max_viol = norm(prob.X[1] - prob.x0,Inf)
+    X̄ = zeros(prob.model.n)
+    for k = 1:prob.N-1
+        X̄ .= 0
+        evaluate!(X̄, prob.model, prob.X[k], prob.U[k], get_dt(prob,k))
+        max_viol = max(max_viol,norm(X̄ - prob.X[k+1],Inf))
+    end
+    return max_viol
+end
+
+#defaults to implicit rk3 integration
+function max_violation_dynamics(prob::Problem{T,Continuous},solver::DIRCOLSolver{T})::T where T <:AbstractFloat
+    n,m,N = size(prob)
+    X̄ = zeros(prob.model.n)
+
+    fVal = [zeros(prob.model.n) for k = 1:N]
+    fValm = [zeros(prob.model.n) for k = 1:N]
+    Xm = [zeros(prob.model.n) for k = 1:N]
+    Um = [zeros(prob.model.m) for k = 1:N-1]
+    dt = get_dt_traj(prob,solver.Z.U)
+
+    # Calculate midpoints
+    for k = 1:N
+        evaluate!(fVal[k], prob.model, prob.X[k], solver.Z.U[k])
+    end
+    for k = 1:N-1
+        Xm[k] = (solver.Z.X[k] + solver.Z.X[k+1])/2 + dt[k]/8*(fVal[k] - fVal[k+1])
+        Um[k] = (solver.Z.U[k] + solver.Z.U[k+1])*0.5
+        evaluate!(fValm[k], prob.model, Xm[k], Um[k])
+    end
+
+    max_viol = norm(solver.Z.X[1] - prob.x0,Inf)
+
+    for k = 1:N-1
+        max(max_viol,norm(-solver.Z.X[k+1] + solver.Z.X[k] + dt[k]*(fVal[k] + 4*fValm[k] + fVal[k+1])/6,Inf))
+    end
+
+    return max_viol
+end
+
+
+function max_violation_direct(prob::Problem{T,Discrete}) where T <: AbstractFloat
+    max(max_violation(prob),max_violation_dynamics(prob))
+end
+
+function max_violation_direct(prob::Problem{T,Continuous},solver::DIRCOLSolver{T}) where T <: AbstractFloat
+    max(max_violation(prob),max_violation_dynamics(prob,solver))
+end
+
+
 """ $(SIGNATURES)
 Get the row and column lists of a sparse matrix, with ordered elements
 """

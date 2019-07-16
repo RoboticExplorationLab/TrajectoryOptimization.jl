@@ -135,6 +135,9 @@ end
 
     "Print output to console"
     verbose::Bool = true
+
+    "Feasibility tolerance"
+    feasibility_tolerance::T = -1.0
 end
 
 

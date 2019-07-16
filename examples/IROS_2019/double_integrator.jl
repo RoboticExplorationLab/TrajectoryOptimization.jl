@@ -37,10 +37,11 @@ rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.doubleintegrator_model) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
-max_violation(p2)
+
 plot(p2.X,title="Double Integrator state (Ipopt)")
 plot(p2.U,title="Double Integrator control (Ipopt)")
 
+p2
 # DIRCOL w/ SNOPT
 prob_snopt = copy(Problems.doubleintegrator_problem)
 rollout!(prob_snopt)

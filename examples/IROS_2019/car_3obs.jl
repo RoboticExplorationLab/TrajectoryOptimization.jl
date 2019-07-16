@@ -5,7 +5,7 @@ T = Float64
 
 # options
 max_con_viol = 1.0e-8
-verbose=false
+verbose=true
 
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
@@ -40,6 +40,7 @@ prob_altro = copy(Problems.car_3obs_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation(p1)
+max_violation_dynamics(p1)
 
 Problems.plot_car_3obj(p1.X,x0,xf)
 
@@ -50,6 +51,7 @@ prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car_model) # get continuou
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation(p2)
+max_violation_dynamics(p2,s2)
 Problems.plot_car_3obj(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
@@ -59,5 +61,6 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation(p3)
+max_violation_dynamics(p3,s3)
 
 Problems.plot_car_3obj(p3.X,x0,xf)

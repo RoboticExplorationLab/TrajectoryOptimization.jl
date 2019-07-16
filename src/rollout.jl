@@ -2,7 +2,6 @@
 function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
     X = prob.X; U = prob.U
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
-
     X̄[1] = prob.x0
 
     for k = 2:prob.N
@@ -13,7 +12,7 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], prob.dt)
+        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], get_dt(prob,Ū[k-1]))
 
         # Check that rollout has not diverged
         if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
@@ -27,7 +26,7 @@ function rollout!(prob::Problem{T}) where T
     N = prob.N
     if !all(isfinite.(prob.X[1]))
         prob.X[1] = prob.x0
-        rollout!(prob.X, prob.model, prob.U, prob.dt)
+        rollout!(prob.X, prob.model, prob.U, get_dt_traj(prob))
     end
 end
 

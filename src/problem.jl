@@ -57,11 +57,11 @@ struct Problem{T<:AbstractFloat,D<:DynamicsType}
         @assert length(constraints) == N
         @assert length(X) == N
 
-        if length(U) == N
-            @info "Length of U should be N-1, not N. Trimming last entry"
-            U = U[1:end-1]
-        end
-        @assert length(U) == N-1
+        # if length(U) == N
+        #     @info "Length of U should be N-1, not N. Trimming last entry"
+        #     U = U[1:end-1]
+        # end
+        # @assert length(U) == N-1
         if !(dt > 0)
             throw(ArgumentError("dt must be strictly positive"))
         end
@@ -126,7 +126,11 @@ Problem(model::Model{Nominal,Discrete}, cost::CostFunction, U0::Matrix{T}; kwarg
 """```julia
 update_problem(prob; kwargs...)
 ```
-Create a new problem from another, specifing all fields as keyword arguments
+Create a new problem from another, specifing all fields as keyword argumen# if length(U) == N
+        #     @info "Length of U should be N-1, not N. Trimming last entry"
+        #     U = U[1:end-1]
+        # end
+        # @assert length(U) == N-1ts
 The `newProb` argument can be set to true if a the primal variables are to be copied, otherwise they will be passed to the modified problem.
 """
 function update_problem(p::Problem;
@@ -290,7 +294,7 @@ function get_dt(prob::Problem,k::Int)
     end
 end
 
-function get_dt(prob::Problem,U::AbstractArray,k::Int)
+function get_dt(prob::Problem,U::AbstractArray)
     if prob.tf == 0.
         return U[end]^2
     else

@@ -89,7 +89,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
-    solver = eval(opts.nlp).Optimizer(;opts.opts...)
+    solver = eval(opts.nlp).Optimizer(;nlp_options(opts)...)
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -130,4 +130,18 @@ function solve!(prob::Problem,opts::DIRCOLSolverOptions)
     copyto!(prob.U,res.U[1:prob.N-1])
 
     return dircol
+end
+
+function nlp_options(opts::DIRCOLSolverOptions)
+    if opts.nlp == :Ipopt
+        !opts.verbose ? opts.opts[:print_level] = 0 : nothing
+        opts.feasibility_tolerance > 0. ? opts.opts[:constr_viol_tol] = opts.feasibility_tolerance : nothing
+    elseif opts.nlp == :SNOPT7
+        !opts.verbose ? opts.opts[:Major_print_level] = 0 : nothing
+        opts.feasibility_tolerance > 0. ? opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance : nothing
+    else
+        error("Nonlinear solver not implemented")
+    end
+
+    return opts.opts
 end
