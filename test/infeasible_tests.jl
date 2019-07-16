@@ -1,7 +1,3 @@
-import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
-    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,line_trajectory
-
 T = Float64
 
 ## Pendulum

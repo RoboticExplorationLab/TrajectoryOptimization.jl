@@ -59,7 +59,7 @@ mutable struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     parts::NamedTuple{(:primals,:duals),NTuple{2,UnitRange{Int}}}
 end
 
-function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T}) where {T,D}
+function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     n,m,N = size(prob)
     X_ = [zeros(T,n) for k = 1:N-1] # midpoints
 

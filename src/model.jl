@@ -11,6 +11,13 @@ abstract type Uncertain <: ModelType end
 abstract type AbstractModel end
 abstract type Model{M<:ModelType,D<:DynamicsType} <: AbstractModel end
 
+export
+    Nominal,
+    Uncertain,
+    AnalyticalModel,
+    discretize_model,
+    dynamics
+
 """
 $(TYPEDEF)
 Dynamics model

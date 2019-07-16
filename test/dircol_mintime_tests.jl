@@ -1,4 +1,4 @@
-using Test, SNOPT7
+using SNOPT7
 
 # opts_d = DIRCOLSolverOptions{Float64}()
 opts_d_mt = DIRCOLSolverMTOptions(verbose=true,nlp=:Ipopt,R_min_time=1.0,h_max=Inf,h_min=0.0)

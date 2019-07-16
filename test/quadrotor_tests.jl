@@ -1,6 +1,3 @@
-import TrajectoryOptimization: LQRCost, iLQRSolverOptions, AugmentedLagrangianSolverOptions,
-    ALTROSolverOptions, Problem, initial_controls!, solve!, goal_constraint, max_violation,
-    Objective, Constraint
 Random.seed!(7)
 
 # model

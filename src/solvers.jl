@@ -29,13 +29,14 @@ Solve trajectory optimization problem `prob` using `solver`.
     The problem will be modified in place, with the solution stored in `prob.X` and `prob.U`.
     The solver will also be modified, and may either return the same solver or a new one that may or may not be the same type as the one given.
 """
-solve!(prob::Problem, solver::AbstractSolver)::AbstractSolver = return solver
+solve!(prob::Problem{T,D}, solver::AbstractSolver{T}) where {T<:AbstractFloat,D<:DynamicsType} =
+    error("Cannot solve with `AbstractSolver`")
 
 "```
 AbstractSolver(prob::Problem, opts::AbstractSolverOptions)::AbsractSolver
 ```
 Create a solver, with the type specified by the type of the solver options `opts` "
-AbstractSolver(::Problem, ::AbstractSolverOptions)::AbstractSolver =
+AbstractSolver(::Problem{T,D}, ::AbstractSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType} =
     error("Can't create an Abstract Solver without knowing the type of the Solver Options")
 
 "```
@@ -65,7 +66,7 @@ solve!(prob, opts)::AbstractSolver
 Solve the trajectory optimization problem `prob` using the solver specified by solver options `opts`.
     The problem will be modified in place, storing the solution in `prob.X` and `prob.U`.
 """
-function solve!(prob::Problem, opts::AbstractSolverOptions)
+function solve!(prob::Problem{T,D}, opts::AbstractSolverOptions{T}) where {T<:AbstractFloat, D<:DynamicsType}
     solver = AbstractSolver(prob, opts)
     solve!(prob, solver)
 end
@@ -78,7 +79,7 @@ Solve the trajectory optimization problem `prob` using the solver specified by s
     and will instead return a new problem with the solution in `prob.X` and `prob.U`,
     along with the solver.
 """
-function solve(prob::Problem, opts::AbstractSolverOptions)
+function solve(prob::Problem{T,D}, opts::AbstractSolverOptions{T}) where {T<:AbstractFloat, D<:DynamicsType}
     prob0 = copy(prob)
     solver = solve!(prob0, opts)
     return prob0, solver
@@ -93,7 +94,7 @@ Solve the trajectory optimization problem `prob` using `solver`.
     along with the solver. The solver will be modified in place,
         and may or may not be the same solver returned.
 """
-function solve(prob::Problem, solver::AbstractSolver)
+function solve(prob::Problem{T,D}, solver::AbstractSolver{T}) where {T<:AbstractFloat, D<:DynamicsType}
     prob0 = copy(prob)
     solver = solve!(prob0, solver)
     return prob0, solver

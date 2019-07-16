@@ -1,4 +1,5 @@
 using TrajectoryOptimization
+using RigidBodyDynamics
 using Test
 using BenchmarkTools
 using LinearAlgebra
@@ -6,6 +7,8 @@ using Random
 using SparseArrays
 using ForwardDiff
 using Logging
+using PartedArrays
+const TO = TrajectoryOptimization
 
 disable_logging(Logging.Debug)
 @testset "Logging" begin

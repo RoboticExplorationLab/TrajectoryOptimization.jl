@@ -1,10 +1,4 @@
-import TrajectoryOptimization: to_dvecs
-const TO = TrajectoryOptimization
-using LinearAlgebra
-using PartedArrays
 using SparseArrays
-using ForwardDiff
-using Plots
 using Ipopt
 
 function unpack(Z::Vector{<:Real}, part_z::NamedTuple)
@@ -160,8 +154,8 @@ dt = prob.dt
 
 ilqr = iLQRSolverOptions()
 res = solve(prob, ilqr)
-plot()
-plot_trajectory!(res.X)
+# plot()
+# plot_trajectory!(res.X)
 
 # Old Method
 method = :hermite_simpson
@@ -172,7 +166,7 @@ X0 = to_dvecs(rollout(solver, U0))
 dt = solver.dt
 
 res, = solve(solver, U0)
-plot(res.X)
+# plot(res.X)
 
 
 
@@ -209,7 +203,7 @@ addOption(problem,"option_file_name",opt_file)
 solveProblem(problem)
 Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
-plot_trajectory!(Xsol)
+# plot_trajectory!(Xsol)
 
 # Try Ipopt again
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
@@ -238,7 +232,7 @@ solveProblem(problem)
 
 Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
-plot_trajectory!(Xsol)
+# plot_trajectory!(Xsol)
 
 
 prob0 = copy(prob)
@@ -256,4 +250,4 @@ solveProblem(problem)
 
 Zsol = problem.x
 Xsol,Usol = unpack(Zsol,part_z)
-plot_trajectory!(Xsol)
+# plot_trajectory!(Xsol)

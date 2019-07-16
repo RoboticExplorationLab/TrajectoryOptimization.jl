@@ -1,25 +1,6 @@
 # Generic solve methods
-function solve!(prob::Problem{T},opts::AbstractSolverOptions{T}) where T
-    solver = AbstractSolver(prob,opts)
-    solve!(prob,solver)
-end
-
-function solve(prob0::Problem{T},solver::AbstractSolver)::Problem{T} where T
-    prob = copy(prob0)
-    solve!(prob,solver)
-    return prob
-end
-
-function solve(prob0::Problem{T},opts::AbstractSolverOptions{T})::Problem{T} where T
-    prob = copy(prob0)
-    solver = AbstractSolver(prob,opts)
-    solve!(prob,solver)
-    return prob
-end
-
-
 "iLQR solve method"
-function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T
+function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
     reset!(solver)
 
     n,m,N = size(prob)

@@ -1,12 +1,4 @@
-using TrajectoryOptimization
 import TrajectoryOptimization: get_dt_traj
-const TO = TrajectoryOptimization
-using Test
-using ForwardDiff
-using LinearAlgebra
-using PartedArrays
-using SparseArrays
-using Ipopt
 
 # Set up problem
 model = Dynamics.car_model

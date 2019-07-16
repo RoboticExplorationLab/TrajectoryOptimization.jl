@@ -1,8 +1,3 @@
-import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQRSolverOptions,
-    AbstractSolver, jacobian!, _backwardpass!, _backwardpass_sqrt!, AugmentedLagrangianSolverOptions, ALTROSolverOptions,
-    goal_constraint, update_constraints!, update_active_set!, jacobian!, update_problem,
-    line_trajectory, total_time
-
 T = Float64
 
 # model
@@ -125,4 +120,4 @@ tt_mt = total_time(prob_mt)
 @test norm(prob_mt.X[end] - xf,Inf) < 1e-3
 @test max_violation(prob_mt) < opts_al.constraint_tolerance
 
-plot(prob_mt.U)
+# plot(prob_mt.U)

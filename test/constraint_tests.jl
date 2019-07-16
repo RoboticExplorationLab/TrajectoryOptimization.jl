@@ -1,8 +1,3 @@
-using Test
-using ForwardDiff
-import TrajectoryOptimization: ConstraintSet, stage, Constraints, BoundConstraint
-using PartedArrays
-using LinearAlgebra
 
 n,m = 3,2
 
