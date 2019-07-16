@@ -18,12 +18,19 @@ opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,
     projected_newton=true,projected_newton_tolerance=1.0e-3);
 
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
-    opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+# opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
+#     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+#
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,
+#     :Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
+#     :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,
-    :Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
+    opts=Dict(:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
+
+opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_optimality_tolerance=>max_con_viol,
     :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
+
 
 x0 = Problems.car_3obs_problem.x0
 xf = Problems.car_3obs_problem.xf
@@ -54,3 +61,7 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 max_violation(p3)
 
 Problems.plot_car_3obj(p3.X,x0,xf)
+
+d = parse_snopt_summary()
+
+parse_ipopt_summary()
