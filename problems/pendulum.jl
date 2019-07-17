@@ -5,16 +5,25 @@ model_d = rk3(model)
 n = model.n; m = model.m
 
 # costs
-Q = 1.0e-1*Diagonal(I,n)
-Qf = 1000.0*Diagonal(I,n)
-R = 1.0e-1*Diagonal(I,m)
-x0 = [0; 0.]
-xf = [pi; 0] # (ie, swing up)
+Q = Array(1e-3*Diagonal(I,n))
+R = Array(1e-3*Diagonal(I,m))
+Qf = Q
+x0 = zeros(n)
+xf = [pi;0.0]
 
-N = 51
-dt = 0.1
-U0 = [rand(m) for k = 1:N-1]
+u_bnd = 5.
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
+goal_con = goal_constraint(xf)
+
+N = 31
+dt = 0.15
+U0 = [ones(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
+constraints = Constraints(N)
+for k = 1:N-1
+    constraints[k] += bnd
+end
+constraints[N] += goal_con
 
-pendulum_problem = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+pendulum_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
 initial_controls!(pendulum_problem, U0)

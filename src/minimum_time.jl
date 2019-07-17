@@ -72,11 +72,10 @@ end
 
 "Return the total duration of trajectory"
 function total_time(prob::Problem{T}) where T
-    m̄ = prob.model.m + 1
     tt = 0.0
-    try
-        tt = sum([prob.U[k][m̄] for k = 1:prob.N-1])
-    catch
+    if prob.tf == 0.
+        tt = sum([prob.U[k][end]^2 for k = 1:prob.N-1])
+    else
         tt = prob.dt*(prob.N-1)
     end
     return tt

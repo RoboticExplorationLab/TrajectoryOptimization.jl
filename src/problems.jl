@@ -9,6 +9,7 @@ using RigidBodyDynamics
 using LinearAlgebra
 using ForwardDiff
 using Plots
+using Random
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")
@@ -30,6 +31,7 @@ export
     acrobot_problem,
     car_escape_problem,
     car_3obs_problem,
+    quadrotor_problem,
     quadrotor_maze_problem,
     kuka_obstacles_problem
 

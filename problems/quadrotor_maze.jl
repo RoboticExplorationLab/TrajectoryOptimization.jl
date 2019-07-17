@@ -16,14 +16,10 @@ xf[1:3] = [0.;60.; 10.]
 xf[4:7] = q0;
 
 # cost
-# cost
 Q = (1.0e-3)*Diagonal(I,n)
 Q[4:7,4:7] = (1.0e-2)*Diagonal(I,4)
 R = (1.0e-4)*Diagonal(I,m)
 Qf = 1000.0*Diagonal(I,n)
-# Q = (1.0)*Diagonal(I,n)
-# R = (1.0)*Diagonal(I,m)
-# Qf = 1000.0*Diagonal(I,n)
 
 # constraints
 r_quad_maze = 2.0
@@ -111,8 +107,11 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
+quadrotor_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+initial_controls!(quadrotor_problem,U_hover); # initialize problem with controls
+
 quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(quadrotor_maze_problem,U_hover); # initialize problem with controls
+
 
 X_guess = zeros(n,7)
 X_guess[:,1] = x0

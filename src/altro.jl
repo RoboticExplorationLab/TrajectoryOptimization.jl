@@ -79,7 +79,7 @@ function process_results!(prob::Problem{T},prob_altro::Problem{T},
         # update original problem (minimum time solve will return dt as controls at U[k][end])
         if state.minimum_time
             for k = 1:prob.N-1
-                prob.U[k] = [prob_altro.U[k][1:prob.model.m]; prob_altro.U[k][end]^2]
+                prob.U[k] = [prob_altro.U[k][1:prob.model.m]; prob_altro.U[k]]
             end
             # copyto!(prob.X,prob_altro.X,prob.model.n)
         end

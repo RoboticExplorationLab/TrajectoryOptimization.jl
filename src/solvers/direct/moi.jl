@@ -10,9 +10,13 @@ struct DIRCOLProblem{T} <: MOI.AbstractNLPEvaluator
     part_z::NamedTuple{(:X,:U), NTuple{2,Matrix{Int}}}
     p::NTuple{2,Int}    # (total constraints, p_colloc)
     nG::NTuple{2,Int}   # (total constraint jacobian, nG_colloc)
+    zL
+    zU
+    gL
+    gU
 end
 
-function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,HermiteSimpson}) where T
+function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,HermiteSimpson}, zL, zU, gL, gU) where T
     n,m,N = size(prob)
     p = num_constraints(prob)
     p_colloc = num_colloc(prob)
@@ -29,7 +33,7 @@ function DIRCOLProblem(prob::Problem{T,Continuous}, solver::DIRCOLSolver{T,Hermi
     jac_struct = collect(zip(r,c))
     num_con = (P,p_colloc)
     num_jac = (nG, nG_colloc)
-    DIRCOLProblem(prob, gen_stage_cost(prob), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac)
+    DIRCOLProblem(prob, gen_stage_cost(prob), gen_stage_cost_gradient(prob), solver, jac_struct, part_z, num_con, num_jac, zL, zU, gL, gU)
 end
 
 MOI.features_available(d::DIRCOLProblem) = [:Grad, :Jac]
@@ -56,6 +60,10 @@ function MOI.eval_constraint(d::DIRCOLProblem, g, Z)
 
     collocation_constraints!(g_colloc, d.prob, d.solver, X, U)
     update_constraints!(g_custom, d.prob, d.solver, X, U)
+
+    # cache c_max
+    push!(d.solver.stats[:iter_time],time() - d.solver.stats[:iter_time][1])
+    push!(d.solver.stats[:c_max],max_violation_dircol(d,Z,g))
 end
 
 function MOI.eval_constraint_jacobian(d::DIRCOLProblem, jac, Z)
@@ -85,12 +93,11 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     # Create NLP Block
     has_objective = true
     dircol = DIRCOLSolver(prob, opts)
-    d = DIRCOLProblem(prob, dircol)
+    d = DIRCOLProblem(prob, dircol, z_L, z_U, g_L, g_U)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
-    # Create solver
-    solver = eval(opts.nlp).Optimizer(;opts.opts...)
+    solver = eval(opts.nlp).Optimizer(;nlp_options(opts)...)
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -105,24 +112,60 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     @info "DIRCOL solve using " * String(opts.nlp)
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+
+    # solve
+    t0 = time()
+    d.solver.stats[:iter_time] = [t0]
     MOI.optimize!(solver)
+    d.solver.stats[:time] = time() - t0
+
+    d.solver.stats[:iter_time] .-= d.solver.stats[:iter_time][2]
+    deleteat!(d.solver.stats[:iter_time],1)
 
     # Get the solution
     res = MOI.get(solver, MOI.VariablePrimal(), Z)
     res = Primals(res, d.part_z)
 
+    d.solver.Z = copy(res)
+    d.solver.stats[:status] = MOI.get(solver, MOI.TerminationStatus())
+
     # Return the results
-    return res, dircol
+    return d.solver
+end
+
+function max_violation_dircol(d::DIRCOLProblem, Z, g)
+    max_viol = 0.
+    max_viol = max(max_viol,norm(max.(d.zL - Z,0),Inf))
+    max_viol = max(max_viol,norm(max.(Z - d.zU,0),Inf))
+    max_viol = max(max_viol,norm(max.(d.gL - g,0),Inf))
+    max_viol = max(max_viol,norm(max.(g - d.gU,0),Inf))
+    return max_viol
 end
 
 function solve!(prob::Problem,opts::DIRCOLSolverOptions)
-    # check for minimum time problem
-    if prob.tf == 0.
-        error("Minimum Time DIRCOL solve not implemented")
-    end
-    res, dircol = solve_moi(prob, opts)
-    copyto!(prob.X,res.X)
-    copyto!(prob.U,res.U[1:prob.N-1])
+
+    dircol = solve_moi(prob, opts)
+
+    copyto!(prob.X,dircol.Z.X)
+    prob.U = copy(dircol.Z.U)
 
     return dircol
+end
+
+function nlp_options(opts::DIRCOLSolverOptions)
+    if opts.nlp == :Ipopt
+        !opts.verbose ? opts.opts[:print_level] = 0 : nothing
+        opts.feasibility_tolerance > 0. ? opts.opts[:constr_viol_tol] = opts.feasibility_tolerance : nothing
+    elseif opts.nlp == :SNOPT7
+        if !opts.verbose
+            opts.opts[:Major_print_level] = 0
+            opts.opts[:Minor_print_level] = 0
+        end
+        opts.feasibility_tolerance > 0. ? opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance : nothing
+    else
+        error("Nonlinear solver not implemented")
+    end
+
+    return opts.opts
 end

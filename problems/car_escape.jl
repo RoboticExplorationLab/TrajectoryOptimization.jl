@@ -47,6 +47,7 @@ function cI_escape(c,x,u)
 end
 
 trap = Constraint{Inequality}(cI_escape,n,m,n_circles_escape,:trap)
+bnd = BoundConstraint(n,m,u_min=-5.,u_max=5.)
 goal = goal_constraint(xf)
 
 N = 101
@@ -55,8 +56,9 @@ U = [ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 constraints = Constraints(N)
+constraints[1] += bnd
 for k = 2:N-1
-    constraints[k] += trap
+    constraints[k] += trap + bnd
 end
 constraints[N] += goal
 

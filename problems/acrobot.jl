@@ -6,7 +6,7 @@ n = model.n; m = model.m
 
 # costs
 Qf = 100.0*Diagonal(I,n)
-Q = (1.0)*Diagonal(I,n)
+Q = (1.0e-2)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
 x0 = [0.; 0.; 0.; 0.]

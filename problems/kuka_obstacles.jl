@@ -119,6 +119,7 @@ cI_arm_obstacles = generate_collision_constraint(kuka,circles_kuka,cylinders_kuk
 Q = Diagonal([ones(7); ones(7)*100])
 Qf = 10.0*Diagonal(I,n)
 R = 1e-2*Diagonal(I,m)
+
 tf = 5.0
 xf_ee = Dynamics.end_effector_function(xf)
 x0_ee = Dynamics.end_effector_function(x0)
@@ -139,7 +140,10 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-kuka_obstacles_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt, constraints=constraints)
-initial_controls!(kuka_obstacles_problem, U_hold)
+kuka_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+kuka_problem.constraints[N] += goal
+initial_controls!(kuka_problem, U_hold)
+
+kuka_obstacles_problem = update_problem(kuka_problem, constraints=constraints)
 
 kuka_obstacles_objects = (circles_kuka,cylinders_kuka)
