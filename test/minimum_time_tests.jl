@@ -180,10 +180,6 @@ opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 
-opts_mt_snopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:SNOPT7,
-    opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
-    :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol),
-    R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 
 # ALTRO w/ Newton
 prob_mt_altro = update_problem(copy(Problems.parallel_park_problem),tf=0.) # make minimum time problem by setting tf = 0
