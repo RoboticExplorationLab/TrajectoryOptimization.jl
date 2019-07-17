@@ -8,14 +8,14 @@ model_d = rk4(model)
 # cost
 Q = Array(1e-3*Diagonal(I,n))
 R = Array(1e-3*Diagonal(I,m))
-Qf = Array(Diagonal(I,n)*0.0)
+Qf = Q
 x0 = zeros(n)
 xf = [pi;0.0]
 
 # options
 verbose=false
 opts_ilqr = iLQRSolverOptions{T}(verbose=false,live_plotting=:off)
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,iterations=50,penalty_scaling=2.0)
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,opts_uncon=opts_ilqr,iterations=50,penalty_scaling=10.0)
 opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=15.0,dt_max=0.15,dt_min=1.0e-3)
 
 # constraints
