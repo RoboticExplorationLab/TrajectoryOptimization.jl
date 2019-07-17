@@ -23,18 +23,15 @@ end
 
 # Test different solve methods
 prob = copy(Problems.pendulum_problem)
-prob = update_problem(prob, constraints=constraints)
 solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
 out = solve!(prob, solver_al)
 @test out isa AugmentedLagrangianSolver
 
 prob = copy(Problems.pendulum_problem)
-prob = update_problem(prob, constraints=constraints)
 out = solve!(prob, opts_al)
 @test out isa AugmentedLagrangianSolver
 
 prob = copy(Problems.pendulum_problem)
-prob = update_problem(prob, constraints=constraints)
 solver_al = TrajectoryOptimization.AugmentedLagrangianSolver(prob, opts_al)
 out = solve(prob, solver_al)
 @test out isa Tuple{Problem, AugmentedLagrangianSolver}

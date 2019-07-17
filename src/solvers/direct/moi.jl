@@ -169,7 +169,7 @@ function nlp_options(opts::DIRCOLSolverOptions)
             opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance
             opts.opts[:Minor_feasibility_tolerance] = opts.feasibility_tolerance
             opts.opts[:Major_optimality_tolerance] = opts.feasibility_tolerance
-        end    
+        end
     else
         error("Nonlinear solver not implemented")
     end

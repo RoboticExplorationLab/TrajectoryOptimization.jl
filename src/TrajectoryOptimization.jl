@@ -90,6 +90,7 @@ export
     backwardpass!,
     cost,
     max_violation,
+    max_violation_direct,
     infeasible_control,
     line_trajectory,
     evaluate!,
