@@ -11,7 +11,7 @@ Qf = Q
 x0 = zeros(n)
 xf = [pi;0.0]
 
-u_bnd = 5.
+u_bnd = 3.
 bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
 goal_con = goal_constraint(xf)
 

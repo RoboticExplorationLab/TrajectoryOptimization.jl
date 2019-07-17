@@ -16,7 +16,7 @@ tf = 5.
 dt = tf/(N-1)
 U0 = [0.01*ones(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
-bnd = BoundConstraint(n,m,u_min=-10.,u_max=10.)
+bnd = BoundConstraint(n,m,u_min=-3.,u_max=3.)
 goal = goal_constraint(xf)
 constraints = Constraints(N)
 for k = 1:N-1

@@ -16,8 +16,8 @@ dt = 0.1
 U0 = [0.001*rand(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
-u_max = 3.
-u_min = -3.
+u_max = 1.5
+u_min = -1.5
 
 bnd = BoundConstraint(n,m,u_max=u_max, u_min=u_min,trim=true)
 goal = goal_constraint(xf)

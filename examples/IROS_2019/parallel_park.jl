@@ -5,22 +5,24 @@ T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
-opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
+opts_ilqr = iLQRSolverOptions{T}(verbose=false,
     live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     opts_uncon=opts_ilqr,
     iterations=30,
     penalty_scaling=10.0,
+    penalty_initial=1e-1,
     constraint_tolerance=max_con_viol)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=false,
     feasibility_tolerance=max_con_viol)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
+    opts_pn=opts_pn,
     projected_newton=true,
-    projected_newton_tolerance=1.0e-4)
+    projected_newton_tolerance=1.0e-2)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
