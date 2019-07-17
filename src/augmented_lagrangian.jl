@@ -7,6 +7,7 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
 
+    rollout!(prob)
     record_iteration!(prob_al, solver, cost(prob_al), solver_uncon)
 
     with_logger(logger) do

@@ -30,7 +30,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     resolve_feasible_problem=false,
     opts_pn=opts_pn,
     projected_newton=true,
-    projected_newton_tolerance=1.0e-4)
+    projected_newton_tolerance=1.0e-3)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
@@ -45,7 +45,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
 
 # ALTRO w/ Newton
 prob_altro = copy(Problems.quadrotor_problem)
-@time p1, s1 = solve(prob_altro, opts_al)
+@time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 X1 = to_array(p1.X)

@@ -468,7 +468,14 @@ function remove_bounds!(prob::Problem)
             bounds[k] = bnd[1]::BoundConstraint
         end
     end
-
+if :goal ∈ labels(prob.constraints[N])
+        goal = pop!(prob.constraints[N])
+        xf = zeros(n)
+        evaluate!(xf, goal, zero(xf))
+        term_bound = BoundConstraint(n,m, x_min=-xf, u_min=bounds[N-1].u_min,
+                                          x_max=-xf, u_max=bounds[N-1].u_max)
+        bounds[N] = term_bound::BoundConstraint
+    end
     # Terminal time step
     #TODO handle control at Nth U differently
 

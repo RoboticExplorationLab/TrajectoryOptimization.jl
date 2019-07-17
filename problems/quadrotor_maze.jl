@@ -78,7 +78,15 @@ x_max[1:3] = [25.0; Inf; 20]
 x_min[1:3] = [-25.0; -Inf; 0.]
 bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
 bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
-# goal = goal_constraint(xf)
+bnd3 = BoundConstraint(n,m,u_min=u_min)
+
+xf_no_quat_U = copy(xf)
+xf_no_quat_L = copy(xf)
+xf_no_quat_U[4:7] .= Inf
+xf_no_quat_L[4:7] .= -Inf
+xf_no_quat_U[8:10] .= 0.
+xf_no_quat_L[8:10] .= 0.
+bnd_xf = BoundConstraint(n,m,x_min=xf_no_quat_L,x_max=xf_no_quat_U)
 
 
 N = 101 # number of knot points
@@ -88,30 +96,25 @@ dt = tf/(N-1) # total time
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
 
-# don't constraint quaternion state
-function quadrotor_goal_constraint(xf::Vector{T}) where T
-    n = length(xf)
-    p = length(xf) - 4
-    idx = [(1:3)...,(8:13)...]
-    terminal_constraint(v,xN) = copyto!(v,xN[idx]-xf[idx])
-    terminal_jacobian(C,xN) = copyto!(C,Diagonal(I,n)[idx,:])
-    Constraint{Equality}(terminal_constraint, terminal_jacobian, p, :goal_quad, [collect(1:n),collect(1:0)], :terminal, :x)
-end
 
-goal = quadrotor_goal_constraint(xf)
+
+quadrotor_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+initial_controls!(quadrotor_problem,U_hover); # initialize problem with controls
+
+quadrotor_problem.constraints[1] += bnd3
+for k = 2:N-1
+    quadrotor_problem.constraints[k] += bnd3
+end
+quadrotor_problem.constraints[N] += bnd_xf
+
 
 constraints = Constraints(N) # constraint trajectory
 constraints[1] += bnd1
 for k = 2:N-1
     constraints[k] += bnd2 + maze
 end
-constraints[N] += goal
-
-quadrotor_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(quadrotor_problem,U_hover); # initialize problem with controls
-
+constraints[N] += bnd_xf
 quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-
 
 X_guess = zeros(n,7)
 X_guess[:,1] = x0

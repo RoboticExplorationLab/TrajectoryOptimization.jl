@@ -3,7 +3,7 @@ T = Float64
 # model
 model = TrajectoryOptimization.Dynamics.pendulum_model
 n = model.n; m = model.m
-model_d = rk4(model)
+model_d = rk3(model)
 
 # cost
 Q = Array(1e-3*Diagonal(I,n))
@@ -20,7 +20,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=false,opts_al=opts_al,R_minimum_time=
 
 # constraints
 u_bnd = 5.
-bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd,trim=true)
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
 goal_con = goal_constraint(xf)
 
 # problem
@@ -146,23 +146,17 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_tim
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:SNOPT7, opts=Dict(:Major_print_level=>0,
-    :Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
-    :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol))
-
-
 # ALTRO w/ Newton
 prob_altro = copy(Problems.parallel_park_problem)
 p1, s1 = solve(prob_altro, opts_altro)
-@test max_violation(p1) < 1e-6
+@test max_violation_direct(p1) <= 1e-6
 
 # DIRCOL w/ Ipopt
 prob_ipopt = copy(Problems.parallel_park_problem)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car_model) # get continuous time model
 p2, s2 = solve(prob_ipopt, opts_ipopt)
-@test max_violation(p2) < 1e-6
-
+@test max_violation_direct(p2) <= 1e-6
 
 ## Minimum Time
 max_con_viol = 1.0e-6
@@ -180,16 +174,11 @@ opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 
-opts_mt_snopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:SNOPT7,
-    opts=Dict(:Major_print_level=>0,:Minor_print_level=>0,:Major_optimality_tolerance=>max_con_viol,
-    :Major_feasibility_tolerance=>max_con_viol, :Minor_feasibility_tolerance=>max_con_viol),
-    R_min_time=10.0,h_max=dt_max,h_min=dt_min)
-
 # ALTRO w/ Newton
 prob_mt_altro = update_problem(copy(Problems.parallel_park_problem),tf=0.) # make minimum time problem by setting tf = 0
 initial_controls!(prob_mt_altro,copy(p1.U))
 p4, s4 = solve(prob_mt_altro,opts_altro)
-@test max_violation(p4) < 1e-6
+@test max_violation_direct(p4) < 1e-6
 @test total_time(p4) < 1.6
 
 
@@ -197,7 +186,7 @@ p4, s4 = solve(prob_mt_altro,opts_altro)
 prob_mt_ipopt = copy(Problems.parallel_park_problem)
 initial_controls!(prob_mt_ipopt,copy(p2.U))
 rollout!(prob_mt_ipopt)
-prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car_model) # get continuous time model
+prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car_model,tf=0.) # get continuous time model
 p5, s5 = solve(prob_mt_ipopt, opts_mt_ipopt)
-@test max_violation(p5) < 1e-6
+@test max_violation_direct(p5) <= 1e-6
 @test total_time(p5) < 1.6
