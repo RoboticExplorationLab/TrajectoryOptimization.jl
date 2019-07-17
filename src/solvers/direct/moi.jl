@@ -156,13 +156,20 @@ end
 function nlp_options(opts::DIRCOLSolverOptions)
     if opts.nlp == :Ipopt
         !opts.verbose ? opts.opts[:print_level] = 0 : nothing
-        opts.feasibility_tolerance > 0. ? opts.opts[:constr_viol_tol] = opts.feasibility_tolerance : nothing
+        if opts.feasibility_tolerance > 0.
+            opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
+            opts.opts[:tol] = opts.feasibility_tolerance
+        end
     elseif opts.nlp == :SNOPT7
         if !opts.verbose
             opts.opts[:Major_print_level] = 0
             opts.opts[:Minor_print_level] = 0
         end
-        opts.feasibility_tolerance > 0. ? opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance : nothing
+        if opts.feasibility_tolerance > 0.
+            opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance
+            opts.opts[:Minor_feasibility_tolerance] = opts.feasibility_tolerance
+            opts.opts[:Major_optimality_tolerance] = opts.feasibility_tolerance
+        end
     else
         error("Nonlinear solver not implemented")
     end

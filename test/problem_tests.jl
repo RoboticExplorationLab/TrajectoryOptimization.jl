@@ -82,10 +82,6 @@ prob = Problem(model_d, obj2, N=N2, tf=5)
 @test_nowarn Problem(model_d, obj, X0, U0, N=N, tf=5)
 @test_nowarn Problem(model_d, obj, U0, N=N, tf=5)
 U0 = rand(m,N)
-disable_logging(Logging.Debug)
-prob = (@test_logs (:info, "Length of U should be N-1, not N. Trimming last entry") Problem(model_d, obj, U0, N=N, tf=3))
-disable_logging(Logging.Info)
-@test length(prob.U) == N-1
 @test_nowarn Problem(model_d, obj, to_array(X0), U0, tf=3)
 @test_throws MethodError Problem(model_d, obj, X0, U0, tf=3)
 
