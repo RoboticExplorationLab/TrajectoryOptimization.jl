@@ -470,7 +470,7 @@ function remove_bounds!(prob::Problem)
     end
 
     # Terminal time step
-    #TODO handle control at U differently
+    #TODO handle control at Nth U differently
 
     if :goal ∈ labels(prob.constraints[N])
         goal = pop!(prob.constraints[N])
@@ -499,7 +499,7 @@ function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
         u_U[k] = bounds[k].u_max
         u_L[k] = bounds[k].u_min
     end
-    #TODO handle control at U differently
+    #TODO handle control at Nth U differently
     if Z.equal
         u_U[N] = bounds[N-1].u_max
         u_L[N] = bounds[N-1].u_min

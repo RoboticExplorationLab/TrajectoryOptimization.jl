@@ -1,4 +1,6 @@
 using Random, BenchmarkTools, SNOPT7
+using PGFPlots
+const PGF = PGFPlots
 
 # Car escape
 T = Float64
@@ -124,9 +126,27 @@ t_span_al = range(0,stop=s1.stats[:time_al],length=s1.solver_al.stats[:iteration
 t_span_pn = range(t_pn,stop=s1.stats[:time],length=s1.solver_pn.stats[:iterations]+1)
 t_span = [t_span_al;t_span_pn[2:end]]
 c_span = [s1.solver_al.stats[:c_max]...,s1.solver_pn.stats[:c_max]...]
+
+s_range = [1,(2:1:length(s3.stats[:iter_time])-1)...,length(s3.stats[:iter_time])]
+i_range = [1,(2:1:length(s2.stats[:iter_time])-1)...,length(s2.stats[:iter_time])]
 p = plot(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),color=:red,linestyle=:dash,label="Projected Newton",width=2)
-p = plot!(s3.stats[:iter_time],s3.stats[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:green,label="SNOPT")
-p = plot!(s2.stats[:iter_time],s2.stats[:c_max],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:blue,label="Ipopt")
+p = plot!(s3.stats[:iter_time][s_range],s3.stats[:c_max][s_range],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:green,label="SNOPT")
+p = plot!(s2.stats[:iter_time][i_range],s2.stats[:c_max][i_range],marker=:circle,yscale=:log10,ylim=[1.0e-9,1.0],color=:blue,label="Ipopt")
 p = plot!(t_span,c_span,title="Car Escape c_max",xlabel="time (s)",marker=:circle,color=:orange,width=2,yscale=:log10,ylim=[1.0e-9,1.0],label="ALTRO")
 
 savefig(p,joinpath(pwd(),"examples/IROS_2019/car_escape_c_max.png"))
+
+#PGFPlots version
+w1 = PGF.Plots.Linear(s3.stats[:iter_time][s_range],s3.stats[:c_max][s_range],mark="none", legendentry="DIRCOL-S",style="very thick, color=green")
+w2 = PGF.Plots.Linear(s2.stats[:iter_time][i_range],s2.stats[:c_max][i_range], mark="none",legendentry="DIRCOL-I",style="very thick, color=cyan")
+w3 = PGF.Plots.Linear(t_span,c_span, mark="none", legendentry="ALTRO",style="very thick, color=orange!80!black")
+w4 = PGF.Plots.Linear(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),legendentry="Projected Newton",mark="none",style="very thick, color=red, dashed")
+
+a = Axis([w4;w1;w2;w3],
+    xmin=0., ymin=1e-9, xmax=45, ymax=1.0,
+    legendPos="north east",
+    ymode="log",
+    hideAxis=false,
+    xlabel="time (s)")
+
+save(joinpath(paper,"escape_c_max.tikz"), a, include_preamble=false)

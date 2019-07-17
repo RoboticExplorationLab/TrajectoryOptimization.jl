@@ -26,7 +26,7 @@ opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
-    R_inf=1.0e-8,
+    R_inf=1.0e-6,
     resolve_feasible_problem=false,
     opts_pn=opts_pn,
     projected_newton=true,
@@ -43,7 +43,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     opts=Dict(:Iterations_limit=>500000,
         :Major_iterations_limit=>1000))
 
-# ALTRO w Newton
+# ALTRO w/ Newton
 prob_altro = copy(Problems.quadrotor_maze_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
