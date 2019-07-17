@@ -74,7 +74,7 @@ end
 maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
-u_max = 100.
+u_max = 50.
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 

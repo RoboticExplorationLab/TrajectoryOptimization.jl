@@ -149,4 +149,5 @@ a = Axis([w4;w1;w2;w3],
     hideAxis=false,
     xlabel="time (s)")
 
+paper = "/home/taylor/Documents/research/ALTRO_paper/images"
 save(joinpath(paper,"escape_c_max.tikz"), a, include_preamble=false)

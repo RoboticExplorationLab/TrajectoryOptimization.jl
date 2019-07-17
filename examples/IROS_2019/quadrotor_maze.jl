@@ -26,7 +26,7 @@ opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
-    R_inf=1.0e-6,
+    R_inf=1.0e-8,
     resolve_feasible_problem=false,
     opts_pn=opts_pn,
     projected_newton=true,
@@ -48,7 +48,6 @@ prob_altro = copy(Problems.quadrotor_maze_problem)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
-
 X1 = to_array(p1.X)
 plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
 plot(p1.U,title="Quadrotor control (ALTRO)")
@@ -103,7 +102,7 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
-function visualize_quadrotor_maze(prob)
+function animate_quadrotor_maze(prob)
     vis = Visualizer()
     open(vis)
 
@@ -117,7 +116,8 @@ function visualize_quadrotor_maze(prob)
 
 
     sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.25)) # trajectory points
-    sphere_medium = HyperSphere(Point3f0(0), convert(Float32,2.0));
+    sphere_med = HyperSphere(Point3f0(0), convert(Float32,0.5));
+    sphere_quad = HyperSphere(Point3f0(0), convert(Float32,2.0));
 
 
     obstacles = vis["obs"]
@@ -131,7 +131,7 @@ function visualize_quadrotor_maze(prob)
     traj = vis["traj"]
 
     for i = 1:prob.N
-        setobject!(vis["traj"]["t$i"],sphere_small,MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)))
+        setobject!(vis["traj"]["t$i"],sphere_small,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
         settransform!(vis["traj"]["t$i"], Translation(prob.X[i][1], prob.X[i][2], prob.X[i][3]))
     end
 
@@ -144,4 +144,47 @@ function visualize_quadrotor_maze(prob)
     MeshCat.setanimation!(vis,anim)
 end
 
-visualize_quadrotor_maze(p1)
+function ghost_quadrotor_maze(prob)
+    vis = Visualizer()
+    open(vis)
+
+    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+    quad_scaling = 0.7
+    robot_obj = FileIO.load(obj)
+    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+
+
+    sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.25)) # trajectory points
+    sphere_med = HyperSphere(Point3f0(0), convert(Float32,0.5));
+    sphere_quad = HyperSphere(Point3f0(0), convert(Float32,2.0));
+
+
+    obstacles = vis["obs"]
+    traj = vis["traj"]
+    robot = vis["robot"]
+    # setobject!(vis["robot"]["quad"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)));
+    # setobject!(vis["robot"]["ball"],sphere_medium,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.5)));
+
+    settransform!(vis["/Cameras/default"], compose(Translation(0., 72., 60.),LinearMap(RotX(pi/7.5)*RotZ(pi/2))))
+    addcylinders!(vis,Problems.quadrotor_maze_objects,16.0)
+    traj = vis["traj"]
+
+    for i = 1:prob.N
+        setobject!(vis["traj"]["t$i"],sphere_small,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+        settransform!(vis["traj"]["t$i"], Translation(prob.X[i][1], prob.X[i][2], prob.X[i][3]))
+    end
+
+    traj_idx = [1;12;20;30;40;50;prob.N]
+    n_robots = length(traj_idx)
+    for i = 1:n_robots
+        robot = vis["robot_$i"]
+        setobject!(vis["robot_$i"]["quad"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+        settransform!(vis["robot_$i"], compose(Translation(prob.X[traj_idx[i]][1:3]...),LinearMap(Quat(prob.X[traj_idx[i]][4:7]...))))    end
+end
+
+ghost_quadrotor_maze(p1)
+
+animate_quadrotor_maze(p1)
