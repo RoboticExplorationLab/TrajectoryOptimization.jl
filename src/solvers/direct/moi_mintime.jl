@@ -125,17 +125,18 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverMTOptions)
     res = MOI.get(solver, MOI.VariablePrimal(), Z)
     res = PrimalsMT(res, d.part_z)
 
+    d.solver.Z = res
+    d.solver.stats[:status] = MOI.get(solver, MOI.TerminationStatus())
+
     # Return the results
-    return res, dircol
+    return d.solver
 end
 
 function solve!(prob::Problem,opts::DIRCOLSolverMTOptions)
-    res, dircol = solve_moi(prob, opts)
-    copyto!(prob.X,res.X)
-    # copyto!(prob.U,res.U[1:prob.N-1])
-    for k = 1:prob.N-1
-        prob.U[k] = [res.U[k]; res.H[k]]
-    end
+    dircol = solve_moi(prob, opts)
+
+    copyto!(prob.X,dircol.Z.X)
+    prob.U = [k != prob.N ? [dircol.Z.U[k];sqrt(dircol.Z.H[k])] : dircol.Z.U[k] for k = 1:prob.N]
 
     return dircol
 end

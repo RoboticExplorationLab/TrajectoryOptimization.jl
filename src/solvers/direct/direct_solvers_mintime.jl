@@ -20,7 +20,7 @@ $(TYPEDEF)
 Direct Collocation Solver.
 Uses a commerical NLP solver to solve the Trajectory Optimization problem.
 """
-struct DIRCOLSolverMT{T,Q} <: DirectSolver{T}
+mutable struct DIRCOLSolverMT{T,Q} <: DirectSolver{T}
     opts::DIRCOLSolverMTOptions{T}
     stats::Dict{Symbol,Any}
     Z::PrimalsMT{T}

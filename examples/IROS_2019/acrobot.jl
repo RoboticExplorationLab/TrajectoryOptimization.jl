@@ -52,8 +52,6 @@ prob_ipopt = update_problem(prob_ipopt,model=Dynamics.acrobot_model) # get conti
 plot(p2.X,title="Acrobot state (Ipopt)")
 plot(p2.U,title="Acrobot control (Ipopt)")
 max_violation_direct(p2)
-# s2.stats[:c_max][end]
-# parse_ipopt_summary()[:c_max][end]
 
 # DIRCOL w/ SNOPT
 prob_snopt = copy(Problems.acrobot_problem)
@@ -64,6 +62,3 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.acrobot_model) # get conti
 plot(p3.X,title="Acrobot state (SNOPT)")
 plot(p3.U,title="Acrobot control (SNOPT)")
 max_violation_direct(p3)
-# s3.stats[:c_max][end]
-# parse_snopt_summary()[:c_max][end]
-# parse_snopt_summary()[:c_max][end]*norm(s3.Z.Z) # try to account for snopt c_max scaling

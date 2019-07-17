@@ -1,9 +1,10 @@
 function max_violation_dynamics(prob::Problem{T,Discrete})::T where T <: AbstractFloat
+    n = prob.model.n; m = prob.model.m
     max_viol = norm(prob.X[1] - prob.x0,Inf)
-    X̄ = zeros(prob.model.n)
+    X̄ = zeros(n)
     for k = 1:prob.N-1
         X̄ .= 0
-        evaluate!(X̄, prob.model, prob.X[k], prob.U[k], get_dt(prob,k))
+        evaluate!(X̄, prob.model, prob.X[k], prob.U[k][1:m], get_dt(prob,prob.U[k]))
         max_viol = max(max_viol,norm(X̄ - prob.X[k+1],Inf))
     end
     return max_viol
@@ -18,7 +19,7 @@ function max_violation_dynamics(prob::Problem{T,Continuous})::T where T <:Abstra
     fValm = [zeros(prob.model.n) for k = 1:N]
     Xm = [zeros(prob.model.n) for k = 1:N]
     Um = [zeros(prob.model.m) for k = 1:N-1]
-    dt = get_dt_traj(prob)
+    dt = get_dt_traj(prob,prob.U)
 
     # Calculate midpoints
     for k = 1:N
@@ -26,7 +27,7 @@ function max_violation_dynamics(prob::Problem{T,Continuous})::T where T <:Abstra
     end
     for k = 1:N-1
         Xm[k] = (prob.X[k] + prob.X[k+1])/2 + dt[k]/8*(fVal[k] - fVal[k+1])
-        Um[k] = (prob.U[k] + prob.U[k+1])*0.5
+        Um[k] = (prob.U[k][1:m] + prob.U[k+1][1:m])*0.5
         evaluate!(fValm[k], prob.model, Xm[k], Um[k])
     end
 
@@ -469,6 +470,8 @@ function remove_bounds!(prob::Problem)
     end
 
     # Terminal time step
+    #TODO handle control at U differently
+
     if :goal ∈ labels(prob.constraints[N])
         goal = pop!(prob.constraints[N])
         xf = zeros(n)
@@ -495,6 +498,11 @@ function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
         x_L[k] = bounds[k].x_min
         u_U[k] = bounds[k].u_max
         u_L[k] = bounds[k].u_min
+    end
+    #TODO handle control at U differently
+    if Z.equal
+        u_U[N] = bounds[N-1].u_max
+        u_L[N] = bounds[N-1].u_min
     end
     if !Z.equal
         x_U = bounds[N].x_max

@@ -31,6 +31,7 @@ export
     acrobot_problem,
     car_escape_problem,
     car_3obs_problem,
+    quadrotor_problem,
     quadrotor_maze_problem,
     kuka_obstacles_problem
 

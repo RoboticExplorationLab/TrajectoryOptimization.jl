@@ -74,7 +74,7 @@ end
 maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
 
 u_min = 0.
-u_max = 50.
+u_max = 100.
 x_max = Inf*ones(model.n)
 x_min = -Inf*ones(model.n)
 
@@ -111,8 +111,11 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-quadrotor_maze_problem = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(quadrotor_maze_problem,U_hover); # initialize problem with controls
+quadrotor_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+quadrotor_problem.constraints[N] += goal
+initial_controls!(quadrotor_problem,U_hover); # initialize problem with controls
+
+quadrotor_maze_problem = update_problem(copy(quadrotor_problem),constraints=constraints)
 
 X_guess = zeros(n,7)
 X_guess[:,1] = x0
