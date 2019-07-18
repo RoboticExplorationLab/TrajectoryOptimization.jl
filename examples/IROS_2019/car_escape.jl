@@ -1,6 +1,6 @@
 using Random, BenchmarkTools, SNOPT7
-using PGFPlots
-const PGF = PGFPlots
+# using PGFPlots
+# const PGF = PGFPlots
 
 # Car escape
 T = Float64

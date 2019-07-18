@@ -1,11 +1,10 @@
 using BenchmarkTools, Plots, SNOPT7
-
 # Car escape
 T = Float64
 
 # options
 max_con_viol = 1.0e-8
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
     live_plotting=:off)

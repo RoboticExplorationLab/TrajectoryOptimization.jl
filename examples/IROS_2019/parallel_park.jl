@@ -83,7 +83,7 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     projected_newton=true,
     projected_newton_tolerance=1.0e-5)
 
-opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,
+opts_mt_ipopt = DIRCOLSolverMTOptions{T}(verbose=verbose,
     nlp=:Ipopt,
     opts=Dict(:print_level=>3,
         :tol=>max_con_viol,
@@ -92,7 +92,7 @@ opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,
     h_max=dt_max,
     h_min=dt_min)
 
-opts_mt_snopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,
+opts_mt_snopt = DIRCOLSolverMTOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
     opts=Dict(:Major_print_level=>0,
         :Minor_print_level=>0,

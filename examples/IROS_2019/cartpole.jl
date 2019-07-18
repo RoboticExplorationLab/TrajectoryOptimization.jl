@@ -27,11 +27,11 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
-    feasibility_tolerance=1.0e-6)
+    feasibility_tolerance=max_con_viol)
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
-    feasibility_tolerance=1.0e-5)
+    feasibility_tolerance=max_con_viol)
 
 # ALTRO w/ Newton
 prob_altro = copy(Problems.cartpole_problem)
