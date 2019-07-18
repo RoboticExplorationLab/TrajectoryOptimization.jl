@@ -50,7 +50,7 @@ function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
 end
 
 function write_ipopt_options()
-    if !isfile(joinpath(root_dir(),"logs","ipopt.out"))
+    if !isdir(joinpath(root_dir(),"logs"))
         mkdir(joinpath(root_dir(),"logs"))
     end
     outfile=joinpath(root_dir(),"logs","ipopt.out")
