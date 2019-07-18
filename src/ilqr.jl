@@ -21,7 +21,8 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
 
             # check for cost blow up
             if J > solver.opts.max_cost_value
-                error("Cost exceeded maximum cost")
+                @warn "Cost exceeded maximum cost"
+                return solver
             end
 
             copyto!(prob.X, solver.X̄)
@@ -36,7 +37,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
             evaluate_convergence(solver) ? break : nothing
         end
     end
-    return solver 
+    return solver
 end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
