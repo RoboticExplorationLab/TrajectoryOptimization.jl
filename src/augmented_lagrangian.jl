@@ -1,6 +1,7 @@
 "Augmented Lagrangian solve"
 function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T}) where T<:AbstractFloat
     reset!(solver)
+    t_start = time()
 
     solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
 
@@ -8,9 +9,10 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
     logger = default_logger(solver)
 
     rollout!(prob)
-    record_iteration!(prob_al, solver, cost(prob_al), solver_uncon)
 
     with_logger(logger) do
+        record_iteration!(prob_al, solver, cost(prob_al), solver_uncon)
+        println(logger,OuterLoop)
         for i = 1:solver.opts.iterations
             set_tolerances!(solver,solver_uncon,i)
             J = step!(prob_al, solver, solver_uncon)
@@ -24,6 +26,7 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
             reset!(solver_uncon)
         end
     end
+    solver.stats[:time] = time() - t_start
     return solver
 end
 
