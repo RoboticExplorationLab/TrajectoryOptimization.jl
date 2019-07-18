@@ -46,12 +46,12 @@ car_3obs_problem = Problem(model_d,obj, constraints=constraints, x0=x0, N=N, dt=
 
 initial_controls!(car_3obs_problem,U); # initialize problem with controls
 
-function plot_car_3obj(X,x0=x0,xf=xf)
+function plot_car_3obj(X,x0=x0,xf=xf; kwargs...)
     X_array = to_array(X)
 
     plot()
     plot_obstacles(circles_3obs,:orange)
     plot!((x0[1],x0[2]),marker=:circle,color=:red,labels="")
     plot!((xf[1],xf[2]),marker=:circle,color=:green,labels="")
-    plot!(X_array[1,:],X_array[2,:],color=:blue,width=2,label="")
+    plot!(X_array[1,:],X_array[2,:],color=:blue,width=2,label=""; kwargs...)
 end

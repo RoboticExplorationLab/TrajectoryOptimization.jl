@@ -1,6 +1,6 @@
 using Random, BenchmarkTools, SNOPT7
-using PGFPlots
-const PGF = PGFPlots
+# using PGFPlots
+# const PGF = PGFPlots
 
 # Car escape
 T = Float64
@@ -84,11 +84,6 @@ PGF.Plots.Linear(x,y);
 # Plot the walls
 color_wall = "gray"
 style = "color=$color_wall, fill=$color_wall"
-function trajectory_plot(prob::Problem; kwargs...)
-    x = [x[1] for x in prob.X]
-    y = [x[2] for x in prob.X]
-    PGF.Plots.Linear(x,y; kwargs...)
-end
 p = [PGF.Plots.Circle(circle..., style=style) for circle in circles]
 
 # Plot the trajectories

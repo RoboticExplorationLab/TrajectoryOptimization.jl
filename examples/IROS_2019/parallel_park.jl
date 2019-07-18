@@ -5,24 +5,22 @@ T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
-opts_ilqr = iLQRSolverOptions{T}(verbose=false,
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
     live_plotting=:off)
 
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     opts_uncon=opts_ilqr,
     iterations=30,
     penalty_scaling=10.0,
-    penalty_initial=1e-1,
     constraint_tolerance=max_con_viol)
 
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=false,
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
     feasibility_tolerance=max_con_viol)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
-    opts_pn=opts_pn,
     projected_newton=true,
-    projected_newton_tolerance=1.0e-2)
+    projected_newton_tolerance=1.0e-4)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
@@ -147,3 +145,45 @@ U6m = to_array([0.5*(p6.U[k][1:p6.model.m] + p6.U[k+1][1:p6.model.m]) for k = 1:
 plot(X6[1,:],X6[2,:],title="Parallel Park Min. Time - (SNOPT)")
 plot(U6',title="Parallel Park Min. Time - (SNOPT)")
 plot(U6m',title="Parallel Park Min. Time - (control midpoint) (SNOPT)")
+
+
+
+
+
+###############################################
+#            Create PGF Plot                  #
+###############################################
+include("vars.jl")
+
+t1 = trajectory_plot_flip(p1, mark="none", legendentry="original", style="very thick, color=$col_altro, mark options={fill=$col_altro}");
+t2 = trajectory_plot_flip(p2, mark="none", legendentry="Ipopt", style="very thick, color=$col_ipopt, mark options={fill=$col_ipopt}");
+t3 = trajectory_plot_flip(p3, mark="none", legendentry="SNOPT", style="very thick, color=$col_snopt, mark options={fill=$col_snopt}");
+t4 = trajectory_plot_flip(p4, mark="none", legendentry="mintime", style="very thick, color=black, mark options={fill=$col_altro}, dashed");
+t5 = trajectory_plot_flip(p5, mark="none", legendentry="Ipopt", style="very thick, color=black, mark options={fill=$col_ipopt}, dashed");
+t6 = trajectory_plot_flip(p6, mark="none", legendentry="SNOPT", style="very thick, color=$col_snopt, mark options={fill=$col_snopt}, dashed");
+
+x0 = prob_altro.x0
+xf = prob_altro.xf
+goal = ([x0[2], xf[2]],
+        [x0[1], xf[1]])
+z = ["start","end"]
+g = PGF.Plots.Scatter(goal[1], goal[2], z,
+    scatterClasses="{start={yellow, mark=*, yellow, scale=2},
+        end={mark=square*, red, scale=2}}",
+    legendentry=["start", "end"]);
+
+a = Axis([t3; t2; t1; t6; t5; t4; g],
+    xmin=-0.1, ymin=-0.3, xmax=1.1, ymax=0.3,
+    axisEqualImage=true,
+    legendPos="outer north east",
+    hideAxis=true)
+
+a = Axis([t1; t4; g],
+    xmin=-0.1, ymin=-0.3, xmax=1.1, ymax=0.3,
+    axisEqualImage=true,
+    legendPos="outer north east",
+    hideAxis=true)
+
+# Save to tikz format
+# NOTE: To fix the problem with the legend for the start and goal points, replace \addplot+ with \addplot in the tikz file
+save(joinpath(paper,"ppark_traj.tikz"), a, include_preamble=false)

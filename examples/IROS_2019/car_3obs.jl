@@ -1,11 +1,10 @@
 using BenchmarkTools, Plots, SNOPT7
-
 # Car escape
 T = Float64
 
 # options
 max_con_viol = 1.0e-8
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
     live_plotting=:off)
@@ -62,4 +61,37 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
-Problems.plot_car_3obj(p3.X,x0,xf)
+Problems.plot_car_3obj(p3.X,x0,xf, markershape=:circle)
+plot(p3.U)
+
+
+###############################################
+#            Create PGF Plot                  #
+###############################################
+
+
+color_obs= "gray"
+style = "color=$color_obs, fill=$color_obs"
+p = [PGF.Plots.Circle(circle..., style=style) for circle in Problems.circles_3obs]
+t1 = trajectory_plot(p1, mark="*", legendentry="ALTRO", style="very thick, color=$col_altro, mark options={fill=$col_altro}");
+t2 = trajectory_plot(p2, mark="*", legendentry="Ipopt", style="very thick, color=$col_ipopt, mark options={fill=$col_ipopt}");
+t3 = trajectory_plot(p3, mark="*", legendentry="SNOPT", style="very thick, color=$col_snopt, mark options={fill=$col_snopt}");
+
+
+goal = ([x0[1], xf[1]],
+        [x0[2], xf[2]])
+z = ["start","end"]
+g = PGF.Plots.Scatter(goal[1], goal[2], z,
+    scatterClasses="{start={yellow, mark=*, yellow, scale=2},
+        end={mark=square*, red, scale=2}}",
+    legendentry=["start", "end"]);
+
+a = Axis([p; t3; t2; t1; g],
+    xmin=-0.1, ymin=-1, xmax=1.5, ymax=1,
+    axisEqualImage=true,
+    legendPos="north west",
+    hideAxis=true)
+
+# Save to tikz format
+# NOTE: To fix the problem with the legend for the start and goal points, replace \addplot+ with \addplot in the tikz file
+save(joinpath(paper,"3obs_traj.tikz"), a, include_preamble=false)

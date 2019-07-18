@@ -15,7 +15,7 @@ Q = (1e-2)*Diagonal(I,n)
 R = (1e-2)*Diagonal(I,m)
 
 # constraints
-u_bnd = [1, 1.5]
+u_bnd = 2.
 x_min = [-0.25; -0.001; -Inf]
 x_max = [0.25; 1.001; Inf]
 bnd1 = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
