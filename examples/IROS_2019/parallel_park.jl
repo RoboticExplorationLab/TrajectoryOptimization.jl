@@ -153,12 +153,7 @@ plot(U6m',title="Parallel Park Min. Time - (control midpoint) (SNOPT)")
 ###############################################
 #            Create PGF Plot                  #
 ###############################################
-
-function trajectory_plot_flip(prob::Problem; kwargs...)
-    x = [x[2] for x in prob.X]
-    y = [x[1] for x in prob.X]
-    PGF.Plots.Linear(x,y; kwargs...)
-end
+include("vars.jl")
 
 t1 = trajectory_plot_flip(p1, mark="none", legendentry="original", style="very thick, color=$col_altro, mark options={fill=$col_altro}");
 t2 = trajectory_plot_flip(p2, mark="none", legendentry="Ipopt", style="very thick, color=$col_ipopt, mark options={fill=$col_ipopt}");

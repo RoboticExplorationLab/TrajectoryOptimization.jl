@@ -69,10 +69,6 @@ plot(p3.U)
 ###############################################
 #            Create PGF Plot                  #
 ###############################################
-col_altro = "orange"
-col_ipopt = "blue"
-col_snopt = "green!80!black"
-
 
 
 color_obs= "gray"
@@ -100,4 +96,3 @@ a = Axis([p; t3; t2; t1; g],
 # Save to tikz format
 # NOTE: To fix the problem with the legend for the start and goal points, replace \addplot+ with \addplot in the tikz file
 save(joinpath(paper,"3obs_traj.tikz"), a, include_preamble=false)
-

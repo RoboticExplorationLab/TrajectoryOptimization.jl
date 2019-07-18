@@ -8,7 +8,7 @@ verbose=false
 
 opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=false,
     opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-4,
     cost_tolerance_intermediate=1.0e-3,
@@ -75,11 +75,14 @@ i_range = [1,(2:4:length(s2.stats[:iter_time])-1)...,length(s2.stats[:iter_time]
 # p = plot!(s2.stats[:iter_time][i_range],s2.stats[:c_max][i_range],marker=:circle,yscale=:log10,ylim=[1.0e-10,10.0],color=:blue,label="Ipopt")
 # p = plot!(t_span,c_span,title="Cartpole c_max",xlabel="time (s)",marker=:circle,color=:orange,width=2,yscale=:log10,ylim=[1.0e-10,10.0],label="ALTRO")
 
-#PGFPlots version
-w1 = PGF.Plots.Linear(s3.stats[:iter_time][s_range],s3.stats[:c_max][s_range],mark="none", legendentry="SNOPT",style="very thick, color=green")
-w2 = PGF.Plots.Linear(s2.stats[:iter_time][i_range],s2.stats[:c_max][i_range], mark="none",legendentry="Ipopt",style="very thick, color=cyan")
-w3 = PGF.Plots.Linear(t_span,c_span, mark="none", legendentry="ALTRO",style="very thick, color=orange")
-w4 = PGF.Plots.Linear(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),legendentry="Projected Newton",mark="none",style="very thick, color=red, dashed")
+###############################################
+#            Create PGF Plot                  #
+###############################################
+include("vars.jl")
+w1 = PGF.Plots.Linear(s3.stats[:iter_time][s_range],s3.stats[:c_max][s_range],mark="none", legendentry="SNOPT",style="very thick, color=$col_snopt");
+w2 = PGF.Plots.Linear(s2.stats[:iter_time][i_range],s2.stats[:c_max][i_range], mark="none",legendentry="Ipopt",style="very thick, color=$col_ipopt");
+w3 = PGF.Plots.Linear(t_span,c_span, mark="none", legendentry="ALTRO",style="very thick, color=$col_altro");
+w4 = PGF.Plots.Linear(t_pn*ones(100),range(1.0e-9,stop=1.0,length=100),legendentry="Projected Newton",mark="none",style="very thick, color=red, dashed");
 
 a = Axis([w4;w1;w2;w3],
     xmin=0., ymin=1e-9, xmax=s3.stats[:iter_time][end], ymax=s3.stats[:c_max][1],
@@ -90,5 +93,4 @@ a = Axis([w4;w1;w2;w3],
     ylabel="maximum constraint violation",
     style="grid=both")
 
-paper = "/home/taylor/Documents/research/ALTRO_paper/images"
 save(joinpath(paper,"cartpole_c_max.tikz"), a, include_preamble=false)
