@@ -140,7 +140,7 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_time=12.5,
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,R_minimum_time=12.5,
     dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-4)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
@@ -148,11 +148,6 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
 
 # ALTRO w/ Newton
 prob_mt = copy(Problems.parallel_park_problem)
-for k = 1:N-1
-    bounds(prob_mt.constraints[k])[1].u_max .=  5
-    bounds(prob_mt.constraints[k])[1].u_min .= -5
-end
-
 prob_altro = copy(prob_mt)
 p1, s1 = solve(prob_altro, opts_altro)
 @test max_violation_direct(p1) <= 1e-6
@@ -173,11 +168,11 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_il
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
 
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_time=12.5,
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,R_minimum_time=12.5,
     dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-4)
 
 opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
-    opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
+    opts=Dict(:print_level=>0,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 
 # ALTRO w/ Newton
@@ -186,6 +181,7 @@ initial_controls!(prob_mt_altro,copy(p1.U))
 p4, s4 = solve(prob_mt_altro,opts_altro)
 @test max_violation_direct(p4) < 1e-6
 @test total_time(p4) < 1.6
+total_time(p4)
 
 
 # DIRCOL w/ Ipopt

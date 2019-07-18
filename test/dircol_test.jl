@@ -30,7 +30,7 @@ prob = TO.update_problem(prob, model=model)
 
 
 # Create DIRCOL Solver
-opts = TO.DIRCOLSolverOptions{Float64}(verbose=true)
+opts = TO.DIRCOLSolverOptions{Float64}(verbose=false)
 pcon = prob.constraints
 dircol = TO.DIRCOLSolver(prob, opts)
 
