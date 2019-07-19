@@ -170,7 +170,7 @@ z = ["start","end"]
 g = PGF.Plots.Scatter(goal[1], goal[2], z,
     scatterClasses="{start={yellow, mark=*, yellow, scale=2},
         end={mark=square*, red, scale=2}}",
-    legendentry=["start", "end"]);
+    );
 
 a = Axis([t3; t2; t1; t6; t5; t4; g],
     xmin=-0.1, ymin=-0.3, xmax=1.1, ymax=0.3,

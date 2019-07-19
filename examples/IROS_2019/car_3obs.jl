@@ -61,7 +61,7 @@ prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuou
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
-Problems.plot_car_3obj(p3.X,x0,xf, markershape=:circle)
+Problems.plot_car_3obj(p3.X,x0,xf)
 plot(p3.U)
 
 
@@ -83,8 +83,7 @@ goal = ([x0[1], xf[1]],
 z = ["start","end"]
 g = PGF.Plots.Scatter(goal[1], goal[2], z,
     scatterClasses="{start={yellow, mark=*, yellow, scale=2},
-        end={mark=square*, red, scale=2}}",
-    legendentry=["start", "end"]);
+        end={mark=square*, red, scale=2}}",);
 
 a = Axis([p; t3; t2; t1; g],
     xmin=-0.1, ymin=-1, xmax=1.5, ymax=1,
