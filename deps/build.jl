@@ -1,2 +1,2 @@
 using Pkg
-Pkg.add("https://github.com/RoboticExplorationLab/MatrixCalculus.jl.git")
+Pkg.add(PackageSpec(url="https://github.com/RoboticExplorationLab/MatrixCalculus.jl.git"))
