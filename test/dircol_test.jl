@@ -1,7 +1,7 @@
 import TrajectoryOptimization: get_dt_traj
 
 # Set up problem
-model = Dynamics.car_model
+model = Dynamics.car
 n,m = model.n, model.m
 Q = (1e-2)*Diagonal(I,n)
 Qf = 1000.0*Diagonal(I,n)

@@ -6,7 +6,7 @@
 #     f_augmented!, add_slack_controls, add_min_time_controls
 #
 # ## Augment dynamics
-# model = Dynamics.pendulum_model
+# model = Dynamics.pendulum
 # model_d = discretize_model(model,:rk4)
 #
 # # Add slack controls
@@ -100,7 +100,7 @@ import TrajectoryOptimization: Model, LQRCost, Problem, Objective, rollout!, iLQ
     f_augmented!, add_slack_controls, add_min_time_controls, Nominal
 
 ## Augment dynamics
-model = Dynamics.pendulum_model
+model = Dynamics.pendulum
 model_d = discretize_model(model,:rk4)
 
 # Add slack controls

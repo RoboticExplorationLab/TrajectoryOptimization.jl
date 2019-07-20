@@ -2,7 +2,7 @@
 T = Float64
 
 # model
-model = TrajectoryOptimization.Dynamics.car_model
+model = TrajectoryOptimization.Dynamics.car
 n = model.n; m = model.m
 model_d = TO.discretize_model(model,:rk4)
 

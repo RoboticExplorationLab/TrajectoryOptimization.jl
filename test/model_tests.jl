@@ -1,6 +1,6 @@
 
 ######## Analytical Model #############
-model = Dynamics.car_model
+model = Dynamics.car
 n = 3; m = 2
 @test model.m == m
 @test model.n == n
@@ -159,7 +159,7 @@ model2.f(ẋ2,x,u)
 
 # Create discrete dynamics from continuous
 n,m = 3,2
-model = Dynamics.car_model
+model = Dynamics.car
 discretizer = :rk3
 model_d = discretize_model(model,discretizer)
 

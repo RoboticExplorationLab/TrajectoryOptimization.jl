@@ -4,7 +4,7 @@ traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
 urdf_folder = joinpath(traj_folder, "dynamics/urdf")
 urdf_cartpole = joinpath(urdf_folder, "cartpole.urdf")
 
-cartpole_model_urdf = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
+cartpole_urdf = Model(urdf_cartpole,[1.;0.]) # underactuated, only control of slider
 
 function cartpole_dynamics!(ẋ::AbstractVector{T}, x::AbstractVector{T}, u::AbstractVector{T}) where T
     mc = 1.0  # mass of the cart in kg (10)
@@ -36,7 +36,7 @@ function cartpole_dynamics!(ẋ::AbstractVector{T}, x::AbstractVector{T}, u::Abs
 end
 
 n,m = 4,1
-cartpole_model = Model(cartpole_dynamics!,n,m)
+cartpole = Model(cartpole_dynamics!,n,m)
 
 # unknown friction
 function cartpole_dynamics_uncertain!(ẋ, x, u, w)
@@ -71,4 +71,4 @@ function cartpole_dynamics_uncertain!(ẋ, x, u, w)
 end
 
 n = 4; m = 1; r = 1
-cartpole_model_uncertain = UncertainModel(cartpole_dynamics_uncertain!,n,m,r)
+cartpole_uncertain = UncertainModel(cartpole_dynamics_uncertain!,n,m,r)

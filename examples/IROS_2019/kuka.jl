@@ -49,9 +49,9 @@ plot(p1.X,title="Kuka state (ALTRO)")
 plot(p1.U,title="Kuka control (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(Problems.kuka_obstacles_problem)
+prob_ipopt = copy(Problems.kuka_obstacles)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.kuka_model)
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.kuka)
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
@@ -59,9 +59,9 @@ plot(p2.X,title="Kuka state (Ipopt)")
 plot(p2.U,title="Kuka control (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = copy(Problems.kuka_obstacles_problem)
+prob_snopt = copy(Problems.kuka_obstacles)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.kuka_model) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.kuka) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)

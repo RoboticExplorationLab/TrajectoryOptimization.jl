@@ -4,4 +4,4 @@ traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
 urdf_folder = joinpath(traj_folder, "dynamics/urdf")
 urdf_doublependulum = joinpath(urdf_folder, "doublependulum.urdf")
 
-doublependulum_model = Model(urdf_doublependulum)
+doublependulum = Model(urdf_doublependulum)

@@ -1,6 +1,6 @@
 
 # Set up Problem
-model = Dynamics.car_model
+model = Dynamics.car
 n,m = model.n, model.m
 N = 51
 Q = Diagonal(I,n)*0.01

@@ -17,4 +17,4 @@ function ballonbeam_dynamics(x::AbstractVector{T},u::AbstractVector{T}) where T
     sys = [zdot; thetadot; zddot; thetaddot];
 end
 n,m = 4,1
-ballonbeam_model = Model(ballonbeam_dynamics,n,m)
+ballonbeam = Model(ballonbeam_dynamics,n,m)

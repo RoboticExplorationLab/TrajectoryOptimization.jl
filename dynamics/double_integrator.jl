@@ -6,4 +6,4 @@ end
 n = 2
 m = 1
 
-doubleintegrator_model = Model(double_integrator_dynamics!,n,m)
+doubleintegrator = Model(double_integrator_dynamics!,n,m)

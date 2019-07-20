@@ -34,7 +34,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     feasibility_tolerance=max_con_viol)
 
 # ALTRO w/ Newton
-prob_altro = copy(Problems.cartpole_problem)
+prob_altro = copy(Problems.cartpole)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
@@ -42,9 +42,9 @@ plot(p1.X,title="Cartpole state (ALTRO)")
 plot(p1.U,title="Cartpole control (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(Problems.cartpole_problem)
+prob_ipopt = copy(Problems.cartpole)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.cartpole_model) # get continuous time model
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.cartpole) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 push!(s2.stats[:iter_time],s2.stats[:time])
@@ -54,9 +54,9 @@ plot(p2.X,title="Cartpole state (Ipopt)")
 plot(p2.U,title="Cartpole control (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = copy(Problems.cartpole_problem)
+prob_snopt = copy(Problems.cartpole)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.cartpole_model) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.cartpole) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
@@ -65,7 +65,7 @@ plot(p3.X,title="Cartpole state (SNOPT)")
 plot(p3.U,title="Cartpole control (SNOPT)")
 
 # AL-iLQR
-prob_alilqr = copy(Problems.cartpole_problem)
+prob_alilqr = copy(Problems.cartpole)
 opts_al.constraint_tolerance = max_con_viol
 @time p4, s4 = solve(prob_alilqr, opts_al)
 @benchmark p4, s4 = solve($prob_alilqr, $opts_al)

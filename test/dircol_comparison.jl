@@ -145,7 +145,7 @@ p_colloc = (N-1)*n
 NN = N*(n+m)
 
 # New Method
-model = Dynamics.car_model
+model = Dynamics.car
 costfun = Dynamics.car_costfun
 prob = Problem(rk4(model), Objective(costfun,N), N=N, tf=3.)
 initial_controls!(prob,U0)

@@ -2,7 +2,7 @@
 T = Float64
 
 # model
-model = TrajectoryOptimization.Dynamics.pendulum_model
+model = TrajectoryOptimization.Dynamics.pendulum
 n = model.n; m = model.m
 model_d = rk4(model)
 
@@ -70,7 +70,7 @@ is_stage(prob.constraints[N][1])
 
 opts = DIRCOLSolverOptions{T}()
 dircol = DIRCOLSolver(prob, opts)
-d = DIRCOLProblem(update_problem(prob,model=Dynamics.pendulum_model), dircol)
+d = DIRCOLProblem(update_problem(prob,model=Dynamics.pendulum), dircol)
 
 is_terminal(prob.constraints[N][1])#(zeros(2),rand(n),rand(m))
 
@@ -84,6 +84,6 @@ end
 bounds(prob.constraints[2])
 prob
 
-prob_c = update_problem(prob,model=Dynamics.pendulum_model)
+prob_c = update_problem(prob,model=Dynamics.pendulum)
 
 minimum_time_problem(prob_c)

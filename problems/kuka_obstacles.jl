@@ -1,5 +1,5 @@
 # Kuka w/ obstacles
-model = Dynamics.kuka_model
+model = Dynamics.kuka
 model_d = rk3(model)
 n,m = model.n, model.m
 
@@ -139,7 +139,7 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-kuka_obstacles_problem = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt, constraints=constraints)
-initial_controls!(kuka_obstacles_problem, U_hold)
+kuka_obstacles = Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt, constraints=constraints)
+initial_controls!(kuka_obstacles, U_hold)
 
 kuka_obstacles_objects = (circles_kuka,cylinders_kuka)

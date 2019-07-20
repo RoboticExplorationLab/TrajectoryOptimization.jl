@@ -32,7 +32,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
 
 
 # ALTRO w/ Newton
-prob_altro = copy(Problems.parallel_park_problem)
+prob_altro = copy(Problems.parallel_park)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
@@ -41,9 +41,9 @@ plot(X1[1,:],X1[2,:],title="Parallel Park - (ALTRO)")
 plot(p1.U,title="Parallel Park - (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(Problems.parallel_park_problem)
+prob_ipopt = copy(Problems.parallel_park)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car_model) # get continuous time model
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
@@ -52,9 +52,9 @@ plot(X2[1,:],X2[2,:],title="Parallel Park - (Ipopt)")
 plot(p2.U,title="Parallel Park - (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = copy(Problems.parallel_park_problem)
+prob_snopt = copy(Problems.parallel_park)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.car) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
@@ -104,7 +104,7 @@ opts_mt_snopt = DIRCOLSolverMTOptions{T}(verbose=verbose,
     h_min=dt_min)
 
 # ALTRO w/ Newton
-prob_mt_altro = update_problem(copy(Problems.parallel_park_problem),tf=0.) # make minimum time problem by setting tf = 0
+prob_mt_altro = update_problem(copy(Problems.parallel_park),tf=0.) # make minimum time problem by setting tf = 0
 initial_controls!(prob_mt_altro,copy(p1.U))
 @time p4, s4 = solve(prob_mt_altro,opts_altro)
 @benchmark p4, s4 = solve($prob_mt_altro, $opts_altro)
@@ -115,10 +115,10 @@ plot(X4[1,:],X4[2,:],title="Parallel Park Min. Time - (ALTRO)")
 plot(p4.U,title="Parallel Park Min. Time - (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_mt_ipopt = update_problem(copy(Problems.parallel_park_problem))
+prob_mt_ipopt = update_problem(copy(Problems.parallel_park))
 initial_controls!(prob_mt_ipopt,copy(p2.U))
 rollout!(prob_mt_ipopt)
-prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car_model,tf=0.) # get continuous time model
+prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car,tf=0.) # get continuous time model
 @time p5, s5 = solve(prob_mt_ipopt, opts_mt_ipopt)
 @benchmark p5, s5 = solve($prob_mt_ipopt, $opts_mt_ipopt)
 max_violation_direct(p5)
@@ -131,10 +131,10 @@ plot(U5',title="Parallel Park Min. Time - (Ipopt)")
 plot(U5m',title="Parallel Park Min. Time (control midpoint) - (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_mt_snopt = copy(Problems.parallel_park_problem)
+prob_mt_snopt = copy(Problems.parallel_park)
 initial_controls!(prob_mt_snopt,copy(p3.U))
 rollout!(prob_mt_snopt)
-prob_mt_snopt = update_problem(prob_mt_snopt,model=Dynamics.car_model,tf=0.) # get continuous time model
+prob_mt_snopt = update_problem(prob_mt_snopt,model=Dynamics.car,tf=0.) # get continuous time model
 @time p6, s6 = solve(prob_mt_snopt, opts_mt_snopt)
 @benchmark p6, s6 = solve($prob_mt_snopt, $opts_mt_snopt)
 max_violation_direct(p6)

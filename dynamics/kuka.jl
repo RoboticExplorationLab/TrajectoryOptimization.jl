@@ -134,5 +134,5 @@ end
 # Write new urdf file with correct absolute paths
 write_kuka_urdf()
 
-kuka_model = Model(urdf_kuka)
+kuka = Model(urdf_kuka)
 end_effector_function = Dynamics.get_kuka_ee_postition_fun(parse_urdf(urdf_kuka,remove_fixed_tree_joints=false))

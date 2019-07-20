@@ -8,16 +8,17 @@ using DocStringExtensions
 using StaticArrays
 
 export
-    pendulum_model,
-    doublependulum_model,
-    cartpole_model,
-    cartpole_model_urdf,
-    ballonbeam_model,
+    pendulum,
+    doublependulum,
+    cartpole,
+    cartpole_urdf,
+    ballonbeam,
     acrobot_model,
-    quadrotor_model,
-    kuka_model,
-    doubleintegrator_model,
-    car_model
+    quadrotor,
+    quadrotor_euler,
+    kuka,
+    doubleintegrator,
+    car
 
 include("../dynamics/pendulum.jl")
 include("../dynamics/doublependulum.jl")
@@ -25,6 +26,7 @@ include("../dynamics/acrobot.jl")
 include("../dynamics/ballonbeam.jl")
 include("../dynamics/cartpole.jl")
 include("../dynamics/quadrotor.jl")
+include("../dynamics/quadrotor_euler.jl")
 include("../dynamics/kuka.jl")
 include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")

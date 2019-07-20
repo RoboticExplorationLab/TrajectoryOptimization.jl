@@ -1,7 +1,7 @@
 const TO = TrajectoryOptimization
 
 # Get the model
-model = Dynamics.car_model
+model = Dynamics.car
 n,m = model.n, model.m
 Q = (1e-2)*Diagonal(I,n)
 Qf = 1000.0*Diagonal(I,n)

@@ -39,26 +39,26 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
     feasibility_tolerance=max_con_viol)
 
-x0 = Problems.car_escape_problem.x0
-xf = Problems.car_escape_problem.xf
+x0 = Problems.car_escape.x0
+xf = Problems.car_escape.xf
 
 # ALTRO
 
-prob_altro = copy(Problems.car_escape_problem)
+prob_altro = copy(Problems.car_escape)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 Problems.plot_escape(p1.X,x0,xf)
 
 # DIRCOL w/ Ipopt
-prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+prob_ipopt = update_problem(copy(Problems.car_escape),model=Dynamics.car) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 Problems.plot_escape(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
-prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+prob_snopt = update_problem(copy(Problems.car_escape),model=Dynamics.car) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
@@ -76,7 +76,7 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,
     penalty_initial=10.,
     iterations=9)
 
-prob_altro = copy(Problems.car_escape_problem)
+prob_altro = copy(Problems.car_escape)
 prob_altro.X .*= NaN
 
 @time p4, s4 = solve(prob_altro, opts_al)

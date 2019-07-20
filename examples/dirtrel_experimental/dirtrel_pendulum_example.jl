@@ -1,39 +1,39 @@
-model = Dynamics.cartpole_model_uncertain
+model = Dynamics.pendulum_uncertain
 n = model.n; m = model.m; r = model.r
 
+eig_thr = 1.0e-3
+
+u_max = 3.
+u_min = -3.
+
+h_max = Inf
+h_min = 0.0
+
 # Problem
-x0 = [0.;0.;0.;0.]
-xf = [0.;pi;0.;0.]
+x0 = [0.;0.]
+xf = [pi;0.]
 
 E0 = Diagonal(1.0e-6*ones(n))
 H0 = zeros(n,r)
-D = Diagonal([4])
+D = Diagonal([.2^2])
 
-N = 101 # knot points
+N = 51 # knot points
 
-Q = Diagonal(ones(n))
-R = Diagonal(0.1*ones(m))
-Rh = 0.
-Qf = Diagonal(0.0*ones(n))
+Q = Diagonal(zeros(n))
+R = Diagonal(zeros(m))
+Rh = 1.0
+Qf = Diagonal(zeros(n))
 
-Q_lqr = Diagonal([10.;10.;1.;1.])
-R_lqr = Diagonal(ones(m))
-Qf_lqr = Diagonal([100.;100.;100.;100.])
+Q_lqr = Diagonal([10.;1.])
+R_lqr = Diagonal(0.1*ones(m))
+Qf_lqr = Diagonal([100.;100.])
 
 Q_r = Q_lqr
 R_r = R_lqr
 Qf_r = Qf_lqr
 
-tf0 = 5.
+tf0 = 2.
 dt = tf0/(N-1)
-
-h_max = dt
-h_min = dt
-
-u_max = 10.
-u_min = -10.
-
-eig_thr = 1.0e-3
 
 # problem
 obj = LQRObjective(Q,R,Qf,xf,N)

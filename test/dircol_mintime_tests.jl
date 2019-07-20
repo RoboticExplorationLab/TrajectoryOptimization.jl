@@ -1,10 +1,10 @@
 # opts_d = DIRCOLSolverOptions{Float64}()
 opts_d_mt = DIRCOLSolverMTOptions(verbose=true,nlp=:Ipopt,R_min_time=1.0,h_max=Inf,h_min=0.0)
 
-model = TrajectoryOptimization.Dynamics.pendulum_model
+model = TrajectoryOptimization.Dynamics.pendulum
 n = model.n; m = model.m
-xf = Problems.pendulum_problem.xf
-N = Problems.pendulum_problem.N
+xf = Problems.pendulum.xf
+N = Problems.pendulum.N
 tf0 = 2.0
 dt = tf0/(N-1)
 u_bound = 3.0
@@ -13,8 +13,8 @@ goal = goal_constraint(xf)
 
 constraints = Constraints([bnd],N)
 
-prob = copy(Problems.pendulum_problem)
-prob = update_problem(prob,model=Dynamics.pendulum_model,constraints=constraints)
+prob = copy(Problems.pendulum)
+prob = update_problem(prob,model=Dynamics.pendulum,constraints=constraints)
 prob.constraints[N] += goal
 # solve!(prob,opts_d)
 
@@ -28,8 +28,8 @@ solve!(prob_mt,opts_d_mt)
 plot(prob_mt.U)
 
 
-prob = copy(Problems.box_parallel_park_problem)
-prob_mt = update_problem(prob,model=Dynamics.car_model)
+prob = copy(Problems.box_parallel_park)
+prob_mt = update_problem(prob,model=Dynamics.car)
 
 solve!(prob_mt,opts_d_mt)
 

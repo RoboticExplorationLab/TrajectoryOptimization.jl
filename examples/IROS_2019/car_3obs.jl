@@ -35,29 +35,29 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     feasibility_tolerance=max_con_viol)
 
 
-x0 = Problems.car_3obs_problem.x0
-xf = Problems.car_3obs_problem.xf
+x0 = Problems.car_3obs.x0
+xf = Problems.car_3obs.xf
 
 # ALTRO w/ Newton
-prob_altro = copy(Problems.car_3obs_problem)
+prob_altro = copy(Problems.car_3obs)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 Problems.plot_car_3obj(p1.X,x0,xf)
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(Problems.car_3obs_problem)
+prob_ipopt = copy(Problems.car_3obs)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car_model) # get continuous time model)
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model)
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 Problems.plot_car_3obj(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
-prob_snopt = copy(Problems.car_3obs_problem)
+prob_snopt = copy(Problems.car_3obs)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.car_model) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.car) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)

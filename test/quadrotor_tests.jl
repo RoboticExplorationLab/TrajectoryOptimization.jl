@@ -3,7 +3,7 @@ Random.seed!(7)
 # model
 T = Float64
 integration = :rk4
-model = Dynamics.quadrotor_model
+model = Dynamics.quadrotor
 model_d = discretize_model(model,integration)
 n = model.n; m = model.m
 

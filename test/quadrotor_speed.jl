@@ -1,6 +1,6 @@
 
-quad = Dynamics.quadrotor_model
-quad2 = Dynamics.quadrotor_model2
+quad = Dynamics.quadrotor
+quad2 = Dynamics.quadrotor2
 n,m = quad.n, quad.m
 
 # Discrete Models

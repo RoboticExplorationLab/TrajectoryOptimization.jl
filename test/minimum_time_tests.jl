@@ -1,7 +1,7 @@
 T = Float64
 
 # model
-model = TrajectoryOptimization.Dynamics.pendulum_model
+model = TrajectoryOptimization.Dynamics.pendulum
 n = model.n; m = model.m
 model_d = rk3(model)
 
@@ -63,7 +63,7 @@ idx = [(1:n)...,((1:m) .+ n̄)...]
 @test max_violation(prob_mt) < opts_al.constraint_tolerance
 
 ## Box parallel park
-model = TrajectoryOptimization.Dynamics.car_model
+model = TrajectoryOptimization.Dynamics.car
 n = model.n; m = model.m
 model_d = discretize_model(model,:rk4)
 
@@ -147,7 +147,7 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
 # ALTRO w/ Newton
-prob_mt = copy(Problems.parallel_park_problem)
+prob_mt = copy(Problems.parallel_park)
 prob_altro = copy(prob_mt)
 p1, s1 = solve(prob_altro, opts_altro)
 @test max_violation_direct(p1) <= 1e-6
@@ -155,7 +155,7 @@ p1, s1 = solve(prob_altro, opts_altro)
 # DIRCOL w/ Ipopt
 prob_ipopt = copy(prob_mt)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car_model) # get continuous time model
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model
 p2, s2 = solve(prob_ipopt, opts_ipopt)
 @test max_violation_direct(p2) <= 1e-6
 
@@ -188,7 +188,7 @@ total_time(p4)
 prob_mt_ipopt = copy(prob_mt)
 initial_controls!(prob_mt_ipopt,copy(p2.U))
 rollout!(prob_mt_ipopt)
-prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car_model,tf=0.) # get continuous time model
+prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car,tf=0.) # get continuous time model
 p5, s5 = solve(prob_mt_ipopt, opts_mt_ipopt)
 @test max_violation_direct(p5) <= 1e-6
 @test total_time(p5) < 1.6

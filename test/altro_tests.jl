@@ -1,6 +1,6 @@
 
 # Set up Problem
-model = Dynamics.car_model
+model = Dynamics.car
 costfun = Dynamics.car_costfun
 xf = [0,1,0]
 N = 51

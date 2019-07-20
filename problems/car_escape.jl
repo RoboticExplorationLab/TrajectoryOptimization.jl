@@ -2,7 +2,7 @@
 T = Float64;
 
 # model
-model = Dynamics.car_model
+model = Dynamics.car
 model_d = rk3(model)
 n = model.n; m = model.m
 x0 = [2.5;2.5;0.]
@@ -62,13 +62,13 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-car_escape_problem = Problem(model_d,obj,constraints=constraints,N=N,tf=tf,x0=x0,xf=xf)
-initial_controls!(car_escape_problem, U);
+car_escape = Problem(model_d,obj,constraints=constraints,N=N,tf=tf,x0=x0,xf=xf)
+initial_controls!(car_escape, U);
 
 X_guess = [2.5 2.5 0.;4. 5. .785;5. 6.25 0.;7.5 6.25 -.261;9 5. -1.57;7.5 2.5 0.]
 X0_escape = interp_rows(N,tf,Array(X_guess'))
 
-copyto!(car_escape_problem.X,X0_escape)
+copyto!(car_escape.X,X0_escape)
 
 # plot escape
 function plot_escape(X,x0=x0,xf=xf,X0=X0_escape)
