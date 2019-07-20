@@ -53,7 +53,7 @@ plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
 plot(p1.U,title="Quadrotor control (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor) # get continuous time model
+prob_ipopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor_euler) # get continuous time model
 p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
@@ -62,7 +62,7 @@ plot(X2[1:3,:]',title="Quadrotor position (Ipopt)")
 plot(p2.U,title="Quadrotor control (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor) # get continuous time model
+prob_snopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor_euler) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)

@@ -34,11 +34,11 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
     opts=Dict(:max_iter=>10000),
-    feasibility_tolerance=1.0e-3)
+    feasibility_tolerance=max_con_viol)
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
-    feasibility_tolerance=1.0e-3,
+    feasibility_tolerance=max_con_viol,
     opts=Dict(:Iterations_limit=>500000,
         :Major_iterations_limit=>1000))
 
@@ -54,8 +54,8 @@ plot(p1.U,title="Quadrotor control (ALTRO)")
 # DIRCOL w/ Ipopt
 prob_ipopt = copy(Problems.quadrotor)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.quadrotor) # get continuous time model
-p2, s2 = solve(prob_ipopt, opts_ipopt)
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.quadrotor_euler) # get continuous time model
+@time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 X2 = to_array(p2.X)
@@ -65,7 +65,7 @@ plot(p2.U,title="Quadrotor control (Ipopt)")
 # DIRCOL w/ SNOPT
 prob_snopt = copy(Problems.quadrotor)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.quadrotor) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.quadrotor_euler) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
