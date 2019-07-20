@@ -146,11 +146,6 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
-# ALTRO w/ Newton
-prob_altro = copy(Problems.parallel_park)
-p1, s1 = solve(prob_altro, opts_altro)
-@test max_violation_direct(p1) <= 1e-6
-
 # DIRCOL w/ Ipopt
 prob_ipopt = copy(Problems.parallel_park)
 rollout!(prob_ipopt)
@@ -160,28 +155,10 @@ p2, s2 = solve(prob_ipopt, opts_ipopt)
 
 ## Minimum Time
 max_con_viol = 1.0e-6
-opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
-
-opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,opts_uncon=opts_ilqr,
-    iterations=30,penalty_scaling=10.0,constraint_tolerance=max_con_viol)
-
-opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=max_con_viol)
-
-opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,R_minimum_time=12.5,
-    dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-4)
 
 opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>0,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
-
-# ALTRO w/ Newton
-prob_mt_altro = update_problem(copy(Problems.parallel_park),tf=0.) # make minimum time problem by setting tf = 0
-initial_controls!(prob_mt_altro,copy(p1.U))
-p4, s4 = solve(prob_mt_altro,opts_altro)
-@test max_violation_direct(p4) < 1e-6
-@test total_time(p4) < 1.6
-total_time(p4)
-
 
 # DIRCOL w/ Ipopt
 prob_mt_ipopt = update_problem(copy(Problems.parallel_park))
