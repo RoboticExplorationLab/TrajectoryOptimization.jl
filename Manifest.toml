@@ -295,14 +295,6 @@ git-tree-sha1 = "3bf2e534e635df810e5f4b4f1a8b6de9004a0d53"
 uuid = "fdba3010-5040-5b88-9595-932c9decdf73"
 version = "0.7.7"
 
-[[MatrixCalculus]]
-deps = ["DocStringExtensions", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "7eef41327ca82345b25a3692dcd6da398a92e85f"
-repo-rev = "master"
-repo-url = "https://github.com/RoboticExplorationLab/MatrixCalculus.jl"
-uuid = "fafa779c-62f8-11e9-0c41-4d0261472a5f"
-version = "0.1.0"
-
 [[MbedTLS]]
 deps = ["BinaryProvider", "Dates", "Distributed", "Libdl", "Random", "Sockets", "Test"]
 git-tree-sha1 = "2d94286a9c2f52c63a16146bb86fd6cdfbf677c6"
