@@ -147,13 +147,12 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
 # ALTRO w/ Newton
-prob_mt = copy(Problems.parallel_park)
-prob_altro = copy(prob_mt)
+prob_altro = copy(Problems.parallel_park)
 p1, s1 = solve(prob_altro, opts_altro)
 @test max_violation_direct(p1) <= 1e-6
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(prob_mt)
+prob_ipopt = copy(Problems.parallel_park)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model
 p2, s2 = solve(prob_ipopt, opts_ipopt)
@@ -176,7 +175,7 @@ opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 
 # ALTRO w/ Newton
-prob_mt_altro = update_problem(copy(prob_mt),tf=0.) # make minimum time problem by setting tf = 0
+prob_mt_altro = update_problem(copy(Problems.parallel_park),tf=0.) # make minimum time problem by setting tf = 0
 initial_controls!(prob_mt_altro,copy(p1.U))
 p4, s4 = solve(prob_mt_altro,opts_altro)
 @test max_violation_direct(p4) < 1e-6
@@ -185,7 +184,7 @@ total_time(p4)
 
 
 # DIRCOL w/ Ipopt
-prob_mt_ipopt = copy(prob_mt)
+prob_mt_ipopt = update_problem(copy(Problems.parallel_park))
 initial_controls!(prob_mt_ipopt,copy(p2.U))
 rollout!(prob_mt_ipopt)
 prob_mt_ipopt = update_problem(prob_mt_ipopt,model=Dynamics.car,tf=0.) # get continuous time model
