@@ -44,17 +44,17 @@ xf = [1.; 0.] # goal state
 N = 21 # number of knot points
 dt = 0.1 # time step
 
-U0 = [0.001*rand(m) for k = 1:N-1]; # initial control trajectory
+U0 = [0.01*rand(m) for k = 1:N-1]; # initial control trajectory
 
 Q = 1.0*Diagonal(I,n)
 Qf = 1.0*Diagonal(I,n)
 R = 1.0e-1*Diagonal(I,m)
-obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N); # objective
+obj = LQRObjective(Q,R,Qf,xf,N) # objective
 
 bnd = BoundConstraint(n,m,u_max-1.5, u_min=-1.5) # control limits
 goal = goal_constraint(xf) # terminal constraint
 
-constraints = Constraints(N)
+constraints = Constraints(N) # define constraints at each time step
 for k = 1:N-1
     constraints[k] += bnd
 end
@@ -67,7 +67,7 @@ solver = solve!(prob, ALTROSolverOptions{Float64}())
 ```
 
 ## Examples
-Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples).
+Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples), including all the examples from our [IROS 2019 paper](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples/IROS_2019).
 
 ## Documentation
-Detailed documentation for getting started can be found [here](https://roboticexplorationlab.github.io/TrajectoryOptimization.jl/dev/).
+Detailed documentation for getting started with the package can be found [here](https://roboticexplorationlab.github.io/TrajectoryOptimization.jl/dev/).
