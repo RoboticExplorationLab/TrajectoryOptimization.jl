@@ -6,11 +6,12 @@
 
 A library of solvers for trajectory optimization problems written in Julia. Currently, the following methods are implemented with a common interface:
 
-[ALTRO (Augmented Lagrangian TRajectory Optimizer)](https://rexlab.stanford.edu/papers/altro-iros.pdf): A novel fast solver for trajectory optimization that features:
+[ALTRO (Augmented Lagrangian TRajectory Optimizer)](https://rexlab.stanford.edu/papers/altro-iros.pdf): A fast solver for constrained trajectory optimization problems formulated as MDPs that features:
   * General nonlinear cost functions, including minimum time problems
   * General nonlinear state and input constraints
-  * Infeasible initialization
+  * Infeasible state initialization
   * Square-root methods for improved numerical conditioning
+  * Active-set projection method for solution polishing
 
 Direct Collocation (DIRCOL)
   * Interfaces to Nonlinear Programming solvers (e.g., [Ipopt](https://github.com/coin-or/Ipopt), [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/)) via [MathOptInterface](https://github.com/JuliaOpt/MathOptInterface.jl)
