@@ -52,7 +52,7 @@ Qf = 1.0*Diagonal(I,n)
 R = 1.0e-1*Diagonal(I,m)
 obj = LQRObjective(Q,R,Qf,xf,N) # objective
 
-bnd = BoundConstraint(n,m,u_max-1.5, u_min=-1.5) # control limits
+bnd = BoundConstraint(n,m,u_max=1.5, u_min=-1.5) # control limits
 goal = goal_constraint(xf) # terminal constraint
 
 constraints = Constraints(N) # define constraints at each time step
