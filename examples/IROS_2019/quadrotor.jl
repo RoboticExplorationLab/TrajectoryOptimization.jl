@@ -80,7 +80,7 @@ function animate_quadrotor_line(prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+    obj = joinpath(urdf_folder, "quadrotor.obj")
 
     quad_scaling = 0.7
     robot_obj = FileIO.load(obj)

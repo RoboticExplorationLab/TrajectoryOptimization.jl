@@ -1,3 +1,4 @@
+using MatrixCalculus
 model = Dynamics.cartpole_uncertain
 n = model.n; m = model.m; r = model.r
 
