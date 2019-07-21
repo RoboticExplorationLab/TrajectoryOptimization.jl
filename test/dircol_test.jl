@@ -225,5 +225,5 @@ Z_L = Primals(z_L, part_z)
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
 
-@test_nowarn solve!(prob, opts)
-@test_nowarn TO.write_ipopt_options()
+# @test_nowarn solve!(prob, opts)
+# @test_nowarn TO.write_ipopt_options()

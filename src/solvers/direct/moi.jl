@@ -120,8 +120,12 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     MOI.optimize!(solver)
     d.solver.stats[:time] = time() - t0
 
-    d.solver.stats[:iter_time] .-= d.solver.stats[:iter_time][2]
-    deleteat!(d.solver.stats[:iter_time],1)
+    if length(d.solver.stats[:iter_time]) > 2
+        d.solver.stats[:iter_time] .-= d.solver.stats[:iter_time][2]
+        deleteat!(d.solver.stats[:iter_time],1)
+    else
+        @warn "Possible issue with c_max logging"
+    end
 
     # Get the solution
     res = MOI.get(solver, MOI.VariablePrimal(), Z)
