@@ -18,6 +18,8 @@ export
     quadrotor_euler,
     kuka,
     doubleintegrator,
+    doubleintegrator3D,
+    double_integrator_3D_dynamics!,
     car
 
 include("../dynamics/pendulum.jl")
