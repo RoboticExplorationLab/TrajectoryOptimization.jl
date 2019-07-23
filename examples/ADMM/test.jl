@@ -1,38 +1,4 @@
-# Double Integrator
 T = Float64
-model = TrajectoryOptimization.Dynamics.doubleintegrator3D
-model_d = rk3(model)
-n = model.n; m = model.m
-
-# costs
-Q = 1.0*Diagonal(I,n)
-Qf = 1.0*Diagonal(I,n)
-R = 1.0e-1*Diagonal(I,m)
-x0 = zeros(n)
-xf = [1.; 1.; 1.; 0.; 0.; 0.] # (ie, swing up)
-
-N = 51
-dt = 0.1
-U0 = [0.001*rand(m) for k = 1:N-1]
-obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
-
-u_max = 10.
-u_min = -10.
-
-bnd = BoundConstraint(n,m,u_max=u_max, u_min=u_min,trim=true)
-goal = goal_constraint(xf)
-constraints = Constraints(N)
-for k = 1:N-1
-    constraints[k] += bnd
-end
-constraints[N] += goal
-
-doubleintegrator = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(doubleintegrator, U0)
-
-solve!(doubleintegrator,ALTROSolverOptions{T}())
-
-plot(doubleintegrator.X)
 
 ## assemble batch model
 # params = (m=1.0,)
@@ -93,14 +59,17 @@ end
 
 batch_model = gen_batch_model(actuated_models,load_model)
 
-batch_model.f(zeros(24),zeros(24),zeros(18))
-batch_model_d = rk3(batch_model)
-batch_model_d.f(zeros(24),zeros(24),zeros(18),0.5)
+# batch_model.f(zeros(24),zeros(24),zeros(18))
+# batch_model_d = rk3(batch_model)
+# batch_model_d.f(zeros(24),zeros(24),zeros(18),0.5)
+#
+# F = zeros(24,24+18)
+# batch_model.∇f(F,zeros(24),zeros(18))
+# Fd = zeros(24,24+18+1)
+# batch_model_d.∇f(Fd,zeros(24),zeros(18),1.0)
 
-F = zeros(24,24+18)
-batch_model.∇f(F,zeros(24),zeros(18))
-Fd = zeros(24,24+18+1)
-batch_model_d.∇f(Fd,zeros(24),zeros(18),1.0)
+r_act = [0.2, 0.2, 0.2]
+r_load = 0.2
 
 function gen_batch_load_constraints(actuated_models,load_model,d,n_slack=3)
     num_act_models = length(actuated_models)
@@ -146,8 +115,94 @@ function gen_batch_load_constraints(actuated_models,load_model,d,n_slack=3)
     Constraint{Equality}(con,∇con,n_batch,m_batch,num_act_models,:load)
 end
 
-_cyl = ((5.,0.,1.),)
+function gen_batch_self_collision_constraints(actuated_models,load_model,r_act,n_slack=3)
+    num_act_models = length(actuated_models)
+    nn = zeros(Int,num_act_models)
+    mm = zeros(Int,num_act_models)
 
+    for i = 1:num_act_models
+        nn[i] = actuated_models[i].n
+        mm[i] = actuated_models[i].m
+    end
+
+    nn_tol = sum(nn)
+    n_batch = nn_tol + load_model.n
+    m_batch = sum(mm) + n_slack*num_act_models
+
+    p_con = 0
+    for i = 1:num_act_models
+        if i < num_act_models
+            for j = (i+1):num_act_models
+                p_con += 1
+            end
+        end
+    end
+
+    function col_con(c,x,u=zeros(m_batch))
+        n_shift = 0
+        p_shift = 1
+        for i = 1:num_act_models
+            idx_pos = (n_shift .+ (1:nn[i]))[1:n_slack]
+            x_pos = x[idx_pos]
+            n_shift2 = n_shift + nn[i]
+            if i < num_act_models
+                for j = (i+1):num_act_models
+                    idx_pos2 = (n_shift2 .+ (1:nn[j]))[1:n_slack]
+                    x_pos2 = x[idx_pos2]
+                    c[p_shift] = (r_act[i] + r_act[j])^2 - norm(x_pos - x_pos2)^2
+                    n_shift2 += nn[j]
+                    p_shift += 1
+                end
+            end
+            n_shift += nn[i]
+        end
+        @assert p_shift-1 == p_con
+    end
+
+    function ∇col_con(C,x,u=zeros(m_batch))
+        n_shift = 0
+        p_shift = 1
+        for i = 1:num_act_models
+            idx_pos = (n_shift .+ (1:nn[i]))[1:n_slack]
+            x_pos = x[idx_pos]
+
+            n_shift2 = n_shift + nn[i]
+            if i < num_act_models
+                for j = (i+1):num_act_models
+                    idx_pos2 = (n_shift2 .+ (1:nn[j]))[1:n_slack]
+                    x_pos2 = x[idx_pos2]
+                    dif = x_pos - x_pos2
+                    C[p_shift,idx_pos] = -2*dif
+                    C[p_shift,idx_pos2] = 2*dif
+                    n_shift2 += nn[j]
+                    p_shift += 1
+                end
+            end
+            n_shift += nn[i]
+        end
+        @assert p_shift-1 == p_con
+    end
+
+    Constraint{Inequality}(col_con,∇col_con,n_batch,m_batch,p_con,:col)
+end
+
+self_col = gen_batch_self_collision_constraints(actuated_models,load_model,r_act)
+# pp = zeros(3)
+# PP = zeros(3,n_batch+m_batch)
+# ppN = zeros(3)
+# PPN = zeros(3,n_batch)
+#
+# self_col.c(pp,rand(n_batch),m_batch)
+# self_col.c(ppN,rand(n_batch))
+# self_col.∇c(PP,rand(n_batch),m_batch)
+# self_col.∇c(PPN,rand(n_batch))
+#
+# pp
+# ppN
+# PP
+# PPN
+
+n_slack = 3
 nn = zeros(Int,num_act_models)
 mm = zeros(Int,num_act_models)
 
@@ -157,34 +212,59 @@ for i = 1:num_act_models
 end
 
 nn_tol = sum(nn)
+mm_tol = sum(mm)
+n_batch = nn_tol + load_model.n
+m_batch = mm_tol + n_slack*num_act_models
+
+# _cyl = ((5.,.75,0.5),(6.,.75,0.5),(4.,.75,0.5),(5.,1.,0.5),(6.,1.,0.5),(4.,1.,0.5),(5.,-.75,0.5),(6.,-.75,0.5),(4.,-.75,0.5),(5.,-1.,0.5),(6.,-1.,0.5),(4.,-1.,0.5))
+r_cylinder = 0.5
+_cyl = []
+l1 = 3
+
+for i = range(4,stop=5,length=l1)
+    push!(_cyl,(i, .75,r_cylinder))
+end
+for i = range(4,stop=5,length=l1)
+    push!(_cyl,(i, -.75,r_cylinder))
+end
+for i = range(4,stop=5,length=l1)
+    push!(_cyl,(i, 1.,r_cylinder))
+end
+for i = range(4,stop=5,length=l1)
+    push!(_cyl,(i, -1.,r_cylinder))
+end
 
 function cI_cylinder(c,x,u)
-    shift = 1
+    c_shift = 1
     n_slack = 3
     for p = 1:length(_cyl)
         n_shift = 0
         for i = 1:num_act_models
             idx_pos = (n_shift .+ (1:nn[i]))[1:3]
-            c[shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] +.2)
-            shift += 1
+            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + r_act[i])
+            c_shift += 1
             n_shift += nn[i]
         end
-        c[shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3]+.2)
-        shift += 1
+        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + r_load)
+        c_shift += 1
     end
 end
+cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_act_models+1)*length(_cyl),:cyl)
 
-cyl = Constraint{Inequality}(cI_cylinder,24,18,(num_act_models+1)*length(_cyl),:cyl)
-
+shift_ = zeros(n)
+shift_[1:3] = [0.0;0.0;1.0]
 scaling = 1.
 x10 = zeros(n)
 x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
+x10 += shift_
 x20 = zeros(n)
 x20[1:3] = scaling*[-sqrt(2/9);sqrt(2/3);4/3]
+x20 += shift_
 x30 = zeros(n)
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
-x30[4] = 1.0
+x30 += shift_
 xload0 = zeros(n)
+xload0 += shift_
 
 x0_batch = [x10;x20;x30;xload0]
 
@@ -207,17 +287,27 @@ d3 = norm(xloadf[1:3]-x3f[1:3])
 
 d = [d1, d2, d3]
 load_con = gen_batch_load_constraints(actuated_models,load_model,d)
-u_lim = Inf*ones(18)
-u_lim[1:9] .= 17.5
-bnd = BoundConstraint(24,18,u_min=-1.0*u_lim,u_max=u_lim)
+
+
+# costs
+Q = 1.0*Diagonal(I,n)
+Qf = 1.0*Diagonal(I,n)
+R = 1.0e-1*Diagonal(I,m)
 Q_batch = Diagonal(cat(Q,Q,Q,Q,dims=(1,2)))
 R_batch = Diagonal(cat(R,R,R,Diagonal(1.0e-6*ones(9)),dims=(1,2)))
 Qf_batch = Diagonal(cat(Qf,Qf,Qf,Qf,dims=(1,2)))
 
+N = 51
+dt = 0.1
+
+u_lim = Inf*ones(18)
+u_lim[1:9] .= 15.
+bnd = BoundConstraint(n_batch,m_batch,u_min=-1.0*u_lim,u_max=u_lim)
+
 batch_obj = LQRObjective(Q_batch,R_batch,Qf_batch,xf_batch,N)
 batch_constraints = Constraints([load_con],N)
 for k = 1:N-1
-    batch_constraints[k] += bnd + cyl
+    batch_constraints[k] += bnd + cyl + self_col
 end
 batch_constraints[N] += goal_constraint(xf_batch)
 
@@ -244,7 +334,7 @@ vis = Visualizer()
 open(vis)
 
 # geometries
-sphere_small = HyperSphere(Point3f0(0), convert(Float32,0.15)) # trajectory points
+# sphere_small = HyperSphere(Point3f0(0), convert(Float32,r_int)) # trajectory points
 # sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
 
 # Set camera location
@@ -285,14 +375,14 @@ function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
 
     # intialized system
     for i = 1:num_act_models
-        setobject!(vis["agent$i"],sphere_small,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+        setobject!(vis["agent$i"],HyperSphere(Point3f0(0), convert(Float32,r_act[i])) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
 
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
         setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
     end
-    setobject!(vis["load"],sphere_small,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
 
-    addcylinders!(vis,_cyl,5.0)
+    addcylinders!(vis,_cyl,3.)
 
     anim = MeshCat.Animation(24)
     for k = 1:prob.N
@@ -315,5 +405,4 @@ end
 
 visualize_batch_system(vis,doubleintegrator_batch,actuated_models,load_model)
 
-
-plot(doubleintegrator_batch.U,4:6)
+plot(doubleintegrator_batch.U,1:3)
