@@ -26,7 +26,6 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
             reset!(solver_uncon)
         end
     end
-    solver.solver_uncon = solver_uncon
     solver.stats[:time] = time() - t_start
     return solver
 end
