@@ -84,6 +84,7 @@ function calculate_gradient(prob::Problem,solver::iLQRSolver)
         gradient = gradient_todorov(prob,solver)
     elseif solver.opts.gradient_type == :feedforward
         gradient = gradient_feedforward(solver)
+
     end
     return gradient
 end
