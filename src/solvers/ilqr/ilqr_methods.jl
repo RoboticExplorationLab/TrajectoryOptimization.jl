@@ -84,8 +84,26 @@ function calculate_gradient(prob::Problem,solver::iLQRSolver)
         gradient = gradient_todorov(prob,solver)
     elseif solver.opts.gradient_type == :feedforward
         gradient = gradient_feedforward(solver)
+    elseif solver.opts.gradient_type == :ℓ2
+        gradient = norm(compute_gradient(prob,solver))
+    elseif solver.opts.gradient_type == :ℓinf
+        gradient = norm(compute_gradient(prob,solver),Inf)
     end
     return gradient
+end
+
+function compute_gradient(prob::Problem,solver::iLQRSolver)
+    N = prob.N
+    reset!(solver.Q)
+    cost_expansion!(solver.Q,prob.obj,prob.X,prob.U,get_dt_traj(prob))
+    ∇ℓ = []
+    for k = 1:N-1
+        push!(∇ℓ,solver.Q[k].x)
+        push!(∇ℓ,solver.Q[k].u)
+    end
+    push!(∇ℓ,solver.Q[N].x)
+
+    vcat(∇ℓ...)
 end
 
 """
