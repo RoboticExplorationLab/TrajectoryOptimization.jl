@@ -405,4 +405,10 @@ end
 
 visualize_batch_system(vis,doubleintegrator_batch,actuated_models,load_model)
 
-plot(doubleintegrator_batch.U,1:3)
+# plot(doubleintegrator_batch.U,1:3)
+#
+# doubleintegrator_batch.constraints[N]
+#
+# a = String(:string)
+# a[1:3]
+# cc = pop!(doubleintegrator_batch.constraints[N],:load)

@@ -81,6 +81,7 @@ function solve!(prob::Problem{T,D}, opts::AbstractSolverOptions{T}) where {T<:Ab
     solve!(prob, solver)
 end
 
+
 """```
 solve(prob, opts)::Tuple{Problem,AbstractSolver}
 ```
