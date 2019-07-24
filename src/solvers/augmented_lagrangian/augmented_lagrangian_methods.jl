@@ -3,7 +3,7 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
     reset!(solver)
     t_start = time()
 
-    solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
+    solver_uncon = solver.solver_uncon
 
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
@@ -26,6 +26,7 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
             reset!(solver_uncon)
         end
     end
+    solver.solver_uncon = solver_uncon
     solver.stats[:time] = time() - t_start
     return solver
 end
