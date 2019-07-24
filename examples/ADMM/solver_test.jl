@@ -13,9 +13,10 @@ R = 1.0e-1*Diagonal(I,m)
 N = 51
 dt = 0.1
 
-obj = LQRObjective(Q,R,Qf,xf,N)
 x0 = zeros(n)
 xf = ones(n)
+
+obj = LQRObjective(Q,R,Qf,xf,N)
 
 probs = []
 for i = 1:num_act_models
