@@ -67,9 +67,13 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
 
     for k = 1:N
         function con(c,x,u=zeros())
-            c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
-            if k < N
-                c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+            if k == 1
+                c[1:n_slack] = u[n_slack .+ (1:n_slack)] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+            else
+                c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
+                if k < N
+                    c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+                end
             end
         end
 
@@ -77,12 +81,20 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
             x_pos = x[1:n_slack]
             x_load_pos = X_load[k][1:n_slack]
             dif = x_pos - x_load_pos
-            C[1,1:n_slack] = 2*dif
-            if k < N
-                C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
+            if k == 1
+                C[1:n_slack,(n+n_slack) .+ (1:n_slack)] = Is
+            else
+                C[1,1:n_slack] = 2*dif
+                if k < N
+                    C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
+                end
             end
         end
-        k < N ? p_con = 1+n_slack : p_con = 1
+        if k == 1
+            p_con = n_slack
+        else
+            k < N ? p_con = 1+n_slack : p_con = 1
+        end
         # p_con = 1
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_lift)
         push!(con_cable_lift,cc)
@@ -100,36 +112,57 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
 
     for k = 1:N
         function con(c,x,u=zeros())
-            for i = 1:num_lift
-                c[i] = norm(X_lift[i][k][1:n_slack] - x[1:n_slack])^2 - d[i]^2
-            end
-
-            if k < N
-                _shift = num_lift
+            if k == 1
+                _shift = 0
                 for i = 1:num_lift
                     c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] + u[(i-1)*n_slack .+ (1:n_slack)]
                     _shift += n_slack
+                end
+            else
+                for i = 1:num_lift
+                    c[i] = norm(X_lift[i][k][1:n_slack] - x[1:n_slack])^2 - d[i]^2
+                end
+
+                if k < N
+                    _shift = num_lift
+                    for i = 1:num_lift
+                        c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] + u[(i-1)*n_slack .+ (1:n_slack)]
+                        _shift += n_slack
+                    end
                 end
             end
         end
 
         function ∇con(C,x,u=zeros())
-            for i = 1:num_lift
-                x_pos = X_lift[i][k][1:n_slack]
-                x_load_pos = x[1:n_slack]
-                dif = x_pos - x_load_pos
-                C[i,1:n_slack] = -2*dif
-            end
-            if k < N
-                _shift = num_lift
+            if k == 1
+                _shift = 0
                 for i = 1:num_lift
                     u_idx = ((i-1)*n_slack .+ (1:n_slack))
                     C[_shift .+ (1:n_slack),n .+ u_idx] = Is
                     _shift += n_slack
                 end
+            else
+                for i = 1:num_lift
+                    x_pos = X_lift[i][k][1:n_slack]
+                    x_load_pos = x[1:n_slack]
+                    dif = x_pos - x_load_pos
+                    C[i,1:n_slack] = -2*dif
+                end
+                if k < N
+                    _shift = num_lift
+                    for i = 1:num_lift
+                        u_idx = ((i-1)*n_slack .+ (1:n_slack))
+                        C[_shift .+ (1:n_slack),n .+ u_idx] = Is
+                        _shift += n_slack
+                    end
+                end
             end
         end
-        k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
+        if k == 1
+            p_con = num_lift*n_slack
+        else
+            k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
+        end
         # p_con = num_lift
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_load)
         push!(con_cable_load,cc)
@@ -139,9 +172,9 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
 end
 
 
-function solve_admm(prob_lift,prob_load,n_slack,opts)
+function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     # admm_type = :sequential
-    admm_type = :parallel
+    # admm_type = :parallel
 
     num_lift = length(prob_lift)
     n_lift = prob_lift[1].model.n
@@ -232,7 +265,6 @@ function solve_admm(prob_lift,prob_load,n_slack,opts)
             penalty_update!(prob_lift_al[i], solver_lift_al[i])
             copyto!(solver_lift_al[i].C_prev,solver_lift_al[i].C)
         end
-
 
         # update load: constraints, dual update, penalty update
         update_constraints!(prob_load_al.obj.C,prob_load_al.obj.constraints, prob_load_al.X, prob_load_al.U)
@@ -439,10 +471,19 @@ prob_load = Problem(doubleintegrator3D_load,
 
 verbose=true
 opts_ilqr = iLQRSolverOptions(verbose=verbose)
-opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,opts_uncon=opts_ilqr,cost_tolerance=1.0e-6,constraint_tolerance=1.0e-2,cost_tolerance_intermediate=1.0e-5,iterations=50,penalty_scaling=2.0,penalty_initial=1.0)
+opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
+    opts_uncon=opts_ilqr,
+    cost_tolerance=1.0e-6,
+    constraint_tolerance=1.0e-2,
+    cost_tolerance_intermediate=1.0e-5,
+    iterations=50,
+    penalty_scaling=2.0,
+    penalty_initial=1.0)
+
 plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,opts_al)
 
 max_violation(slift_al[1])
+max_violation(plift_al[1])
 
 
 vis = Visualizer()
