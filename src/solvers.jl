@@ -1,6 +1,9 @@
 import Base.copy
 using Parameters
 
+export
+    solver_name
+
 abstract type AbstractSolver{T} end
 abstract type AbstractSolverOptions{T<:Real} end
 
@@ -22,6 +25,14 @@ include("solvers/direct/primals_mintime.jl")
 include("solvers/direct/direct_solvers_mintime.jl")
 include("solvers/direct/dircol_mintime.jl")
 include("solvers/direct/moi_mintime.jl")
+
+
+# Get name of solver as a string
+solver_name(::iLQRSolverOptions) = "iLQR"
+solver_name(::ALTROSolverOptions) = "ALTRO"
+solver_name(opts::DIRCOLSolverOptions) = string(opts.nlp)
+solver_name(opts::AugmentedLagrangianSolverOptions) = "AL-" * solver_name(opts.opts_uncon)
+solver_name(solver::AbstractSolver) = solver_name(solver.opts)
 
 
 # Solver interface
@@ -60,6 +71,7 @@ size(::AbstractSolver)::NTuple{3,Int} = error("`AbstractSolver` has no size")
 
 
 
+
 # Generic methods for calling solve
 """```
 solve!(prob, opts)::AbstractSolver
@@ -86,7 +98,7 @@ function solve(prob::Problem{T,D}, opts::AbstractSolverOptions{T}) where {T<:Abs
     return prob0, solver
 end
 
-"""```
+""" ```
 solve(prob, solver)::Tuple{Problem,AbstractSolver}
 ```
 Solve the trajectory optimization problem `prob` using `solver`.
@@ -100,7 +112,6 @@ function solve(prob::Problem{T,D}, solver::AbstractSolver{T}) where {T<:Abstract
     solver = solve!(prob0, solver)
     return prob0, solver
 end
-
 
 jacobian!(prob::Problem{T,Continuous}, solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U)
 jacobian!(prob::Problem{T,Discrete},   solver::AbstractSolver) where T = jacobian!(solver.∇F, prob.model, prob.X, prob.U, get_dt_traj(prob))
