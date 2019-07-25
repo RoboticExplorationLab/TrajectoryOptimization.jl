@@ -1,6 +1,6 @@
 # Double Pendulum
 T = Float64
-model = TrajectoryOptimization.Dynamics.doublependulum_model
+model = TrajectoryOptimization.Dynamics.doublependulum
 model_d = rk3(model)
 n = model.n; m = model.m
 
@@ -16,5 +16,5 @@ dt = 0.01
 U0 = [ones(m) for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
 
-doublependulum_problem = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(doublependulum_problem, U0)
+doublependulum = TrajectoryOptimization.Problem(model_d, obj, x0=x0, xf=xf, N=N, dt=dt)
+initial_controls!(doublependulum, U0)

@@ -1,6 +1,6 @@
 # Double Integrator
 T = Float64
-model = TrajectoryOptimization.Dynamics.doubleintegrator_model
+model = TrajectoryOptimization.Dynamics.doubleintegrator
 model_d = rk3(model)
 n = model.n; m = model.m
 
@@ -27,5 +27,5 @@ for k = 1:N-1
 end
 constraints[N] += goal
 
-doubleintegrator_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(doubleintegrator_problem, U0)
+doubleintegrator = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
+initial_controls!(doubleintegrator, U0)

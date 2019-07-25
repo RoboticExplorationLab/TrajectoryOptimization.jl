@@ -44,7 +44,7 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
         :Major_iterations_limit=>1000))
 
 # ALTRO w/ Newton
-prob_altro = copy(Problems.quadrotor_maze_problem)
+prob_altro = copy(Problems.quadrotor_maze)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
@@ -53,7 +53,7 @@ plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
 plot(p1.U,title="Quadrotor control (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = update_problem(copy(Problems.quadrotor_maze_problem),model=Dynamics.quadrotor_model) # get continuous time model
+prob_ipopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor_euler) # get continuous time model
 p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
@@ -62,7 +62,7 @@ plot(X2[1:3,:]',title="Quadrotor position (Ipopt)")
 plot(p2.U,title="Quadrotor control (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = update_problem(copy(Problems.quadrotor_maze_problem),model=Dynamics.quadrotor_model) # get continuous time model
+prob_snopt = update_problem(copy(Problems.quadrotor_maze),model=Dynamics.quadrotor_euler) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
@@ -108,7 +108,7 @@ function animate_quadrotor_maze(prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+    obj = joinpath(urdf_folder, "quadrotor.obj")
 
     quad_scaling = 0.7
     robot_obj = FileIO.load(obj)
@@ -150,7 +150,7 @@ function ghost_quadrotor_maze(prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+    obj = joinpath(urdf_folder, "quadrotor.obj")
 
     quad_scaling = 0.7
     robot_obj = FileIO.load(obj)

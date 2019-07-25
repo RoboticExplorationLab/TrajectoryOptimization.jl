@@ -12,7 +12,7 @@ function pendulum_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::Abstr
 end
 
 n,m = 2,1
-pendulum_model = Model(pendulum_dynamics!,n,m) # inplace model
+pendulum = Model(pendulum_dynamics!,n,m) # inplace model
 
 # unknown mass
 function pendulum_dynamics_uncertain!(ẋ,x,u,w)
@@ -29,4 +29,4 @@ function pendulum_dynamics_uncertain!(ẋ,x,u,w)
 end
 
 n = 2; m = 1; r = 1
-pendulum_model_uncertain = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)
+pendulum_uncertain = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)

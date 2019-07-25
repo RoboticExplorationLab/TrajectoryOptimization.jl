@@ -39,37 +39,47 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
     feasibility_tolerance=max_con_viol)
 
-x0 = Problems.car_escape_problem.x0
-xf = Problems.car_escape_problem.xf
+x0 = Problems.car_escape.x0
+xf = Problems.car_escape.xf
 
 # ALTRO
 
-prob_altro = copy(Problems.car_escape_problem)
+prob_altro = copy(Problems.car_escape)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 Problems.plot_escape(p1.X,x0,xf)
 
 # DIRCOL w/ Ipopt
-prob_ipopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+prob_ipopt = update_problem(copy(Problems.car_escape),model=Dynamics.car) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 Problems.plot_escape(p2.X,x0,xf)
 
 # DIRCOL w/ SNOPT
-prob_snopt = update_problem(copy(Problems.car_escape_problem),model=Dynamics.car_model) # get continuous time model
+prob_snopt = update_problem(copy(Problems.car_escape),model=Dynamics.car) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
 Problems.plot_escape(p3.X,x0,xf)
 
 # AL-iLQR
-prob_altro = copy(Problems.car_escape_problem)
+opts_ilqr = iLQRSolverOptions{T}(verbose=true,live_plotting=:off,iterations=150)
+
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,
+    opts_uncon=opts_ilqr,
+    cost_tolerance=1.0e-6,
+    cost_tolerance_intermediate=1.0e-2,
+    constraint_tolerance=max_con_viol,
+    penalty_scaling=50.,
+    penalty_initial=10.,
+    iterations=9)
+
+prob_altro = copy(Problems.car_escape)
 prob_altro.X .*= NaN
-opts_altro.projected_newton = false
-@time p4, s4 = solve(prob_altro, opts_altro)
-# b1 = @benchmark p1, s1 = solve($prob_altro, $opts_altro)
+
+@time p4, s4 = solve(prob_altro, opts_al)
 max_violation(p4)
 Problems.plot_escape(p4.X,x0,xf)
 x = [x[1] for x in p4.X]
@@ -84,35 +94,36 @@ PGF.Plots.Linear(x,y);
 # Plot the walls
 color_wall = "gray"
 style = "color=$color_wall, fill=$color_wall"
-p = [PGF.Plots.Circle(circle..., style=style) for circle in circles]
+p = [PGF.Plots.Circle(circle..., style=style) for circle in Problems.circles_escape]
 
 # Plot the trajectories
 t0 = PGF.Plots.Linear(Problems.X0_escape[1,:],Problems.X0_escape[2,:],
     legendentry="initial guess",
     mark="none",
     style="color=black, dashed, thick")
-t1 = trajectory_plot(p1, mark="none", legendentry="ALTRO", style="very thick, color=orange!80!black")
-t3 = trajectory_plot(p3, mark="none", legendentry="SNOPT", style="very thick, color=green, dashed");
+
+t1 = trajectory_plot(p1, mark="none", legendentry="ALTRO", style="very thick, color=$col_altro, dashed")
+t2 = trajectory_plot(p1, mark="none", legendentry="Ipopt", style="very thick, color=$col_ipopt")
+t3 = trajectory_plot(p3, mark="none", legendentry="SNOPT", style="very thick, color=$col_snopt");
 t4 = trajectory_plot(p4, mark="none", legendentry="AL-iLQR", style="very thick, color=cyan");
 
 # Plot the initial and final points
 goal = ([x0[1], xf[1]],
         [x0[2], xf[2]])
-z = ["start","end"]
-g = PGF.Plots.Scatter(goal[1], goal[2], z,
-    scatterClasses="{start={green, mark=*, green, scale=2},
-        end={mark=square*, red, scale=2}}",
-    legendentry=["start", "end"])
+
+z = ["start", "end"]
+sc = "{start={mark=*,yellow, scale=1.5, mark options={fill=yellow}},end={mark=square*,red,scale=1.5, mark options={fill=red}}}"
+g = PGF.Plots.Scatter(goal[1], goal[2], z, scatterClasses=sc)
 
 # Plot the whole thing
-a = Axis([p; t0; t1; t4; t3; g],
+a = Axis([p;t0; t3; t2; t4; t1; g],
     xmin=-1, ymin=-1, xmax=11, ymax=8,
     axisEqualImage=true,
     legendPos="north west",
     hideAxis=true)
 
 # Save to tikz format
-# NOTE: To fix the problem with the legend for the start and goal points, replace \addplot+ with \addplot in the tikz file
+# paper = "/home/taylor/Documents/research/ALTRO_paper/images"
 save(joinpath(paper,"escape_traj.tikz"), a, include_preamble=false)
 
 # Max constraint plot

@@ -1,7 +1,6 @@
 using BenchmarkTools, SNOPT7, Plots
 using FileIO, MeshIO, GeometryTypes, CoordinateTransformations, MeshCat
 
-# Quadrotor in Maze
 T = Float64
 
 # options
@@ -35,16 +34,16 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:Ipopt,
     opts=Dict(:max_iter=>10000),
-    feasibility_tolerance=1.0e-3)
+    feasibility_tolerance=max_con_viol)
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=:SNOPT7,
-    feasibility_tolerance=1.0e-3,
+    feasibility_tolerance=max_con_viol,
     opts=Dict(:Iterations_limit=>500000,
         :Major_iterations_limit=>1000))
 
 # ALTRO w/ Newton
-prob_altro = copy(Problems.quadrotor_problem)
+prob_altro = copy(Problems.quadrotor)
 @time p1, s1 = solve(prob_altro, opts_altro)
 @benchmark p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
@@ -53,10 +52,10 @@ plot(X1[1:3,:]',title="Quadrotor position (ALTRO)")
 plot(p1.U,title="Quadrotor control (ALTRO)")
 
 # DIRCOL w/ Ipopt
-prob_ipopt = copy(Problems.quadrotor_problem)
+prob_ipopt = copy(Problems.quadrotor)
 rollout!(prob_ipopt)
-prob_ipopt = update_problem(prob_ipopt,model=Dynamics.quadrotor_model) # get continuous time model
-p2, s2 = solve(prob_ipopt, opts_ipopt)
+prob_ipopt = update_problem(prob_ipopt,model=Dynamics.quadrotor_euler) # get continuous time model
+@time p2, s2 = solve(prob_ipopt, opts_ipopt)
 @benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 X2 = to_array(p2.X)
@@ -64,9 +63,9 @@ plot(X2[1:3,:]',title="Quadrotor position (Ipopt)")
 plot(p2.U,title="Quadrotor control (Ipopt)")
 
 # DIRCOL w/ SNOPT
-prob_snopt = copy(Problems.quadrotor_problem)
+prob_snopt = copy(Problems.quadrotor)
 rollout!(prob_snopt)
-prob_snopt = update_problem(prob_snopt,model=Dynamics.quadrotor_model) # get continuous time model
+prob_snopt = update_problem(prob_snopt,model=Dynamics.quadrotor_euler) # get continuous time model
 @time p3, s3 = solve(prob_snopt, opts_snopt)
 @benchmark p3, s3 = solve($prob_snopt, $opts_snopt)
 max_violation_direct(p3)
@@ -81,7 +80,7 @@ function animate_quadrotor_line(prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+    obj = joinpath(urdf_folder, "quadrotor.obj")
 
     quad_scaling = 0.7
     robot_obj = FileIO.load(obj)

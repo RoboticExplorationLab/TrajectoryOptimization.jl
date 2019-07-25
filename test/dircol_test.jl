@@ -1,7 +1,7 @@
 import TrajectoryOptimization: get_dt_traj
 
 # Set up problem
-model = Dynamics.car_model
+model = Dynamics.car
 n,m = model.n, model.m
 Q = (1e-2)*Diagonal(I,n)
 Qf = 1000.0*Diagonal(I,n)
@@ -225,5 +225,5 @@ Z_L = Primals(z_L, part_z)
 @test Z_U.X[N] == Z_L.X[N] == xf
 @test Z_U.U[N] == Z_U.U[N-1]
 
-@test_nowarn solve!(prob, opts)
-@test_nowarn TO.write_ipopt_options()
+# @test_nowarn solve!(prob, opts)
+# @test_nowarn TO.write_ipopt_options()

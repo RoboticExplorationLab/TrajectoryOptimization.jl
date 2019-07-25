@@ -8,4 +8,4 @@ function car_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector)
 end
 n,m = 3,2
 
-car_model = Model(car_dynamics!,n,m)
+car = Model(car_dynamics!,n,m)

@@ -1,6 +1,6 @@
 #  Car w/ obstacles
 T = Float64
-model = Dynamics.car_model
+model = Dynamics.car
 model_d = rk3(model)
 n = model.n # number of states
 m = model.m; # number of controls
@@ -42,9 +42,9 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-car_3obs_problem = Problem(model_d,obj, constraints=constraints, x0=x0, N=N, dt=dt, xf=xf)
+car_3obs = Problem(model_d,obj, constraints=constraints, x0=x0, N=N, dt=dt, xf=xf)
 
-initial_controls!(car_3obs_problem,U); # initialize problem with controls
+initial_controls!(car_3obs,U); # initialize problem with controls
 
 function plot_car_3obj(X,x0=x0,xf=xf; kwargs...)
     X_array = to_array(X)

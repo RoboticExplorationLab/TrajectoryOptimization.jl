@@ -1,6 +1,6 @@
 # Cartpole
 T = Float64
-model = TrajectoryOptimization.Dynamics.cartpole_model
+model = TrajectoryOptimization.Dynamics.cartpole
 model_d = rk3(model)
 n = model.n; m = model.m
 
@@ -24,5 +24,5 @@ for k = 1:N-1
 end
 constraints[N] += goal
 
-cartpole_problem = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints,x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(cartpole_problem, U0)
+cartpole = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints,x0=x0, xf=xf, N=N, dt=dt)
+initial_controls!(cartpole, U0)

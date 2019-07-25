@@ -13,7 +13,7 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
     live_plotting(prob,solver)
 
     J_prev = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))
-    push!(solver.stats[:cost], J_prev)
+    record_iteration!(prob, solver, J_prev, Inf)
 
     with_logger(logger) do
         for i = 1:solver.opts.iterations
@@ -21,7 +21,8 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
 
             # check for cost blow up
             if J > solver.opts.max_cost_value
-                error("Cost exceeded maximum cost")
+                @warn "Cost exceeded maximum cost"
+                return solver
             end
 
             copyto!(prob.X, solver.X̄)
@@ -83,8 +84,26 @@ function calculate_gradient(prob::Problem,solver::iLQRSolver)
         gradient = gradient_todorov(prob,solver)
     elseif solver.opts.gradient_type == :feedforward
         gradient = gradient_feedforward(solver)
+    elseif solver.opts.gradient_type == :ℓ2
+        gradient = norm(compute_gradient(prob,solver))
+    elseif solver.opts.gradient_type == :ℓinf
+        gradient = norm(compute_gradient(prob,solver),Inf)
     end
     return gradient
+end
+
+function compute_gradient(prob::Problem,solver::iLQRSolver)
+    N = prob.N
+    reset!(solver.Q)
+    cost_expansion!(solver.Q,prob.obj,prob.X,prob.U,get_dt_traj(prob))
+    ∇ℓ = []
+    for k = 1:N-1
+        push!(∇ℓ,solver.Q[k].x)
+        push!(∇ℓ,solver.Q[k].u)
+    end
+    push!(∇ℓ,solver.Q[N].x)
+
+    vcat(∇ℓ...)
 end
 
 """

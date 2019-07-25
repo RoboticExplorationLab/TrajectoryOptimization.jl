@@ -4,7 +4,7 @@ import TrajectoryOptimization: planar_obstacle_constraint
 # Discretize the model
 T = Float64
 integration = :rk3
-model = Dynamics.quadrotor_model
+model = Dynamics.quadrotor
 n = model.n; m = model.m
 
 # cost

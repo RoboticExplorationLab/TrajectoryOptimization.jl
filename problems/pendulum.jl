@@ -1,4 +1,4 @@
-model = TrajectoryOptimization.Dynamics.pendulum_model
+model = TrajectoryOptimization.Dynamics.pendulum
 n = model.n; m = model.m
 model_d = rk3(model)
 
@@ -31,4 +31,4 @@ constraints[N] += goal_con
 obj = LQRObjective(Q,R,Qf,xf,N)
 
 dt = 0.15
-pendulum_problem = Problem(model_d,obj,U,constraints=constraints,dt=dt,x0=x0,xf=xf,N=N)
+pendulum = Problem(model_d,obj,U,constraints=constraints,dt=dt,x0=x0,xf=xf,N=N)

@@ -71,4 +71,4 @@ function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVe
       return tau, omega, J, Jinv
 end
 
-quadrotor_model = Model(quadrotor_dynamics!, 13, 4, quad_params)
+quadrotor = Model(quadrotor_dynamics!, 13, 4, quad_params)

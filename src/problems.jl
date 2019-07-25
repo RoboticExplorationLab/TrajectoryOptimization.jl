@@ -19,21 +19,22 @@ include("../problems/doublependulum.jl")
 include("../problems/acrobot.jl")
 include("../problems/car_escape.jl")
 include("../problems/car_3obs.jl")
+include("../problems/quadrotor.jl")
 include("../problems/quadrotor_maze.jl")
 include("../problems/kuka_obstacles.jl")
 
 export
-    doubleintegrator_problem,
-    pendulum_problem,
-    parallel_park_problem,
-    cartpole_problem,
-    doublependulum_problem,
-    acrobot_problem,
-    car_escape_problem,
-    car_3obs_problem,
-    quadrotor_problem,
-    quadrotor_maze_problem,
-    kuka_obstacles_problem
+    doubleintegrator,
+    pendulum,
+    parallel_park,
+    cartpole,
+    doublependulum,
+    acrobot,
+    car_escape,
+    car_3obs,
+    quadrotor,
+    quadrotor_maze,
+    kuka_obstacles
 
 export
     plot_escape,

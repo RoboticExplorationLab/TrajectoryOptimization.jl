@@ -2,7 +2,7 @@
 T = Float64
 
 # model
-model = TrajectoryOptimization.Dynamics.car_model
+model = TrajectoryOptimization.Dynamics.car
 n = model.n; m = model.m
 model_d = rk3(model)
 
@@ -37,4 +37,4 @@ for k = 2:N-1
 end
 constraints[N] += goal
 
-parallel_park_problem = Problem(model_d,obj,U,constraints=constraints,dt=dt,x0=x0,xf=xf)
+parallel_park = Problem(model_d,obj,U,constraints=constraints,dt=dt,x0=x0,xf=xf)

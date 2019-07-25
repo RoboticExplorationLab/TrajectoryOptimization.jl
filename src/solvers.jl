@@ -7,8 +7,14 @@ export
 abstract type AbstractSolver{T} end
 abstract type AbstractSolverOptions{T<:Real} end
 
-include("solvers/ilqr.jl")
-include("solvers/augmentedlagrangian.jl")
+include("solvers/ilqr/ilqr_solver.jl")
+include("solvers/ilqr/ilqr_methods.jl")
+include("solvers/ilqr/backward_pass.jl")
+include("solvers/ilqr/forward_pass.jl")
+
+include("solvers/augmented_lagrangian/augmented_lagrangian_solver.jl")
+include("solvers/augmented_lagrangian/augmented_lagrangian_methods.jl")
+
 
 include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/sequential_newton.jl")
@@ -19,7 +25,10 @@ include("solvers/direct/moi.jl")
 include("solvers/direct/sequential_newton_solve.jl")
 include("solvers/direct/projected_newton.jl")
 
-include("solvers/altro.jl")
+include("solvers/altro/altro_solver.jl")
+include("solvers/altro/altro_methods.jl")
+include("solvers/altro/infeasible.jl")
+include("solvers/altro/minimum_time.jl")
 
 include("solvers/direct/primals_mintime.jl")
 include("solvers/direct/direct_solvers_mintime.jl")

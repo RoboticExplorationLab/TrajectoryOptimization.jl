@@ -3,7 +3,7 @@ Random.seed!(7)
 # model
 T = Float64
 integration = :rk3
-model = TrajectoryOptimization.Dynamics.car_model
+model = TrajectoryOptimization.Dynamics.car
 n = model.n; m = model.m
 
 # cost

@@ -1,10 +1,6 @@
 """
     TrajectoryOptimization
-Primary module for setting up and solving trajectory optimization problems with
-iterative Linear Quadratic Regulator (iLQR). Module supports unconstrained and
-constrained optimization problems. Constrained optimization problems are solved
-using Augmented Lagrangian methods. Supports automatic differentiation via the
-`ForwardDiff` package.
+Primary module for setting up and solving trajectory optimization problems.
 """
 module TrajectoryOptimization
 
@@ -144,18 +140,10 @@ include("utils.jl")
 include("objective.jl")
 include("problem.jl")
 include("solvers.jl")
-include("ilqr.jl")
-include("altro.jl")
-include("backwardpass.jl")
-include("forward_pass.jl")
 include("rollout.jl")
-include("augmented_lagrangian.jl")
-include("minimum_time.jl")
-include("infeasible.jl")
 include("dynamics.jl")
 include("problems.jl")
 include("logger.jl")
-
 
 write_ipopt_options()
 end
