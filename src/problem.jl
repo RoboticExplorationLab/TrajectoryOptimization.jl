@@ -1,7 +1,8 @@
 export
     set_x0!,
     is_constrained,
-    update_problem
+    update_problem,
+    continuous
 
 
 """$(TYPEDEF) Trajectory Optimization Problem.
@@ -284,6 +285,8 @@ end
 midpoint(prob::Problem{T,Continuous}) where T = update_problem(prob, model=midpoint(prob.model))
 rk3(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk3(prob.model))
 rk4(prob::Problem{T,Continuous}) where T = update_problem(prob, model=rk4(prob.model))
+
+continuous(prob::Problem{T,Discrete}) where T<:AbstractFloat = update_problem(prob, model=continuous(prob.model))
 
 "Return timestep"
 function get_dt(prob::Problem,k::Int)

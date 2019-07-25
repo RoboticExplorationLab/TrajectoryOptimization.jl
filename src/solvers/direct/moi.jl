@@ -80,7 +80,9 @@ end
 
 MOI.eval_hessian_lagrangian(::DIRCOLProblem, H, x, σ, μ) = nothing
 
-function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
+function solve_moi(prob::Problem, dircol::DIRCOLSolver)
+    opts = dircol.opts
+
     prob = copy(prob)
     bnds = remove_bounds!(prob)
     z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
@@ -92,7 +94,6 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
 
     # Create NLP Block
     has_objective = true
-    dircol = DIRCOLSolver(prob, opts)
     d = DIRCOLProblem(prob, dircol, z_L, z_U, g_L, g_U)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
@@ -143,14 +144,29 @@ function max_violation_dircol(d::DIRCOLProblem, Z, g)
     return max_viol
 end
 
-function solve!(prob::Problem{T,Continuous}, opts::DIRCOLSolverOptions) where T<:AbstractFloat
+function solve!(prob::Problem{T,Continuous}, solver::DIRCOLSolver) where T<:AbstractFloat
 
-    dircol = solve_moi(prob, opts)
+    dircol = solve_moi(prob, solver)
 
     copyto!(prob.X,dircol.Z.X)
     prob.U = copy(dircol.Z.U)
 
     return dircol
+end
+
+function solve(prob::Problem{T,Discrete}, solver::DIRCOLSolver) where T<:AbstractFloat
+    prob0 = continuous(prob)
+    solver = solve!(prob0, solver)
+    return prob0, solver
+end
+
+function solve(prob::Problem{T,Discrete}, opts::DIRCOLSolver) where T<:AbstractFloat
+    prob0 = copy(prob)
+    rollout!(prob0)
+    prob_c = continuous(prob0)
+    solver = AbstractSolver(prob_c, solver)
+    solver = solve!(prob_c, solver)
+    return prob_c, solver
 end
 
 function nlp_options(opts::DIRCOLSolverOptions)

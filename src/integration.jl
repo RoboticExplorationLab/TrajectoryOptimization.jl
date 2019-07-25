@@ -12,6 +12,8 @@
 
 # TODO: Change S to Z
 
+default_integration() = rk4
+
 """
 $(SIGNATURES)
 In place Midpoint integration

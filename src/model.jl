@@ -604,7 +604,6 @@ Convert a continuous dynamics model into a discrete one using the given discreti
     end
     ```
 """
-
 function discretize_model(model::Model{M,Continuous},discretizer::Symbol, dt::T=1.0) where {M<:ModelType,T}
     fd!,∇fd! = discretize(model.f,discretizer,dt,model.n,model.m)
     info_d = deepcopy(model.info)
@@ -623,6 +622,21 @@ function discretize_model(model::Model{Uncertain,Continuous},discretizer::Symbol
     info_d[:fc] = model.f
     info_d[:∇fc] = model.∇f
     AnalyticalModel{Uncertain,Discrete}(fd!, ∇fd!, model.n, model.m, model.r, model.params, info_d)
+end
+
+function continuous(model::Model{M,Discrete}) where M<:ModelType
+    n,m = model.n, model.m
+    if haskey(model.info, :fc)
+        f = model.info[:fc]
+        if haskey(model.info, :∇fc)
+            ∇f = model.info[:∇fc]
+            Model(f,∇f,n,m)
+        else
+            Model(f,n,m)
+        end
+    else
+        error("Continuous time model not stashed in model.info")
+    end
 end
 
 midpoint(model::Model{M,Continuous},dt::T=1.0) where {M <: ModelType,T} = discretize_model(model, :midpoint, dt)
