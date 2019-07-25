@@ -150,6 +150,7 @@ constraints_load[N] += goal_constraint(xloadf)
 # create problems
 prob_lift = [Problem(doubleintegrator3D_lift,
                 obj_lift[i],
+                [0.01*rand(m_lift) for k = 1:N-1],
                 integration=:rk3,
                 constraints=constraints_lift[i],
                 x0=xlift0[i],
@@ -160,6 +161,7 @@ prob_lift = [Problem(doubleintegrator3D_lift,
 
 prob_load = Problem(doubleintegrator3D_load,
                 obj_load,
+                [ones(m_load) for k = 1:N-1],
                 integration=:rk3,
                 constraints=constraints_load,
                 x0=xload0,
@@ -176,9 +178,9 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
     for k = 1:N
         function con(c,x,u=zeros())
             c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
-            if k < N
-                c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] - U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
-            end
+            # if k < N
+            #     c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] - U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+            # end
         end
 
         function ∇con(C,x,u=zeros())
@@ -186,11 +188,12 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
             x_load_pos = X_load[k][1:n_slack]
             dif = x_pos - x_load_pos
             C[1,1:n_slack] = 2*dif
-            if k < N
-                C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
-            end
+            # if k < N
+            #     C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
+            # end
         end
-        k < N ? p_con = 1+n_slack : p_con = 1
+        # k < N ? p_con = 1+n_slack : p_con = 1
+        p_con = 1
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_lift)
         push!(con_cable_lift,cc)
     end
@@ -203,19 +206,21 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
     N = length(X_lift[1])
     con_cable_load = []
 
+    Is = Diagonal(I,n_slack)
+
     for k = 1:N
         function con(c,x,u=zeros())
             for i = 1:num_lift
                 c[i] = norm(X_lift[i][k][1:n_slack] - x[1:n_slack])^2 - d[i]^2
             end
 
-            if k < N
-                _shift = num_lift
-                for i = 1:num_lift
-                    c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[(i-1)*n_slack .+ (1:n_slack)]
-                    _shift += n_slack
-                end
-            end
+            # if k < N
+            #     _shift = num_lift
+            #     for i = 1:num_lift
+            #         c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[(i-1)*n_slack .+ (1:n_slack)]
+            #         _shift += n_slack
+            #     end
+            # end
         end
 
         function ∇con(C,x,u=zeros())
@@ -225,16 +230,17 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
                 dif = x_pos - x_load_pos
                 C[i,1:n_slack] = -2*dif
             end
-            if k < N
-                _shift = num_lift
-                for i = 1:num_lift
-                    u_idx = ((i-1)*n_slack .+ (1:n_slack))
-                    C[_shift .+ (1:n_slack),n .+ u_idx] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[u_idx]
-                    _shift += n_slack
-                end
-            end
+            # if k < N
+            #     _shift = num_lift
+            #     for i = 1:num_lift
+            #         u_idx = ((i-1)*n_slack .+ (1:n_slack))
+            #         C[_shift .+ (1:n_slack),n .+ u_idx] = -Is
+            #         _shift += n_slack
+            #     end
+            # end
         end
-        k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
+        # k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
+        p_con = num_lift
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_load)
         push!(con_cable_load,cc)
     end
@@ -243,6 +249,8 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
 end
 
 function solve_admm!(prob_lift,prob_load,n_slack,opts)
+    admm_type = :sequential
+
     num_lift = length(prob_lift)
     n_lift = prob_lift[1].model.n
     m_lift = prob_lift[1].model.m
@@ -251,6 +259,8 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
 
     # calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0 - prob_load.x0) for i = 1:num_lift]
+
+    println(d)
 
     # generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
@@ -292,56 +302,110 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
     solver_load_al = AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
+    cost(prob_lift_al[1])
+    error("hi")
+    for ii = 1:opts.iterations
+        # solve lift agents using iLQR
+        for i = 1:num_lift
+            solve!(prob_lift_al[i],solver_lift_al[i].solver_uncon)
+            if admm_type == :sequential
+                X_lift[i] .= prob_lift_al[i].X
+                U_lift[i] .= prob_lift_al[i].U
+            end
+            # reset!(solver_lift_al[i].solver_uncon)
+        end
 
+        # if admm_type == :parallel
+        #     for i = 1:num_lift
+        #         X_lift[i] .= prob_lift_al[i].X
+        #         U_lift[i] .= prob_lift_al[i].U
+        #     end
+        # end
 
+        # solve load using iLQR
+        solve!(prob_load_al,solver_load_al.solver_uncon)
+        X_load .= prob_load_al.X
+        U_load .= prob_load_al.U
+        # reset!(solver_load.solver_uncon)
 
+        # update lift agents: constraints, dual update, penalty update
+        for i = 1:num_lift
+            update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
+            update_active_set!(prob_lift_al[i].obj)
+            # cost(prob_lift_al[i])
+
+            dual_update!(prob_lift_al[i], solver_lift_al[i])
+            penalty_update!(prob_lift_al[i], solver_lift_al[i])
+            copyto!(solver_lift_al[i].C_prev,solver_lift_al[i].C)
+        end
+
+        # update load: constraints, dual update, penalty update
+        update_constraints!(prob_load_al.obj.C,prob_load_al.obj.constraints, prob_load_al.X, prob_load_al.U)
+        update_active_set!(prob_load_al.obj)
+        # cost(prob_load_al)
+
+        dual_update!(prob_load_al, solver_load_al)
+        penalty_update!(prob_load_al, solver_load_al)
+        copyto!(solver_load_al.C_prev, solver_load_al.C)
+
+        if max([max_violation(prob_lift_al[i]) for i = 1:num_lift]...,max_violation(prob_load)) < opts.constraint_tolerance
+            @info "ADMM problem solved"
+            break
+        end
+    end
 
     return prob_lift_al, prob_load_al
 end
 
 solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}())
 
-# plot(prob_load.X)
-#
-# ccc = gen_lift_cable_constraints(prob_load.X,prob_load.U,1,n_lift,m_lift,d[1],n_slack)
-#
-# cc1 = zeros(1+n_slack)
-# cc2 = zeros(1+n_slack)
-# cc3 = zeros(1+n_slack)
-# xx = rand(n_lift)
-# uu = rand(m_lift)
-#
-# ccc[1].c(cc1,xx,uu)
-# ccc[2].c(cc2,xx,uu)
-# ccc[3].c(cc3,xx,uu)
-#
-# prob_load.X[1] .= 0
-# ccc[1].c(cc1,xx,uu)
-#
-# X_ll = [prob_lift[i].X for i = 1:num_lift]
-# U_ll = [prob_lift[i].U for i = 1:num_lift]
-#
-# ddd = gen_load_cable_constraints(X_ll,U_ll,n_load,m_load,d,n_slack)
-#
-#
-# dd1 = zeros(num_lift*(1+n_slack))
-# dd2 = zeros(num_lift*(1+n_slack))
-# dd3 = zeros(num_lift*(1+n_slack))
-# xx = rand(n_load)
-# uu = rand(m_load)
-#
-# ddd[1].c(dd1,xx,uu)
-# ddd[2].c(dd2,xx,uu)
-# ddd[3].c(dd3,xx,uu)
-#
-# dd1
-# dd2
-# dd3
-#
-#
-# X_ll[1][1] .= 0
-# ddd[1].c(dd1,xx,uu)
-# dd1
+rollout!(prob_load)
+plot(prob_load.X)
+
+X_load = deepcopy(prob_load.X)
+U_load = deepcopy(prob_load.U)
+ccc = gen_lift_cable_constraints(X_load,U_load,1,n_lift,m_lift,d[1],n_slack)
+
+cc1 = zeros(1+n_slack)
+cc2 = zeros(1+n_slack)
+cc3 = zeros(1+n_slack)
+xx = rand(n_lift)
+uu = rand(m_lift)
+
+ccc[1].c(cc1,xx,uu)
+ccc[2].c(cc2,xx,uu)
+ccc[N-1].c(cc2,xx,uu)
+ccc[N].c(cc3,xx,uu)
+
+norm(xx - X_load[N])^2
+
+prob_load.X[1] .= 0
+ccc[1].c(cc1,xx,uu)
+
+X_ll = [prob_lift[i].X for i = 1:num_lift]
+U_ll = [prob_lift[i].U for i = 1:num_lift]
+
+ddd = gen_load_cable_constraints(X_ll,U_ll,n_load,m_load,d,n_slack)
+
+
+dd1 = zeros(num_lift*(1+n_slack))
+dd2 = zeros(num_lift*(1+n_slack))
+dd3 = zeros(num_lift*(1+n_slack))
+xx = rand(n_load)
+uu = rand(m_load)
+
+ddd[1].c(dd1,xx,uu)
+ddd[2].c(dd2,xx,uu)
+ddd[3].c(dd3,xx,uu)
+
+dd1
+dd2
+dd3
+
+
+X_ll[1][1] .= 0
+ddd[1].c(dd1,xx,uu)
+dd1
 # solve!(prob_lift[1],ALTROSolverOptions{Float64}())
 #
 # using Plots
@@ -351,11 +415,6 @@ solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64
 
 # prob_lift[1].constraints[1]
 
-vis = Visualizer()
-open(vis)
-
-# Set camera location
-settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
 function cable_transform(y,z)
     v1 = [0,0,1]
@@ -380,6 +439,9 @@ end
 
 function visualize_lift_system(vis,prob_lift,prob_load,n_slack=3)
     num_lift = length(prob_lift)
+
+    # camera angle
+    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
     # intialize system
     for i = 1:num_lift
@@ -408,6 +470,6 @@ function visualize_lift_system(vis,prob_lift,prob_load,n_slack=3)
     MeshCat.setanimation!(vis,anim)
 end
 
+vis = Visualizer()
+open(vis)
 visualize_lift_system(vis,prob_lift,prob_load)
-
-xx = [zeros(n_lift)]
