@@ -25,7 +25,7 @@ function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
     u_slack1 = u[1:3]
     u_slack2 = u[4:6]
     u_slack3 = u[7:9]
-    Dynamics.double_integrator_3D_dynamics!(ẋ,x,-u_slack1-u_slack2-u_slack3)
+    Dynamics.double_integrator_3D_dynamics!(ẋ,x,u_slack1+u_slack2+u_slack3)
 end
 
 n_load = Dynamics.doubleintegrator3D.n
@@ -38,8 +38,16 @@ r_load = 0.2
 
 # Control limits for lift robots
 u_lim = Inf*ones(m_lift)
-u_lim[1:3] .= 15.
-bnd = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim)
+u_lim[1:3] .= 100.
+bnd1 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim)
+
+x_lim_lift_l = -Inf*ones(n_lift)
+x_lim_lift_l[3] = 0.
+bnd2 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim,x_min=x_lim_lift_l)
+
+x_lim_load_l = -Inf*ones(n_load)
+bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_load_l)
+
 
 # Obstacle constraints
 r_cylinder = 0.5
@@ -115,17 +123,17 @@ d3 = norm(xloadf[1:3]-x3f[1:3])
 d = [d1, d2, d3]
 
 # discretization
-N = 51
+N = 21
 dt = 0.1
 
 # objective
-Q_lift = 1.0*Diagonal(I,n_lift)
-Qf_lift = 1.0*Diagonal(I,n_lift)
-R_lift = 1.0e-1*Diagonal(I,m_lift)
+Q_lift = 1.0e-2*Diagonal(I,n_lift)
+Qf_lift = 1000.0*Diagonal(I,n_lift)
+R_lift = 1.0e-4*Diagonal(I,m_lift)
 
-Q_load = 1.0*Diagonal(I,n_load)
+Q_load = 1.0e-2*Diagonal(I,n_load)
 Qf_load = 1000.0*Diagonal(I,n_load)
-R_load = 1.0e-1*Diagonal(I,m_load)
+R_load = 1.0e-6*Diagonal(I,m_load)
 
 obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N) for i = 1:num_lift]
 obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
@@ -134,24 +142,24 @@ obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
-    # for k = 1:N-1
-    #     con[k] += bnd + obs_lift
-    # end
+    for k = 1:N-1
+        # con[k] += bnd2 #+ obs_lift
+    end
     # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
 constraints_load = Constraints(N)
 for k = 1:N-1
-    # constraints_load[k] += obs_load
+    # constraints_load[k] += bnd3 #obs_load
 end
 # constraints_load[N] += goal_constraint(xloadf)
 
 # create problems
 prob_lift = [Problem(doubleintegrator3D_lift,
                 obj_lift[i],
-                [0.01*rand(m_lift) for k = 1:N-1],
-                integration=:rk3,
+                [rand(m_lift) for k = 1:N-1],
+                integration=:midpoint,
                 constraints=constraints_lift[i],
                 x0=xlift0[i],
                 xf=xliftf[i],
@@ -161,8 +169,8 @@ prob_lift = [Problem(doubleintegrator3D_lift,
 
 prob_load = Problem(doubleintegrator3D_load,
                 obj_load,
-                [ones(m_load) for k = 1:N-1],
-                integration=:rk3,
+                [rand(m_load) for k = 1:N-1],
+                integration=:midpoint,
                 constraints=constraints_load,
                 x0=xload0,
                 xf=xloadf,
@@ -179,7 +187,7 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
         function con(c,x,u=zeros())
             c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
             if k < N
-                c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] - U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+                c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
             end
         end
 
@@ -217,7 +225,7 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
             if k < N
                 _shift = num_lift
                 for i = 1:num_lift
-                    c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[(i-1)*n_slack .+ (1:n_slack)]
+                    c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] + u[(i-1)*n_slack .+ (1:n_slack)]
                     _shift += n_slack
                 end
             end
@@ -234,7 +242,7 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
                 _shift = num_lift
                 for i = 1:num_lift
                     u_idx = ((i-1)*n_slack .+ (1:n_slack))
-                    C[_shift .+ (1:n_slack),n .+ u_idx] = -Is
+                    C[_shift .+ (1:n_slack),n .+ u_idx] = Is
                     _shift += n_slack
                 end
             end
@@ -248,7 +256,7 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
     return con_cable_load
 end
 
-function solve_admm!(prob_lift,prob_load,n_slack,opts)
+function solve_admm(prob_lift,prob_load,n_slack,opts)
     admm_type = :sequential
 
     num_lift = length(prob_lift)
@@ -314,7 +322,9 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
-            reset!(solver_lift_al[i].solver_uncon)
+            # copyto!(solver_lift_al[i].C_prev, solver_lift_al[i].C)
+
+            # reset!(solver_lift_al[i].solver_uncon)
         end
 
         # if admm_type == :parallel
@@ -328,39 +338,48 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
         solve!(prob_load_al,solver_load_al.solver_uncon)
         X_load .= prob_load_al.X
         U_load .= prob_load_al.U
-        reset!(solver_load_al.solver_uncon)
+        # reset!(solver_load_al.solver_uncon)
 
         # update lift agents: constraints, dual update, penalty update
         for i = 1:num_lift
             update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
             update_active_set!(prob_lift_al[i].obj)
-            # cost(prob_lift_al[i])
+            cost(prob_lift_al[i])
 
             dual_update!(prob_lift_al[i], solver_lift_al[i])
             penalty_update!(prob_lift_al[i], solver_lift_al[i])
             copyto!(solver_lift_al[i].C_prev,solver_lift_al[i].C)
         end
 
+
         # update load: constraints, dual update, penalty update
         update_constraints!(prob_load_al.obj.C,prob_load_al.obj.constraints, prob_load_al.X, prob_load_al.U)
         update_active_set!(prob_load_al.obj)
-        # cost(prob_load_al)
+        cost(prob_load_al)
 
         dual_update!(prob_load_al, solver_load_al)
         penalty_update!(prob_load_al, solver_load_al)
         copyto!(solver_load_al.C_prev, solver_load_al.C)
 
-        if max([max_violation(prob_lift_al[i]) for i = 1:num_lift]...,max_violation(prob_load)) < opts.constraint_tolerance
+        if max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al)) < opts.constraint_tolerance
             @info "ADMM problem solved"
             break
+        else
+            nothing
+            # for i = 1:num_lift
+            #     reset!(solver_lift_al[i].solver_uncon)
+            # end
+            # reset!(solver_load_al.solver_uncon)
         end
     end
 
-    return prob_lift_al, prob_load_al
+    return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
 end
 
-solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}())
+plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}(verbose=true,iterations=50,penalty_scaling=2.0))
 
+slift_al
+max_violation(slift_al[1])
 
 # cost(plift[1])
 # initial_controls!(plift[1],[zeros(m_lift) for k = 1:N-1])
@@ -377,17 +396,24 @@ solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64
 #
 #
 
+qq = [rand(3) for i = 1:3]
+
+qqq(x) = x - qq[2][1:2]
+xx = ones(2)
+qqq(xx)
 
 
-
-
+qq .= [2*ones(3) for i = 1:3]
+qqq(xx)
 
 
 
 # rollout!(prob_load)
 plot(prob_lift[1].X)
-plot(prob_load.U)
+plot(prob_load.X)
 
+prob_lift[1].obj.C
+norm(prob_lift[2].X[end] - prob_load.X[end])^2 - d[1]^2
 
 X_load = deepcopy(prob_load.X)
 U_load = deepcopy(prob_load.U)
@@ -500,3 +526,5 @@ end
 vis = Visualizer()
 open(vis)
 visualize_lift_system(vis,prob_lift,prob_load)
+
+plot(prob_lift[1].U)
