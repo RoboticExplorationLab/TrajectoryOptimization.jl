@@ -1,6 +1,6 @@
 # Generic solve methods
 "iLQR solve method"
-function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
+function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:AbstractFloat
     reset!(solver)
 
     n,m,N = size(prob)
@@ -36,7 +36,7 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
             evaluate_convergence(solver) ? break : nothing
         end
     end
-    return solver 
+    return solver
 end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T

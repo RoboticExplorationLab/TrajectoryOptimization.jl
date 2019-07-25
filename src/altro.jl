@@ -1,5 +1,5 @@
 "ALTRO solve"
-function solve!(prob::Problem, opts::ALTROSolverOptions) where T
+function solve!(prob::Problem{T,Discrete}, opts::ALTROSolverOptions) where T<:AbstractFloat
     t0 = time()
 
     # Set terminal condition if using projected newton

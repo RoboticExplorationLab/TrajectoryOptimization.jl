@@ -143,7 +143,7 @@ function max_violation_dircol(d::DIRCOLProblem, Z, g)
     return max_viol
 end
 
-function solve!(prob::Problem,opts::DIRCOLSolverOptions)
+function solve!(prob::Problem{T,Continuous}, opts::DIRCOLSolverOptions) where T<:AbstractFloat
 
     dircol = solve_moi(prob, opts)
 
