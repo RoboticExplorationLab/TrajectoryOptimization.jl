@@ -145,7 +145,7 @@ constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
     for k = 1:N-1
-        con[k] += bnd2 + obs_lift
+        con[k] += bnd2 #+ obs_lift
     end
     # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
@@ -267,7 +267,7 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
 end
 
 function solve_admm(prob_lift,prob_load,n_slack,opts)
-    admm_type = :sequential
+    admm_type = :parallel#:sequential
 
     num_lift = length(prob_lift)
     n_lift = prob_lift[1].model.n
