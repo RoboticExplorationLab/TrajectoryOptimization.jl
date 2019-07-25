@@ -253,11 +253,11 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
     d = [norm(prob_lift[i].x0 - prob_load.x0) for i = 1:num_lift]
 
     # generate cable constraints
-    X_lift = [prob_lift[i].X for i = 1:num_lift]
-    U_lift = [prob_lift[i].U for i = 1:num_lift]
+    X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
+    U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
 
-    X_load = prob_load.X
-    U_load = prob_load.U
+    X_load = deepcopy(prob_load.X)
+    U_load = deepcopy(prob_load.U)
 
     cable_lift = [gen_lift_cable_constraints(X_load,
                     U_load,
@@ -279,62 +279,69 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
         prob_load.constraints[k] += cable_load[k]
     end
 
-    solver_lift = []
-    # for i = 1:num_lift
-    #     solver = solve!(prob_lift[i],opts)
-    #     push!(solver_lift,solver)
-    # end
-    solver_load = []
-    # solver_load = solve!(prob_load,opts)
+    # create augmented Lagrangian problems, solvers
+    solver_lift_al = []
+    prob_lift_al = []
+    for i = 1:num_lift
+        solver = AbstractSolver(prob_lift[i],opts)
+        prob = AugmentedLagrangianProblem(prob_lift[i],solver)
+
+        push!(solver_lift_al,solver)
+        push!(prob_lift_al,prob)
+    end
+    solver_load_al = AbstractSolver(prob_load,opts)
+    prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
 
-    # return (solver_lift,solver_load)
-    return prob_lift, prob_load
+
+
+
+    return prob_lift_al, prob_load_al
 end
 
-solve_admm!(prob_lift,prob_load,n_slack,ALTROSolverOptions{Float64}())
+solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}())
 
-plot(prob_load.X)
-
-ccc = gen_lift_cable_constraints(prob_load.X,prob_load.U,1,n_lift,m_lift,d[1],n_slack)
-
-cc1 = zeros(1+n_slack)
-cc2 = zeros(1+n_slack)
-cc3 = zeros(1+n_slack)
-xx = rand(n_lift)
-uu = rand(m_lift)
-
-ccc[1].c(cc1,xx,uu)
-ccc[2].c(cc2,xx,uu)
-ccc[3].c(cc3,xx,uu)
-
-prob_load.X[1] .= 0
-ccc[1].c(cc1,xx,uu)
-
-X_ll = [prob_lift[i].X for i = 1:num_lift]
-U_ll = [prob_lift[i].U for i = 1:num_lift]
-
-ddd = gen_load_cable_constraints(X_ll,U_ll,n_load,m_load,d,n_slack)
-
-
-dd1 = zeros(num_lift*(1+n_slack))
-dd2 = zeros(num_lift*(1+n_slack))
-dd3 = zeros(num_lift*(1+n_slack))
-xx = rand(n_load)
-uu = rand(m_load)
-
-ddd[1].c(dd1,xx,uu)
-ddd[2].c(dd2,xx,uu)
-ddd[3].c(dd3,xx,uu)
-
-dd1
-dd2
-dd3
-
-
-X_ll[1][1] .= 0
-ddd[1].c(dd1,xx,uu)
-dd1
+# plot(prob_load.X)
+#
+# ccc = gen_lift_cable_constraints(prob_load.X,prob_load.U,1,n_lift,m_lift,d[1],n_slack)
+#
+# cc1 = zeros(1+n_slack)
+# cc2 = zeros(1+n_slack)
+# cc3 = zeros(1+n_slack)
+# xx = rand(n_lift)
+# uu = rand(m_lift)
+#
+# ccc[1].c(cc1,xx,uu)
+# ccc[2].c(cc2,xx,uu)
+# ccc[3].c(cc3,xx,uu)
+#
+# prob_load.X[1] .= 0
+# ccc[1].c(cc1,xx,uu)
+#
+# X_ll = [prob_lift[i].X for i = 1:num_lift]
+# U_ll = [prob_lift[i].U for i = 1:num_lift]
+#
+# ddd = gen_load_cable_constraints(X_ll,U_ll,n_load,m_load,d,n_slack)
+#
+#
+# dd1 = zeros(num_lift*(1+n_slack))
+# dd2 = zeros(num_lift*(1+n_slack))
+# dd3 = zeros(num_lift*(1+n_slack))
+# xx = rand(n_load)
+# uu = rand(m_load)
+#
+# ddd[1].c(dd1,xx,uu)
+# ddd[2].c(dd2,xx,uu)
+# ddd[3].c(dd3,xx,uu)
+#
+# dd1
+# dd2
+# dd3
+#
+#
+# X_ll[1][1] .= 0
+# ddd[1].c(dd1,xx,uu)
+# dd1
 # solve!(prob_lift[1],ALTROSolverOptions{Float64}())
 #
 # using Plots
@@ -342,7 +349,7 @@ dd1
 # plot(prob_lift[1].X)
 
 
-prob_lift[1].constraints[1]
+# prob_lift[1].constraints[1]
 
 vis = Visualizer()
 open(vis)
