@@ -124,7 +124,7 @@ Qf_lift = 1.0*Diagonal(I,n_lift)
 R_lift = 1.0e-1*Diagonal(I,m_lift)
 
 Q_load = 1.0*Diagonal(I,n_load)
-Qf_load = 1.0*Diagonal(I,n_load)
+Qf_load = 1000.0*Diagonal(I,n_load)
 R_load = 1.0e-1*Diagonal(I,m_load)
 
 obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N) for i = 1:num_lift]
@@ -134,18 +134,18 @@ obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
-    for k = 1:N-1
-        con[k] += bnd + obs_lift
-    end
-    con[N] += goal_constraint(xliftf[i])
+    # for k = 1:N-1
+    #     con[k] += bnd + obs_lift
+    # end
+    # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
 constraints_load = Constraints(N)
 for k = 1:N-1
-    constraints_load[k] += obs_load
+    # constraints_load[k] += obs_load
 end
-constraints_load[N] += goal_constraint(xloadf)
+# constraints_load[N] += goal_constraint(xloadf)
 
 # create problems
 prob_lift = [Problem(doubleintegrator3D_lift,
@@ -178,9 +178,9 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
     for k = 1:N
         function con(c,x,u=zeros())
             c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
-            # if k < N
-            #     c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] - U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
-            # end
+            if k < N
+                c[1 .+ (1:n_slack)] = u[n_slack .+ (1:n_slack)] - U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+            end
         end
 
         function ∇con(C,x,u=zeros())
@@ -188,12 +188,12 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
             x_load_pos = X_load[k][1:n_slack]
             dif = x_pos - x_load_pos
             C[1,1:n_slack] = 2*dif
-            # if k < N
-            #     C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
-            # end
+            if k < N
+                C[1 .+ (1:n_slack),(n+n_slack) .+ (1:n_slack)] = Is
+            end
         end
-        # k < N ? p_con = 1+n_slack : p_con = 1
-        p_con = 1
+        k < N ? p_con = 1+n_slack : p_con = 1
+        # p_con = 1
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_lift)
         push!(con_cable_lift,cc)
     end
@@ -214,13 +214,13 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
                 c[i] = norm(X_lift[i][k][1:n_slack] - x[1:n_slack])^2 - d[i]^2
             end
 
-            # if k < N
-            #     _shift = num_lift
-            #     for i = 1:num_lift
-            #         c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[(i-1)*n_slack .+ (1:n_slack)]
-            #         _shift += n_slack
-            #     end
-            # end
+            if k < N
+                _shift = num_lift
+                for i = 1:num_lift
+                    c[_shift .+ (1:n_slack)] = U_lift[i][k][n_slack .+ (1:n_slack)] - u[(i-1)*n_slack .+ (1:n_slack)]
+                    _shift += n_slack
+                end
+            end
         end
 
         function ∇con(C,x,u=zeros())
@@ -230,17 +230,17 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
                 dif = x_pos - x_load_pos
                 C[i,1:n_slack] = -2*dif
             end
-            # if k < N
-            #     _shift = num_lift
-            #     for i = 1:num_lift
-            #         u_idx = ((i-1)*n_slack .+ (1:n_slack))
-            #         C[_shift .+ (1:n_slack),n .+ u_idx] = -Is
-            #         _shift += n_slack
-            #     end
-            # end
+            if k < N
+                _shift = num_lift
+                for i = 1:num_lift
+                    u_idx = ((i-1)*n_slack .+ (1:n_slack))
+                    C[_shift .+ (1:n_slack),n .+ u_idx] = -Is
+                    _shift += n_slack
+                end
+            end
         end
-        # k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
-        p_con = num_lift
+        k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
+        # p_con = num_lift
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_load)
         push!(con_cable_load,cc)
     end
@@ -260,7 +260,11 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
     # calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0 - prob_load.x0) for i = 1:num_lift]
 
-    println(d)
+    # initial rollout
+    for i = 1:num_lift
+        rollout!(prob_lift[i])
+    end
+    rollout!(prob_load)
 
     # generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
@@ -302,8 +306,6 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
     solver_load_al = AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
-    cost(prob_lift_al[1])
-    error("hi")
     for ii = 1:opts.iterations
         # solve lift agents using iLQR
         for i = 1:num_lift
@@ -312,7 +314,7 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
-            # reset!(solver_lift_al[i].solver_uncon)
+            reset!(solver_lift_al[i].solver_uncon)
         end
 
         # if admm_type == :parallel
@@ -326,7 +328,7 @@ function solve_admm!(prob_lift,prob_load,n_slack,opts)
         solve!(prob_load_al,solver_load_al.solver_uncon)
         X_load .= prob_load_al.X
         U_load .= prob_load_al.U
-        # reset!(solver_load.solver_uncon)
+        reset!(solver_load_al.solver_uncon)
 
         # update lift agents: constraints, dual update, penalty update
         for i = 1:num_lift
@@ -359,8 +361,33 @@ end
 
 solve_admm!(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}())
 
-rollout!(prob_load)
-plot(prob_load.X)
+
+# cost(plift[1])
+# initial_controls!(plift[1],[zeros(m_lift) for k = 1:N-1])
+# rollout!(plift[1])
+# i = 1
+# update_constraints!(plift[i].obj.C,plift[i].obj.constraints, plift[i].X, plift[i].U)
+# update_active_set!(plift[i].obj)
+# plot(plift[1].X)
+# solve!(plift[1],slift[1].solver_uncon)
+#
+# plift[1]
+#
+# slift[1].solver_uncon
+#
+#
+
+
+
+
+
+
+
+
+# rollout!(prob_load)
+plot(prob_lift[1].X)
+plot(prob_load.U)
+
 
 X_load = deepcopy(prob_load.X)
 U_load = deepcopy(prob_load.U)

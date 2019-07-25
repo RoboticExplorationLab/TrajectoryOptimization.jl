@@ -4,6 +4,7 @@ function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T})
     t_start = time()
 
     solver_uncon = solver.solver_uncon
+    # solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
 
     prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
@@ -138,7 +139,7 @@ function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::Constrai
     # Get sizes
     n,m = get_sizes(cost)
     C,∇C,λ,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianObjective{T}(cost,constraints,C,∇C,λ,μ,active_set)
 end
 
 function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::Constraints,
@@ -147,7 +148,7 @@ function AugmentedLagrangianObjective(cost::CostTrajectory,constraints::Constrai
     n,m = get_sizes(cost)
     N = length(λ)
     C,∇C,_,μ,active_set = init_constraint_trajectories(constraints,n,m,N)
-    AugmentedLagrangianObjective{T}(cost,constraint,C,∇C,λ,μ,active_set)
+    AugmentedLagrangianObjective{T}(cost,constraints,C,∇C,λ,μ,active_set)
 end
 
 getindex(obj::AugmentedLagrangianObjective,i::Int) = obj.cost[i]
