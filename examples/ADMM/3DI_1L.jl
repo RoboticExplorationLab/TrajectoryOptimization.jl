@@ -38,14 +38,16 @@ r_load = 0.2
 
 # Control limits for lift robots
 u_lim = Inf*ones(m_lift)
-u_lim[1:3] .= 100.
+u_lim[1:3] .= 25.
 bnd1 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim)
 
 x_lim_lift_l = -Inf*ones(n_lift)
 x_lim_lift_l[3] = 0.
 bnd2 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim,x_min=x_lim_lift_l)
+# bnd2 = BoundConstraint(n_lift,m_lift,x_min=x_lim_lift_l)
 
 x_lim_load_l = -Inf*ones(n_load)
+x_lim_load_l[3] = 0.
 bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_load_l)
 
 
@@ -143,7 +145,7 @@ constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
     for k = 1:N-1
-        # con[k] += bnd2 #+ obs_lift
+        con[k] += bnd2 + obs_lift
     end
     # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
@@ -151,14 +153,22 @@ end
 
 constraints_load = Constraints(N)
 for k = 1:N-1
-    # constraints_load[k] += bnd3 #obs_load
+    constraints_load[k] += bnd3 #obs_load
 end
 # constraints_load[N] += goal_constraint(xloadf)
+
+
+u_ = [0.;0.;9.81 + 9.81/num_lift;0.;0.;-9.81/num_lift]
+u_load = [0.;0.;9.81/num_lift;0.;0.;9.81/num_lift;0.;0.;9.81/num_lift]
+U0_lift = [u_ for k = 1:N-1]
+U0_load = [u_load for k = 1:N-1]
+
+
 
 # create problems
 prob_lift = [Problem(doubleintegrator3D_lift,
                 obj_lift[i],
-                [rand(m_lift) for k = 1:N-1],
+                U0_lift,
                 integration=:midpoint,
                 constraints=constraints_lift[i],
                 x0=xlift0[i],
@@ -169,7 +179,7 @@ prob_lift = [Problem(doubleintegrator3D_lift,
 
 prob_load = Problem(doubleintegrator3D_load,
                 obj_load,
-                [rand(m_load) for k = 1:N-1],
+                U0_load,
                 integration=:midpoint,
                 constraints=constraints_load,
                 x0=xload0,
@@ -322,23 +332,20 @@ function solve_admm(prob_lift,prob_load,n_slack,opts)
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
-            # copyto!(solver_lift_al[i].C_prev, solver_lift_al[i].C)
-
-            # reset!(solver_lift_al[i].solver_uncon)
+            copyto!(solver_lift_al[i].C_prev, solver_lift_al[i].C)
         end
 
-        # if admm_type == :parallel
-        #     for i = 1:num_lift
-        #         X_lift[i] .= prob_lift_al[i].X
-        #         U_lift[i] .= prob_lift_al[i].U
-        #     end
-        # end
+        if admm_type == :parallel
+            for i = 1:num_lift
+                X_lift[i] .= prob_lift_al[i].X
+                U_lift[i] .= prob_lift_al[i].U
+            end
+        end
 
         # solve load using iLQR
         solve!(prob_load_al,solver_load_al.solver_uncon)
         X_load .= prob_load_al.X
         U_load .= prob_load_al.U
-        # reset!(solver_load_al.solver_uncon)
 
         # update lift agents: constraints, dual update, penalty update
         for i = 1:num_lift
@@ -365,109 +372,23 @@ function solve_admm(prob_lift,prob_load,n_slack,opts)
             @info "ADMM problem solved"
             break
         else
-            nothing
-            # for i = 1:num_lift
-            #     reset!(solver_lift_al[i].solver_uncon)
-            # end
-            # reset!(solver_load_al.solver_uncon)
+            for i = 1:num_lift
+                reset!(solver_lift_al[i].solver_uncon)
+            end
+            reset!(solver_load_al.solver_uncon)
         end
     end
 
     return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
 end
 
-plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,AugmentedLagrangianSolverOptions{Float64}(verbose=true,iterations=50,penalty_scaling=2.0))
+verbose=true
+opts_ilqr = iLQRSolverOptions(verbose=verbose)
+opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,opts_uncon=opts_ilqr,iterations=50,penalty_scaling=2.0,penalty_initial=1.0e-2)
+plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,opts_al)
 
 slift_al
 max_violation(slift_al[1])
-
-# cost(plift[1])
-# initial_controls!(plift[1],[zeros(m_lift) for k = 1:N-1])
-# rollout!(plift[1])
-# i = 1
-# update_constraints!(plift[i].obj.C,plift[i].obj.constraints, plift[i].X, plift[i].U)
-# update_active_set!(plift[i].obj)
-# plot(plift[1].X)
-# solve!(plift[1],slift[1].solver_uncon)
-#
-# plift[1]
-#
-# slift[1].solver_uncon
-#
-#
-
-qq = [rand(3) for i = 1:3]
-
-qqq(x) = x - qq[2][1:2]
-xx = ones(2)
-qqq(xx)
-
-
-qq .= [2*ones(3) for i = 1:3]
-qqq(xx)
-
-
-
-# rollout!(prob_load)
-plot(prob_lift[1].X)
-plot(prob_load.X)
-
-prob_lift[1].obj.C
-norm(prob_lift[2].X[end] - prob_load.X[end])^2 - d[1]^2
-
-X_load = deepcopy(prob_load.X)
-U_load = deepcopy(prob_load.U)
-ccc = gen_lift_cable_constraints(X_load,U_load,1,n_lift,m_lift,d[1],n_slack)
-
-cc1 = zeros(1+n_slack)
-cc2 = zeros(1+n_slack)
-cc3 = zeros(1+n_slack)
-xx = rand(n_lift)
-uu = rand(m_lift)
-
-ccc[1].c(cc1,xx,uu)
-ccc[2].c(cc2,xx,uu)
-ccc[N-1].c(cc2,xx,uu)
-ccc[N].c(cc3,xx,uu)
-
-norm(xx - X_load[N])^2
-
-prob_load.X[1] .= 0
-ccc[1].c(cc1,xx,uu)
-
-X_ll = [prob_lift[i].X for i = 1:num_lift]
-U_ll = [prob_lift[i].U for i = 1:num_lift]
-
-ddd = gen_load_cable_constraints(X_ll,U_ll,n_load,m_load,d,n_slack)
-
-
-dd1 = zeros(num_lift*(1+n_slack))
-dd2 = zeros(num_lift*(1+n_slack))
-dd3 = zeros(num_lift*(1+n_slack))
-xx = rand(n_load)
-uu = rand(m_load)
-
-ddd[1].c(dd1,xx,uu)
-ddd[2].c(dd2,xx,uu)
-ddd[3].c(dd3,xx,uu)
-
-dd1
-dd2
-dd3
-
-
-X_ll[1][1] .= 0
-ddd[1].c(dd1,xx,uu)
-dd1
-# solve!(prob_lift[1],ALTROSolverOptions{Float64}())
-#
-# using Plots
-#
-# plot(prob_lift[1].X)
-
-
-# prob_lift[1].constraints[1]
-
 
 function cable_transform(y,z)
     v1 = [0,0,1]
@@ -527,4 +448,4 @@ vis = Visualizer()
 open(vis)
 visualize_lift_system(vis,prob_lift,prob_load)
 
-plot(prob_lift[1].U)
+plot(prob_lift[1].U,1:3)
