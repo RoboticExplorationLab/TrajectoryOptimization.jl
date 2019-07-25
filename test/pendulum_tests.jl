@@ -9,8 +9,16 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,R_minimum_tim
 int_schemes = [:midpoint, :rk3, :rk4, :rk3_implicit, :midpoint_implicit]
 model = TrajectoryOptimization.Dynamics.pendulum
 n = model.n; m = model.m
-xf = copy(Problems.pendulum.xf)
-N = copy(Problems.pendulum.N)
+xf = Problems.pendulum.xf
+N = Problems.pendulum.N
+
+# Make sure Ipopt will solve a discrete problem by converting it
+prob = copy(Problems.pendulum)
+opts_ipopt = DIRCOLSolverOptions(verbose=false)
+res, = solve(prob, opts_ipopt)
+@test prob isa Problem{T,Discrete}
+@test res isa Problem{T,Continuous}
+
 
 for is in int_schemes
     prob = update_problem(copy(Problems.pendulum),model=discretize_model(model,is))
