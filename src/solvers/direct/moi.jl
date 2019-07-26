@@ -1,4 +1,3 @@
-using MathOptInterface
 const MOI = MathOptInterface
 
 struct DIRCOLProblem{T} <: MOI.AbstractNLPEvaluator
@@ -98,7 +97,8 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
-    solver = eval(opts.nlp).Optimizer(;nlp_options(opts)...)
+    solver = typeof(opts.nlp)(;nlp_options(opts)...)
+    solver.options = opts.opts
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -110,7 +110,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     end
 
     # Solve the problem
-    @info "DIRCOL solve using " * String(opts.nlp)
+    @info "DIRCOL solve using " * String(nameof(parentmodule(typeof(solver))))
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
@@ -171,13 +171,13 @@ function solve(prob::Problem{T,Discrete}, opts::DIRCOLSolverOptions) where T<:Ab
 end
 
 function nlp_options(opts::DIRCOLSolverOptions)
-    if opts.nlp == :Ipopt
+    if nameof(parentmodule(typeof(opts.nlp))) == :Ipopt
         !opts.verbose ? opts.opts[:print_level] = 0 : nothing
         if opts.feasibility_tolerance > 0.
             opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
             opts.opts[:tol] = opts.feasibility_tolerance
         end
-    elseif opts.nlp == :SNOPT7
+    elseif nameof(parentmodule(typeof(opts.nlp))) == :SNOPT7
         if !opts.verbose
             opts.opts[:Major_print_level] = 0
             opts.opts[:Minor_print_level] = 0

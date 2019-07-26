@@ -23,6 +23,7 @@ using PartedArrays
 using Parameters
 using Rotations
 using BlockArrays
+using MathOptInterface
 
 export
     Dynamics,
