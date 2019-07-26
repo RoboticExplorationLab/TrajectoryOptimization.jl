@@ -32,5 +32,5 @@ function cartpole_benchmarks!(suite::BenchmarkGroup)
         nlp=SNOPT7.Optimizer(),
         feasibility_tolerance=1.0e-5)
 
-    run_benchmarks!(suite, Problems.cartpole, [opts_altro, opts_ipopt, opts_snopt, opts_ilqr])
+    run_benchmarks!(suite, Problems.cartpole, [opts_ilqr, opts_al, opts_altro, opts_ipopt, opts_snopt])
 end

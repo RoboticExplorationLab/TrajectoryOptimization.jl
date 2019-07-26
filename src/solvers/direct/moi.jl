@@ -109,7 +109,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     end
 
     # Solve the problem
-    @info "DIRCOL solve using " * String(nameof(parentmodule(typeof(solver))))
+    @info "DIRCOL solve using " * String(optimizer_name(solver))
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
 
@@ -170,13 +170,14 @@ function solve(prob::Problem{T,Discrete}, opts::DIRCOLSolverOptions) where T<:Ab
 end
 
 function nlp_options(opts::DIRCOLSolverOptions)
-    if nameof(parentmodule(typeof(opts.nlp))) == :Ipopt
+    solver_name = optimizer_name(opts.nlp)
+    if solver_name == :Ipopt
         !opts.verbose ? opts.opts[:print_level] = 0 : nothing
         if opts.feasibility_tolerance > 0.
             opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
             opts.opts[:tol] = opts.feasibility_tolerance
         end
-    elseif nameof(parentmodule(typeof(opts.nlp))) == :SNOPT7
+    elseif solver_name == :SNOPT7
         if !opts.verbose
             opts.opts[:Major_print_level] = 0
             opts.opts[:Minor_print_level] = 0
@@ -191,4 +192,8 @@ function nlp_options(opts::DIRCOLSolverOptions)
     end
 
     return opts.opts
+end
+
+function optimizer_name(optimizer::MathOptInterface.AbstractOptimizer)
+    nameof(parentmodule(typeof(optimizer)))
 end

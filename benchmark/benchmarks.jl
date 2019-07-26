@@ -1,6 +1,8 @@
 using BenchmarkTools
 using TrajectoryOptimization
 using SNOPT7, Ipopt
+using Suppressor
+using Logging
 const TO = TrajectoryOptimization
 
 const suite = BenchmarkGroup()
@@ -14,9 +16,11 @@ suite["car"] = BenchmarkGroup()
 
 function run_benchmarks!(suite::BenchmarkGroup, prob::Problem, opts::Vector{<:TO.AbstractSolverOptions})
     for opt in opts
-        suite[solver_name(opt)] = @benchmarkable solve($prob, $opt)
-        # @time solve(prob, opt)
+        println("Solver: $(solver_name(opt))")
+        @time @suppress solve(prob, opt)
+        suite[solver_name(opt)] = @benchmarkable @suppress solve($prob, $opt)
     end
+    nothing
 end
 
 benchmarks = filter!(readdir(@__DIR__)) do file
@@ -31,8 +35,10 @@ pendulum_benchmarks!(suite["pendulum"])
 cartpole_benchmarks!(suite["cartpole"])
 car_benchmarks!(suite["car"])
 # quadrotor_benchmarks!(suite["quadrotor"])
+disable_logging(Logging.Info)
 
-paramspath = joinpath(dirname(@__FILE__), "params.json")
+paramspath = joinpath(dirname(@__FILE__), "tune.json")
+
 
 
 if isfile(paramspath)

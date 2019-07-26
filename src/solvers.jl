@@ -39,7 +39,7 @@ include("solvers/direct/moi_mintime.jl")
 # Get name of solver as a string
 solver_name(::iLQRSolverOptions) = "iLQR"
 solver_name(::ALTROSolverOptions) = "ALTRO"
-solver_name(opts::DIRCOLSolverOptions) = string(opts.nlp)
+solver_name(opts::DIRCOLSolverOptions) = string(optimizer_name(opts.nlp))
 solver_name(opts::AugmentedLagrangianSolverOptions) = "AL-" * solver_name(opts.opts_uncon)
 solver_name(solver::AbstractSolver) = solver_name(solver.opts)
 
