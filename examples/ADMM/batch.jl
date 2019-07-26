@@ -301,17 +301,17 @@ load_con = gen_batch_load_constraints(actuated_models,load_model,d)
 
 # costs
 Q = 1.0e-2*Diagonal(I,n)
-Qf = 1000.0*Diagonal(I,n)
+Qf = 1.0*Diagonal(I,n)
 R = 1.0e-4*Diagonal(I,m)
-Q_batch = Diagonal(cat(Q,Q,Q,Q,dims=(1,2)))
-R_batch = Diagonal(cat(R,R,R,Diagonal(1.0e-6*ones(9)),dims=(1,2)))
-Qf_batch = Diagonal(cat(Qf,Qf,Qf,Qf,dims=(1,2)))
+Q_batch = Diagonal(cat(0.0*Q,0.0*Q,Q,Q,dims=(1,2)))
+R_batch = Diagonal(cat(R,R,R,Diagonal(1.0e-4*ones(9)),dims=(1,2)))
+Qf_batch = Diagonal(cat(Qf,Qf,100.0*Qf,Qf,dims=(1,2)))
 
 N = 21
 dt = 0.1
 
 u_lim = Inf*ones(18)
-u_lim[1:9] .= 20.
+u_lim[1:9] .= 75.
 bnd = BoundConstraint(n_batch,m_batch,u_min=-1.0*u_lim,u_max=u_lim)
 
 batch_obj = LQRObjective(Q_batch,R_batch,Qf_batch,xf_batch,N)
@@ -322,7 +322,10 @@ end
 batch_constraints[N] += goal_constraint(xf_batch)
 
 doubleintegrator_batch = TrajectoryOptimization.Problem(batch_model_d, batch_obj,constraints=batch_constraints, x0=x0_batch, xf=xf_batch, N=N, dt=dt)
-initial_controls!(doubleintegrator_batch, 0.01*rand(batch_model.m,N-1))
+
+u_ = [0.;0.;9.81 + 9.81/num_lift]
+u_load = [0.;0.;9.81/num_lift;0.;0.;9.81/num_lift;0.;0.;9.81/num_lift]
+initial_controls!(doubleintegrator_batch, [[u_;u_;u_;u_load] for k = 1:N-1])
 # initial_controls!(doubleintegrator_batch, zeros(batch_model.m,N-1))
 
 # rollout!(doubleintegrator_batch)

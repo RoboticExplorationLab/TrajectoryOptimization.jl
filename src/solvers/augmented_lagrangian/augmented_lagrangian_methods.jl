@@ -1,32 +1,28 @@
 "Augmented Lagrangian solve"
 function solve!(prob::Problem{T,Discrete}, solver::AugmentedLagrangianSolver{T}) where T<:AbstractFloat
     reset!(solver)
-    t_start = time()
-
-    solver_uncon = solver.solver_uncon
-    # solver_uncon = AbstractSolver(prob, solver.opts.opts_uncon)
-
-    prob_al = AugmentedLagrangianProblem(prob, solver)
     logger = default_logger(solver)
 
+    t_start = time()
+    prob_al = AugmentedLagrangianProblem(prob, solver)
     rollout!(prob)
-
-    with_logger(logger) do
-        record_iteration!(prob_al, solver, cost(prob_al), solver_uncon)
-        println(logger,OuterLoop)
-        for i = 1:solver.opts.iterations
-            set_tolerances!(solver,solver_uncon,i)
-            J = step!(prob_al, solver, solver_uncon)
-
-            record_iteration!(prob, solver, J, solver_uncon)
-
-            converged = evaluate_convergence(solver)
-            println(logger,OuterLoop)
-            converged ? break : nothing
-
-            reset!(solver_uncon)
-        end
-    end
+    solve_aula!(prob_al,solver,logger)
+    # with_logger(logger) do
+    #     record_iteration!(prob_al, solver, cost(prob_al), solver_uncon)
+    #     println(logger,OuterLoop)
+    #     for i = 1:solver.opts.iterations
+    #         set_tolerances!(solver,solver_uncon,i)
+    #         J = step!(prob_al, solver, solver_uncon)
+    #
+    #         record_iteration!(prob, solver, J, solver_uncon)
+    #
+    #         converged = evaluate_convergence(solver)
+    #         println(logger,OuterLoop)
+    #         converged ? break : nothing
+    #
+    #         reset!(solver_uncon)
+    #     end
+    # end
     solver.stats[:time] = time() - t_start
     return solver
 end
@@ -34,6 +30,25 @@ end
 function solve!(prob::Problem{T,Discrete},opts::AugmentedLagrangianSolverOptions{T}) where T<:AbstractFloat
     !is_constrained(prob) ? solver = AbstractSolver(prob,opts.opts_uncon) : solver = AbstractSolver(prob,opts)
     solve!(prob,solver)
+end
+
+function solve_aula!(prob_al::Problem{T,Discrete},solver::AugmentedLagrangianSolver{T},logger=default_logger(solver)) where T
+    with_logger(logger) do
+        record_iteration!(solver, cost(prob_al), solver.solver_uncon)
+        println(logger,OuterLoop)
+        for i = 1:solver.opts.iterations
+            set_tolerances!(solver,solver.solver_uncon,i)
+            J = step!(prob_al, solver, solver.solver_uncon)
+
+            record_iteration!(solver, J, solver.solver_uncon)
+
+            converged = evaluate_convergence(solver)
+            println(logger,OuterLoop)
+            converged ? break : nothing
+
+            reset!(solver.solver_uncon)
+        end
+    end
 end
 
 "Set intermediate convergence tolerances for unconstrained solve"
@@ -76,7 +91,7 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver{T}) where T
     converged || (solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false)
 end
 
-function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T}, J::T,
+function record_iteration!(solver::AugmentedLagrangianSolver{T}, J::T,
         unconstrained_solver::AbstractSolver) where T
     c_max = max_violation(solver)
 
