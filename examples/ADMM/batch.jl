@@ -7,9 +7,9 @@ T = Float64
 # actuated_models = [_doubleintegrator3D,_doubleintegrator3D,_doubleintegrator3D]
 # load_model = Model(double_integrator_3D_dynamics!,6,3,params_load)
 
-actuated_models = [doubleintegrator3D,doubleintegrator3D,doubleintegrator3D]
+actuated_models = [Dynamics.doubleintegrator3D,Dynamics.doubleintegrator3D,Dynamics.doubleintegrator3D]
 num_act_models = length(actuated_models)
-load_model = doubleintegrator3D
+load_model = Dynamics.doubleintegrator3D
 
 function gen_batch_model(actuated_models,load_model,n_slack=3)
     num_act_models = length(actuated_models)
@@ -60,7 +60,7 @@ end
 batch_model = gen_batch_model(actuated_models,load_model)
 
 # batch_model.f(zeros(24),zeros(24),zeros(18))
-# batch_model_d = rk3(batch_model)
+batch_model_d = midpoint(batch_model)
 # batch_model_d.f(zeros(24),zeros(24),zeros(18),0.5)
 #
 # F = zeros(24,24+18)
@@ -68,8 +68,8 @@ batch_model = gen_batch_model(actuated_models,load_model)
 # Fd = zeros(24,24+18+1)
 # batch_model_d.∇f(Fd,zeros(24),zeros(18),1.0)
 
-r_act = [0.2, 0.2, 0.2]
-r_load = 0.2
+r_act = [0.1, 0.1, 0.1]
+r_load = 0.1
 
 function gen_batch_load_constraints(actuated_models,load_model,d,n_slack=3)
     num_act_models = length(actuated_models)
@@ -217,22 +217,30 @@ n_batch = nn_tol + load_model.n
 m_batch = mm_tol + n_slack*num_act_models
 
 # _cyl = ((5.,.75,0.5),(6.,.75,0.5),(4.,.75,0.5),(5.,1.,0.5),(6.,1.,0.5),(4.,1.,0.5),(5.,-.75,0.5),(6.,-.75,0.5),(4.,-.75,0.5),(5.,-1.,0.5),(6.,-1.,0.5),(4.,-1.,0.5))
-r_cylinder = 0.5
-_cyl = []
-l1 = 3
+# r_cylinder = 0.5
+# _cyl = []
+# l1 = 3
+#
+# for i = range(4,stop=5,length=l1)
+#     push!(_cyl,(i, .75,r_cylinder))
+# end
+# for i = range(4,stop=5,length=l1)
+#     push!(_cyl,(i, -.75,r_cylinder))
+# end
+# for i = range(4,stop=5,length=l1)
+#     push!(_cyl,(i, 1.,r_cylinder))
+# end
+# for i = range(4,stop=5,length=l1)
+#     push!(_cyl,(i, -1.,r_cylinder))
+# end
 
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, .75,r_cylinder))
-end
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, -.75,r_cylinder))
-end
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, 1.,r_cylinder))
-end
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, -1.,r_cylinder))
-end
+r_cylinder = 0.75
+
+_cyl = []
+# l1 = 6
+
+push!(_cyl,(5.,1.,r_cylinder))
+push!(_cyl,(5.,-1.,r_cylinder))
 
 function cI_cylinder(c,x,u)
     c_shift = 1
@@ -241,16 +249,18 @@ function cI_cylinder(c,x,u)
         n_shift = 0
         for i = 1:num_act_models
             idx_pos = (n_shift .+ (1:nn[i]))[1:3]
-            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + r_act[i])
+            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 2*r_act[i])
             c_shift += 1
             n_shift += nn[i]
         end
-        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + r_load)
+        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 2*r_load)
         c_shift += 1
     end
 end
 cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_act_models+1)*length(_cyl),:cyl)
 
+n = Dynamics.doubleintegrator3D.n
+m = Dynamics.doubleintegrator3D.m
 shift_ = zeros(n)
 shift_[1:3] = [0.0;0.0;1.0]
 scaling = 1.
@@ -290,18 +300,18 @@ load_con = gen_batch_load_constraints(actuated_models,load_model,d)
 
 
 # costs
-Q = 1.0*Diagonal(I,n)
-Qf = 1.0*Diagonal(I,n)
-R = 1.0e-1*Diagonal(I,m)
+Q = 1.0e-2*Diagonal(I,n)
+Qf = 1000.0*Diagonal(I,n)
+R = 1.0e-4*Diagonal(I,m)
 Q_batch = Diagonal(cat(Q,Q,Q,Q,dims=(1,2)))
 R_batch = Diagonal(cat(R,R,R,Diagonal(1.0e-6*ones(9)),dims=(1,2)))
 Qf_batch = Diagonal(cat(Qf,Qf,Qf,Qf,dims=(1,2)))
 
-N = 51
+N = 21
 dt = 0.1
 
 u_lim = Inf*ones(18)
-u_lim[1:9] .= 15.
+u_lim[1:9] .= 20.
 bnd = BoundConstraint(n_batch,m_batch,u_min=-1.0*u_lim,u_max=u_lim)
 
 batch_obj = LQRObjective(Q_batch,R_batch,Qf_batch,xf_batch,N)
@@ -319,7 +329,7 @@ initial_controls!(doubleintegrator_batch, 0.01*rand(batch_model.m,N-1))
 plot(doubleintegrator_batch.X)
 plot(doubleintegrator_batch.U)
 
-solve!(doubleintegrator_batch,ALTROSolverOptions{T}(verbose=true))
+@time solve!(doubleintegrator_batch,ALTROSolverOptions{T}(verbose=true))
 plot(doubleintegrator_batch.X)
 max_violation(doubleintegrator_batch)
 

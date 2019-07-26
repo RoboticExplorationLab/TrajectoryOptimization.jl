@@ -488,7 +488,7 @@ for i = 1:num_lift
     for k = 1:N-1
         con[k] += bnd2 + obs_lift
     end
-    # con[N] += goal_constraint(xliftf[i])
+    con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
@@ -496,11 +496,14 @@ constraints_load = Constraints(N)
 for k = 1:N-1
     constraints_load[k] += bnd3 + obs_load
 end
-# constraints_load[N] += goal_constraint(xloadf)
+constraints_load[N] += goal_constraint(xloadf)
 
 
 u_ = [0.;0.;9.81 + 9.81/num_lift;0.;0.;-9.81/num_lift]
 u_load = [0.;0.;9.81/num_lift;0.;0.;9.81/num_lift;0.;0.;9.81/num_lift]
+
+# u_ = rand(6)
+# u_load = rand(9)
 U0_lift = [u_ for k = 1:N-1]
 U0_load = [u_load for k = 1:N-1]
 
@@ -526,21 +529,20 @@ prob_load = Problem(doubleintegrator3D_load,
                 N=N,
                 dt=dt)
 
-verbose=true
-opts_ilqr = iLQRSolverOptions(verbose=verbose)
+verbose=false
+opts_ilqr = iLQRSolverOptions(verbose=verbose,iterations=500)
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-6,
-    constraint_tolerance=1.0e-3,
+    constraint_tolerance=1.0e-2,
     cost_tolerance_intermediate=1.0e-5,
-    iterations=50,
+    iterations=100,
     penalty_scaling=2.0,
-    penalty_initial=1.0)
+    penalty_initial=10.)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:parallel,opts_al)
 
-plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
-
-max_violation(slift_al[1])
-max_violation(plift_al[1])
+max_violation(slift_al[3])
+max_violation(sload_al)
 
 plift_al[1]
 vis = Visualizer()
