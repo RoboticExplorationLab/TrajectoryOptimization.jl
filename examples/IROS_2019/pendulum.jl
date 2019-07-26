@@ -34,6 +34,10 @@ opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=SNOPT7.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
+# iLQR
+prob_ilqr = copy(Problems.pendulum)
+@time p0, s0 = solve(prob_ilqr, opts_ilqr)
+
 # ALTRO w/ Newton
 prob_altro = copy(Problems.pendulum)
 @time p1, s1 = solve(prob_altro, opts_altro)
