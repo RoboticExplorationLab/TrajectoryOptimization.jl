@@ -3,7 +3,6 @@ T = Float64
 
 # model
 model = Dynamics.quadrotor
-# model = Dynamics.quadrotor_euler
 model_d = rk3(model)
 n = model.n; m = model.m
 q0 = [1.;0.;0.;0.] # unit quaternion
@@ -110,7 +109,7 @@ X_guess[:,1] = x0
 X_guess[:,7] = xf
 X_guess[1:3,2:6] .= [0 -12.5 -20 -12.5 0 ;15 20 30 40 45 ;10 10 10 10 10]
 
-# X_guess[4:7,:] .= q0
+X_guess[4:7,:] .= q0
 X0 = interp_rows(N,tf,X_guess);
 copyto!(quadrotor_maze.X,X0)
 
