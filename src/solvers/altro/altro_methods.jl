@@ -18,11 +18,12 @@ function solve!(prob::Problem{T,Discrete}, opts::ALTROSolverOptions) where T<:Ab
 
     # Create ALTRO solver
     solver = ALTROSolver(prob_altro, opts)
+    to = solver.opts[:timer]
 
     # primary solve (augmented Lagrangian)
     t_al = time()
     @info "Augmented Lagrangian solve..."
-    solve!(prob_altro, solver.solver_al)
+    @timeit to "AL solve" solve!(prob_altro, solver.solver_al)
     time_al = time() - t_al
 
     t_pn = time()
@@ -34,12 +35,12 @@ function solve!(prob::Problem{T,Discrete}, opts::ALTROSolverOptions) where T<:Ab
         # @assert pn_solver == solver.solver_pn
 
         solver.solver_pn.V = PrimalDual(prob_altro)
-        solve!(prob_altro,solver.solver_pn)#pn_solver)
+        @timeit to "Projection solve" solve!(prob_altro,solver.solver_pn)#pn_solver)
     end
     time_pn = time()- t_pn
 
     # process primary solve results
-    process_results!(prob,prob_altro,state,opts)
+    @timeit to "Process results" process_results!(prob,prob_altro,state,opts)
 
     # Stats
     time_total = time() - t0

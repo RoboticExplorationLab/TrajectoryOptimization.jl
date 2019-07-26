@@ -4,10 +4,13 @@
 #          SOLVE           #
 ############################
 function solve!(prob::Problem, solver::ProjectedNewtonSolver)
+    to = solver.stats[:timer]
     for i = 1:solver.opts.n_steps
-        V_ = newton_step!(prob, solver)
-        copyto!(prob.X, V_.X)
-        copyto!(prob.U, V_.U)
+        @timeit to "newton step" V_ = newton_step!(prob, solver)
+        @timeit to "copy" begin
+            copyto!(prob.X, V_.X)
+            copyto!(prob.U, V_.U)
+        end
 
         record_iteration!(prob,solver)
         solver.stats[:c_max][end] <= solver.opts.feasibility_tolerance ? break : nothing
@@ -151,13 +154,14 @@ end
 #     FUNCTIONS      #
 ######################
 function update!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V, active_set=true)
-    dynamics_constraints!(prob, solver, V)
-    update_constraints!(prob, solver, V)
-    dynamics_jacobian!(prob, solver, V)
-    constraint_jacobian!(prob, solver, V)
-    cost_expansion!(prob, solver, V)
+    to = solver.stats[:timer]
+    @timeit to "dynamics"       dynamics_constraints!(prob, solver, V)
+    @timeit to "constraints"    update_constraints!(prob, solver, V)
+    @timeit to "dyn jacobian"   dynamics_jacobian!(prob, solver, V)
+    @timeit to "con jacobian"   constraint_jacobian!(prob, solver, V)
+    @timeit to "cost expansion" cost_expansion!(prob, solver, V)
     if active_set
-        active_set!(prob, solver)
+        @timeit to "active set" active_set!(prob, solver)
     end
 end
 
@@ -209,6 +213,8 @@ end
 
 function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
         V=solver.V, active_set_update=true)
+    to = solver.stats[:timer]
+
     Z = primals(V)
     λ = duals(V)
     a = solver.a.duals
@@ -219,12 +225,12 @@ function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
     # cost_expansion!(prob, solver, V)
     H = Diagonal(solver.H)
 
-    dynamics_constraints!(prob, solver, V)
-    update_constraints!(prob, solver, V)
-    dynamics_jacobian!(prob, solver, V)
-    constraint_jacobian!(prob, solver, V)
+    @timeit to "dynamics"     dynamics_constraints!(prob, solver, V)
+    @timeit to "constraints"  update_constraints!(prob, solver, V)
+    @timeit to "dyn jacobian" dynamics_jacobian!(prob, solver, V)
+    @timeit to "con jacobian" constraint_jacobian!(prob, solver, V)
     if active_set_update
-        active_set!(prob, solver)
+        @timeit to "active set" active_set!(prob, solver)
     end
     Y,y = active_constraints(prob, solver)
     viol0 = norm(y,Inf)
@@ -234,11 +240,11 @@ function _projection_solve!(prob::Problem, solver::ProjectedNewtonSolver,
 
     HinvY = H\Y'
     S = Symmetric(Y*HinvY)
-    Sreg = cholesky(S + ρ*I)
+    @timeit to "cholesky" Sreg = cholesky(S + ρ*I)
     viol_prev = viol0
     count = 0
     while count < max_refinements
-        viol = _projection_linesearch!(prob, solver, V, (S,Sreg), HinvY)
+        @timeit to "linesearch" viol = _projection_linesearch!(prob, solver, V, (S,Sreg), HinvY)
         convergence_rate = log10(viol)/log10(viol_prev)
         viol_prev = viol
         count += 1
@@ -259,6 +265,8 @@ end
 
 function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
         V, S, HinvY)
+    to = solver.stats[:timer]
+    
     a = solver.a.duals
     y = solver.y[a]
     viol0 = norm(y,Inf)
@@ -272,12 +280,12 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
     ϕ = 0.5
     count = 1
     while true
-        δλ = reg_solve(S[1],y,S[2],1e-8,25)
-        δZ = -HinvY*δλ
+        @timeit to "dual solve" δλ = reg_solve(S[1],y,S[2],1e-8,25)
+        @timeit to "primal solve" δZ = -HinvY*δλ
         Z_ .= Z + α*δZ
 
-        dynamics_constraints!(prob, solver, V_)
-        update_constraints!(prob, solver, V_)
+        @timeit to "dynamics" dynamics_constraints!(prob, solver, V_)
+        @timeit to "constraints" update_constraints!(prob, solver, V_)
         y = solver.y[a]
         viol = norm(y,Inf)
 
@@ -287,7 +295,7 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
         if viol < viol0 || count > 10
             break
         else
-            count += 1
+            count += a
             α *= ϕ
         end
     end

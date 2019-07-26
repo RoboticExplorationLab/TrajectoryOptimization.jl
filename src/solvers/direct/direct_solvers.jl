@@ -63,6 +63,8 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     n,m,N = size(prob)
     X_ = [zeros(T,n) for k = 1:N-1] # midpoints
 
+    stats = Dict{Symbol,Any}(:timer=>TimerOutput())
+
     NN = N*n + (N-1)*m
     p = num_constraints(prob)
     pcum = insert!(cumsum(p),1,0)
@@ -105,7 +107,7 @@ function AbstractSolver(prob::Problem{T,D}, opts::ProjectedNewtonSolverOptions{T
     active_set = [view(a,Block(i+1)) for i in c_blocks]
     a = PartedVector(a, part_a)
 
-    solver = ProjectedNewtonSolver{T}(opts, Dict{Symbol,Any}(), V, H, g, Y, y, fVal, ∇F, C, ∇C, a, active_set, part_a)
+    solver = ProjectedNewtonSolver{T}(opts, stats, V, H, g, Y, y, fVal, ∇F, C, ∇C, a, active_set, part_a)
     reset!(solver)
     return solver
 end

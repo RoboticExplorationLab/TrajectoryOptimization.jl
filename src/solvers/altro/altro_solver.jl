@@ -83,8 +83,12 @@ end
 ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts)
 
 function AbstractSolver(prob::Problem{T,D},opts::ALTROSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
-    stats = Dict{Symbol,Any}()
+    to = TimerOutput()
+    stats = Dict{Symbol,Any}(:timer=>to)
     solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
     solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)
+    solver_al.stats[:timer] = to
+    solver_al.solver_uncon.stats[:timer] = to
+    solver_pn.stats[:timer] = to
     ALTROSolver{T}(opts,stats,solver_al,solver_pn)
 end

@@ -79,13 +79,16 @@ opts_ilqr = iLQRSolverOptions{T}(verbose=true,
 @time r0, s0 = solve(prob, opts_ilqr)
 animate_quad!(vis, r0)
 plot(res.U)
+open(joinpath(@__DIR__,"ilqr_times.txt"),"w") do file
+    TimerOutputs.print_timer(file, s0.stats[:timer])
+end
 
 # AL-iLQR
 prob = copy(Problems.quad_obs)
 opts_ilqr.verbose = false
 opts_al = AugmentedLagrangianSolverOptions{T}(verbose=true,
     opts_uncon=opts_ilqr,
-    iterations=40,
+    iterations=25,
     cost_tolerance=1.0e-5,
     cost_tolerance_intermediate=1.0e-3,
     constraint_tolerance=1e-4,
@@ -108,6 +111,10 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     projected_newton=true,
     projected_newton_tolerance=1.0e-3)
 @time r2, s2 = solve(prob, opts_altro)
+open(joinpath(@__DIR__,"altro_times.txt"),"w") do file
+    TimerOutputs.print_timer(file, s2.stats[:timer])
+end
+
 plot(r2.U)
 animate_quad!(vis, r2)
 max_violation_direct(p2)
