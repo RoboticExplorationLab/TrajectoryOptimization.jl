@@ -143,7 +143,7 @@ opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,feasibility_tolerance=
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,opts_al=opts_al,opts_pn=opts_pn,R_minimum_time=12.5,
     dt_max=dt_max,dt_min=dt_min,projected_newton=true,projected_newton_tolerance=1.0e-4)
 
-opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=:Ipopt,
+opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,nlp=Ipopt.Optimizer(),
     opts=Dict(:print_level=>3,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol))
 
 # DIRCOL w/ Ipopt
@@ -156,7 +156,7 @@ p2, s2 = solve(prob_ipopt, opts_ipopt)
 ## Minimum Time
 max_con_viol = 1.0e-6
 
-opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=:Ipopt,
+opts_mt_ipopt = TO.DIRCOLSolverMTOptions{T}(verbose=verbose,nlp=Ipopt.Optimizer(),
     opts=Dict(:print_level=>0,:tol=>max_con_viol,:constr_viol_tol=>max_con_viol),
     R_min_time=10.0,h_max=dt_max,h_min=dt_min)
 

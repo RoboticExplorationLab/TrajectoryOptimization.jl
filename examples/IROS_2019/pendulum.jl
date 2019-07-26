@@ -1,4 +1,4 @@
-using BenchmarkTools, Plots, SNOPT7
+using BenchmarkTools, Plots, SNOPT7, Ipopt
 
 T = Float64
 
@@ -27,11 +27,11 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_pn=opts_pn)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=:Ipopt,
+    nlp=Ipopt.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=:SNOPT7,
+    nlp=SNOPT7.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
 # ALTRO w/ Newton
@@ -78,7 +78,7 @@ opts_altro_mt = ALTROSolverOptions{T}(verbose=verbose,
     dt_min=dt_min)
 
 opts_ipopt_mt = DIRCOLSolverMTOptions{T}(verbose=verbose,
-    nlp=:Ipopt,
+    nlp=Ipopt.Optimizer(),
     opts=Dict(:print_level=>3,
         :tol=>max_con_viol,
         :constr_viol_tol=>max_con_viol),
@@ -87,7 +87,7 @@ opts_ipopt_mt = DIRCOLSolverMTOptions{T}(verbose=verbose,
     h_min=dt_min)
 
 opts_snopt_mt = DIRCOLSolverMTOptions{T}(verbose=verbose,
-    nlp=:SNOPT7,
+    nlp=SNOPT7.Optimizer(),
     opts=Dict(:Major_print_level=>0,
         :Minor_print_level=>0,
         :Major_optimality_tolerance=>max_con_viol,

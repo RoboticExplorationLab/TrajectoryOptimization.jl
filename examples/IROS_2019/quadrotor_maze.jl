@@ -33,12 +33,12 @@ opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     projected_newton_tolerance=1.0e-4)
 
 opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=:Ipopt,
+    nlp=Ipopt.Optimizer(),
     opts=Dict(:max_iter=>10000),
     feasibility_tolerance=1.0e-3)
 
 opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=:SNOPT7,
+    nlp=SNOPT7.Optimizer(),
     feasibility_tolerance=1.0e-3,
     opts=Dict(:Iterations_limit=>500000,
         :Major_iterations_limit=>1000))
