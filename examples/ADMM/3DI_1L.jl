@@ -27,7 +27,7 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
-function visualize_lift_system(vis,prob_lift,prob_load,n_slack=3)
+function visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=3)
     num_lift = length(prob_lift)
 
     # camera angle
@@ -171,6 +171,45 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
     return con_cable_load
 end
 
+function gen_self_collision_constraints(X_lift,agent,n,m,sep,n_slack=3)
+    num_lift = length(X_lift)
+    N = length(X_lift[1])
+    p_con = num_lift - 1
+
+    self_col_con = []
+
+    for k = 1:N
+        function col_con(c,x,u=zeros())
+            p_shift = 1
+            for i = 1:num_lift
+                if i != agent
+                    x_pos = x[1:n_slack]
+                    x_pos2 = X_lift[i][k][1:n_slack]
+                    c[p_shift] = (r_lift + r_lift)^2 - norm(x_pos - x_pos2)^2
+                    p_shift += 1
+                end
+            end
+        end
+
+        function ∇col_con(C,x,u=zeros())
+            p_shift = 1
+            for i = 1:num_lift
+                if i != agent
+                    x_pos = x[1:n_slack]
+                    x_pos2 = X_lift[i][k][1:n_slack]
+                    dif = x_pos - x_pos2
+                    C[p_shift,1:n_slack] = -2*dif
+                    p_shift += 1
+                end
+            end
+        end
+
+        push!(self_col_con,Constraint{Inequality}(col_con,∇col_con,n,m,p_con,:self_col))
+    end
+
+    return self_col_con
+end
+
 
 function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     # admm_type = :sequential
@@ -199,24 +238,29 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     X_load = deepcopy(prob_load.X)
     U_load = deepcopy(prob_load.U)
 
-    cable_lift = [gen_lift_cable_constraints(X_load,
-                    U_load,
-                    i,
-                    n_lift,
-                    m_lift,
-                    d[i],
-                    n_slack) for i = 1:num_lift]
+    if admm_type == :sequential || admm_type == :parallel
+        cable_lift = [gen_lift_cable_constraints(X_load,
+                        U_load,
+                        i,
+                        n_lift,
+                        m_lift,
+                        d[i],
+                        n_slack) for i = 1:num_lift]
 
-    cable_load = gen_load_cable_constraints(X_lift,U_lift,n_load,m_load,d,n_slack)
+        cable_load = gen_load_cable_constraints(X_lift,U_lift,n_load,m_load,d,n_slack)
 
-    for i = 1:num_lift
-        for k = 1:N
-            prob_lift[i].constraints[k] += cable_lift[i][k]
+        self_col = [gen_self_collision_constraints(X_lift,i,n_lift,m_lift,2*r_lift,n_slack) for i = 1:num_lift]
+
+        for i = 1:num_lift
+            for k = 1:N
+                prob_lift[i].constraints[k] += cable_lift[i][k]
+                (k != 1 && k != N) ? prob_lift[i].constraints[k] += self_col[i][k] : nothing
+            end
         end
-    end
 
-    for k = 1:N
-        prob_load.constraints[k] += cable_load[k]
+        for k = 1:N
+            prob_load.constraints[k] += cable_load[k]
+        end
     end
 
     # create augmented Lagrangian problems, solvers
@@ -317,12 +361,12 @@ m_load = n_slack*num_lift
 doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,n_load,m_load)
 
 # Robot sizes
-r_lift = 0.2
-r_load = 0.2
+r_lift = 0.1
+r_load = 0.1
 
 # Control limits for lift robots
 u_lim = Inf*ones(m_lift)
-u_lim[1:3] .= 25.
+u_lim[1:3] .= 20.
 bnd1 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim)
 
 x_lim_lift_l = -Inf*ones(n_lift)
@@ -336,22 +380,35 @@ bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_load_l)
 
 
 # Obstacle constraints
-r_cylinder = 0.5
-_cyl = []
-l1 = 3
+# r_cylinder = 0.5
+r_cylinder = 0.75
 
-# for i = range(4,stop=5,length=l1)
+_cyl = []
+# l1 = 6
+
+push!(_cyl,(5.,1.,r_cylinder))
+push!(_cyl,(5.,-1.,r_cylinder))
+# for i = range(4.75,stop=5.25,length=l1)
+#     push!(_cyl,(i, 1.25,r_cylinder))
+# end
+# for i = range(4.75,stop=5.25,length=l1)
+#     push!(_cyl,(i, -1.25,r_cylinder))
+# end
+#
+# for i = range(4.75,stop=5.25,length=l1)
+#     push!(_cyl,(i, 1.,r_cylinder))
+# end
+# for i = range(4.75,stop=5.25,length=l1)
+#     push!(_cyl,(i, -1.,r_cylinder))
+# end
+#
+# for i = range(4.75,stop=5.25,length=l1)
 #     push!(_cyl,(i, .75,r_cylinder))
 # end
-# for i = range(4,stop=5,length=l1)
+# for i = range(4.75,stop=5.25,length=l1)
 #     push!(_cyl,(i, -.75,r_cylinder))
 # end
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, 1.,r_cylinder))
-end
-for i = range(4,stop=5,length=l1)
-    push!(_cyl,(i, -1.,r_cylinder))
-end
+
 
 function cI_cylinder_lift(c,x,u)
     for i = 1:length(_cyl)
@@ -372,7 +429,7 @@ obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:o
 scaling = 1.
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;1.0]
+shift_[1:3] = [0.0;0.0;1.]
 x10 = zeros(n_lift)
 x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
 x10 += shift_
@@ -393,7 +450,7 @@ xlift0 = [x10, x20, x30]
 
 # goal state
 _shift = zeros(n_lift)
-_shift[1:3] = [10.0;0.0;0.0]
+_shift[1:3] = [10.;0.0;0.0]
 
 x1f = x10 + _shift
 x2f = x20 + _shift
@@ -431,7 +488,7 @@ for i = 1:num_lift
     for k = 1:N-1
         con[k] += bnd2 + obs_lift
     end
-    con[N] += goal_constraint(xliftf[i])
+    # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
@@ -439,7 +496,7 @@ constraints_load = Constraints(N)
 for k = 1:N-1
     constraints_load[k] += bnd3 + obs_load
 end
-constraints_load[N] += goal_constraint(xloadf)
+# constraints_load[N] += goal_constraint(xloadf)
 
 
 u_ = [0.;0.;9.81 + 9.81/num_lift;0.;0.;-9.81/num_lift]
@@ -474,20 +531,20 @@ opts_ilqr = iLQRSolverOptions(verbose=verbose)
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-6,
-    constraint_tolerance=1.0e-2,
+    constraint_tolerance=1.0e-3,
     cost_tolerance_intermediate=1.0e-5,
     iterations=50,
     penalty_scaling=2.0,
     penalty_initial=1.0)
 
-plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,opts_al)
+plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 
 max_violation(slift_al[1])
 max_violation(plift_al[1])
 
-
+plift_al[1]
 vis = Visualizer()
 open(vis)
-visualize_lift_system(vis,prob_lift,prob_load)
+visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load)
 #
 # plot(prob_lift[1].U,4:6)
