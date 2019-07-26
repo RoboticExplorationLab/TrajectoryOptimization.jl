@@ -10,3 +10,4 @@ ipopt.opt
 ipopt.out
 temp/
 fort.10
+logs/
