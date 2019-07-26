@@ -13,6 +13,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
     expected = 0.
 
     logger = current_logger()
+    to = solver.stats[:timer]
     # @logmsg InnerIters :iter value=0
     # @logmsg InnerIters :cost value=J_prev
     while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
@@ -36,7 +37,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
         end
 
         # Otherwise, rollout a new trajectory for current alpha
-        flag = rollout!(prob,solver,alpha)
+        @timeit to "rollout" flag = rollout!(prob,solver,alpha)
 
         # Check if rollout completed
         if ~flag
@@ -48,7 +49,7 @@ function forwardpass!(prob::Problem, solver::iLQRSolver, ΔV::Array, J_prev::Flo
         end
 
         # Calcuate cost
-        J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))   # Unconstrained cost
+        @timeit to "cost" J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))   # Unconstrained cost
 
         expected = -alpha*(ΔV[1] + alpha*ΔV[2])
         if expected > 0

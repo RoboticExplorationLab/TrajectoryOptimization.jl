@@ -117,7 +117,7 @@ end
 
 function AbstractSolver(prob::Problem{T,D}, opts::iLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # Init solver statistics
-    stats = Dict{Symbol,Any}()
+    stats = Dict{Symbol,Any}(:timer=>TimerOutput())
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N

@@ -52,14 +52,15 @@ end
 "Augmented Lagrangian step"
 function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
         unconstrained_solver::AbstractSolver) where T
+    to = solver.stats[:timer]
 
     # Solve the unconstrained problem
-    solve!(prob, unconstrained_solver)
-    J = cost(prob)
+    @timeit to "uncon solve" solve!(prob, unconstrained_solver)
+    @timeit to "cost" J = cost(prob)
 
     # Outer loop update
-    dual_update!(prob, solver)
-    penalty_update!(prob, solver)
+    @timeit to "dual update" dual_update!(prob, solver)
+    @timeit to "penalty update" penalty_update!(prob, solver)
     copyto!(solver.C_prev,solver.C)
 
     return J

@@ -24,6 +24,7 @@ using Parameters
 using Rotations
 using BlockArrays
 using MathOptInterface
+using TimerOutputs
 
 export
     Dynamics,

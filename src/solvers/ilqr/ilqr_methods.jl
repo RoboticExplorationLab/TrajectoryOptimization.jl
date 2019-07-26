@@ -2,6 +2,7 @@
 "iLQR solve method"
 function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:AbstractFloat
     reset!(solver)
+    to = solver.stats[:timer]
 
     n,m,N = size(prob)
     J = Inf
@@ -13,9 +14,10 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
     live_plotting(prob,solver)
 
     J_prev = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))
-    record_iteration!(prob, solver, J_prev, Inf)
+
 
     with_logger(logger) do
+        record_iteration!(prob, solver, J_prev, Inf)
         for i = 1:solver.opts.iterations
             J = step!(prob, solver, J_prev)
 
@@ -25,8 +27,10 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
                 return solver
             end
 
-            copyto!(prob.X, solver.X̄)
-            copyto!(prob.U, solver.Ū)
+            @timeit to "copy" begin
+                copyto!(prob.X, solver.X̄)
+                copyto!(prob.U, solver.Ū)
+            end
 
             dJ = abs(J - J_prev)
             J_prev = copy(J)
@@ -34,17 +38,18 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
             live_plotting(prob,solver)
 
             println(logger, InnerLoop)
-            evaluate_convergence(solver) ? break : nothing
+            @timeit to "convergence" evaluate_convergence(solver) ? break : nothing
         end
     end
     return solver
 end
 
 function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
-    jacobian!(prob,solver)
-    cost_expansion!(prob,solver)
-    ΔV = backwardpass!(prob,solver)
-    forwardpass!(prob,solver,ΔV,J)
+    to = solver.stats[:timer]
+    @timeit to "jacobians" jacobian!(prob,solver)
+    @timeit to "cost expansion" cost_expansion!(prob,solver)
+    @timeit to "backward pass" ΔV = backwardpass!(prob,solver)
+    @timeit to "forward pass" forwardpass!(prob,solver,ΔV,J)
 end
 
 function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
