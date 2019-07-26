@@ -1,6 +1,6 @@
 @with_kw mutable struct DIRCOLSolverMTOptions{T} <: DirectSolverOptions{T}
     "NLP Solver to use. See MathOptInterface for available NLP solvers"
-    nlp::Symbol = :Ipopt
+    nlp::MathOptInterface.AbstractOptimizer = Ipopt.Optimizer()
 
     "Options dictionary for the nlp solver"
     opts::Dict{Symbol,Any} = Dict{Symbol,Any}()

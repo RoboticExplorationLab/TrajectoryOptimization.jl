@@ -104,7 +104,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverMTOptions)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
     # Create solver
-    solver = eval(opts.nlp).Optimizer(;opts.opts...)
+    solver = typeof(opts.nlp)(;opts.opts...)
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
@@ -116,7 +116,7 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverMTOptions)
     end
 
     # Solve the problem
-    @info "DIRCOL solve (minimum time) using " * String(opts.nlp)
+    @info "DIRCOL solve using " * String(nameof(parentmodule(typeof(solver))))
     MOI.set(solver, MOI.NLPBlock(), block_data)
     MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     MOI.optimize!(solver)

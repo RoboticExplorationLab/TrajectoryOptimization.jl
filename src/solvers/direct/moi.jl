@@ -98,7 +98,6 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
 
     solver = typeof(opts.nlp)(;nlp_options(opts)...)
-    solver.options = opts.opts
     Z = MOI.add_variables(solver, NN)
 
     # Add bound constraints
