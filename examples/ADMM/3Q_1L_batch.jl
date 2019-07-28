@@ -388,9 +388,9 @@ Q_load = 1.0e-2*Diagonal(I,n_load)
 Qf_load = 1.0*Diagonal(I,n_load)
 R_load = 1.0e-4*Diagonal(I,m_load)
 
-Q_batch = Diagonal(cat(Q,1.5*Q,2.0*Q,Q_load,dims=(1,2)))
-R_batch = Diagonal(cat(R,R,R,dims=(1,2)))
-Qf_batch = Diagonal(cat(Qf,1.5*Qf,2.0*Qf,Qf_load,dims=(1,2)))
+Q_batch = Diagonal(cat(Q_lift,1.5*Q_lift,2.0*Q_lift,Q_load,dims=(1,2)))
+R_batch = Diagonal(cat(R_lift,R_lift,R_lift,dims=(1,2)))
+Qf_batch = Diagonal(cat(Qf_lift,1.5*Qf_lift,2.0*Qf_lift,Qf_load,dims=(1,2)))
 
 N = 21
 dt = 0.1
@@ -417,7 +417,7 @@ batch_constraints[N] += goal_constraint(xf_batch)
 quad_batch = TrajectoryOptimization.Problem(batch_model_d, batch_obj,constraints=batch_constraints, x0=x0_batch, xf=xf_batch, N=N, dt=dt)
 
 u_ = [9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.]
-u_load = [0.;0.;9.81/num_lift]
+u_load = [0.;0.;-9.81/num_lift]
 initial_controls!(quad_batch, [[u_;u_load;u_;u_load;u_;u_load] for k = 1:N-1])
 # initial_controls!(doubleintegrator_batch, zeros(batch_model.m,N-1))
 
@@ -517,8 +517,6 @@ function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
     MeshCat.setanimation!(vis,anim)
 end
 
-vis = Visualizer()
-open(vis)
-visualize_batch_system(vis,quad_batch,actuated_models,load_model)
-
-# plot(doubleintegrator_batch.U,1:3)
+# vis = Visualizer()
+# open(vis)
+# visualize_batch_system(vis,quad_batch,actuated_models,load_model)
