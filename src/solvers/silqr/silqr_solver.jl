@@ -100,8 +100,8 @@ struct StaticiLQRSolver{T,N,M,NM,G,Q} <: AbstractSolver{T}
 
     ∇F::Vector{G}# discrete dynamics jacobian (block) (n,n+m+1,N)
 
-    S::Vector{Q} # Optimal cost-to-go expansion trajectory
-    Q::Vector{Q} # cost-to-go expansion trajectory
+    S::Q # Optimal cost-to-go expansion trajectory
+    Q::Q # cost-to-go expansion trajectory
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
@@ -126,8 +126,8 @@ function AbstractSolver(prob::Problem{T,D}, opts::StaticiLQRSolverOptions{T}) wh
 
     ∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
 
-    S = [@SMatrix zeros(T,n+m,n+m) for k = 1:N]
-    Q = [@SMatrix zeros(T,n+m,n+m) for k = 1:N]
+    S = StaticExpansion{T}(n,m,N)
+    Q = StaticExpansion{T}(n,m,N)
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)

@@ -36,6 +36,28 @@ function Expansion{T,Q,R}(n::Int, m::Int) where {T,Q,R}
 end
 Expansion{T}(n::Int, m::Int) where T = Expansion{T,Matrix{T},Matrix{T}}(n,m)
 
+struct StaticExpansion{T,N,M,L1,L2,L3}
+    x::Vector{SVector{N,T}}
+    u::Vector{SVector{M,T}}
+    xx::Vector{SMatrix{N,N,T,L1}}
+    uu::Vector{SMatrix{M,M,T,L2}}
+    ux::Vector{SMatrix{M,N,T,L3}}
+    function StaticExpansion{T}(n::Int,m::Int,N::Int) where T
+        x = [@SVector zeros(n) for k = 1:N]
+        u = [@SVector zeros(m) for k = 1:N]
+        xx = [@SMatrix zeros(n,n) for k = 1:N]
+        uu = [@SMatrix zeros(m,m) for k = 1:N]
+        ux = [@SMatrix zeros(m,n) for k = 1:N]
+        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    end
+end
+
+function Base.getindex(E::StaticExpansion,k::Int)
+    E.xx[k],E.uu[k],E.ux[k],E.x[k],E.u[k]
+end
+
+
+
 import Base./, Base.*
 function *(e::Expansion, a::Real)
     e.x .*= a
@@ -109,30 +131,29 @@ QuadraticCost(Q, q, c)
 ```
 Any optional or omitted values will be set to zero(s).
 """
-mutable struct QuadraticCost{T} <: CostFunction
-    Q::AbstractMatrix{T}                 # Quadratic stage cost for states (n,n)
-    R::AbstractMatrix{T}                 # Quadratic stage cost for controls (m,m)
-    H::AbstractMatrix{T}                 # Quadratic Cross-coupling for state and controls (n,m)
-    q::AbstractVector{T}                 # Linear term on states (n,)
-    r::AbstractVector{T}                 # Linear term on controls (m,)
+mutable struct QuadraticCost{TQ,TR,TH,Tq,Tr,T} <: CostFunction
+    Q::TQ                 # Quadratic stage cost for states (n,n)
+    R::TR                 # Quadratic stage cost for controls (m,m)
+    H::TH                 # Quadratic Cross-coupling for state and controls (n,m)
+    q::Tq                 # Linear term on states (n,)
+    r::Tr                 # Linear term on controls (m,)
     c::T                                 # constant term
-    function QuadraticCost(Q::AbstractMatrix{T}, R::AbstractMatrix{T}, H::AbstractMatrix{T},
-            q::AbstractVector{T}, r::AbstractVector{T}, c::T) where T
-        if !isposdef(R)
+    function QuadraticCost(Q::TQ, R::TR, H::TH,
+            q::Tq, r::Tr, c::T) where {TQ,TR,TH,Tq,Tr,T}
+        if !isposdef(Array(R))
             @warn "R is not positive definite"
         end
-        if !ispossemidef(Q)
+        if !ispossemidef(Array(Q))
             err = ArgumentError("Q must be positive semi-definite")
             throw(err)
         end
-
-        new{T}(Q,R,H,q,r,c)
+        new{TQ,TR,TH,Tq,Tr,T}(Q,R,H,q,r,c)
     end
 end
 
 get_sizes(cost::QuadraticCost) = (size(cost.Q,1),size(cost.R,1))
 
-function QuadraticCost(Q,R; H=zeros(size(R,1), size(Q,1)), q=zeros(size(Q,1)),
+function QuadraticCost(Q,R; H=similar(Q,size(R,1), size(Q,1)), q=zeros(size(Q,1)),
         r=zeros(size(R,1)), c=0.0)
     QuadraticCost(Q,R,H,q,r,c)
 end
@@ -141,6 +162,9 @@ function QuadraticCost(Q,q,c)
     QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c)
 end
 
+function Base.show(io::IO, cost::QuadraticCost)
+    print(io, "QuadraticCost{...}")
+end
 
 """
 $(SIGNATURES)
@@ -195,6 +219,20 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
     S.xx .= cost.Q
     S.x .= cost.Q*xN + cost.q
     return nothing
+end
+
+function cost_expansion(cost::QuadraticCost, x, u, dt)
+    return (
+        cost.Q*dt, cost.R*dt, cost.H*dt,
+        (cost.Q*x + cost.q)*dt, (cost.R*u + cost.r)*dt
+    )
+end
+
+function cost_expansion(cost::QuadraticCost, xN)
+    return (cost.Q, (cost.Q*x + cost.q),
+        # cost.Q*dt, cost.R*0, cost.H*0,
+        # (cost.Q*x + cost.q)*dt, cost.r*0
+    )
 end
 
 function gradient!(grad, cost::QuadraticCost,

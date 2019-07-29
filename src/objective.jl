@@ -12,8 +12,8 @@ Objective(cost, cost_term, N)
 Objective(costs::Vector{<:CostFunction}, cost_term)
 ```
 """
-struct Objective <: AbstractObjective
-    cost::CostTrajectory
+struct Objective{C} <: AbstractObjective
+    cost::Vector{C}
 end
 
 function Objective(cost::CostFunction,N::Int)
@@ -31,6 +31,8 @@ end
 import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]
+
+Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
 """```julia
 cost(obj::Objective, X::Vector, U::Vector, dt::Vector)
@@ -78,6 +80,22 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf:
 
     ℓ = QuadraticCost(Q, R, H, q, r, c)
     ℓN = QuadraticCost(Qf, qf, cf)
+
+    Objective([k < N ? ℓ : ℓN for k = 1:N])
+end
+
+function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int) where {T,S<:SVector}
+    n,m = size(Q,1), size(R,1)
+    H = @SMatrix zeros(m,n)
+    q = -Q*xf
+    r = @SVector zeros(m)
+    c = 0.5*xf'*Q*xf
+    qf = -Qf*xf
+    cf = 0.5*xf'*Qf*xf
+
+    ℓ = QuadraticCost(Q, R, H, q, r, c)
+
+    ℓN = QuadraticCost(Qf, R, H, qf, r, cf)
 
     Objective([k < N ? ℓ : ℓN for k = 1:N])
 end
