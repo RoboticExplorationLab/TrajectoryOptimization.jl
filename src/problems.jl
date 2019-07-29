@@ -22,6 +22,7 @@ include("../problems/car_3obs.jl")
 include("../problems/quadrotor.jl")
 include("../problems/quadrotor_maze.jl")
 include("../problems/kuka_obstacles.jl")
+include("../problems/quad_obs.jl")
 
 export
     doubleintegrator,
