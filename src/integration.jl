@@ -157,6 +157,16 @@ function rk3(f!::Function, dt::Float64)
    end
 end
 
+function rk3_nip(f::Function)
+       # Runge-Kutta 3 (zero order hold)
+   fd(x,u,dt) = begin
+       k1 = f(x, u)*dt;
+       k2 = f(x + k1/2, u)*dt;
+       k3 = f(x - k1 + 2*k2, u)*dt;
+       x + (k1 + 4*k2 + k3)/6
+   end
+end
+
 function rk3_uncertain(f!::Function, dt::Float64)
        # Runge-Kutta 3 (zero order hold)
    fd!(xdot,x,u,w,dt=dt) = begin

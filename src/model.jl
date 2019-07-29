@@ -207,6 +207,12 @@ function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorT
     end
 end
 
+function jacobian!(Z::Vector{<:SMatrix}, model::Model{M,Discrete}, X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
+    for k in eachindex(Z)
+        Z[k] = model.∇f(x,u,dt)
+    end
+end
+
 # Uncertain Dynamics
 function evaluate!(ẋ::AbstractVector,model::Model{Uncertain,Continuous},x::AbstractVector,u::AbstractVector)
     model.f(view(ẋ,1:model.n),x[1:model.n],u[1:model.m],zeros(model.r))
@@ -687,7 +693,7 @@ function is_inplace_dynamics(model::Model)::Bool
     is_inplace_dynamics(model.f,model.n,model.m,model.r)
 end
 
-function is_inplace_dynamics(f::Function,n::Int,m::Int,r::Int)::Bool
+function is_inplace_dynamics(f::Function,n::Int,m::Int,r::Int=0)::Bool
     x = rand(n)
     u = rand(m)
     xdot = rand(n)
@@ -711,6 +717,7 @@ function is_inplace_dynamics(f::Function,n::Int,m::Int,r::Int)::Bool
     end
     return true
 end
+
 """
 $(SIGNATURES)
 Makes the dynamics function `f(x,u)` appear to operate as an inplace operation of the
