@@ -232,6 +232,7 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     # rollout!(prob_load)
     solve!(prob_load,opts_al)
 
+    # return prob_lift, prob_load, 1, 1
     # generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
     U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
@@ -366,18 +367,20 @@ r_lift = 0.1
 r_load = 0.1
 
 # Control limits for lift robots
-u_lim = Inf*ones(m_lift)
-u_lim[1:3] .= 75.
-bnd1 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim)
+u_lim_u = Inf*ones(m_lift)
+u_lim_u[1:3] .= 9.81*2.
+u_lim_l = -Inf*ones(m_lift)
+u_lim_l[3] = 0.
+# bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
 
-x_lim_lift_l = -Inf*ones(n_lift)
-x_lim_lift_l[3] = 0.
-bnd2 = BoundConstraint(n_lift,m_lift,u_min=-1.0*u_lim,u_max=u_lim,x_min=x_lim_lift_l)
+# x_lim_lift_l = -Inf*ones(n_lift)
+# x_lim_lift_l[3] = 0.
+bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_lift_l)
 # bnd2 = BoundConstraint(n_lift,m_lift,x_min=x_lim_lift_l)
-
-x_lim_load_l = -Inf*ones(n_load)
-x_lim_load_l[3] = 0.
-bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_load_l)
+# u_lim_load_l = zeros(m_load)
+# x_lim_load_l = -Inf*ones(n_load)
+# x_lim_load_l[3] = 0.
+# bnd3 = BoundConstraint(n_load,m_load,u_min=u_lim_load_l,x_min=x_lim_load_l)
 
 
 # Obstacle constraints
@@ -471,12 +474,12 @@ N = 21
 dt = 0.1
 
 # objective
-Q_lift = [0.0e-2*Diagonal(I,n_lift), 0.0e-2*Diagonal(I,n_lift), 1.0e-2*Diagonal(I,n_lift)]
-Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),100.0*Diagonal(I,n_lift)]
+Q_lift = [1.0e-2*Diagonal(I,n_lift), 10.0e-2*Diagonal(I,n_lift), 0.1e-2*Diagonal(I,n_lift)]
+Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
 R_lift = 1.0e-4*Diagonal(I,m_lift)
 
-Q_load = 1.0e-2*Diagonal(I,n_load)
-Qf_load = 1.0*Diagonal(I,n_load)
+Q_load = 0.0*Diagonal(I,n_load)
+Qf_load = 0.0*Diagonal(I,n_load)
 R_load = 1.0e-4*Diagonal(I,m_load)
 
 obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
@@ -487,7 +490,7 @@ constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
     for k = 1:N-1
-        con[k] += obs_lift + bnd2
+        con[k] += obs_lift + bnd
     end
     con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
@@ -495,7 +498,7 @@ end
 
 constraints_load = Constraints(N)
 for k = 1:N-1
-    constraints_load[k] += obs_load + bnd3
+    constraints_load[k] += obs_load #+ bnd3
 end
 constraints_load[N] += goal_constraint(xloadf)
 
@@ -530,7 +533,7 @@ prob_load = Problem(doubleintegrator3D_load,
                 N=N,
                 dt=dt)
 
-verbose=false
+verbose=true
 opts_ilqr = iLQRSolverOptions(verbose=verbose,iterations=500)
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr,
@@ -543,12 +546,14 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 
-# max_violation(slift_al[3])
-# max_violation(sload_al)
 
-# plift_al[1]
 vis = Visualizer()
 open(vis)
 visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load)
-#
+
+
 plot(prob_lift[1].U,1:3)
+plot(prob_load.U,1:3)
+
+
+plift_al
