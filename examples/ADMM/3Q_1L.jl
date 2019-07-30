@@ -269,29 +269,27 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     X_load = deepcopy(prob_load.X)
     U_load = deepcopy(prob_load.U)
 
-    if admm_type == :sequential || admm_type == :parallel
-        cable_lift = [gen_lift_cable_constraints(X_load,
-                        U_load,
-                        i,
-                        n_lift,
-                        m_lift,
-                        d[i],
-                        n_slack) for i = 1:num_lift]
+    cable_lift = [gen_lift_cable_constraints(X_load,
+                    U_load,
+                    i,
+                    n_lift,
+                    m_lift,
+                    d[i],
+                    n_slack) for i = 1:num_lift]
 
-        cable_load = gen_load_cable_constraints(X_lift,U_lift,n_load,m_load,d,n_slack)
+    cable_load = gen_load_cable_constraints(X_lift,U_lift,n_load,m_load,d,n_slack)
 
-        self_col = [gen_self_collision_constraints(X_lift,i,n_lift,m_lift,r_lift,n_slack) for i = 1:num_lift]
+    self_col = [gen_self_collision_constraints(X_lift,i,n_lift,m_lift,r_lift,n_slack) for i = 1:num_lift]
 
-        for i = 1:num_lift
-            for k = 1:N
-                prob_lift[i].constraints[k] += cable_lift[i][k]
-                (k != 1 && k != N) ? prob_lift[i].constraints[k] += self_col[i][k] : nothing
-            end
-        end
-
+    for i = 1:num_lift
         for k = 1:N
-            prob_load.constraints[k] += cable_load[k]
+            prob_lift[i].constraints[k] += cable_lift[i][k]
+            (k != 1 && k != N) ? prob_lift[i].constraints[k] += self_col[i][k] : nothing
         end
+    end
+
+    for k = 1:N
+        prob_load.constraints[k] += cable_load[k]
     end
 
     # create augmented Lagrangian problems, solvers
@@ -304,6 +302,7 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
     end
+
     solver_load_al = AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
@@ -316,7 +315,6 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
-            copyto!(solver_lift_al[i].C_prev, solver_lift_al[i].C)
         end
 
         if admm_type == :parallel
@@ -330,6 +328,15 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
         solve_aula!(prob_load_al,solver_load_al)
         X_load .= prob_load_al.X
         U_load .= prob_load_al.U
+
+        # update lift constraints to evaluate convergence
+        for i = 1:num_lift
+            update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
+            update_active_set!(prob_lift_al[i].obj)
+        end
+
+        # update_constraints!(prob_load_al.obj.C,prob_load_al.obj.constraints, prob_load_al.X, prob_load_al.U)
+        # update_active_set!(prob_load_al.obj)
 
         # return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
         if max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al)) < opts.constraint_tolerance
@@ -456,7 +463,7 @@ u_lim_u[1:4] .= 9.81*(quad_params.m + 1.)/4.0
 bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_l)
 
 # Obstacle constraints
-r_cylinder = 0.85
+r_cylinder = 0.75
 
 _cyl = []
 
@@ -549,9 +556,9 @@ dt = 0.1
 q_diag = ones(n)
 # q_diag[4:7] .= 2.
 r_diag = ones(m)
-r_diag[1:4] .= 1.0e-6
+r_diag[1:4] .= 10.0e-3
 r_diag[5:7] .= 1.0e-6
-Q_lift = [1.0e-2*Diagonal(q_diag), 1.0e-2*Diagonal(q_diag), 1.0e-2*Diagonal(q_diag)]
+Q_lift = [0.1e-2*Diagonal(q_diag), 0.1e-2*Diagonal(q_diag), 0.1e-2*Diagonal(q_diag)]
 Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
 R_lift = Diagonal(r_diag)
 Q_load = 0.0*Diagonal(I,n_load)
@@ -590,7 +597,7 @@ U0_load = [-1.0*[u_load;u_load;u_load] for k = 1:N-1]
 prob_lift = [Problem(quadrotor_lift,
                 obj_lift[i],
                 U0_lift,
-                integration=:rk3,
+                integration=:midpoint,
                 constraints=constraints_lift[i],
                 x0=xlift0[i],
                 xf=xliftf[i],
@@ -601,7 +608,7 @@ prob_lift = [Problem(quadrotor_lift,
 prob_load = Problem(doubleintegrator3D_load,
                 obj_load,
                 U0_load,
-                integration=:rk3,
+                integration=:midpoint,
                 constraints=constraints_load,
                 x0=xload0,
                 xf=xloadf,
@@ -625,7 +632,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 #     resolve_feasible_problem=false,
 #     projected_newton=false)
 
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:parallel,opts_al)
 
 # max_violation(slift_al[3])
 # max_violation(sload_al)
@@ -634,6 +641,6 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 vis = Visualizer()
 open(vis)
 visualize_lift_system(vis,plift_al,pload_al,r_lift,r_load)
-
-plot(plift_al[1].U,1:3)
-plot(pload_al.U,1:3)
+#
+# plot(plift_al[1].U,1:3)
+# plot(pload_al.U,1:3)
