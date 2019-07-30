@@ -29,8 +29,11 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
-function visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=3)
+function visualize_lift_system(vis,probs, r_lift, r_load, n_slack=3)
+    prob_load = probs[1]
+    prob_lift = probs[2:end]
     num_lift = length(prob_lift)
+
 
     # camera angle
     settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
