@@ -13,9 +13,9 @@ function solve!(prob::Problem{T}, solver::iLQRSolver{T}) where T<:AbstractFloat
     live_plotting(prob,solver)
 
     J_prev = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))
-    record_iteration!(prob, solver, J_prev, Inf)
 
     with_logger(logger) do
+        record_iteration!(prob, solver, J_prev, Inf)
         for i = 1:solver.opts.iterations
             J = step!(prob, solver, J_prev)
 
