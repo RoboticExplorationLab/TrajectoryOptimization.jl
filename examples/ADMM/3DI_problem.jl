@@ -1,4 +1,5 @@
 include("methods.jl")
+include("models.jl")
 
 function build_lift_problem(x0, xf, Q, r_lift, _cyl, num_lift)
     # discretization

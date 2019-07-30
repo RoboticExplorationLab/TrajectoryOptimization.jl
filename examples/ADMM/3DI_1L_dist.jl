@@ -64,6 +64,7 @@ distributed = true
 if distributed
     probs = ddata(T=Problem{Float64,Discrete});
     @sync for i in workers()
+        j = i - 1
         @spawnat i probs[:L] = build_lift_problem(x0_lift[j], xf_lift[j], Q_lift[j], r_lift, _cyl, num_lift)
     end
     prob_load = build_load_problem(x0_load, xf_load, r_load, _cyl, num_lift)
