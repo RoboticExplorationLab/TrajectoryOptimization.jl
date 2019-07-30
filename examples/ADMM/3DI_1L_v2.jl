@@ -549,11 +549,8 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 vis = Visualizer()
 open(vis)
-visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load)
+visualize_lift_system(vis,plift_al,pload_al,r_lift,r_load)
 
 
 plot(prob_lift[1].U,1:3)
 plot(prob_load.U,1:3)
-
-
-plift_al
