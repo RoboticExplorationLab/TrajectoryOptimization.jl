@@ -54,7 +54,7 @@ function visualize_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=3)
 
     addcylinders!(vis,_cyl,3.)
 
-    anim = MeshCat.Animation(24)
+    anim = MeshCat.Animation(convert(Int,floor(1/prob_lift[1].dt)))
     for k = 1:prob_lift[1].N
         MeshCat.atframe(anim,vis,k) do frame
             # cables
@@ -245,6 +245,8 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     # rollout!(prob_load)
     solve!(prob_load,opts_al)
 
+    # return prob_lift, prob_load, 1, 1
+
     # initial rollout
     # for i = 1:num_lift
     #     # rollout!(prob_lift[i])
@@ -259,8 +261,6 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
     #     prob_load.X[k] = prob_load_al.X[k]
     #     k < N ? prob_load.U[k] = prob_load_al.U[k] : nothing
     # end
-
-    # return prob_lift, prob_load, 1, 1
 
     # generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
@@ -285,7 +285,7 @@ function solve_admm(prob_lift,prob_load,n_slack,admm_type,opts)
         for i = 1:num_lift
             for k = 1:N
                 prob_lift[i].constraints[k] += cable_lift[i][k]
-                # (k != 1 && k != N) ? prob_lift[i].constraints[k] += self_col[i][k] : nothing
+                (k != 1 && k != N) ? prob_lift[i].constraints[k] += self_col[i][k] : nothing
             end
         end
 
@@ -389,7 +389,7 @@ function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::Abstr
       w3 = u[3]
       w4 = u[4]
 
-      f_load = u[5:7]
+      u_slack = u[5:7]
 
       kf = params[:kf]; # 6.11*10^-8;
       F1 = kf*w1;
@@ -408,7 +408,7 @@ function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::Abstr
       ẋ[1:3] = v # velocity in world frame
       # ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
       ẋ[4:7] = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
-      ẋ[8:10] = g + (1/m)*(q*F + f_load) #acceleration in world frame
+      ẋ[8:10] = g + (1/m)*(q*F) + u_slack #acceleration in world frame
       ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
       return tau, omega, J, Jinv
 end
@@ -417,7 +417,7 @@ quad_params = (m=0.5,
              J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
              Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
              gravity=SVector(0,0,-9.81),
-             motor_dist=0.1750,
+             motor_dist=0.2,
              kf=1.0,
              km=0.0245)
 
@@ -450,13 +450,13 @@ r_load = 0.1
 u_lim_l = -Inf*ones(m_lift)
 u_lim_u = Inf*ones(m_lift)
 u_lim_l[1:4] .= 0.
-u_lim_u[1:4] .= 9.81*(quad_params.m + 1.)/4.0*1.5
-x_lim_l = -Inf*ones(n_lift)
-x_lim_l[3] = 0.
-bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l)
+u_lim_u[1:4] .= 9.81*(quad_params.m + 1.)/4.0
+# x_lim_l = -Inf*ones(n_lift)
+# x_lim_l[3] = 0.
+bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_l)
 
 # Obstacle constraints
-r_cylinder = 1.0
+r_cylinder = 0.85
 
 _cyl = []
 
@@ -524,16 +524,16 @@ x3f = copy(x30) + _shift
 
 xliftf = [x1f,x2f,x3f]
 
-xf_bnd_lift_u = [Inf*ones(n_lift) for i = 1:num_lift]
-xf_bnd_lift_l = [-Inf*ones(n_lift) for i = 1:num_lift]
-
-for i = 1:num_lift
-    xf_bnd_lift_u[i][1:10] = xliftf[i][1:10]
-    # xf_bnd_lift_u[i][8:10] = xliftf[i][1:3]
-    xf_bnd_lift_l[i][1:10] = xliftf[i][1:10]
-    # xf_bnd_lift_l[i][8:10] = xliftf[i][1:3]
-end
-xf_bnd = [BoundConstraint(n_lift,m_lift,x_min=xf_bnd_lift_l[i],x_max=xf_bnd_lift_u[i]) for i = 1:num_lift]
+# xf_bnd_lift_u = [Inf*ones(n_lift) for i = 1:num_lift]
+# xf_bnd_lift_l = [-Inf*ones(n_lift) for i = 1:num_lift]
+#
+# for i = 1:num_lift
+#     xf_bnd_lift_u[i][1:10] = xliftf[i][1:10]
+#     # xf_bnd_lift_u[i][8:10] = xliftf[i][1:3]
+#     xf_bnd_lift_l[i][1:10] = xliftf[i][1:10]
+#     # xf_bnd_lift_l[i][8:10] = xliftf[i][1:3]
+# end
+# xf_bnd = [BoundConstraint(n_lift,m_lift,x_min=xf_bnd_lift_l[i],x_max=xf_bnd_lift_u[i]) for i = 1:num_lift]
 
 d1 = norm(xloadf[1:3]-x1f[1:3])
 d2 = norm(xloadf[1:3]-x2f[1:3])
@@ -542,18 +542,18 @@ d3 = norm(xloadf[1:3]-x3f[1:3])
 d = [d1, d2, d3]
 
 # discretization
-N = 21
+N = 51
 dt = 0.1
 
 # objective
 q_diag = ones(n)
 # q_diag[4:7] .= 2.
 r_diag = ones(m)
-# r_diag[1:4] .= 1.0e-2
-# r_diag[5:7] .= 1.0e-6
+r_diag[1:4] .= 1.0e-6
+r_diag[5:7] .= 1.0e-6
 Q_lift = [1.0e-2*Diagonal(q_diag), 1.0e-2*Diagonal(q_diag), 1.0e-2*Diagonal(q_diag)]
-Qf_lift = [100.0*Diagonal(q_diag), 100.0*Diagonal(q_diag), 100.0*Diagonal(q_diag)]
-R_lift = 1.0e-3*Diagonal(r_diag)
+Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
+R_lift = Diagonal(r_diag)
 Q_load = 0.0*Diagonal(I,n_load)
 Qf_load = 0.0*Diagonal(I,n_load)
 R_load = 1.0e-6*Diagonal(I,m_load)
@@ -566,7 +566,7 @@ constraints_lift = []
 for i = 1:num_lift
     con = Constraints(N)
     for k = 1:N-1
-        con[k] += obs_lift# + bnd
+        con[k] += bnd + obs_lift
     end
     con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
@@ -634,5 +634,6 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 vis = Visualizer()
 open(vis)
 visualize_lift_system(vis,plift_al,pload_al,r_lift,r_load)
-#
-plot(plift_al[3].U,1:3)
+
+plot(plift_al[1].U,1:3)
+plot(pload_al.U,1:3)
