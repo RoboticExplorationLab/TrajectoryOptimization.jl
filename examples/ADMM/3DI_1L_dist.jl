@@ -94,76 +94,23 @@ end
 
 vis = Visualizer()
 open(vis)
-visualize_lift_system(vis, probs, r_lift, r_load)
+visualize_lift_system(vis, sol, r_lift, r_load)
 
 
-X_cache, U_cache, X_lift, U_lift = init_cache(probs);
-solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
-println(cost.(combine_problems(prob_load, probs)))
-
-solvers_al = AugmentedLagrangianSolver{Float64}[]
-for i = 1:num_lift
-    solver = AugmentedLagrangianSolver(probs[i],opts)
-    probs[i] = AugmentedLagrangianProblem(probs[i],solver)
-    push!(solvers_al, solver)
-end
-solver_load = AugmentedLagrangianSolver(prob_load, opts)
-prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
-for i = 1:num_lift
-    TO.solve_aula!(probs[i], solvers_al[i])
-end
-max_c = max_violation.(solvers_al)
-println(cost.(combine_problems(prob_load, probs)))
-println(max_c)
-for i = 1:num_lift
-    X_lift[i] .= probs[i].X
-    U_lift[i] .= probs[i].U
-end
-TO.solve_aula!(prob_load, solver_load)
-
-# create augmented Lagrangian problems, solvers
-solvers_al = ddata(T=AugmentedLagrangianSolver{Float64});
-@sync for w in workers()
-    @spawnat w begin
-        solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
-        probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
-    end
-end
-solver_load = AugmentedLagrangianSolver(prob_load, opts)
-prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
-future = fetch.([@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()])
-println(cost.(combine_problems(prob_load, probs)))
-max_c = fetch.([@spawnat w max_violation(solvers_al[:L]) for w in workers()])
-println(max_c)
-X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
-U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
-for i = 1:num_lift
-    X_lift[i] .= X_lift0[i]
-    U_lift[i] .= U_lift0[i]
-end
-TO.solve_aula!(prob_load, solver_load)
-max_violation(solver_load)
-
-
-max_c = maximum(max_violation.(solvers_al))
-max_c = max(max_c, max_violation(solver_load))
-
-
-# Solve with ADMM
 function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions)
-    # prob_load = copy(prob_load)
-    # probs = copy_probs(probs)
+    prob_load = copy(prob_load)
+    probs = copy_probs(probs)
     X_cache, U_cache, X_lift, U_lift = init_cache(probs)
     solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
     combine_problems(prob_load, probs)
 end
 
 function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts)
-    for i in workers()
-        @spawnat i solve!(probs[:L], opts_al)
-    end
+    # for i in workers()
+    #     @spawnat i solve!(probs[:L], opts)
+    # end
     futures = [@spawnat w solve!(probs[:L], opts_al) for w in workers()]
-    solve!(prob_load, opts_al)
+    solve!(prob_load, opts)
     wait.(futures)
 
     # Get trajectories
@@ -198,33 +145,34 @@ end
 
 function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts)
     num_lift = length(probs)
-
     for i = 1:num_lift
-        @timeit "solve" solve!(probs[i], opts)
+        solve!(probs[i], opts)
     end
     solve!(prob_load, opts)
 
-    # Get trajectories from solve
+    # Get trajectories
+    X_lift0 = [prob.X for prob in probs]
+    U_lift0 = [prob.U for prob in probs]
     for i = 1:num_lift
-        X_lift[i] .= deepcopy(probs[i].X)
-        U_lift[i] .= deepcopy(probs[i].U)
+        X_lift[i] .= X_lift0[i]
+        U_lift[i] .= U_lift0[i]
     end
     update_load_problem(prob_load, X_lift, U_lift, d)
 
     # Send trajectories
-    for i = 1:num_lift  # loop over agents
-        for j = 1:num_lift
-            i != j || continue
-            X_cache[i][j+1] .= X_lift[j]
+    for w = 2:4
+        for i = 2:4
+            X_cache[w-1][i] .= X_lift0[i-1]
+            U_cache[w-1][i] .= U_lift0[i-1]
         end
-        X_cache[i][1] .= deepcopy(prob_load.X)
+        X_cache[w-1][1] .= prob_load.X
+        U_cache[w-1][1] .= prob_load.U
     end
 
-    # Add constraints to problems
-    @timeit "update problem" begin
-        for i = 1:num_lift
-            update_lift_problem(probs[i], X_cache[i], U_cache[i], i, d[i], r_lift)
-        end
+    # Update lift problems
+    for w = 2:4
+        agent = w - 1
+        update_lift_problem(probs[agent], X_cache[agent], U_cache[agent], agent, d[agent], r_lift)
     end
 end
 
@@ -330,9 +278,10 @@ end
 copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 function copy_probs(probs::DArray)
     probs2 = ddata(T=eltype(probs))
-    @sync for prob in probs
-        probs2[:L] = copy(prob)
+    @sync for w in workers()
+        @spawnat w probs2[:L] = copy(probs[:L])
     end
+    return probs2
 end
 
 
