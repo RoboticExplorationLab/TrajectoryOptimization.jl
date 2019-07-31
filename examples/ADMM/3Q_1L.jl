@@ -4,6 +4,7 @@ using GeometryTypes
 using CoordinateTransformations
 using FileIO
 using MeshIO
+const TO = TrajectoryOptimization
 
 include("visualization.jl")
 include("methods.jl")
@@ -147,6 +148,18 @@ prob_load = Problem(doubleintegrator3D_load,
                 N=N,
                 dt=dt)
 
+# Obstacles
+r_cylinder = 0.75
+_cyl = []
+push!(_cyl,(5.,1.3,r_cylinder))
+push!(_cyl,(5.,-1.3,r_cylinder))
+
+r_lift = 0.2   # global variable
+r_load = 0.1
+
+prob_lift = [build_quad_problem(i) for i = 1:3]
+prob_load = build_quad_problem(:load)
+
 # Solver options
 verbose=false
 
@@ -162,6 +175,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
+
 # Solve
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:parallel,opts_al)
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
@@ -169,4 +183,4 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 # Visualize
 vis = Visualizer()
 open(vis)
-visualize_quadrotor_lift_system(vis,plift_al,pload_al,r_lift,r_load)
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], r_lift, r_load, _cyl)

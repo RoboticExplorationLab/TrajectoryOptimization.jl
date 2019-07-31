@@ -1,4 +1,6 @@
 function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
+    N = prob_load.N
+
     # Problem dimensions
     num_lift = length(prob_lift)
     n_lift = prob_lift[1].model.n
@@ -50,19 +52,19 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
     solver_lift_al = []
     prob_lift_al = []
     for i = 1:num_lift
-        solver = AbstractSolver(prob_lift[i],opts)
+        solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
 
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
     end
-    solver_load_al = AbstractSolver(prob_load,opts)
+    solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
     for ii = 1:opts.iterations
         # Solve lift agents
         for i = 1:num_lift
-            solve_aula!(prob_lift_al[i],solver_lift_al[i])
+            TO.solve_aula!(prob_lift_al[i],solver_lift_al[i])
 
             # Update constraints (sequentially)
             if admm_type == :sequential
@@ -80,7 +82,7 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
         end
 
         # Solve load
-        solve_aula!(prob_load_al,solver_load_al)
+        TO.solve_aula!(prob_load_al,solver_load_al)
 
         # Update constraints
         X_load .= prob_load_al.X
@@ -88,8 +90,8 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
 
         # Update lift constraints prior to evaluating convergence
         for i = 1:num_lift
-            update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
-            update_active_set!(prob_lift_al[i].obj)
+            TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
+            TO.update_active_set!(prob_lift_al[i].obj)
         end
 
         max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
@@ -280,7 +282,7 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
     end
 end
 
-function update_load_problem(prob, X_lift, U_lift, d)
+function update_load_problem(prob, X_lift, U_lift, d::Vector)
     n_load = prob.model.n
     m_load = prob.model.m
     n_slack = 3

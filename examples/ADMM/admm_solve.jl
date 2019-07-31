@@ -2,8 +2,8 @@
 function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
-    X_cache, U_cache, X_lift, U_lift = init_cache(probs)
-    solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
+    @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
+    @timeit "solve" solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
     combine_problems(prob_load, probs)
 end
 
@@ -22,6 +22,14 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
         X_lift[i] .= X_lift0[i]
         U_lift[i] .= U_lift0[i]
     end
+
+    # Update load problem constraints
+    xf_load = prob_load.xf
+    xf_lift = fetch.([@spawnat w probs[:L].xf for w in workers()])
+    d1 = norm(xf_load[1:3]-xf_lift[1][1:3])
+    d2 = norm(xf_load[1:3]-xf_lift[2][1:3])
+    d3 = norm(xf_load[1:3]-xf_lift[3][1:3])
+    d = [d1, d2, d3]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
     # Send trajectories
@@ -59,6 +67,14 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
         X_lift[i] .= X_lift0[i]
         U_lift[i] .= U_lift0[i]
     end
+
+    # Update Load problem constraints
+    xf_load = prob_load.xf
+    xf_lift = [prob.xf for prob in probs]
+    d1 = norm(xf_load[1:3]-xf_lift[1][1:3])
+    d2 = norm(xf_load[1:3]-xf_lift[2][1:3])
+    d3 = norm(xf_load[1:3]-xf_lift[3][1:3])
+    d = [d1, d2, d3]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
     # Send trajectories
@@ -118,6 +134,12 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
             X_cache[i][1] .= prob_load.X
         end
 
+        # Update lift constraints prior to evaluating convergence
+        for i = 1:num_lift
+            TO.update_constraints!(probs[i].obj.C, probs[i].obj.constraints, probs[i].X, probs[i].U)
+            TO.update_active_set!(probs[i].obj)
+        end
+
         max_c = maximum(max_violation.(solvers_al))
         max_c = max(max_c, max_violation(solver_load))
         println(max_c)
@@ -168,6 +190,15 @@ function solve_admm!(prob_load, prob::DArray, X_cache, U_cache, X_lift, U_lift, 
                 U_cache[:L][1] .= prob_load.U
             end
         end
+
+        # Update lift constraints prior to evaluating convergence
+        @sync for w in workers()
+            @spawnat w begin
+                TO.update_constraints!(probs[:L].obj.C, probs[:L].obj.constraints, probs[:L].X, probs[:L].U)
+                TO.update_active_set!(probs[:L].obj)
+            end
+        end
+
         max_c = maximum(fetch.([@spawnat w max_violation(solvers_al[:L]) for w in workers()]))
         max_c = max(max_c, max_violation(solver_load))
         println(max_c)
