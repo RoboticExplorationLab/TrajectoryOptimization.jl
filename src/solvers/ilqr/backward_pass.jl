@@ -149,12 +149,14 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
 
         Quu = Q[k].uu'*Q[k].uu
         _tmp = tmp1'*tmp1
-        try
-            tmp2 = cholesky(Quu - _tmp).U
-        catch
-            tmp = eigen(Quu - _tmp)
-            tmp2 = Diagonal(sqrt.(tmp.values))*tmp.vectors'
-        end
+        # try
+        #     tmp2 = cholesky(Quu - _tmp).U
+        # catch
+        #     tmp = eigen(Quu - _tmp)
+        #     tmp2 = Diagonal(sqrt.(tmp.values))*tmp.vectors'
+        # end
+
+        tmp2 = chol_minus(Q[k].uu,tmp1)
 
         S[k].xx .= chol_plus(Q[k].xx + tmp1*K[k],tmp2*K[k])
 
@@ -184,4 +186,13 @@ end
 
 function chol_plus!(A::AbstractMatrix{T},B::AbstractMatrix{T}) where T
     A .= qr([A;B]).R
+end
+
+#TODO
+function chol_minus(A,B)
+    AmB = Cholesky(copy(A),:U,0)
+    for i = 1:size(B,1)
+        lowrankdowndate!(AmB,B[i,:])
+    end
+    return AmB.U
 end
