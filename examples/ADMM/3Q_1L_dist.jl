@@ -46,4 +46,5 @@ end
 
 TimerOutputs.reset_timer!()
 @time sol = solve_admm(prob_load, probs, opts_al)
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
 TimerOutputs.DEFAULT_TIMER

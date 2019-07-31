@@ -47,6 +47,7 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     end
 
     # Update lift problems
+    r_lift = fetch(@spawnat 2 probs[:L].model.info[:radius])::Float64
     @sync for w in workers()
         agent = w - 1
         @spawnat w update_lift_problem(probs[:L], X_cache[:L], U_cache[:L], agent, d[agent], r_lift)
@@ -88,6 +89,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 
     # Update lift problems
+    r_lift = probs[1].model.info[:radius]::Float64
     for w = 2:4
         agent = w - 1
         update_lift_problem(probs[agent], X_cache[agent], U_cache[agent], agent, d[agent], r_lift)

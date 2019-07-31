@@ -11,6 +11,7 @@ function double_integrator_3D_dynamics_lift!(ẋ,x,u)
 end
 
 doubleintegrator3D_lift = Model(double_integrator_3D_dynamics_lift!,Dynamics.doubleintegrator3D.n,Dynamics.doubleintegrator3D.m + n_slack)
+doubleintegrator3D_lift.info[:radius] = 0.1
 
 # Double integrator load model
 function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
@@ -21,6 +22,7 @@ function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
 end
 
 doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,Dynamics.doubleintegrator3D.n,n_slack*num_lift)
+doubleintegrator3D_load.info[:radius] = 0.1
 
 # Quadrotor lift model
 include(joinpath(pwd(),"dynamics/quaternions.jl"))
@@ -73,3 +75,4 @@ quad_params = (m=0.5,
              km=0.0245)
 
 quadrotor_lift = Model(quadrotor_lift_dynamics!, 13, 7, quad_params)
+quadrotor_lift.info[:radius] = 0.2

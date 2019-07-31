@@ -34,6 +34,7 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
 
     cable_load = gen_load_cable_constraints(X_lift,U_lift,n_load,m_load,d,n_slack)
 
+    r_lift = prob_lift[1].model.info[:radius]::Float64
     self_col = [gen_self_collision_constraints(X_lift,i,n_lift,m_lift,r_lift,n_slack) for i = 1:num_lift]
 
     # Add system constraints to problems
