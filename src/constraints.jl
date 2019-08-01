@@ -146,7 +146,7 @@ struct BoundConstraint{T} <: AbstractConstraint{Inequality}
     label::Symbol
     active::NamedTuple{(:x_max, :u_max, :x_min, :u_min, :all, :x_all),NTuple{6,BitArray{1}}}
     inds::Vector{Vector{Int}}
-    part::NamedTuple{(:x_max, :u_max, :x_min, :u_min),NTuple{4,UnitRange{Int64}}}
+    part::NamedTuple{(:x_max, :u_max, :x_min, :u_min),NTuple{4,UnitRange{Int}}}
 end
 
 """$(SIGNATURES) Create a stage bound constraint

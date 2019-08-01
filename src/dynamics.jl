@@ -23,13 +23,13 @@ export
     car
 
 include("../dynamics/pendulum.jl")
-include("../dynamics/doublependulum.jl")
-include("../dynamics/acrobot.jl")
+# include("../dynamics/doublependulum.jl")
+# include("../dynamics/acrobot.jl")
 include("../dynamics/ballonbeam.jl")
 include("../dynamics/cartpole.jl")
 include("../dynamics/quadrotor.jl")
 include("../dynamics/quadrotor_euler.jl")
-include("../dynamics/kuka.jl")
+# include("../dynamics/kuka.jl")
 include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")
 

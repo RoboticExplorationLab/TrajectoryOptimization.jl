@@ -46,16 +46,16 @@ mutable struct ProjectedNewtonSolver{T} <: DirectSolver{T}
     V::PrimalDual{T}
     H::SparseMatrixCSC{T,Int}      # Cost Hessian
     g::Vector{T}                   # Cost gradient
-    Y::PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int64},BlockArrays.BlockSizes{2,NTuple{2,Vector{Int64}}}}      # Constraint Jacobian
-    y::PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}}                   # Constraint Violations
+    Y::PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int},BlockArrays.BlockSizes{2,NTuple{2,Vector{Int}}}}      # Constraint Jacobian
+    y::PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int,1}}}}                   # Constraint Violations
 
-    fVal::Vector{SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false}}
+    fVal::Vector{SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Vector{T},BlockArrays.BlockSizes{1,Tuple{Array{Int,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int}}},false}}
     # ∇F::Vector{PartedArray{T,2,SubArray{T,2,SparseMatrixCSC{T,Int},Tuple{UnitRange{Int},UnitRange{Int}},false}, P}} where P
     ∇F::PartedMatTrajectory{T}
-    C::Vector{PartedArrays.PartedArray{T,1,SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Array{T,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false},P} where P}
-    ∇C::Vector{PartedArrays.PartedArray{T,2,SubArray{T,2,BlockArrays.PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int64},BlockArrays.BlockSizes{2,NTuple{2,Array{Int64,1}}}},NTuple{2,BlockArrays.BlockSlice{BlockArrays.Block{1,Int64}}},false},P} where P}
-    a::PartedArrays.PartedArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},NamedTuple{(:primals, :duals),NTuple{2,UnitRange{Int64}}}}
-    active_set::Vector{SubArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int64,1}}}},Tuple{BlockArrays.BlockSlice{Block{1,Int64}}},false}}
+    C::Vector{PartedArrays.PartedArray{T,1,SubArray{T,1,BlockArrays.PseudoBlockArray{T,1,Array{T,1},BlockArrays.BlockSizes{1,Tuple{Array{Int,1}}}},Tuple{BlockArrays.BlockSlice{BlockArrays.Block{1,Int}}},false},P} where P}
+    ∇C::Vector{PartedArrays.PartedArray{T,2,SubArray{T,2,BlockArrays.PseudoBlockArray{T,2,SparseArrays.SparseMatrixCSC{T,Int},BlockArrays.BlockSizes{2,NTuple{2,Array{Int,1}}}},NTuple{2,BlockArrays.BlockSlice{BlockArrays.Block{1,Int}}},false},P} where P}
+    a::PartedArrays.PartedArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int,1}}}},NamedTuple{(:primals, :duals),NTuple{2,UnitRange{Int}}}}
+    active_set::Vector{SubArray{Bool,1,PseudoBlockArray{Bool,1,Array{Bool,1},BlockArrays.BlockSizes{1,Tuple{Array{Int,1}}}},Tuple{BlockArrays.BlockSlice{Block{1,Int}}},false}}
     parts::NamedTuple{(:primals,:duals),NTuple{2,UnitRange{Int}}}
 end
 

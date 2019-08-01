@@ -15,13 +15,13 @@ include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")
 include("../problems/parallel_park.jl")
 include("../problems/cartpole.jl")
-include("../problems/doublependulum.jl")
-include("../problems/acrobot.jl")
+# include("../problems/doublependulum.jl")
+# include("../problems/acrobot.jl")
 include("../problems/car_escape.jl")
 include("../problems/car_3obs.jl")
 include("../problems/quadrotor.jl")
 include("../problems/quadrotor_maze.jl")
-include("../problems/kuka_obstacles.jl")
+# include("../problems/kuka_obstacles.jl")
 
 export
     doubleintegrator,
