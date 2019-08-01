@@ -62,6 +62,37 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     cost_expansion!(Q[N],c[N],X[N])
 end
 
+function cost_expansion_sqrt!(Q::ExpansionTrajectory{T}, obj::Objective,
+        X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}, dt::Vector{T}) where T
+    cost_expansion_sqrt!(Q,obj.cost,X,U,dt)
+end
+
+function cost_expansion_sqrt!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
+        X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}, dt::Vector{T}) where T
+    N = length(X)
+    for k = 1:N-1
+        cost_expansion!(Q[k],c[k],X[k],U[k],dt[k])
+
+        try
+            Q[k].xx .= cholesky(Q[k].xx).U
+        catch PosDefException
+            error("State stage cost Hessian must be PD for sqrt backward pass")
+        end
+        try
+            Q[k].uu .= cholesky(Q[k].uu).U
+        catch PosDefException
+            error("Control stage cost Hessian must be PD for sqrt backward pass")
+        end
+    end
+    cost_expansion!(Q[N],c[N],X[N])
+
+    try
+        Q[N].xx .= cholesky(Q[N].xx).U
+    catch PosDefException
+        error("Terminal cost Hessian must be PD for sqrt backward pass")
+    end
+end
+
 @doc raw"""```julia
 LQRObjective(Q, R, Qf, xf, N)
 ```
