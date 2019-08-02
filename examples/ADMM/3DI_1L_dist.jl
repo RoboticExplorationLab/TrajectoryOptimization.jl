@@ -1,7 +1,9 @@
 using Distributed
 using DistributedArrays
 using TimerOutputs
-addprocs(3)
+if nworkers() != 3 
+	addprocs(3,exeflags="--project=$(@__DIR__)")
+end
 
 
 using TrajectoryOptimization
@@ -9,7 +11,7 @@ include("admm_solve.jl")
 @everywhere using TrajectoryOptimization
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
-@everywhere include("examples/ADMM/3DI_problem.jl")
+@everywhere include(joinpath(dirname(@__FILE__),"3DI_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
 
 
@@ -29,25 +31,29 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 opts = opts_al
 
-distributed = true
-distributed = false
-if distributed
-    probs = ddata(T=Problem{Float64,Discrete});
-    @sync for i in workers()
-        j = i - 1
-        @spawnat i probs[:L] = build_DI_problem(j)
-    end
-    prob_load = build_DI_problem(:load)
-else
-    probs = Problem{Float64,Discrete}[]
-    prob_load = build_DI_problem(:load)
-    for i = 1:num_lift
-        push!(probs, build_DI_problem(i))
-    end
+function init_DI(distributed=true)
+	if distributed
+	    probs = ddata(T=Problem{Float64,Discrete});
+	    @sync for i in workers()
+		j = i - 1
+		@spawnat i probs[:L] = build_DI_problem(j)
+	    end
+	    prob_load = build_DI_problem(:load)
+	else
+	    probs = Problem{Float64,Discrete}[]
+	    prob_load = build_DI_problem(:load)
+	    for i = 1:num_lift
+		push!(probs, build_DI_problem(i))
+	    end
+	end
+	return probs, prob_load
 end
+probs, prob_load = init_DI(true)
 
-@time sol = solve_admm(prob_load, probs, opts_al)
+if false
+	@time sol = solve_admm(prob_load, probs, opts_al)
 
-vis = Visualizer()
-open(vis)
-visualize_lift_system(vis, sol, r_lift, r_load)
+	vis = Visualizer()
+	open(vis)
+	visualize_lift_system(vis, sol, r_lift, r_load)
+end

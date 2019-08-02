@@ -11,21 +11,6 @@ function build_DI_problem(agent)
     m_lift = Dynamics.doubleintegrator3D.m + n_slack
 
     #~~~~~~~~~~~~~ DYNAMICS ~~~~~~~~~~~~~~~~#
-    function double_integrator_3D_dynamics_lift!(ẋ,x,u) where T
-        u_input = u[1:3]
-        u_slack = u[4:6]
-        Dynamics.double_integrator_3D_dynamics!(ẋ,x,u_input+u_slack)
-    end
-
-    doubleintegrator3D_lift = Model(double_integrator_3D_dynamics_lift!,n_lift,m_lift)
-
-    function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
-        u_slack1 = u[1:3]
-        u_slack2 = u[4:6]
-        u_slack3 = u[7:9]
-        Dynamics.double_integrator_3D_dynamics!(ẋ,x,u_slack1+u_slack2+u_slack3)
-    end
-
     n_load = Dynamics.doubleintegrator3D.n
     m_load = n_slack*num_lift
     doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,n_load,m_load)

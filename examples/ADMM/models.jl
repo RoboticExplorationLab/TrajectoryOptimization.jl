@@ -25,7 +25,7 @@ doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,Dynamics.dou
 doubleintegrator3D_load.info[:radius] = 0.1
 
 # Quadrotor lift model
-include(joinpath(pwd(),"dynamics/quaternions.jl"))
+include(joinpath(dirname(@__FILE__),"../../dynamics/quaternions.jl"))
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
       q = normalize(Quaternion(view(x,4:7)))
       v = view(x,8:10)

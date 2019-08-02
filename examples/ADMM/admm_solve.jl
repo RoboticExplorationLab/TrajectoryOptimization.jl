@@ -47,9 +47,8 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     end
 
     # Update lift problems
-    r_lift = fetch(@spawnat 2 probs[:L].model.info[:radius])::Float64
-    @sync for w in workers()
-        agent = w - 1
+    r_lift = fetch(@spawnat workers()[1] probs[:L].model.info[:radius])::Float64
+    @sync for (agent,w) in enumerate(workers())
         @spawnat w update_lift_problem(probs[:L], X_cache[:L], U_cache[:L], agent, d[agent], r_lift)
     end
 end
@@ -100,9 +99,11 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     num_left = length(probs) - 1
 
     # Solve the initial problems
+	println("Solving initial problems...")
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
 
     # create augmented Lagrangian problems, solvers
+	@info "Setting up solvers..."
     solvers_al = AugmentedLagrangianSolver{Float64}[]
     for i = 1:num_lift
         solver = AugmentedLagrangianSolver(probs[i],opts)
@@ -114,11 +115,13 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
     for ii = 1:opts.iterations
         # Solve each AL problem
+    	@info "Solving AL problems..."	
         for i = 1:num_lift
             TO.solve_aula!(probs[i], solvers_al[i])
         end
 
         # Get trajectories
+		@info "Solving load problem..."
         for i = 1:num_lift
             X_lift[i] .= probs[i].X
             U_lift[i] .= probs[i].U
@@ -128,6 +131,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
         TO.solve_aula!(prob_load, solver_load)
 
         # Send trajectories
+		@info "Sending trajectories..."
         for i = 1:num_lift  # loop over agents
             for j = 1:num_lift
                 i != j || continue
@@ -137,6 +141,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
         end
 
         # Update lift constraints prior to evaluating convergence
+		@info "Updating constraints..."
         for i = 1:num_lift
             TO.update_constraints!(probs[i].obj.C, probs[i].obj.constraints, probs[i].X, probs[i].U)
             TO.update_active_set!(probs[i].obj)
@@ -151,10 +156,12 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 end
 
-function solve_admm!(prob_load, prob::DArray, X_cache, U_cache, X_lift, U_lift, opts)
+function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts)
+    @info "Solving initial problems..."
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
 
     # create augmented Lagrangian problems, solvers
+    @info "Setting up Solvers..."	
     solvers_al = ddata(T=AugmentedLagrangianSolver{Float64});
     @sync for w in workers()
         @spawnat w begin
@@ -167,10 +174,12 @@ function solve_admm!(prob_load, prob::DArray, X_cache, U_cache, X_lift, U_lift, 
 
     for ii = 1:opts.iterations
         # Solve each AL lift problem
+		@info "Solving AL lift problems..."
         future = [@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()]
         wait.(future)
 
         # Get trajectories
+	("Solving load AL problem...")
         X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
         U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
         for i = 1:num_lift
@@ -180,6 +189,7 @@ function solve_admm!(prob_load, prob::DArray, X_cache, U_cache, X_lift, U_lift, 
         TO.solve_aula!(prob_load, solver_load)
 
         # Send trajectories
+		@info "Sending trajectories back..."
         @sync for w in workers()
             for i = 2:4
                 @spawnat w begin
@@ -194,6 +204,7 @@ function solve_admm!(prob_load, prob::DArray, X_cache, U_cache, X_lift, U_lift, 
         end
 
         # Update lift constraints prior to evaluating convergence
+		@info "Updating constraints"
         @sync for w in workers()
             @spawnat w begin
                 TO.update_constraints!(probs[:L].obj.C, probs[:L].obj.constraints, probs[:L].X, probs[:L].U)
