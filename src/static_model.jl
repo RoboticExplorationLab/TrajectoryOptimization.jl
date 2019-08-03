@@ -21,9 +21,8 @@ end
 function SModel{Continuous}(f::Function,n,m,params)
     f_(x,u) = f(x,u,params)
     ∇f = generate_jacobian_nip(f_,n,m)
-    params = NamedTuple()
     info = Dict{Symbol,Any}()
-    SModel{Continuous}(f,∇f,n,m,params,info)
+    SModel{Continuous}(f_,∇f,n,m,params,info)
 end
 
 # Discrete Model Constructors
@@ -84,6 +83,22 @@ function generate_jacobian_nip(f,n,m)
     return ∇f
 end
 
+function generate_jacobian_nip(f,ix::SVector,iu::SVector)
+    f_aug(z,ix,iu) = fc(z[ix],z[iu])
+    f_aug(z) = let ix_=ix, iu_=iu
+        f_aug(z,ix_,iu_)
+    end
+    ∇f(z) = ForwardDiff.jacobian(f_aug,z)
+    ∇f(x::SVector,u::SVector) = ∇f([x;u])
+    z = zeros(n+m)
+    ∇f(x,u) = begin
+        z[ix] = x
+        z[iu] = u
+        ∇f(z)
+    end
+    return ∇f
+end
+
 function generate_jacobian_nip(f,n,m,dt)
     ix = 1:n
     iu = n .+ (1:m)
@@ -99,4 +114,46 @@ function generate_jacobian_nip(f,n,m,dt)
         ∇f(z)
     end
     return ∇f
+end
+
+
+function generate_jacobian(model::M) where {M<:AbstractModel}
+    ix,iu = 1:n, n .+ (1:m)
+    f_aug(z) = dynamics(model, view(z,ix), view(z,iu))
+    ∇f(z) = ForwardDiff.jacobian(f_aug,z)
+    ∇f(x::SVector,u::SVector) = ∇f([x;u])
+    ∇f(x,u) = begin
+        z = zeros(n+m)
+        z[ix] = x
+        z[iu] = u
+        ∇f(z)
+    end
+    @eval begin
+        jacobian(model::$(M), x, u) = $(∇f)(x, u)
+        jacobian(model::$(M), z) = $(∇f)(z)
+    end
+end
+
+
+macro generate_jacobian(model)
+    ix,iu = 1:n, n .+ (1:m)
+    f = dynamics()
+    f_aug(z) = f(view(z,ix), view(z,iu))
+    ∇f(z) = ForwardDiff.jacobian(f_aug,z)
+    ∇f(x::SVector,u::SVector) = ∇f([x;u])
+    ∇f(x,u) = begin
+        z = zeros(n+m)
+        z[ix] = x
+        z[iu] = u
+        ∇f(z)
+    end
+    @eval begin
+        jacobian(model::$(model), x::AbstractVector, u::AbstractVector) = $(∇f)(x,u)
+    end
+end
+
+macro augment(f,ix,iu)
+    quote
+        $(f)(z[$(ix)], z[$(iu)])
+    end
 end

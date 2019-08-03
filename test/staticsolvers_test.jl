@@ -7,24 +7,38 @@ model = continuous(prob.model)
 model_d = rk3(model)
 n,m,N = size(prob)
 dt = prob.dt
-
-params = Dynamics.quad_params
-
-fc(x,u) = Dynamics.quadrotor_dynamics(x,u,params)
-∇fc = generate_jacobian_nip(fc,n,m)
-quad = SModel{Continuous}(fc,n,m)
+ix = 1:n
+iu = n .+ (1:m)
+const ix_ = @SVector [i for i = ix]
+const iu_ = @SVector [i for i = iu]
 
 # Random inputs
 xs,us = (@SVector rand(n)), (@SVector rand(m))
 x,u = Array(xs), Array(us)
 
+
+quad_ = Dynamics.Quadrotor()
+dynamics(quad_,x,u)
+jacobian(quad_,x,u)
+generate_jacobian(quad_)
+jacobian(quad_,x,u)
+
+fc(x,u) = Dynamics.quadrotor_dynamics(x,u,Dynamics.quadrotor_params)
+∇fc = generate_jacobian_nip(fc, n, m)
+∇fc2 = generate_jacobian_nip(fc, ix_, iu_)
+quad = SModel{Continuous}(fc,n,m)
+
+
 # Continuous time
 fc(x,u) ≈ dynamics(quad, x, u)
+fc(x,u) ≈ dynamics(quad_, x, u)
 xdot = zeros(n)
 model.f(xdot,x,u)
 fc(x,u) ≈ xdot
 
 ∇fc(x,u) ≈ jacobian(quad,x,u)
+∇fc(x,u) ≈ ∇fc2(x,u)
+∇fc(x,u) ≈ jacobian(quad_,x,u)
 Z = zeros(n,n+m)
 jacobian!(Z,model,x,u)
 Z ≈ ∇fc(x,u)
@@ -33,11 +47,12 @@ Z ≈ ∇fc(x,u)
 @btime fc($x,$u)
 @btime dynamics($quad,$x,$u)
 @btime dynamics($quad,$xs,$us)
+@btime dynamics($quad_,$xs,$us)
 
 @btime jacobian!($Z,$model,$x,$u)
-@btime ∇fc($x,$u)
 @btime jacobian($quad,$x,$u)
 @btime jacobian($quad,$xs,$us)
+@btime jacobian($quad_,$xs,$us)
 
 
 # Discrete Time
@@ -158,6 +173,8 @@ jacobian!(silqr.∇F, quad_d, X, U, Dt)
 cost_expansion!(r0, silqr)
 Juno.@enter backwardpass!(prob, silqr)
 
+J_prev = cost(r0)
+
 jacobian!(silqr.∇F, quad_d, X, U, Dt)
 jacobian!(r0, ilqr)
 silqr.∇F ≈ s0.∇F
@@ -171,8 +188,13 @@ all([silqr.Q[k].x == ilqr.Q[k].x for k = 1:N])
 all([silqr.Q[k].u == ilqr.Q[k].u for k = 1:N-1])
 
 backwardpass!(r0, silqr) ≈ backwardpass!(r0, ilqr)
-@btime backwardpass!($r0, $ilqr)
-@btime backwardpass!($r0, $silqr)
+
+cost_expansion!(r0, silqr)
+∇V = backwardpass!(r0, silqr)
+forwardpass!(r0, ilqr, ∇V, J_prev)
+forwardpass!(r0, silqr, ∇V, J_prev)
+
+
 
 for k = 1:N
     silqr.Q.xx[k]

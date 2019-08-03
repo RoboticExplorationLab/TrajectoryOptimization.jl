@@ -75,3 +75,7 @@ function deriv_conj(q::Quaternion, r::AbstractVector)
     j3 = v*r' + I*v'r - 2s*skew(r) - skew(v)*skew(r) - skew(skew(v)*r)
     return [j2 j3]
 end
+
+function deriv(q::Quaternion, ω::AbstractVector)
+    SVector(0.5*q*Quaternion(zero(eltype(ω)), ω))
+end
