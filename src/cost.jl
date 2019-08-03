@@ -36,21 +36,36 @@ function Expansion{T,Q,R}(n::Int, m::Int) where {T,Q,R}
 end
 Expansion{T}(n::Int, m::Int) where T = Expansion{T,Matrix{T},Matrix{T}}(n,m)
 
-struct StaticExpansion{T,N,M,L1,L2,L3}
-    x::Vector{SVector{N,T}}
-    u::Vector{SVector{M,T}}
-    xx::Vector{SMatrix{N,N,T,L1}}
-    uu::Vector{SMatrix{M,M,T,L2}}
-    ux::Vector{SMatrix{M,N,T,L3}}
+mutable struct StaticExpansion{T,N,M,L1,L2,L3}
+    x::SVector{N,T}
+    u::SVector{M,T}
+    xx::SMatrix{N,N,T,L1}
+    uu::SMatrix{M,M,T,L2}
+    ux::SMatrix{M,N,T,L3}
     function StaticExpansion{T}(n::Int,m::Int,N::Int) where T
-        x = [@SVector zeros(n) for k = 1:N]
-        u = [@SVector zeros(m) for k = 1:N]
-        xx = [@SMatrix zeros(n,n) for k = 1:N]
-        uu = [@SMatrix zeros(m,m) for k = 1:N]
-        ux = [@SMatrix zeros(m,n) for k = 1:N]
+        x = @SVector zeros(n)
+        u = @SVector zeros(m)
+        xx = @SMatrix zeros(n,n)
+        uu = @SMatrix zeros(m,m)
+        ux = @SMatrix zeros(m,n)
+        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    end
+    function StaticExpansion(x::SVector, xx::SMatrix, m::Int)
+        n = length(x)
+        u = @SVector zeros(m)
+        uu = @SMatrix zeros(m,m)
+        ux = @SMatrix zeros(m,n)
+        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    end
+    function StaticExpansion(x::SVector{n,T},u::SVector{m,T},xx,uu,ux) where {n,m,T}
+        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    end
+    function StaticExpansion(x,u,xx,uu,ux::SMatrix{m,n,T}) where {n,m,T}
         new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
     end
 end
+
+
 
 function Base.getindex(E::StaticExpansion,k::Int)
     E.xx[k],E.uu[k],E.ux[k],E.x[k],E.u[k]
@@ -221,18 +236,19 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
     return nothing
 end
 
-function cost_expansion(cost::QuadraticCost, x, u, dt)
-    return (
-        cost.Q*dt, cost.R*dt, cost.H*dt,
-        (cost.Q*x + cost.q)*dt, (cost.R*u + cost.r)*dt
-    )
+function cost_expansion!(E::StaticExpansion, cost::QuadraticCost, x, u, dt)
+    E.xx = cost.Q*dt
+    E.uu = cost.R*dt
+    E.ux = cost.H*dt
+    E.x = (cost.Q*x + cost.q)*dt
+    E.u = (cost.R*u + cost.r)*dt
+    return nothing
 end
 
-function cost_expansion(cost::QuadraticCost, xN)
-    return (cost.Q, (cost.Q*x + cost.q),
-        # cost.Q*dt, cost.R*0, cost.H*0,
-        # (cost.Q*x + cost.q)*dt, cost.r*0
-    )
+function cost_expansion!(E::StaticExpansion, cost::QuadraticCost, xN)
+    E.xx = cost.Q
+    E.x = cost.Q*xN + cost.q
+    return nothing
 end
 
 function gradient!(grad, cost::QuadraticCost,

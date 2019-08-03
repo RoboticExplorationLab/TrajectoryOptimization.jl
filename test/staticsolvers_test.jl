@@ -1,3 +1,4 @@
+using StaticArrays, LinearAlgebra
 
 max_con_viol = 1.0e-8
 verbose=false
@@ -40,7 +41,6 @@ Z ≈ ∇fc(x,u)
 
 
 # Discrete Time
-dt = 0.1
 quad_d = discretize(quad,:rk3_nip)
 fd = rk3_nip(fc)
 
@@ -85,6 +85,7 @@ S isa SMatrix  # TODO: fix this
 
 # Solve the problem using the old method
 prob = copy(Problems.quad_obs)
+dt = prob.dt
 opts_ilqr = iLQRSolverOptions()
 r0,s0 = solve(prob,opts_ilqr)
 Dt = ones(N)*dt
@@ -106,19 +107,27 @@ Q = (1.0e-3)*Diagonal(@SVector ones(n))
 R = (1.0e-2)*Diagonal(@SVector ones(m))
 Qf = 1.0*Diagonal(@SVector ones(n))
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
+mycost = obj[1]
+Qx = mycost.Q*x
+Qu = mycost.R*u
+Qxx = mycost.Q
+Quu = mycost.R
+Qux = mycost.H
+E = StaticExpansion(Qx,Qu,Qxx,Quu,Qux)
+
+mycost.Q*xs
+mycost.Q*x
+@which StaticExpansion(mycost.Q*x + mycost.q, mycost.R*u + mycost.r, mycost.Q, mycost.R, mycost.H)
 @btime cost($prob.obj, $r0.X, $r0.U, get_dt_traj($prob))
 @btime cost($obj, $r0.X, $r0.U, get_dt_traj($prob))  # much faster
 
 # Cost Expansions
 E = StaticExpansion{Float64}(n,m,N)
-E.xx[1], E.uu[1], E.ux[1], E.x[1], E.u[1] = cost_expansion(obj[1],x,u,dt)
-E[1] = cost_expansion(obj[1],x,u,dt)
-
 
 
 opts = StaticiLQRSolverOptions()
 silqr = StaticiLQRSolver(prob,opts)
-silqr.S.x
+silqr.S[1].x
 cost_expansion!(r0, silqr)
 cost_expansion!(r0, s0)
 @btime cost_expansion!($r0, $s0)
@@ -127,7 +136,7 @@ cost_expansion!(r0, s0)
 
 
 # Test Jacobians
-prob_ = update_problem(prob, objective=obj)
+prob_ = update_problem(prob, obj=obj)
 Zs = [@SMatrix zeros(n,n+m+1) for k = 1:N-1]
 Z = s0.∇F
 Dt = ones(N)*dt
@@ -142,19 +151,31 @@ jacobian!(Z,model_d,X,U,Dt)
 
 
 # iLQR
-
+ilqr = s0
 opts = StaticiLQRSolverOptions()
 silqr = StaticiLQRSolver(prob, opts)
 jacobian!(silqr.∇F, quad_d, X, U, Dt)
 cost_expansion!(r0, silqr)
 Juno.@enter backwardpass!(prob, silqr)
-silqr.K[N-1]
-s0.K[N-1]
+
+jacobian!(silqr.∇F, quad_d, X, U, Dt)
+jacobian!(r0, ilqr)
+silqr.∇F ≈ s0.∇F
 
 cost_expansion!(r0, silqr)
-backwardpass!(r0, silqr)
-cost_expansion!(r0, s0)
-backwardpass!(r0, s0)
+cost_expansion!(r0, ilqr)
+all([silqr.Q[k].xx == ilqr.Q[k].xx for k = 1:N])
+all([silqr.Q[k].uu == ilqr.Q[k].uu for k = 1:N-1])
+all([silqr.Q[k].ux == ilqr.Q[k].ux for k = 1:N-1])
+all([silqr.Q[k].x == ilqr.Q[k].x for k = 1:N])
+all([silqr.Q[k].u == ilqr.Q[k].u for k = 1:N-1])
+
+backwardpass!(r0, silqr) ≈ backwardpass!(r0, ilqr)
+@btime backwardpass!($r0, $ilqr)
+@btime backwardpass!($r0, $silqr)
+
+for k = 1:N
+    silqr.Q.xx[k]
 
 @btime begin
     cost_expansion!($r0, $silqr)

@@ -58,16 +58,14 @@ function cost_expansion!(prob::Problem{T}, solver::StaticiLQRSolver{T}) where T
     N = prob.N
     X,U,Dt = prob.X, prob.U, get_dt_traj(prob)
     for k in eachindex(U)
-        E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
-            cost_expansion(prob.obj[k], X[k], U[k], Dt[k])
+        cost_expansion!(E[k], prob.obj[k], X[k], U[k], Dt[k])
     end
-    E.xx[N], E.x[N] =
-        cost_expansion(prob.obj[N], X[N])
+    cost_expansion!(E[N], prob.obj[N], X[N])
     nothing
 end
 
 function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
-    N = prob.N
+    n,m,N = size(prob)
 
     # Objective
     obj = prob.obj
@@ -78,25 +76,26 @@ function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
     Q = solver.Q
 
     # Terminal cost-to-go
-    S.xx[N] = Q.xx[N]
-    S.x[N] = Q.x[N]
+    S[N].xx = copy(Q[N].xx)
+    S[N].x = copy(Q[N].x)
 
     # Initialize expected change in cost-to-go
     ΔV = zeros(2)
 
-    ix = @SVector [i for i = 1:n]
-    iu = @SVector [i for i = 1:m]
+    # ix = @SVector [i for i = 1:n]
+    # iu = @SVector [i for i = 1:m]
+    ix, iu = 1:n, n .+ (1:m)
 
     # Backward pass
     k = N-1
     while k >= 1
         fdx, fdu = solver.∇F[k][ix,ix], solver.∇F[k][ix,iu]
 
-        Q.x[k] += fdx'*S.x[k+1]
-        Q.u[k] += fdu'*S.x[k+1]
-        Q.xx[k] += fdx'*S.xx[k+1]*fdx
-        Q.uu[k] += fdu'*S.xx[k+1]*fdu
-        Q.ux[k] += fdu'*S.xx[k+1]*fdx
+        Q[k].x += fdx'*S[k+1].x
+        Q[k].u += fdu'*S[k+1].x
+        Q[k].xx += fdx'*S[k+1].xx*fdx
+        Q[k].uu += fdu'*S[k+1].xx*fdu
+        Q[k].ux += fdu'*S[k+1].xx*fdx
 
         if solver.opts.bp_reg_type == :state
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*fdu'*fdu,check=false)
@@ -104,8 +103,8 @@ function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
             Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Q.uu[k] + solver.ρ[1]*Diagonal(ones(prob.model.m))
-            Qux_reg = Q.ux[k]
+            Quu_reg = Q[k].uu + solver.ρ[1]*Diagonal(ones(prob.model.m))
+            Qux_reg = Q[k].ux
         end
 
 
@@ -127,16 +126,16 @@ function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
 
         # Compute gains
         K[k] = -1.0*(Quu_reg\Qux_reg)
-        d[k] = -1.0*(Quu_reg\Q.u[k])
+        d[k] = -1.0*(Quu_reg\Q[k].u)
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        S.x[k]  = Q.x[k] + K[k]'*Q.uu[k]*d[k] + K[k]'*Q.u[k] + Q.ux[k]'*d[k]
-        S.xx[k] = Q.xx[k] + K[k]'*Q.uu[k]*K[k] + K[k]'*Q.ux[k] + Q.ux[k]'*K[k]
-        S.xx[k] = 0.5*(S.xx[k] + S.xx[k]')
+        S[k].x  =  Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'* Q[k].u + Q[k].ux'*d[k]
+        S[k].xx = Q[k].xx + K[k]'*Q[k].uu*K[k] + K[k]'*Q[k].ux + Q[k].ux'*K[k]
+        S[k].xx = 0.5*(S[k].xx + S[k].xx')
 
         # calculated change is cost-to-go over entire trajectory
-        ΔV[1] += d[k]'*Q.u[k]
-        ΔV[2] += 0.5*d[k]'*Q.uu[k]*d[k]
+        ΔV[1] += d[k]'*Q[k].u
+        ΔV[2] += 0.5*d[k]'*Q[k].uu*d[k]
 
         k = k - 1;
     end

@@ -126,8 +126,8 @@ function AbstractSolver(prob::Problem{T,D}, opts::StaticiLQRSolverOptions{T}) wh
 
     ∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
 
-    S = StaticExpansion{T}(n,m,N)
-    Q = StaticExpansion{T}(n,m,N)
+    S = [StaticExpansion{T}(n,m,N) for k=1:N]
+    Q = [StaticExpansion{T}(n,m,N) for k=1:N]
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
