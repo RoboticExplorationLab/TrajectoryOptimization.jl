@@ -45,7 +45,7 @@ function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:Abstr
     return solver
 end
 
-function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
+function step!(prob::Problem{T}, solver::StaticiLQRSolver{T}, J::T) where T
     to = solver.stats[:timer]
     @timeit to "jacobians" jacobian!(prob,solver)   # TODO: rename this to dynamics jacobian
     @timeit to "cost expansion" cost_expansion!(prob,solver)
@@ -144,4 +144,123 @@ function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
     # regularization_update!(solver,:decrease)
 
     return ΔV
+end
+
+"""
+$(SIGNATURES)
+Propagate dynamics with a line search (in-place)
+"""
+function forwardpass!(prob::Problem, solver::StaticiLQRSolver, ΔV::Array, J_prev::Float64)
+    # Pull out values from results
+    X = prob.X; U = prob.U; X̄ = solver.X̄; Ū = solver.Ū
+
+    J = Inf
+    alpha = 1.0
+    iter = 0
+    z = -1.
+    expected = 0.
+
+    logger = current_logger()
+    to = solver.stats[:timer]
+    # @logmsg InnerIters :iter value=0
+    # @logmsg InnerIters :cost value=J_prev
+    while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
+
+        # Check that maximum number of line search decrements has not occured
+        if iter > solver.opts.iterations_linesearch
+            # set trajectories to original trajectory
+            copyto!(X̄,X)
+            copyto!(Ū,U)
+
+            J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))
+
+            z = 0.
+            alpha = 0.0
+            expected = 0.
+
+            # @logmsg InnerLoop "Max iterations (forward pass)"
+            regularization_update!(solver,:increase) # increase regularization
+            solver.ρ[1] += solver.opts.bp_reg_fp
+            break
+        end
+
+        # Otherwise, rollout a new trajectory for current alpha
+        @timeit to "rollout" flag = rollout!(prob,solver,alpha)
+
+        # Check if rollout completed
+        if ~flag
+            # Reduce step size if rollout returns non-finite values (NaN or Inf)
+            # @logmsg InnerIters "Non-finite values in rollout"
+            iter += 1
+            alpha /= 2.0
+            continue
+        end
+
+        # Calcuate cost
+        @timeit to "cost" J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))   # Unconstrained cost
+
+        expected = -alpha*(ΔV[1] + alpha*ΔV[2])
+        if expected > 0
+            z  = (J_prev - J)/expected
+        else
+            @logmsg InnerIters "Non-positive expected decrease"
+            z = -1
+        end
+
+        iter += 1
+        alpha /= 2.0
+
+        # Log messages
+        # @logmsg InnerIters :iter value=iter
+        # @logmsg InnerIters :α value=2*alpha
+        # @logmsg InnerIters :cost value=J
+        # @logmsg InnerIters :z value=z
+
+    end  # forward pass loop
+
+    # @logmsg InnerLoop :cost value=J
+    # @logmsg InnerLoop :dJ value=J_prev-J
+    @logmsg InnerLoop :expected value=expected
+    @logmsg InnerLoop :z value=z
+    @logmsg InnerLoop :α value=2*alpha
+    @logmsg InnerLoop :ρ value=solver.ρ[1]
+
+    if J > J_prev
+        error("Error: Cost increased during Forward Pass")
+    end
+
+    return J
+end
+
+"Simulate state trajectory with feedback control"
+function rollout!(prob::Problem{T}, solver::StaticiLQRSolver{T},alpha::T=1.0) where T
+    X = prob.X; U = prob.U
+    K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
+    X̄[1] = prob.x0
+    Dt = get_dt_traj(prob)
+
+    for k = 2:prob.N
+        # Calculate state trajectory difference
+        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
+
+        # Calculate updated control
+        Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
+
+        # Propagate dynamics
+        X̄[k] = dynamics(prob.model, X̄[k-1], Ū[k-1], Dt[k])
+
+        # Check that rollout has not diverged
+        if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
+            return false
+        end
+    end
+    return true
+end
+
+function state_diff(x̄::AbstractVector{T}, x::AbstractVector{T}, prob::Problem{T},  solver::StaticiLQRSolver{T}) where T
+    if true
+        x̄ - x
+    else
+        nothing #TODO quaternion
+    end
 end

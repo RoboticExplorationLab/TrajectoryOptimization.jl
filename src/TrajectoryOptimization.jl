@@ -147,5 +147,9 @@ include("dynamics.jl")
 include("problems.jl")
 include("logger.jl")
 
+include("static_model.jl")
+include("solvers/silqr/silqr_solver.jl")
+include("solvers/silqr/silqr_methods.jl")
+
 write_ipopt_options()
 end

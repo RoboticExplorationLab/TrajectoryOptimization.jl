@@ -85,8 +85,8 @@ function generate_jacobian_nip(f,n,m)
 end
 
 function generate_jacobian_nip(f,n,m,dt)
-    ix = @SVector [i for i in 1:n]
-    iu = @SVector [i for i in (n .+ (1:m))]
+    ix = 1:n
+    iu = n .+ (1:m)
     idt = n+m+1
     z = zeros(n+m+1)
     @inbounds f_aug(z) = f(z[ix], z[iu], z[idt])
