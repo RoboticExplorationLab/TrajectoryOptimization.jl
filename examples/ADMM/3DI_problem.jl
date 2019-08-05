@@ -1,6 +1,15 @@
 include("methods.jl")
 include("models.jl")
 
+function DI_obstacles()
+    r_cylinder = 0.75
+
+    _cyl = []
+    push!(_cyl,(5.,1.,r_cylinder))
+    push!(_cyl,(5.,-1.,r_cylinder))
+    return _cyl
+end
+
 function build_DI_problem(agent)
     # Set up lift (3x) and load (1x) models
     num_lift = 3
@@ -13,8 +22,6 @@ function build_DI_problem(agent)
     #~~~~~~~~~~~~~ DYNAMICS ~~~~~~~~~~~~~~~~#
     n_load = Dynamics.doubleintegrator3D.n
     m_load = n_slack*num_lift
-    doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,n_load,m_load)
-
 
     #~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~#
     # Robot sizes
@@ -29,11 +36,7 @@ function build_DI_problem(agent)
     bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_lift_l)
 
     # Obstacle constraints
-    r_cylinder = 0.75
-
-    _cyl = []
-    push!(_cyl,(5.,1.,r_cylinder))
-    push!(_cyl,(5.,-1.,r_cylinder))
+    _cyl = DI_obstacles()
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)

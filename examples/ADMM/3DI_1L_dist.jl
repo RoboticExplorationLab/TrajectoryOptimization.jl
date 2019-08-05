@@ -1,7 +1,7 @@
 using Distributed
 using DistributedArrays
 using TimerOutputs
-if nworkers() != 3 
+if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
 
@@ -34,9 +34,8 @@ opts = opts_al
 function init_DI(distributed=true)
 	if distributed
 	    probs = ddata(T=Problem{Float64,Discrete});
-	    @sync for i in workers()
-		j = i - 1
-		@spawnat i probs[:L] = build_DI_problem(j)
+	    @sync for (j,w) in enumerate(workers())
+			@spawnat w probs[:L] = build_DI_problem(j)
 	    end
 	    prob_load = build_DI_problem(:load)
 	else
@@ -48,12 +47,14 @@ function init_DI(distributed=true)
 	end
 	return probs, prob_load
 end
-probs, prob_load = init_DI(true)
+probs, prob_load = init_DI(true);
 
+@time sol = solve_admm(prob_load, probs, opts_al)
 if false
-	@time sol = solve_admm(prob_load, probs, opts_al)
+	# @time sol = solve_admm(prob_load, probs, opts_al)
 
-	vis = Visualizer()
-	open(vis)
-	visualize_lift_system(vis, sol, r_lift, r_load)
 end
+vis = Visualizer()
+open(vis)
+sol[1].model.info
+visualize_DI_lift_system(vis, sol)
