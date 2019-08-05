@@ -194,3 +194,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 vis = Visualizer()
 open(vis)
 visualize_DI_lift_system(vis,plift_al,pload_al,r_lift,r_load)
+
+
+# xx = copy(plift_al[1].X)
+# output_traj(plift_al[1])

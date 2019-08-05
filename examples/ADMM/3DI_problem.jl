@@ -2,7 +2,7 @@ include("methods.jl")
 include("models.jl")
 
 function DI_obstacles()
-    r_cylinder = 0.75
+    r_cylinder = 0.5
 
     _cyl = []
     push!(_cyl,(5.,1.,r_cylinder))
@@ -25,12 +25,12 @@ function build_DI_problem(agent)
 
     #~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~#
     # Robot sizes
-    r_lift = 0.1
-    r_load = 0.1
+    r_lift = 0.25
+    r_load = 0.2
 
     # Control limits for lift robots
     u_lim_u = Inf*ones(m_lift)
-    u_lim_u[1:3] .= 9.81*2.
+    u_lim_u[1:3] .= 12/.850
     u_lim_l = -Inf*ones(m_lift)
     u_lim_l[3] = 0.
     bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_lift_l)
@@ -57,7 +57,7 @@ function build_DI_problem(agent)
     scaling = 1.
 
     shift_ = zeros(n_lift)
-    shift_[1:3] = [0.0;0.0;1.]
+    shift_[1:3] = [0.0;0.0;0.5]
     x10 = zeros(n_lift)
     x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
     x10 += shift_
@@ -68,6 +68,7 @@ function build_DI_problem(agent)
     x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
     x30 += shift_
     xload0 = zeros(n_load)
+    xload0[3] = 4/6
     xload0 += shift_
 
     xlift0 = [x10, x20, x30]
@@ -92,13 +93,13 @@ function build_DI_problem(agent)
     #~~~~~~~~~~~~~ BUILD PROBLEM ~~~~~~~~~~~~~~~~#
 
     # discretization
-    N = 21
-    dt = 0.1
+    N = 41
+    dt = 0.25
 
     # objective
-    Q_lift = [1.0e-2*Diagonal(I,n_lift), 10.0e-2*Diagonal(I,n_lift), 0.1e-2*Diagonal(I,n_lift)]
+    Q_lift = [0.65e-2*Diagonal(I,n_lift), 0.65e-4*Diagonal(I,n_lift), 0.65e-2*Diagonal(I,n_lift)]
     Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
-    R_lift = 1.0e-4*Diagonal(I,m_lift)
+    R_lift = 1.0*Diagonal(I,m_lift)
 
     Q_load = 0.0*Diagonal(I,n_load)
     Qf_load = 0.0*Diagonal(I,n_load)

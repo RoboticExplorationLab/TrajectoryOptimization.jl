@@ -1,6 +1,7 @@
 using Distributed
 using DistributedArrays
 using TimerOutputs
+
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
@@ -8,13 +9,12 @@ end
 
 using TrajectoryOptimization
 include("admm_solve.jl")
+include("visualization.jl")
 @everywhere using TrajectoryOptimization
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3DI_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
-
-
 
 
 # Initialize problems
