@@ -6,6 +6,7 @@ using FileIO
 using MeshIO
 using LinearAlgebra
 import TrajectoryOptimization: AbstractSolver, solve_aula!
+const TO = TrajectoryOptimization
 
 include("visualization.jl")
 include("methods.jl")
@@ -18,19 +19,19 @@ n_load = doubleintegrator3D_load.n
 m_load = doubleintegrator3D_load.m
 
 # Robot sizes
-r_lift = 0.1
+r_lift = 0.25
 r_load = 0.1
 
 # Control limits for lift robots
 u_lim_u = Inf*ones(m_lift)
-u_lim_u[1:3] .= 9.81*2.
+u_lim_u[1:3] .= 12/.850
 u_lim_l = -Inf*ones(m_lift)
 u_lim_l[3] = 0.
 
 bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)#,x_min=x_lim_lift_l)
 
 # Obstacle constraints
-r_cylinder = 0.75
+r_cylinder = 0.5
 
 _cyl = []
 push!(_cyl,(5.,1.,r_cylinder))
@@ -54,7 +55,7 @@ obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:o
 scaling = 1.
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;1.]
+shift_[1:3] = [0.0;0.0;0.5]
 x10 = zeros(n_lift)
 x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
 x10 += shift_
@@ -65,13 +66,17 @@ x30 = zeros(n_lift)
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
+xload0[3] = 4/6
 xload0 += shift_
 
 xlift0 = [x10, x20, x30]
 
-# norm(xload0[1:3]-x10[1:3])
-# norm(xload0[1:3]-x20[1:3])
-# norm(xload0[1:3]-x30[1:3])
+norm(xload0[1:3]-x10[1:3])
+norm(xload0[1:3]-x20[1:3])
+norm(xload0[1:3]-x30[1:3])
+norm(x10[1:3]-x20[1:3])
+norm(x20[1:3]-x30[1:3])
+norm(x30[1:3]-x10[1:3])
 
 # goal state
 _shift = zeros(n_lift)
@@ -84,14 +89,33 @@ xloadf = xload0 + _shift
 
 xliftf = [x1f, x2f, x3f]
 
+norm(xloadf[1:3]-x1f[1:3])
+norm(xloadf[1:3]-x2f[1:3])
+norm(xloadf[1:3]-x3f[1:3])
+norm(x1f[1:3]-x2f[1:3])
+norm(x2f[1:3]-x3f[1:3])
+norm(x3f[1:3]-x1f[1:3])
+
 # Discretization
-N = 21
-dt = 0.1
+# N = 21
+# dt = 0.1
+#
+# # Objective
+# Q_lift = [1.0e-2*Diagonal(I,n_lift), 10.0e-2*Diagonal(I,n_lift), 0.1e-2*Diagonal(I,n_lift)]
+# Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
+# R_lift = 1.0e-4*Diagonal(I,m_lift)
+#
+# Q_load = 0.0*Diagonal(I,n_load)
+# Qf_load = 0.0*Diagonal(I,n_load)
+# R_load = 1.0e-4*Diagonal(I,m_load)
+
+N = 41
+dt = 0.25
 
 # Objective
-Q_lift = [1.0e-2*Diagonal(I,n_lift), 10.0e-2*Diagonal(I,n_lift), 0.1e-2*Diagonal(I,n_lift)]
+Q_lift = [0.65e-2*Diagonal(I,n_lift), 0.65e-4*Diagonal(I,n_lift), 0.65e-2*Diagonal(I,n_lift)]
 Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
-R_lift = 1.0e-4*Diagonal(I,m_lift)
+R_lift = 1.0*Diagonal(I,m_lift)
 
 Q_load = 0.0*Diagonal(I,n_load)
 Qf_load = 0.0*Diagonal(I,n_load)
@@ -163,7 +187,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 
 # Solve
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:parallel,opts_al)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 
 # Visualize
