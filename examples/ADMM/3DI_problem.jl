@@ -25,7 +25,7 @@ function build_DI_problem(agent)
 
     #~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~#
     # Robot sizes
-    r_lift = 0.25
+    r_lift = 0.275
     r_load = 0.2
 
     # Control limits for lift robots
@@ -40,14 +40,14 @@ function build_DI_problem(agent)
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 2*r_lift)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_lift)
         end
     end
     obs_lift = Constraint{Inequality}(cI_cylinder_lift,n_lift,m_lift,length(_cyl),:obs_lift)
 
     function cI_cylinder_load(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 2*r_load)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_load)
         end
     end
     obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
@@ -97,7 +97,7 @@ function build_DI_problem(agent)
     dt = 0.25
 
     # objective
-    Q_lift = [0.65e-2*Diagonal(I,n_lift), 0.65e-4*Diagonal(I,n_lift), 0.65e-2*Diagonal(I,n_lift)]
+    Q_lift = [1.0e-2*Diagonal(I,n_lift), 1.0e-4*Diagonal(I,n_lift), 1.0e-2*Diagonal(I,n_lift)]
     Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
     R_lift = 1.0*Diagonal(I,m_lift)
 

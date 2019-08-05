@@ -17,22 +17,22 @@ n_load = doubleintegrator3D_load.n
 m_load = doubleintegrator3D_load.m
 
 # Robot sizes
-r_lift = 0.2
-r_load = 0.1
+r_lift = 0.25
+r_load = 0.2
 
 # Control limits for lift robots
 u_lim_l = -Inf*ones(m_lift)
 u_lim_u = Inf*ones(m_lift)
 u_lim_l[1:4] .= 0.
-u_lim_u[1:4] .= 9.81*(quad_params.m + 1.)/4.0
+u_lim_u[1:4] .= 12.0/4.0
 bnd = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
 
 # Obstacles
-r_cylinder = 0.75
+r_cylinder = 0.5
 
 _cyl = []
-push!(_cyl,(5.,1.3,r_cylinder))
-push!(_cyl,(5.,-1.3,r_cylinder))
+push!(_cyl,(5.,1.,r_cylinder))
+push!(_cyl,(5.,-1.,r_cylinder))
 
 function cI_cylinder_lift(c,x,u)
     for i = 1:length(_cyl)
@@ -49,7 +49,7 @@ end
 obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;1.0]
+shift_[1:3] = [0.0;0.0;0.5]
 scaling = 1.
 x10 = zeros(n_lift)
 x10[4] = 1.
@@ -64,6 +64,7 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
+xload0[3] = 4/6
 xload0[1:3] += shift_[1:3]
 
 xlift0 = [x10,x20,x30]
@@ -90,7 +91,7 @@ q_diag = ones(n_lift)
 r_diag = ones(m_lift)
 r_diag[1:4] .= 10.0e-3
 r_diag[5:7] .= 1.0e-6
-Q_lift = [0.1e-2*Diagonal(q_diag), 0.1e-2*Diagonal(q_diag), 0.1e-2*Diagonal(q_diag)]
+Q_lift = [0.0e-2*Diagonal(q_diag), 0.0e-2*Diagonal(q_diag), 0.0e-2*Diagonal(q_diag)]
 Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
 R_lift = Diagonal(r_diag)
 Q_load = 0.0*Diagonal(I,n_load)
@@ -121,7 +122,7 @@ constraints_load[N] += goal_constraint(xloadf)
 u_load = [0.;0.;-9.81/num_lift]
 
 u_lift = zeros(m_lift)
-u_lift[1:4] .= 9.81*(quad_params.m + 1.)/12.
+u_lift[1:4] .= 9.81*(quad_params.m + 0.35)/12.
 u_lift[5:7] = u_load
 U0_lift = [u_lift for k = 1:N-1]
 U0_load = [-1.0*[u_load;u_load;u_load] for k = 1:N-1]
@@ -148,18 +149,6 @@ prob_load = Problem(doubleintegrator3D_load,
                 N=N,
                 dt=dt)
 
-# Obstacles
-r_cylinder = 0.75
-_cyl = []
-push!(_cyl,(5.,1.3,r_cylinder))
-push!(_cyl,(5.,-1.3,r_cylinder))
-
-r_lift = 0.2   # global variable
-r_load = 0.1
-
-prob_lift = [build_quad_problem(i) for i = 1:3]
-prob_load = build_quad_problem(:load)
-
 # Solver options
 verbose=false
 
@@ -177,10 +166,10 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Solve
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:parallel,opts_al)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
 
 # Visualize
 vis = Visualizer()
 open(vis)
-visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], r_lift, r_load, _cyl)
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
