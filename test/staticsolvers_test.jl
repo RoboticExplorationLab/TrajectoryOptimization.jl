@@ -15,6 +15,8 @@ const iu_ = @SVector [i for i = iu]
 # Random inputs
 xs,us = (@SVector rand(n)), (@SVector rand(m))
 x,u = Array(xs), Array(us)
+zs = [xs;us]
+z = [x;u]
 
 
 quad_ = Dynamics.Quadrotor()
@@ -53,49 +55,44 @@ Z ≈ ∇fc(x,u)
 @btime jacobian($quad,$x,$u)
 @btime jacobian($quad,$xs,$us)
 @btime jacobian($quad_,$xs,$us)
+@btime jacobian($quad_,$zs)
 
 
 # Discrete Time
 quad_d = discretize(quad,:rk3_nip)
-fd = rk3_nip(fc)
+f_d2 = rk3_nip(quad_)
+f_d = rk3_nip(fc)
 
-fd(x,u,dt) ≈ dynamics(quad_d,x,u,dt)
+f_d(x,u,dt) ≈ dynamics(quad_d,x,u,dt)
 model_d.f(xdot,x,u,dt)
-xdot ≈ fd(x,u,dt)
-fd(x,u,dt) isa SVector
+xdot ≈ f_d(x,u,dt)
+xdot ≈ f_d2(x,u,dt)
+f_d(x,u,dt) isa SVector
+rk3_gen(quad_)
+discrete_dynamics(quad_,xs,us,dt)
 
-ix = @SVector [i for i = 1:n]
-iu = @SVector [i for i = 1:m]
-f_aug(z) = fd(z[ix],z[iu],z[end])
-f_aug([x;u;dt]) isa SVector
-ForwardDiff.jacobian(f_aug,[xs;us;@SVector [dt,]])
-
-∇fd = generate_jacobian_nip(fd,n,m,dt)
-∇fd(x,u,dt) ≈ jacobian(quad_d,x,u,dt)
 S = zeros(n,n+m+1)
 model_d.∇f(S,x,u,dt)
-S ≈ ∇fd(x,u,dt)
-∇fd(x,u,dt) isa SMatrix
-S = ∇fd(xs,us,dt)
-S  isa SMatrix
-
-ix = @SVector [i for i = 1:n]
-iu = @SVector [i for i = 1:m]
-
-jacobian(quad_d,xs,us,dt)
-S = ∇fd(x,u,dt)
-S isa SMatrix  # TODO: fix this
+S ≈ jacobian(quad_d,x,u,dt)
+ss = [xs;us; (@SVector [dt])]
+s = [x;u;dt]
+generate_discrete_jacobian(quad_)
+discrete_jacobian(quad_,xs,us,dt) ≈ discrete_jacobian(quad_,ss) ≈ discrete_jacobian(quad_,zs,dt)
 
 @btime model_d.f($xdot,$x,$u,$dt)
-@btime fd($x,$u,$dt)
+@btime f_d($xs,$us,$dt)
+@btime f_d2($xs,$us,$dt)
 @btime dynamics($quad_d,$x,$u,$dt)
 @btime dynamics($quad_d,$xs,$us,$dt)
+@btime discrete_dynamics($quad_,$x,$u,$dt)
 
 @btime model_d.∇f($S,$x,$u,$dt)
-@btime ∇fd($x,$u,$dt)
-@btime ∇fd($xs,$us,$dt)
 @btime jacobian($quad_d,$x,$u,$dt)
 @btime jacobian($quad_d,$xs,$us,$dt)
+@btime discrete_jacobian($quad_,$xs,$us,$dt)
+@btime discrete_jacobian($quad_,$x,$u,$dt)
+@btime discrete_jacobian($quad_,$ss) # 0 alloc
+@btime discrete_jacobian($quad_,$zs,$dt) # 0 alloc, 3x faster than in place
 
 
 # Solve the problem using the old method

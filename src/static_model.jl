@@ -134,6 +134,26 @@ function generate_jacobian(model::M) where {M<:AbstractModel}
     end
 end
 
+function generate_discrete_jacobian(model::M) where {M<:AbstractModel}
+    ix,iu,idt = 1:n, n .+ (1:m), n+m
+    fd_aug(z) = discrete_dynamics(model, view(z,ix), view(z,iu), z[idt])
+    ∇fd(z) = ForwardDiff.jacobian(fd_aug, z)
+    ∇fd(z::SVector,dt) = ForwardDiff.jacobian(fd_aug, [z; @SVector [dt]])
+    ∇fd(x::SVector,u::SVector,dt) = ∇fd([x;u; @SVector [dt]])
+    ∇fd(x,u,dt) = begin
+        z = zeros(n+m)
+        z[ix] = x
+        z[iu] = u
+        z[idt] = dt
+        ∇fd(z)
+    end
+    @eval begin
+        discrete_jacobian(model::$(M), x, u, dt) = $(∇fd)(x, u, dt)
+        discrete_jacobian(model::$(M), z) = $(∇fd)(z)
+        discrete_jacobian(model::$(M), z, dt) = $(∇fd)(z, dt)
+    end
+end
+
 
 macro generate_jacobian(model)
     ix,iu = 1:n, n .+ (1:m)

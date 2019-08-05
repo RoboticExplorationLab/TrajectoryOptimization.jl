@@ -34,20 +34,20 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-mutable struct Problem{T<:AbstractFloat,D<:DynamicsType}
+mutable struct Problem{T<:AbstractFloat,D<:DynamicsType,S,C}
     model::AbstractModel
     obj::AbstractObjective
     constraints::Constraints
     x0::Vector{T}
     xf::Vector{T}
-    X::VectorTrajectory{T}
-    U::VectorTrajectory{T}
+    X::S
+    U::C
     N::Int
     dt::T
     tf::T
 
     function Problem(model::Model{M,D}, obj::AbstractObjective, constraints::Constraints,
-        x0::Vector{T},xf::Vector{T}, X::VectorTrajectory, U::VectorTrajectory, N::Int, dt::Real, tf::Real) where {M,T,D}
+        x0::Vector{T},xf::Vector{T}, X::S, U::C, N::Int, dt::Real, tf::Real) where {M,T,D,S,C}
 
         n,m = model.n, model.m
         # TODO these checks break for infeasible, minimum time -> do a post check
@@ -67,7 +67,7 @@ mutable struct Problem{T<:AbstractFloat,D<:DynamicsType}
             throw(ArgumentError("dt must be strictly positive"))
         end
 
-        new{T,D}(model,obj,constraints,x0,xf,X,U,N,dt,tf)
+        new{T,D,S,C}(model,obj,constraints,x0,xf,X,U,N,dt,tf)
     end
 end
 
