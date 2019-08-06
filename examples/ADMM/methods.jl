@@ -1,4 +1,4 @@
-function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
+function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
     N = prob_load.N
 
     # Problem dimensions
@@ -10,12 +10,13 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
 
     # Calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
-
-    # Solve each agent trajectory separately
+# Solve each agent trajectory separately
     for i = 1:num_lift
         solve!(prob_lift[i],opts_al)
     end
     solve!(prob_load,opts_al)
+
+    # return prob_lift, prob_load, 1, 1
 
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
@@ -53,12 +54,22 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts)
     solver_lift_al = []
     prob_lift_al = []
     for i = 1:num_lift
+        # if infeasible
+        #     prob_lift[i] = infeasible_problem(prob_lift[i],1.0)
+        # end
+
         solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
+
+
 
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
     end
+
+    # if infeasible
+    #     prob_load = infeasible_problem(prob_load,1.0)
+    # end
     solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
 
