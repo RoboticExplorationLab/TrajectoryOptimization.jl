@@ -35,7 +35,7 @@ function init_DI(distributed=true)
 	if distributed
 	    probs = ddata(T=Problem{Float64,Discrete});
 	    @sync for (j,w) in enumerate(workers())
-			@spawnat w probs[:L] = build_DI_problem(j)
+		@spawnat w probs[:L] = build_DI_problem(j)
 	    end
 	    prob_load = build_DI_problem(:load)
 	else

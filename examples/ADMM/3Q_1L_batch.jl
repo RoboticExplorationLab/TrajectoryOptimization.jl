@@ -1,4 +1,4 @@
-include(joinpath(pwd(),"dynamics/quaternions.jl"))
+include(joinpath(dirname(@__FILE__),"../../dynamics/quaternions.jl"))
 
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params) where T
       #TODO change concatentations to make faster!
@@ -422,101 +422,106 @@ initial_controls!(quad_batch, [[u_;u_load;u_;u_load;u_;u_load] for k = 1:N-1])
 # initial_controls!(doubleintegrator_batch, zeros(batch_model.m,N-1))
 
 # rollout!(quad_batch)
-plot(quad_batch.X,1:3)
-plot(quad_batch.U)
+# plot(quad_batch.X,1:3)
+# plot(quad_batch.U)
 
+@info "Solving batch problem"
 @time solve!(quad_batch,ALTROSolverOptions{Float64}(verbose=true))
-plot(quad_batch.X,1:3)
-max_violation(quad_batch)
 
-using MeshCat
-using GeometryTypes
-using CoordinateTransformations
-using FileIO
-using MeshIO
-using Plots
+visualize = false
+if visualize 
+	plot(quad_batch.X,1:3)
+	max_violation(quad_batch)
 
-# geometries
-# sphere_small = HyperSphere(Point3f0(0), convert(Float32,r_int)) # trajectory points
-# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
+	using MeshCat
+	using GeometryTypes
+	using CoordinateTransformations
+	using FileIO
+	using MeshIO
+	using Plots
+
+	# geometries
+	# sphere_small = HyperSphere(Point3f0(0), convert(Float32,r_int)) # trajectory points
+	# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
 
 
-function cable_transform(y,z)
-    v1 = [0,0,1]
-    v2 = y[1:3,1] - z[1:3,1]
-    normalize!(v2)
-    ax = cross(v1,v2)
-    ang = acos(v1'v2)
-    R = AngleAxis(ang,ax...)
-    compose(Translation(z),LinearMap(R))
+	function cable_transform(y,z)
+	    v1 = [0,0,1]
+	    v2 = y[1:3,1] - z[1:3,1]
+	    normalize!(v2)
+	    ax = cross(v1,v2)
+	    ang = acos(v1'v2)
+	    R = AngleAxis(ang,ax...)
+	    compose(Translation(z),LinearMap(R))
+	end
+
+	function plot_cylinder(vis,c1,c2,radius,mat,name="")
+	    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
+	    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+	end
+
+	function addcylinders!(vis,cylinders,height=1.5)
+	    for (i,cyl) in enumerate(cylinders)
+		plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
+	    end
+	end
+
+	function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
+	    num_act_models = length(actuated_models)
+	    nn = zeros(Int,num_act_models)
+	    mm = zeros(Int,num_act_models)
+
+	    for i = 1:num_act_models
+		nn[i] = actuated_models[i].n
+		mm[i] = actuated_models[i].m
+	    end
+
+	    nn_tol = sum(nn)
+
+	    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+	    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+	    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+	    quad_scaling = 0.1
+	    robot_obj = FileIO.load(obj)
+	    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+
+	    # intialized system
+	    for i = 1:num_act_models
+		setobject!(vis["agent$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_act[i])) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.35)))
+		setobject!(vis["agent$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+
+		cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
+		setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+	    end
+	    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+
+	    addcylinders!(vis,_cyl,3.)
+
+	    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
+
+
+	    anim = MeshCat.Animation(24)
+	    for k = 1:prob.N
+		MeshCat.atframe(anim,vis,k) do frame
+		    # cables
+		    x_load = prob.X[k][nn_tol .+ (1:load_model.n)][1:n_slack]
+		    n_shift = 0
+		    for i = 1:num_act_models
+			x_idx = n_shift .+ (1:actuated_models[i].n)
+			x_ = prob.X[k][x_idx][1:n_slack]
+			settransform!(frame["cable"]["$i"], cable_transform(x_,x_load))
+			settransform!(frame["agent$i"], compose(Translation(x_...),LinearMap(Quat(prob.X[k][x_idx][4:7]...))))
+
+			n_shift += actuated_models[i].n
+		    end
+		    settransform!(frame["load"], Translation(x_load...))
+		end
+	    end
+	    MeshCat.setanimation!(vis,anim)
+	end
+
+	# vis = Visualizer()
+	# open(vis)
+	# visualize_batch_system(vis,quad_batch,actuated_models,load_model)
 end
-
-function plot_cylinder(vis,c1,c2,radius,mat,name="")
-    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
-    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
-end
-
-function addcylinders!(vis,cylinders,height=1.5)
-    for (i,cyl) in enumerate(cylinders)
-        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
-    end
-end
-
-function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
-    num_act_models = length(actuated_models)
-    nn = zeros(Int,num_act_models)
-    mm = zeros(Int,num_act_models)
-
-    for i = 1:num_act_models
-        nn[i] = actuated_models[i].n
-        mm[i] = actuated_models[i].m
-    end
-
-    nn_tol = sum(nn)
-
-    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
-
-    quad_scaling = 0.1
-    robot_obj = FileIO.load(obj)
-    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
-
-    # intialized system
-    for i = 1:num_act_models
-        setobject!(vis["agent$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_act[i])) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.35)))
-        setobject!(vis["agent$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
-
-        cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
-        setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
-    end
-    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
-
-    addcylinders!(vis,_cyl,3.)
-
-    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
-
-
-    anim = MeshCat.Animation(24)
-    for k = 1:prob.N
-        MeshCat.atframe(anim,vis,k) do frame
-            # cables
-            x_load = prob.X[k][nn_tol .+ (1:load_model.n)][1:n_slack]
-            n_shift = 0
-            for i = 1:num_act_models
-                x_idx = n_shift .+ (1:actuated_models[i].n)
-                x_ = prob.X[k][x_idx][1:n_slack]
-                settransform!(frame["cable"]["$i"], cable_transform(x_,x_load))
-                settransform!(frame["agent$i"], compose(Translation(x_...),LinearMap(Quat(prob.X[k][x_idx][4:7]...))))
-
-                n_shift += actuated_models[i].n
-            end
-            settransform!(frame["load"], Translation(x_load...))
-        end
-    end
-    MeshCat.setanimation!(vis,anim)
-end
-
-# vis = Visualizer()
-# open(vis)
-# visualize_batch_system(vis,quad_batch,actuated_models,load_model)
