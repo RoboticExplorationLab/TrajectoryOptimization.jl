@@ -1,9 +1,9 @@
 
-function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions)
+function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions, parallel=true)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
     @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
-    @timeit "solve" solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
+    @timeit "solve" solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel)
     combine_problems(prob_load, probs)
 end
 
@@ -95,7 +95,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 end
 
-function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts)
+function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
     num_left = length(probs) - 1
 
     # Solve the initial problems
@@ -118,14 +118,20 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     	@info "Solving AL problems..."	
         for i = 1:num_lift
             TO.solve_aula!(probs[i], solvers_al[i])
+			if !parallel
+				X_lift[i] .= probs[i].X
+				U_lift[i] .= probs[i].U	
+			end
         end
 
         # Get trajectories
 		@info "Solving load problem..."
-        for i = 1:num_lift
-            X_lift[i] .= probs[i].X
-            U_lift[i] .= probs[i].U
-        end
+		if parallel
+			for i = 1:num_lift
+				X_lift[i] .= probs[i].X
+				U_lift[i] .= probs[i].U
+			end
+		end
 
         # Solve load with updated lift trajectories
         TO.solve_aula!(prob_load, solver_load)
@@ -156,7 +162,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 end
 
-function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts)
+function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
     @info "Solving initial problems..."
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
 
@@ -175,17 +181,28 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     for ii = 1:opts.iterations
         # Solve each AL lift problem
 		@info "Solving AL lift problems..."
-        future = [@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()]
-        wait.(future)
+		if parallel
+        	future = [@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()]
+        	wait.(future)
 
-        # Get trajectories
-	("Solving load AL problem...")
-        X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
-        U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
-        for i = 1:num_lift
-            X_lift[i] .= X_lift0[i]
-            U_lift[i] .= U_lift0[i]
-        end
+			# Get Trajectories
+			X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
+			U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
+			for i = 1:num_lift
+				X_lift[i] .= X_lift0[i]
+				U_lift[i] .= U_lift0[i]
+			end
+		else
+			for (i,w) in enumerate(workers())
+				wait(@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]))
+				X_lift[i] .= fetch(@spawnat w probs[:L].X)
+				U_lift[i] .= fetch(@spawnat w probs[:L].U)
+			end
+		end
+				
+
+        # Solve AL load problem 
+		@info ("Solving load AL problem...")
         TO.solve_aula!(prob_load, solver_load)
 
         # Send trajectories
@@ -193,8 +210,8 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
         @sync for w in workers()
             for i = 2:4
                 @spawnat w begin
-                    X_cache[:L][i] .= X_lift0[i-1]
-                    U_cache[:L][i] .= U_lift0[i-1]
+                    X_cache[:L][i] .= X_lift[i-1]
+                    U_cache[:L][i] .= U_lift[i-1]
                 end
             end
             @spawnat w begin
