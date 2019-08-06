@@ -311,7 +311,7 @@ function output_traj(prob,idx=collect(1:6),filename=joinpath(pwd(),"examples/ADM
     x0 = prob.x0
     for k = 1:prob.N
         x, y, z, vx, vy, vz = prob.X[k][idx]
-        str = "$(x-x0[1]) $(y-x0[2]) $(z-x0[3]) $vx $vy $vz"
+        str = "$(x-x0[1]) $(y-x0[2]) $(z) $vx $vy $vz"
         if k != prob.N
             str *= " "
         end

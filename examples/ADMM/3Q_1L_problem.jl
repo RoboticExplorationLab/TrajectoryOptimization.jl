@@ -34,8 +34,8 @@ function build_quad_problem(agent)
     r_cylinder = 0.5
 
     _cyl = []
-    push!(_cyl,(5.,1.,r_cylinder))
-    push!(_cyl,(5.,-1.,r_cylinder))
+    push!(_cyl,(3.75,1.,r_cylinder))
+    push!(_cyl,(3.75,-1.,r_cylinder))
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
@@ -55,7 +55,7 @@ function build_quad_problem(agent)
 
     #~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     shift_ = zeros(n_lift)
-    shift_[1:3] = [0.0;0.0;0.5]
+    shift_[1:3] = [0.0;0.0;0.25]
     scaling = 1.
     x10 = zeros(n_lift)
     x10[4] = 1.
@@ -76,7 +76,7 @@ function build_quad_problem(agent)
     xlift0 = [x10,x20,x30]
 
     _shift = zeros(n_lift)
-    _shift[1:3] = [10.0;0.0;0.0]
+    _shift[1:3] = [7.5;0.0;0.0]
 
     # goal state
     xloadf = zeros(n_load)
@@ -101,7 +101,7 @@ function build_quad_problem(agent)
     q_diag2 = copy(q_diag)
     q_diag3 = copy(q_diag)
     q_diag1[1] = 1.0
-    q_diag2[1] = 1.0e-2
+    q_diag2[1] = 1.5e-2
     q_diag3[1] = 1.0e-3
 
     r_diag = ones(m_lift)

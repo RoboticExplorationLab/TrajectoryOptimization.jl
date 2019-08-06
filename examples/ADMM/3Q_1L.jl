@@ -39,8 +39,8 @@ bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load)
 r_cylinder = 0.5
 
 _cyl = []
-push!(_cyl,(5.,1.,r_cylinder))
-push!(_cyl,(5.,-1.,r_cylinder))
+push!(_cyl,(3.75,1.,r_cylinder))
+push!(_cyl,(3.75,-1.,r_cylinder))
 
 function cI_cylinder_lift(c,x,u)
     for i = 1:length(_cyl)
@@ -57,7 +57,7 @@ end
 obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;0.5]
+shift_[1:3] = [0.0;0.0;0.25]
 scaling = 1.
 x10 = zeros(n_lift)
 x10[4] = 1.
@@ -78,7 +78,7 @@ xload0[1:3] += shift_[1:3]
 xlift0 = [x10,x20,x30]
 
 _shift = zeros(n_lift)
-_shift[1:3] = [10.0;0.0;0.0]
+_shift[1:3] = [7.5;0.0;0.0]
 
 # goal state
 xloadf = zeros(n_load)
@@ -100,7 +100,7 @@ q_diag1 = copy(q_diag)
 q_diag2 = copy(q_diag)
 q_diag3 = copy(q_diag)
 q_diag1[1] = 1.0
-q_diag2[1] = 1.0e-2
+q_diag2[1] = 1.5e-2
 q_diag3[1] = 1.0e-3
 
 
@@ -203,4 +203,13 @@ vis = Visualizer()
 open(vis)
 visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
 
+idx = [(1:3)...,(8:10)...]
 plot(plift_al[1].U,label="")
+plot(plift_al[1].X,8:10)
+plot(plift_al[1].X,1:3)
+
+
+
+output_traj(plift_al[1],idx,joinpath(pwd(),"examples/ADMM/traj1.txt"))
+output_traj(plift_al[2],idx,joinpath(pwd(),"examples/ADMM/traj2.txt"))
+output_traj(plift_al[3],idx,joinpath(pwd(),"examples/ADMM/traj3.txt"))
