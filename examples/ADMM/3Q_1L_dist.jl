@@ -1,4 +1,3 @@
-
 using Distributed
 using DistributedArrays
 using TimerOutputs
@@ -44,11 +43,14 @@ function init_quad_ADMM(distributed=true)
 		end
 		return probs, prob_load
 end
-probs, prob_load = init_quad_ADMM()
+probs, prob_load = init_quad_ADMM();
 
-if false
+vis = Visualizer()
+if true
 		TimerOutputs.reset_timer!()
 		@time sol = solve_admm(prob_load, probs, opts_al)
-		visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
+		# visualize_quadrotor_lift_system(vis, [[prob_load]; probs], _cyl)
 		TimerOutputs.DEFAULT_TIMER
 end
+
+open(vis)

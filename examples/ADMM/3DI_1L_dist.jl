@@ -54,7 +54,7 @@ if false
 	# @time sol = solve_admm(prob_load, probs, opts_al)
 
 end
-vis = Visualizer()
-open(vis)
-sol[1].model.info
-visualize_DI_lift_system(vis, sol)
+# vis = Visualizer()
+# open(vis)
+# sol[1].model.info
+# visualize_DI_lift_system(vis, sol)
