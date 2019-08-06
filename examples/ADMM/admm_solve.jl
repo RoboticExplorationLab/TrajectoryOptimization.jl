@@ -115,7 +115,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
     for ii = 1:opts.iterations
         # Solve each AL problem
-    	@info "Solving AL problems..."	
+    	@info "Solving AL problems..."
         for i = 1:num_lift
             TO.solve_aula!(probs[i], solvers_al[i])
 			if !parallel
@@ -167,7 +167,7 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
 
     # create augmented Lagrangian problems, solvers
-    @info "Setting up Solvers..."	
+    @info "Setting up Solvers..."
     solvers_al = ddata(T=AugmentedLagrangianSolver{Float64});
     @sync for w in workers()
         @spawnat w begin

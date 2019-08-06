@@ -294,3 +294,18 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
         prob.constraints[k] += cable_load[k]
     end
 end
+
+function output_traj(prob,idx=collect(1:6),filename=joinpath(pwd(),"examples/ADMM/traj_output.txt"))
+    open(filename,"w") do f
+        x0 = prob.x0
+        for k = 1:prob.N
+            x, y, z, vx, vy, vz = prob.X[k][idx]
+            str = "$(x-x0[1]),$(y-x0[2]),$(z-x0[3]),$vx,$vy,$vz"
+            if k != N
+                str *= ","
+            end
+            write(f,str)
+        end
+    end
+    close(f)
+end

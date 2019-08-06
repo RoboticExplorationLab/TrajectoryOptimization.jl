@@ -28,9 +28,18 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
+function visualize_DI_lift_system(vis,sol)
+    prob_lift = sol[2:end]
+    prob_load = sol[1]
+    r_lift = prob_lift[1].model.info[:radius]
+    r_load = prob_load.model.info[:radius]
+    visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,3)
+end
+
 function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=3)
     num_lift = length(prob_lift)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
+    _cyl = DI_obstacles()
 
     # camera angle
     settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
