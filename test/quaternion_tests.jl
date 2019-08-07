@@ -134,5 +134,44 @@ animate_quadrotor_line(vis_quad, sol_quat)
 animate_quadrotor_line(vis_quad, sol_con)
 animate_quadrotor_line(vis_quad, sol_quat_con)
 
-cost(sol_quat)
-cost(sol)
+
+# Quadrotor Maze
+max_con_viol = 1.0e-8
+verbose=false
+
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
+    iterations=300)
+
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
+    opts_uncon=opts_ilqr,
+    iterations=40,
+    cost_tolerance=1.0e-5,
+    cost_tolerance_intermediate=1.0e-4,
+    constraint_tolerance=max_con_viol,
+    penalty_scaling=10.,
+    penalty_initial=1.)
+
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
+    feasibility_tolerance=max_con_viol,
+    solve_type=:feasible)
+
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,
+    opts_al=opts_al,
+    R_inf=1.0e-8,
+    resolve_feasible_problem=false,
+    opts_pn=opts_pn,
+    projected_newton=true,
+    projected_newton_tolerance=1.0e-4)
+
+prob_altro = copy(Problems.quadrotor_maze)
+prob_altro.model.quat
+@time p1, s1 = solve(prob_altro, opts_altro)
+
+prob_quat = update_problem(prob_altro, model=model_d)
+@time p1_quat, s1_quat = solve(prob_quat, opts_altro)
+
+animate_quadrotor_maze(vis_quad, p1)
+animate_quadrotor_maze(vis_quad, p1_quat)
+
+
+settransform!(vis_quad["/Cameras/default"], compose(Translation(0., 72., 60.),LinearMap(RotX(pi/7.5)*RotZ(pi/2))))
