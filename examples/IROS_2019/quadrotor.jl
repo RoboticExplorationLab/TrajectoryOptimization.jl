@@ -74,9 +74,9 @@ plot(X3[1:3,:]',title="Quadrotor position (SNOPT)")
 plot(p3.U,title="Quadrotor control (SNOPT)")
 
 # Visualization
-function animate_quadrotor_line(prob)
-    vis = Visualizer()
-    open(vis)
+vis = Visualizer()
+open(vis)
+function animate_quadrotor_line(vis,prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
