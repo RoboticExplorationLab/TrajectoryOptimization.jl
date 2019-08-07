@@ -1,4 +1,5 @@
 import Base: copy, reset
+import TrajectoryOptimization.Dynamics: Quaternion, Lmult
 
 abstract type DynamicsType end
 abstract type Continuous <: DynamicsType end
@@ -64,7 +65,7 @@ struct AnalyticalModel{M,D} <: Model{M,D}
         if :quat ∈ keys(d)
             quat = d[:quat]
         else
-            quat = 0:1
+            quat = 1:0
         end
 
         if check_functions
@@ -386,10 +387,10 @@ function state_diff(model::Model,x,x0)
     if has_quat(model)
         inds = model.quat
         q = Quaternion(x[inds])
-        q0 = Quaternon(x0[inds])
-        δq = SVector(inv(q)*q)
-        δx = zeros(length(x) - 1)
+        q0 = Quaternion(x0[inds])
+        δq = vec(inv(q0)*q)
         dx = x - x0
+        δx = zeros(length(x) - 1)
         δx[1:inds[1]-1] = dx[1:inds[1]-1]
         δx[inds[1:3]] = δq
         δx[inds[4]:end] = dx[inds[4]+1:end]
@@ -400,9 +401,9 @@ function state_diff(model::Model,x,x0)
 end
 
 function state_diff_jacobian(model::Model, x)
-    if has_quat
+    if has_quat(model)
         n,m = model.n, model.m
-        n̄ = n + 1
+        n̄ = n - 1
         inds = model.quat
         Gk = zeros(n̄,n)
         blk1 = (1:inds[1]-1, 1:inds[1]-1)
