@@ -6,7 +6,6 @@ quad_params = (m=0.5,
              kf=1.0,
              km=0.0245)
 
-include("quaternions.jl")
 function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params) where T
       #TODO change concatentations to make faster!
       # Quaternion representation

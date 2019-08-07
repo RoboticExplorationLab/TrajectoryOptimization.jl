@@ -3,6 +3,11 @@ using CoordinateTransformations
 using StaticArrays
 using LinearAlgebra
 
+export
+    Quaternion,
+    Lmult,
+    Rmult
+
 struct Quaternion{T}
     w::T
     x::T

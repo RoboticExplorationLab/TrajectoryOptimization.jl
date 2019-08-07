@@ -1,5 +1,4 @@
 import Base: copy, reset
-import TrajectoryOptimization.Dynamics: Quaternion, Lmult
 
 abstract type DynamicsType end
 abstract type Continuous <: DynamicsType end
