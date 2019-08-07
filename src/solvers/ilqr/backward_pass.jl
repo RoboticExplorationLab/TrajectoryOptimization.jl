@@ -95,13 +95,8 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
     S = solver.S
     Q = solver.Q # cost-to-go expansion
 
-    # Terminal cost-to-go
-    try
-        S[N].xx .= cholesky(Q[N].xx).U
-    catch PosDefException
-        error("Terminal cost Hessian must be PD for sqrt backward pass")
-    end
-
+    # Terminal cost-to-go expansion
+    S[N].xx .= Q[N].xx
     S[N].x .= Q[N].x
 
     # Initialize expected change in cost-to-go
@@ -118,9 +113,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
         Q[k].u .+= fdu'*S[k+1].x
         tmp_x = S[k+1].xx*fdx
         tmp_u = S[k+1].xx*fdu
-        Q[k].xx .= cholesky(Q[k].xx).U
         chol_plus!(Q[k].xx,tmp_x)
-        Q[k].uu .= cholesky(Q[k].uu).U
         chol_plus!(Q[k].uu,tmp_u)
         Q[k].ux .+= tmp_u'*tmp_x
 
@@ -147,14 +140,7 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
             tmp1 = pinv(Array(Q[k].xx'))*Q[k].ux'
         end
 
-        Quu = Q[k].uu'*Q[k].uu
-        _tmp = tmp1'*tmp1
-        try
-            tmp2 = cholesky(Quu - _tmp).U
-        catch
-            tmp = eigen(Quu - _tmp)
-            tmp2 = Diagonal(sqrt.(tmp.values))*tmp.vectors'
-        end
+        tmp2 = chol_minus(Q[k].uu,tmp1)
 
         S[k].xx .= chol_plus(Q[k].xx + tmp1*K[k],tmp2*K[k])
 
@@ -184,4 +170,13 @@ end
 
 function chol_plus!(A::AbstractMatrix{T},B::AbstractMatrix{T}) where T
     A .= qr([A;B]).R
+end
+
+#TODO
+function chol_minus(A,B)
+    AmB = Cholesky(copy(A),:U,0)
+    for i = 1:size(B,1)
+        lowrankdowndate!(AmB,B[i,:])
+    end
+    return AmB.U
 end

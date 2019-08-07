@@ -226,6 +226,53 @@ function cost_expansion!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjec
     return nothing
 end
 
+function cost_expansion_sqrt!(Q::ExpansionTrajectory{T},obj::AugmentedLagrangianObjective{T},
+        X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where T
+    N = length(X)
+
+    cost_expansion_sqrt!(Q, obj.cost, X, U, dt)
+
+    for k = 1:N-1
+        c = obj.C[k]
+        λ = obj.λ[k]
+        μ = obj.μ[k]
+        a = active_set(c,λ)
+        Iμ = Diagonal(a .* μ)
+        Iμ_sqrt = Diagonal(a.* sqrt.(μ))
+        jacobian!(obj.∇C[k],obj.constraints[k],X[k],U[k])
+        cx = obj.∇C[k].x
+        cu = obj.∇C[k].u
+
+        # Second Order pieces
+        chol_plus!(Q[k].xx,Iμ_sqrt*cx)
+        chol_plus!(Q[k].uu,Iμ_sqrt*cu)
+
+        # First order pieces
+        g = (Iμ*c + λ)
+        Q[k].x .+= cx'g
+        Q[k].u .+= cu'g
+    end
+
+    c = obj.C[N]
+    λ = obj.λ[N]
+    μ = obj.μ[N]
+    a = active_set(c,λ)
+    Iμ = Diagonal(a .* μ)
+    Iμ_sqrt = Diagonal(a.* sqrt.(μ))
+
+    cx = obj.∇C[N]
+
+    jacobian!(cx,obj.constraints[N],X[N])
+
+    # Second Order pieces
+    chol_plus!(Q[N].xx,Iμ_sqrt*cx)
+
+    # First order pieces
+    Q[N].x .+= cx'*(Iμ*c + λ)
+
+    return nothing
+end
+
 function update_active_set!(obj::AugmentedLagrangianObjective{T},tol::T=0.0) where T
     update_active_set!(obj.active_set,obj.C,obj.λ,tol)
 end

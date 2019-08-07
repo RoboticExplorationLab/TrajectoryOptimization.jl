@@ -31,7 +31,7 @@ TO.cost_expansion!(prob,ilqr_solver)
 
 #sqrt bp
 opts_ilqr_sqrt = iLQRSolverOptions{T}(square_root=true)
-ilqr_solver_sqrt = iLQRSolver(prob,opts_ilqr)
+ilqr_solver_sqrt = iLQRSolver(prob,opts_ilqr_sqrt)
 jacobian!(prob,ilqr_solver_sqrt)
 TO.cost_expansion!(prob,ilqr_solver_sqrt)
 ΔV_sqrt = TO._backwardpass_sqrt!(prob,ilqr_solver_sqrt)
@@ -45,7 +45,7 @@ end
 
 ## constrained
 opts_al = AugmentedLagrangianSolverOptions{T}(opts_uncon=opts_ilqr)
-opts_altro = ALTROSolverOptions{T}(opts_al=opts_al)
+opts_al_sqrt = AugmentedLagrangianSolverOptions{T}(opts_uncon=opts_ilqr_sqrt)
 
 # constraints
 u_bnd = 5.
@@ -67,15 +67,14 @@ TO.cost_expansion!(prob_al,solver_ilqr)
 ΔV = TO._backwardpass!(prob_al,solver_ilqr)
 
 #bp sqrt
-solver_ilqr_sqrt = iLQRSolver(prob,opts_ilqr)
-solver_al_sqrt = AugmentedLagrangianSolver(prob,opts_al)
+solver_al_sqrt = AugmentedLagrangianSolver(prob,opts_al_sqrt)
+solver_ilqr_sqrt = solver_al_sqrt.solver_uncon
 prob_al_sqrt = TO.AugmentedLagrangianProblem(prob,solver_al_sqrt)
 TO.update_constraints!(prob_al_sqrt.obj.C,prob_al_sqrt.obj.constraints, prob_al_sqrt.X, prob_al_sqrt.U)
 TO.update_active_set!(prob_al_sqrt.obj)
 jacobian!(prob_al_sqrt,solver_ilqr_sqrt)
 TO.cost_expansion!(prob_al_sqrt,solver_ilqr_sqrt)
 ΔV_sqrt = TO._backwardpass_sqrt!(prob_al_sqrt,solver_ilqr_sqrt)
-prob_al_sqrt.obj[N-1].Q
 
 @test isapprox(ΔV_sqrt,ΔV)
 @test all(isapprox(solver_ilqr.K,solver_ilqr_sqrt.K))
