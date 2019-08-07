@@ -14,7 +14,7 @@ function double_integrator_3D_dynamics_lift!(ẋ,x,u)
 end
 
 doubleintegrator3D_lift = Model(double_integrator_3D_dynamics_lift!,Dynamics.doubleintegrator3D.n,Dynamics.doubleintegrator3D.m + n_slack)
-doubleintegrator3D_lift.info[:radius] = 0.25
+doubleintegrator3D_lift.info[:radius] = 0.275
 
 # Double integrator load model
 function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
@@ -73,9 +73,9 @@ quad_params = (m=0.850,
              J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
              Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
              gravity=SVector(0,0,-9.81),
-             motor_dist=0.2,
+             motor_dist=0.175,
              kf=1.0,
              km=0.0245)
 
 quadrotor_lift = Model(quadrotor_lift_dynamics!, 13, 7, quad_params)
-quadrotor_lift.info[:radius] = 0.25
+quadrotor_lift.info[:radius] = 0.275

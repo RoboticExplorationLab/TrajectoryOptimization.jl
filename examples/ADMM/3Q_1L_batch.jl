@@ -1,4 +1,4 @@
-include(joinpath(pwd(),"dynamics/quaternions.jl"))
+include(joinpath(dirname(@__FILE__),"../../dynamics/quaternions.jl"))
 
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params) where T
       #TODO change concatentations to make faster!
@@ -65,7 +65,7 @@ function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::Abstr
       return tau, omega, J, Jinv
 end
 
-quad_params = (m=0.5,
+quad_params = (m=0.85,
              J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
              Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
              gravity=SVector(0,0,-9.81),
@@ -136,8 +136,8 @@ batch_model_d = midpoint(batch_model)
 # Fd = zeros(45,45+21+1)
 # batch_model_d.∇f(Fd,zeros(45),zeros(21),1.0)
 
-r_act = [0.3, 0.3, 0.3]
-r_load = 0.15
+r_act = [0.275, 0.275, 0.275]
+r_load = 0.2
 
 function gen_batch_load_constraints(actuated_models,load_model,d,n_slack=3)
     num_act_models = length(actuated_models)
@@ -269,7 +269,7 @@ self_col = gen_batch_self_collision_constraints(actuated_models,load_model,r_act
 # ppN
 # PP
 # PPN
-
+num_lift = 3
 n_slack = 3
 nn = zeros(Int,num_act_models)
 mm = zeros(Int,num_act_models)
@@ -309,12 +309,12 @@ _cyl = []
 
 push!(_cyl,(5.,1.,r_cylinder))
 push!(_cyl,(5.,-1.,r_cylinder))
-push!(_cyl,(5.,1.25,r_cylinder))
-push!(_cyl,(5.,-1.25,r_cylinder))
-push!(_cyl,(5.,1.5,r_cylinder))
-push!(_cyl,(5.,-1.5,r_cylinder))
-push!(_cyl,(5.,1.75,r_cylinder))
-push!(_cyl,(5.,-1.75,r_cylinder))
+# push!(_cyl,(5.,1.25,r_cylinder))
+# push!(_cyl,(5.,-1.25,r_cylinder))
+# push!(_cyl,(5.,1.5,r_cylinder))
+# push!(_cyl,(5.,-1.5,r_cylinder))
+# push!(_cyl,(5.,1.75,r_cylinder))
+# push!(_cyl,(5.,-1.75,r_cylinder))
 
 function cI_cylinder(c,x,u)
     c_shift = 1
@@ -323,11 +323,11 @@ function cI_cylinder(c,x,u)
         n_shift = 0
         for i = 1:num_act_models
             idx_pos = (n_shift .+ (1:nn[i]))[1:3]
-            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 2*r_act[i])
+            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*r_act[i])
             c_shift += 1
             n_shift += nn[i]
         end
-        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 2*r_load)
+        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*r_load)
         c_shift += 1
     end
 end
@@ -339,7 +339,7 @@ m = quadrotor_lift.m
 n_load = Dynamics.doubleintegrator3D.n
 m_load = Dynamics.doubleintegrator3D.m
 shift_ = zeros(n)
-shift_[1:3] = [0.0;0.0;1.0]
+shift_[1:3] = [0.0;0.0;0.25]
 scaling = 1.
 x10 = zeros(n)
 x10[4] = 1.
@@ -354,12 +354,13 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
+xload0[3] = 4/6
 xload0[1:3] += shift_[1:3]
 
 x0_batch = [x10;x20;x30;xload0]
 
 _shift = zeros(n)
-_shift[1:3] = [10.0;0.0;0.0]
+_shift[1:3] = [7.5;0.0;0.0]
 
 norm(xload0[1:3]-x10[1:3])
 norm(xload0[1:3]-x20[1:3])
@@ -381,18 +382,32 @@ load_con = gen_batch_load_constraints(actuated_models,load_model,d)
 
 
 # costs
-Q_lift = 1.0e-2*Diagonal(I,n)
-Qf_lift = 1.0*Diagonal(I,n)
-R_lift = 1.0e-4*Diagonal(I,m)
-Q_load = 1.0e-2*Diagonal(I,n_load)
-Qf_load = 1.0*Diagonal(I,n_load)
-R_load = 1.0e-4*Diagonal(I,m_load)
 
-Q_batch = Diagonal(cat(Q_lift,1.5*Q_lift,2.0*Q_lift,Q_load,dims=(1,2)))
+q_diag = ones(n)
+
+q_diag1 = copy(q_diag)
+q_diag2 = copy(q_diag)
+q_diag3 = copy(q_diag)
+q_diag1[1] = 1.0
+q_diag2[1] = 1.5e-2
+q_diag3[1] = 1.0e-3
+
+r_diag = ones(m)
+r_diag[1:4] .= 1.0e-6
+r_diag[5:7] .= 1.0e-6
+Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
+Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
+R_lift = Diagonal(r_diag)
+Q_load = 0.0*Diagonal(I,n_load)
+Qf_load = 0.0*Diagonal(I,n_load)
+R_load = 1.0e-6*Diagonal(I,m_load)
+
+
+Q_batch = Diagonal(cat(Q_lift[1],Q_lift[2],Q_lift[3],Q_load,dims=(1,2)))
 R_batch = Diagonal(cat(R_lift,R_lift,R_lift,dims=(1,2)))
-Qf_batch = Diagonal(cat(Qf_lift,1.5*Qf_lift,2.0*Qf_lift,Qf_load,dims=(1,2)))
+Qf_batch = Diagonal(cat(Qf_lift[1],Qf_lift[2],Qf_lift[3],Qf_load,dims=(1,2)))
 
-N = 21
+N = 101
 dt = 0.1
 
 u_lim_l = -Inf*ones(m_batch)
@@ -401,122 +416,147 @@ u_lim_l[1:4] .= 0.
 u_lim_l[8:11] .= 0.
 u_lim_l[15:18] .= 0.
 
-u_lim_u[1:4] .= 9.81*(quad_params.m + 1.)/4.
-u_lim_u[8:11] .= 9.81*(quad_params.m + 1.)/4.
-u_lim_u[15:18] .= 9.81*(quad_params.m + 1.)/4.
+u_lim_u[1:4] .= 12/4.
+u_lim_u[8:11] .= 12/4.
+u_lim_u[15:18] .= 12/4.
 
-bnd = BoundConstraint(n_batch,m_batch,u_min=u_lim_l,u_max=u_lim_u)
+x_lim_l = -Inf*ones(n_batch)
+x_lim_l[3] = 0.
+x_lim_l[13+3] = 0.
+x_lim_l[26+3] = 0.
+
+bnd1 = BoundConstraint(n_batch,m_batch,u_min=u_lim_l,u_max=u_lim_u)
+bnd2 = BoundConstraint(n_batch,m_batch,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l)
 
 batch_obj = LQRObjective(Q_batch,R_batch,Qf_batch,xf_batch,N)
-batch_constraints = Constraints([load_con],N)
-for k = 1:N-1
-    batch_constraints[k] += bnd + cyl + self_col
+batch_constraints = Constraints(N)
+
+batch_constraints[1] += bnd1
+for k = 2:N-1
+    batch_constraints[k] += cyl + self_col + bnd2 + load_con
 end
 batch_constraints[N] += goal_constraint(xf_batch)
 
 quad_batch = TrajectoryOptimization.Problem(batch_model_d, batch_obj,constraints=batch_constraints, x0=x0_batch, xf=xf_batch, N=N, dt=dt)
 
-u_ = [9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.;9.81*(quad_params.m + 1.)/12.]
-u_load = [0.;0.;-9.81/num_lift]
+u_ = [9.81*(quad_params.m)/4.;9.81*(quad_params.m)/4.;9.81*(quad_params.m)/4.;9.81*(quad_params.m)/4.]
+u_load = [0.;0.;-9.81*0.35/num_lift]
 initial_controls!(quad_batch, [[u_;u_load;u_;u_load;u_;u_load] for k = 1:N-1])
 # initial_controls!(doubleintegrator_batch, zeros(batch_model.m,N-1))
 
 # rollout!(quad_batch)
-plot(quad_batch.X,1:3)
-plot(quad_batch.U)
+# plot(quad_batch.X,1:3)
+# plot(quad_batch.U)
 
-@time solve!(quad_batch,ALTROSolverOptions{Float64}(verbose=true))
-plot(quad_batch.X,1:3)
-max_violation(quad_batch)
+@info "Solving batch problem"
+verbose=false
+opts_ilqr = iLQRSolverOptions(verbose=verbose,
+      iterations=500, max_cost_value=1e12)
 
-using MeshCat
-using GeometryTypes
-using CoordinateTransformations
-using FileIO
-using MeshIO
-using Plots
+opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
+    opts_uncon=opts_ilqr,
+    cost_tolerance=1.0e-5,
+    constraint_tolerance=1.0e-3,
+    cost_tolerance_intermediate=1.0e-4,
+    penalty_initial=1.0e-3)
+    # penalty_scaling=2.0)
 
-# geometries
-# sphere_small = HyperSphere(Point3f0(0), convert(Float32,r_int)) # trajectory points
-# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
+@time solve!(quad_batch,opts_al)
+
+visualize = false
+if visualize
+	# plot(quad_batch.X,1:3)
+	# max_violation(quad_batch)
+
+	using MeshCat
+	using GeometryTypes
+	using CoordinateTransformations
+	using FileIO
+	using MeshIO
+	using Plots
+
+	# geometries
+	# sphere_small = HyperSphere(Point3f0(0), convert(Float32,r_int)) # trajectory points
+	# sphere_medium = HyperSphere(Point3f0(0), convert(Float32,1.0))
 
 
-function cable_transform(y,z)
-    v1 = [0,0,1]
-    v2 = y[1:3,1] - z[1:3,1]
-    normalize!(v2)
-    ax = cross(v1,v2)
-    ang = acos(v1'v2)
-    R = AngleAxis(ang,ax...)
-    compose(Translation(z),LinearMap(R))
+	function cable_transform(y,z)
+	    v1 = [0,0,1]
+	    v2 = y[1:3,1] - z[1:3,1]
+	    normalize!(v2)
+	    ax = cross(v1,v2)
+	    ang = acos(v1'v2)
+	    R = AngleAxis(ang,ax...)
+	    compose(Translation(z),LinearMap(R))
+	end
+
+	function plot_cylinder(vis,c1,c2,radius,mat,name="")
+	    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
+	    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+	end
+
+	function addcylinders!(vis,cylinders,height=1.5)
+	    for (i,cyl) in enumerate(cylinders)
+		plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
+	    end
+	end
+
+	function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
+	    num_act_models = length(actuated_models)
+	    nn = zeros(Int,num_act_models)
+	    mm = zeros(Int,num_act_models)
+
+	    for i = 1:num_act_models
+		nn[i] = actuated_models[i].n
+		mm[i] = actuated_models[i].m
+	    end
+
+	    nn_tol = sum(nn)
+
+	    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+	    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+	    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+	    quad_scaling = 0.1
+	    robot_obj = FileIO.load(obj)
+	    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+
+	    # intialized system
+	    for i = 1:num_act_models
+		setobject!(vis["agent$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_act[i])) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.35)))
+		setobject!(vis["agent$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+
+		cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
+		setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+	    end
+	    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+
+	    addcylinders!(vis,_cyl,3.)
+
+	    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
+
+
+	    anim = MeshCat.Animation(24)
+	    for k = 1:prob.N
+		MeshCat.atframe(anim,vis,k) do frame
+		    # cables
+		    x_load = prob.X[k][nn_tol .+ (1:load_model.n)][1:n_slack]
+		    n_shift = 0
+		    for i = 1:num_act_models
+			x_idx = n_shift .+ (1:actuated_models[i].n)
+			x_ = prob.X[k][x_idx][1:n_slack]
+			settransform!(frame["cable"]["$i"], cable_transform(x_,x_load))
+			settransform!(frame["agent$i"], compose(Translation(x_...),LinearMap(Quat(prob.X[k][x_idx][4:7]...))))
+
+			n_shift += actuated_models[i].n
+		    end
+		    settransform!(frame["load"], Translation(x_load...))
+		end
+	    end
+	    MeshCat.setanimation!(vis,anim)
+	end
+
+	vis = Visualizer()
+	open(vis)
+	visualize_batch_system(vis,quad_batch,actuated_models,load_model)
 end
-
-function plot_cylinder(vis,c1,c2,radius,mat,name="")
-    geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
-    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
-end
-
-function addcylinders!(vis,cylinders,height=1.5)
-    for (i,cyl) in enumerate(cylinders)
-        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
-    end
-end
-
-function visualize_batch_system(vis,prob,actuated_models,load_model,n_slack=3)
-    num_act_models = length(actuated_models)
-    nn = zeros(Int,num_act_models)
-    mm = zeros(Int,num_act_models)
-
-    for i = 1:num_act_models
-        nn[i] = actuated_models[i].n
-        mm[i] = actuated_models[i].m
-    end
-
-    nn_tol = sum(nn)
-
-    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
-
-    quad_scaling = 0.1
-    robot_obj = FileIO.load(obj)
-    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
-
-    # intialized system
-    for i = 1:num_act_models
-        setobject!(vis["agent$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_act[i])) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.35)))
-        setobject!(vis["agent$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
-
-        cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
-        setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
-    end
-    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
-
-    addcylinders!(vis,_cyl,3.)
-
-    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
-
-
-    anim = MeshCat.Animation(24)
-    for k = 1:prob.N
-        MeshCat.atframe(anim,vis,k) do frame
-            # cables
-            x_load = prob.X[k][nn_tol .+ (1:load_model.n)][1:n_slack]
-            n_shift = 0
-            for i = 1:num_act_models
-                x_idx = n_shift .+ (1:actuated_models[i].n)
-                x_ = prob.X[k][x_idx][1:n_slack]
-                settransform!(frame["cable"]["$i"], cable_transform(x_,x_load))
-                settransform!(frame["agent$i"], compose(Translation(x_...),LinearMap(Quat(prob.X[k][x_idx][4:7]...))))
-
-                n_shift += actuated_models[i].n
-            end
-            settransform!(frame["load"], Translation(x_load...))
-        end
-    end
-    MeshCat.setanimation!(vis,anim)
-end
-
-# vis = Visualizer()
-# open(vis)
-# visualize_batch_system(vis,quad_batch,actuated_models,load_model)

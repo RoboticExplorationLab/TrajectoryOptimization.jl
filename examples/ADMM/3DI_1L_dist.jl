@@ -1,6 +1,7 @@
 using Distributed
 using DistributedArrays
 using TimerOutputs
+
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
@@ -8,13 +9,12 @@ end
 
 using TrajectoryOptimization
 include("admm_solve.jl")
+include("visualization.jl")
 @everywhere using TrajectoryOptimization
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3DI_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
-
-
 
 
 # Initialize problems
@@ -35,7 +35,7 @@ function init_DI(distributed=true)
 	if distributed
 	    probs = ddata(T=Problem{Float64,Discrete});
 	    @sync for (j,w) in enumerate(workers())
-			@spawnat w probs[:L] = build_DI_problem(j)
+		@spawnat w probs[:L] = build_DI_problem(j)
 	    end
 	    prob_load = build_DI_problem(:load)
 	else
@@ -55,7 +55,7 @@ if false
 	# @time sol = solve_admm(prob_load, probs, opts_al)
 
 end
-vis = Visualizer()
-open(vis)
-sol[1].model.info
-visualize_DI_lift_system(vis, sol)
+# vis = Visualizer()
+# open(vis)
+# sol[1].model.info
+# visualize_DI_lift_system(vis, sol)

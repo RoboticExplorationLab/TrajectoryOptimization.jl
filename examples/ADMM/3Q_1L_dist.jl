@@ -1,16 +1,16 @@
-
 using Distributed
 using DistributedArrays
 using TimerOutputs
-addprocs(3)
-nworkers()
+if nworkers() != 3
+	addprocs(3,exeflags="--project=$(@__DIR__)")
+end
 
 using TrajectoryOptimization
 include("admm_solve.jl")
 @everywhere using TrajectoryOptimization
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
-@everywhere include("examples/ADMM/3Q_1L_problem.jl")
+@everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
 
 
@@ -27,24 +27,30 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-distributed = true
-distributed = false
-if distributed
-    probs = ddata(T=Problem{Float64,Discrete});
-    @sync for i in workers()
-        j = i - 1
-        @spawnat i probs[:L] = build_quad_problem(j)
-    end
-    prob_load = build_quad_problem(:load)
-else
-    probs = Problem{Float64,Discrete}[]
-    prob_load = build_quad_problem(:load)
-    for i = 1:num_lift
-        push!(probs, build_quad_problem(i))
-    end
+function init_quad_ADMM(distributed=true)
+		if distributed
+			probs = ddata(T=Problem{Float64,Discrete});
+			@sync for (j,w) in enumerate(workers())
+				@spawnat w probs[:L] = build_quad_problem(j)
+			end
+			prob_load = build_quad_problem(:load)
+		else
+			probs = Problem{Float64,Discrete}[]
+			prob_load = build_quad_problem(:load)
+			for i = 1:num_lift
+				push!(probs, build_quad_problem(i))
+			end
+		end
+		return probs, prob_load
+end
+probs, prob_load = init_quad_ADMM();
+
+vis = Visualizer()
+if true
+		TimerOutputs.reset_timer!()
+		@time sol = solve_admm(prob_load, probs, opts_al)
+		# visualize_quadrotor_lift_system(vis, [[prob_load]; probs], _cyl)
+		TimerOutputs.DEFAULT_TIMER
 end
 
-TimerOutputs.reset_timer!()
-@time sol = solve_admm(prob_load, probs, opts_al)
-visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
-TimerOutputs.DEFAULT_TIMER
+open(vis)

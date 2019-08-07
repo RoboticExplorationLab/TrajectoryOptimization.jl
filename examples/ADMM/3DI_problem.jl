@@ -18,8 +18,8 @@ function build_DI_problem(agent)
     m_load = doubleintegrator3D_load.m
 
     # Robot sizes
-    r_lift = 0.25
-    r_load = 0.1
+    r_lift = 0.275
+    r_load = 0.2
 
     # Control limits for lift robots
     u_lim_u = Inf*ones(m_lift)
@@ -36,14 +36,14 @@ function build_DI_problem(agent)
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 2*r_lift)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_lift)
         end
     end
     obs_lift = Constraint{Inequality}(cI_cylinder_lift,n_lift,m_lift,length(_cyl),:obs_lift)
 
     function cI_cylinder_load(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 2*r_load)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_load)
         end
     end
     obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
@@ -86,31 +86,14 @@ function build_DI_problem(agent)
 
     xliftf = [x1f, x2f, x3f]
 
-    norm(xloadf[1:3]-x1f[1:3])
-    norm(xloadf[1:3]-x2f[1:3])
-    norm(xloadf[1:3]-x3f[1:3])
-    norm(x1f[1:3]-x2f[1:3])
-    norm(x2f[1:3]-x3f[1:3])
-    norm(x3f[1:3]-x1f[1:3])
+    #~~~~~~~~~~~~~ BUILD PROBLEM ~~~~~~~~~~~~~~~~#
 
-    # Discretization
-    # N = 21
-    # dt = 0.1
-    #
-    # # Objective
-    # Q_lift = [1.0e-2*Diagonal(I,n_lift), 10.0e-2*Diagonal(I,n_lift), 0.1e-2*Diagonal(I,n_lift)]
-    # Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
-    # R_lift = 1.0e-4*Diagonal(I,m_lift)
-    #
-    # Q_load = 0.0*Diagonal(I,n_load)
-    # Qf_load = 0.0*Diagonal(I,n_load)
-    # R_load = 1.0e-4*Diagonal(I,m_load)
-
+    # discretization
     N = 41
     dt = 0.25
 
-    # Objective
-    Q_lift = [0.65e-2*Diagonal(I,n_lift), 0.65e-4*Diagonal(I,n_lift), 0.65e-2*Diagonal(I,n_lift)]
+    # objective
+    Q_lift = [1.0e-2*Diagonal(I,n_lift), 1.0e-4*Diagonal(I,n_lift), 1.0e-2*Diagonal(I,n_lift)]
     Qf_lift = [1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift),1.0*Diagonal(I,n_lift)]
     R_lift = 1.0*Diagonal(I,m_lift)
 
