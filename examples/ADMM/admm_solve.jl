@@ -113,6 +113,8 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
+	# return combine_problems(prob_load, probs)
+
     for ii = 1:opts.iterations
         # Solve each AL problem
     	@info "Solving AL problems..."
@@ -120,7 +122,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
             TO.solve_aula!(probs[i], solvers_al[i])
 			if !parallel
 				X_lift[i] .= probs[i].X
-				U_lift[i] .= probs[i].U	
+				U_lift[i] .= probs[i].U
 			end
         end
 
@@ -199,9 +201,9 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 				U_lift[i] .= fetch(@spawnat w probs[:L].U)
 			end
 		end
-				
 
-        # Solve AL load problem 
+
+        # Solve AL load problem
 		@info ("Solving load AL problem...")
         TO.solve_aula!(prob_load, solver_load)
 

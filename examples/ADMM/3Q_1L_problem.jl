@@ -1,11 +1,33 @@
 include("methods.jl")
 include("models.jl")
 
-function build_quad_problem(agent)
+function quad_obstacles()
+    r_cylinder = 0.5
+    _cyl = []
+    h = 3.75 - 1.8  # [-1.8,2.0]
+    w = 1. - 0.1  # [0.1, inf)
+    off = 0.6    # [0, 0.6]
+    push!(_cyl,(h,  w+off, r_cylinder))
+    push!(_cyl,(h, -w+off, r_cylinder))
+    push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
+    push!(_cyl,(h, -w+off-2r_cylinder, 2r_cylinder))
+    return _cyl
+end
+
+function build_quad_problem(agent,quat=false)
     num_lift = 3
 
-    n_lift = quadrotor_lift.n
-    m_lift = quadrotor_lift.m
+    if quat
+        quad_model = let quad = quadrotor_lift
+            d = copy(quad.info)
+            d[:quat] = 4:7
+            Model(quad.f, quad.∇f, quad.n, quad.m, quad.params, d)
+        end
+    else
+        quad_model = quadrotor_lift
+    end
+    n_lift = quad_model.n
+    m_lift = quad_model.m
 
     n_load = doubleintegrator3D_load.n
     m_load = doubleintegrator3D_load.m
@@ -23,6 +45,8 @@ function build_quad_problem(agent)
     x_lim_l_lift = -Inf*ones(n_lift)
     x_lim_l_lift[3] = 0.
 
+    hall_width =
+
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
 
@@ -31,11 +55,7 @@ function build_quad_problem(agent)
     bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load)
 
     # Obstacles
-    r_cylinder = 0.5
-
-    _cyl = []
-    push!(_cyl,(3.75,1.,r_cylinder))
-    push!(_cyl,(3.75,-1.,r_cylinder))
+    _cyl = quad_obstacles()
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
@@ -147,7 +167,7 @@ function build_quad_problem(agent)
     # Create problems
     if agent ∈ 1:num_lift
         i = agent
-        prob= Problem(quadrotor_lift,
+        prob= Problem(quad_model,
                         obj_lift[i],
                         U0_lift,
                         integration=:midpoint,
