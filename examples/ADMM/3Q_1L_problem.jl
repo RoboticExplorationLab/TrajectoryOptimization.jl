@@ -4,9 +4,9 @@ include("models.jl")
 function quad_obstacles()
     r_cylinder = 0.5
     _cyl = []
-    h = 3.75 - 1.8  # [-1.8,2.0]
-    w = 1. - 0.1  # [0.1, inf)
-    off = 0.6    # [0, 0.6]
+    h = 3.75 - 0*1.8  # [-1.8,2.0]
+    w = 1. - 0*0.1  # [0.1, inf)
+    off = 0*0.6    # [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
     push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
@@ -42,10 +42,10 @@ function build_quad_problem(agent,quat=false)
     u_lim_u = Inf*ones(m_lift)
     u_lim_l[1:4] .= 0.
     u_lim_u[1:4] .= 12.0/4.0
+
+    u
     x_lim_l_lift = -Inf*ones(n_lift)
     x_lim_l_lift[3] = 0.
-
-    hall_width =
 
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
@@ -94,6 +94,9 @@ function build_quad_problem(agent,quat=false)
     xload0[1:3] += shift_[1:3]
 
     xlift0 = [x10,x20,x30]
+    for k = 1:num_lift
+        xlift0[k][1:3] += randn(3)*0.5*0
+    end
 
     _shift = zeros(n_lift)
     _shift[1:3] = [7.5;0.0;0.0]
@@ -101,6 +104,7 @@ function build_quad_problem(agent,quat=false)
     # goal state
     xloadf = zeros(n_load)
     xloadf[1:3] = xload0[1:3] + _shift[1:3]
+    xloadf[3] += 1
     x1f = copy(x10) + _shift
     x2f = copy(x20) + _shift
     x3f = copy(x30) + _shift
@@ -116,6 +120,7 @@ function build_quad_problem(agent,quat=false)
 
     # Objectives
     q_diag = ones(n_lift)
+    q_diag[3] = 1e-3   # don't weight height very much
 
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
@@ -123,6 +128,8 @@ function build_quad_problem(agent,quat=false)
     q_diag1[1] = 1.0
     q_diag2[1] = 1.5e-2
     q_diag3[1] = 1.0e-3
+
+    # q_diag[2:end] .*= 1e-3  # encourage only x in the final state
 
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-6
@@ -145,7 +152,7 @@ function build_quad_problem(agent,quat=false)
         for k = 2:N-1
             con[k] += bnd2 + obs_lift
         end
-        con[N] += goal_constraint(xliftf[i])
+        # con[N] += goal_constraint(xliftf[i])
         push!(constraints_lift,copy(con))
     end
 

@@ -46,8 +46,27 @@ function init_quad_ADMM(;distributed=true,quat=false)
 end
 probs, prob_load = init_quad_ADMM(distributed=false, quat=true);
 
+plot([sum(u[(1:3:7) .+ 2]) for u in sol[1].U])
+plot(sol[1].U,3:3)
+plot(sol[3].U,5:7)
+@time sol,solvers = solve_admm(prob_load, probs, opts_al)
+visualize_quadrotor_lift_system(vis, sol)
+max_violation.(solvers)
 
-@time sol = solve_admm(prob_load, probs, opts_al)
+xf_load = prob_load.xf[1:3]
+xf_lift = [prob.xf[1:3] for prob in probs]
+d1 = norm(xf_load[1:3]-xf_lift[1][1:3])
+d2 = norm(xf_load[1:3]-xf_lift[2][1:3])
+d3 = norm(xf_load[1:3]-xf_lift[3][1:3])
+
+xN_lift - xf_lift
+xN_load - xf_load
+xN_load = sol[1].X[end][1:3]
+xN_lift = [prob.X[end][1:3] for prob in sol[2:4]]
+norm.(xN_lift - [xN_load for k = 1:3])
+d = [d1, d2, d3]
+solvers[1].C[end]
+xf = [prob.xf[1:3k] for prob in sol]
 
 vis = Visualizer()
 open(vis)

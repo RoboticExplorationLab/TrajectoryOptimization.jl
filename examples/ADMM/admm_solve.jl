@@ -3,8 +3,10 @@ function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions, pa
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
     @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
-    @timeit "solve" solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel)
-    combine_problems(prob_load, probs)
+    @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel)
+	solvers = combine_problems(solver_load, solvers_al)
+    problems = combine_problems(prob_load, probs)
+	return problems, solvers
 end
 
 function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts)
@@ -24,11 +26,11 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     end
 
     # Update load problem constraints
-    xf_load = prob_load.xf
-    xf_lift = fetch.([@spawnat w probs[:L].xf for w in workers()])
-    d1 = norm(xf_load[1:3]-xf_lift[1][1:3])
-    d2 = norm(xf_load[1:3]-xf_lift[2][1:3])
-    d3 = norm(xf_load[1:3]-xf_lift[3][1:3])
+    x0_load = prob_load.x0
+    x0_lift = fetch.([@spawnat w probs[:L].x0 for w in workers()])
+    d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
+    d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
+    d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
     d = [d1, d2, d3]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
@@ -69,11 +71,11 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 
     # Update Load problem constraints
-    xf_load = prob_load.xf
-    xf_lift = [prob.xf for prob in probs]
-    d1 = norm(xf_load[1:3]-xf_lift[1][1:3])
-    d2 = norm(xf_load[1:3]-xf_lift[2][1:3])
-    d3 = norm(xf_load[1:3]-xf_lift[3][1:3])
+    x0_load = prob_load.x0
+    x0_lift = [prob.x0 for prob in probs]
+    d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
+    d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
+    d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
     d = [d1, d2, d3]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
@@ -115,7 +117,8 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
 	# return combine_problems(prob_load, probs)
 
-    for ii = 1:opts.iterations
+	max_iter = 1
+    for ii = 1:max_iter
         # Solve each AL problem
     	@info "Solving AL problems..."
         for i = 1:num_lift
@@ -162,6 +165,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
             break
         end
     end
+	return solvers_al, solver_load
 end
 
 function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
@@ -238,6 +242,7 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
             break
         end
     end
+	return solvers_al, solver_load
 end
 
 copy_probs(probs::Vector{<:Problem}) = copy.(probs)
@@ -250,7 +255,7 @@ function copy_probs(probs::DArray)
 end
 
 
-combine_problems(prob_load, probs::Vector{<:Problem}) = [[prob_load]; probs]
+combine_problems(prob_load, probs::Vector) = [[prob_load]; probs]
 function combine_problems(prob_load, probs::DArray)
     problems = fetch.([@spawnat w probs[:L] for w in workers()])
     combine_problems(prob_load, problems)
