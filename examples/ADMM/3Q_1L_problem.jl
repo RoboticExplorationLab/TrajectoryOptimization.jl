@@ -43,7 +43,6 @@ function build_quad_problem(agent,quat=false)
     u_lim_l[1:4] .= 0.
     u_lim_u[1:4] .= 12.0/4.0
 
-    u
     x_lim_l_lift = -Inf*ones(n_lift)
     x_lim_l_lift[3] = 0.
 
@@ -125,7 +124,7 @@ function build_quad_problem(agent,quat=false)
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
     q_diag3 = copy(q_diag)
-    q_diag1[1] = 1.0
+    q_diag1[1] = 1.0e-1
     q_diag2[1] = 1.5e-2
     q_diag3[1] = 1.0e-3
 
@@ -135,7 +134,7 @@ function build_quad_problem(agent,quat=false)
     r_diag[1:4] .= 1.0e-6
     r_diag[5:7] .= 1.0e-6
     Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
+    Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
     Q_load = 0.0*Diagonal(I,n_load)
     Qf_load = 0.0*Diagonal(I,n_load)

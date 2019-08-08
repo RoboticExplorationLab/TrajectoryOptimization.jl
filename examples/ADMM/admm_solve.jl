@@ -115,7 +115,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
-	# return combine_problems(prob_load, probs)
+	# return solvers_al, solver_load
 
 	max_iter = 1
     for ii = 1:max_iter

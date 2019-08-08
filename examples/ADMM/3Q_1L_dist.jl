@@ -45,10 +45,15 @@ function init_quad_ADMM(;distributed=true,quat=false)
 		return probs, prob_load
 end
 probs, prob_load = init_quad_ADMM(distributed=false, quat=true);
+# for obj in prob_load.obj.cost
+# 	obj.q[3] = 0.0001
+# end
+# for prob in probs
+# 	for obj in prob.obj.cost
+# 		obj.q[3] = -0.1
+# 	end
+# end
 
-plot([sum(u[(1:3:7) .+ 2]) for u in sol[1].U])
-plot(sol[1].U,3:3)
-plot(sol[3].U,5:7)
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
 visualize_quadrotor_lift_system(vis, sol)
 max_violation.(solvers)
