@@ -5,7 +5,7 @@ function quad_obstacles()
     r_cylinder = 0.5
     _cyl = []
     h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
-    w = 1. + 10*0  # doorway width [0.1, inf)
+    w = 1. + 10  # doorway width [0.1, inf)
     off = 0*0.6    # y-offset [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
@@ -29,7 +29,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3)
     return x_lift
 end
 
-function build_quad_problem(agent,quat::Bool=false)
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false)
     num_lift = 3
 
     # Discretization
@@ -58,11 +58,11 @@ function build_quad_problem(agent,quat::Bool=false)
     # scaling = 1.
 
     # Specify task by load locations
-    x0_load = [0, -1, 0.5]
-    move = [7.5, 0., 1.8]
-    shift = [-1.5, 1.5, -1]
-    xf_load = x0_load + move + shift
-    d = 1.2           # length of string / rod
+    # x0_load = [0, -1, 0.5]
+    # move = [7.5, 0., 1.8]
+    # shift = [-1.5, 1.5, -1]
+    # xf_load = x0_load + move + shift
+    # d = 1.2           # length of string / rod
     α = deg2rad(45)   # angle between string and vertical for each quad
 
 
