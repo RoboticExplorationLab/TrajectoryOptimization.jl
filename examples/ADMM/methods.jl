@@ -219,7 +219,7 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
             prob.constraints[k] += con_height[k]
         end
     end
-    prob.obj[N].q[3] = -1
+    # prob.obj[N].q[3] = -1
 end
 
 function update_load_problem(prob, X_lift, U_lift, d::Vector)

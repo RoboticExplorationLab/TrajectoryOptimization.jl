@@ -117,7 +117,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
 	# return solvers_al, solver_load
 
-	max_iter = 1
+	max_iter = 2
     for ii = 1:max_iter
         # Solve each AL problem
     	@info "Solving AL problems..."

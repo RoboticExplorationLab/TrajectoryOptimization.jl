@@ -14,8 +14,26 @@ function quad_obstacles()
     return _cyl
 end
 
-function build_quad_problem(agent,quat=false)
+function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3)
+    h = d*cos(α)
+    r = d*sin(α)
+    z = x_load[3] + h
+    circle(θ) = [x_load[1] + r*cos(θ), x_load[2] + r*sin(θ)]
+    θ = range(0,2π,length=num_lift+1)
+    x_lift = [zeros(3) for i = 1:num_lift]
+    for i = 1:num_lift
+        x_lift[i][1:2] = circle(θ[i])
+        x_lift[i][3] = z
+    end
+    return x_lift
+end
+
+function build_quad_problem(agent,quat::Bool=false)
     num_lift = 3
+
+    # Discretization
+    N = 101
+    dt = 0.1
 
     if quat
         quad_model = let quad = quadrotor_lift
@@ -32,26 +50,80 @@ function build_quad_problem(agent,quat=false)
     n_load = doubleintegrator3D_load.n
     m_load = doubleintegrator3D_load.m
 
+
+    #~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # shift_ = zeros(n_lift)
+    # shift_[1:3] = [0.0;0.0;0.25]
+    # scaling = 1.
+
+    # Specify task by load locations
+    x0_load = [0, 0, 0.5]
+    move = [7.5, 0, 1.8]
+    xf_load = x0_load + move
+    d = 1.2           # length of string / rod
+    α = deg2rad(45)   # angle between string and vertical for each quad
+
+
+    # Calculate initial position
+    x0_lift = get_quad_locations(x0_load, d)
+    xlift0 = [zeros(n_lift) for i = 1:num_lift]
+
+    # Send quads to default configuration at first
+    xf_lift = get_quad_locations(xf_load, d)
+    xliftf = [zeros(n_lift) for i = 1:num_lift]
+
+    # Copy positions into state vectors
+    for i = 1:num_lift
+        xlift0[i][1:3] = x0_lift[i]
+        xliftf[i][1:3] = xf_lift[i]
+
+        # Set quaternion
+        xlift0[i][4] = 1
+        xliftf[i][4] = 1
+    end
+
+    xload0 = zeros(n_load)
+    xloadf = zeros(n_load)
+    xload0[1:3] = x0_load
+    xloadf[1:3] = xf_load
+
+
     #~~~~~~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Robot sizes
     r_lift = 0.275
     r_load = 0.2
 
+    # Workspace
+    ceiling = 3.0
+    flr = 0.0
+
     # Control limits for lift robots
     u_lim_l = -Inf*ones(m_lift)
-    u_lim_u = Inf*ones(m_lift)
+    u_lim_u =  Inf*ones(m_lift)
     u_lim_l[1:4] .= 0.
     u_lim_u[1:4] .= 12.0/4.0
 
-    x_lim_l_lift = -Inf*ones(n_lift)
-    x_lim_l_lift[3] = 0.
+    x_min_lift= -Inf*ones(n_lift)
+    x_min_lift[3] = flr + r_lift
+    x_max_lift = Inf*ones(n_lift)
+    x_max_lift[3] = ceiling - r_lift
 
+    # Load
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
 
+    # Load table
+    table_len = 0.  # last fraction of trajectory to enforce the table height on the load (e.g. 0.25 enforces it for the last fourth of knot points)
+    table_k::Int = N - floor(N*table_len)  # Start enforcing table at this knot point
+    table_height = xf_load[3] - r_load
+
+    x_min_load_table = -Inf*ones(n_load)
+    x_min_load_table[3] = 0.7
+
     bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
-    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l_lift)
-    bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load)
+    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u, x_min=x_min_lift, x_max=x_max_lift)
+    bnd_load = BoundConstraint(n_load,m_load, x_min=x_lim_l_load)
+    bnd_table = BoundConstraint(n_load,m_load, x_min=x_min_load_table)
 
     # Obstacles
     _cyl = quad_obstacles()
@@ -72,59 +144,18 @@ function build_quad_problem(agent,quat=false)
 
 
 
-    #~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    shift_ = zeros(n_lift)
-    shift_[1:3] = [0.0;0.0;0.25]
-    scaling = 1.
-    x10 = zeros(n_lift)
-    x10[4] = 1.
-    x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
-    x10 += shift_
-    x20 = zeros(n_lift)
-    x20[4] = 1.
-    x20[1:3] = scaling*[-sqrt(2/9);sqrt(2/3);4/3]
-    x20 += shift_
-    x30 = zeros(n_lift)
-    x30[4] = 1.
-    x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
-    x30 += shift_
-    xload0 = zeros(n_load)
-    xload0[3] = 4/6
-    xload0[1:3] += shift_[1:3]
-
-    xlift0 = [x10,x20,x30]
-    for k = 1:num_lift
-        xlift0[k][1:3] += randn(3)*0.5*0
-    end
-
-    _shift = zeros(n_lift)
-    _shift[1:3] = [7.5;0.0;0.0]
-
-    # goal state
-    xloadf = zeros(n_load)
-    xloadf[1:3] = xload0[1:3] + _shift[1:3]
-    xloadf[3] += 1
-    x1f = copy(x10) + _shift
-    x2f = copy(x20) + _shift
-    x3f = copy(x30) + _shift
-
-    xliftf = [x1f,x2f,x3f]
-
-
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~ BUILD PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    # Discretization
-    N = 101
-    dt = 0.1
 
     # Objectives
     q_diag = ones(n_lift)
-    q_diag[3] = 1e-3   # don't weight height very much
+    # q_diag[3] = 1e-3   # don't weight height very much
 
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
     q_diag3 = copy(q_diag)
-    q_diag1[1] = 1.0e-1
+    q_diag1[1] = 5.0e-2
+    q_diag1[1] = 1.0
     q_diag2[1] = 1.5e-2
     q_diag3[1] = 1.0e-3
 
@@ -133,11 +164,11 @@ function build_quad_problem(agent,quat=false)
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-6
     r_diag[5:7] .= 1.0e-6
-    Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
+    Q_lift = [1.0e-2*Diagonal(q_diag1), 1.0e-2*Diagonal(q_diag2), 1.0e-2*Diagonal(q_diag3)]
     Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
-    Q_load = 0.0*Diagonal(I,n_load)
-    Qf_load = 0.0*Diagonal(I,n_load)
+    Q_load = 1e-4*Diagonal(I,n_load)*0
+    Qf_load = 1e-1*Diagonal(I,n_load)*0
     R_load = 1.0e-6*Diagonal(I,m_load)
 
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
@@ -151,13 +182,21 @@ function build_quad_problem(agent,quat=false)
         for k = 2:N-1
             con[k] += bnd2 + obs_lift
         end
+        con[N] += bnd2
         # con[N] += goal_constraint(xliftf[i])
         push!(constraints_lift,copy(con))
     end
 
     constraints_load = Constraints(N)
     for k = 2:N-1
-        constraints_load[k] += obs_load + bnd3
+        constraints_load[k] += obs_load
+    end
+    for k = 2:N-1
+        if k < table_k
+            constraints_load[k] += bnd_load
+        else
+            constraints_load[k] += bnd_table
+        end
     end
     constraints_load[N] += goal_constraint(xloadf)
 
