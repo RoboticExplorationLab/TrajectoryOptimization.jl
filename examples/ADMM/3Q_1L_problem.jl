@@ -4,13 +4,14 @@ include("models.jl")
 function quad_obstacles()
     r_cylinder = 0.5
     _cyl = []
-    h = 3.75 - 0*1.8  # [-1.8,2.0]
-    w = 1. - 0*0.1  # [0.1, inf)
-    off = 0*0.6    # [0, 0.6]
+    h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
+    w = 1. + 10*0  # doorway width [0.1, inf)
+    off = 0*0.6    # y-offset [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
     push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
     push!(_cyl,(h, -w+off-2r_cylinder, 2r_cylinder))
+    # push!(_cyl,(h,  1+off+4r_cylinder, 3r_cylinder))
     return _cyl
 end
 
@@ -57,9 +58,10 @@ function build_quad_problem(agent,quat::Bool=false)
     # scaling = 1.
 
     # Specify task by load locations
-    x0_load = [0, 0, 0.5]
-    move = [7.5, 0, 1.8]
-    xf_load = x0_load + move
+    x0_load = [0, -1, 0.5]
+    move = [7.5, 0., 1.8]
+    shift = [-1.5, 1.5, -1]
+    xf_load = x0_load + move + shift
     d = 1.2           # length of string / rod
     α = deg2rad(45)   # angle between string and vertical for each quad
 
@@ -96,6 +98,7 @@ function build_quad_problem(agent,quat::Bool=false)
     # Workspace
     ceiling = 3.0
     flr = 0.0
+    hall = 3.0
 
     # Control limits for lift robots
     u_lim_l = -Inf*ones(m_lift)
@@ -104,8 +107,10 @@ function build_quad_problem(agent,quat::Bool=false)
     u_lim_u[1:4] .= 12.0/4.0
 
     x_min_lift= -Inf*ones(n_lift)
+    x_min_lift[2] = -hall
     x_min_lift[3] = flr + r_lift
     x_max_lift = Inf*ones(n_lift)
+    x_max_lift[2] = hall
     x_max_lift[3] = ceiling - r_lift
 
     # Load
@@ -113,12 +118,12 @@ function build_quad_problem(agent,quat::Bool=false)
     x_lim_l_load[3] = 0.
 
     # Load table
-    table_len = 0.  # last fraction of trajectory to enforce the table height on the load (e.g. 0.25 enforces it for the last fourth of knot points)
+    table_len = 0.1  # last fraction of trajectory to enforce the table height on the load (e.g. 0.25 enforces it for the last fourth of knot points)
     table_k::Int = N - floor(N*table_len)  # Start enforcing table at this knot point
     table_height = xf_load[3] - r_load
 
     x_min_load_table = -Inf*ones(n_load)
-    x_min_load_table[3] = 0.7
+    x_min_load_table[3] = table_height + r_load
 
     bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
     bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u, x_min=x_min_lift, x_max=x_max_lift)
@@ -150,15 +155,16 @@ function build_quad_problem(agent,quat::Bool=false)
     # Objectives
     q_diag = ones(n_lift)
     # q_diag[3] = 1e-3   # don't weight height very much
+    # q_diag[2] = 1
 
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
     q_diag3 = copy(q_diag)
-    q_diag1[1] = 5.0e-2
-    q_diag1[1] = 1.0
+    q_diag1[1] = 5.0e-1
     q_diag2[1] = 1.5e-2
     q_diag3[1] = 1.0e-3
 
+    # q_diag[2] = 1
     # q_diag[2:end] .*= 1e-3  # encourage only x in the final state
 
     r_diag = ones(m_lift)
@@ -167,9 +173,10 @@ function build_quad_problem(agent,quat::Bool=false)
     Q_lift = [1.0e-2*Diagonal(q_diag1), 1.0e-2*Diagonal(q_diag2), 1.0e-2*Diagonal(q_diag3)]
     Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
-    Q_load = 1e-4*Diagonal(I,n_load)*0
-    Qf_load = 1e-1*Diagonal(I,n_load)*0
+    Q_load = 0.0*Diagonal(I,n_load)
+    Qf_load = 0.0*Diagonal(I,n_load)
     R_load = 1.0e-6*Diagonal(I,m_load)
+    # Q_load[3,3] = 1e-4
 
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)

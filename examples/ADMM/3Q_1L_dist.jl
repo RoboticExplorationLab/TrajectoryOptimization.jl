@@ -7,10 +7,10 @@ end
 
 using TrajectoryOptimization
 include("admm_solve.jl")
+@everywhere using StaticArrays
 @everywhere using TrajectoryOptimization
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
-@everywhere using StaticArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
 
@@ -44,18 +44,13 @@ function init_quad_ADMM(;distributed=true,quat=false)
 		end
 		return probs, prob_load
 end
+@everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 probs, prob_load = init_quad_ADMM(distributed=false, quat=true);
-# for obj in prob_load.obj.cost
-# 	obj.q[3] = 0.0001
-# end
-# for prob in probs
-# 	for obj in prob.obj.cost
-# 		obj.q[3] = -0.1
-# 	end
-# end
 
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
+
 visualize_quadrotor_lift_system(vis, sol)
+plot(sol[1].X,1:3)
 max_violation.(solvers)
 
 xf_load = prob_load.xf[1:3]
@@ -73,6 +68,8 @@ d = [d1, d2, d3]
 solvers[1].C[end]
 xf = [prob.xf[1:3k] for prob in sol]
 
+
+include("visualization.jl")
 vis = Visualizer()
 open(vis)
 visualize_quadrotor_lift_system(vis, sol)

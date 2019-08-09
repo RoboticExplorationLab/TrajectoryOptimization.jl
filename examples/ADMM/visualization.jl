@@ -19,12 +19,12 @@ end
 
 function plot_cylinder(vis,c1,c2,radius,mat,name="")
     geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
-    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+    setobject!(vis["cyl"][name],geom,mat)
 end
 
 function addcylinders!(vis,cylinders,height=1.5)
     for (i,cyl) in enumerate(cylinders)
-        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
+        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(1.0, 0, 0, 1.0)),"cyl_$i")
     end
 end
 
@@ -81,8 +81,13 @@ function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
     num_lift = length(prob_lift)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
+    # Pedestal
+    xf_load = prob_load.xf
+    mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+    plot_cylinder(vis, [xf_load[1], xf_load[2], 0], [xf_load[1], xf_load[2], xf_load[3] - r_load], 0.3, mat, "pedestal")
+
     # camera angle
-    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
+    # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
     # load in quad mesh
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")

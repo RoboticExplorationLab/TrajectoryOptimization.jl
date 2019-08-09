@@ -183,8 +183,11 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
+	
+	# return solvers_al, solver_load
 
-    for ii = 1:opts.iterations
+	max_iters = 2
+    for ii = 1:max_iters
         # Solve each AL lift problem
 		@info "Solving AL lift problems..."
 		if parallel
