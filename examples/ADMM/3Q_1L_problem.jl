@@ -70,7 +70,7 @@ function build_quad_problem(agent)
     x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
     x30 += shift_
     xload0 = zeros(n_load)
-    xload0[3] = 4/6
+    xload0[3] = 3/6
     xload0[1:3] += shift_[1:3]
 
     xlift0 = [x10,x20,x30]
@@ -87,11 +87,32 @@ function build_quad_problem(agent)
 
     xliftf = [x1f,x2f,x3f]
 
+    _shift_ = zeros(n_lift)
+    _shift_[1] = 3.75
 
+    ℓ1 = norm(x30[1:3]-x10[1:3])
+    # norm(x10[1:3]-x20[1:3])
+    # norm(x20[1:3]-x30[1:3])
+
+    ℓ2 = norm(xload0[1:3]-x10[1:3])
+    norm(xload0[1:3]-x20[1:3])
+    # norm(xload0[1:3]-x30[1:3])
+
+
+    x1m = copy(x10)
+    x1m += _shift_
+    x3m = copy(x1m)
+    x3m[1] -= ℓ1
+    x2m = copy(x1m)
+    x2m[1] = 3.75
+    x2m[3] = xload0[3] + ℓ2
+
+    xliftmid = [x1m,x2m,x3m]
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~ BUILD PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Discretization
     N = 101
+    Nmid = Int(floor(N/2))
     dt = 0.1
 
     # Objectives
@@ -100,9 +121,16 @@ function build_quad_problem(agent)
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
     q_diag3 = copy(q_diag)
-    q_diag1[1] = 1.0
-    q_diag2[1] = 1.5e-2
+    # q_diag1[1] = 1.0
+    # q_diag2[1] = 1.5e-2
+    # q_diag3[1] = 1.0e-3
+    q_diag1[1] = 1.0e-3
+    q_diag2[1] = 1.0e-3
     q_diag3[1] = 1.0e-3
+    # q_diag1[3] = 1.0e-3
+    # q_diag2[3] = 1.0e-3
+    # q_diag3[3] = 1.0e-3
+
 
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-6
@@ -114,7 +142,17 @@ function build_quad_problem(agent)
     Qf_load = 0.0*Diagonal(I,n_load)
     R_load = 1.0e-6*Diagonal(I,m_load)
 
+    q_mid = zeros(n_lift)
+    q_mid[1:3] .= 100.0
+
+    Q_mid = Diagonal(q_mid)
+    cost_mid = [LQRCost(Q_mid,R_lift,xliftmid[i]) for i = 1:num_lift]
+
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
+    # update mid cost function
+    for i = 1:num_lift
+        obj_lift[i].cost[Nmid] = cost_mid[i]
+    end
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 
     # Constraints
@@ -125,7 +163,7 @@ function build_quad_problem(agent)
         for k = 2:N-1
             con[k] += bnd2 + obs_lift
         end
-        con[N] += goal_constraint(xliftf[i])
+        # con[N] += goal_constraint(xliftf[i])
         push!(constraints_lift,copy(con))
     end
 

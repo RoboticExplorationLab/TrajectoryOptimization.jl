@@ -72,7 +72,7 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
-xload0[3] = 4/6
+xload0[3] = 3/6
 xload0[1:3] += shift_[1:3]
 
 xlift0 = [x10,x20,x30]
@@ -89,8 +89,36 @@ x3f = copy(x30) + _shift
 
 xliftf = [x1f,x2f,x3f]
 
+# midpoint desired configuration
+ℓ1 = norm(x30[1:3]-x10[1:3])
+norm(x10[1:3]-x20[1:3])
+norm(x20[1:3]-x30[1:3])
+
+ℓ2 = norm(xload0[1:3]-x10[1:3])
+norm(xload0[1:3]-x20[1:3])
+norm(xload0[1:3]-x30[1:3])
+
+ℓ3 = 0.
+
+_shift_ = zeros(n_lift)
+_shift_[1] = 3.75
+
+x1m = copy(x10)
+x1m += _shift_
+x1m[1] += ℓ3
+x3m = copy(x1m)
+x3m[1] -= ℓ1
+x3m[1] -= ℓ3
+x2m = copy(x1m)
+x2m[1] = 3.75
+x2m[3] = ℓ2 - 0.5*sqrt(4*ℓ2^2 - ℓ1^2 + ℓ3*2) + x20[3]
+
+xliftmid = [x1m,x2m,x3m]
+
+
 # Discretization
 N = 101
+Nmid = Int(floor(N/2))
 dt = 0.1
 
 # Objectives
@@ -99,9 +127,15 @@ q_diag = ones(n_lift)
 q_diag1 = copy(q_diag)
 q_diag2 = copy(q_diag)
 q_diag3 = copy(q_diag)
-q_diag1[1] = 1.0
-q_diag2[1] = 1.5e-2
+# q_diag1[1] = 1.0
+# q_diag2[1] = 1.5e-2
+# q_diag3[1] = 1.0e-3
+q_diag1[1] = 1.0e-3
+q_diag2[1] = 1.0e-3
 q_diag3[1] = 1.0e-3
+# q_diag1[3] = 1.0e-3
+# q_diag2[3] = 1.0e-3
+# q_diag3[3] = 1.0e-3
 
 
 r_diag = ones(m_lift)
@@ -114,19 +148,17 @@ Q_load = 0.0*Diagonal(I,n_load)
 Qf_load = 0.0*Diagonal(I,n_load)
 R_load = 1.0e-6*Diagonal(I,m_load)
 
-# q_diag = ones(n_lift)
-# # q_diag[4:7] .= 2.
-# r_diag = ones(m_lift)
-# r_diag[1:4] .= 1.0e-3
-# r_diag[5:7] .= 1.0e-6
-# Q_lift = [1.0e-3*Diagonal(q_diag), 1.0e-3*Diagonal(q_diag), 1.9e-3*Diagonal(q_diag)]
-# Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
-# R_lift = Diagonal(r_diag)
-# Q_load = 0.0e-6*Diagonal(I,n_load)
-# Qf_load = 0.0e-6*Diagonal(I,n_load)
-# R_load = 1.0e-6*Diagonal(I,m_load)
+q_mid = zeros(n_lift)
+q_mid[1:3] .= 100.0
+
+Q_mid = Diagonal(q_mid)
+cost_mid = [LQRCost(Q_mid,R_lift,xliftmid[i]) for i = 1:num_lift]
 
 obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
+# update mid cost function
+for i = 1:num_lift
+    obj_lift[i].cost[Nmid] = cost_mid[i]
+end
 obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 
 # Constraints
@@ -137,13 +169,13 @@ for i = 1:num_lift
     for k = 2:N-1
         con[k] += bnd2 + obs_lift
     end
-    con[N] += goal_constraint(xliftf[i])
+    # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
 constraints_load = Constraints(N)
 for k = 2:N-1
-    constraints_load[k] += obs_load + bnd3
+    constraints_load[k] +=  bnd3 + obs_load
 end
 constraints_load[N] += goal_constraint(xloadf)
 
@@ -210,6 +242,6 @@ plot(plift_al[1].X,1:3)
 
 
 
-output_traj(plift_al[1],idx,joinpath(pwd(),"examples/ADMM/traj1.txt"))
-output_traj(plift_al[2],idx,joinpath(pwd(),"examples/ADMM/traj2.txt"))
-output_traj(plift_al[3],idx,joinpath(pwd(),"examples/ADMM/traj3.txt"))
+output_traj(plift_al[1],idx,joinpath(pwd(),"examples/ADMM/traj0.txt"))
+output_traj(plift_al[2],idx,joinpath(pwd(),"examples/ADMM/traj1.txt"))
+output_traj(plift_al[3],idx,joinpath(pwd(),"examples/ADMM/traj2.txt"))

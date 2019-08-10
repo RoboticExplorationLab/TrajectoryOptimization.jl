@@ -45,12 +45,20 @@ function init_quad_ADMM(distributed=true)
 end
 probs, prob_load = init_quad_ADMM();
 
-vis = Visualizer()
+# vis = Visualizer()
 if true
 		TimerOutputs.reset_timer!()
 		@time sol = solve_admm(prob_load, probs, opts_al)
-		# visualize_quadrotor_lift_system(vis, [[prob_load]; probs], _cyl)
+		# visualize_quadrotor_lift_system(vis, sol)
 		TimerOutputs.DEFAULT_TIMER
 end
-
+using MeshCat
+vis = MeshCat.Visualizer()
 open(vis)
+
+r_cylinder = 0.5
+_cyl = []
+push!(_cyl,(3.75,1.,r_cylinder))
+push!(_cyl,(3.75,-1.,r_cylinder))
+
+visualize_quadrotor_lift_system(vis, sol, _cyl)

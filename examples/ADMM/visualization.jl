@@ -88,13 +88,18 @@ function visualize_quadrotor_lift_system(vis, probs, _cyl, n_slack=3)
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
     obj = joinpath(urdf_folder, "quadrotor_base.obj")
 
-    quad_scaling = 0.07
+    quad_scaling = 0.085
     robot_obj = FileIO.load(obj)
     robot_obj.vertices .= robot_obj.vertices .* quad_scaling
 
     # intialize system
     for i = 1:num_lift
-        setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
+        # setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
+
+        # setobject!(vis["lift$i"]["cyl_top"],Cylinder(Point3f0([0,0,-1*r_lift]),Point3f0([0,0,3*r_lift]),convert(Float32,r_lift)),MeshPhongMaterial(color=RGBA(1, 0, 0, 0.25)))
+        # setobject!(vis["lift$i"]["cyl_bottom"],Cylinder(Point3f0([0,0,-3r_lift]),Point3f0([0,0,-1*r_lift]),convert(Float32,r_lift)),MeshPhongMaterial(color=RGBA(1, 0, 0, 0.25)))
+        # setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
+
         setobject!(vis["lift$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
 
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))

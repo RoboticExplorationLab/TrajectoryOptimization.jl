@@ -1,4 +1,9 @@
 function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
+    adaptive = false
+    if admm_type == :adaptive
+        adaptive = true
+        admm_type = :parallel
+    end
     N = prob_load.N
 
     # Problem dimensions
@@ -101,9 +106,19 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=f
         U_load .= prob_load_al.U
 
         # Update lift constraints prior to evaluating convergence
-        for i = 1:num_lift
-            TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
+        for i = 1:num_lift TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
             TO.update_active_set!(prob_lift_al[i].obj)
+            # collision = check_self_collision(prob_lift_al[i],opts.constraint_tolerance)
+            #
+            # if collision && adaptive
+            #     admm_type = :sequential
+            #     @info "-Sequential-"
+            # elseif !collision && adaptive
+            #     admm_type = :parallel
+            #     @info "-Parallel-"
+            # else
+            #     nothing
+            # end
         end
 
         max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
@@ -116,6 +131,16 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=f
     end
 
     return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
+end
+
+function check_self_collision(prob,tol)
+    for k = 2:prob.N-1
+        if any(prob.obj.C[k][:self_col] .> tol)
+            @info "Collision detected at time step: $k"
+            return true
+        end
+    end
+    return false
 end
 
 function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
@@ -241,7 +266,8 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
                 if i != agent
                     x_pos = x[1:n_slack]
                     x_pos2 = X_lift[i][k][1:n_slack]
-                    c[p_shift] = (r_lift + r_lift)^2 - norm(x_pos - x_pos2)^2
+                    # c[p_shift] = (r_lift + r_lift)^2 - norm(x_pos - x_pos2)^2
+                    c[p_shift] = circle_constraint(x_pos,x_pos2[1],x_pos2[2],2*r_lift)
                     p_shift += 1
                 end
             end
@@ -253,8 +279,10 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
                 if i != agent
                     x_pos = x[1:n_slack]
                     x_pos2 = X_lift[i][k][1:n_slack]
-                    dif = x_pos - x_pos2
-                    C[p_shift,1:n_slack] = -2*dif
+                    # dif = x_pos - x_pos2
+                    # C[p_shift,1:n_slack] = -2*dif
+                    C[p_shift,1] = -2*(x_pos[1] - x_pos2[1])
+                    C[p_shift,2] = -2*(x_pos[2] - x_pos2[2])
                     p_shift += 1
                 end
             end
