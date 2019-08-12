@@ -1,41 +1,137 @@
 include("methods.jl")
 include("models.jl")
 
-function build_quad_problem(agent)
+function quad_obstacles()
+    r_cylinder = 0.5
+    _cyl = []
+    h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
+    w = 1. + 10  # doorway width [0.1, inf)
+    off = 0*0.6    # y-offset [0, 0.6]
+    push!(_cyl,(h,  w+off, r_cylinder))
+    push!(_cyl,(h, -w+off, r_cylinder))
+    push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
+    push!(_cyl,(h, -w+off-2r_cylinder, 2r_cylinder))
+    # push!(_cyl,(h,  1+off+4r_cylinder, 3r_cylinder))
+    return _cyl
+end
+
+function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3)
+    h = d*cos(α)
+    r = d*sin(α)
+    z = x_load[3] + h
+    circle(θ) = [x_load[1] + r*cos(θ), x_load[2] + r*sin(θ)]
+    θ = range(0,2π,length=num_lift+1)
+    x_lift = [zeros(3) for i = 1:num_lift]
+    for i = 1:num_lift
+        x_lift[i][1:2] = circle(θ[i])
+        x_lift[i][3] = z
+    end
+    return x_lift
+end
+
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false)
     num_lift = 3
 
-    n_lift = quadrotor_lift.n
-    m_lift = quadrotor_lift.m
+    # Discretization
+    N = 101
+    dt = 0.1
+
+    if quat
+        quad_model = let quad = quadrotor_lift
+            d = copy(quad.info)
+            d[:quat] = 4:7
+            Model(quad.f, quad.∇f, quad.n, quad.m, quad.params, d)
+        end
+    else
+        quad_model = quadrotor_lift
+    end
+    n_lift = quad_model.n
+    m_lift = quad_model.m
 
     n_load = doubleintegrator3D_load.n
     m_load = doubleintegrator3D_load.m
+
+
+    #~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # shift_ = zeros(n_lift)
+    # shift_[1:3] = [0.0;0.0;0.25]
+    # scaling = 1.
+
+    # Specify task by load locations
+    # x0_load = [0, -1, 0.5]
+    # move = [7.5, 0., 1.8]
+    # shift = [-1.5, 1.5, -1]
+    # xf_load = x0_load + move + shift
+    # d = 1.2           # length of string / rod
+    α = deg2rad(45)   # angle between string and vertical for each quad
+
+
+    # Calculate initial position
+    x0_lift = get_quad_locations(x0_load, d)
+    xlift0 = [zeros(n_lift) for i = 1:num_lift]
+
+    # Send quads to default configuration at first
+    xf_lift = get_quad_locations(xf_load, d)
+    xliftf = [zeros(n_lift) for i = 1:num_lift]
+
+    # Copy positions into state vectors
+    for i = 1:num_lift
+        xlift0[i][1:3] = x0_lift[i]
+        xliftf[i][1:3] = xf_lift[i]
+
+        # Set quaternion
+        xlift0[i][4] = 1
+        xliftf[i][4] = 1
+    end
+
+    xload0 = zeros(n_load)
+    xloadf = zeros(n_load)
+    xload0[1:3] = x0_load
+    xloadf[1:3] = xf_load
+
 
     #~~~~~~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Robot sizes
     r_lift = 0.275
     r_load = 0.2
 
+    # Workspace
+    ceiling = 3.0
+    flr = 0.0
+    hall = 3.0
+
     # Control limits for lift robots
     u_lim_l = -Inf*ones(m_lift)
-    u_lim_u = Inf*ones(m_lift)
+    u_lim_u =  Inf*ones(m_lift)
     u_lim_l[1:4] .= 0.
     u_lim_u[1:4] .= 12.0/4.0
-    x_lim_l_lift = -Inf*ones(n_lift)
-    x_lim_l_lift[3] = 0.
 
+    x_min_lift= -Inf*ones(n_lift)
+    x_min_lift[2] = -hall
+    x_min_lift[3] = flr + r_lift
+    x_max_lift = Inf*ones(n_lift)
+    x_max_lift[2] = hall
+    x_max_lift[3] = ceiling - r_lift
+
+    # Load
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
 
+    # Load table
+    table_len = 0.1  # last fraction of trajectory to enforce the table height on the load (e.g. 0.25 enforces it for the last fourth of knot points)
+    table_k::Int = N - floor(N*table_len)  # Start enforcing table at this knot point
+    table_height = xf_load[3] - r_load
+
+    x_min_load_table = -Inf*ones(n_load)
+    x_min_load_table[3] = table_height + r_load
+
     bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
-    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l_lift)
-    bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load)
+    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u, x_min=x_min_lift, x_max=x_max_lift)
+    bnd_load = BoundConstraint(n_load,m_load, x_min=x_lim_l_load)
+    bnd_table = BoundConstraint(n_load,m_load, x_min=x_min_load_table)
 
     # Obstacles
-    r_cylinder = 0.5
-
-    _cyl = []
-    push!(_cyl,(3.75,1.,r_cylinder))
-    push!(_cyl,(3.75,-1.,r_cylinder))
+    _cyl = quad_obstacles()
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
@@ -117,6 +213,8 @@ function build_quad_problem(agent)
 
     # Objectives
     q_diag = ones(n_lift)
+    # q_diag[3] = 1e-3   # don't weight height very much
+    # q_diag[2] = 1
 
     q_diag1 = copy(q_diag)
     q_diag2 = copy(q_diag)
@@ -132,15 +230,19 @@ function build_quad_problem(agent)
     # q_diag3[3] = 1.0e-3
 
 
+    # q_diag[2] = 1
+    # q_diag[2:end] .*= 1e-3  # encourage only x in the final state
+
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-6
     r_diag[5:7] .= 1.0e-6
-    Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
+    Q_lift = [1.0e-2*Diagonal(q_diag1), 1.0e-2*Diagonal(q_diag2), 1.0e-2*Diagonal(q_diag3)]
+    Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
     Q_load = 0.0*Diagonal(I,n_load)
     Qf_load = 0.0*Diagonal(I,n_load)
     R_load = 1.0e-6*Diagonal(I,m_load)
+    # Q_load[3,3] = 1e-4
 
     q_mid = zeros(n_lift)
     q_mid[1:3] .= 100.0
@@ -169,7 +271,14 @@ function build_quad_problem(agent)
 
     constraints_load = Constraints(N)
     for k = 2:N-1
-        constraints_load[k] += obs_load + bnd3
+        constraints_load[k] += obs_load
+    end
+    for k = 2:N-1
+        if k < table_k
+            constraints_load[k] += bnd_load
+        else
+            constraints_load[k] += bnd_table
+        end
     end
     constraints_load[N] += goal_constraint(xloadf)
 
@@ -185,7 +294,7 @@ function build_quad_problem(agent)
     # Create problems
     if agent ∈ 1:num_lift
         i = agent
-        prob= Problem(quadrotor_lift,
+        prob= Problem(quad_model,
                         obj_lift[i],
                         U0_lift,
                         integration=:midpoint,

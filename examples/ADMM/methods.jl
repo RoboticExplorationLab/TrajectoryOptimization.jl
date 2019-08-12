@@ -1,9 +1,4 @@
 function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
-    adaptive = false
-    if admm_type == :adaptive
-        adaptive = true
-        admm_type = :parallel
-    end
     N = prob_load.N
 
     # Problem dimensions
@@ -106,19 +101,9 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=f
         U_load .= prob_load_al.U
 
         # Update lift constraints prior to evaluating convergence
-        for i = 1:num_lift TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
+        for i = 1:num_lift
+            TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
             TO.update_active_set!(prob_lift_al[i].obj)
-            # collision = check_self_collision(prob_lift_al[i],opts.constraint_tolerance)
-            #
-            # if collision && adaptive
-            #     admm_type = :sequential
-            #     @info "-Sequential-"
-            # elseif !collision && adaptive
-            #     admm_type = :parallel
-            #     @info "-Parallel-"
-            # else
-            #     nothing
-            # end
         end
 
         max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
@@ -131,6 +116,45 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=f
     end
 
     return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
+end
+
+function gen_lift_inequality_constraints(X_load, U_load, n, m)
+    N = length(X_load)
+    con_height = Constraint{Inequality}[]
+
+    for k = 1:N
+        function bnd(c,x,u=zeros())
+            c[1] = X_load[k][3] - x[3]
+        end
+        function ∇bnd(C,x,u=zeros())
+            C[1,3] = 1
+        end
+        ci = Constraint{Inequality}(bnd, n, m, 1, :height)
+        push!(con_height, ci)
+    end
+    return con_height
+end
+
+function gen_load_inequality_constraints(X_lift, U_lift, n, m)
+    N = length(X_lift[1])
+    num_lift = length(X_lift)
+    con_height = Constraint{Inequality}[]
+
+    for k = 1:N
+        function bnd(c,x,u=zeros())
+            for i = 1:num_lift
+                c[i] = x[3] - X_lift[i][k][3]
+            end
+        end
+        function ∇bnd(C,x,u=zeros())
+            for i = 1:num_lift
+                C[i,3] = 1
+            end
+        end
+        ci = Constraint{Inequality}(bnd, n, m, num_lift, :height)
+        push!(con_height, ci)
+    end
+    return con_height
 end
 
 function check_self_collision(prob,tol)
@@ -188,11 +212,12 @@ end
 function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
     num_lift = length(X_lift)
     N = length(X_lift[1])
-    con_cable_load = []
+    con_cable_load = Constraint{Equality}[]
 
     Is = Diagonal(I,n_slack)
 
     for k = 1:N
+
         function con(c,x,u=zeros())
             if k == 1
                 _shift = 0
@@ -230,6 +255,7 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
                     dif = x_pos - x_load_pos
                     C[i,1:n_slack] = -2*dif
                 end
+
                 if k < N
                     _shift = num_lift
                     for i = 1:num_lift
@@ -314,12 +340,17 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
     X_lift = X_cache[2:4]
     U_lift = U_cache[2:4]
     self_col = gen_self_collision_constraints(X_lift, agent, n_lift, m_lift, r_lift, n_slack)
+    con_height = gen_lift_inequality_constraints(X_load, U_load, n_lift, m_lift)
 
     # Add constraints to problems
     for k = 1:N
         prob.constraints[k] += cable_lift[k]
         (k != 1 && k != N) ? prob.constraints[k] += self_col[k] : nothing
+        if k > 1
+            prob.constraints[k] += con_height[k]
+        end
     end
+    # prob.obj[N].q[3] = -1
 end
 
 function update_load_problem(prob, X_lift, U_lift, d::Vector)
@@ -328,9 +359,13 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
     n_slack = 3
 
     cable_load = gen_load_cable_constraints(X_lift, U_lift, n_load, m_load, d, n_slack)
+    con_height = gen_load_inequality_constraints(X_lift, U_lift, n_load, m_load)
 
     for k = 1:prob.N
         prob.constraints[k] += cable_load[k]
+        if k > 1
+            prob.constraints[k] += con_height[k]
+        end
     end
 end
 

@@ -144,9 +144,9 @@ function animate_quadrotor_maze(prob)
     MeshCat.setanimation!(vis,anim)
 end
 
-function ghost_quadrotor_maze(prob)
-    vis = Visualizer()
-    open(vis)
+vis = Visualizer()
+open(vis)
+function ghost_quadrotor_maze(vis,prob)
 
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")

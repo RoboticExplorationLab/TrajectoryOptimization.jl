@@ -57,8 +57,8 @@ end
 obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;0.25]
-scaling = 1.
+shift_[1:3] = [0.0;0.0;0.0]
+scaling = 1.25
 x10 = zeros(n_lift)
 x10[4] = 1.
 x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
@@ -72,7 +72,7 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
-xload0[3] = 3/6
+xload0[3] = 4/6
 xload0[1:3] += shift_[1:3]
 
 xlift0 = [x10,x20,x30]
@@ -233,7 +233,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 # Visualize
 vis = Visualizer()
 open(vis)
-visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al], _cyl)
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al],_cyl)
 
 idx = [(1:3)...,(8:10)...]
 plot(plift_al[1].U,label="")

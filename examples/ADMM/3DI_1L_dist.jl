@@ -47,6 +47,7 @@ function init_DI(distributed=true)
 	end
 	return probs, prob_load
 end
+@everywhere include(joinpath(dirname(@__FILE__),"3DI_problem.jl"))
 probs, prob_load = init_DI(true);
 
 @time sol = solve_admm(prob_load, probs, opts_al)

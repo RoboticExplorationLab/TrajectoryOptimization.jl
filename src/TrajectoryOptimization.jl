@@ -131,6 +131,7 @@ DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
 PartedVecTrajectory{T} = Vector{PartedVector{T,Vector{T}}}
 PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
+include("quaternions.jl")
 include("constraints.jl")
 include("constraint_sets.jl")
 include("cost.jl")

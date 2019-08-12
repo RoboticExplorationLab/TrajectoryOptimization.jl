@@ -1,3 +1,4 @@
+using StaticArrays
 num_lift = 3
 num_load = 1
 
@@ -10,8 +11,7 @@ di_mass_lift = .850
 function double_integrator_3D_dynamics_lift!(ẋ,x,u)
     u_input = u[1:3]
     u_slack = u[4:6]
-    Dynamics.double_integrator_3D_dynamics!(ẋ,x,u_input+u_slack/di_mass_lift)
-end
+    Dynamics.double_integrator_3D_dynamics!(ẋ,x,u_input+u_slack/di_mass_lift) end
 
 doubleintegrator3D_lift = Model(double_integrator_3D_dynamics_lift!,Dynamics.doubleintegrator3D.n,Dynamics.doubleintegrator3D.m + n_slack)
 doubleintegrator3D_lift.info[:radius] = 0.275
@@ -28,7 +28,6 @@ doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,Dynamics.dou
 doubleintegrator3D_load.info[:radius] = 0.2
 
 # Quadrotor lift model
-include(joinpath(dirname(@__FILE__),"../../dynamics/quaternions.jl"))
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
       q = normalize(Quaternion(view(x,4:7)))
       v = view(x,8:10)
