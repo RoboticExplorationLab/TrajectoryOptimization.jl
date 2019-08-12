@@ -49,12 +49,11 @@ function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true,quat=
 		return probs, prob_load
 end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-x0 = [1,   0.5,  0.5]
-xf = [6.0, -0.5, 1.5]
+x0 = [0,   0.5,  0.66]
+xf = [7.5, -0.5, 0.66]
 probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true);
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
 
-get_quad_locations([3.75, 0, 1.5], 1.5, deg2rad(45), config=:doorway)
 
 visualize_quadrotor_lift_system(vis, sol)
 
