@@ -320,6 +320,7 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
     return self_col_con
 end
 
+
 function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift)
     n_lift = prob.model.n
     m_lift = prob.model.m

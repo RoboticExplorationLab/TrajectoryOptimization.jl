@@ -5,14 +5,15 @@ function quad_obstacles()
     r_cylinder = 0.5
     _cyl = []
     h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
-    w = 1. + 10  # doorway width [0.1, inf)
+    w = 1. + 10*0  # doorway width [0.1, inf)
     off = 0*0.6    # y-offset [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
     push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
     push!(_cyl,(h, -w+off-2r_cylinder, 2r_cylinder))
     # push!(_cyl,(h,  1+off+4r_cylinder, 3r_cylinder))
-    return _cyl
+    x_door = [h, off, 0]
+    return _cyl, x_door
 end
 
 function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3)
@@ -131,7 +132,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     bnd_table = BoundConstraint(n_load,m_load, x_min=x_min_load_table)
 
     # Obstacles
-    _cyl = quad_obstacles()
+    _cyl, x_door = quad_obstacles()
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
@@ -256,6 +257,24 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
         obj_lift[i].cost[Nmid] = cost_mid[i]
     end
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
+
+
+    # Modify cost at middle of the trajectory
+    x_mid = [copy(xlift0[1]) for i = 1:num_lift]
+    x_mid[1][1:3] = x_door + [ d, 0, 0]
+    x_mid[2][1:3] = x_door + [ 0, 0, d]
+    x_mid[3][1:3] = x_door + [-d, 0, 0]
+    cost_mid = [LQRCost(Q_lift[i]*10, R_lift, x_mid[i]) for i = 1:num_lift]
+
+    Nmid = N÷2
+    for i = 1:num_lift
+        obj_lift[i].cost[Nmid] = cost_mid[i]
+    end
+
+
+    # obj_lift[1][Nmid].q[1] = -1
+    # obj_kikklift[2][Nmid].q[3] = -1
+    # obj_lift[3][Nmid].q[1] =  1
 
     # Constraints
     constraints_lift = []
