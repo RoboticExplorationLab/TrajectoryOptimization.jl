@@ -71,11 +71,12 @@ function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=
     MeshCat.setanimation!(vis,anim)
 end
 
-function visualize_quadrotor_lift_system(vis, probs, _cyl, n_slack=3)
+function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     r_lift = prob_lift[1].model.info[:radius]::Float64
     r_load = prob_load.model.info[:radius]::Float64
+    _cyl, = quad_obstacles()
 
     num_lift = length(prob_lift)::Int
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]

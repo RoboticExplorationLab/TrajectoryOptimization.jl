@@ -51,38 +51,23 @@ end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 x0 = [1,   0.5,  0.5]
 xf = [6.0, -0.5, 1.5]
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=true, quat=true);
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true);
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
+
+get_quad_locations([3.75, 0, 1.5], 1.5, deg2rad(45), config=:doorway)
 
 visualize_quadrotor_lift_system(vis, sol)
 
-<<<<<<< HEAD
-# vis = Visualizer()
-=======
 include("visualization.jl")
 vis = Visualizer()
 open(vis)
 visualize_quadrotor_lift_system(vis, sol)
->>>>>>> fe188aaa4a779dec7f4924727d509839523f32f2
 if true
 		TimerOutputs.reset_timer!()
 		@time sol = solve_admm(prob_load, probs, opts_al)
 		# visualize_quadrotor_lift_system(vis, sol)
 		TimerOutputs.DEFAULT_TIMER
 end
-<<<<<<< HEAD
-using MeshCat
-vis = MeshCat.Visualizer()
-open(vis)
-
-r_cylinder = 0.5
-_cyl = []
-push!(_cyl,(3.75,1.,r_cylinder))
-push!(_cyl,(3.75,-1.,r_cylinder))
-
-visualize_quadrotor_lift_system(vis, sol, _cyl)
-=======
-
 
 function robustness_check(opts, nruns=50)
 	Random.seed!(1)
@@ -144,4 +129,3 @@ function export_traj(sol)
 	end
 end
 export_traj(sol)
->>>>>>> fe188aaa4a779dec7f4924727d509839523f32f2
