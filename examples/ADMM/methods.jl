@@ -151,43 +151,42 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
 end
 
 function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
-    num_lift = length(X_lift)
-    N = length(X_lift[1])
-    p_con = num_lift - 1
-
-    self_col_con = []
-
-    for k = 1:N
-        function col_con(c,x,u=zeros())
-            p_shift = 1
-            for i = 1:num_lift
-                if i != agent
-                    x_pos = x[1:n_slack]
-                    x_pos2 = X_lift[i][k][1:n_slack]
-                    c[p_shift] = (r_lift + r_lift)^2 - norm(x_pos - x_pos2)^2
-                    p_shift += 1
-                end
-            end
-        end
-
-        function ∇col_con(C,x,u=zeros())
-            p_shift = 1
-            for i = 1:num_lift
-                if i != agent
-                    x_pos = x[1:n_slack]
-                    x_pos2 = X_lift[i][k][1:n_slack]
-                    dif = x_pos - x_pos2
-                    C[p_shift,1:n_slack] = -2*dif
-                    p_shift += 1
-                end
-            end
-        end
-
-        push!(self_col_con,Constraint{Inequality}(col_con,∇col_con,n,m,p_con,:self_col))
-    end
-
-    return self_col_con
+   num_lift = length(X_lift)
+   N = length(X_lift[1])
+   p_con = num_lift - 1
+   self_col_con = []
+   for k = 1:N
+       function col_con(c,x,u=zeros())
+           p_shift = 1
+           for i = 1:num_lift
+               if i != agent
+                   x_pos = x[1:n_slack]
+                   x_pos2 = X_lift[i][k][1:n_slack]
+                   # c[p_shift] = (r_lift + r_lift)^2 - norm(x_pos - x_pos2)^2
+                   c[p_shift] = circle_constraint(x_pos,x_pos2[1],x_pos2[2],2*r_lift)
+                   p_shift += 1
+               end
+           end
+       end
+       function ∇col_con(C,x,u=zeros())
+           p_shift = 1
+           for i = 1:num_lift
+               if i != agent
+                   x_pos = x[1:n_slack]
+                   x_pos2 = X_lift[i][k][1:n_slack]
+                   # dif = x_pos - x_pos2
+                   # C[p_shift,1:n_slack] = -2*dif
+                   C[p_shift,1] = -2*(x_pos[1] - x_pos2[1])
+                   C[p_shift,2] = -2*(x_pos[2] - x_pos2[2])
+                   p_shift += 1
+               end
+           end
+       end
+       push!(self_col_con,Constraint{Inequality}(col_con,∇col_con,n,m,p_con,:self_col))
+   end
+   return self_col_con
 end
+
 
 function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift)
     n_lift = prob.model.n

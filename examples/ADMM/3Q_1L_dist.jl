@@ -7,6 +7,7 @@ using TimerOutputs
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
+import TrajectoryOptimization: Discrete
 
 using TrajectoryOptimization
 include("admm_solve.jl")
@@ -110,7 +111,7 @@ function export_traj(sol)
 		if i == 1
 			name = "load"
 		else
-			name = "quad$(i-1)"
+			name = "quad$(i-2)"
 		end
 		open(name * ".txt", write=true) do f
 			for k = 1:prob.N
