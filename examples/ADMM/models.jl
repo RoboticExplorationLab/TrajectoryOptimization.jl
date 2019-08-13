@@ -77,4 +77,5 @@ quad_params = (m=0.850,
              km=0.0245)
 
 quadrotor_lift = Model(quadrotor_lift_dynamics!, 13, 7, quad_params)
-quadrotor_lift.info[:radius] = 0.275
+# quadrotor_lift.info[:radius] = 0.275
+quadrotor_lift.info[:radius] = 0.5  # keep 2m distance between quads

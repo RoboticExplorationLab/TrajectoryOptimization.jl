@@ -69,6 +69,7 @@ function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=
         end
     end
     MeshCat.setanimation!(vis,anim)
+    return anim
 end
 
 function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
@@ -132,4 +133,5 @@ function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
         end
     end
     MeshCat.setanimation!(vis,anim)
+    return anim
 end

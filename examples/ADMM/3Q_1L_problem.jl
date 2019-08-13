@@ -5,8 +5,8 @@ function quad_obstacles()
     r_cylinder = 0.5
     _cyl = []
     h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
-    w = 1. + 10*0  # doorway width [0.1, inf)
-    off = 1.5    # y-offset [0, 0.6]
+    w = 1. - 0.1  # doorway width [0.1, inf)
+    off = 1.0    # y-offset [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
     push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
@@ -65,10 +65,11 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     N = 101          # number of knot points
     dt = 0.1         # time step
     d = 1.55         # rope length
-    α = deg2rad(45)  # angle between vertical and ropes
-    α2 = deg2rad(45) # arc angle for doorway
+    α = deg2rad(60)  # angle between vertical and ropes
+    α2 = deg2rad(60) # arc angle for doorway
+    ceiling = 3      # ceiling height
 
-    # Robot sizes
+    # Robot sizes (for obstacles)
     r_lift = 0.275
     r_load = 0.2
 
@@ -115,14 +116,19 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     q_diag1[1] = 1.0e-3
     q_diag2[1] = 1.0e-3
     q_diag3[1] = 1.0e-3
+    # q_diag2[2] = 1.0e-5
+    # q_diag3[2] = 1.0e-5
+    q_diag1[3] = 1.0e-3
+    q_diag2[3] = 1.0e-3
+    q_diag3[3] = 1.0e-3
 
     r_diag = ones(m_lift)
-    r_diag[1:4] .= 1.0e-6
+    r_diag[1:4] .= 1.0e-2
     r_diag[5:7] .= 1.0e-2
 
     # Quads
     Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    Qf_lift = [1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag), 1000.0*Diagonal(q_diag)]
+    Qf_lift = [10.0*Diagonal(q_diag), 10.0*Diagonal(q_diag), 10.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
 
@@ -133,14 +139,38 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 
     # Set cost at midpoint
+    n_mid = 10
     q_mid = zeros(n_lift)
-    q_mid[1:3] .= 100.0
+    q_mid[1:3] .= 100.0 / n_mid
 
     Q_mid = Diagonal(q_mid)
+    Q_mid2 = Diagonal(q_mid * 1e-2)
     cost_mid = [LQRCost(Q_mid,R_lift,xliftmid[i]) for i = 1:num_lift]
+
+    q_diag = ones(n_lift)
+
+    q_diag1 = copy(q_diag)
+    q_diag2 = copy(q_diag)
+    q_diag3 = copy(q_diag)
+    q_diag1[1] = 1.0e-3
+    q_diag2[1] = 1.0e-3
+    q_diag3[1] = 1.0e-6
+    q_diag2[2] = 1.0e-3
+    q_diag3[2] = 1.0e-3
+    Q_lift2 = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
+    cost2 = [LQRCost(Q_lift2[i], R_lift, xliftf[i]) for i = 1:num_lift]
+
     for i = 1:num_lift
-        obj_lift[i].cost[Nmid] = cost_mid[i]
+        for k = 1:N-1
+            if k == Nmid
+                obj_lift[i].cost[k] = cost_mid[i]
+            elseif k > Nmid
+                # obj_lift[i].cost[k] = cost2[i]
+            end
+        end
     end
+
+
 
     qm_load = zeros(n_load)
     qm_load[1:3] .= 100.0
@@ -167,9 +197,14 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
 
-    bnd1 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u)                     # Control bounds on quads
-    bnd2 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u,x_min=x_lim_l_lift)  # all bounds on quads
-    bnd3 = BoundConstraint(n_load, m_load, x_min=x_lim_l_load)                               # all bounds on load
+    # Set ceiling limit
+    x_lim_u_lift = Inf*ones(n_lift)
+    x_lim_u_lift[3] = ceiling
+
+    bnd1 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u)                    # Control bounds on quads
+    bnd2 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u,
+        x_min=x_lim_l_lift, x_max=x_lim_u_lift)                                             # all bounds on quads
+    bnd3 = BoundConstraint(n_load, m_load, x_min=x_lim_l_load)                              # all bounds on load
 
     # Obstacles
     function cI_cylinder_lift(c,x,u)
@@ -194,6 +229,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
         for k = 2:N-1
             con[k] += bnd2 + obs_lift
         end
+        con[N] += bnd2
         push!(constraints_lift,copy(con))
     end
 
