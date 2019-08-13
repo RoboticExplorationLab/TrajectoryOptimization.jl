@@ -1,19 +1,36 @@
 include("methods.jl")
 include("models.jl")
 
-function quad_obstacles()
-    r_cylinder = 0.5
+function quad_obstacles(door=:middle)
+    r_cylinder = 0.1
     _cyl = []
     h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
-    w = 1. - 0.1  # doorway width [0.1, inf)
-    off = 1.0    # y-offset [0, 0.6]
+    w = 0.5      # doorway width [0.1, inf)
+    off = 0.0    # y-offset [0, 0.6]
+    door_width = 1.0
+    off += door_location(door)
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
-    push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
-    push!(_cyl,(h, -w+off-2r_cylinder, 2r_cylinder))
-    # push!(_cyl,(h,  1+off+4r_cylinder, 3r_cylinder))
+    push!(_cyl,(h,  w+off+3r_cylinder, 3r_cylinder))
+    push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
+    push!(_cyl,(h,  w+off+3r_cylinder+3r_cylinder, 4r_cylinder))
+    push!(_cyl,(h, -w+off-3r_cylinder-3r_cylinder, 4r_cylinder))
+    # push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
     x_door = [h, off, 0]
     return _cyl, x_door
+end
+
+function door_location(door, door_width=1.0)
+    if door == :left
+        off = door_width
+    elseif door == :middle
+        off = 0.0
+    elseif door == :right
+        off = -door_width
+    else
+        error(string(door) * " not a defined door")
+    end
+    return off
 end
 
 """
@@ -49,7 +66,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
     return x_lift
 end
 
-function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false; infeasible=false)
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false; infeasible=false, doors=false)
     num_lift = 3
 
     n_lift = quadrotor_lift.n
@@ -58,7 +75,18 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     n_load = doubleintegrator3D_load.n
     m_load = doubleintegrator3D_load.m
 
-    _cyl, x_door = quad_obstacles()
+    door = :middle
+    door_width = 1.0
+    if doors
+        if xf_load[2] == door_width
+            door = :left
+        elseif xf_load[2] == -door_width
+            door = :right
+        end
+    end
+    @info "Going through $door door"
+    _cyl, x_door = quad_obstacles(door)
+
 
 
     # Params
@@ -67,7 +95,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     d = 1.55         # rope length
     α = deg2rad(60)  # angle between vertical and ropes
     α2 = deg2rad(60) # arc angle for doorway
-    ceiling = 3      # ceiling height
+    ceiling = 2.1    # ceiling height
 
     # Robot sizes (for obstacles)
     r_lift = 0.275

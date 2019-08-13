@@ -18,6 +18,17 @@ include("admm_solve.jl")
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 @everywhere const TO = TrajectoryOptimization
 
+function change_door!(xf, door)
+	door_width = 1.0
+	if door == :middle
+		xf[2] = 0.0
+	elseif door == :left
+		xf[2] = door_width
+	elseif door == :right
+		xf[2] = -door_width
+	end
+end
+
 
 # Initialize problems
 verbose = false
@@ -32,30 +43,68 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true,quat=false, infeasible=false)
+opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
+    opts_al=opts_al,
+    R_inf=1.0e-4,
+    resolve_feasible_problem=false,
+    projected_newton=false,
+    projected_newton_tolerance=1.0e-4)
+
+function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat=false, kwargs...)
 		if distributed
 			probs = ddata(T=Problem{Float64,Discrete});
 			@sync for (j,w) in enumerate(workers())
-				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat, infeasible=infeasible)
+				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat; kwargs...)
 			end
-			prob_load = build_quad_problem(:load,x0,xf,quat)
+			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
 		else
 			probs = Problem{Float64,Discrete}[]
-			prob_load = build_quad_problem(:load,x0,xf,quat)
+			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
 			for i = 1:num_lift
-				push!(probs, build_quad_problem(i,x0,xf,quat, infeasible=infeasible))
+				push!(probs, build_quad_problem(i,x0,xf,quat; kwargs...))
 			end
 		end
 		return probs, prob_load
 end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-x0 = [0,   0.5,  0.66]
-xf = [7.5, 0.5, 0.66]
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=true);
-probs[1].X[1]
+x0 = [0,  0.0,  0.3]
+xf = [7., 0.0, 0.3]
+door = :right
+change_door!(xf, door)
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=true);
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
+anim = visualize_quadrotor_lift_system(vis, sol, door=door)
 
-visualize_quadrotor_lift_system(vis, sol)
+k_init = 30
+door2 = :left
+change_door!(xf, door2)
+probs, prob_load = init_quad_ADMM(sol[1].X[k_init][1:3], xf, distributed=false, quat=true, infeasible=false, doors=true);
+@time sol2,solvers2 = solve_admm(prob_load, probs, opts_al)
+anim = visualize_quadrotor_lift_system(vis, sol2, door=door2)
+plot_quad_scene(vis, 33, sol)
+
+
+visualize_door_change(vis, sol, sol2, door, door2, k_init)
+plot_quad_scene(vis, 25, sol)
+plot_quad_scene(vis, 5, sol2)
+
+settransform!(vis["cyl"]["pedestal"], Translation(0,0,0))
+_cyl, = quad_obstacles(:middle)
+addcylinders!(vis, _cyl, 3.0)
+shifts = [[0, door_location(:middle), 0] for cyl in _cyl]
+movecylinders!(vis, shifts)
+
+1/probs[1].dt
+MeshCat.convert_frames_to_video("/home/bjack205/Downloads/meshcat_doorswitch.tar", "quad_doorswitch.mp4"; overwrite=true)
+
+X_lift = [p.X for p in sol[2:4]]
+X_load = sol[1].X
+n_lift, m_lift = size(sol[2])
+r_centroid = 0.0
+agent = 1
+con_centroid = gen_centroid_constraints(X_lift, X_load, agent, n_lift, m_lift, r_centroid)
+con = [con_centroid[k].c(zeros(1), X_lift[agent][k]) for k = 1:N]
+plot(con)
 
 include("visualization.jl")
 vis = Visualizer()
@@ -128,3 +177,9 @@ function export_traj(sol)
 	end
 end
 export_traj(sol)
+
+ffmpeg -r 60 -i %07d.png \
+	 -vcodec libx264 \
+	 -preset slow \
+	 -crf 18 \
+	 output.mp4

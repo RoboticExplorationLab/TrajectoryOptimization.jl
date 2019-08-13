@@ -321,11 +321,50 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
 end
 
 
+function gen_centroid_constraints(X_lift, X_load, agent, n_lift, m_lift, r_centroid, n_slack=3)
+    N = length(X_load)
+    num_lift = length(X_lift)
+    con_centroid = Vector{Constraint{Inequality}}(undef, N)
+    for k = 1:N
+        con, ∇con = centroid_constraint(X_lift, X_load, agent, k, r_centroid)
+        con_centroid[k] = Constraint{Inequality}(con, ∇con, n_lift, m_lift, 1, :centroid)
+    end
+    return con_centroid
+end
+
+function centroid_constraint(X_lift, X_load, agent, k, r_centroid)
+    num_lift = length(X_lift)
+    inds = [1:agent-1; agent+1:num_lift]
+    xs = sum([X_lift[i][k] for i in inds])
+    x_load = X_load[k]
+
+    function con(c, x, u=0)
+        cen = (x + xs)/num_lift
+        diff = cen[1:2] - x_load[1:2]
+        c[1] = norm(diff) - r_centroid
+    end
+    function ∇con(C, x, u=0)
+        cen = (x + xs)/num_lift
+        diff = cen[1:2] - x_load[1:2]
+        norm_diff = norm(diff)
+        C[1:2] = diff / (num_lift*norm(diff))
+    end
+    return con, ∇con
+end
+
+
+
+
+
+
+
 function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift)
     n_lift = prob.model.n
     m_lift = prob.model.m
     n_slack = 3
     N = prob.N
+
+    r_centroid = 0.1
 
     X_load = X_cache[1]
     U_load = U_cache[1]
@@ -342,6 +381,7 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
     U_lift = U_cache[2:4]
     self_col = gen_self_collision_constraints(X_lift, agent, n_lift, m_lift, r_lift, n_slack)
     con_height = gen_lift_inequality_constraints(X_load, U_load, n_lift, m_lift)
+    con_centroid = gen_centroid_constraints(X_lift, X_load, agent, n_lift, m_lift, r_centroid)
 
     # Add constraints to problems
     for k = 1:N
@@ -349,6 +389,9 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
         (k != 1 && k != N) ? prob.constraints[k] += self_col[k] : nothing
         if k > 1
             prob.constraints[k] += con_height[k]
+        end
+        if 1 < k < N
+            # prob.constraints[k] += con_centroid[k]
         end
     end
     # prob.obj[N].q[3] = -1
@@ -366,6 +409,40 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
         prob.constraints[k] += cable_load[k]
         if k > 1
             prob.constraints[k] += con_height[k]
+        end
+    end
+end
+
+"""
+Update the objective of the load to encourage it to say near the x-y centroid of the quads
+"""
+function update_load_objective!(prob, X_lift, U_lift)
+    n,m,N = size(prob)
+    Nmid = N÷2
+    num_lift = length(X_lift)
+
+    # Calculate centroid of the quads
+    centroid = [zeros(n) for k = 1:N]
+    for k = 1:N
+        cen = zero(X_lift[1][k])
+        for i = 1:num_lift
+           cen += X_lift[i][k]
+        end
+        cen /= num_lift
+        centroid[k][1:3] = cen[1:3]
+    end
+
+    # Set cost
+    q_diag = zeros(n)
+    q_diag[1:2] .= 1e1    # Only care about x-y tracking
+    Q = Diagonal(q_diag)
+    R = Diagonal(I,m)*1e-8
+
+    # Update costs
+    cost0 = prob.obj[1]
+    for k = 2:N-1
+        if k != Nmid
+            prob.obj.cost[k] = cost0 + LQRCost(Q, R, centroid[k])
         end
     end
 end
