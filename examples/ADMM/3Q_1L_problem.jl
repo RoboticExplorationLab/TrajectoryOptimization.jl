@@ -6,7 +6,7 @@ function quad_obstacles()
     _cyl = []
     h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
     w = 1. + 10*0  # doorway width [0.1, inf)
-    off = 0*0.6    # y-offset [0, 0.6]
+    off = 1.5    # y-offset [0, 0.6]
     push!(_cyl,(h,  w+off, r_cylinder))
     push!(_cyl,(h, -w+off, r_cylinder))
     push!(_cyl,(h,  w+off+2r_cylinder, 2r_cylinder))
@@ -49,7 +49,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
     return x_lift
 end
 
-function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false)
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false; infeasible=false)
     num_lift = 3
 
     n_lift = quadrotor_lift.n
@@ -71,6 +71,10 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     # Robot sizes
     r_lift = 0.275
     r_load = 0.2
+
+    # Calculated Params
+    tf = (N-1)*dt           # total time
+    Nmid = Int(floor(N/2))  # midpint at which to set the doorway configuration
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL & FINAL POSITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -114,7 +118,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-6
-    r_diag[5:7] .= 1.0e-6
+    r_diag[5:7] .= 1.0e-2
 
     # Quads
     Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
@@ -129,7 +133,6 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 
     # Set cost at midpoint
-    Nmid = Int(floor(N/2))  # midpint at which to set the doorway configuration
     q_mid = zeros(n_lift)
     q_mid[1:3] .= 100.0
 
@@ -138,6 +141,14 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     for i = 1:num_lift
         obj_lift[i].cost[Nmid] = cost_mid[i]
     end
+
+    qm_load = zeros(n_load)
+    qm_load[1:3] .= 100.0
+    Qm_load = Diagonal(qm_load)
+    xloadmid = zeros(n_load)
+    xloadmid[1:3] = xm_load
+    cost_load_mid = LQRCost(Qm_load, R_load, xloadmid)
+    obj_load.cost[Nmid] = cost_load_mid
 
 
 
@@ -202,6 +213,10 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     U0_lift = [u_lift for k = 1:N-1]
     U0_load = [-1.0*[u_load;u_load;u_load] for k = 1:N-1]
 
+    X0_lift = Vector{Vector{Vector{Float64}}}(undef, num_lift)
+    for i = 1:num_lift
+        X0_lift[i] = to_dvecs(interp_rows(N, tf, [xlift0[i] xliftmid[i] xliftf[i]]))
+    end
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~ CREATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Create problems
@@ -216,6 +231,9 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
                     xf=xliftf[i],
                     N=N,
                     dt=dt)
+        if infeasible
+            initial_states!(prob, X0_lift[i])
+        end
 
     elseif agent ∈ [0, :load]
         prob = Problem(doubleintegrator3D_load,

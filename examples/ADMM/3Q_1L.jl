@@ -188,6 +188,8 @@ u_lift[5:7] = u_load
 U0_lift = [u_lift for k = 1:N-1]
 U0_load = [-1.0*[u_load;u_load;u_load] for k = 1:N-1]
 
+
+
 # Create problems
 prob_lift = [Problem(quadrotor_lift,
                 obj_lift[i],

@@ -1,5 +1,5 @@
 
-function solve_admm(prob_load, probs, opts::AugmentedLagrangianSolverOptions, parallel=true)
+function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions, parallel=true)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
     @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
@@ -102,10 +102,17 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
     # Solve the initial problems
 	println("Solving initial problems...")
-    solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
+    solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
+
 
     # create augmented Lagrangian problems, solvers
 	@info "Setting up solvers..."
+	if opts isa ALTROSolverOptions
+		# for i = 1:num_lift
+		# 	probs[i] = TO.altro_problem(probs[i], opts)
+		# end
+		opts = opts.opts_al
+	end
     solvers_al = AugmentedLagrangianSolver{Float64}[]
     for i = 1:num_lift
         solver = AugmentedLagrangianSolver(probs[i],opts)

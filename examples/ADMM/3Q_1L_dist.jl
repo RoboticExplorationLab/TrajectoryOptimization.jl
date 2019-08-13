@@ -32,28 +32,28 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true,quat=false)
+function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true,quat=false, infeasible=false)
 		if distributed
 			probs = ddata(T=Problem{Float64,Discrete});
 			@sync for (j,w) in enumerate(workers())
-				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat)
+				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat, infeasible=infeasible)
 			end
 			prob_load = build_quad_problem(:load,x0,xf,quat)
 		else
 			probs = Problem{Float64,Discrete}[]
 			prob_load = build_quad_problem(:load,x0,xf,quat)
 			for i = 1:num_lift
-				push!(probs, build_quad_problem(i,x0,xf,quat))
+				push!(probs, build_quad_problem(i,x0,xf,quat, infeasible=infeasible))
 			end
 		end
 		return probs, prob_load
 end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 x0 = [0,   0.5,  0.66]
-xf = [7.5, -0.5, 0.66]
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true);
+xf = [7.5, 0.5, 0.66]
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=true);
+probs[1].X[1]
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
-
 
 visualize_quadrotor_lift_system(vis, sol)
 
