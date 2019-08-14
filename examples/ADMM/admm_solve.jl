@@ -98,21 +98,12 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 end
 
 function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
-	all_parallel = true
 
     num_lift = length(probs)
 
     # Solve the initial problems
 	println("Solving initial problems...")
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts)
-
-	if all_parallel
-		for i = 1:num_lift
-			X_lift[i] .= probs[i].X
-			U_lift[i] .= probs[i].U
-		end
-	end
-
 
     # create augmented Lagrangian problems, solvers
 	@info "Setting up solvers..."
@@ -131,9 +122,9 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
-	return solvers_al, solver_load
+	# return solvers_al, solver_load
 
-	max_iter = 1
+	max_iter = 3
     for ii = 1:max_iter
         # Solve each AL problem
     	@info "Solving AL problems..."
@@ -147,7 +138,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
         # Get trajectories
 		@info "Solving load problem..."
-		if parallel && !all_parallel
+		if parallel
 			for i = 1:num_lift
 				X_lift[i] .= probs[i].X
 				U_lift[i] .= probs[i].U
@@ -159,12 +150,6 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
         # Send trajectories
 		@info "Sending trajectories..."
-		if all_parallel
-			for i = 1:num_lift
-				X_lift[i] .= probs[i].X
-				U_lift[i] .= probs[i].U
-			end
-		end
         for i = 1:num_lift  # loop over agents
             for j = 1:num_lift
                 i != j || continue
