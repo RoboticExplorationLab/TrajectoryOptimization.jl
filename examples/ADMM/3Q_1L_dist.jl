@@ -74,7 +74,6 @@ change_door!(xf, door)
 probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=true);
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
 anim = visualize_quadrotor_lift_system(vis, sol, door=door)
-sol[2].X[end][3]
 
 
 # Change the door partway through
@@ -89,7 +88,7 @@ plot_quad_scene(vis, 33, sol)
 visualize_door_change(vis, sol, sol2, door, door2, k_init)
 
 
-MeshCat.convert_frames_to_video("/home/bjack205/Downloads/meshcat_doorswitch.tar", "quad_doorswitch.mp4"; overwrite=true)
+MeshCat.convert_frames_to_video("/home/bjack205/Downloads/meshcat_doorswitch_pedestal.tar", "quad_doorswitch.mp4"; overwrite=true)
 
 
 include("visualization.jl")
