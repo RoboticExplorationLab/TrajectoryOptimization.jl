@@ -4,7 +4,7 @@ include("models.jl")
 function quad_obstacles(door=:middle)
     r_cylinder = 0.1
     _cyl = []
-    h = 3.75 - 0*1.8  # x-loc [-1.8,2.0]
+    h = 3 - 0*1.8  # x-loc [-1.8,2.0]
     w = 0.5      # doorway width [0.1, inf)
     off = 0.0    # y-offset [0, 0.6]
     door_width = 1.0
@@ -15,6 +15,8 @@ function quad_obstacles(door=:middle)
     push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
     push!(_cyl,(h,  w+off+3r_cylinder+3r_cylinder, 4r_cylinder))
     push!(_cyl,(h, -w+off-3r_cylinder-3r_cylinder, 4r_cylinder))
+    push!(_cyl,(h,  w+off+3r_cylinder+9r_cylinder, 6r_cylinder))
+    push!(_cyl,(h, -w+off-3r_cylinder-9r_cylinder, 6r_cylinder))
     # push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
     x_door = [h, off, 0]
     return _cyl, x_door
@@ -145,8 +147,9 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     q_diag1[1] = 1.0e-3
     q_diag2[1] = 1.0e-3
     q_diag3[1] = 1.0e-3
-    # q_diag2[2] = 1.0e-5
-    # q_diag3[2] = 1.0e-5
+    q_diag1[2] = 1.0e-1
+    q_diag2[2] = 1.0e-1
+    q_diag3[2] = 1.0e-1
     q_diag1[3] = 1.0e-3
     q_diag2[3] = 1.0e-3
     q_diag3[3] = 1.0e-3

@@ -124,7 +124,9 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
 	# return solvers_al, solver_load
 
+	max_time = 30.0 # seconds
 	max_iter = 3
+	t_start = time()
     for ii = 1:max_iter
         # Solve each AL problem
     	@info "Solving AL problems..."
@@ -173,7 +175,14 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 			solver_load.stats[:viol_ADMM] = max_c
             break
         end
+		if time() - t_start > max_time
+			@warn "Maximum time exceeded"
+			break
+		end
     end
+	for (i,prob) in enumerate(probs)
+		probs[i] = update_problem(prob, constraints=prob.obj.constraints)
+	end
 	return solvers_al, solver_load
 end
 
@@ -195,7 +204,9 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 
 	# return solvers_al, solver_load
 
+	max_time = 30.0 # seconds
 	max_iters = 3
+	t_start = time()
     for ii = 1:max_iters
         # Solve each AL lift problem
 		@info "Solving AL lift problems..."
@@ -259,6 +270,9 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 			solver_load.stats[:viol_ADMM] = max_c
         end
     end
+	@sync for w in workers()
+		@spawnat w probs[:L] = update_problem(probs[:L], constraints=probs[:L].obj.constraints)
+	end
 	return solvers_al, solver_load
 end
 

@@ -11,12 +11,12 @@ import TrajectoryOptimization: Discrete
 
 using TrajectoryOptimization
 include("admm_solve.jl")
-@everywhere using StaticArrays
 @everywhere using TrajectoryOptimization
+@everywhere const TO = TrajectoryOptimization
+@everywhere using StaticArrays
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-@everywhere const TO = TrajectoryOptimization
 
 function change_door!(xf, door)
 	door_width = 1.0
@@ -67,13 +67,17 @@ function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat
 		return probs, prob_load
 end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-x0 = [0,  0.0,  0.3]
-xf = [7., 0.0, 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
-door = :right
-change_door!(xf, door)
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=true);
-@time sol,solvers = solve_admm(prob_load, probs, opts_al)
+x0 = [-1, 3,  0.3]
+xf = [6., 0.0, 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
+door = :middle
+# change_door!(xf, door)
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=false);
+@time sol,solvers = solve_admm(prob_load, probs, opts_al, false)
 anim = visualize_quadrotor_lift_system(vis, sol, door=door)
+
+findmax_violation.(sol)
+@which max_violation(sol[2])
+@which max_violation(solvers[4])
 
 
 # Change the door partway through
@@ -102,12 +106,22 @@ if true
 		TimerOutputs.DEFAULT_TIMER
 end
 
-function robustness_check(opts, nruns=50)
+
+function robustness_check(opts)
 	Random.seed!(1)
 	disable_logging(Logging.Info)
 
-	x0 = [Uniform(-1,1), Uniform(-0.5,0.5), Uniform(0.5, 1.5)]
-	xf = [Uniform(6,7.5), Uniform(-0.5,0.5), Uniform(0.5, 1.5)]
+	x0_bnd = [(-1, 0.75), (-3, 3), (0.3, 0.3)]
+	dx = 0.2
+	x0 = [range(x0_bnd[1]..., step=dx),
+	      range(x0_bnd[2]..., step=dx),
+	      range(x0_bnd[3]..., step=dx)]
+    sizes = length.(x0)
+	n_points = prod(sizes)
+	println("Total points: $n_points ($(join(sizes,'x')))")
+	xf = [6.0, 0.0, .95]
+
+	nruns = n_points
 	stats = Dict{Symbol,Vector}(
 		:c_max=>zeros(nruns),
 		:iters=>zeros(Int,nruns),
@@ -116,10 +130,11 @@ function robustness_check(opts, nruns=50)
 		:xf=>[zeros(3) for i = 1:nruns],
 		:success=>zeros(Bool,nruns),
 	)
-	for i = 1:nruns
-		print("Sample $i:")
-		x0_load = rand.(x0)
-		xf_load = rand.(xf)
+	i= 1
+	for x in x0[1], y in x0[2], z in x0[3]
+		print("Sample $i/ $n_points:")
+		x0_load = [x,y,z]
+		xf_load = xf
 		# x0_load = [0, 0, 0.5]
 		# xf_load = [7.5, 0, 0.5]
 		probs, prob_load = init_quad_ADMM(x0_load, xf_load, distributed=true, quat=true)
@@ -133,38 +148,8 @@ function robustness_check(opts, nruns=50)
 		stats[:time][i] = t
 		stats[:success][i] ? success = "success" : success = "failed"
 		println(" $success ($t sec)")
+		i+= 1
 	end
 	return stats
-
 end
-robustness_check(opts_al, 10)
-
-
-function export_traj(sol)
-	for (i,prob) in enumerate(sol)
-		if i == 1
-			name = "load"
-		else
-			name = "quad$(i-2)"
-		end
-		open(name * ".txt", write=true) do f
-			for k = 1:prob.N
-				if i == 1
-					inds = [1,2,3,4,5,6]
-				else
-					inds = [1,2,3,8,9,10]
-				end
-				for j in inds
-					print(f, prob.X[k][j], " ")
-				end
-			end
-		end
-	end
-end
-export_traj(sol)
-
-ffmpeg -r 60 -i %07d.png \
-	 -vcodec libx264 \
-	 -preset slow \
-	 -crf 18 \
-	 output.mp4
+robustness_check(opts_al)
