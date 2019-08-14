@@ -68,14 +68,17 @@ function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat
 end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 x0 = [0,  0.0,  0.3]
-xf = [7., 0.0, 0.3]
+xf = [7., 0.0, 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
 door = :right
 change_door!(xf, door)
 probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=true);
 @time sol,solvers = solve_admm(prob_load, probs, opts_al)
 anim = visualize_quadrotor_lift_system(vis, sol, door=door)
+sol[2].X[end][3]
 
-k_init = 30
+
+# Change the door partway through
+k_init = 30  # time step to change the door
 door2 = :left
 change_door!(xf, door2)
 probs, prob_load = init_quad_ADMM(sol[1].X[k_init][1:3], xf, distributed=false, quat=true, infeasible=false, doors=true);
@@ -83,28 +86,11 @@ probs, prob_load = init_quad_ADMM(sol[1].X[k_init][1:3], xf, distributed=false, 
 anim = visualize_quadrotor_lift_system(vis, sol2, door=door2)
 plot_quad_scene(vis, 33, sol)
 
-
 visualize_door_change(vis, sol, sol2, door, door2, k_init)
-plot_quad_scene(vis, 25, sol)
-plot_quad_scene(vis, 5, sol2)
 
-settransform!(vis["cyl"]["pedestal"], Translation(0,0,0))
-_cyl, = quad_obstacles(:middle)
-addcylinders!(vis, _cyl, 3.0)
-shifts = [[0, door_location(:middle), 0] for cyl in _cyl]
-movecylinders!(vis, shifts)
 
-1/probs[1].dt
 MeshCat.convert_frames_to_video("/home/bjack205/Downloads/meshcat_doorswitch.tar", "quad_doorswitch.mp4"; overwrite=true)
 
-X_lift = [p.X for p in sol[2:4]]
-X_load = sol[1].X
-n_lift, m_lift = size(sol[2])
-r_centroid = 0.0
-agent = 1
-con_centroid = gen_centroid_constraints(X_lift, X_load, agent, n_lift, m_lift, r_centroid)
-con = [con_centroid[k].c(zeros(1), X_lift[agent][k]) for k = 1:N]
-plot(con)
 
 include("visualization.jl")
 vis = Visualizer()

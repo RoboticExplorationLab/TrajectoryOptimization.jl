@@ -84,7 +84,6 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
             door = :right
         end
     end
-    @info "Going through $door door"
     _cyl, x_door = quad_obstacles(door)
 
 
@@ -96,6 +95,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     α = deg2rad(60)  # angle between vertical and ropes
     α2 = deg2rad(60) # arc angle for doorway
     ceiling = 2.1    # ceiling height
+    r_ped = 0.15     # last fraction of traj to increase lower bound on load
 
     # Robot sizes (for obstacles)
     r_lift = 0.275
@@ -127,6 +127,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     # midpoint desired configuration
     xm_load = (x0_load + xf_load)/2       # average middle and end positions to get load height at doorway
+    xm_load = copy(x0_load)
     xm_load[1:2] = x_door[1:2]            # set x,y location of load to be the location of the door
     xliftmid = [zeros(n_lift) for i = 1:num_lift]
     xm_lift = get_quad_locations(xm_load, d, α2, num_lift, config=:doorway)
@@ -156,13 +157,14 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     # Quads
     Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    Qf_lift = [10.0*Diagonal(q_diag), 10.0*Diagonal(q_diag), 10.0*Diagonal(q_diag)]
+    Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
     R_lift = Diagonal(r_diag)
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
 
     # Load
     Q_load = 0.0*Diagonal(I,n_load)
     Qf_load = 0.0*Diagonal(I,n_load)
+    Qf_load[3,3] = 1.0  # needed to get good initial guess with pedestal constraints. Turned off after initial solve
     R_load = 1.0e-6*Diagonal(I,m_load)
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
 
@@ -198,8 +200,6 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
         end
     end
 
-
-
     qm_load = zeros(n_load)
     qm_load[1:3] .= 100.0
     Qm_load = Diagonal(qm_load)
@@ -229,10 +229,15 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     x_lim_u_lift = Inf*ones(n_lift)
     x_lim_u_lift[3] = ceiling
 
+    # Set pedestal limit
+    x_min_pedestal = copy(x_lim_l_load)
+    x_min_pedestal[3] = xf_load[3]
+
     bnd1 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u)                    # Control bounds on quads
     bnd2 = BoundConstraint(n_lift, m_lift, u_min=u_lim_l, u_max=u_lim_u,
         x_min=x_lim_l_lift, x_max=x_lim_u_lift)                                             # all bounds on quads
     bnd3 = BoundConstraint(n_load, m_load, x_min=x_lim_l_load)                              # all bounds on load
+    bnd_ped = BoundConstraint(n_load, m_load, x_min=x_min_pedestal)                         # pedestal bounds on load
 
     # Obstacles
     function cI_cylinder_lift(c,x,u)
@@ -263,7 +268,12 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     constraints_load = Constraints(N)
     for k = 2:N-1
-        constraints_load[k] +=  bnd3 + obs_load
+        constraints_load[k] +=  obs_load
+        if k < floor((1-r_ped)*N)
+            constraints_load[k] += bnd3
+        else
+            constraints_load[k] += bnd_ped
+        end
     end
     constraints_load[N] += goal_constraint(xloadf)
 

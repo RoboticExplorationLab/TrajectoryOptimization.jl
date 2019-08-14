@@ -405,6 +405,7 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
     cable_load = gen_load_cable_constraints(X_lift, U_lift, n_load, m_load, d, n_slack)
     con_height = gen_load_inequality_constraints(X_lift, U_lift, n_load, m_load)
 
+    prob.obj.cost[end].Q .*= 0
     for k = 1:prob.N
         prob.constraints[k] += cable_load[k]
         if k > 1

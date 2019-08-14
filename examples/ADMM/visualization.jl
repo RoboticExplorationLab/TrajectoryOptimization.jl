@@ -85,7 +85,6 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     r_load = prob_load.model.info[:radius]::Float64
     ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
     _cyl, = quad_obstacles()
-    @show _cyl
 
     num_lift = length(prob_lift)::Int
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
