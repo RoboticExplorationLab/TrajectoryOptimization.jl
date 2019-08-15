@@ -140,7 +140,7 @@ function plot_quad_scene(frame, k, probs)
 
     # cables
     x_load = prob_load.X[k][1:n_slack]
-    for i = 1:num_lift
+    for i = 1:length(prob_lift)
         x_lift = prob_lift[i].X[k][1:n_slack]
         settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
         settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...))))
@@ -208,4 +208,56 @@ function visualize_door_change(vis, sol1, sol2, door1, door2, k_switch; n_slack=
     end
     MeshCat.setanimation!(vis,anim)
     return anim
+end
+
+function ghost_quadrotor_lift_system(vis, probs, index, tp=[]; door=:middle, n_slack=3)
+    prob_load = probs[1]
+    prob_lift = probs[2:end]
+    r_lift = prob_lift[1].model.info[:radius]::Float64
+    r_load = prob_load.model.info[:radius]::Float64
+    ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
+    _cyl, = quad_obstacles()
+
+    num_lift = length(prob_lift)::Int
+    d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
+
+    addcylinders!(vis, _cyl, ceiling)
+    settransform!(vis["cyl"], Translation(0, door_location(door), 0))
+
+    # # Pedestal
+    xf_load = prob_load.xf
+    mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+    plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
+
+    # camera angle
+    settransform!(vis["/Cameras/default"], compose(Translation(4., 0., 8.5),LinearMap(RotY(-pi/2))))
+
+    # load in quad mesh
+    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+    quad_scaling = 0.085
+    robot_obj = FileIO.load(obj)
+    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+
+
+    for (kk,k) in enumerate(index)
+        x_load = prob_load.X[k][1:n_slack]
+
+        for i = 1:num_lift
+            x_lift = prob_lift[i].X[k][1:n_slack]
+
+            setobject!(vis["lift$k$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, tp[kk])))
+            settransform!(vis["lift$k$i"], Translation(x_lift...))
+
+            cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
+            setobject!(vis["cable$k"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, tp[kk])))
+            settransform!(vis["cable$k"]["$i"], cable_transform(x_lift,x_load))
+
+        end
+        setobject!(vis["load$k"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, tp[kk])))
+        settransform!(vis["load$k"], Translation(x_load...))
+
+    end
 end
