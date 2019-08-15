@@ -18,6 +18,23 @@ include("admm_solve.jl")
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 
+function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat=false, kwargs...)
+		if distributed
+			probs = ddata(T=Problem{Float64,Discrete});
+			@sync for (j,w) in enumerate(workers())
+				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat; kwargs...)
+			end
+			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
+		else
+			probs = Problem{Float64,Discrete}[]
+			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
+			for i = 1:num_lift
+				push!(probs, build_quad_problem(i,x0,xf,quat; kwargs...))
+			end
+		end
+		return probs, prob_load
+end
+
 function change_door!(xf, door)
 	door_width = 1.0
 	if door == :middle
@@ -28,7 +45,6 @@ function change_door!(xf, door)
 		xf[2] = -door_width
 	end
 end
-
 
 # Initialize problems
 verbose = false
@@ -50,25 +66,9 @@ opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
     projected_newton=false,
     projected_newton_tolerance=1.0e-4)
 
-function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat=false, kwargs...)
-		if distributed
-			probs = ddata(T=Problem{Float64,Discrete});
-			@sync for (j,w) in enumerate(workers())
-				@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat; kwargs...)
-			end
-			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
-		else
-			probs = Problem{Float64,Discrete}[]
-			prob_load = build_quad_problem(:load,x0,xf,quat; kwargs...)
-			for i = 1:num_lift
-				push!(probs, build_quad_problem(i,x0,xf,quat; kwargs...))
-			end
-		end
-		return probs, prob_load
-end
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-x0 = [-1, 3,  0.3]
-xf = [6., 0.0, 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
+x0 = [0., 0.,  0.3]
+xf = [6., 0., 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
 door = :middle
 # change_door!(xf, door)
 probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=false);
