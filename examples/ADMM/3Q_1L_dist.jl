@@ -4,15 +4,19 @@ using Logging
 using Distributed
 using DistributedArrays
 using TimerOutputs
+using JSON3
+using Plots
+using PGFPlots
+const PGF = PGFPlots
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
 import TrajectoryOptimization: Discrete
 
 using TrajectoryOptimization
-include("admm_solve.jl")
 @everywhere using TrajectoryOptimization
 @everywhere const TO = TrajectoryOptimization
+include("admm_solve.jl")
 @everywhere using StaticArrays
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
@@ -67,12 +71,12 @@ opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
     projected_newton_tolerance=1.0e-4)
 
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
-x0 = [0., 0.,  0.3]
-xf = [6., 0., 0.95]  # height of table: 0.75 (+0.2) m, spread height: 1.7
+x0 = [0, 0,  0.3]
+xf = [6., 0., 1.0]  # height of table: 0.75 (+0.2) m, spread height: 1.7
 door = :middle
 # change_door!(xf, door)
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, quat=true, infeasible=false, doors=false);
-@time sol,solvers = solve_admm(prob_load, probs, opts_al, false)
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=true, quat=true, infeasible=false, doors=false);
+@time sol,solvers = solve_admm(prob_load, probs, opts_al, true)
 anim = visualize_quadrotor_lift_system(vis, sol, door=door)
 
 findmax_violation.(sol)
@@ -107,11 +111,11 @@ if true
 end
 
 
-function robustness_check(opts)
+function robustness_check(opts, filename=joinpath(dirname(@__FILE__), "robustness_check.txt"))
 	Random.seed!(1)
 	disable_logging(Logging.Info)
 
-	x0_bnd = [(-1, 0.75), (-3, 3), (0.3, 0.3)]
+	x0_bnd = [(-1, 0.75), (-4, 4), (0.3, 0.3)]
 	dx = 0.2
 	x0 = [range(x0_bnd[1]..., step=dx),
 	      range(x0_bnd[2]..., step=dx),
@@ -129,10 +133,11 @@ function robustness_check(opts)
 		:x0=>[zeros(3) for i = 1:nruns],
 		:xf=>[zeros(3) for i = 1:nruns],
 		:success=>zeros(Bool,nruns),
+		:gridsize=>sizes
 	)
 	i= 1
 	for x in x0[1], y in x0[2], z in x0[3]
-		print("Sample $i/ $n_points:")
+		print("Sample $i / $n_points ($x, $y, $z):")
 		x0_load = [x,y,z]
 		xf_load = xf
 		# x0_load = [0, 0, 0.5]
@@ -150,6 +155,64 @@ function robustness_check(opts)
 		println(" $success ($t sec)")
 		i+= 1
 	end
+
+	# # Write results
+	# jsontxt = JSON3.write(stats)
+	# open(filename, write=true) do f
+	# 	write(f, jsontxt)
+	# end
+
 	return stats
 end
-robustness_check(opts_al)
+stats = robustness_check(opts_al)
+
+# # Write results
+filename = joinpath(dirname(@__FILE__), "robustness_check.txt")
+jsontxt = JSON3.write(stats)
+open(filename, write=true) do f
+	write(f, jsontxt)
+end
+
+# Read results back in
+stats2 = open(joinpath(dirname(@__FILE__), "robustness_check.txt"), read=true) do f
+	JSON3.read(read(f))
+end
+
+# Create PGF Plot
+pushPGFPlotsOptions("scale=2.0")
+xs = [x[1] for x in stats[:x0]]
+ys = [x[2] for x in stats[:x0]]
+nx = length(unique(xs))
+ny = length(unique(ys))
+
+s = stats[:success]
+tmin = minimum(stats[:time])
+pts_succ = PGF.Plots.Scatter(ys[s], -xs[s], stats[:time][s], style="mark=*", legendentry="success")
+pts_fail = PGF.Plots.Scatter(ys[.!s], -xs[.!s], stats[:time][.!s], style="mark=diamond*", legendentry="failure")
+color_wall = "red"
+style = "color=$color_wall, fill=$color_wall"
+obs = [PGF.Plots.Circle(circle[2], -circle[1], circle[3], style=style) for circle in quad_obstacles()[1]]
+goal = let circle = stats[:xf][1]
+	PGF.Plots.Circle(circle[2], -circle[1], 0.1, style="color=green, fill=green")
+end
+a = Axis([pts_succ; pts_fail; goal; obs],
+	xmin=-3.5, xmax=3.5,
+	ymin=-6.2, ymax=1,
+	axisEqualImage=true,
+	hideAxis=true,
+	colorbar=true,
+	legendPos="south west",
+	style="{point meta max=10,
+			colorbar style={
+				ylabel=runtime (s),
+				ytick={$tmin,2,4,6,8}, extra y ticks={10},
+				 extra y tick labels={10+}
+			 }}")
+PGF.save("initial_conditions.tikz", a, include_preamble=false)
+
+save(joinpath(paper,"escape_c_max.tikz"), a, include_preamble=false)
+
+ColorMaps.Named()
+x = [1,2,3]
+y = [2,4,1]
+plot(x, y)

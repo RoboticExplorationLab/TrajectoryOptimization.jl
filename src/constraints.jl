@@ -123,7 +123,7 @@ jacobian!(V::AbstractMatrix, con::Constraint, x::AbstractVector, u::AbstractVect
 jacobian!(V::AbstractMatrix, con::Constraint, x::AbstractVector) = is_terminal(con) ? con.∇c(V,x) : nothing
 
 violation!(v, con::Constraint{Equality}, x, u) = evaluate!(v, con, x, u)
-function violation!(v, con::Union{Constraint{Inequality}, BoundConstraint}, x, u)
+function violation!(v, con::AbstractConstraint{Inequality}, x, u)
     evaluate!(v, con, x, u);
     for i in eachindex(v)
         v[i] = pos(v[i])
@@ -131,7 +131,7 @@ function violation!(v, con::Union{Constraint{Inequality}, BoundConstraint}, x, u
 end
 
 violation!(v, con::Constraint{Equality}, x) = evaluate!(v, con, x)
-function violation!(v, con::Union{Constraint{Inequality}, BoundConstraint}, x)
+function violation!(v, con::AbstractConstraint{Inequality}, x)
     evaluate!(v, con, x);
     for i in eachindex(v)
         v[i] = pos(v[i])

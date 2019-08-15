@@ -1,4 +1,5 @@
-using Plots
+# using Plots
+using Colors
 using MeshCat
 using GeometryTypes
 using CoordinateTransformations
