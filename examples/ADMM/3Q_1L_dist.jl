@@ -22,6 +22,7 @@ include("admm_solve.jl")
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 
+
 function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; distributed=true, quat=false, kwargs...)
 		if distributed
 			probs = ddata(T=Problem{Float64,Discrete});
@@ -103,11 +104,78 @@ include("visualization.jl")
 vis = Visualizer()
 open(vis)
 visualize_quadrotor_lift_system(vis, sol)
+# ghost_quadrotor_lift_system(vis, sol, [1,50,100], [1.0,0.5,1.0]; door=:middle, n_slack=3)
+
+# generate frame plots
+settransform!(vis["/Cameras/default"], compose(Translation(5., 0., 5.),LinearMap(RotY(-pi/3))))
+k = [1,25+1,50+1,75+1,sol[1].N]
+plot_quad_scene(vis, k[5], sol)
+
+# Z height plot
+p = plot(xlabel="time (s)",ylabel="height")
+N = sol[1].N
+_labels=["agent 1","agent 2", "agent 3"]
+
+tspan = range(0,stop=sol[1].tf,length=sol[1].N)
+for i = 1:num_lift
+	z = [sol[i+1].X[k][3] for k = 1:N]
+	p = plot!(tspan,z,label=_labels[i],color=i,width=2)
+end
+z = [sol[1].X[k][3] for k = 1:N]
+p = plot!(tspan,z,label="load",legend=:topleft,color=num_lift+1)
+
+for kk in k
+	for i = 1:num_lift
+		z = [sol[i+1].X[kk][3] for k = 1:N]
+		p = plot!((tspan[kk],z[kk]),marker=:circle,color=i,label="")
+		println(z[end])
+	end
+	z = [sol[1].X[kk][3] for k = 1:N]
+	p = plot!((tspan[kk],z[kk]),label="",marker=:circle,color=num_lift+1)
+end
+display(p)
+
+using PGFPlots
+const PGF = PGFPlots
+
+_colors = ["blue","orange","green","purple"]
+_labels = ["load","agent 1","agent 2", "agent 3"]
+# Plot the trajectories
+z_plot = [PGF.Plots.Linear(tspan,[sol[i].X[k][3] for k = 1:N],
+    legendentry="$(_labels[i])",
+    mark="none",
+    style="color=$(_colors[i]), thick") for i = 1:length(sol)]
+
+tspan_points = [tspan[kk] for kk in k]
+zpoints = [[sol[i].X[kk][3] for kk in k] for i in 1:length(sol)]
+zz = ["a"]
+sc = "{l={mark=o,red, scale=1.5, mark options={fill=red},legendentry=""},
+		a={mark=o,red,scale=1.5, mark options={fill=red}},
+		b={mark=o,red,scale=1.5, mark options={fill=red}},
+		c={mark=o,red,scale=1.5, mark options={fill=red}}}"
+
+z_markers = [PGF.Plots.Scatter(tspan_points, zpoints[i], ["a" for kk in k], scatterClasses="{a={mark=*,$(_colors[i]),scale=1.0, mark options={fill=$(_colors[i])}}}") for i = 1:length(sol)]
+
+# Plot the whole thing
+a = Axis([z_plot[2]; z_plot[3]; z_plot[4]; z_plot[1];z_markers[2];z_markers[3];z_markers[4];z_markers[1]],
+    xmin=0., ymin=0., xmax=sol[1].tf, ymax=2.1,
+    axisEqualImage=false,
+    legendPos="north west",
+    hideAxis=false,
+	style="grid=both",
+	xlabel="time (s)",
+	ylabel="height (m)")
+
+# Save to tikz format
+paper = "/home/taylor/Research/distributed_team_lift_paper/images"
+PGF.save(joinpath(paper,"height.tikz"), a, include_preamble=false)
+
+
 if true
-		TimerOutputs.reset_timer!()
-		@time sol = solve_admm(prob_load, probs, opts_al)
-		# visualize_quadrotor_lift_system(vis, sol)
-		TimerOutputs.DEFAULT_TIMER
+	TimerOutputs.reset_timer!()
+	@time sol = solve_admm(prob_load, probs, opts_al)
+	# visualize_quadrotor_lift_system(vis, sol)
+	TimerOutputs.DEFAULT_TIMER
 end
 
 
