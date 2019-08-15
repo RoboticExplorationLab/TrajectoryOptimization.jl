@@ -225,7 +225,7 @@ Return the number of states (n), number of controls (m), and the number of knot 
 Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
 "$(TYPEDSIGNATURES) Copy a problem"
-Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0), copy(p.xf),
+Base.copy(p::Problem) = Problem(p.model, copy(p.obj), copy(p.constraints), copy(p.x0), copy(p.xf),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]

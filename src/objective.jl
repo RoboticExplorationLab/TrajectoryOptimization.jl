@@ -28,6 +28,7 @@ function Objective(cost::CostTrajectory,cost_terminal::CostFunction)
     Objective([cost...,cost_terminal])
 end
 
+Base.copy(obj::Objective) = Objective(deepcopy(obj.cost))
 import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]
