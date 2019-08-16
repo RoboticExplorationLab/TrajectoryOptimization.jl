@@ -6,19 +6,21 @@ using Plots
 include("3Q_1L_problem.jl")
 include("batch_methods.jl")
 
+num_lift = 4
 x0 = [0,  0.0,  0.3]
-xf = [7., 0.0, 0.95]
+xf = [6.0, 0.0, 0.3]
+
 probs = Problem{Float64,Discrete}[]
-prob_load = build_quad_problem(:load,x0,xf,true)
+prob_load = build_quad_problem(:load,x0,xf,true,false,num_lift)
 for i = 1:num_lift
-    push!(probs, build_quad_problem(i,x0,xf,true))
+    push!(probs, build_quad_problem(i,x0,xf,true,false,num_lift))
 end
 prob_load.model.info[:radius]
 N = probs[1].N
 dt = probs[1].dt
-_cyl, x_door = quad_obstacles()
 
-norm(probs[1].x0[1:3]-probs[2].x0[1:3])
+r_lift = 0.275
+r_load = 0.2
 
 num_lift = length(probs)
 n_batch = sum([probs[i].model.n for i = 1:num_lift]) + prob_load.model.n
@@ -39,28 +41,6 @@ xf_batch = vcat([probs[i].xf for i = 1:num_lift]...,prob_load.xf)
 # initial controls
 U0 = [vcat([probs[i].U[k] for i = 1:num_lift]...) for k = 1:N-1]
 
-# obstacle constraints
-r_lift = 0.275
-r_load = 0.2
-function cI_cylinder(c,x,u)
-    c_shift = 1
-    n_slack = 3
-    nn_tol = sum([probs[i].model.n for i = 1:num_lift])
-
-    for p = 1:length(_cyl)
-        n_shift = 0
-        for i = 1:num_lift
-            idx_pos = (n_shift .+ (1:probs[i].model.n))[1:3]
-            c[c_shift] = circle_constraint(x[idx_pos],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*r_lift)
-            c_shift += 1
-            n_shift += probs[i].model.n
-        end
-        c[c_shift] = circle_constraint(x[nn_tol .+ (1:load_model.n)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*r_load)
-
-        c_shift += 1
-    end
-end
-cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
 
 # load constraints
 d = [norm(prob_load.xf[1:3] - probs[i].xf[1:3]) for i = 1:num_lift]
@@ -128,7 +108,7 @@ batch_constraints = Constraints(N)
 
 batch_constraints[1] += bnds[1]
 for k = 2:N-1
-    batch_constraints[k] += cyl + bnds[k] #+ load_con + self_col
+    batch_constraints[k] +=  bnds[k] #+ load_con + self_col
 end
 batch_constraints[N] += goal_constraint(xf_batch)
 
@@ -144,11 +124,17 @@ opts_ilqr = iLQRSolverOptions(verbose=verbose,
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr)#,
 
-@time solve!(quad_batch,opts_al) # solve without system level constraints
-for k = 2:N-1
-	quad_batch.constraints[k] += load_con + self_col # add system level constraints
+function solve_batch(prob,opts)
+	_batch, _solver = solve(prob,opts) # solve without system level constraints
+	for k = 2:N-1
+		_batch.constraints[k] += load_con + self_col # add system level constraints
+	end
+	_batch_, _solver_ = solve(_batch,opts)
+
+	return _batch_, _solver_
 end
-@time solve!(quad_batch,opts_al)
+
+@time sol, _solver = solve_batch(quad_batch, opts_al)
 
 visualize = true
 if visualize
@@ -210,16 +196,10 @@ if visualize
 	    end
 	    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
 
-	    addcylinders!(vis,_cyl,3.)
-
-		xf_load = prob_load.xf
-	    mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
-	    plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
-
 	    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
 
-	    anim = MeshCat.Animation(24)
+	    anim = MeshCat.Animation(convert(Int,floor(1/prob_load.dt)))
 	    for k = 1:prob.N
 		MeshCat.atframe(anim,vis,k) do frame
 		    # cables
@@ -241,5 +221,5 @@ if visualize
 
 	vis = Visualizer()
 	open(vis)
-	visualize_batch_system(vis,quad_batch,actuated_models,load_model)
+	visualize_batch_system(vis,sol,actuated_models,load_model)
 end

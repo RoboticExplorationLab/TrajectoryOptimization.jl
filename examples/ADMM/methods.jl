@@ -358,7 +358,7 @@ end
 
 
 
-function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift)
+function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift, num_lift=3)
     n_lift = prob.model.n
     m_lift = prob.model.m
     n_slack = 3
@@ -377,8 +377,8 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
                     n_slack)
 
 
-    X_lift = X_cache[2:4]
-    U_lift = U_cache[2:4]
+    X_lift = X_cache[2:(num_lift+1)]
+    U_lift = U_cache[2:(num_lift+1)]
     self_col = gen_self_collision_constraints(X_lift, agent, n_lift, m_lift, r_lift, n_slack)
     con_height = gen_lift_inequality_constraints(X_load, U_load, n_lift, m_lift)
     con_centroid = gen_centroid_constraints(X_lift, X_load, agent, n_lift, m_lift, r_centroid)

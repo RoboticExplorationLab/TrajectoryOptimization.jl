@@ -68,14 +68,13 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
     return x_lift
 end
 
-function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, quat::Bool=false; infeasible=false, doors=false)
-    num_lift = 3
-
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bool=false, obstacles::Bool=true, num_lift::Int=3; infeasible=false, doors=false)
     n_lift = quadrotor_lift.n
     m_lift = quadrotor_lift.m
 
-    n_load = doubleintegrator3D_load.n
-    m_load = doubleintegrator3D_load.m
+    _doubleintegrator3D_load = gen_di_load_dyn(num_lift)
+    n_load = _doubleintegrator3D_load.n
+    m_load = _doubleintegrator3D_load.m
 
     door = :middle
     door_width = 1.0
@@ -111,6 +110,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     #~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL & FINAL POSITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     x0_lift = get_quad_locations(x0_load, d, α, num_lift)
     xf_lift = get_quad_locations(xf_load, d, α, num_lift)
+
     xlift0 = [zeros(n_lift) for i = 1:num_lift]
     xliftf = [zeros(n_lift) for i = 1:num_lift]
     for i = 1:num_lift
@@ -140,28 +140,31 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     q_diag = ones(n_lift)
+    _q_diag = copy(q_diag)
+    # q_diag1 = copy(q_diag)
+    # q_diag2 = copy(q_diag)
+    # q_diag3 = copy(q_diag)
+    _q_diag[1] = 1.0e-3
+    # q_diag2[1] = 1.0e-3
+    # q_diag3[1] = 1.0e-3
 
-    q_diag1 = copy(q_diag)
-    q_diag2 = copy(q_diag)
-    q_diag3 = copy(q_diag)
-    q_diag1[1] = 1.0e-3
-    q_diag2[1] = 1.0e-3
-    q_diag3[1] = 1.0e-3
-    q_diag1[2] = 1.0e-1
-    q_diag2[2] = 1.0e-1
-    q_diag3[2] = 1.0e-1
-    q_diag1[3] = 1.0e-3
-    q_diag2[3] = 1.0e-3
-    q_diag3[3] = 1.0e-3
+    _q_diag[2] = 1.0e-1
+    # q_diag2[2] = 1.0e-1
+    # q_diag3[2] = 1.0e-1
+
+    _q_diag[3] = 1.0e-3
+    # q_diag2[3] = 1.0e-3
+    # q_diag3[3] = 1.0e-3
 
     r_diag = ones(m_lift)
     r_diag[1:4] .= 1.0e-2
     r_diag[5:7] .= 1.0e-2
 
     # Quads
-    Q_lift = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    Qf_lift = [1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag), 1.0*Diagonal(q_diag)]
+    Q_lift = [1.0e-1*Diagonal(_q_diag) for i = 1:num_lift]#, 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
+    Qf_lift = [1.0*Diagonal(q_diag) for i = 1:num_lift]
     R_lift = Diagonal(r_diag)
+
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
 
     # Load
@@ -180,36 +183,39 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     Q_mid2 = Diagonal(q_mid * 1e-2)
     cost_mid = [LQRCost(Q_mid,R_lift,xliftmid[i]) for i = 1:num_lift]
 
-    q_diag = ones(n_lift)
 
-    q_diag1 = copy(q_diag)
-    q_diag2 = copy(q_diag)
-    q_diag3 = copy(q_diag)
-    q_diag1[1] = 1.0e-3
-    q_diag2[1] = 1.0e-3
-    q_diag3[1] = 1.0e-6
-    q_diag2[2] = 1.0e-3
-    q_diag3[2] = 1.0e-3
-    Q_lift2 = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
-    cost2 = [LQRCost(Q_lift2[i], R_lift, xliftf[i]) for i = 1:num_lift]
+    if obstacles
+        q_diag = ones(n_lift)
 
-    for i = 1:num_lift
-        for k = 1:N-1
-            if k == Nmid
-                obj_lift[i].cost[k] = cost_mid[i]
-            elseif k > Nmid
-                # obj_lift[i].cost[k] = cost2[i]
+        q_diag1 = copy(q_diag)
+        q_diag2 = copy(q_diag)
+        q_diag3 = copy(q_diag)
+        q_diag1[1] = 1.0e-3
+        q_diag2[1] = 1.0e-3
+        q_diag3[1] = 1.0e-6
+        q_diag2[2] = 1.0e-3
+        q_diag3[2] = 1.0e-3
+        Q_lift2 = [1.0e-1*Diagonal(q_diag1), 1.0e-1*Diagonal(q_diag2), 1.0e-1*Diagonal(q_diag3)]
+        cost2 = [LQRCost(Q_lift2[i], R_lift, xliftf[i]) for i = 1:num_lift]
+
+        for i = 1:num_lift
+            for k = 1:N-1
+                if k == Nmid
+                    obj_lift[i].cost[k] = cost_mid[i]
+                elseif k > Nmid
+                    # obj_lift[i].cost[k] = cost2[i]
+                end
             end
         end
-    end
 
-    qm_load = zeros(n_load)
-    qm_load[1:3] .= 100.0
-    Qm_load = Diagonal(qm_load)
-    xloadmid = zeros(n_load)
-    xloadmid[1:3] = xm_load
-    cost_load_mid = LQRCost(Qm_load, R_load, xloadmid)
-    obj_load.cost[Nmid] = cost_load_mid
+        qm_load = zeros(n_load)
+        qm_load[1:3] .= 100.0
+        Qm_load = Diagonal(qm_load)
+        xloadmid = zeros(n_load)
+        xloadmid[1:3] = xm_load
+        cost_load_mid = LQRCost(Qm_load, R_load, xloadmid)
+        obj_load.cost[Nmid] = cost_load_mid
+    end
 
 
 
@@ -263,7 +269,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
         con = Constraints(N)
         con[1] += bnd1
         for k = 2:N-1
-            con[k] += bnd2 + obs_lift
+            obstacles ? con[k] += bnd2 + obs_lift : con[k] += bnd2
         end
         con[N] += bnd2
         push!(constraints_lift,copy(con))
@@ -271,11 +277,11 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
 
     constraints_load = Constraints(N)
     for k = 2:N-1
-        constraints_load[k] +=  obs_load
+        obstacles ? constraints_load[k] +=  obs_load : nothing
         if k < floor((1-r_ped)*N)
             constraints_load[k] += bnd3
         else
-            constraints_load[k] += bnd_ped
+            obstacles ? constraints_load[k] += bnd_ped : nothing
         end
     end
     constraints_load[N] += goal_constraint(xloadf)
@@ -288,7 +294,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
     u_lift[1:4] .= 9.81*(quad_params.m)/4.
     u_lift[5:7] = u_load
     U0_lift = [u_lift for k = 1:N-1]
-    U0_load = [-1.0*[u_load;u_load;u_load] for k = 1:N-1]
+    U0_load = [-1.0*vcat([u_load for i = 1:num_lift]...) for k = 1:N-1]
 
     X0_lift = Vector{Vector{Vector{Float64}}}(undef, num_lift)
     for i = 1:num_lift
@@ -313,7 +319,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], d=1.2, q
         end
 
     elseif agent ∈ [0, :load]
-        prob = Problem(doubleintegrator3D_load,
+        prob = Problem(_doubleintegrator3D_load,
                         obj_load,
                         U0_load,
                         integration=:midpoint,

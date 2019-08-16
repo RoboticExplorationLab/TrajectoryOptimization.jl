@@ -84,19 +84,21 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     r_lift = prob_lift[1].model.info[:radius]::Float64
     r_load = prob_load.model.info[:radius]::Float64
     ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
-    _cyl, = quad_obstacles()
+
 
     num_lift = length(prob_lift)::Int
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
-    addcylinders!(vis, _cyl, ceiling)
-    settransform!(vis["cyl"], Translation(0, door_location(door), 0))
+    if door != :false
+        _cyl, = quad_obstacles()
+        addcylinders!(vis, _cyl, ceiling)
+        settransform!(vis["cyl"], Translation(0, door_location(door), 0))
 
-    # # Pedestal
-    xf_load = prob_load.xf
-    mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
-    plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
-
+        # # Pedestal
+        xf_load = prob_load.xf
+        mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+        plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
+    end
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 

@@ -13,6 +13,7 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     # for i in workers()
     #     @spawnat i solve!(probs[:L], opts)
     # end
+	num_lift = length(probs)
     futures = [@spawnat w solve!(probs[:L], opts_al) for w in workers()]
     solve!(prob_load, opts)
     wait.(futures)
@@ -28,15 +29,15 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     # Update load problem constraints
     x0_load = prob_load.x0
     x0_lift = fetch.([@spawnat w probs[:L].x0 for w in workers()])
-    d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
-    d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
-    d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
-    d = [d1, d2, d3]
+    # d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
+    # d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
+    # d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
+    d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
     # Send trajectories
     @sync for w in workers()
-        for i = 2:4
+        for i = 2:(num_lift+1)
             @spawnat w begin
                 X_cache[:L][i] .= X_lift0[i-1]
                 U_cache[:L][i] .= U_lift0[i-1]
@@ -51,7 +52,7 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     # Update lift problems
     r_lift = fetch(@spawnat workers()[1] probs[:L].model.info[:radius])::Float64
     @sync for (agent,w) in enumerate(workers())
-        @spawnat w update_lift_problem(probs[:L], X_cache[:L], U_cache[:L], agent, d[agent], r_lift)
+        @spawnat w update_lift_problem(probs[:L], X_cache[:L], U_cache[:L], agent, d[agent], r_lift, num_lift)
     end
 end
 
@@ -73,15 +74,15 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     # Update Load problem constraints
     x0_load = prob_load.x0
     x0_lift = [prob.x0 for prob in probs]
-    d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
-    d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
-    d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
-    d = [d1, d2, d3]
+    # d1 = norm(x0_load[1:3]-x0_lift[1][1:3])
+    # d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
+    # d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
+    d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
     update_load_problem(prob_load, X_lift, U_lift, d)
 
     # Send trajectories
-    for w = 2:4
-        for i = 2:4
+    for w = 2:(num_lift+1)
+        for i = 2:(num_lift+1)
             X_cache[w-1][i] .= X_lift0[i-1]
             U_cache[w-1][i] .= U_lift0[i-1]
         end
@@ -91,9 +92,9 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
     # Update lift problems
     r_lift = probs[1].model.info[:radius]::Float64
-    for w = 2:4
+    for w = 2:(num_lift+1)
         agent = w - 1
-        update_lift_problem(probs[agent], X_cache[agent], U_cache[agent], agent, d[agent], r_lift)
+        update_lift_problem(probs[agent], X_cache[agent], U_cache[agent], agent, d[agent], r_lift, num_lift)
     end
 end
 
@@ -187,6 +188,8 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 end
 
 function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
+	num_lift = length(probs)
+
     @info "Solving initial problems..."
     solve_init!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts_al)
 
@@ -237,7 +240,7 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
         # Send trajectories
 		@info "Sending trajectories back..."
         @sync for w in workers()
-            for i = 2:4
+            for i = 2:(num_lift+1)
                 @spawnat w begin
                     X_cache[:L][i] .= X_lift[i-1]
                     U_cache[:L][i] .= U_lift[i-1]

@@ -27,6 +27,21 @@ end
 doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,Dynamics.doubleintegrator3D.n,n_slack*num_lift)
 doubleintegrator3D_load.info[:radius] = 0.2
 
+
+function gen_di_load_dyn(num_lift,n_slack=3)
+
+      function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
+          u_slack = [u[3*(i-1) .+ (1:3)] for i = 1:num_lift]
+          Dynamics.double_integrator_3D_dynamics!(ẋ,x,sum(u_slack)/di_mass_load)
+      end
+
+      doubleintegrator3D_load = Model(double_integrator_3D_dynamics_load!,Dynamics.doubleintegrator3D.n,n_slack*num_lift)
+      doubleintegrator3D_load.info[:radius] = 0.2
+
+      doubleintegrator3D_load
+end
+
+
 # Quadrotor lift model
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
       q = normalize(Quaternion(view(x,4:7)))
