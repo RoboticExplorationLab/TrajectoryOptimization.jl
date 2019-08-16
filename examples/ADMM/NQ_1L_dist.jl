@@ -76,3 +76,38 @@ include("visualization.jl")
 vis = Visualizer()
 open(vis)
 anim = visualize_quadrotor_lift_system(vis, sol, door=:false)
+
+
+# timing results
+
+n = [2, 3, 4, 5, 6]
+tb = [1.355, 3.709, 5.165, 10.572, 11.565]
+tp = [.717, .809, .895, 1.042, 1.148]
+
+using Plots
+plot(n,tb)
+plot!(n,tp,xlabel="number of lift agents",ylabel="time (s)")
+
+using PGFPlots
+const PGF = PGFPlots
+
+_tb = PGF.Plots.Linear(n,tb,mark="o",style="color=orange, thick")
+_tp = PGF.Plots.Linear(n,tp,mark="o",style="color=blue, thick")
+
+_tbs = PGF.Plots.Scatter(n,tb,style="color=orange, thick")
+_tps = PGF.Plots.Scatter(n,tp,style="color=blue, thick")
+
+_tbs = PGF.Plots.Scatter(n,tb, ["a" for kk in n], scatterClasses="{a={mark=*,orange,scale=1.0, mark options={fill=orange}}}")
+_tps = PGF.Plots.Scatter(n,tp, ["a" for kk in n], scatterClasses="{a={mark=*,blue,scale=1.0, mark options={fill=blue}}}")
+
+a = Axis([_tb;_tp;_tbs;_tps],
+    xmin=2., ymin=0., xmax=6, ymax=12.,
+    axisEqualImage=false,
+    hideAxis=false,
+	style="grid=both",
+	ylabel="time (s)",
+	xlabel="number of lift agents")
+
+# Save to tikz format
+paper = "/home/taylor/Research/distributed_team_lift_paper/images"
+PGF.save(joinpath(paper,"n_lift.tikz"), a, include_preamble=false)
