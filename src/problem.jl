@@ -1,7 +1,11 @@
 export
     set_x0!,
     is_constrained,
-    update_problem
+    update_problem,
+    initial_controls!,
+    initial_states!,
+    findmax_violation
+
 
 
 """$(TYPEDEF) Trajectory Optimization Problem.
@@ -225,7 +229,7 @@ Return the number of states (n), number of controls (m), and the number of knot 
 Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
 
 "$(TYPEDSIGNATURES) Copy a problem"
-Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0), copy(p.xf),
+Base.copy(p::Problem) = Problem(p.model, copy(p.obj), copy(p.constraints), copy(p.x0), copy(p.xf),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
@@ -263,6 +267,54 @@ function max_violation(prob::Problem{T})::T where T
     else
         return 0.
     end
+end
+
+"""
+$(SIGNATURES) Find where the maximum constraint violation occurs.
+Returns `(c_max, k_max, label, ind_max)` where
+* `c_max` is the value of the maximum violation
+* `k_max` is the time index where the violation occurs
+* `label` is the label of the constraint with the maximum violation
+* `ind_max` is the index location of the maximum violation within the constraint with label `label` at time step `k_max`
+"""
+function findmax_violation(prob::Problem{T}) where T
+    k_max = 0
+    label_max = :none
+    ind_max = 0
+    c_max = 0.0
+    if is_constrained(prob)
+        N = prob.N
+        X,U = prob.X, prob.U
+        for k = 1:N-1
+            if num_stage_constraints(prob.constraints[k]) > 0
+                for con in prob.constraints[k]
+                    c = zeros(length(con))
+                    violation!(c, con, X[k], U[k])
+                    temp_max, temp_ind = findmax(c)
+                    if temp_max > c_max
+                        c_max = temp_max
+                        ind_max = temp_ind
+                        label_max = label(con)
+                        k_max = k
+                    end
+                end
+            end
+        end
+        if num_terminal_constraints(prob.constraints[N]) > 0
+            for con in prob.constraints[N]
+                c = zeros(length(con, :terminal))
+                violation!(c, con, X[N])
+                temp_max, temp_ind = findmax(c)
+                if temp_max > c_max
+                    c_max = temp_max
+                    ind_max = temp_ind
+                    label_max = label(con)
+                    k_max = N
+                end
+            end
+        end
+    end
+    return c_max, k_max, label_max, ind_max
 end
 
 function Expansion(prob::Problem{T}) where T

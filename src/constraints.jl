@@ -2,6 +2,10 @@ using PartedArrays, Test, ForwardDiff
 using BenchmarkTools
 using DocStringExtensions
 
+export
+    violation!,
+    label
+
 "Sense of a constraint (inequality / equality / null)"
 abstract type ConstraintType end
 "Inequality constraints"
@@ -29,6 +33,7 @@ end
 "$(SIGNATURES) Return the type of the constraint (Inequality or Equality)"
 type(::AbstractConstraint{S}) where S = S
 
+label(con::AbstractConstraint) = con.label
 
 function con_methods(f::Function)
     term = hasmethod(f, (AbstractVector, AbstractVector))
@@ -116,6 +121,22 @@ evaluate!(v::AbstractVector, con::Constraint, x::AbstractVector, u::AbstractVect
 evaluate!(v::AbstractVector, con::Constraint, x::AbstractVector) = is_terminal(con) ? con.c(v,x) : nothing
 jacobian!(V::AbstractMatrix, con::Constraint, x::AbstractVector, u::AbstractVector) = is_stage(con) ? con.∇c(V, x, u) : nothing
 jacobian!(V::AbstractMatrix, con::Constraint, x::AbstractVector) = is_terminal(con) ? con.∇c(V,x) : nothing
+
+violation!(v, con::Constraint{Equality}, x, u) = evaluate!(v, con, x, u)
+function violation!(v, con::AbstractConstraint{Inequality}, x, u)
+    evaluate!(v, con, x, u);
+    for i in eachindex(v)
+        v[i] = pos(v[i])
+    end
+end
+
+violation!(v, con::Constraint{Equality}, x) = evaluate!(v, con, x)
+function violation!(v, con::AbstractConstraint{Inequality}, x)
+    evaluate!(v, con, x);
+    for i in eachindex(v)
+        v[i] = pos(v[i])
+    end
+end
 
 is_terminal(con::Constraint) = con.type != :stage
 is_stage(con::Constraint) = con.type != :terminal
