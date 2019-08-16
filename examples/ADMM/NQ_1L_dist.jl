@@ -6,7 +6,7 @@ using DistributedArrays
 using TimerOutputs
 using BenchmarkTools
 
-num_lift = 3
+num_lift = 6
 nn = copy(num_lift)
 if nworkers() != num_lift
 	addprocs(num_lift,exeflags="--project=$(@__DIR__)")

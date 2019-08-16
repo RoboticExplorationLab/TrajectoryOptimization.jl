@@ -6,7 +6,7 @@ using Plots
 include("3Q_1L_problem.jl")
 include("batch_methods.jl")
 
-num_lift = 4
+num_lift = 2
 x0 = [0,  0.0,  0.3]
 xf = [6.0, 0.0, 0.3]
 
@@ -134,7 +134,7 @@ function solve_batch(prob,opts)
 	return _batch_, _solver_
 end
 
-@time sol, _solver = solve_batch(quad_batch, opts_al)
+@btime sol, _solver = solve_batch(quad_batch, opts_al)
 
 visualize = true
 if visualize

@@ -53,7 +53,11 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
         θ = range(0,2π,length=num_lift+1)
         x_lift = [zeros(3) for i = 1:num_lift]
         for i = 1:num_lift
-            x_lift[i][1:2] = circle(θ[i])
+            if num_lift == 2
+                x_lift[i][1:2] = circle(θ[i] + pi/2)
+            else
+                x_lift[i][1:2] = circle(θ[i])
+            end
             x_lift[i][3] = z
         end
     elseif config == :doorway
