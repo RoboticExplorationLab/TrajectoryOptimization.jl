@@ -1,3 +1,169 @@
+function solve_admm_collision(probs, admm_type, opts, system=true)
+
+    if admm_type == :adaptive
+        admm_type = :parallel
+        adaptive = true
+    else
+        adaptive = false
+    end
+
+    N = probs[1].N
+
+    # Problem dimensions
+    na = length(probs)
+    n = probs[1].model.n
+    m = probs[1].model.m
+
+    for i = 1:na
+        solve!(probs[i],opts)
+    end
+
+    # return probs, 1,
+
+    # Generate cable constraints
+    X = [deepcopy(probs[i].X) for i = 1:na]
+    U = [deepcopy(probs[i].U) for i = 1:na]
+
+    radius = [probs[i].model.info[:radius]::Float64 for i = 1:na]
+
+    if system
+        self_col = [gen_self_collision_constraints2(X,i,n,m,radius[i]) for i = 1:na]
+        # Add system constraints to problems
+        for i = 1:na
+            for k = 1:N
+                (k != 1 && k != N) ? probs[i].constraints[k] += self_col[i][k] : nothing
+            end
+        end
+    end
+
+    # Create augmented Lagrangian problems, solvers
+    solver_al = []
+    prob_al = []
+    for i = 1:na
+        solver = TO.AbstractSolver(probs[i],opts)
+        prob = AugmentedLagrangianProblem(probs[i],solver)
+
+        push!(solver_al,solver)
+        push!(prob_al,prob)
+    end
+
+    for ii = 1:opts.iterations
+        # Solve lift agents
+        for i = 1:na
+            TO.solve_aula!(prob_al[i],solver_al[i])
+
+            # Update constraints (sequentially)
+            if admm_type == :sequential
+                X[i] .= prob_al[i].X
+                U[i] .= prob_al[i].U
+            end
+        end
+
+        # Update constraints (parallel)
+        if admm_type == :parallel
+            for i = 1:na
+                X[i] .= prob_al[i].X
+                U[i] .= prob_al[i].U
+            end
+        end
+
+        # Update lift constraints prior to evaluating convergence
+        for i = 1:na
+            TO.update_constraints!(prob_al[i].obj.C,prob_al[i].obj.constraints, prob_al[i].X, prob_al[i].U)
+            TO.update_active_set!(prob_al[i].obj)
+        end
+
+
+        if adaptive && system
+            flag = zeros(Bool,na)
+            col = [zeros(na) for i = 1:na]
+            for i = 1:na
+                _flag, _col = check_self_collision(prob_al[i],na,opts.constraint_tolerance)
+
+                flag[i] = _flag
+                col[i][1:end .!= i] = _col
+            end
+
+            if any(flag)
+                admm_type = :sequential
+                @info "update -> sequential"
+            else
+                admm_type = :parallel
+            end
+        end
+
+
+
+        max_c = max([max_violation(solver_al[i]) for i = 1:na]...)
+        println(max_c)
+
+        if max_c < opts.constraint_tolerance
+            @info "ADMM problem solved"
+            break
+        end
+    end
+
+    return prob_al, solver_al
+end
+
+function check_self_collision(prob,na,tol)
+    col = zeros(na-1)
+    flag = false
+    for k = 2:prob.N-1
+        # if any(prob.obj.C[k][:self_col] .> tol)
+        #     @info "Collision detected at time step: $k"
+
+        for i = 1:(na-1)
+            if prob.obj.C[k][:self_col][i] > tol
+                col[i] = 1
+                flag = true
+            end
+        end
+        #     flag = true
+        # end
+    end
+    return flag, col
+end
+
+function gen_self_collision_constraints2(X,agent,n,m,rad,n_slack=2)
+    na = length(X)
+    N = length(X[1])
+    p_con = na - 1
+
+    self_col_con = []
+
+    for k = 1:N
+        function col_con(c,x,u=zeros())
+            p_shift = 1
+            for i = 1:na
+                if i != agent
+                    x_pos = x[1:n_slack]
+                    x_pos2 = X[i][k][1:n_slack]
+                    c[p_shift] = circle_constraint(x_pos,x_pos2[1],x_pos2[2],2*rad)
+                    p_shift += 1
+                end
+            end
+        end
+
+        function ∇col_con(C,x,u=zeros())
+            p_shift = 1
+            for i = 1:na
+                if i != agent
+                    x_pos = x[1:n_slack]
+                    x_pos2 = X[i][k][1:n_slack]
+                    C[p_shift,1] = -2*(x_pos[1] - x_pos2[1])
+                    C[p_shift,2] = -2*(x_pos[2] - x_pos2[2])
+                    p_shift += 1
+                end
+            end
+        end
+
+        push!(self_col_con,Constraint{Inequality}(col_con,∇col_con,n,m,p_con,:self_col))
+    end
+
+    return self_col_con
+end
+
 function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
     N = prob_load.N
 
@@ -12,9 +178,9 @@ function solve_admm(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=f
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 # Solve each agent trajectory separately
     for i = 1:num_lift
-        solve!(prob_lift[i],opts_al)
+        solve!(prob_lift[i],opts)
     end
-    solve!(prob_load,opts_al)
+    solve!(prob_load,opts)
 
     # return prob_lift, prob_load, 1, 1
 
@@ -155,16 +321,6 @@ function gen_load_inequality_constraints(X_lift, U_lift, n, m)
         push!(con_height, ci)
     end
     return con_height
-end
-
-function check_self_collision(prob,tol)
-    for k = 2:prob.N-1
-        if any(prob.obj.C[k][:self_col] .> tol)
-            @info "Collision detected at time step: $k"
-            return true
-        end
-    end
-    return false
 end
 
 function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
