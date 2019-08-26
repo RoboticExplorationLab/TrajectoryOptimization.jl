@@ -220,7 +220,7 @@ function gen_lift_distance_constraints(model::Model, load_model::Model,
 
     for k = 1:N
         function con(c,x,u=zeros())
-            c[1] = norm(x[1:n_slack] - (X_load[k][1:n_slack] - r_cables[agent]))^2 - d^2
+            c[1] = norm(x[1:n_slack] - (X_load[k][1:n_slack] + r_cables[agent]))^2 - d^2
         end
 
         function ∇con(C,x,u=zeros())
@@ -236,7 +236,9 @@ function gen_lift_distance_constraints(model::Model, load_model::Model,
     return con_cable_lift
 end
 
-function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
+function gen_load_cable_constraints(model, X_lift, U_lift, n_slack=3)
+    n,m = model.n, model.m
+
     num_lift = length(X_lift)
     N = length(X_lift[1])
     con_cable_load = Constraint{Equality}[]
@@ -246,59 +248,59 @@ function gen_load_cable_constraints(X_lift,U_lift,n,m,d,n_slack=3)
     for k = 1:N
 
         function con(c,x,u=zeros())
-            if k == 1
-                _shift = 0
-                for i = 1:num_lift
-                    c[_shift .+ (1:n_slack)] = U_lift[i][k][(end-(n_slack-1)):end] + u[(i-1)*n_slack .+ (1:n_slack)]
-                    _shift += n_slack
-                end
-            else
-                for i = 1:num_lift
-                    c[i] = norm(X_lift[i][k][1:n_slack] - x[1:n_slack])^2 - d[i]^2
-                end
-
-                if k < N
-                    _shift = num_lift
-                    for i = 1:num_lift
-                        c[_shift .+ (1:n_slack)] = U_lift[i][k][(end-(n_slack-1)):end] + u[(i-1)*n_slack .+ (1:n_slack)]
-                        _shift += n_slack
-                    end
-                end
+            _shift = 0
+            for i = 1:num_lift
+                c[_shift .+ (1:n_slack)] = U_lift[i][k][(end-(n_slack-1)):end] + u[(i-1)*n_slack .+ (1:n_slack)]
+                _shift += n_slack
             end
         end
 
         function ∇con(C,x,u=zeros())
-            if k == 1
-                _shift = 0
-                for i = 1:num_lift
-                    u_idx = ((i-1)*n_slack .+ (1:n_slack))
-                    C[_shift .+ (1:n_slack),n .+ u_idx] = Is
-                    _shift += n_slack
-                end
-            else
-                for i = 1:num_lift
-                    x_pos = X_lift[i][k][1:n_slack]
-                    x_load_pos = x[1:n_slack]
-                    dif = x_pos - x_load_pos
-                    C[i,1:n_slack] = -2*dif
-                end
-
-                if k < N
-                    _shift = num_lift
-                    for i = 1:num_lift
-                        u_idx = ((i-1)*n_slack .+ (1:n_slack))
-                        C[_shift .+ (1:n_slack),n .+ u_idx] = Is
-                        _shift += n_slack
-                    end
-                end
+            _shift = 0
+            for i = 1:num_lift
+                u_idx = ((i-1)*n_slack .+ (1:n_slack))
+                C[_shift .+ (1:n_slack),n .+ u_idx] = Is
+                _shift += n_slack
             end
         end
-        if k == 1
-            p_con = num_lift*n_slack
-        else
-            k < N ? p_con = num_lift*(1 + n_slack) : p_con = num_lift
-        end
+
+        p_con = num_lift*n_slack
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_load)
+        push!(con_cable_load,cc)
+    end
+
+    return con_cable_load
+end
+
+function gen_load_distance_constraints(model, X_lift, U_lift, n_slack=3)
+    n,m = model.n, model.m
+    d = model.info[:rope_length]
+    r_cables = model.info[:r_cables]
+
+    num_lift = length(X_lift)
+    N = length(X_lift[1])
+    con_cable_load = Constraint{Equality}[]
+
+    Is = Diagonal(I,n_slack)
+
+    for k = 1:N
+
+        function con(c,x,u=zeros())
+            for i = 1:num_lift
+                c[i] = norm(X_lift[i][k][1:n_slack] - (x[1:n_slack] + r_cables[i]))^2 - d^2
+            end
+        end
+
+        function ∇con(C,x,u=zeros())
+            for i = 1:num_lift
+                x_pos = X_lift[i][k][1:n_slack]
+                x_load_pos = x[1:n_slack]
+                dif = x_pos - (x_load_pos + r_cables[i])
+                C[i,1:n_slack] = -2*dif
+            end
+        end
+        p_con = num_lift
+        cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_length)
         push!(con_cable_load,cc)
     end
 
@@ -437,14 +439,18 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
     m_load = prob.model.m
     n_slack = 3
 
-    cable_load = gen_load_cable_constraints(X_lift, U_lift, n_load, m_load, d, n_slack)
+    cable_load = gen_load_cable_constraints(prob.model, X_lift, U_lift, n_slack)
+    cable_length = gen_load_distance_constraints(prob.model, X_lift, U_lift, n_slack)
     con_height = gen_load_inequality_constraints(X_lift, U_lift, n_load, m_load)
 
     prob.obj.cost[end].Q .*= 0
     for k = 1:prob.N
-        prob.constraints[k] += cable_load[k]
+        prob.constraints[k] += cable_length[k]
         if k > 1
             prob.constraints[k] += con_height[k]
+        end
+        if k < N
+            prob.constraints[k] += cable_load[k]
         end
     end
 end
