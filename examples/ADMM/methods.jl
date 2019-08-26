@@ -167,7 +167,8 @@ function check_self_collision(prob,tol)
     return false
 end
 
-function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
+function gen_lift_cable_constraints(model::Model, X_load,U_load,agent,n_slack=3)
+    n,m = model.n, model.m
     N = length(X_load)
     con_cable_lift = []
     Is = Diagonal(I,n_slack)
@@ -207,20 +208,25 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
     return con_cable_lift
 end
 
-function gen_lift_distance_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
+function gen_lift_distance_constraints(model::Model, load_model::Model,
+        X_load, U_load, agent, n_slack=3)
+    n,m = model.n, model.m
+    d = load_model.info[:rope_length]
+    r_cables = load_model.info[:r_cables]
+
     N = length(X_load)
     con_cable_lift = []
     Is = Diagonal(I,n_slack)
 
     for k = 1:N
         function con(c,x,u=zeros())
-            c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
+            c[1] = norm(x[1:n_slack] - (X_load[k][1:n_slack] - r_cables[agent]))^2 - d^2
         end
 
         function ∇con(C,x,u=zeros())
             x_pos = x[1:n_slack]
             x_load_pos = X_load[k][1:n_slack]
-            dif = x_pos - x_load_pos
+            dif = x_pos - (x_load_pos + r_cables[agent])
             C[1,1:n_slack] = 2*dif
         end
         cc = Constraint{Equality}(con,∇con,n,m,1,:cable_length)
@@ -379,29 +385,27 @@ end
 
 
 
-function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_lift, num_lift=3)
+function update_lift_problem(prob, prob_load::Problem, X_cache, U_cache, agent::Int, num_lift=3)
     n_lift = prob.model.n
     m_lift = prob.model.m
     n_slack = 3
+    r_lift = prob.model.info[:radius]
+    d = prob_load.model.info[:rope_length]
     N = prob.N
 
     r_centroid = 0.1
 
     X_load = X_cache[1]
     U_load = U_cache[1]
-    cable_lift = gen_lift_cable_constraints(X_load,
+    cable_lift = gen_lift_cable_constraints(prob.model,
+                    X_load,
                     U_load,
                     agent,
-                    n_lift,
-                    m_lift,
-                    d,
                     n_slack)
-    cable_length = gen_lift_distance_constraints(X_load,
+    cable_length = gen_lift_distance_constraints(prob.model, prob_load.model,
+                    X_load,
                     U_load,
                     agent,
-                    n_lift,
-                    m_lift,
-                    d,
                     n_slack)
 
 

@@ -94,7 +94,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     r_lift = probs[1].model.info[:radius]::Float64
     for w = 2:(num_lift+1)
         agent = w - 1
-        update_lift_problem(probs[agent], X_cache[agent], U_cache[agent], agent, d[agent], r_lift, num_lift)
+        update_lift_problem(probs[agent], prob_load, X_cache[agent], U_cache[agent], agent, num_lift)
     end
 end
 
