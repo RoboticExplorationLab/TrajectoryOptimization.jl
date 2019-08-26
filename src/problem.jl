@@ -283,34 +283,40 @@ function findmax_violation(prob::Problem{T}) where T
     ind_max = 0
     c_max = 0.0
     if is_constrained(prob)
-        N = prob.N
-        X,U = prob.X, prob.U
-        for k = 1:N-1
-            if num_stage_constraints(prob.constraints[k]) > 0
-                for con in prob.constraints[k]
-                    c = zeros(length(con))
-                    violation!(c, con, X[k], U[k])
-                    temp_max, temp_ind = findmax(c)
-                    if temp_max > c_max
-                        c_max = temp_max
-                        ind_max = temp_ind
-                        label_max = label(con)
-                        k_max = k
-                    end
-                end
-            end
-        end
-        if num_terminal_constraints(prob.constraints[N]) > 0
-            for con in prob.constraints[N]
-                c = zeros(length(con, :terminal))
-                violation!(c, con, X[N])
+        constraints = prob.constraints
+    elseif prob.obj isa AugmentedLagrangianObjective
+        constraints = prob.obj.constraints
+    else
+        return c_max, k_max, label_max, ind_max
+    end
+
+    N = prob.N
+    X,U = prob.X, prob.U
+    for k = 1:N-1
+        if num_stage_constraints(constraints[k]) > 0
+            for con in constraints[k]
+                c = zeros(length(con))
+                violation!(c, con, X[k], U[k])
                 temp_max, temp_ind = findmax(c)
                 if temp_max > c_max
                     c_max = temp_max
                     ind_max = temp_ind
                     label_max = label(con)
-                    k_max = N
+                    k_max = k
                 end
+            end
+        end
+    end
+    if num_terminal_constraints(constraints[N]) > 0
+        for con in constraints[N]
+            c = zeros(length(con, :terminal))
+            violation!(c, con, X[N])
+            temp_max, temp_ind = findmax(c)
+            if temp_max > c_max
+                c_max = temp_max
+                ind_max = temp_ind
+                label_max = label(con)
+                k_max = N
             end
         end
     end
