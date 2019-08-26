@@ -84,7 +84,8 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     prob_lift = probs[2:end]
     r_lift = prob_lift[1].model.info[:radius]::Float64
     r_load = prob_load.model.info[:radius]::Float64
-    ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
+    # ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
+    ceiling = 3
     rigidbody = size(prob_load)[1] == 13
 
 

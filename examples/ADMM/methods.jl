@@ -177,9 +177,8 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
             if k == 1
                 c[1:n_slack] = u[(end-(n_slack-1)):end] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
             else
-                c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
                 if k < N
-                    c[1 .+ (1:n_slack)] = u[(end-(n_slack-1)):end] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
+                    c[(1:n_slack)] = u[(end-(n_slack-1)):end] + U_load[k][(agent-1)*n_slack .+ (1:n_slack)]
                 end
             end
         end
@@ -191,18 +190,40 @@ function gen_lift_cable_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
             if k == 1
                 C[1:n_slack,(end-(n_slack-1)):end] = Is
             else
-                C[1,1:n_slack] = 2*dif
                 if k < N
-                    C[1 .+ (1:n_slack),(end-(n_slack-1)):end] = Is
+                    C[(1:n_slack),(end-(n_slack-1)):end] = Is
                 end
             end
         end
         if k == 1
             p_con = n_slack
         else
-            k < N ? p_con = 1+n_slack : p_con = 1
+            k < N ? p_con = n_slack : p_con = 0
         end
         cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_lift)
+        push!(con_cable_lift,cc)
+    end
+
+    return con_cable_lift
+end
+
+function gen_lift_distance_constraints(X_load,U_load,agent,n,m,d,n_slack=3)
+    N = length(X_load)
+    con_cable_lift = []
+    Is = Diagonal(I,n_slack)
+
+    for k = 1:N
+        function con(c,x,u=zeros())
+            c[1] = norm(x[1:n_slack] - X_load[k][1:n_slack])^2 - d^2
+        end
+
+        function ∇con(C,x,u=zeros())
+            x_pos = x[1:n_slack]
+            x_load_pos = X_load[k][1:n_slack]
+            dif = x_pos - x_load_pos
+            C[1,1:n_slack] = 2*dif
+        end
+        cc = Constraint{Equality}(con,∇con,n,m,1,:cable_length)
         push!(con_cable_lift,cc)
     end
 
@@ -375,6 +396,13 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
                     m_lift,
                     d,
                     n_slack)
+    cable_length = gen_lift_distance_constraints(X_load,
+                    U_load,
+                    agent,
+                    n_lift,
+                    m_lift,
+                    d,
+                    n_slack)
 
 
     X_lift = X_cache[2:(num_lift+1)]
@@ -385,7 +413,10 @@ function update_lift_problem(prob, X_cache, U_cache, agent::Int, d::Float64, r_l
 
     # Add constraints to problems
     for k = 1:N
-        prob.constraints[k] += cable_lift[k]
+        if k < N
+            prob.constraints[k] += cable_lift[k]
+        end
+        prob.constraints[k] += cable_length[k]
         (k != 1 && k != N) ? prob.constraints[k] += self_col[k] : nothing
         if k > 1
             prob.constraints[k] += con_height[k]

@@ -66,7 +66,7 @@ function load_dynamics!(ẋ,x,u,params)
     u_new = zeros(eltype(ẋ),6)
     u_new[1:3] = F_total
     u_new[4:6] = M_total
-    rigid_body_dynamics!(ẋ,x,[F_total; M_total], params)
+    Dynamics.rigid_body_dynamics!(ẋ,x,[F_total; M_total], params)
 end
 
 

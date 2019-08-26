@@ -6,14 +6,14 @@ using DistributedArrays
 using TimerOutputs
 using BenchmarkTools
 
-num_lift = 6
+num_lift = 3
 nn = copy(num_lift)
 if nworkers() != num_lift
 	addprocs(num_lift,exeflags="--project=$(@__DIR__)")
 end
+using TrajectoryOptimization
 import TrajectoryOptimization: Discrete
 
-using TrajectoryOptimization
 @everywhere using TrajectoryOptimization
 @everywhere const TO = TrajectoryOptimization
 include("admm_solve.jl")
@@ -67,9 +67,8 @@ opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
 x0 = [0., 0., 0.3]
 xf = [6., 0., 0.3]
 
-num_lift = nn
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=true, num_lift=num_lift, obstacles=false,quat=true, infeasible=false, doors=false);
-sol,_solver = solve_admm(prob_load, probs, opts_al, true)
+probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, num_lift=num_lift, obstacles=false,quat=true, infeasible=false, doors=false);
+sol0, solvers0 = solve_admm(prob_load, probs, opts_al, true)
 @btime sol,_solver = solve_admm(prob_load, probs, opts_al, true)
 
 include("visualization.jl")

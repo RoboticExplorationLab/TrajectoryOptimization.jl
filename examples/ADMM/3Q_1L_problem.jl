@@ -104,15 +104,15 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
         load_params = let (l,w,h) = load_dims
             (mass=0.350, inertia=Diagonal(1.0I,3),
                 gravity=SVector(0,0,-9.81),
-                r_cables=[(@SVector [ l/2,    0, h/2])*1,
-                          (@SVector [-l/2,  w/2, h/2])*1,
-                          (@SVector [-l/2, -w/2, h/2])*1])
+                r_cables=[(@SVector [ l/2,    0, h/2])*0,
+                          (@SVector [-l/2,  w/2, h/2])*0,
+                          (@SVector [-l/2, -w/2, h/2])*0])
         end
         info = Dict{Symbol,Any}(:quat=>4:7, :dims=>load_dims, :r_cables=>load_params.r_cables)
 
         n_load = 13
         m_load = 3*num_lift
-        load_model = Model(Dynamics.load_dynamics!, n_load, m_load, load_params, info)
+        load_model = Model(load_dynamics!, n_load, m_load, load_params, info)
     else
         _doubleintegrator3D_load = gen_di_load_dyn(num_lift)
         n_load = _doubleintegrator3D_load.n
@@ -161,7 +161,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
     if n_load == 13
         xload0[4] = 1.0
         xloadf[4] = 1.0
-        xloadf[4:7] = SVector(Quaternion(RotX(pi/2)))
+        # xloadf[4:7] = SVector(Quaternion(RotX(pi/2)))
     end
 
     # midpoint desired configuration
