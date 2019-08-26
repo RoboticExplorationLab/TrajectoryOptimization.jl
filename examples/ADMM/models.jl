@@ -41,6 +41,34 @@ function gen_di_load_dyn(num_lift,n_slack=3)
       doubleintegrator3D_load
 end
 
+"Dynamics for Rigid Body load with 3D forces injected through u"
+function load_dynamics!(ẋ,x,u,params)
+    r_cables = params.r_cables
+    n_cables = length(r_cables)
+
+    # Get quaternion
+    q = Quaternion(x[4:7])
+
+    # Get input forces
+    F_ = reshape(u,3,n_cables)
+    F = [col for col in eachcol(F_)]
+
+    # Convert to body frame
+    F_body = [inv(q)*f for f in F]
+
+    # Calculate Torque
+    M_body = [r × f for (r,f) in zip(r_cables, F_body)]
+
+    # Total torque and force
+    F_total = sum(F_body)
+    M_total = sum(M_body)
+
+    u_new = zeros(eltype(ẋ),6)
+    u_new[1:3] = F_total
+    u_new[4:6] = M_total
+    rigid_body_dynamics!(ẋ,x,[F_total; M_total], params)
+end
+
 
 # Quadrotor lift model
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)

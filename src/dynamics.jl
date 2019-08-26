@@ -32,5 +32,6 @@ include("../dynamics/quadrotor_euler.jl")
 # include("../dynamics/kuka.jl")
 include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")
+include("../dynamics/free_body.jl")
 
 end
