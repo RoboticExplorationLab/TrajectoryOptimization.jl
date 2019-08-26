@@ -44,7 +44,8 @@ Default Config:
 Doorway Config:
     Distribute quads evenly over an arc of `2α` degrees, centered at vertical, in the x-z plane
 """
-function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config=:default)
+function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
+        config=:default, r_cables=[zeros(3) for i = 1:num_lift])
     if config == :default
         h = d*cos(α)
         r = d*sin(α)
@@ -59,6 +60,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
                 x_lift[i][1:2] = circle(θ[i])
             end
             x_lift[i][3] = z
+            x_lift[i] += r_cables[i]  # Shift by attachment location
         end
     elseif config == :doorway
         y = x_load[2]
@@ -72,26 +74,11 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3; config
     return x_lift
 end
 
-function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bool=false, obstacles::Bool=true, num_lift::Int=3; infeasible=false, doors=false)
+function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
+        quat::Bool=false, obstacles::Bool=true, num_lift::Int=3;
+        infeasible=false, doors=false, rigidbody=false)
     n_lift = quadrotor_lift.n
     m_lift = quadrotor_lift.m
-
-    _doubleintegrator3D_load = gen_di_load_dyn(num_lift)
-    n_load = _doubleintegrator3D_load.n
-    m_load = _doubleintegrator3D_load.m
-
-    door = :middle
-    door_width = 1.0
-    if doors
-        if xf_load[2] == door_width
-            door = :left
-        elseif xf_load[2] == -door_width
-            door = :right
-        end
-    end
-    _cyl, x_door = quad_obstacles(door)
-
-
 
     # Params
     N = 101          # number of knot points
@@ -111,9 +98,49 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bo
     Nmid = Int(floor(N/2))  # midpint at which to set the doorway configuration
 
 
+    # Model
+    if rigidbody
+        load_dims = (0.5, 0.5, 0.2)
+        load_params = let (l,w,h) = load_dims
+            (mass=0.350, inertia=Diagonal(1.0I,3),
+                gravity=SVector(0,0,-9.81),
+                r_cables=[(@SVector [ l/2,    0, h/2])*1,
+                          (@SVector [-l/2,  w/2, h/2])*1,
+                          (@SVector [-l/2, -w/2, h/2])*1])
+        end
+        info = Dict{Symbol,Any}(:quat=>4:7, :dims=>load_dims, :r_cables=>load_params.r_cables)
+
+        n_load = 13
+        m_load = 3*num_lift
+        load_model = Model(Dynamics.load_dynamics!, n_load, m_load, load_params, info)
+    else
+        _doubleintegrator3D_load = gen_di_load_dyn(num_lift)
+        n_load = _doubleintegrator3D_load.n
+        m_load = _doubleintegrator3D_load.m
+        load_model = _doubleintegrator3D_load
+        load_model.info[:r_cables] = [zeros(3) for i = 1:num_lift]
+    end
+    r_cables = load_model.info[:r_cables]
+    load_model.info[:radius] = 0.2
+    load_model.info[:rope_length] = d
+
+    door = :middle
+    door_width = 1.0
+    if doors
+        if xf_load[2] == door_width
+            door = :left
+        elseif xf_load[2] == -door_width
+            door = :right
+        end
+    end
+    _cyl, x_door = quad_obstacles(door)
+
+
+
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL & FINAL POSITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    x0_lift = get_quad_locations(x0_load, d, α, num_lift)
-    xf_lift = get_quad_locations(xf_load, d, α, num_lift)
+    x0_lift = get_quad_locations(x0_load, d, α, num_lift, r_cables=r_cables)
+    xf_lift = get_quad_locations(xf_load, d, α, num_lift, r_cables=r_cables)
 
     xlift0 = [zeros(n_lift) for i = 1:num_lift]
     xliftf = [zeros(n_lift) for i = 1:num_lift]
@@ -130,6 +157,12 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bo
     xload0[1:3] = x0_load
     xloadf = zeros(n_load)
     xloadf[1:3] = xf_load
+
+    if n_load == 13
+        xload0[4] = 1.0
+        xloadf[4] = 1.0
+        xloadf[4:7] = SVector(Quaternion(RotX(pi/2)))
+    end
 
     # midpoint desired configuration
     xm_load = (x0_load + xf_load)/2       # average middle and end positions to get load height at doorway
@@ -172,8 +205,12 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bo
     obj_lift = [LQRObjective(Q_lift[i],R_lift,Qf_lift[i],xliftf[i],N) for i = 1:num_lift]
 
     # Load
-    Q_load = 0.0*Diagonal(I,n_load)
-    Qf_load = 0.0*Diagonal(I,n_load)
+    q_load = zeros(n_load)
+    if rigidbody
+        q_load[4:7] .= 1e-1
+    end
+    Q_load = Diagonal(q_load)
+    Qf_load = 0.0*Diagonal(q_load)
     Qf_load[3,3] = 1.0  # needed to get good initial guess with pedestal constraints. Turned off after initial solve
     R_load = 1.0e-6*Diagonal(I,m_load)
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
@@ -184,7 +221,6 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bo
     q_mid[1:3] .= 100.0 / n_mid
 
     Q_mid = Diagonal(q_mid)
-    Q_mid2 = Diagonal(q_mid * 1e-2)
     cost_mid = [LQRCost(Q_mid,R_lift,xliftmid[i]) for i = 1:num_lift]
 
 
@@ -323,7 +359,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0], quat::Bo
         end
 
     elseif agent ∈ [0, :load]
-        prob = Problem(_doubleintegrator3D_load,
+        prob = Problem(load_model,
                         obj_load,
                         U0_load,
                         integration=:midpoint,
