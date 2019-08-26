@@ -85,10 +85,11 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     r_lift = prob_lift[1].model.info[:radius]::Float64
     r_load = prob_load.model.info[:radius]::Float64
     ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
+    rigidbody = size(prob_load)[1] == 13
 
 
     num_lift = length(prob_lift)::Int
-    d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
+    d = [prob_load.model.info[:rope_length] for i = 1:num_lift]
 
     if door != :false
         _cyl, = quad_obstacles()
@@ -125,7 +126,12 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
         setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
     end
-    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+    if rigidbody
+        load_dims = prob_load.model.info[:dims]
+        setobject!(vis["load"], HyperRectangle(Vec(load_dims ./ (-2)), Vec(load_dims)))
+    else
+        setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+    end
 
     anim = MeshCat.Animation(convert(Int,floor(1/prob_lift[1].dt)))
     for k = 1:prob_lift[1].N
@@ -140,16 +146,24 @@ end
 function plot_quad_scene(frame, k, probs)
     prob_load = probs[1]
     prob_lift = probs[2:end]
+    n_load = size(prob_load)[1]
+    num_lift = length(prob_lift)
+
+    if n_load == 13
+        settransform!(frame["load"], compose(Translation(prob_load.X[k][1:3]),LinearMap(Quat(prob_load.X[k][4:7]...))))
+        r_cables = prob_load.model.params.r_cables
+    else
+        settransform!(frame["load"], Translation(prob_load.X[k][1:3]...))
+        r_cables = [zeros(3) for i = 1:num_lift]
+    end
 
     # cables
     x_load = prob_load.X[k][1:n_slack]
-    for i = 1:length(prob_lift)
+    for i = 1:num_lift
         x_lift = prob_lift[i].X[k][1:n_slack]
-        settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
+        settransform!(frame["cable"]["$i"], cable_transform(x_lift, x_load + r_cables[i]))
         settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...))))
-
     end
-    settransform!(frame["load"], Translation(x_load...))
 end
 
 
