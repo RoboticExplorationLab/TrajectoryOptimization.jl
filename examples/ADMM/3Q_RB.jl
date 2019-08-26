@@ -75,34 +75,22 @@ sol_load.U[2][1:3]
 
 sol_quad1.U[2][5:7]
 
+
+# Solve the whole system
 x0 = [0., 0., 0.3]
 xf = [6., 0., 0.3]
 probs, prob_load2 = init_quad_ADMM(x0, xf, distributed=false, num_lift=num_lift, obstacles=false, quat=true, infeasible=false, doors=false, rigidbody=true);
 sol, solvers = solve_admm(prob_load2, probs, opts_al, true)
 
-solve_aula!(sol[2], solvers[2])
-solve_aula!(sol0[2], solvers0[2])
-
-plot(sol[1].U, 1:9)
-plot(sol0[1].U, 1:9)
-plot(sol[2].U, 5:7)
-plot(sol0[2].U, 5:7)
-
-findmax_violation(sol[1])
-sol[1].X[end]
-findmax_violation(sol0[1])
-
-
-sol[1] = sol_load
-sol[2] = sol_quad1
 anim = visualize_quadrotor_lift_system(vis, sol, door=:false)
+sol[2].xf
+sol[2].X[end]
 
-sol[1].X[end]
-sol[1].X[2]
-sol[4].X[end]
+plot(sol[2].X,3:3)
 plot(sol[1].U,1:3)
-plot(sol[1].U,1:3)
-plot(sol[2].U,5:7)
+plot(sol0[1].U,1:3)
+plot(sol[1].U,5:7)
+plot(sol0[1].U,5:7)
 
 c = zeros(12)
 k = 6

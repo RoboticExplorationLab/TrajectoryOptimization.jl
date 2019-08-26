@@ -74,7 +74,7 @@ sol0, solvers0 = solve_admm(prob_load, probs, opts_al, true)
 include("visualization.jl")
 vis = Visualizer()
 open(vis)
-anim = visualize_quadrotor_lift_system(vis, sol, door=:false)
+anim = visualize_quadrotor_lift_system(vis, sol0, door=:false)
 
 
 # timing results
