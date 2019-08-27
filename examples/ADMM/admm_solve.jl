@@ -1,9 +1,9 @@
 
-function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions, parallel=true)
+function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions; parallel=true, max_iter=3)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
     @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
-    @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel)
+    @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel, max_iter)
 	solvers = combine_problems(solver_load, solvers_al)
     problems = combine_problems(prob_load, probs)
 	return problems, solvers, X_cache
@@ -98,7 +98,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
 end
 
-function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
+function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true, max_iter=3)
 
     num_lift = length(probs)
 
@@ -133,7 +133,6 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 	# return solvers_al, solver_load
 
 	max_time = 30.0 # seconds
-	max_iter = 1
 	t_start = time()
     for ii = 1:max_iter
         # Solve each AL problem
@@ -177,10 +176,10 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 
         max_c = maximum(max_violation.(solvers_al))
         max_c = max(max_c, max_violation(solver_load))
+		solver_load.stats[:iters_ADMM] = ii
+		solver_load.stats[:viol_ADMM] = max_c
         println(max_c)
         if max_c < opts.constraint_tolerance
-			solver_load.stats[:iters_ADMM] = ii
-			solver_load.stats[:viol_ADMM] = max_c
             break
         end
 		if time() - t_start > max_time
@@ -194,7 +193,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 	return solvers_al, solver_load
 end
 
-function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts, parallel=true)
+function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts, parallel=true, max_iters=3)
 	num_lift = length(probs)
 
     @info "Solving initial problems..."
@@ -215,7 +214,6 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 	# return solvers_al, solver_load
 
 	max_time = 30.0 # seconds
-	max_iters = 3
 	t_start = time()
     for ii = 1:max_iters
         # Solve each AL lift problem
@@ -270,14 +268,12 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 
         max_c = maximum(fetch.([@spawnat w max_violation(solvers_al[:L]) for w in workers()]))
         max_c = max(max_c, max_violation(solver_load))
+		solver_load.stats[:iters_ADMM] = ii
+		solver_load.stats[:viol_ADMM] = max_c
         @info max_c
         if max_c < opts.constraint_tolerance
-			solver_load.stats[:iters_ADMM] = ii
-			solver_load.stats[:viol_ADMM] = max_c
             break
 		elseif ii == max_iters
-			solver_load.stats[:iters_ADMM] = ii
-			solver_load.stats[:viol_ADMM] = max_c
         end
     end
 	@sync for w in workers()
