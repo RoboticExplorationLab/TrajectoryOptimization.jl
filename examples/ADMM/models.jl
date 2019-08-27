@@ -69,6 +69,13 @@ function load_dynamics!(ẋ,x,u,params)
     Dynamics.rigid_body_dynamics!(ẋ,x,[F_total; M_total], params)
 end
 
+function attachment_points(model::Model, x)
+    r_cables = model.info[:r_cables]
+    q = Quaternion(x[4:7])
+    r = x[1:3]
+    r_attach = [q*r_ + r for r_ in r_cables]
+end
+
 
 # Quadrotor lift model
 function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)

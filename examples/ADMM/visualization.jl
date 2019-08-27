@@ -160,9 +160,10 @@ function plot_quad_scene(frame, k, probs)
 
     # cables
     x_load = prob_load.X[k][1:n_slack]
+    r_attach = attachment_points(prob_load.model, prob_load.X[k])
     for i = 1:num_lift
         x_lift = prob_lift[i].X[k][1:n_slack]
-        settransform!(frame["cable"]["$i"], cable_transform(x_lift, x_load + r_cables[i]))
+        settransform!(frame["cable"]["$i"], cable_transform(x_lift, r_attach[i]))
         settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...))))
     end
 end

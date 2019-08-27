@@ -40,18 +40,19 @@ Return the 3D positions of the quads given the position of the load
 Default Config:
     Distribute quads evenly around a circle centered around the load, each at a distance `d` from the load.
     The angle `α` specifies the angle between the rope and vertical (i.e. α=pi/2 puts the quads in plane with the load)
+    The angle `ϕ` specifies how much the formation is rotated about Z
 
 Doorway Config:
     Distribute quads evenly over an arc of `2α` degrees, centered at vertical, in the x-z plane
 """
 function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
-        config=:default, r_cables=[zeros(3) for i = 1:num_lift])
+        config=:default, r_cables=[zeros(3) for i = 1:num_lift], ϕ=0.0)
     if config == :default
         h = d*cos(α)
         r = d*sin(α)
         z = x_load[3] + h
         circle(θ) = [x_load[1] + r*cos(θ), x_load[2] + r*sin(θ)]
-        θ = range(0,2π,length=num_lift+1)
+        θ = range(0,2π,length=num_lift+1) .+ ϕ
         x_lift = [zeros(3) for i = 1:num_lift]
         for i = 1:num_lift
             if num_lift == 2
@@ -104,9 +105,9 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
         load_params = let (l,w,h) = load_dims
             (mass=0.350, inertia=Diagonal(1.0I,3),
                 gravity=SVector(0,0,-9.81),
-                r_cables=[(@SVector [ l/2,    0, h/2])*0,
-                          (@SVector [-l/2,  w/2, h/2])*0,
-                          (@SVector [-l/2, -w/2, h/2])*0])
+                r_cables=[(@SVector [ l/2,    0, h/2])*0.8,
+                          (@SVector [-l/2,  w/2, h/2])*0.8,
+                          (@SVector [-l/2, -w/2, h/2])*0.8])
         end
         info = Dict{Symbol,Any}(:quat=>4:7, :dims=>load_dims, :r_cables=>load_params.r_cables)
 
@@ -140,7 +141,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL & FINAL POSITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     x0_lift = get_quad_locations(x0_load, d, α, num_lift, r_cables=r_cables)
-    xf_lift = get_quad_locations(xf_load, d, α, num_lift, r_cables=r_cables)
+    xf_lift = get_quad_locations(xf_load, d, α, num_lift, r_cables=r_cables, ϕ=pi/8)
 
     xlift0 = [zeros(n_lift) for i = 1:num_lift]
     xliftf = [zeros(n_lift) for i = 1:num_lift]
@@ -161,7 +162,7 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
     if n_load == 13
         xload0[4] = 1.0
         xloadf[4] = 1.0
-        # xloadf[4:7] = SVector(Quaternion(RotX(pi/2)))
+        xloadf[4:7] = SVector(Quaternion(RotZ(pi/8)))
     end
 
     # midpoint desired configuration
@@ -207,10 +208,13 @@ function build_quad_problem(agent, x0_load=zeros(3), xf_load=[7.5,0,0],
     # Load
     q_load = zeros(n_load)
     if rigidbody
-        q_load[4:7] .= 1e-1
+        q_load[1:3] .= 1e-6
+        q_load[4:7] .= 1e-2
+        q_load[8:10] .= 1e-2
+        q_load[11:13] .= 1e-2
     end
     Q_load = Diagonal(q_load)
-    Qf_load = 0.0*Diagonal(q_load)
+    Qf_load = Diagonal(q_load)*10
     Qf_load[3,3] = 1.0  # needed to get good initial guess with pedestal constraints. Turned off after initial solve
     R_load = 1.0e-6*Diagonal(I,m_load)
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)

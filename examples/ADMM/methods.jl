@@ -212,7 +212,6 @@ function gen_lift_distance_constraints(model::Model, load_model::Model,
         X_load, U_load, agent, n_slack=3)
     n,m = model.n, model.m
     d = load_model.info[:rope_length]
-    r_cables = load_model.info[:r_cables]
 
     N = length(X_load)
     con_cable_lift = []
@@ -220,13 +219,15 @@ function gen_lift_distance_constraints(model::Model, load_model::Model,
 
     for k = 1:N
         function con(c,x,u=zeros())
-            c[1] = norm(x[1:n_slack] - (X_load[k][1:n_slack] + r_cables[agent]))^2 - d^2
+            r_cables = attachment_points(load_model, X_load[k])
+            c[1] = norm(x[1:n_slack] - r_cables[agent])^2 - d^2
         end
 
         function ∇con(C,x,u=zeros())
+            r_cables = attachment_points(load_model, X_load[k])
             x_pos = x[1:n_slack]
             x_load_pos = X_load[k][1:n_slack]
-            dif = x_pos - (x_load_pos + r_cables[agent])
+            dif = x_pos - r_cables[agent]
             C[1,1:n_slack] = 2*dif
         end
         cc = Constraint{Equality}(con,∇con,n,m,1,:cable_length)
@@ -286,21 +287,26 @@ function gen_load_distance_constraints(model, X_lift, U_lift, n_slack=3)
     for k = 1:N
 
         function con(c,x,u=zeros())
+            r_cables = attachment_points(model, x)
             for i = 1:num_lift
-                c[i] = norm(X_lift[i][k][1:n_slack] - (x[1:n_slack] + r_cables[i]))^2 - d^2
+                c[i] = norm(X_lift[i][k][1:n_slack] - r_cables[i])^2 - d^2
             end
         end
 
         function ∇con(C,x,u=zeros())
+            r_cables = attachment_points(model, x)
             for i = 1:num_lift
+                r = model.info[:r_cables][i]
                 x_pos = X_lift[i][k][1:n_slack]
                 x_load_pos = x[1:n_slack]
-                dif = x_pos - (x_load_pos + r_cables[i])
+                dif = x_pos - r_cables[i]
                 C[i,1:n_slack] = -2*dif
+                C[i,4:7] = -2*dif'grad_rotation(q,r)
             end
         end
+
         p_con = num_lift
-        cc = Constraint{Equality}(con,∇con,n,m,p_con,:cable_length)
+        cc = Constraint{Equality}(con, ∇con, n, m, p_con, :cable_length)
         push!(con_cable_load,cc)
     end
 

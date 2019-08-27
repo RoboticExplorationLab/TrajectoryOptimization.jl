@@ -4,11 +4,11 @@ load_dims = (0.5, 0.5, 0.2)
 load_params = let (l,w,h) = load_dims
     (mass=0.1, inertia=Diagonal(1.0I,3),
         gravity=(@SVector [0,0,-9.81]),
-        r_cables=[(@SVector [ l/2,    0, h/2])*0,
-                  (@SVector [-l/2,  w/2, h/2])*0,
-                  (@SVector [-l/2, -w/2, h/2])*0])
+        r_cables=[(@SVector [ l/2,    0, h/2])*0.8,
+                  (@SVector [-l/2,  w/2, h/2])*0.8,
+                  (@SVector [-l/2, -w/2, h/2])*0.8])
 end
-info = Dict{Symbol,Any}(:quat0=>4:7, :dims=>load_dims)
+info = Dict{Symbol,Any}(:quat0=>4:7, :dims=>load_dims, :r_cables=>load_params.r_cables)
 
 n_load = 13
 m_load = 3*num_lift
@@ -29,7 +29,7 @@ x0[4] = 1
 xf_prev = prob_load.xf
 xf = zeros(n_load)
 xf[1:3] = xf_prev[1:3]
-xf[4:7] = SVector(Quaternion(RotZ(0*pi/2)))
+xf[4:7] = SVector(Quaternion(RotZ(pi/4)))
 # xf[4] = 1
 
 # Objective
@@ -79,12 +79,32 @@ sol_quad1.U[2][5:7]
 # Solve the whole system
 x0 = [0., 0., 0.3]
 xf = [6., 0., 0.3]
-probs, prob_load2 = init_quad_ADMM(x0, xf, distributed=false, num_lift=num_lift, obstacles=false, quat=true, infeasible=false, doors=false, rigidbody=true);
-sol, solvers = solve_admm(prob_load2, probs, opts_al, true)
+probs, prob_load2 = init_quad_ADMM(x0[1:3], xf[1:3], distributed=false, num_lift=num_lift, obstacles=false, quat=true, infeasible=false, doors=false, rigidbody=true);
+sol, solvers, X_cache = solve_admm(prob_load2, probs, opts_al, true)
+X_cache[1][2][1][1:3]
 
 anim = visualize_quadrotor_lift_system(vis, sol, door=:false)
 sol[2].xf
 sol[2].X[end]
+
+function dist(x)
+    q = Quaternion(x[4:7])
+    r = load_params.r_cables[1]
+    [norm(sol[2].X[1][1:3] - (q*r + x[1:3]))^2 - 1.55^2]
+end
+
+function ∇dist(x)
+    q = Quaternion(x[4:7])
+    r = load_params.r_cables[1]
+    diff = sol[2].X[1][1:3] - (q*r + x[1:3])
+    C = zeros(13)
+    C[1:3] = - 2diff
+    C[4:7] = -2diff'grad_rotation(q,r)
+    C
+end
+dist(x0)
+
+ForwardDiff.jacobian(dist,xf) ≈ ∇dist(xf)'
 
 plot(sol[2].X,3:3)
 plot(sol[1].U,1:3)

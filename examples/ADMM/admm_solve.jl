@@ -6,7 +6,7 @@ function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions, parallel=t
     @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel)
 	solvers = combine_problems(solver_load, solvers_al)
     problems = combine_problems(prob_load, probs)
-	return problems, solvers
+	return problems, solvers, X_cache
 end
 
 function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift, opts)
@@ -123,10 +123,17 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
+	# @info "Updating constraints..."
+    # for i = 1:num_lift
+    #     TO.update_constraints!(probs[i].obj.C, probs[i].obj.constraints, probs[i].X, probs[i].U)
+    #     TO.update_active_set!(probs[i].obj)
+    # end
+    # TO.update_constraints!(prob_load.obj.C, prob_load.obj.constraints, prob_load.X, prob_load.U)
+    # TO.update_active_set!(prob_load.obj)
 	# return solvers_al, solver_load
 
 	max_time = 30.0 # seconds
-	max_iter = 3
+	max_iter = 1
 	t_start = time()
     for ii = 1:max_iter
         # Solve each AL problem
