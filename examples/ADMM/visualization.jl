@@ -79,7 +79,12 @@ function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=
     return anim
 end
 
-function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
+function visualize_lift_system(vis, probs; door=:middle, n_slack=3)
+    is_quad = false
+    if probs[2].model.n == 13
+        is_quad = true
+    end
+
     prob_load = probs[1]
     prob_lift = probs[2:end]
     r_lift = prob_lift[1].model.info[:radius]::Float64
@@ -88,9 +93,8 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     ceiling = 3
     rigidbody = size(prob_load)[1] == 13
 
-
     num_lift = length(prob_lift)::Int
-    d = [prob_load.model.info[:rope_length] for i = 1:num_lift]
+    d = [prob_load.model.info[:rope_length]::Float64 for i = 1:num_lift]
 
     if door != :false
         _cyl, = quad_obstacles()
@@ -105,24 +109,24 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
-    # load in quad mesh
-    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+    if is_quad
+        # load in quad mesh
+        traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+        urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+        obj = joinpath(urdf_folder, "quadrotor_base.obj")
 
-    quad_scaling = 0.085
-    robot_obj = FileIO.load(obj)
-    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+        quad_scaling = 0.085
+        robot_obj = FileIO.load(obj)
+        robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+        robot_mat = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
+    else
+        robot_obj = HyperSphere(Point3f0(0), convert(Float32,r_lift))
+        robot_mat = MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0))
+    end
 
     # intialize system
     for i = 1:num_lift
-        # setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
-
-        # setobject!(vis["lift$i"]["cyl_top"],Cylinder(Point3f0([0,0,-1*r_lift]),Point3f0([0,0,3*r_lift]),convert(Float32,r_lift)),MeshPhongMaterial(color=RGBA(1, 0, 0, 0.25)))
-        # setobject!(vis["lift$i"]["cyl_bottom"],Cylinder(Point3f0([0,0,-3r_lift]),Point3f0([0,0,-1*r_lift]),convert(Float32,r_lift)),MeshPhongMaterial(color=RGBA(1, 0, 0, 0.25)))
-        # setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
-
-        setobject!(vis["lift$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+        setobject!(vis["lift$i"]["robot"], robot_obj, MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
 
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
         setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
@@ -148,6 +152,7 @@ function plot_quad_scene(frame, k, probs)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     n_load = size(prob_load)[1]
+    n_lift = probs[2].model.n
     num_lift = length(prob_lift)
 
     if n_load == 13
@@ -158,13 +163,20 @@ function plot_quad_scene(frame, k, probs)
         r_cables = [zeros(3) for i = 1:num_lift]
     end
 
+
     # cables
     x_load = prob_load.X[k][1:n_slack]
     r_attach = attachment_points(prob_load.model, prob_load.X[k])
     for i = 1:num_lift
         x_lift = prob_lift[i].X[k][1:n_slack]
+        if n_lift == 13
+            lift_trans = compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...)))
+        else
+            lift_trans = Translation(x_lift...)
+        end
+
         settransform!(frame["cable"]["$i"], cable_transform(x_lift, r_attach[i]))
-        settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...))))
+        settransform!(frame["lift$i"], lift_trans)
     end
 end
 

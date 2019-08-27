@@ -301,7 +301,10 @@ function gen_load_distance_constraints(model, X_lift, U_lift, n_slack=3)
                 x_load_pos = x[1:n_slack]
                 dif = x_pos - r_cables[i]
                 C[i,1:n_slack] = -2*dif
-                C[i,4:7] = -2*dif'grad_rotation(q,r)
+                if n == 13
+                    q = Quaternion(x[4:7])
+                    C[i,4:7] = -2*dif'grad_rotation(q,r)
+                end
             end
         end
 
@@ -444,13 +447,14 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
     n_load = prob.model.n
     m_load = prob.model.m
     n_slack = 3
+    N = prob.N
 
     cable_load = gen_load_cable_constraints(prob.model, X_lift, U_lift, n_slack)
     cable_length = gen_load_distance_constraints(prob.model, X_lift, U_lift, n_slack)
     con_height = gen_load_inequality_constraints(X_lift, U_lift, n_load, m_load)
 
     prob.obj.cost[end].Q .*= 0
-    for k = 1:prob.N
+    for k = 1:N
         prob.constraints[k] += cable_length[k]
         if k > 1
             prob.constraints[k] += con_height[k]

@@ -7,7 +7,6 @@ using TimerOutputs
 using BenchmarkTools
 
 num_lift = 3
-nn = copy(num_lift)
 if nworkers() != num_lift
 	addprocs(num_lift,exeflags="--project=$(@__DIR__)")
 end
@@ -24,18 +23,18 @@ include("admm_solve.jl")
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 
 
-function init_quad_ADMM(x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; quat=false, num_lift=3, obstacles=true, distributed=true, kwargs...)
+function init_lift_ADMM(lift_model::Model, x0=[0, 0, 0.5], xf=[7.5, 0, 0.5]; quat=false, num_lift=3, obstacles=true, distributed=true, kwargs...)
 	if distributed
 		probs = ddata(T=Problem{Float64,Discrete});
 		@sync for (j,w) in enumerate(workers())
-			@spawnat w probs[:L] = build_quad_problem(j,x0,xf,quat,obstacles,num_lift; kwargs...)
+			@spawnat w probs[:L] = build_lift_problem(lift_model, j,x0,xf,quat,obstacles,num_lift; kwargs...)
 		end
-		prob_load = build_quad_problem(:load,x0,xf,quat,obstacles,num_lift; kwargs...)
+		prob_load = build_lift_problem(lift_model, :load,x0,xf,quat,obstacles,num_lift; kwargs...)
 	else
 		probs = Problem{Float64,Discrete}[]
-		prob_load = build_quad_problem(:load,x0,xf,quat,obstacles,num_lift; kwargs...)
+		prob_load = build_lift_problem(lift_model, :load, x0,xf,quat,obstacles,num_lift; kwargs...)
 		for i = 1:num_lift
-			push!(probs, build_quad_problem(i,x0,xf,quat,obstacles,num_lift; kwargs...))
+			push!(probs, build_lift_problem(lift_model, i, x0,xf,quat,obstacles,num_lift; kwargs...))
 		end
 	end
 	return probs, prob_load
@@ -67,18 +66,19 @@ opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
 x0 = [0., 0., 0.3]
 xf = [6., 0., 0.3]
 
-probs, prob_load = init_quad_ADMM(x0, xf, distributed=false, num_lift=num_lift, obstacles=false,quat=true, infeasible=false, doors=false);
-sol0, solvers0 = solve_admm(prob_load, probs, opts_al, true)
-@btime sol,_solver = solve_admm(prob_load, probs, opts_al, true)
+lift_model = quadrotor_lift
+lift_model = doubleintegrator3D_lift
+probs, prob_load = init_lift_ADMM(lift_model, x0, xf,
+	distributed=false, num_lift=num_lift, obstacles=false,quat=true, infeasible=false, doors=false);
+sol0, solvers0 = solve_admm(prob_load, probs, opts_al, parallel=true, max_iter=2)
 
 include("visualization.jl")
 vis = Visualizer()
 open(vis)
-anim = visualize_quadrotor_lift_system(vis, sol0, door=:false)
+anim = visualize_lift_system(vis, sol0, door=:false)
 
 
 # timing results
-
 n = [2, 3, 4, 5, 6]
 tb = [1.355, 3.709, 5.165, 10.572, 11.565]
 tp = [.717, .809, .895, 1.042, 1.148]
