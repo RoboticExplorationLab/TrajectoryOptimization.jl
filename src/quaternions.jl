@@ -74,9 +74,8 @@ function Base.conj(q::Quaternion)
     return C
 end
 
-function deriv_conj(q::Quaternion, r::AbstractVector)
+"Derivative of a rotation of a vector, wrt the quaternion"
+function grad_rotation(q::Quaternion, r::AbstractVector)
     s,v = scalar(q), vec(q)
-    j2 = 2(s*I + skew(v))*r
-    j3 = v*r' + I*v'r - 2s*skew(r) - skew(v)*skew(r) - skew(skew(v)*r)
-    return [j2 j3]
+    2*[s*r + cross(v,r) (v'r)*I + v*r' - r*v' - s*skew(r)]
 end
