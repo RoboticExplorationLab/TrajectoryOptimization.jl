@@ -302,6 +302,21 @@ function _validate_bounds(max,min,n::Int)
     return max, min
 end
 
+function check_jacobian(con::Constraint)
+    n,m = length.(con.inds)
+    p = con.p
+    C0 = zeros(p,n+m)
+    ∇c,c_aug = generate_jacobian(con.c,n,m,p)
+    x,u = rand(n), rand(m)
+    ∇c(C0,x,u)
+
+    C = zero(C0)
+    con.∇c(C,x,u)
+    return C≈C0, (C, C0)
+end
+
+
+
 """$(SIGNATURES)
 A constraint where x,y positions of the state must remain a distance r from a circle centered at x_obs
 Assumes x,y are the first two dimensions of the state vector
