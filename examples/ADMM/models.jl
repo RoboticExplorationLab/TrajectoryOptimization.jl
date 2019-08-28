@@ -199,3 +199,12 @@ end
 quadrotor_lift = Model(quadrotor_lift_dynamics!, 13, 7, lift_params)
 # quadrotor_lift.info[:radius] = 0.275
 quadrotor_lift.info[:radius] = 0.5  # keep 2m distance between quads
+
+function double_integrator_2D_dynamics!(ẋ,x,u)
+      ẋ[1:2] = x[3:4]
+      ẋ[3:4] = u
+      return nothing
+end
+
+doubleintegrator2D = Model(double_integrator_2D_dynamics!,4,2)
+doubleintegrator2D.info[:radius] = 1.
