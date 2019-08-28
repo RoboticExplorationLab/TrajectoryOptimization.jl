@@ -40,13 +40,18 @@ end
 Get the location of the cable attachment points in the world frame
 """
 function attachment_points(model::Model, x)
-    if model.n == 13
-        r_cables = model.info[:r_cables]
-        q = Quaternion(x[4:7])
-        r = x[1:3]
-        r_attach = [q*r_ + r for r_ in r_cables]
+    if :r_cables ∈ keys(model.info)
+        if model.n == 13
+            r_cables = model.info[:r_cables]
+            q = Quaternion(x[4:7])
+            r = x[1:3]
+            r_attach = [q*r_ + r for r_ in r_cables]
+        else
+            num_lift = length(model.info[:r_cables])
+            r_attach = [x[1:3] for i = 1:num_lift]
+        end
     else
-        num_lift = length(model.info[:r_cables])
+        num_lift = model.info[:num_lift]
         r_attach = [x[1:3] for i = 1:num_lift]
     end
     return r_attach

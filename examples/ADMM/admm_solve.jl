@@ -2,7 +2,7 @@
 function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions; parallel=true, max_iter=3)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
-    @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache(probs)
+    @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache([prob_load; probs])
     @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel, max_iter)
 	solvers = combine_problems(solver_load, solvers_al)
     problems = combine_problems(prob_load, probs)
@@ -298,7 +298,10 @@ function combine_problems(prob_load, probs::DArray)
     combine_problems(prob_load, problems)
 end
 
-function init_cache(probs::Vector{<:Problem})
+function init_cache(probs_all::Vector{<:Problem})
+	probs = view(probs_all, 2:4)
+	prob_load = probs_all[1]
+
     num_lift = length(probs)
     X_lift = [deepcopy(prob.X) for prob in probs]
     U_lift = [deepcopy(prob.U) for prob in probs]
@@ -309,7 +312,10 @@ function init_cache(probs::Vector{<:Problem})
     return X_cache, U_cache, X_lift, U_lift
 end
 
-function init_cache(probs::DArray)
+function init_cache(probs_all::DArray)
+	probs = view(probs_all, 2:4)
+	prob_load = probs_all[1]
+
     # Initialize state and control caches
     X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
     U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])
