@@ -54,9 +54,22 @@ initial_controls!(prob_load2,U0)
 sol_load, solver = solve(prob_load2, opts_al)
 visualize_rigidbody(vis["load"], sol_load)
 
-# Solve quadrotor
-probs, = init_quad_ADMM(x0[1:3], xf[1:3], distributed=false, num_lift=num_lift, obstacles=false, quat=true, infeasible=false, doors=false, rigidbody=true);
-X_cache, U_cache, X_lift, U_lift = init_cache(probs);
+# Solve
+lift_model = quadrotor_lift
+lift_model = doubleintegrator3D_lift
+probs, prob_load = init_lift_ADMM(lift_model, x0, xf,
+	distributed=false, num_lift=num_lift, obstacles=false,quat=true, infeasible=false, doors=false, rigidbody=true);
+sol, solvers = solve_admm(prob_load, probs, opts_al, parallel=true, max_iter=2);
+anim = visualize_lift_system(vis, sol, door=:false)
+
+r1 = [sol[4].X[k][1:3] - sol[1].X[k][1:3] for k = 1:100]
+f1 = [sol[4].U[k][4:6] for k = 1:100]
+[normalize(r)'normalize(f) for (r,f) in zip(r1,f1)]
+plot([r'f for (r,f) in zip(r1,f1)])
+plot([solvers[2].λ[k].cable_length for k = 1:101])
+plot(sol[2].U, 4:6)
+
+
 prob = probs[1]
 solve!(prob, opts_al)
 visualize_rigidbody(vis["lift1"], prob)
@@ -81,7 +94,6 @@ x0 = [0., 0., 0.3]
 xf = [6., 0., 0.3]
 probs, prob_load2 = init_quad_ADMM(x0[1:3], xf[1:3], distributed=false, num_lift=num_lift, obstacles=false, quat=true, infeasible=false, doors=false, rigidbody=true);
 sol, solvers, X_cache = solve_admm(prob_load2, probs, opts_al, true)
-X_cache[1][2][1][1:3]
 
 anim = visualize_quadrotor_lift_system(vis, sol, door=:false)
 sol[2].xf

@@ -105,8 +105,8 @@ is_quad = n_lift == 13
 # Params
 N = 51
 tf = 5.0
-d = 1.5
-α = pi/4
+d = 1.55
+α = deg2rad(60)
 r_lift = 0.2
 r_load = 0.1
 
@@ -138,7 +138,7 @@ xf = [vcat(xf_lift...); xf_load]
 
 # Objective
 Q = I(n)*1e-1
-R = I(m)*1e-1
+R = I(m)*1e-2
 Qf = I(n)*100.0
 
 obj = LQRObjective(Q,R,Qf,xf,N)
@@ -225,7 +225,7 @@ evaluate!(xdot, batch_model, x0, u0)
 
 # Solve
 prob = Problem(rk3(batch_model), obj, U0, x0=x0, xf=xf, constraints=constraints, N=N, tf=tf)
-res, = solve(prob, opts_al)
+@time res, = solve(prob, opts_al)
 findmax_violation(res)
 visualize_batch(vis,res)
 
