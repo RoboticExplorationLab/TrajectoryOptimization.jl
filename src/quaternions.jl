@@ -6,7 +6,9 @@ using LinearAlgebra
 export
     Quaternion,
     Lmult,
-    Rmult
+    Rmult,
+    grad_rotation,
+    skew
 
 struct Quaternion{T}
     w::T
