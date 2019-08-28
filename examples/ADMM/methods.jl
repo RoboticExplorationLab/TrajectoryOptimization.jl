@@ -390,6 +390,128 @@ function centroid_constraint(X_lift, X_load, agent, k, r_centroid)
     return con, ∇con
 end
 
+function gen_lift_direction_constraint(model, X_load, U_load, agent)
+    N = length(X_load)
+    n,m = model.n, model.m
+    con_direction = Vector{Constraint{Inequality}}(undef, N)
+
+    if n == 13
+        u_inds = 5:7
+    else
+        u_inds = 4:6
+    end
+
+    for k = 1:N
+        function direction_constraint(c,x,u)
+            dir = X_load[k][1:3] - x[1:3]
+            u_cable = view(u,u_inds)
+            c[1] = -dir'u_cable
+        end
+
+        function ∇direction_constraint(C,x,u)
+            dir = X_load[k][1:3] - x[1:3]
+            u_cable = view(u,u_inds)
+            C[1,1:3] = u_cable
+            C[1,n .+ (u_inds)] = -dir
+        end
+        con_direction[k] = Constraint{Inequality}(direction_constraint, ∇direction_constraint,
+            n, m, 1, :cable_direction)
+    end
+    return con_direction
+end
+
+function gen_load_direction_constraint(load_model, X_lift, U_lift)
+    n,m = load_model.n, load_model.m
+    N = length(X_lift[1])
+    con_direction = Vector{Constraint{Inequality}}(undef, N)
+    num_lift = length(X_lift)
+
+    u_inds = [(i-1)*3 .+ (1:3) for i = 1:num_lift]
+
+    for k = 1:N
+        function direction_constraint(c,x,u)
+            for k = 1:num_lift
+                dir = X_lift[i][k][1:3] - x[1:3]
+                u_cable = view(u, u_inds[i])
+                c[i] = -dir'u_cable
+            end
+        end
+
+        function ∇direction_constraint(C,x,u)
+            for k = 1:num_lift
+                dir = X_lift[i][k][1:3] - x[1:3]
+                u_cable = view(u, u_inds[i])
+                C[i,1:3] = u_cable
+                C[i,n .+ u_inds[i]] = -dir
+            end
+        end
+        con_direction[k] = Constraint{Inequality}(direction_constraint, ∇direction_constraint,
+            n, m, num_lift, :cable_direction)
+    end
+    return con_direction
+end
+
+function gen_lift_direction_constraint(model, X_load, U_load, agent)
+    N = length(X_load)
+    n,m = model.n, model.m
+    con_direction = Vector{Constraint{Equality}}(undef, N)
+
+    if n == 13
+        u_inds = 5:7
+    else
+        u_inds = 4:6
+    end
+
+    for k = 1:N
+        function direction_constraint(c,x,u)
+            dir = X_load[k][1:3] - x[1:3]
+            u_cable = view(u, u_inds)
+            c[1:3] = cross(dir, u_cable)
+        end
+
+        function ∇direction_constraint(C,x,u)
+            dir = X_load[k][1:3] - x[1:3]
+            u_cable = view(u, u_inds)
+            C[1:3, 1:3] = skew(u_cable)
+            C[1:3, n .+ u_inds] = skew(dir)
+        end
+        con_direction[k] = Constraint{Equality}(direction_constraint, ∇direction_constraint,
+            n, m, 3, :cable_direction)
+    end
+    return con_direction
+end
+
+function gen_load_direction_constraint(load_model, X_lift, U_lift)
+    n,m = load_model.n, load_model.m
+    N = length(X_lift[1])
+    con_direction = Vector{Constraint{Equality}}(undef, N)
+    num_lift = length(X_lift)
+
+    u_inds = [(i-1)*3 .+ (1:3) for i = 1:num_lift]
+
+    for k = 1:N
+        function direction_constraint(c,x,u)
+            for i = 1:num_lift
+                dir = X_lift[i][k][1:3] - x[1:3]
+                u_cable = view(u, u_inds[i])
+                c[u_inds[i]] = cross(dir, u_cable)
+            end
+        end
+
+        function ∇direction_constraint(C,x,u)
+            for i = 1:num_lift
+                dir = X_lift[i][k][1:3] - x[1:3]
+                u_cable = view(u, u_inds[i])
+                C[u_inds[i], 1:3] = skew(u_cable)
+                C[u_inds[i], n .+ u_inds[i]] = skew(dir)
+            end
+        end
+        con_direction[k] = Constraint{Equality}(direction_constraint, ∇direction_constraint,
+            n, m, 3num_lift, :cable_direction)
+    end
+    return con_direction
+end
+
 
 
 
@@ -418,6 +540,10 @@ function update_lift_problem(prob, prob_load::Problem, X_cache, U_cache, agent::
                     U_load,
                     agent,
                     n_slack)
+    cable_direction = gen_lift_direction_constraint(prob.model,
+                    X_load,
+                    U_load,
+                    agent)
 
 
     X_lift = X_cache[2:(num_lift+1)]
@@ -428,16 +554,21 @@ function update_lift_problem(prob, prob_load::Problem, X_cache, U_cache, agent::
 
     # Add constraints to problems
     for k = 1:N
+        if 1 < k < N
+            prob.constraints[k] += self_col[k]
+            prob.constraints[k] += cable_length[k]
+        end
+
         if k < N
             prob.constraints[k] += cable_lift[k]
+            # prob.constraints[k] += cable_direction[k]
         end
-        prob.constraints[k] += cable_length[k]
-        (k != 1 && k != N) ? prob.constraints[k] += self_col[k] : nothing
         if k > 1
-            prob.constraints[k] += con_height[k]
+            # prob.constraints[k] += con_height[k]
         end
-        if 1 < k < N
-            # prob.constraints[k] += con_centroid[k]
+
+        for j = m_lift:m_lift-2
+            prob.obj[k].R[j,j] = 0.0
         end
     end
     # prob.obj[N].q[3] = -1
@@ -451,13 +582,17 @@ function update_load_problem(prob, X_lift, U_lift, d::Vector)
 
     cable_load = gen_load_cable_constraints(prob.model, X_lift, U_lift, n_slack)
     cable_length = gen_load_distance_constraints(prob.model, X_lift, U_lift, n_slack)
+    cable_direction = gen_load_direction_constraint(prob.model, X_lift, U_lift)
     con_height = gen_load_inequality_constraints(X_lift, U_lift, n_load, m_load)
 
     prob.obj.cost[end].Q .*= 0
     for k = 1:N
-        prob.constraints[k] += cable_length[k]
+        if 1 < k < N
+            prob.constraints[k] += cable_length[k]
+            # prob.constraints[k] += cable_direction[k]
+        end
         if k > 1
-            prob.constraints[k] += con_height[k]
+            # prob.constraints[k] += con_height[k]
         end
         if k < N
             prob.constraints[k] += cable_load[k]
