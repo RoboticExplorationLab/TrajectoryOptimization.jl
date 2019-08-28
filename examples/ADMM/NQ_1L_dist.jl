@@ -53,13 +53,6 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-opts_altro = ALTROSolverOptions{Float64}(verbose=verbose,
-    opts_al=opts_al,
-    R_inf=1.0e-4,
-    resolve_feasible_problem=false,
-    projected_newton=false,
-    projected_newton_tolerance=1.0e-4)
-
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_problem.jl"))
 
 # n-teamlift
@@ -76,7 +69,6 @@ include("visualization.jl")
 vis = Visualizer()
 open(vis)
 anim = visualize_lift_system(vis, sol0, door=:false)
-
 
 # timing results
 n = [2, 3, 4, 5, 6]

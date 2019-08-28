@@ -75,7 +75,20 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
     return x_lift
 end
 
+function DI_objective_weights(model::Model, num_lift)
+    n_lift, m_lift = model.n, model.m
 
+    # objective
+    q_lift = ones(n_lift)*1e-3
+    Q_lift = [Diagonal(q_lift), Diagonal(q_lift), Diagonal(q_lift)]
+    # Qf_lift = [100.0*Diagonal(),100.0*Diagonal(I,n_lift),100.0*Diagonal(I,n_lift)]
+    Qf_lift = Q_lift .* 1e6
+    r_lift = ones(m_lift)*1e-1
+    r_lift[4:6] .= 10
+    R_lift = Diagonal(r_lift)
+
+    return Q_lift, R_lift, Qf_lift
+end
 
 function quad_objective_weights(model::Model, num_lift)
     n_lift, m_lift = model.n, model.m
@@ -123,7 +136,7 @@ function build_lift_problem(lift_model::Model, agent, x0_load=zeros(3), xf_load=
     α2 = deg2rad(60) # arc angle for doorway
     ceiling = 2.1    # ceiling height
     r_ped = 0.15     # last fraction of traj to increase lower bound on load
-    ϕ = 0            # load rotation angle
+    ϕ = 0*pi/4            # load rotation angle
 
     # Robot sizes (for obstacles)
     r_lift = 0.275
@@ -204,13 +217,13 @@ function build_lift_problem(lift_model::Model, agent, x0_load=zeros(3), xf_load=
     # Load
     q_load = zeros(n_load)
     if rigidbody
-        q_load[1:3] .= 1e-6
+        q_load[1:3] .= 1e-5
         q_load[4:7] .= 1e-2
-        q_load[8:10] .= 1e-2
+        q_load[8:10] .= 1e-3
         q_load[11:13] .= 1e-2
     end
     Q_load = Diagonal(q_load)
-    Qf_load = Diagonal(q_load)*10
+    Qf_load = Diagonal(q_load)*1e4
     Qf_load[3,3] = 1.0  # needed to get good initial guess with pedestal constraints. Turned off after initial solve
     R_load = 1.0e-6*Diagonal(I,m_load)
     obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
