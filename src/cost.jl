@@ -148,11 +148,11 @@ Cost function of the form
 ``(x-x_f)^T Q (x_x_f) + u^T R u``
 R must be positive definite, Q must be positive semidefinite
 """
-function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
+function LQRCost(Q::AbstractArray, R::AbstractArray, xr::AbstractVector, ur::AbstractVector)
     H = zeros(size(R,1),size(Q,1))
-    q = -Q*xf
-    r = zeros(size(R,1))
-    c = 0.5*xf'*Q*xf
+    q = -Q*xr
+    r = -R*ur
+    c = 0.5*xr'*Q*xr + 0.5*ur'*R*ur
     return QuadraticCost(Q, R, H, q, r, c)
 end
 

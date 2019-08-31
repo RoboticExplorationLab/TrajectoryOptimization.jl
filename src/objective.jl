@@ -68,11 +68,11 @@ LQRObjective(Q, R, Qf, xf, N)
 Create an objective of the form
 `` (x_N - x_f)^T Q_f (x_N - x_f) + \sum_{k=0}^{N-1} (x_k-x_f)^T Q (x_k-x_f) + u_k^T R u_k``
 """
-function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int)
+function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int,uf=zeros(size(R,1)))
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
-    r = zeros(size(R,1))
-    c = 0.5*xf'*Q*xf
+    r = -R*uf
+    c = 0.5*xf'*Q*xf + 0.5*uf'*R*uf
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
 
