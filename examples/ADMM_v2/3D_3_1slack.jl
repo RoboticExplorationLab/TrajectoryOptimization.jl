@@ -238,9 +238,9 @@ function collision_constraint(c,x,u=zeros(m_batch))
     x2 = x[13 .+ (1:3)]
     x3 = x[2*13 .+ (1:3)]
 
-    c[1] = circle_constraint(x1,x2[1],x2[2],2*r_lift)
-    c[2] = circle_constraint(x2,x3[1],x3[2],2*r_lift)
-    c[3] = circle_constraint(x3,x1[1],x1[2],2*r_lift)
+    c[1] = circle_constraint(x1,x2[1],x2[2],3*r_lift)
+    c[2] = circle_constraint(x2,x3[1],x3[2],3*r_lift)
+    c[3] = circle_constraint(x3,x1[1],x1[2],3*r_lift)
 
     return nothing
 end
@@ -338,11 +338,13 @@ uu/norm(uu)
 ul/norm(ul)
 
 plot(prob.U,1:4)
-plot(prob.U,5)
+plot(prob.U,5:5)
 plot(prob.U,5*3 + 1)
 
-plot(prob.U,10)
+plot(prob.U,10:10)
 plot(prob.U,15 + 2)
+
+plot(prob.U,15:15)
 
 include(joinpath(pwd(),"examples/ADMM/visualization.jl"))
 

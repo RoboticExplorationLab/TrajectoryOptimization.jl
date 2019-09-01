@@ -12,6 +12,8 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Objective
     obj = prob.obj
 
+    prob.model isa Vector{Model} ? m = prob.model[1].m : prob.model.m
+
     X = prob.X; U = prob.U; K = solver.K; d = solver.d
 
     S = solver.S
@@ -41,7 +43,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
             Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Q[k].uu + solver.ρ[1]*Diagonal(ones(prob.model.m))
+            Quu_reg = Q[k].uu + solver.ρ[1]*Diagonal(ones(m))
             Qux_reg = Q[k].ux
         end
 

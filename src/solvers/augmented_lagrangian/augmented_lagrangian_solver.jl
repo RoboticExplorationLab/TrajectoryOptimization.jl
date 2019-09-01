@@ -126,7 +126,11 @@ function AbstractSolver(prob::Problem{T,D}, opts::AugmentedLagrangianSolverOptio
     stats_uncon = Dict{Symbol,Any}[]
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
+    if prob.model isa Vector{Model}
+        n = prob.model[1].n; m = prob.model[1].m; N = prob.N
+    else
+        n = prob.model.n; m = prob.model.m; N = prob.N
+    end
 
     C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
 
