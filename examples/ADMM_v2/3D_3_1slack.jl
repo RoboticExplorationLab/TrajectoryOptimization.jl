@@ -3,7 +3,7 @@ using ForwardDiff, LinearAlgebra, Plots, StaticArrays
 na = 3
 dt = 0.2
 n_batch = na*13 + 6
-m_batch = na*(4 + 3) + 3*na
+m_batch = na*(4 + 1) + na
 N = 51
 
 function load_dynamics!(ẋ,x,u)
@@ -64,10 +64,20 @@ function lift_dynamics!(ẋ,x,u,params)
 end
 
 function batch_dynamics!(ẋ,x,u)
-    lift_control_1 = u[1:7]
-    lift_control_2 = u[7 .+ (1:7)]
-    lift_control_3 = u[2*7 .+ (1:7)]
-    u_slack_load = u[3*7 .+ (1:3)] + u[(3*7 + 3) .+ (1:3)] + u[(3*7 + 2*3) .+ (1:3)]
+    x1 = x[1:3]
+    x2 = x[13 .+ (1:3)]
+    x3 = x[2*13 .+ (1:3)]
+
+    xload = x[3*13 .+ (1:3)]
+
+    dir1 = (xload - x1)/norm(xload - x1)
+    dir2 = (xload - x2)/norm(xload - x2)
+    dir3 = (xload - x3)/norm(xload - x3)
+
+    lift_control_1 = [u[1:4]; u[5]*dir1]
+    lift_control_2 = [u[5 .+ (1:4)]; u[10]*dir2]
+    lift_control_3 = [u[2*5 .+ (1:4)]; u[15]*dir3]
+    u_slack_load = -1.0*(u[3*5 + 1]*dir1 + u[3*5 + 2]*dir2 + u[3*5 + 3]*dir3)
 
     lift_dynamics!(view(ẋ,1:13),x[1:13],lift_control_1,lift_params)
     lift_dynamics!(view(ẋ,13 .+ (1:13)),x[13 .+ (1:13)],lift_control_2,lift_params)
@@ -132,7 +142,7 @@ for i in [(3*13 .+ (1:6))...]
       Q[i,i] = 0.
 end
 r_control = 1.0e-3*ones(4)
-r_slack = ones(3)
+r_slack = ones(1)
 R = Diagonal([r_control;r_slack;r_control;r_slack;r_control;r_slack;r_slack;r_slack;r_slack])
 Qf = 100*Diagonal(ones(n_batch))
 for i in [(3*13 .+ (1:6))...]
@@ -147,13 +157,13 @@ f_mag = hcat(f1, f2, f3)\[0;0;9.81*load_mass]
 ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
 
 thrust = 9.81*(lift_params.m + load_mass/na)/4
-ulift = [[thrust;thrust;thrust;thrust;-ff[i]] for i = 1:na]
-ulift_r = [[0.;0.;0.;0.;-ff[i]] for i = 1:na]
-uload = vcat(ff...)
+ulift = [[thrust;thrust;thrust;thrust;f_mag[i]] for i = 1:na]
+ulift_r = [[0.;0.;0.;0.;f_mag[i]] for i = 1:na]
+uload = vcat(f_mag...)
 u0 = vcat(ulift...,uload)
 u0_r = vcat(ulift_r...,uload)
 
-obj = LQRObjective(Q,R,Qf,xf,N,u0_r)
+obj = LQRObjective(Q,R,Qf,xf,N)
 
 # midpoint desired configuration
 Nmid = convert(Int,floor(N/2))+1
@@ -194,8 +204,8 @@ f_magm = hcat(f1m, f2m, f3m)\[0;0;9.81*di_mass_load]
 ffm = [f_magm[1]*f1m, f_magm[2]*f2m, f_magm[3]*f3m]
 
 thrustm = 9.81*(quad_params.m + di_mass_load/num_lift)/4
-uliftm = [[thrustm;thrustm;thrustm;thrustm;-ffm[i]] for i = 1:num_lift]
-uloadm = vcat(ffm...)
+uliftm = [[thrustm;thrustm;thrustm;thrustm;f_magm[i]] for i = 1:num_lift]
+uloadm = vcat(f_magm...)
 um = vcat(uliftm...,uloadm)
 Q_mid = copy(Q)
 
@@ -203,7 +213,7 @@ for i in [(1:3)...,(13 .+ (1:3))...,(2*13 .+ (1:3))...,(3*13 .+ (1:3))...]
       Q_mid[i,i] = 1000.
 end
 
-cost_mid = LQRCost(Q_mid,R,xm,um)
+cost_mid = LQRCost(Q_mid,R,xm)
 #
 obj.cost[Nmid] = cost_mid
 
@@ -216,29 +226,10 @@ function distance_constraint(c,x,u=zeros(m_batch))
     return nothing
 end
 
-function direction_constraint(c,x,u)
-    xload = x[3*13 .+ (1:3)]
-
-    Δx1 = xload - x[1:3]
-    Δx2 = xload - x[13 .+ (1:3)]
-    Δx3 = xload - x[2*13 .+ (1:3)]
-
-    Is = Diagonal(ones(3))
-    c[1:3] = (Δx1'*Δx1*Is - Δx1*Δx1')*u[4 .+ (1:3)]
-    c[4:6] = (Δx1'*Δx1*Is - Δx1*Δx1')*u[3*7 .+ (1:3)]
-
-    c[7:9] = (Δx2'*Δx2*Is - Δx2*Δx2')*u[(7 + 4) .+ (1:3)]
-    c[10:12] = (Δx2'*Δx2*Is - Δx2*Δx2')*u[(3*7 + 3) .+ (1:3)]
-
-    c[13:15] = (Δx3'*Δx3*Is - Δx3*Δx3')*u[(2*7 + 4) .+ (1:3)]
-    c[16:18] = (Δx3'*Δx3*Is - Δx3*Δx3')*u[(3*7 + 2*3) .+ (1:3)]
-    return nothing
-end
-
 function force_constraint(c,x,u)
-    c[1:3] = u[4 .+ (1:3)] + u[3*7 .+ (1:3)]
-    c[4:6] = u[(7 + 4) .+ (1:3)] + u[(3*7 + 3) .+ (1:3)]
-    c[7:9] = u[(2*7 + 4) .+ (1:3)] + u[(3*7 + 2*3) .+ (1:3)]
+    c[1] = u[5] - u[3*5 + 1]
+    c[2] = u[10] - u[3*5 + 2]
+    c[3] = u[15] - u[3*5 + 3]
     return nothing
 end
 
@@ -281,31 +272,28 @@ cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cy
 u_l = -Inf*ones(m_batch)
 u_u = Inf*ones(m_batch)
 u_l[1:4] .= 0.
-u_l[7 .+ (1:4)] .= 0.
-u_l[2*7 .+ (1:4)] .= 0.
-u_l[na*7 + 3] = 0.
-u_l[(na*7 + 3) + 3] = 0.
-u_l[(na*7 + 6) + 3] = 0.
-
+u_l[5 .+ (1:4)] .= 0.
+u_l[2*5 .+ (1:4)] .= 0.
+u_l[na*5 .+ (1:3)] .= 0.
 
 u_u[1:4] .= 12/4.
-u_u[7 .+ (1:4)] .= 12/4.
-u_u[2*7 .+ (1:4)] .= 12/4.
+u_u[5 .+ (1:4)] .= 12/4.
+u_u[2*5 .+ (1:4)] .= 12/4.
 
 bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u)
 
 dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch,na,:distance)
-dir_con = Constraint{Equality}(direction_constraint,n_batch,m_batch,18,:direction)
-for_con = Constraint{Equality}(force_constraint,n_batch,m_batch,9,:force)
+# dir_con = Constraint{Equality}(direction_constraint,n_batch,m_batch,18,:direction)
+for_con = Constraint{Equality}(force_constraint,n_batch,m_batch,3,:force)
 col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch,3,:collision)
 goal = goal_constraint(xf)
 
 con = Constraints(N)
 
 for k = 1:N-1
-    con[k] += dist_con + dir_con + for_con + bnd + col_con + cyl
+    con[k] += dist_con + for_con + bnd + col_con + cyl
 end
-con[N] += dist_con + goal + col_con + cyl
+con[N] +=  goal + col_con + cyl + dist_con
 prob = Problem(model_d,obj,dt=dt,N=N,constraints=con,xf=xf,x0=x0)
 
 
@@ -343,20 +331,18 @@ kk = 3
 Δx = prob.X[kk][13*3 .+ (1:3)] - prob.X[kk][1:3]
 Δx/norm(Δx)
 
-uu = prob.U[kk][4 .+ (1:3)]
-ul = prob.U[kk][3*7 .+ (1:3)]
+uu = prob.U[kk][4 + 1]
+ul = prob.U[kk][3*5 + 1]
 
 uu/norm(uu)
 ul/norm(ul)
 
 plot(prob.U,1:4)
-plot(prob.U,4 .+ (1:3))
-plot(prob.U,7*3 .+ (1:3))
+plot(prob.U,5)
+plot(prob.U,5*3 + 1)
 
-plot(prob.U,(7 + 4) .+ (1:3))
-plot(prob.U,(7*3 + 3) .+ (1:3))
-
-# plot(prob.U,7 .+ (1:3))
+plot(prob.U,10)
+plot(prob.U,15 + 2)
 
 include(joinpath(pwd(),"examples/ADMM/visualization.jl"))
 
