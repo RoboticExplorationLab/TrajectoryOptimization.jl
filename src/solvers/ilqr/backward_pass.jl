@@ -12,7 +12,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
     # Objective
     obj = prob.obj
 
-    prob.model isa Vector{Model} ? m = prob.model[1].m : prob.model.m
+    prob.model isa Vector{Model} ? m = prob.model[1].m : m = prob.model.m
 
     X = prob.X; U = prob.U; K = solver.K; d = solver.d
 

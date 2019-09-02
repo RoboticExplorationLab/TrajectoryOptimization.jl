@@ -204,6 +204,14 @@ jacobian!(Z::PartedVecTrajectory, model::Model{M,Discrete}, X, U, dt)
 ```
 Evaluate discrete dynamics Jacobian along entire trajectory
 """
+
+function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
+    N = length(X)
+    for k = 1:N-1
+        jacobian!(Z[k],model,X[k],U[k],dt[k])
+    end
+end
+
 function jacobian!(Z::PartedMatTrajectory{T},model,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
     N = length(X)
     for k = 1:N-1

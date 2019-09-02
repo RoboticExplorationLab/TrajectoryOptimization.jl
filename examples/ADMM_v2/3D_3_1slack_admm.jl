@@ -4,6 +4,8 @@ using GeometryTypes
 using CoordinateTransformations
 using FileIO
 using MeshIO
+using LinearAlgebra
+using ForwardDiff
 const TO = TrajectoryOptimization
 
 num_lift = 3
@@ -323,8 +325,8 @@ R_load = Diagonal([r_slack;r_slack;r_slack])
 Qf_load = 0.0*Diagonal(ones(n_load))
 
 
-obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N) for i = 1:num_lift]
-obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N)
+obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
+obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N,uload)
 
 Q_mid_lift = copy(Q_lift)
 for i in (1:3)
@@ -336,8 +338,8 @@ for i in (1:3)
     Q_mid_load[i,i] = 100.
 end
 
-cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i]) for i = 1:num_lift]
-cost_mid_load = LQRCost(Q_mid_load,R_load,xloadm)
+cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
+cost_mid_load = LQRCost(Q_mid_load,R_load,xloadm,uloadm)
 
 for i = 1:num_lift
     obj_lift[i].cost[Nmid] = cost_mid_lift[i]
@@ -352,13 +354,12 @@ for i = 1:num_lift
     for k = 2:N-1
         con[k] += bnd2 + obs_lift
     end
-    # con[N] += goal_constraint(xliftf[i])
     push!(constraints_lift,copy(con))
 end
 
 constraints_load = Constraints(N)
 for k = 2:N-1
-    constraints_load[k] +=  bnd3 + obs_load
+    constraints_load[k] += bnd3 + obs_load
 end
 constraints_load[N] += goal_constraint(xloadf) + bnd4
 
@@ -412,6 +413,11 @@ include(joinpath(pwd(),"examples/ADMM/methods.jl"))
 # Solve
 @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,n_slack,:parallel,opts_al)
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,n_slack,:sequential,opts_al)
+
+max_violation(slift_al[1])
+max_violation(slift_al[2])
+max_violation(slift_al[3])
+max_violation(sload_al)
 
 # Visualize
 include(joinpath(pwd(),"examples/ADMM/visualization.jl"))

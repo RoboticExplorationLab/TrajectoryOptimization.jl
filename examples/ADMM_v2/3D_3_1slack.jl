@@ -1,6 +1,6 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
 
-na = 3
+na = num_lift = 3
 dt = 0.2
 n_batch = na*13 + 6
 m_batch = na*(4 + 1) + na
@@ -21,8 +21,10 @@ lift_params = (m=0.85,
              kf=1.0,
              km=0.0245)
 n_lift = 13
-load_mass = 0.1
+load_mass = 0.35
 n_load = 6
+r_lift = 0.275
+r_load = 0.2
 
 function lift_dynamics!(ẋ,x,u,params)
 
@@ -111,7 +113,7 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
-xload0[3] = 3/6
+xload0[3] = 4/6
 xload0[1:3] += shift_[1:3]
 
 xlift0 = [x10,x20,x30]
@@ -163,7 +165,7 @@ uload = vcat(f_mag...)
 u0 = vcat(ulift...,uload)
 u0_r = vcat(ulift_r...,uload)
 
-obj = LQRObjective(Q,R,Qf,xf,N)
+obj = LQRObjective(Q,R,Qf,xf,N,u0)
 
 # midpoint desired configuration
 Nmid = convert(Int,floor(N/2))+1
@@ -200,20 +202,20 @@ xm = vcat(xliftmid...,xloadm)
 f1m = (x1m[1:3] - xloadm[1:3])/norm(x1m[1:3] - xloadm[1:3])
 f2m = (x2m[1:3] - xloadm[1:3])/norm(x2m[1:3] - xloadm[1:3])
 f3m = (x3m[1:3] - xloadm[1:3])/norm(x3m[1:3] - xloadm[1:3])
-f_magm = hcat(f1m, f2m, f3m)\[0;0;9.81*di_mass_load]
+f_magm = hcat(f1m, f2m, f3m)\[0;0;9.81*load_mass]
 ffm = [f_magm[1]*f1m, f_magm[2]*f2m, f_magm[3]*f3m]
 
-thrustm = 9.81*(quad_params.m + di_mass_load/num_lift)/4
+thrustm = 9.81*(lift_params.m + load_mass/num_lift)/4
 uliftm = [[thrustm;thrustm;thrustm;thrustm;f_magm[i]] for i = 1:num_lift]
 uloadm = vcat(f_magm...)
 um = vcat(uliftm...,uloadm)
 Q_mid = copy(Q)
 
 for i in [(1:3)...,(13 .+ (1:3))...,(2*13 .+ (1:3))...,(3*13 .+ (1:3))...]
-      Q_mid[i,i] = 1000.
+      Q_mid[i,i] = 100.
 end
 
-cost_mid = LQRCost(Q_mid,R,xm)
+cost_mid = LQRCost(Q_mid,R,xm,um)
 #
 obj.cost[Nmid] = cost_mid
 
@@ -283,7 +285,6 @@ u_u[2*5 .+ (1:4)] .= 12/4.
 bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u)
 
 dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch,na,:distance)
-# dir_con = Constraint{Equality}(direction_constraint,n_batch,m_batch,18,:direction)
 for_con = Constraint{Equality}(force_constraint,n_batch,m_batch,3,:force)
 col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch,3,:collision)
 goal = goal_constraint(xf)

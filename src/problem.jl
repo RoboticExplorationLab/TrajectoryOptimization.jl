@@ -139,6 +139,8 @@ function update_problem(p::Problem;
 
     if model isa Vector{Model}
         _model = model[1]
+    else
+        _model = model
     end
     if newProb
         pp = Problem(_model,obj,constraints,x0,xf,deepcopy(X),deepcopy(U),N,dt,tf)
