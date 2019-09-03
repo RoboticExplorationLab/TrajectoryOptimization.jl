@@ -12,7 +12,7 @@ function load_dynamics!(ẋ,x,u)
     ẋ[6] -= 9.81 # gravity
 end
 
-include(joinpath(pwd(),"dynamics/quaternions.jl"))
+include(joinpath(pwd(),"src/quaternions.jl"))
 lift_params = (m=0.85,
              J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
              Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
@@ -340,10 +340,10 @@ ul/norm(ul)
 
 plot(prob.U,1:4)
 plot(prob.U,5:5)
-plot(prob.U,5*3 + 1)
+plot(prob.U,16:16)
 
 plot(prob.U,10:10)
-plot(prob.U,15 + 2)
+plot(prob.U,17:17)
 
 plot(prob.U,15:15)
 
@@ -353,14 +353,14 @@ function visualize(vis,prob)
 
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
-    addcylinders!(vis, _cyl, 2.1)
+    addcylinders!(vis, _cyl, 3.0)
 
     # intialize system
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
     urdf_folder = joinpath(traj_folder, "dynamics","urdf")
     obj = joinpath(urdf_folder, "quadrotor_base.obj")
 
-    quad_scaling = 0.07
+    quad_scaling = 0.085
     robot_obj = FileIO.load(obj)
     robot_obj.vertices .= robot_obj.vertices .* quad_scaling
     for i = 1:na
@@ -368,7 +368,7 @@ function visualize(vis,prob)
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d),convert(Float32,0.01))
         setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
     end
-    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,0.05)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,0.2)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
 
     anim = MeshCat.Animation(convert(Int,floor(1.0/prob.dt)))
     for k = 1:prob.N

@@ -4,16 +4,15 @@ using Logging
 using Distributed
 using DistributedArrays
 using TimerOutputs
-using JSON3
-using Plots
-using PGFPlots
-const PGF = PGFPlots
+# using JSON3
+
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
 import TrajectoryOptimization: Discrete
 
 using TrajectoryOptimization
+const TO = TrajectoryOptimization
 @everywhere using TrajectoryOptimization
 @everywhere const TO = TrajectoryOptimization
 include("admm_solve.jl")
@@ -21,7 +20,6 @@ include("admm_solve.jl")
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_1_slack_problem.jl"))
-
 
 function init_quad_ADMM(distributed=true)
 	if distributed
@@ -55,8 +53,9 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 # @everywhere include(joinpath(dirname(@__FILE__),"3Q_1L_1_slack_problem.jl"))
 include("3Q_1L_1_slack_problem.jl")
-probs, prob_load = init_quad_ADMM(true)#x0, xf, distributed=true, quat=true, infeasible=false, doors=false);
-@time sol,solvers = solve_admm(prob_load, probs, opts_al, parallel=true)
+parallel = false
+probs, prob_load = init_quad_ADMM(parallel)#x0, xf, distributed=true, quat=true, infeasible=false, doors=false);
+@time sol,solvers = solve_admm(prob_load, probs, opts_al, parallel=parallel)
 
 include("visualization.jl")
 vis = Visualizer()

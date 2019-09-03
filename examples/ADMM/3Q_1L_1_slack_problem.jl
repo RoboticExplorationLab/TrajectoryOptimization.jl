@@ -15,8 +15,8 @@ include("methods_v2.jl")
 
 function gen_lift_problem(aa)
     num_lift = 3
-    N = 101
-    dt = 0.1
+    N = 51
+    dt = 0.2
 
     n_lift = 13
     m_lift = 5
@@ -200,9 +200,9 @@ function gen_lift_problem(aa)
     U0_lift = [[ulift[i] for k = 1:N-1] for i = 1:num_lift]
     U0_load = [uload for k = 1:N-1]
 
-    Q_lift = 1.0e-1*Diagonal(ones(n_lift))
-    Q_lift[1,1] = 1.0e-4
-    r_control = 1.0e-3*ones(4)
+    Q_lift = 10.0*Diagonal(ones(n_lift))
+    Q_lift[1,1] = 1.0e-3
+    r_control = 1.0e-4*ones(4)
     r_slack = ones(1)
     R_lift = 1.0*Diagonal([r_control;r_slack])
     Qf_lift = 100.0*Diagonal(ones(n_lift))

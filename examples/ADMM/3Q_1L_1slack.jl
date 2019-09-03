@@ -49,7 +49,7 @@ include(joinpath(pwd(),"examples/ADMM/visualization.jl"))
 
 vis = Visualizer()
 open(vis)
-visualize_lift_system(vis, [[pload_al]; plift_al],door=:false)
+visualize_lift_system(vis, [[pload_al]; plift_al])
 
 # idx = [(1:3)...,(8:10)...]
 # plot(plift_al[1].U,label="")
