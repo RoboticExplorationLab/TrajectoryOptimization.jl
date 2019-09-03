@@ -1,6 +1,3 @@
-
-
-
 """$(TYPEDEF)
 Solver options for the augmented Lagrangian solver.
 $(FIELDS)
@@ -88,7 +85,6 @@ AL methods form the following augmented Lagrangian function:
            & + \sum_{k=0}^{N-1} \ell_k(x_k,u_k,dt) + λ_k^T c_k(x_k,u_k) + c_k(x_k,u_k)^T I_{\mu_k} c_k(x_k,u_k)
 \end{align*}
 ```
-
 This function is then minimized with respect to the primal variables using any unconstrained minimization solver (e.g. iLQR).
     After a local minima is found, the AL method updates the Lagrange multipliers λ and the penalty terms μ and repeats the unconstrained minimization.
     AL methods have superlinear convergence as long as the penalty term μ is updated each iteration.
@@ -126,7 +122,11 @@ function AbstractSolver(prob::Problem{T,D}, opts::AugmentedLagrangianSolverOptio
     stats_uncon = Dict{Symbol,Any}[]
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
+    if prob.model isa Vector{Model}
+        n = prob.model[1].n; m = prob.model[1].m; N = prob.N
+    else
+        n = prob.model.n; m = prob.model.m; N = prob.N
+    end
 
     C,∇C,λ,μ,active_set = init_constraint_trajectories(prob.constraints,n,m,N)
 

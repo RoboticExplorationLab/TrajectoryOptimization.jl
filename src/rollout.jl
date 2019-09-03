@@ -6,13 +6,13 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
 
     for k = 2:prob.N
         # Calculate state trajectory difference
-        δx = state_diff(prob.model, X̄[k-1], X[k-1])
+        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
 
         # Calculate updated control
         Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
 
         # Propagate dynamics
-        evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], get_dt(prob,Ū[k-1]))
+        prob.model isa Vector{Model} ? evaluate!(X̄[k], prob.model[k-1], X̄[k-1], Ū[k-1], get_dt(prob,Ū[k-1])) : evaluate!(X̄[k], prob.model, X̄[k-1], Ū[k-1], get_dt(prob,Ū[k-1]))
 
         # Check that rollout has not diverged
         if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
@@ -30,14 +30,14 @@ function rollout!(prob::Problem{T}) where T
     end
 end
 
-function rollout!(X::AbstractVectorTrajectory, model::Model{M,Discrete}, U::AbstractVectorTrajectory, dt) where {M,T}
+function rollout!(X::AbstractVectorTrajectory, model, U::AbstractVectorTrajectory, dt) where {M,T}
     N = length(X)
     for k = 1:N-1
-        evaluate!(X[k+1], model, X[k], U[k], dt[k])
+        model isa Vector{Model} ? evaluate!(X[k+1], model[k], X[k], U[k], dt[k]) : evaluate!(X[k+1], model, X[k], U[k], dt[k])
     end
 end
 
-function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajectory, dt) where M
+function rollout(model, x0::Vector, U::AbstractVectorTrajectory, dt) where M
     n = model.n
     N = length(U)+1
     X = [zero(x0) for k = 1:N]
@@ -45,7 +45,7 @@ function rollout(model::Model{M,Discrete}, x0::Vector, U::AbstractVectorTrajecto
     rollout!(X, model, U, dt)
     return X
 end
-rollout(prob::Problem{T,Discrete}) where T = rollout(prob.model, prob.x0, prob.U, get_dt_traj(prob))
+rollout(prob::Problem{T,Discrete}) where T = rollout(prob.model, prob.x0, prob.U, prob.dt)
 
 function state_diff(x̄::Vector{T},x::Vector{T},prob::Problem{T},solver::iLQRSolver{T}) where T
     if true

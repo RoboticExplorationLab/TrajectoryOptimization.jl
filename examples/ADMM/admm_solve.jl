@@ -63,6 +63,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     end
     solve!(prob_load, opts)
 
+
     # Get trajectories
     X_lift0 = [prob.X for prob in probs]
     U_lift0 = [prob.U for prob in probs]
@@ -96,10 +97,12 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
         agent = w - 1
         update_lift_problem(probs[agent], prob_load, X_cache[agent], U_cache[agent], agent, num_lift)
     end
+
+
 end
 
 function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true, max_iter=3)
-
+	N = prob_load.N; dt = prob_load.dt
     num_lift = length(probs)
 
     # Solve the initial problems
@@ -118,10 +121,12 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     for i = 1:num_lift
         solver = AugmentedLagrangianSolver(probs[i],opts)
         probs[i] = AugmentedLagrangianProblem(probs[i],solver)
+		probs[i].model = gen_lift_model(X_cache[i][1],N,dt)
         push!(solvers_al, solver)
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
+	prob_load.model = gen_load_model(X_cache[1][2:4],N,dt)
 
 	# @info "Updating constraints..."
     # for i = 1:num_lift
@@ -132,7 +137,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     # TO.update_active_set!(prob_load.obj)
 	# return solvers_al, solver_load
 
-	max_time = 30.0 # seconds
+	max_time = 120.0 # seconds
 	t_start = time()
     for ii = 1:max_iter
         # Solve each AL problem
@@ -155,7 +160,12 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 		end
 
         # Solve load with updated lift trajectories
+		prob_load.model = gen_load_model(X_lift,N,dt)
         TO.solve_aula!(prob_load, solver_load)
+
+		for i = 1:num_lift
+			probs[i].model = gen_lift_model(prob_load.X,N,dt)
+		end
 
         # Send trajectories
 		@info "Sending trajectories..."

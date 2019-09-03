@@ -1,11 +1,7 @@
 export
     set_x0!,
     is_constrained,
-    update_problem,
-    initial_controls!,
-    initial_states!,
-    findmax_violation
-
+    update_problem
 
 
 """$(TYPEDEF) Trajectory Optimization Problem.
@@ -16,7 +12,6 @@ Contains the full definition of a trajectory optimization problem, including:
 * initial and final states
 * Primal variables (state and control trajectories)
 * Discretization information: knot points (`N`), time step (`dt`), and total time (`tf`)
-
 # Constructors:
 ```julia
 Problem(model, obj X0, U0; integration, constraints, x0, xf, dt, tf, N)
@@ -38,7 +33,7 @@ Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be t
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
 mutable struct Problem{T<:AbstractFloat,D<:DynamicsType}
-    model::AbstractModel
+    model
     obj::AbstractObjective
     constraints::Constraints
     x0::Vector{T}
@@ -97,18 +92,18 @@ function Problem(model::Model{M,Discrete}, obj::AbstractObjective, X0::VectorTra
     Problem(model, obj, constraints, x0, xf, deepcopy(X0), deepcopy(U0), N, dt, tf)
 end
 
-Problem(model::Model, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
+Problem(model, obj::Objective, X0::Matrix{T}, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(X0), to_dvecs(U0); kwargs...)
 
-function Problem(model::Model, obj::AbstractObjective, U0::VectorTrajectory{T}; kwargs...) where T
+function Problem(model, obj::AbstractObjective, U0::VectorTrajectory{T}; kwargs...) where T
     N = length(obj)
     X0 = empty_state(model.n, N)
     Problem(model, obj, X0, U0; kwargs...)
 end
-Problem(model::Model, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
+Problem(model, obj::AbstractObjective, U0::Matrix{T}; kwargs...) where T =
     Problem(model, obj, to_dvecs(U0); kwargs...)
 
-function Problem(model::Model, obj::AbstractObjective; kwargs...)
+function Problem(model, obj::AbstractObjective; kwargs...)
     N = length(obj)
     U0 = [zeros(model.m) for k = 1:N-1]
     X0 = empty_state(model.n, N)
@@ -141,11 +136,20 @@ function update_problem(p::Problem;
     model=p.model, obj=p.obj, constraints=p.constraints, x0=p.x0, xf=p.xf, X=p.X, U=p.U,
     N=p.N, dt=p.dt, tf=p.tf, newProb=true)
 
-    if newProb
-        Problem(model,obj,constraints,x0,xf,deepcopy(X),deepcopy(U),N,dt,tf)
+    if model isa Vector{Model}
+        _model = model[1]
     else
-        Problem(model,obj,constraints,x0,xf,X,U,N,dt,tf)
+        _model = model
     end
+    if newProb
+        pp = Problem(_model,obj,constraints,x0,xf,deepcopy(X),deepcopy(U),N,dt,tf)
+    else
+        pp = Problem(_model,obj,constraints,x0,xf,X,U,N,dt,tf)
+    end
+    if model isa Vector{Model}
+        pp.model = model
+    end
+    pp
 end
 
 "$(SIGNATURES) Set the initial control trajectory for a problem. U0 can be either a `Matrix` or a `Vector{Vector}`"
@@ -226,10 +230,10 @@ end
 n,m,N = size(p::Problem)
 ```
 Return the number of states (n), number of controls (m), and the number of knot points (N)"""
-Base.size(p::Problem)::NTuple{3,Int} = (p.model.n,p.model.m,p.N)
+Base.size(p::Problem)::NTuple{3,Int} = p.model isa Vector{Model} ? (p.model[1].n,p.model[1].m,p.N) : (p.model.n,p.model.m,p.N)
 
 "$(TYPEDSIGNATURES) Copy a problem"
-Base.copy(p::Problem) = Problem(p.model, copy(p.obj), copy(p.constraints), copy(p.x0), copy(p.xf),
+Base.copy(p::Problem) = Problem(p.model, p.obj, copy(p.constraints), copy(p.x0), copy(p.xf),
     deepcopy(p.X), deepcopy(p.U), p.N, p.dt, p.tf)
 
 empty_state(n::Int,N::Int) = [ones(n)*NaN32 for k = 1:N]
@@ -269,67 +273,21 @@ function max_violation(prob::Problem{T})::T where T
     end
 end
 
-"""
-$(SIGNATURES) Find where the maximum constraint violation occurs.
-Returns `(c_max, k_max, label, ind_max)` where
-* `c_max` is the value of the maximum violation
-* `k_max` is the time index where the violation occurs
-* `label` is the label of the constraint with the maximum violation
-* `ind_max` is the index location of the maximum violation within the constraint with label `label` at time step `k_max`
-"""
-function findmax_violation(prob::Problem{T}) where T
-    k_max = 0
-    label_max = :none
-    ind_max = 0
-    c_max = 0.0
-    if is_constrained(prob)
-        constraints = prob.constraints
-    elseif prob.obj isa AugmentedLagrangianObjective
-        constraints = prob.obj.constraints
-    else
-        return c_max, k_max, label_max, ind_max
-    end
-
-    N = prob.N
-    X,U = prob.X, prob.U
-    for k = 1:N-1
-        if num_stage_constraints(constraints[k]) > 0
-            for con in constraints[k]
-                c = zeros(length(con))
-                violation!(c, con, X[k], U[k])
-                temp_max, temp_ind = findmax(c)
-                if temp_max > c_max
-                    c_max = temp_max
-                    ind_max = temp_ind
-                    label_max = label(con)
-                    k_max = k
-                end
-            end
-        end
-    end
-    if num_terminal_constraints(constraints[N]) > 0
-        for con in constraints[N]
-            c = zeros(length(con, :terminal))
-            violation!(c, con, X[N])
-            temp_max, temp_ind = findmax(c)
-            if temp_max > c_max
-                c_max = temp_max
-                ind_max = temp_ind
-                label_max = label(con)
-                k_max = N
-            end
-        end
-    end
-    return c_max, k_max, label_max, ind_max
-end
-
 function Expansion(prob::Problem{T}) where T
-    n = prob.model.n; m = prob.model.m
+    if prob.model isa Vector{Model}
+        n = prob.model[1].n; m = prob.model[1].m
+    else
+        n = prob.model.n; m = prob.model.m
+    end
     Expansion(zeros(T,n),zeros(T,m),zeros(T,n,n),zeros(T,m,m),zeros(T,m,n))
 end
 
 function Expansion(prob::Problem{T},exp::Symbol) where T
-    n = prob.model.n; m = prob.model.m
+    if prob.model isa Vector{Model}
+        n = prob.model[1].n; m = prob.model[1].m
+    else
+        n = prob.model.n; m = prob.model.m
+    end
     if exp == :x
         return Expansion(zeros(T,n),zeros(T,0),zeros(T,n,n),zeros(T,0,0),zeros(T,0,0))
     elseif exp == :u

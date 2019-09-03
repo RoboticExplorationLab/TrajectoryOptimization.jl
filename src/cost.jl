@@ -100,7 +100,6 @@ $(TYPEDEF)
 Cost function of the form
     1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
-
 Constructor use any of the following constructors:
 ```julia
 QuadraticCost(Q, R, H, q, r, c)
@@ -148,11 +147,11 @@ Cost function of the form
 ``(x-x_f)^T Q (x_x_f) + u^T R u``
 R must be positive definite, Q must be positive semidefinite
 """
-function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
+function LQRCost(Q::AbstractArray, R::AbstractArray, xr::AbstractVector, ur::AbstractVector=zeros(size(R,1)))
     H = zeros(size(R,1),size(Q,1))
-    q = -Q*xf
-    r = zeros(size(R,1))
-    c = 0.5*xf'*Q*xf
+    q = -Q*xr
+    r = -R*ur
+    c = 0.5*xr'*Q*xr + 0.5*ur'*R*ur
     return QuadraticCost(Q, R, H, q, r, c)
 end
 
@@ -247,7 +246,6 @@ end
 """
 $(SIGNATURES)
 Create a Generic Cost, specifying the gradient and hessian of the cost function analytically
-
 # Arguments
 * hess: multiple-dispatch function of the form,
     Q,R,H = hess(x,u) with sizes (n,n), (m,m), (m,n)
@@ -255,7 +253,6 @@ Create a Generic Cost, specifying the gradient and hessian of the cost function 
 * grad: multiple-dispatch function of the form,
     q,r = grad(x,u) with sizes (n,), (m,)
     qf = grad(x,u) with size (n,)
-
 """
 function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
     function expansion(x::Vector{T},u::Vector{T}) where T
@@ -271,7 +268,6 @@ end
 """
 $(SIGNATURES)
 Create a Generic Cost. Gradient and Hessian information will be determined using ForwardDiff
-
 # Arguments
 * ℓ: stage cost function of the form J = ℓ(x,u)
 * ℓf: terminal cost function of the form J = ℓ(xN)

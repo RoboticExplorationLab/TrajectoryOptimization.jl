@@ -81,14 +81,14 @@ end
 
 function visualize_lift_system(vis, probs; door=:middle, n_slack=3)
     is_quad = false
-    if probs[2].model.n == 13
+    if probs[2].model[1].n == 13
         is_quad = true
     end
 
     prob_load = probs[1]
     prob_lift = probs[2:end]
-    r_lift = prob_lift[1].model.info[:radius]::Float64
-    r_load = prob_load.model.info[:radius]::Float64
+    r_lift = .275
+    r_load = .2
     # ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
     ceiling = 3
     rigidbody = size(prob_load)[1] == 13
@@ -152,9 +152,9 @@ function plot_quad_scene(frame, k, probs)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     n_load = size(prob_load)[1]
-    n_lift = probs[2].model.n
+    n_lift = probs[2].model[1].n
     num_lift = length(prob_lift)
-
+    n_slack = 3
     if n_load == 13
         settransform!(frame["load"], compose(Translation(prob_load.X[k][1:3]),LinearMap(Quat(prob_load.X[k][4:7]...))))
         r_cables = prob_load.model.params.r_cables
@@ -166,7 +166,6 @@ function plot_quad_scene(frame, k, probs)
 
     # cables
     x_load = prob_load.X[k][1:n_slack]
-    r_attach = attachment_points(prob_load.model, prob_load.X[k])
     for i = 1:num_lift
         x_lift = prob_lift[i].X[k][1:n_slack]
         if n_lift == 13
@@ -175,7 +174,7 @@ function plot_quad_scene(frame, k, probs)
             lift_trans = Translation(x_lift...)
         end
 
-        settransform!(frame["cable"]["$i"], cable_transform(x_lift, r_attach[i]))
+        settransform!(frame["cable"]["$i"], cable_transform(x_lift, prob_load.X[k][1:3]))
         settransform!(frame["lift$i"], lift_trans)
     end
 end

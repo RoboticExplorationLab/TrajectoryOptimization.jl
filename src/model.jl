@@ -18,6 +18,10 @@ export
     discretize_model,
     dynamics
 
+struct Models <: AbstractModel
+    m::Vector{Model}
+end
+
 """
 $(TYPEDEF)
 Dynamics model
@@ -42,7 +46,6 @@ struct AnalyticalModel{M,D} <: Model{M,D}
     params::NamedTuple
     evals::Vector{Int}
     info::Dict{Symbol,Any}
-    quat::UnitRange{Int}
 
 
     """ $(SIGNATURES)
@@ -59,14 +62,6 @@ struct AnalyticalModel{M,D} <: Model{M,D}
             check_functions::Bool=false) where {M<:ModelType,D<:DynamicsType}
         d[:evals] = 0
         evals = [0;0]
-
-        # Check if dynamics have quaternion state
-        if :quat ∈ keys(d)
-            quat = d[:quat]
-        else
-            quat = 1:0
-        end
-
         if check_functions
             # Make dynamics inplace
             if is_inplace_dynamics(f,n,m,r)
@@ -75,9 +70,9 @@ struct AnalyticalModel{M,D} <: Model{M,D}
                 f! = wrap_inplace(f)
             end
             # ∇f! = _check_jacobian(D,f,∇f,n,m)
-            new{M,D}(f!,∇f,n,m,r,p,evals,d, quat)
+            new{M,D}(f!,∇f,n,m,r,p,evals,d)
         else
-            new{M,D}(f,∇f,n,m,r,p,evals,d, quat)
+            new{M,D}(f,∇f,n,m,r,p,evals,d)
         end
     end
 end
@@ -209,10 +204,18 @@ jacobian!(Z::PartedVecTrajectory, model::Model{M,Discrete}, X, U, dt)
 ```
 Evaluate discrete dynamics Jacobian along entire trajectory
 """
+
 function jacobian!(Z::PartedMatTrajectory{T},model::Model{M,Discrete},X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
     N = length(X)
     for k = 1:N-1
         jacobian!(Z[k],model,X[k],U[k],dt[k])
+    end
+end
+
+function jacobian!(Z::PartedMatTrajectory{T},model,X::VectorTrajectory{T},U::VectorTrajectory{T},dt::Vector{T}) where {M<:ModelType,T}
+    N = length(X)
+    for k = 1:N-1
+        model isa Vector{Model} ? jacobian!(Z[k],model[k],X[k],U[k],dt[k]) : jacobian!(Z[k],model,X[k],U[k],dt[k])
     end
 end
 
@@ -376,69 +379,6 @@ end
 function dynamics(model::Model{Uncertain,D},xdot::AbstractVector,x::AbstractVector,u::AbstractVector,w::AbstractVector) where D <: DynamicsType
     model.f(xdot,x,u,w)
     model.evals[1] += 1
-end
-
-has_quat(model::Model) = length(model.quat) != 0
-state_diff_size(model::Model) = has_quat(model) ? model.n-1 : model.n
-
-"$(SIGNATURES) Calculate the difference between states `x` and `x0`. In Euclidean space this is simply `x-x0`"
-function state_diff(model::Model,x,x0)
-    if has_quat(model)
-        inds = model.quat
-        q = Quaternion(x[inds])
-        q0 = Quaternion(x0[inds])
-        δq = vec(inv(q0)*q)
-        dx = x - x0
-        δx = zeros(length(x) - 1)
-        δx[1:inds[1]-1] = dx[1:inds[1]-1]
-        δx[inds[1:3]] = δq
-        δx[inds[4]:end] = dx[inds[4]+1:end]
-    else
-        δx = x - x0
-    end
-    return δx
-end
-
-function state_diff_jacobian(model::Model, x)
-    if has_quat(model)
-        n,m = model.n, model.m
-        n̄ = n - 1
-        inds = model.quat
-        Gk = zeros(n̄,n)
-        blk1 = (1:inds[1]-1, 1:inds[1]-1)
-        blk2 = (inds[1:3],inds)
-        blk3 = (inds[4]:n̄,inds[4]+1:n)
-
-        q = Quaternion(x[model.quat])
-        G = Lmult(inv(q))[2:4,:]
-        Gk[blk1...] = Diagonal(I,length(blk1[1]))
-        Gk[blk2...] = G
-        Gk[blk3...] = Diagonal(I,length(blk3[1]))
-        return Gk
-    else
-        return Diagonal(I,model.n)
-    end
-end
-
-function dynamics_expansion(Z::PartedMatrix, model::Model, x, u)
-    fdx, fdu = Z.xx, Z.xu
-    if has_quat(model)
-        G = state_diff_jacobian(model,x)
-        return G*fdx*G', G*fdu
-    else
-        return fdx, fdu
-    end
-end
-
-function cost_expansion(Q::Expansion, model::Model, x, u)
-    if has_quat(model)
-        q = Quaternion(x[model.quat])
-        G = Lmult(inv(q))[2:4,:]
-        G = state_diff_jacobian(model, x)
-        return G*Q.xx*G', Q.uu, Q.ux*G', G*Q.x, Q.u
-    else
-        return Q.xx, Q.uu, Q.ux, Q.x, Q.u
-    end
 end
 
 
