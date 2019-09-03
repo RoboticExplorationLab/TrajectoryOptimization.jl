@@ -80,10 +80,9 @@ function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,n_slack=
 end
 
 function visualize_lift_system(vis, probs; door=:middle, n_slack=3)
-    is_quad = false
-    if probs[2].model[1].n == 13
-        is_quad = true
-    end
+
+    is_quad = true
+
 
     prob_load = probs[1]
     prob_lift = probs[2:end]
@@ -94,17 +93,21 @@ function visualize_lift_system(vis, probs; door=:middle, n_slack=3)
     rigidbody = size(prob_load)[1] == 13
 
     num_lift = length(prob_lift)::Int
-    d = [prob_load.model.info[:rope_length]::Float64 for i = 1:num_lift]
+    d = [prob_load.model isa Vector{Model} ? prob_load.model[1].info[:rope_length] : prob_load.model.info[:rope_length] for i = 1:num_lift]
 
     if door != :false
-        _cyl, = quad_obstacles()
+        _cyl = []
+        goal_dist = 6.0
+        r_cylinder = 0.5
+        push!(_cyl,(goal_dist/2.,1.,r_cylinder))
+        push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
         addcylinders!(vis, _cyl, ceiling)
-        settransform!(vis["cyl"], Translation(0, door_location(door), 0))
+        settransform!(vis["cyl"], Translation(0, 0, 0))
 
-        # # Pedestal
-        xf_load = prob_load.xf
-        mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
-        plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
+        # # # Pedestal
+        # xf_load = prob_load.xf
+        # mat = MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0))
+        # plot_cylinder(vis, [xf_load[1], 0, 0], [xf_load[1], 0, xf_load[3] - r_load], 0.3, mat, "pedestal")
     end
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
