@@ -135,14 +135,7 @@ Q_quat2 = Gf'Diagonal(repeat(Q_diag,2))*Gf
 Qf_quat2 = Gf'Diagonal(repeat(Qf_diag,2))*Gf
 Qf_quat2[11:14,11:14]
 Qf_quat2[4:7, 4:7]
-Gf[10:12,11:14]
-Gf[4:6, 4:7]
-
-
-
-
 R2 = Diagonal(repeat(diag(R),2))
-
 costfun2 = QuadraticCost(Q_quat2,R2)
 costfun_term2 = QuadraticCost(Qf_quat2,zeros(n), 0.)
 obj_quat2 = Objective(costfun2, costfun_term2, N)
@@ -152,6 +145,7 @@ constraints2[N] += goal_constraint(xf_double)
 prob_double = Problem(model_quat, obj_quat2, constraints=constraints2, x0=x0_double, xf=xf_double, tf=tf, N=N, integration=:rk3)
 opts_ilqr = iLQRSolverOptions()
 @time sol_double, = solve(prob_double, opts_al)
+animate_double_free_body(vis,sol_double)
 
 
 

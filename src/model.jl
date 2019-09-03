@@ -400,21 +400,50 @@ state_diff_size(model::Model) = has_quat(model) ? model.n - num_quat(model) : mo
 "$(SIGNATURES) Calculate the difference between states `x` and `x0`. In Euclidean space this is simply `x-x0`"
 function state_diff(model::Model,x,x0)
     if has_quat(model)
-        for i = 1:num_quat(model)
-            inds = model.quat[i]
-            q = Quaternion(x[inds])
-            q0 = Quaternion(x0[inds])
-            δq = vec(inv(q0)*q)
-            dx = x - x0
-            δx = zeros(eltype(x), length(x) - 1)
-            δx[1:inds[1]-1] = dx[1:inds[1]-1]
-            δx[inds[1:3]] = δq
-            δx[inds[4]:end] = dx[inds[4]+1:end]
+        q = num_quat(model)
+        δx = zeros(eltype(x), length(x) - q)
+
+        part1, part2 = quat_partition(model)
+
+        dx = x - x0
+        for i = 1:2q+1
+            inds1 = part1[i]
+            inds2 = part2[i]
+            if isodd(i)  # not quaternion
+                δx[inds1] = dx[inds2]
+            else
+                q = Quaternion(x[inds2])
+                q0 = Quaternion(x0[inds2])
+                δx[inds1] = vec(inv(q0)*q)
+            end
         end
     else
         δx = x - x0
     end
     return δx
+end
+
+function quat_partition(model::Model)
+    n = model.n
+    q = num_quat(model)
+    n̄ = n - q
+    part1 = Vector{UnitRange{Int}}(undef, 2q+1)
+    part2 = Vector{UnitRange{Int}}(undef, 2q+1)
+    start1 = 1
+    start2 = 1
+    for i = 1:q
+        inds = model.quat[i]
+        part1[2i-1] = start1:inds[1]-i
+        part1[2i] = inds[1:3] .- (i-1)
+        part2[2i-1] = start2:inds[1]-1
+        part2[2i] = inds
+        nx = length(part1[2i-1])
+        start1 += nx + 3
+        start2 += nx + 4
+    end
+    part1[end] = start1:n̄
+    part2[end] = start2:n
+    return part1, part2
 end
 
 
@@ -424,25 +453,8 @@ function state_diff_jacobian(model::Model, x)
         q = num_quat(model)
         n̄ = n - q
         Gk = zeros(n̄,n)
-        start = 1
-        off1 = 0
-        part1 = Vector{UnitRange{Int}}(undef, 2q+1)
-        part2 = Vector{UnitRange{Int}}(undef, 2q+1)
-        start1 = 1
-        start2 = 1
-        for i = 1:q
-            inds = model.quat[i]
-            part1[2i-1] = start1:inds[1]-i
-            part1[2i] = inds[1:3] .- (i-1)
-            part2[2i-1] = start2:inds[1]-1
-            part2[2i] = inds
-            nx = length(part1[2i-1])
-            start1 += nx + 3
-            start2 += nx + 4
-        end
-        part1[end] = start1:n̄
-        part2[end] = start2:n
 
+        part1, part2 = quat_partition(model)
         for i = 1:2q+1
             inds1 = part1[i]
             inds2 = part2[i]
@@ -471,10 +483,9 @@ function dynamics_expansion(Z::PartedMatrix, model::Model, x, u)
     end
 end
 
+
 function cost_expansion(Q::Expansion, model::Model, x, u)
     if has_quat(model)
-        q = Quaternion(x[model.quat])
-        G = Lmult(inv(q))[2:4,:]
         G = state_diff_jacobian(model, x)
         return G*Q.xx*G', Q.uu, Q.ux*G', G*Q.x, Q.u
     else
