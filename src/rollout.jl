@@ -7,7 +7,7 @@ function rollout!(prob::Problem{T},solver::iLQRSolver{T},alpha::T=1.0) where T
     for k = 2:prob.N
         # Calculate state trajectory difference
         if prob.model isa Vector{Model}
-            δx = state_diff(prob.model[k], X̄[k-1], X[k-1])
+            δx = state_diff(prob.model[k-1], X̄[k-1], X[k-1])
         else
             δx = state_diff(prob.model, X̄[k-1], X[k-1])
         end

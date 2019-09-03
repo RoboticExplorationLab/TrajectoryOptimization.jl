@@ -459,7 +459,7 @@ function state_diff_jacobian(model::Model, x)
             inds1 = part1[i]
             inds2 = part2[i]
             if isodd(i)  # not quaternion
-                Gk[inds1, inds2] = I(length(inds1))
+                Gk[inds1, inds2] = Diagonal(ones(length(inds1)))
                 @assert length(inds1) == length(inds2)
             else  # quaternion
                 q = Quaternion(x[inds2])

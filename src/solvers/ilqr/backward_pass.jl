@@ -16,7 +16,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
 
     if prob.model isa Vector{Model}
         m = prob.model[1].m
-        G = state_diff_jacobian(prob.model[N], X[N])
+        G = state_diff_jacobian(prob.model[N-1], X[N])
     else
         m = prob.model.m
         G = state_diff_jacobian(prob.model, X[N])
@@ -60,7 +60,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
             Qux_reg = Qux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Quu + solver.ρ[1]*Diagonal(ones(prob.model.m))
+            Quu_reg = Quu + solver.ρ[1]*Diagonal(ones(m))
             Qux_reg = Qux
         end
 
