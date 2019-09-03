@@ -1,8 +1,12 @@
-
+include("methods_v2.jl")
 function solve_admm(prob_load, probs, opts::TO.AbstractSolverOptions; parallel=true, max_iter=3)
     prob_load = copy(prob_load)
     probs = copy_probs(probs)
-    @timeit "init cache" X_cache, U_cache, X_lift, U_lift = init_cache([prob_load; probs])
+	if parallel
+		X_cache, U_cache, X_lift, U_lift = init_cache(prob_load, probs)
+	else
+    	X_cache, U_cache, X_lift, U_lift = init_cache([prob_load; probs])
+	end
     @timeit "solve" solvers_al, solver_load = solve_admm!(prob_load, probs, X_cache, U_cache, X_lift, U_lift, opts, parallel, max_iter)
 	solvers = combine_problems(solver_load, solvers_al)
     problems = combine_problems(prob_load, probs)
@@ -33,7 +37,7 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     # d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
     # d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
     d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
-    update_load_problem(prob_load, X_lift, U_lift, d)
+	prob_load = update_load_problem(prob_load,X_lift,U_lift,prob_load.model.n,prob_load.model.m,d)
 
     # Send trajectories
     @sync for w in workers()
@@ -52,7 +56,7 @@ function solve_init!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
     # Update lift problems
     r_lift = fetch(@spawnat workers()[1] probs[:L].model.info[:radius])::Float64
     @sync for (agent,w) in enumerate(workers())
-        @spawnat w update_lift_problem(probs[:L], X_cache[:L], U_cache[:L], agent, d[agent], r_lift, num_lift)
+        @spawnat w probs[:L] = update_lift_problem(probs[:L], X_cache[:L][2:4], X_cache[:L][1], U_cache[:L][1], d[agent], agent, probs[:L].model.n, probs[:L].model.m, probs[:L].model.info[:radius], num_lift)
     end
 end
 
@@ -62,7 +66,6 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
         solve!(probs[i], opts)
     end
     solve!(prob_load, opts)
-
 
     # Get trajectories
     X_lift0 = [prob.X for prob in probs]
@@ -79,7 +82,7 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     # d2 = norm(x0_load[1:3]-x0_lift[2][1:3])
     # d3 = norm(x0_load[1:3]-x0_lift[3][1:3])
     d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
-    update_load_problem(prob_load, X_lift, U_lift, d)
+	prob_load = update_load_problem(prob_load,X_lift,U_lift,prob_load.model.n,prob_load.model.m,d)
 
     # Send trajectories
     for w = 2:(num_lift+1)
@@ -95,10 +98,9 @@ function solve_init!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     r_lift = probs[1].model.info[:radius]::Float64
     for w = 2:(num_lift+1)
         agent = w - 1
-        update_lift_problem(probs[agent], prob_load, X_cache[agent], U_cache[agent], agent, num_lift)
+        # update_lift_problem(probs[agent], prob_load, X_cache[agent], U_cache[agent], agent, num_lift)
+		probs[agent] = update_lift_problem(probs[agent],X_cache[agent][2:4],X_cache[agent][1],U_cache[agent][1],d[agent],agent,probs[agent].model.n,probs[agent].model.m,probs[agent].model.info[:radius])
     end
-
-
 end
 
 function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_lift, U_lift, opts, parallel=true, max_iter=3)
@@ -121,13 +123,13 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     for i = 1:num_lift
         solver = AugmentedLagrangianSolver(probs[i],opts)
         probs[i] = AugmentedLagrangianProblem(probs[i],solver)
-		probs[i].model = gen_lift_model(X_cache[i][1],N,dt)
+		probs[i].model = gen_lift_model(prob_load.X,N,dt)
         push!(solvers_al, solver)
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
-	prob_load.model = gen_load_model(X_cache[1][2:4],N,dt)
-
+    prob_load.model isa Vector{Model} ? d = prob_load.model[1].info[:rope_length] : d = prob_load.model.info[:rope_length]
+	prob_load.model = gen_load_model(X_lift,N,dt,d)
 	# @info "Updating constraints..."
     # for i = 1:num_lift
     #     TO.update_constraints!(probs[i].obj.C, probs[i].obj.constraints, probs[i].X, probs[i].U)
@@ -137,7 +139,7 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
     # TO.update_active_set!(prob_load.obj)
 	# return solvers_al, solver_load
 
-	max_time = 120.0 # seconds
+	max_time = 30.0 # seconds
 	t_start = time()
     for ii = 1:max_iter
         # Solve each AL problem
@@ -158,14 +160,11 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
 				U_lift[i] .= probs[i].U
 			end
 		end
+		prob_load.model isa Vector{Model} ? d = prob_load.model[1].info[:rope_length] : d = prob_load.model.info[:rope_length]
+		prob_load.model = gen_load_model(X_lift,N,dt,d)
 
         # Solve load with updated lift trajectories
-		prob_load.model = gen_load_model(X_lift,N,dt)
         TO.solve_aula!(prob_load, solver_load)
-
-		for i = 1:num_lift
-			probs[i].model = gen_lift_model(prob_load.X,N,dt)
-		end
 
         # Send trajectories
 		@info "Sending trajectories..."
@@ -175,6 +174,10 @@ function solve_admm!(prob_load, probs::Vector{<:Problem}, X_cache, U_cache, X_li
                 X_cache[i][j+1] .= X_lift[j]
             end
             X_cache[i][1] .= prob_load.X
+        end
+
+		for i = 1:num_lift
+            probs[i].model = gen_lift_model(prob_load.X,N,dt)
         end
 
         # Update lift constraints prior to evaluating convergence
@@ -216,11 +219,14 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
             probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
+			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt)
         end
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
+	prob_load.model isa Vector{Model} ? d = prob_load.model[1].info[:rope_length] : d = prob_load.model.info[:rope_length]
 
+	prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt,d)
 	# return solvers_al, solver_load
 
 	max_time = 30.0 # seconds
@@ -250,6 +256,9 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
 
         # Solve AL load problem
 		@info ("Solving load AL problem...")
+		prob_load.model isa Vector{Model} ? d = prob_load.model[1].info[:rope_length] : d = prob_load.model.info[:rope_length]
+
+		prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt,d)
         TO.solve_aula!(prob_load, solver_load)
 
         # Send trajectories
@@ -264,7 +273,9 @@ function solve_admm!(prob_load, probs::DArray, X_cache, U_cache, X_lift, U_lift,
             @spawnat w begin
                 X_cache[:L][1] .= prob_load.X
                 U_cache[:L][1] .= prob_load.U
+				probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt)
             end
+
         end
 
         # Update lift constraints prior to evaluating convergence
@@ -322,10 +333,7 @@ function init_cache(probs_all::Vector{<:Problem})
     return X_cache, U_cache, X_lift, U_lift
 end
 
-function init_cache(probs_all::DArray)
-	probs = view(probs_all, 2:4)
-	prob_load = probs_all[1]
-
+function init_cache(prob_load::Problem, probs::DArray)
     # Initialize state and control caches
     X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
     U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])

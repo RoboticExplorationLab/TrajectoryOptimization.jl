@@ -25,37 +25,19 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     X_load = deepcopy(prob_load.X)
     U_load = deepcopy(prob_load.U)
 
-    cable_lift = [gen_lift_cable_constraints_1slack(X_load,
-                    U_load,
-                    i,
-                    n_lift,
-                    m_lift,
-                    d[i],
-                    n_slack) for i = 1:num_lift]
-
-    cable_load = gen_load_cable_constraints_1slack(X_lift,U_lift,n_load,m_load,d,n_slack)
-
-    self_col = [gen_self_collision_constraints(X_lift,i,n_lift,m_lift,r_lift,n_slack) for i = 1:num_lift]
-
-    # Add system constraints to problems
     for i = 1:num_lift
-        for k = 1:N
-            prob_lift[i].constraints[k] += cable_lift[i][k]
-            prob_lift[i].constraints[k] += self_col[i][k]
-        end
+        prob_lift[i] = update_lift_problem(prob_lift[i],X_lift,X_load,U_load,d[i],i,n_lift,m_lift,prob_lift[i].model.info[:radius],n_slack)
     end
 
-    for k = 1:N
-        prob_load.constraints[k] += cable_load[k]
-    end
+    prob_load = update_load_problem(prob_load,X_lift,U_lift,n_load,m_load,d,n_slack)
 
-    # Create augmented Lagrangian problems, solvers
     solver_lift_al = []
     prob_lift_al = []
     for i = 1:num_lift
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
+
         prob.model = gen_lift_model(X_load,N,dt)
 
         push!(solver_lift_al,solver)
@@ -65,7 +47,9 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
     solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
-    prob_load_al.model = gen_load_model(X_lift,N,dt)
+    prob_load_al.model isa Vector{Model} ? d = prob_load_al.model[1].info[:rope_length] : d = prob_load_al.model.info[:rope_length]
+
+    prob_load_al.model = gen_load_model(X_lift,N,dt,d)
 
     for ii = 1:opts.iterations
         # Solve lift agents
@@ -89,9 +73,10 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
         end
 
         # Solve load
-        # return prob_lift,prob_load,1,1
 
-        prob_load_al.model = gen_load_model(X_lift,N,dt)
+        prob_load_al.model isa Vector{Model} ? d = prob_load_al.model[1].info[:rope_length] : d = prob_load_al.model.info[:rope_length]
+
+        prob_load_al.model = gen_load_model(X_lift,N,dt,d)
         TO.solve_aula!(prob_load_al,solver_load_al)
 
         # Update constraints
@@ -107,8 +92,6 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
             TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
             TO.update_active_set!(prob_lift_al[i].obj)
         end
-        # TO.update_constraints!(prob_load_al.obj.C,prob_load_al.obj.constraints, prob_load_al.X, prob_load_al.U)
-        # TO.update_active_set!(prob_load_al.obj)
 
         max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
         println(max_c)
@@ -168,7 +151,6 @@ function gen_load_cable_constraints_1slack(X_lift,U_lift,n,m,d,n_slack=3)
     num_lift = length(X_lift)
     N = length(X_lift[1])
     con_cable_load = []
-
     Is = Diagonal(I,n_slack)
 
     for k = 1:N
@@ -231,143 +213,6 @@ function gen_load_cable_constraints_1slack(X_lift,U_lift,n,m,d,n_slack=3)
     return con_cable_load
 end
 
-function gen_lift_model(X_load,N,dt)
-      model = Model[]
-
-      for k = 1:N-1
-        function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
-            q = normalize(Quaternion(view(x,4:7)))
-            v = view(x,8:10)
-            omega = view(x,11:13)
-
-            # Parameters
-            m = params[:m] # mass
-            J = params[:J] # inertia matrix
-            Jinv = params[:Jinv] # inverted inertia matrix
-            g = params[:gravity] # gravity
-            L = params[:motor_dist] # distance between motors
-
-            w1 = u[1]
-            w2 = u[2]
-            w3 = u[3]
-            w4 = u[4]
-
-            kf = params[:kf]; # 6.11*10^-8;
-            F1 = kf*w1;
-            F2 = kf*w2;
-            F3 = kf*w3;
-            F4 = kf*w4;
-            F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
-
-            km = params[:km]
-            M1 = km*w1;
-            M2 = km*w2;
-            M3 = km*w3;
-            M4 = km*w4;
-            tau = @SVector [L*(F2-F4), L*(F3-F1), (M1-M2+M3-M4)] #total rotor torque in body frame
-
-            ẋ[1:3] = v # velocity in world frame
-            ẋ[4:7] = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
-            Δx = X_load[k][1:3] - x[1:3]
-            dir = Δx/norm(Δx)
-            ẋ[8:10] = g + (1/m)*(q*F + u[5]*dir) # acceleration in world frame
-            ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
-            return tau, omega, J, Jinv
-        end
-        mm = midpoint(Model(quadrotor_lift_dynamics!,13,5,quad_params),dt)
-        mm.info[:mass] = mass_load
-        mm.info[:radius] = 0.2
-        push!(model,mm)
-    end
-    model
-end
-
-function gen_lift_model_initial(xload,xlift0)
-
-    function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
-        q = normalize(Quaternion(view(x,4:7)))
-        v = view(x,8:10)
-        omega = view(x,11:13)
-
-        # Parameters
-        m = params[:m] # mass
-        J = params[:J] # inertia matrix
-        Jinv = params[:Jinv] # inverted inertia matrix
-        g = params[:gravity] # gravity
-        L = params[:motor_dist] # distance between motors
-
-        w1 = u[1]
-        w2 = u[2]
-        w3 = u[3]
-        w4 = u[4]
-
-        kf = params[:kf]; # 6.11*10^-8;
-        F1 = kf*w1;
-        F2 = kf*w2;
-        F3 = kf*w3;
-        F4 = kf*w4;
-        F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
-
-        km = params[:km]
-        M1 = km*w1;
-        M2 = km*w2;
-        M3 = km*w3;
-        M4 = km*w4;
-        tau = @SVector [L*(F2-F4), L*(F3-F1), (M1-M2+M3-M4)] #total rotor torque in body frame
-
-        ẋ[1:3] = v # velocity in world frame
-        ẋ[4:7] = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
-        Δx = xload0[1:3] - xlift0[1:3]
-        dir = Δx/norm(Δx)
-        ẋ[8:10] = g + (1/m)*(q*F + u[5]*dir) # acceleration in world frame
-        ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
-        return tau, omega, J, Jinv
-    end
-    mm = Model(quadrotor_lift_dynamics!,13,5,quad_params)
-    mm.info[:mass] = 0.85
-    mm.info[:radius] = 0.5
-    mm
-end
-
-function gen_load_model(X_lift,N,dt)
-      model = Model[]
-      for k = 1:N-1
-          function double_integrator_3D_dynamics_load!(ẋ,x,u)
-              Δx1 = X_lift[1][k][1:3] - x[1:3]
-              Δx2 = X_lift[2][k][1:3] - x[1:3]
-              Δx3 = X_lift[3][k][1:3] - x[1:3]
-
-              u_slack1 = u[1]*Δx1/norm(Δx1)
-              u_slack2 = u[2]*Δx2/norm(Δx2)
-              u_slack3 = u[3]*Δx3/norm(Δx3)
-              Dynamics.double_integrator_3D_dynamics!(ẋ,x,(u_slack1+u_slack2+u_slack3)/0.35)
-          end
-          mm = Model(double_integrator_3D_dynamics_load!,6,3)
-          mm.info[:mass] = mass_load
-          mm.info[:radius] = 0.5
-          push!(model,midpoint(mm,dt))
-    end
-    model
-end
-
-function gen_load_model_initial(xload0,xlift0)
-
-      function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
-          Δx1 = (xlift0[1][1:3] - xload0[1:3])
-          Δx2 = (xlift0[2][1:3] - xload0[1:3])
-          Δx3 = (xlift0[3][1:3] - xload0[1:3])
-          u_slack1 = u[1]*Δx1/norm(Δx1)
-          u_slack2 = u[2]*Δx2/norm(Δx2)
-          u_slack3 = u[3]*Δx3/norm(Δx3)
-          Dynamics.double_integrator_3D_dynamics!(ẋ,x,(u_slack1+u_slack2+u_slack3)/mass_load)
-      end
-      mm = Model(double_integrator_3D_dynamics_load!,6,3)
-      mm.info[:mass] = mass_load
-      mm
-end
-
-
-
 function output_traj(prob,idx=collect(1:6),filename=joinpath(pwd(),"examples/ADMM/traj_output.txt"))
     f = open(filename,"w")
     x0 = prob.x0
@@ -425,108 +270,35 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
     return self_col_con
 end
 
-function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
-        config=:default, r_cables=[zeros(3) for i = 1:num_lift], ϕ=0.0)
-    if config == :default
-        h = d*cos(α)
-        r = d*sin(α)
-        z = x_load[3] + h
-        circle(θ) = [x_load[1] + r*cos(θ), x_load[2] + r*sin(θ)]
-        θ = range(0,2π,length=num_lift+1) .+ ϕ
-        x_lift = [zeros(3) for i = 1:num_lift]
-        for i = 1:num_lift
-            if num_lift == 2
-                x_lift[i][1:2] = circle(θ[i] + pi/2)
-            else
-                x_lift[i][1:2] = circle(θ[i])
-            end
-            x_lift[i][3] = z
-            x_lift[i] += r_cables[i]  # Shift by attachment location
-        end
-    elseif config == :doorway
-        y = x_load[2]
-        fan(θ) = [x_load[1] - d*sin(θ), y, x_load[3] + d*cos(θ)]
-        θ = range(-α,α, length=num_lift)
-        x_lift = [zeros(3) for i = 1:num_lift]
-        for i = 1:num_lift
-            x_lift[i][1:3] = fan(θ[i])
-        end
-    end
-    return x_lift
-end
-
-function quad_obstacles(door=:middle)
-    r_cylinder = 0.1
-    _cyl = []
-    h = 3 - 0*1.8  # x-loc [-1.8,2.0]
-    w = 0.5      # doorway width [0.1, inf)
-    off = 0.0    # y-offset [0, 0.6]
-    door_width = 1.0
-    off += door_location(door)
-    push!(_cyl,(h,  w+off, r_cylinder))
-    push!(_cyl,(h, -w+off, r_cylinder))
-    push!(_cyl,(h,  w+off+3r_cylinder, 3r_cylinder))
-    push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
-    push!(_cyl,(h,  w+off+3r_cylinder+3r_cylinder, 4r_cylinder))
-    push!(_cyl,(h, -w+off-3r_cylinder-3r_cylinder, 4r_cylinder))
-    push!(_cyl,(h,  w+off+3r_cylinder+9r_cylinder, 6r_cylinder))
-    push!(_cyl,(h, -w+off-3r_cylinder-9r_cylinder, 6r_cylinder))
-    # push!(_cyl,(h, -w+off-3r_cylinder, 3r_cylinder))
-    x_door = [h, off, 0]
-    return _cyl, x_door
-end
-
-function door_location(door, door_width=1.0)
-    if door == :left
-        off = door_width
-    elseif door == :middle
-        off = 0.0
-    elseif door == :right
-        off = -door_width
-    else
-        error(string(door) * " not a defined door")
-    end
-    return off
-end
-
-function update_lift_problem(prob_lift, prob_load::Problem, X_cache, U_cache, agent::Int, num_lift=3, n_slack=3)
-
-    X_load = X_cache[1]
-    U_load = U_cache[1]
-
-    X_lift = X_cache[2:(num_lift+1)]
-    U_lift = U_cache[2:(num_lift+1)]
-
-    d = norm(prob_lift.x0[1:n_slack] - prob_load.x0[1:n_slack])
-
+function update_lift_problem(prob_lift,X_lift,X_load,U_load,d,i,n_lift,m_lift,r_lift,n_slack=3)
+    N = prob_lift.N
     cable_lift = gen_lift_cable_constraints_1slack(X_load,
                     U_load,
-                    agent,
-                    prob_lift[agent].model.n,
-                    prob_lift[agent].model.m,
+                    i,
+                    n_lift,
+                    m_lift,
                     d,
                     n_slack)
 
-    self_col = gen_self_collision_constraints(X_lift,agent,prob_lift.model.n,prob_lift.model.m,prob_lift.model.info[:radius],n_slack)
+
+    self_col = gen_self_collision_constraints(X_lift,i,n_lift,m_lift,r_lift,n_slack)
 
     # Add system constraints to problems
-        for k = 1:N
-            prob_lift.constraints[k] += cable_lift[k]
-            prob_lift.constraints[k] += self_col[k]
-        end
+    for k = 1:N
+        prob_lift.constraints[k] += cable_lift[k]
+        prob_lift.constraints[k] += self_col[k]
+    end
 
+    prob_lift
 end
 
-function update_load_problem(prob_lift,prob_load, X_lift, U_lift)
-    n_load = prob_load.model.n
-    m_load = prob_load.model.m
-    n_slack = 3
+function update_load_problem(prob_load,X_lift,U_lift,n_load,m_load,d,n_slack=3)
     N = prob_load.N
+    cable_load = gen_load_cable_constraints_1slack(X_lift,U_lift,n_load,m_load,d,n_slack)
 
-    d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
-    # cable_load = gen_load_cable_constraints_1slack(X_lift,U_lift,prob_load.model.n,prob_load.model.m,d,n_slack)
-    #
-    # for k = 1:N
-    #     prob_load.constraints[k] += cable_load[k]
-    # end
+    for k = 1:N
+        prob_load.constraints[k] += cable_load[k]
+    end
+
+    prob_load
 end
