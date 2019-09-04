@@ -1,18 +1,11 @@
 include(joinpath(pwd(),"dynamics/quaternions.jl"))
 
-num_lift = 3
-mass_load = 0.35
-mass_lift = 0.85
 
-quad_params = (m=mass_lift,
-             J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
-             Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
-             gravity=SVector(0,0,-9.81),
-             motor_dist=0.175,
-             kf=1.0,
-             km=0.0245)
 
 function gen_load_model_initial(xload0,xlift0)
+    num_lift = 3
+    mass_load = 0.35
+    mass_lift = 0.85
     function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
         Δx1 = (xlift0[1][1:3] - xload0[1:3])
         Δx2 = (xlift0[2][1:3] - xload0[1:3])
@@ -26,6 +19,17 @@ function gen_load_model_initial(xload0,xlift0)
 end
 
 function gen_lift_model_initial(xload0,xlift0)
+        num_lift = 3
+        mass_load = 0.35
+        mass_lift = 0.85
+
+        quad_params = (m=mass_lift,
+                     J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
+                     Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
+                     gravity=SVector(0,0,-9.81),
+                     motor_dist=0.175,
+                     kf=1.0,
+                     km=0.0245)
 
         function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
             q = normalize(Quaternion(view(x,4:7)))
@@ -70,6 +74,18 @@ function gen_lift_model_initial(xload0,xlift0)
 end
 
 function gen_lift_model(X_load,N,dt)
+        num_lift = 3
+        mass_load = 0.35
+        mass_lift = 0.85
+
+        quad_params = (m=mass_lift,
+                     J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
+                     Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
+                     gravity=SVector(0,0,-9.81),
+                     motor_dist=0.175,
+                     kf=1.0,
+                     km=0.0245)
+
       model = Model[]
 
       for k = 1:N-1
@@ -118,6 +134,9 @@ function gen_lift_model(X_load,N,dt)
 end
 
 function gen_load_model(X_lift,N,dt)
+    num_lift = 3
+    mass_load = 0.35
+    mass_lift = 0.85
       model = Model[]
       for k = 1:N-1
           function double_integrator_3D_dynamics_load!(ẋ,x,u)

@@ -10,6 +10,18 @@ function gen_prob(agent)
     n_load = 6
     m_load = 3
 
+    num_lift = 3
+    mass_load = 0.35
+    mass_lift = 0.85
+
+    quad_params = (m=mass_lift,
+                 J=SMatrix{3,3}(Diagonal([0.0023, 0.0023, 0.004])),
+                 Jinv=SMatrix{3,3}(Diagonal(1.0./[0.0023, 0.0023, 0.004])),
+                 gravity=SVector(0,0,-9.81),
+                 motor_dist=0.175,
+                 kf=1.0,
+                 km=0.0245)
+
     ceiling = 2.1
 
     goal_dist = 6.
