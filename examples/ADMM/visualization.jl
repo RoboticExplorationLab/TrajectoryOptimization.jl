@@ -71,11 +71,17 @@ function visualize_DI_lift_system(vis,prob_lift,prob_load,r_lift,r_load,_cyl,n_s
     MeshCat.setanimation!(vis,anim)
 end
 
-function visualize_quadrotor_lift_system(vis, probs, _cyl, n_slack=3)
+function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     r_lift = .275
     r_load = .2
+
+    r_cylinder = 0.5
+
+    _cyl = []
+    push!(_cyl,(goal_dist/2.,1.,r_cylinder))
+    push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
 
     num_lift = length(prob_lift)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
@@ -124,16 +130,20 @@ end
 function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     prob_load = probs[1]
     prob_lift = probs[2:end]
-    r_lift = prob_lift[1].model.info[:radius]::Float64
-    r_load = prob_load.model.info[:radius]::Float64
+    r_lift = .275
+    r_load = .2
     ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
-    _cyl, = quad_obstacles()
+    r_cylinder = 0.5
 
+    _cyl = []
+    goal_dist = 6.
+    push!(_cyl,(goal_dist/2.,1.,r_cylinder))
+    push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
     num_lift = length(prob_lift)::Int
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
     addcylinders!(vis, _cyl, ceiling)
-    settransform!(vis["cyl"], Translation(0, door_location(door), 0))
+    settransform!(vis["cyl"], Translation(0, 0, 0))
 
     # # Pedestal
     xf_load = prob_load.xf
@@ -180,7 +190,7 @@ end
 function plot_quad_scene(frame, k, probs)
     prob_load = probs[1]
     prob_lift = probs[2:end]
-
+    n_slack = 3
     # cables
     x_load = prob_load.X[k][1:n_slack]
     for i = 1:num_lift

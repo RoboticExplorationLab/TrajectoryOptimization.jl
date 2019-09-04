@@ -1,12 +1,12 @@
 function solve_admm_1slack(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
-    N = prob_load.N
+    N = prob_load.N; dt = prob_load.dt
 
     # Problem dimensions
     num_lift = length(prob_lift)
-    n_lift = prob_lift[1].model[1].n
-    m_lift = prob_lift[1].model[1].m
-    n_load = prob_load.model[1].n
-    m_load = prob_load.model[1].m
+    n_lift = prob_lift[1].model.n
+    m_lift = prob_lift[1].model.m
+    n_load = prob_load.model.n
+    m_load = prob_load.model.m
 
     # Calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
@@ -58,7 +58,7 @@ function solve_admm_1slack(prob_lift, prob_load, n_slack, admm_type, opts, infea
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
-        prob.model = gen_lift_model(X_load)
+        prob.model = gen_lift_model(X_load,N,dt)
 
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
@@ -67,7 +67,7 @@ function solve_admm_1slack(prob_lift, prob_load, n_slack, admm_type, opts, infea
 
     solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
-    prob_load_al.model = gen_load_model(X_lift)
+    prob_load_al.model = gen_load_model(X_lift,N,dt)
 
     for ii = 1:opts.iterations
         # Solve lift agents
@@ -93,7 +93,7 @@ function solve_admm_1slack(prob_lift, prob_load, n_slack, admm_type, opts, infea
         # Solve load
         # return prob_lift,prob_load,1,1
 
-        prob_load_al.model = gen_load_model(X_lift)
+        prob_load_al.model = gen_load_model(X_lift,N,dt)
         TO.solve_aula!(prob_load_al,solver_load_al)
 
         # Update constraints
@@ -101,7 +101,7 @@ function solve_admm_1slack(prob_lift, prob_load, n_slack, admm_type, opts, infea
         U_load .= prob_load_al.U
 
         for i = 1:num_lift
-            prob_lift_al[i].model = gen_lift_model(X_load)
+            prob_lift_al[i].model = gen_lift_model(X_load,N,dt)
         end
 
         # Update lift constraints prior to evaluating convergence
