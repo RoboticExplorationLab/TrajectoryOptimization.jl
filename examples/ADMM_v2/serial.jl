@@ -27,10 +27,10 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.0)
 
 prob_load = gen_prob(:load)
-prob_lift = [gen_prob(i) for i = 1:num_lift]
+prob_lift = [gen_prob(i) for i = 1:3]
 @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
 
-include("visualization.jl")
-vis = Visualizer()
-open(vis)
-visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
+# include("visualization.jl")
+# vis = Visualizer()
+# open(vis)
+# visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])

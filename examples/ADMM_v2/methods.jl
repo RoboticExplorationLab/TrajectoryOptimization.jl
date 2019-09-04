@@ -18,7 +18,7 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     end
     solve!(prob_load,opts)
 
-    return [prob_load;prob_lift], 1, 1, 1
+    # return [prob_load;prob_lift], 1, 1, 1
 
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]

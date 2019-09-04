@@ -246,8 +246,25 @@ function gen_prob(agent)
 
 
     if agent ∈ [:load, 0]
-        return prob_load
+        return Problem(gen_load_model_initial(xload0,xlift0),
+                        obj_load,
+                        U0_load,
+                        integration=:midpoint,
+                        constraints=constraints_load,
+                        x0=xload0,
+                        xf=xloadf,
+                        N=N,
+                        dt=dt)
     else
-        return prob_lift[agent]
+        i = agent
+        return Problem(gen_lift_model_initial(xload0,xlift0[i]),
+                obj_lift[i],
+                U0_lift[i],
+                integration=:midpoint,
+                constraints=constraints_lift[i],
+                x0=xlift0[i],
+                xf=xliftf[i],
+                N=N,
+                dt=dt)
     end
 end

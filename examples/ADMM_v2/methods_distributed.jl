@@ -1,3 +1,5 @@
+include("methods.jl")
+
 function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
 
 
@@ -5,10 +7,10 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
 
     # Problem dimensions
     num_lift = length(probs)
-    n_lift = 13
-    m_lift = 5
-    n_load = prob_load.model.n
-    m_load = prob_load.model.m
+    # n_lift = 13
+    # m_lift = 5
+    # n_load = prob_load.model.n
+    # m_load = prob_load.model.m
 
     # Calculate cable lengths based on initial configuration
 	x0_load = prob_load.x0
@@ -20,13 +22,7 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
     solve!(prob_load, opts)
     wait.(futures)
 
-	# solvers = combine_problems(solver_load, solvers_al)
-	problems = combine_problems(prob_load, probs)
-
-	return problems, 1, 1
-
 	@info "System solve"
-
 	# Initialize state and control caches
     X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
     U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])
@@ -181,14 +177,4 @@ combine_problems(prob_load, probs::Vector) = [[prob_load]; probs]
 function combine_problems(prob_load, probs::DArray)
     problems = fetch.([@spawnat w probs[:L] for w in workers()])
     combine_problems(prob_load, problems)
-end
-
-function init_dist()
-	probs = ddata(T=Problem{Float64,Discrete});
-	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j)
-	end
-	prob_load = gen_prob(:load)
-
-	return probs, prob_load
 end

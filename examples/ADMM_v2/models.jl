@@ -1,7 +1,5 @@
 include(joinpath(pwd(),"dynamics/quaternions.jl"))
 
-
-
 function gen_load_model_initial(xload0,xlift0)
     num_lift = 3
     mass_load = 0.35
