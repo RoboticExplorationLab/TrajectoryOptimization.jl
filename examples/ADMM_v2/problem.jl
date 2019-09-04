@@ -495,13 +495,13 @@ function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, n
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_lift)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*lift_radius)
         end
     end
 
     function cI_cylinder_load(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_load)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*load_radius)
         end
     end
 
@@ -599,8 +599,35 @@ function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, n
 
     elseif agent ∈ 1:num_lift
 
-        obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
+        # Objective
+        Q_lift = Diagonal(q_lift)
+        R_lift = Diagonal(r_lift)
+        Qf_lift = Diagonal(qf_lift)
+        obj_lift = LQRObjective(Q_lift, R_lift, Qf_lift, xliftf[agent], N, u0_lift[agent])
 
+        # Constraints
+        bnd = BoundConstraint(n_lift, m_lift, u_min=u_min_lift, u_max=u_max_lift)
+        obs_lift = Constraint{Inequality}(cI_cylinder_lift, n_lift, m_lift,
+            length(_cyl), :obs_lift)
+
+        constraints_lift = Constraints(N)
+        for k = 1:N
+            constraints_lift[k] += bnd + obs_lift
+        end
+
+        # Initial controls
+        U0_lift = [u0_lift[agent] for k = 1:N-1]
+
+
+        prob = Problem(gen_lift_model_initial(xload0, xlift0[agent]),
+                        obj_lift,
+                        U0_lift,
+                        integration=:midpoint,
+                        constraints=constraints_lift,
+                        x0=xlift0[agent],
+                        xf=xliftf[agent],
+                        N=N,
+                        tf=tf)
     else
         error("Agent not valid")
     end
