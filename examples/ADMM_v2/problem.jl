@@ -10,9 +10,11 @@ function gen_prob(agent)
     n_load = 6
     m_load = 3
 
+    ceiling = 2.1
+
     goal_dist = 6.
     shift_ = zeros(n_lift)
-    shift_[1:3] = [0.0;0.0;0.0]
+    shift_[1:3] = [0.0;0.0;-0.25]
     scaling = 1.25
     x10 = zeros(n_lift)
     x10[4] = 1.
@@ -27,8 +29,9 @@ function gen_prob(agent)
     x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
     x30 += shift_
     xload0 = zeros(n_load)
-    xload0[3] = 4/6
     xload0[1:3] += shift_[1:3]
+    xload0[3] = 0.5
+
 
     xlift0 = [x10,x20,x30]
 
@@ -72,14 +75,6 @@ function gen_prob(agent)
 
     xliftmid = [x1m,x2m,x3m]
 
-
-
-
-
-
-
-
-
     # Robot sizes
     r_lift = 0.275
     r_load = 0.2
@@ -92,6 +87,8 @@ function gen_prob(agent)
     u_lim_u[1:4] .= 12.0/4.0
     x_lim_l_lift = -Inf*ones(n_lift)
     x_lim_l_lift[3] = 0.
+    x_lim_u_lift = Inf*ones(n_lift)
+    x_lim_u_lift[3] = ceiling
 
     x_lim_l_load = -Inf*ones(n_load)
     x_lim_l_load[3] = 0.
@@ -99,8 +96,8 @@ function gen_prob(agent)
     u_lim_l_load = -Inf*ones(m_load)
     u_lim_l_load .= 0.
 
-    bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u)
-    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l_lift)
+    bnd1 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_max=x_lim_u_lift)
+    bnd2 = BoundConstraint(n_lift,m_lift,u_min=u_lim_l,u_max=u_lim_u,x_min=x_lim_l_lift,x_max=x_lim_u_lift)
     bnd3 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load,u_min=u_lim_l_load)
     bnd4 = BoundConstraint(n_load,m_load,x_min=x_lim_l_load)
 

@@ -14,11 +14,12 @@ using TrajectoryOptimization
 const TO = TrajectoryOptimization
 @everywhere using TrajectoryOptimization
 @everywhere const TO = TrajectoryOptimization
-include("methods.jl")
 @everywhere using StaticArrays
 @everywhere using LinearAlgebra
 @everywhere using DistributedArrays
 @everywhere include(joinpath(dirname(@__FILE__),"problem.jl"))
+@everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
+
 
 function init_dist()
 	probs = ddata(T=Problem{Float64,Discrete});
@@ -44,4 +45,18 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-probs, prob_load = init_dist()
+probs, prob_load = init_dist();
+@time sol, sol_solvers, xx = solve_admm_1slack_dist(probs, prob_load, true, opts_al);
+
+vis = Visualizer()
+open(vis)
+include("visualization.jl")
+visualize_quadrotor_lift_system(vis, sol)
+
+idx = [(1:3)...,(7 .+ (1:3))...]
+output_traj(sol[2],idx,joinpath(pwd(),"trajectoriestraj0.txt"))
+output_traj(sol[3],idx,joinpath(pwd(),"trajectoriestraj1.txt"))
+output_traj(sol[4],idx,joinpath(pwd(),"trajectoriestraj2.txt"))
+println(sol[2].x0[1:3])
+println(sol[3].x0[1:3])
+println(sol[4].x0[1:3])

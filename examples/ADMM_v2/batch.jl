@@ -26,6 +26,8 @@ n_load = 6
 r_lift = 0.275
 r_load = 0.2
 
+ceiling = 2.1
+
 function lift_dynamics!(ẋ,x,u,params)
 
       q = normalize(Quaternion(view(x,4:7)))
@@ -95,10 +97,10 @@ model_d = midpoint(model,dt)
 
 model_d.f(rand(n_batch),rand(n_batch),rand(m_batch),0.1)
 
-goal_dist = 10.0
+goal_dist = 6.0
 
 shift_ = zeros(n_lift)
-shift_[1:3] = [0.0;0.0;0.25]
+shift_[1:3] = [0.0;0.0;-.25]
 scaling = 1.25
 x10 = zeros(n_lift)
 x10[4] = 1.
@@ -113,8 +115,9 @@ x30[4] = 1.
 x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
 x30 += shift_
 xload0 = zeros(n_load)
-xload0[3] = 4/6
 xload0[1:3] += shift_[1:3]
+xload0[3] = 0.5
+
 
 xlift0 = [x10,x20,x30]
 
@@ -129,8 +132,6 @@ x2f = copy(x20) + _shift
 x3f = copy(x30) + _shift
 
 xliftf = [x1f,x2f,x3f]
-# xliftf = xlift0
-# xloadf = xload0
 
 x0 = vcat(xlift0...,xload0)
 xf = vcat(xliftf...,xloadf)
@@ -282,7 +283,20 @@ u_u[1:4] .= 12/4.
 u_u[5 .+ (1:4)] .= 12/4.
 u_u[2*5 .+ (1:4)] .= 12/4.
 
-bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u)
+x_l = -Inf*ones(n_batch)
+x_l[3] = 0.
+x_l[13 + 3] = 0.
+x_l[2*13 + 3] = 0.
+x_l[3*13 + 3] = 0.
+
+x_u = Inf*ones(n_batch)
+x_u[3] = ceiling
+x_u[13 + 3] = ceiling
+x_u[2*13 + 3] = ceiling
+x_u[3*13 + 3] = ceiling
+
+
+bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u,x_min=x_l,x_max=x_u)
 
 dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch,na,:distance)
 for_con = Constraint{Equality}(force_constraint,n_batch,m_batch,3,:force)
@@ -347,13 +361,13 @@ plot(prob.U,15 + 2)
 
 plot(prob.U,15:15)
 
-include(joinpath(pwd(),"examples/ADMM/visualization.jl"))
+include("visualization.jl")
 
 function visualize(vis,prob)
 
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
-    addcylinders!(vis, _cyl, 2.1)
+    addcylinders!(vis, _cyl, 3.)
 
     # intialize system
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
