@@ -65,71 +65,81 @@ function gen_prob(agent)
     ceiling = 2.1
 
     goal_dist = 6.
-    shift_ = zeros(n_lift)
-    shift_[1:3] = [0.0;0.0;-0.25]
-    scaling = 1.25
-    x10 = zeros(n_lift)
-    x10[4] = 1.
-    x10[1:3] = scaling*[sqrt(8/9);0.;4/3]
-    x10 += shift_
-    x20 = zeros(n_lift)
-    x20[4] = 1.
-    x20[1:3] = scaling*[-sqrt(2/9);sqrt(2/3);4/3]
-    x20 += shift_
-    x30 = zeros(n_lift)
-    x30[4] = 1.
-    x30[1:3] = scaling*[-sqrt(2/9);-sqrt(2/3);4/3]
-    x30 += shift_
-    xload0 = zeros(n_load)
-    xload0[1:3] += shift_[1:3]
-    xload0[3] = 0.5
+    Nmid = Int(floor(N/2))
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    d = 1.55
+    α = deg2rad(50)
+    β = deg2rad(50)
+
+    # Initial conditions
+    r0_load = [0,0,0.5]
+    rf_load = copy(r0_load)
+    rf_load[1] += goal_dist
+    xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
+    xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
 
-    xlift0 = [x10,x20,x30]
-
-    _shift = zeros(n_lift)
-    _shift[1:3] = [goal_dist;0.0;0.0]
-
-    # goal state
-    xloadf = zeros(n_load)
-    xloadf[1:3] = xload0[1:3] + _shift[1:3]
-    x1f = copy(x10) + _shift
-    x2f = copy(x20) + _shift
-    x3f = copy(x30) + _shift
-
-    xliftf = [x1f,x2f,x3f]
-
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MIDPOINT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # midpoint desired configuration
-    ℓ1 = norm(x30[1:3]-x10[1:3])
-    norm(x10[1:3]-x20[1:3])
-    norm(x20[1:3]-x30[1:3])
+    rm_load = [goal_dist/2, 0, r0_load[3]]
+    rm_lift = get_quad_locations(rm_load, d, β, num_lift, config=:doorway)
 
-    ℓ2 = norm(xload0[1:3]-x10[1:3])
-    norm(xload0[1:3]-x20[1:3])
-    norm(xload0[1:3]-x30[1:3])
+    xliftmid = [zeros(n_lift) for i = 1:num_lift]
+    for i = 1:num_lift
+        xliftmid[i][1:3] = rm_lift[i]
+        xliftmid[i][4] = 1.0
+    end
+    xliftmid[2][2] = 0.01
+    xliftmid[3][2] = -0.01
 
-    ℓ3 = 0.
+    xloadm = zeros(n_load)
+    xloadm[1:3] = rm_load
 
-    _shift_ = zeros(n_lift)
-    _shift_[1] = goal_dist/2.
 
-    x1m = copy(x10)
-    x1m += _shift_
-    x1m[1] += ℓ3
-    x3m = copy(x1m)
-    x3m[1] -= ℓ1
-    x3m[1] -= ℓ3
-    x3m[2] = -0.01
-    x2m = copy(x1m)
-    x2m[1] = goal_dist/2.
-    x2m[2] = 0.01
-    x2m[3] = ℓ2 - 0.5*sqrt(4*ℓ2^2 - ℓ1^2 + ℓ3*2) + x20[3]
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONTROLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Initial controls
+    ulift, uload = calc_static_forces(xlift0, xload0, quad_params.m, mass_load, num_lift)
 
-    xliftmid = [x1m,x2m,x3m]
+    # initial control mid
+    uliftm, uloadm = calc_static_forces(xliftmid, xloadm, quad_params.m, mass_load, num_lift)
 
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    q_lift, r_lift, qf_lift = quad_costs(n_lift, m_lift)
+    q_load, r_load, qf_load = load_costs(n_load, m_load)
+    Q_lift = Diagonal(q_lift)
+    R_lift = Diagonal(r_lift)
+    Qf_lift = Diagonal(qf_lift)
+    Q_load = Diagonal(q_load)
+    R_load = Diagonal(r_load)
+    Qf_load = Diagonal(qf_load)
+
+    obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
+    obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N,uload)
+
+    # Midpoint objective
+    q_lift_mid = copy(q_lift)
+    q_load_mid = copy(q_load)
+    q_lift_mid[1:3] .= 100
+    q_load_mid[1:3] .= 100
+
+    Q_mid_lift = Diagonal(q_lift_mid)
+    Q_mid_load = Diagonal(q_load_mid)
+
+    cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
+    cost_mid_load = LQRCost(Q_mid_load,R_load,xloadm,uloadm)
+    for i = 1:num_lift
+        obj_lift[i].cost[Nmid] = cost_mid_lift[i]
+    end
+    obj_load.cost[Nmid] = cost_mid_load
+
+
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Robot sizes
-    r_lift = 0.275
-    r_load = 0.2
+    lift_radius = 0.275
+    load_radius = 0.2
 
     # Control limits for lift robots
     u_lim_l = -Inf*ones(m_lift)
@@ -156,94 +166,35 @@ function gen_prob(agent)
     # Obstacles
     r_cylinder = 0.5
 
-    _cyl = []
-    push!(_cyl,(goal_dist/2.,1.,r_cylinder))
-    push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
+
+    _cyl = door_obstacles(r_cylinder, goal_dist/2)
 
     # push!(_cyl,(goal_dist/2.,1.25,r_cylinder))
     # push!(_cyl,(goal_dist/2.,-1.25,r_cylinder))
 
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_lift)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*lift_radius)
         end
     end
     obs_lift = Constraint{Inequality}(cI_cylinder_lift,n_lift,m_lift,length(_cyl),:obs_lift)
 
     function cI_cylinder_load(c,x,u)
         for i = 1:length(_cyl)
-            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_load)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*load_radius)
         end
     end
     obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
 
 
 
-    # Initial controls
-    f1 = (x10[1:3] - xload0[1:3])/norm(x10[1:3] - xload0[1:3])
-    f2 = (x20[1:3] - xload0[1:3])/norm(x20[1:3] - xload0[1:3])
-    f3 = (x30[1:3] - xload0[1:3])/norm(x30[1:3] - xload0[1:3])
-    f_mag = hcat(f1, f2, f3)\[0;0;9.81*mass_load]
-    ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
 
-    thrust = 9.81*(quad_params.m + mass_load/num_lift)/4
-    ulift = [[thrust;thrust;thrust;thrust;f_mag[i]] for i = 1:num_lift]
-    ulift_r = [[0;0;0;0;f_mag[i]] for i = 1:num_lift]
-
-    uload = vcat(f_mag...)
-
-    # initial control mid
-    xloadm = [goal_dist/2.; 0; xload0[3];0.;0.;0.]
-    f1m = (x1m[1:3] - xloadm[1:3])/norm(x1m[1:3] - xloadm[1:3])
-    f2m = (x2m[1:3] - xloadm[1:3])/norm(x2m[1:3] - xloadm[1:3])
-    f3m = (x3m[1:3] - xloadm[1:3])/norm(x3m[1:3] - xloadm[1:3])
-    f_magm = hcat(f1m, f2m, f3m)\[0;0;9.81*mass_load]
-    ffm = [f_magm[1]*f1m, f_magm[2]*f2m, f_magm[3]*f3m]
-
-    thrustm = 9.81*(quad_params.m + mass_load/num_lift)/4
-    uliftm = [[thrustm;thrustm;thrustm;thrustm;f_mag[i]] for i = 1:num_lift]
-    uliftm_r = [[0;0;0;0;f_mag[i]] for i = 1:num_lift]
-
-    uloadm = vcat(f_mag...)
-
-    Nmid = Int(floor(N/2))
 
     U0_lift = [[ulift[i] for k = 1:N-1] for i = 1:num_lift]
     U0_load = [uload for k = 1:N-1]
 
-    Q_lift = 1.0e-1*Diagonal(ones(n_lift))
-    Q_lift[1,1] = 1.0e-4
-    r_control = 1.0e-3*ones(4)
-    r_slack = ones(1)
-    R_lift = 1.0*Diagonal([r_control;r_slack])
-    Qf_lift = 100.0*Diagonal(ones(n_lift))
-
-    Q_load = 0.0*Diagonal(ones(n_load))
-    # Q_load[1,1] = 1.0e-4
-    R_load = Diagonal([r_slack;r_slack;r_slack])
-    Qf_load = 0.0*Diagonal(ones(n_load))
 
 
-    obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
-    obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N,uload)
-
-    Q_mid_lift = copy(Q_lift)
-    for i in (1:3)
-        Q_mid_lift[i,i] = 100.
-    end
-
-    Q_mid_load = copy(Q_load)
-    for i in (1:3)
-        Q_mid_load[i,i] = 100.
-    end
-
-    cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
-    cost_mid_load = LQRCost(Q_mid_load,R_load,xloadm,uloadm)
-
-    for i = 1:num_lift
-        obj_lift[i].cost[Nmid] = cost_mid_lift[i]
-    end
-    obj_load.cost[Nmid] = cost_mid_load
 
     # Constraints
     constraints_lift = []
@@ -355,11 +306,11 @@ function calc_static_forces(xlift::Vector{T}, xload, lift_mass, load_mass, num_l
     return ulift, uload
 end
 
-function door_obstacles(r_cylinder=0.5)
+function door_obstacles(r_cylinder=0.5, x_door=3.0)
     _cyl = NTuple{3,Float64}[]
 
-    push!(_cyl,(5.0, 1.,r_cylinder))
-    push!(_cyl,(5.0,-1.,r_cylinder))
+    push!(_cyl,(x_door, 1.,r_cylinder))
+    push!(_cyl,(x_door,-1.,r_cylinder))
     return _cyl
 end
 
@@ -438,8 +389,8 @@ function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, n
     # create objective at midpoint
     q_lift_mid = copy(q_lift)
     q_load_mid = copy(q_load)
-    q_lift_mid[1:3] .= 1
-    q_load_mid[1:3] .= 1
+    q_lift_mid[1:3] .= 100
+    q_load_mid[1:3] .= 100
 
     uliftm, uloadm = calc_static_forces(xliftmid, xloadm, lift_params.m, load_mass, num_lift)
 
@@ -574,6 +525,10 @@ function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, n
         Qf_load = Diagonal(qf_load)
         obj_load = LQRObjective(Q_load, R_load, Qf_load, xloadf, N, u0_load)
 
+        Q_mid_load = Diagonal(q_load_mid)
+        obj_mid_load = LQRCost(Q_mid_load, R_loadm xloadm, uloadm)
+        obj_load.cost[Nmid] = obj_mid_load
+
         # Constraints
         bnd = BoundConstraint(n_load, m_load, u_min=u_min_load, u_max=u_max_load)
         obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
@@ -604,6 +559,10 @@ function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, n
         R_lift = Diagonal(r_lift)
         Qf_lift = Diagonal(qf_lift)
         obj_lift = LQRObjective(Q_lift, R_lift, Qf_lift, xliftf[agent], N, u0_lift[agent])
+
+        Q_mid_lift = Diagonal(q_lift_mid)
+        obj_mid_lift = LQRCost(Q_mid_lift, R_lift, xliftmid[agent], uloadm[agent])
+        obj_lift.cost[Nmid] = obj_mid_lift
 
         # Constraints
         bnd = BoundConstraint(n_lift, m_lift, u_min=u_min_lift, u_max=u_max_lift)
