@@ -70,3 +70,9 @@ TO.findmax_violation(prob)
 vis = Visualizer()
 open(vis)
 visualize(vis,prob)
+
+#=
+Notes:
+Fastest solve with midpoint cost = 10.0
+Smoothest solution with midpoint cost = 1.0
+=#

@@ -340,8 +340,8 @@ function door_obstacles(r_cylinder=0.5)
 end
 
 
-function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, num_lift=3, N=51,
-        integration=:midpoint, batch=false)
+function gen_prob_all(lift_params, load_params, r0_load=[0,0,0.5]; quat=false, num_lift=3, N=51,
+        integration=:midpoint, agent=:batch)::Problem{Float64, Discrete}
 
     # Params
     tf = 10.0  # sec
@@ -385,29 +385,17 @@ function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false,
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
-    # Concatenate into joint states
-    x0 = vcat(xlift0...,xload0)
-    xf = vcat(xliftf...,xloadf)
-
-
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     q_lift, r_lift, qf_lift = quad_costs(n_lift, m_lift)
     q_load, r_load, qf_load = load_costs(n_load, m_load)
 
-    # Concatenate costs
-    Q = Diagonal([repeat(q_lift, num_lift); q_load])
-    R = Diagonal([repeat(r_lift, num_lift); r_load])
-    Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
-
     # determine static forces
     u0_lift, u0_load = calc_static_forces(xlift0, xload0, lift_params.m, load_mass, num_lift)
-    u0 = vcat(u0_lift...,u0_load)
-
-    # Create objective
-    obj = LQRObjective(Q,R,Qf,xf,N,u0)
 
 
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MIDPOINT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # get position at midpoint
     rm_load = [goal_distance/2, 0, r0_load[3]]
     rm_lift = get_quad_locations(rm_load, d, β, num_lift, config=:doorway)
@@ -423,20 +411,14 @@ function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false,
     xloadm = zeros(n_load)
     xloadm[1:3] = rm_load
 
-    xm = vcat(xliftmid...,xloadm)
-
     # create objective at midpoint
     q_lift_mid = copy(q_lift)
     q_load_mid = copy(q_load)
-    q_lift_mid[1:3] .= 100
-    q_load_mid[1:3] .= 100
-    Q_mid = Diagonal([repeat(q_lift_mid, num_lift); q_load_mid])
+    q_lift_mid[1:3] .= 1
+    q_load_mid[1:3] .= 1
 
     uliftm, uloadm = calc_static_forces(xliftmid, xloadm, lift_params.m, load_mass, num_lift)
-    um = vcat(uliftm...,uloadm)
 
-    cost_mid = LQRCost(Q_mid,R,xm,um)
-    obj.cost[Nmid] = cost_mid
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -486,12 +468,18 @@ function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false,
             c_shift += 1
         end
     end
-    cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
 
-    dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch, num_lift, :distance)
-    for_con = Constraint{Equality}(force_constraint,n_batch,m_batch, num_lift, :force)
-    col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, 3, :collision)
-    goal = goal_constraint(xf)
+    function cI_cylinder_lift(c,x,u)
+        for i = 1:length(_cyl)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_lift)
+        end
+    end
+
+    function cI_cylinder_load(c,x,u)
+        for i = 1:length(_cyl)
+            c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*r_load)
+        end
+    end
 
     # Bound constraints
     u_min_lift = [0,0,0,0,-Inf]
@@ -500,21 +488,52 @@ function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false,
     u_max_lift[end] = Inf
     u_max_load = ones(m_load)*Inf
 
-    u_l = [repeat(u_min_lift, num_lift); u_min_load]
-    u_u = [repeat(u_max_lift, num_lift); u_max_load]
-
-    bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u)
-
     # Create problem constraints
     con = Constraints(N)
-    for k = 1:N-1
-        con[k] += dist_con + for_con + bnd + col_con + cyl
-    end
-    con[N] +=  goal + col_con  + dist_con
-
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ CREATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    if batch
+    if agent == :batch
+
+        # Initial and final conditions
+        x0 = vcat(xlift0...,xload0)
+        xf = vcat(xliftf...,xloadf)
+
+
+        # objective costs
+        Q = Diagonal([repeat(q_lift, num_lift); q_load])
+        R = Diagonal([repeat(r_lift, num_lift); r_load])
+        Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
+
+        # Create objective
+        u0 = vcat(u0_lift...,u0_load)
+        obj = LQRObjective(Q,R,Qf,xf,N,u0)
+
+        # Midpoint
+        xm = vcat(xliftmid...,xloadm)
+        um = vcat(uliftm...,uloadm)
+        Q_mid = Diagonal([repeat(q_lift_mid, num_lift); q_load_mid])
+        cost_mid = LQRCost(Q_mid,R,xm,um)
+        obj.cost[Nmid] = cost_mid
+
+        # Bound Constraints
+        u_l = [repeat(u_min_lift, num_lift); u_min_load]
+        u_u = [repeat(u_max_lift, num_lift); u_max_load]
+        bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u)
+
+
+        # Constraints
+        cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
+        dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch, num_lift, :distance)
+        for_con = Constraint{Equality}(force_constraint,n_batch,m_batch, num_lift, :force)
+        col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, 3, :collision)
+        goal = goal_constraint(xf)
+
+        for k = 1:N-1
+            con[k] += dist_con + for_con + bnd + col_con + cyl
+        end
+        con[N] +=  goal + col_con  + dist_con
+
+        # Create problem
         prob = Problem(model_batch, obj, constraints=con,
                 tf=tf, N=N, xf=xf, x0=x0,
                 integration=integration)
@@ -522,6 +541,44 @@ function gen_prob_batch(lift_params, load_params, r0_load=[0,0,0.5]; quat=false,
         # Initial controls
         U0 = [u0 for k = 1:N-1]
         initial_controls!(prob, U0)
+
+    elseif agent == :load
+
+        # Objective
+        Q_load = Diagonal(q_load)
+        R_load = Diagonal(r_load)
+        Qf_load = Diagonal(qf_load)
+        obj_load = LQRObjective(Q_load, R_load, Qf_load, xloadf, N, u0_load)
+
+        # Constraints
+        bnd = BoundConstraint(n_load, m_load, u_min=u_min_load, u_max=u_max_load)
+        obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
+
+        constraints_load = Constraints(N)
+        for k = 2:N-1
+            constraints_load[k] += bnd + obs_load
+        end
+        constraints_load[N] += goal_constraint(xloadf) + bnd + obs_load
+
+        # Initial controls
+        U0_load = [u0_load for k = 1:N-1]
+
+        prob = Problem(gen_load_model_initial(xload0,xlift0),
+                        obj_load,
+                        U0_load,
+                        integration=integration,
+                        constraints=constraints_load,
+                        x0=xload0,
+                        xf=xloadf,
+                        N=N,
+                        tf=tf)
+
+    elseif agent ∈ 1:num_lift
+
+        obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
+
+    else
+        error("Agent not valid")
     end
 
     return prob
