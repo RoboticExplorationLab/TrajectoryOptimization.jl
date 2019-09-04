@@ -155,6 +155,7 @@ include("solvers.jl")
 include("rollout.jl")
 include("dynamics.jl")
 include("logger.jl")
+include("../dynamics/quaternions.jl")
 
 include("static_methods.jl")
 include("static_constraints.jl")
