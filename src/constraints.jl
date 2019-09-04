@@ -312,3 +312,20 @@ function infeasible_constraints(n::Int, m::Int)
     inf_jac(C,x,u) = copyto!(C, ∇inf)
     Constraint{Equality}(inf_con, inf_jac, n, :infeasible, [collect(1:n), collect(u_inf)], :stage, :u)
 end
+
+violation!(v, con::Constraint{Equality}, x, u) = evaluate!(v, con, x, u)
+function violation!(v, con::AbstractConstraint{Inequality}, x, u)
+    evaluate!(v, con, x, u);
+    for i in eachindex(v)
+        v[i] = pos(v[i])
+    end
+end
+
+violation!(v, con::Constraint{Equality}, x) = evaluate!(v, con, x)
+function violation!(v, con::AbstractConstraint{Inequality}, x)
+    evaluate!(v, con, x);
+    for i in eachindex(v)
+        v[i] = pos(v[i])
+    end
+end
+label(con::AbstractConstraint) = con.label
