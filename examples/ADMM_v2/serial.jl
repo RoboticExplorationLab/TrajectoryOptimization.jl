@@ -26,6 +26,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.0)
 
+num_lift = 3
 prob_load = gen_prob(:load)
 prob_lift = [gen_prob(i) for i = 1:num_lift]
 @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)

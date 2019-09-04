@@ -65,7 +65,7 @@ function batch_dynamics!(ẋ,x,u, params)
     lift_params = params.lift
     load_params = params.load
     load_mass = load_params.m
-    
+
     x1 = x[1:3]
     x2 = x[13 .+ (1:3)]
     x3 = x[2*13 .+ (1:3)]
@@ -94,6 +94,7 @@ end
 
 
 function gen_load_model_initial(xload0,xlift0)
+    mass_load = load_params.m
     function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
         Δx1 = (xlift0[1][1:3] - xload0[1:3])
         Δx2 = (xlift0[2][1:3] - xload0[1:3])
@@ -200,6 +201,7 @@ end
 
 function gen_load_model(X_lift,N,dt)
       model = Model[]
+      mass_load = load_params.m
       for k = 1:N-1
           function double_integrator_3D_dynamics_load!(ẋ,x,u)
               Δx1 = X_lift[1][k][1:3] - x[1:3]

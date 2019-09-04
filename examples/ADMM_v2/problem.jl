@@ -50,6 +50,8 @@ function gen_prob(agent)
     n_load = 6
     m_load = 3
 
+    mass_load = load_params.m
+
     goal_dist = 6.
     shift_ = zeros(n_lift)
     shift_[1:3] = [0.0;0.0;0.0]

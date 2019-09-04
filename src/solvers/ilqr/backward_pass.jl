@@ -62,7 +62,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
             Qux_reg = Qux + solver.ρ[1]*fdu'*fdx
         elseif solver.opts.bp_reg_type == :control
             # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Quu + solver.ρ[1]*Diagonal(ones(prob.model.m))
+            Quu_reg = Quu + solver.ρ[1]*Diagonal(ones(m))
             Qux_reg = Qux
         end
 

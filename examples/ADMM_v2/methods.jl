@@ -1,3 +1,6 @@
+using Distributed
+using DistributedArrays
+
 function solve_admm_1slack_dist(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
     N = prob_load.N; dt = prob_load.dt
 
