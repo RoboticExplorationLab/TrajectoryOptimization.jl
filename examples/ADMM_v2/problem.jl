@@ -39,7 +39,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
     return x_lift
 end
 
-function gen_prob(agent, quad_params, load_params; num_lift=3, N=51)
+function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
 
 
     # Params
@@ -282,7 +282,6 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51)
     elseif agent == :batch
 
         # Dynamics
-        quat = false
         info = Dict{Symbol,Any}()
         if quat
             info[:quat] = [(4:7) .+ i for i in 0:n_lift:n_lift*num_lift-1]

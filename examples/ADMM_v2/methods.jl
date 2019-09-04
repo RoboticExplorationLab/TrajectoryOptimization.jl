@@ -1,4 +1,13 @@
 
+function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, parallel, opts, n_slack=3)
+	probs = copy_probs(probs0)
+	prob_load = copy(prob_load0)
+	
+	solve_admm_1slack(probs, prob_load, parallel, opts, n_slack)
+end
+
+copy_probs(probs::Vector{<:Problem}) = copy.(probs)
+
 function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
 
@@ -12,14 +21,17 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     # Calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
+
+    #~~~~~~~~~~~~~~~~~~~~ SOLVE INITIAL PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+    # Solve the initial problems
     for i = 1:num_lift
         solve!(prob_lift[i],opts)
-
     end
     solve!(prob_load,opts)
 
     # return [prob_load;prob_lift], 1, 1, 1
 
+    #~~~~~~~~~~~~~~~~~~~~ UPDATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
     U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
@@ -33,8 +45,8 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     update_load!(prob_load,X_lift,U_lift,d)
 
     # Create augmented Lagrangian problems, solvers
-    solver_lift_al = []
-    prob_lift_al = []
+    solver_lift_al = AugmentedLagrangianSolver{Float64}[]
+    prob_lift_al = Problem{Float64,Discrete}[]
     for i = 1:num_lift
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
@@ -45,11 +57,11 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
         push!(prob_lift_al,prob)
     end
 
-
     solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
     prob_load_al.model = gen_load_model(X_lift,N,dt)
 
+    #~~~~~~~~~~~~~~~~~~~~ SOLVE ADMM ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     for ii = 1:opts.iterations
         # Solve lift agents
         for i = 1:num_lift
@@ -73,7 +85,6 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
         # Solve load
         # return prob_lift,prob_load,1,1
-
         prob_load_al.model = gen_load_model(X_lift,N,dt)
         TO.solve_aula!(prob_load_al,solver_load_al)
 

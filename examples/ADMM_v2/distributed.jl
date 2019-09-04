@@ -1,9 +1,10 @@
 using Random
-using Distributions
+# using Distributions
 using Logging
 using Distributed
 using DistributedArrays
 using TimerOutputs
+using BenchmarkTools
 
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
@@ -23,12 +24,12 @@ const TO = TrajectoryOptimization
 @everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
 @everywhere include(joinpath(dirname(@__FILE__),"models.jl"))
 
-function init_dist()
+function init_dist(;quat=false)
 	probs = ddata(T=Problem{Float64,Discrete});
 	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j)
+		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, quat=quat)
 	end
-	prob_load = gen_prob(:load)
+	prob_load = gen_prob(:load, quad_params, load_params, quat=quat)
 
 	return probs, prob_load
 end
@@ -47,8 +48,15 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-probs, prob_load = init_dist();
-@time sol, sol_solvers, xx = solve_admm_1slack_dist(probs, prob_load, true, opts_al);
+quat = true
+probs, prob_load = init_dist(quat=quat);
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, true, opts_al);
+@btime solve_admm($probs, $prob_load, $true, $opts_al);
+
+
+X_cache, U_cache, X_lift, U_lift = init_cache(prob_load, probs);
+fetch(@spawnat 1 length(X_cache[:L]))
+cache = (X_cache=X_cache, U_cache=U_cache, X_lift=X_lift, U_lift=U_lift);
 
 
 include("visualization.jl")

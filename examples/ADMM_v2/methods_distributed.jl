@@ -1,5 +1,19 @@
 include("methods.jl")
 
+function solve_admm(probs0::DArray, prob_load0::Problem, parallel, opts, n_slack=3)
+	probs = copy_probs(probs0)
+	prob_load = copy(prob_load0)
+	solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack)
+end
+
+function copy_probs(probs::DArray)
+    probs2 = ddata(T=eltype(probs))
+    @sync for w in workers()
+        @spawnat w probs2[:L] = copy(probs[:L])
+    end
+    return probs2
+end
+
 function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
 
 

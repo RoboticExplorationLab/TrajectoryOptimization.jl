@@ -60,11 +60,13 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-prob = gen_prob(:batch, quad_params, load_params)
+prob = gen_prob(:batch, quad_params, load_params, quat=true)
 # prob = gen_prob_all(quad_params, load_params, agent=:batch)
 
 # @btime solve($prob,$opts_al)
 @time solve!(prob,opts_al)
+@btime solve($prob,$opts_al)
+
 max_violation(prob)
 TO.findmax_violation(prob)
 

@@ -27,9 +27,13 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.0)
 
 num_lift = 3
-prob_load = gen_prob(:load, quad_params, load_params)
-prob_lift = [gen_prob(i, quad_params, load_params) for i = 1:3]
-@time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
+quat = false
+prob_load = gen_prob(:load, quad_params, load_params, quat=quat)
+prob_lift = [gen_prob(i, quad_params, load_params, quat=quat) for i = 1:3]
+# @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,:sequential,opts_al)
+@btime solve_admm($prob_lift, $prob_load, :sequential, $opts_al)
+
 
 
 prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
