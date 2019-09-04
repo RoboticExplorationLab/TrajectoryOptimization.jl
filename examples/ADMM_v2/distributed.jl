@@ -21,15 +21,7 @@ const TO = TrajectoryOptimization
 @everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
 
 
-function init_dist()
-	probs = ddata(T=Problem{Float64,Discrete});
-	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j)
-	end
-	prob_load = gen_prob(:load)
-
-	return probs, prob_load
-end
+include("methods_distributed.jl")
 
 verbose = false
 
