@@ -1,4 +1,5 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
+const TO = TrajectoryOptimization
 
 na = num_lift = 3
 dt = 0.2
@@ -21,8 +22,10 @@ lift_params = (m=0.85,
              kf=1.0,
              km=0.0245)
 n_lift = 13
+m_lift = 5
 load_mass = 0.35
 n_load = 6
+m_load = num_lift
 r_lift = 0.275
 r_load = 0.2
 
@@ -90,13 +93,18 @@ function batch_dynamics!(ẋ,x,u)
     return nothing
 end
 
-model = Model(batch_dynamics!,n_batch,m_batch)
+info = Dict{Symbol,Any}(:quat=>[(4:7) .+ i for i in 0:n_lift:n_lift*num_lift-1])
+model = Model(batch_dynamics!,n_batch,m_batch,info)
 model_d = midpoint(model,dt)
 
 model_d.f(rand(n_batch),rand(n_batch),rand(m_batch),0.1)
 
 goal_dist = 10.0
+TO.has_quat(model_d)
 
+
+
+# Initial conditions
 shift_ = zeros(n_lift)
 shift_[1:3] = [0.0;0.0;0.25]
 scaling = 1.25
@@ -136,25 +144,30 @@ x0 = vcat(xlift0...,xload0)
 xf = vcat(xliftf...,xloadf)
 d = norm(x10[1:3]-xload0[1:3])
 
+
+
+#~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
 Q = 1.0e-1*Diagonal(ones(n_batch))
-for i in [1,13+1,2*13+1,3*13+1]
+
+for i in range(1,step=n_lift,length=num_lift+1) # decrease cost on x
       Q[i,i] = 1.0e-3
 end
-for i in [(3*13 .+ (1:6))...]
+for i in num_lift*n_lift .+ (1:n_load) # no cost on load
       Q[i,i] = 0.
 end
 r_control = 1.0e-3*ones(4)
 r_slack = ones(1)
-R = Diagonal([r_control;r_slack;r_control;r_slack;r_control;r_slack;r_slack;r_slack;r_slack])
+R = Diagonal([repeat([r_control; r_slack], num_lift); repeat(r_slack, num_lift)])
 Qf = 100*Diagonal(ones(n_batch))
-for i in [(3*13 .+ (1:6))...]
+for i in num_lift*n_lift .+ (1:n_load) # no cost on load
       Qf[i,i] = 0.
 end
 
 # determine static forces
-f1 = (x10[1:3] - xload0[1:3])/norm(x10[1:3] - xload0[1:3])
-f2 = (x20[1:3] - xload0[1:3])/norm(x20[1:3] - xload0[1:3])
-f3 = (x30[1:3] - xload0[1:3])/norm(x30[1:3] - xload0[1:3])
+f1 = normalize(x10[1:3] - xload0[1:3])
+f2 = normalize(x20[1:3] - xload0[1:3])
+f3 = normalize(x30[1:3] - xload0[1:3])
 f_mag = hcat(f1, f2, f3)\[0;0;9.81*load_mass]
 ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
 
@@ -199,9 +212,9 @@ xliftmid = [x1m,x2m,x3m]
 
 xloadm = [goal_dist/2.; 0; xload0[3];0.;0.;0.]
 xm = vcat(xliftmid...,xloadm)
-f1m = (x1m[1:3] - xloadm[1:3])/norm(x1m[1:3] - xloadm[1:3])
-f2m = (x2m[1:3] - xloadm[1:3])/norm(x2m[1:3] - xloadm[1:3])
-f3m = (x3m[1:3] - xloadm[1:3])/norm(x3m[1:3] - xloadm[1:3])
+f1m = normalize(x1m[1:3] - xloadm[1:3])
+f2m = normalize(x2m[1:3] - xloadm[1:3])
+f3m = normalize(x3m[1:3] - xloadm[1:3])
 f_magm = hcat(f1m, f2m, f3m)\[0;0;9.81*load_mass]
 ffm = [f_magm[1]*f1m, f_magm[2]*f2m, f_magm[3]*f3m]
 
@@ -211,13 +224,17 @@ uloadm = vcat(f_magm...)
 um = vcat(uliftm...,uloadm)
 Q_mid = copy(Q)
 
-for i in [(1:3)...,(13 .+ (1:3))...,(2*13 .+ (1:3))...,(3*13 .+ (1:3))...]
+for i in vcat([(1:3) .+ i for i in range(0,step=n_lift,length=num_lift+1)]...) # set position cost high
       Q_mid[i,i] = 100.
 end
 
 cost_mid = LQRCost(Q_mid,R,xm,um)
-#
 obj.cost[Nmid] = cost_mid
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~ CONSTRAINTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 function distance_constraint(c,x,u=zeros(m_batch))
     xload = x[3*13 .+ (1:3)]
@@ -271,6 +288,7 @@ end
 cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
 
 
+# Bound constraints
 u_l = -Inf*ones(m_batch)
 u_u = Inf*ones(m_batch)
 u_l[1:4] .= 0.
@@ -295,21 +313,20 @@ for k = 1:N-1
     con[k] += dist_con + for_con + bnd + col_con + cyl
 end
 con[N] +=  goal + col_con + cyl + dist_con
+
+
+# Create Problem
 prob = Problem(model_d,obj,dt=dt,N=N,constraints=con,xf=xf,x0=x0)
 
-
+# Initial controls
 U0 = [u0 for k = 1:N-1]
 initial_controls!(prob,U0)
 
 rollout!(prob)
 
-plot(prob.X,1:3)
-plot(prob.X,13 .+ (1:3))
-plot(prob.X,2*13 .+ (1:3))
+verbose=false
 
-verbose=true
-
-opts_ilqr = iLQRSolverOptions(verbose=true,
+opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=250)
 
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
@@ -321,6 +338,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=10.0,
     penalty_initial=1.0e-3)
 
+# @btime solve($prob,$opts_al)
 @time solve!(prob,opts_al)
 max_violation(prob)
 
