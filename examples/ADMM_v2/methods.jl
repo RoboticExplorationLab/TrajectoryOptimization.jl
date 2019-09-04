@@ -1,112 +1,3 @@
-using Distributed
-using DistributedArrays
-
-function solve_admm_1slack_dist(prob_lift, prob_load, n_slack, admm_type, opts, infeasible=false)
-    N = prob_load.N; dt = prob_load.dt
-
-    # Problem dimensions
-    num_lift = length(prob_lift)
-    n_lift = prob_lift[1].model.n
-    m_lift = prob_lift[1].model.m
-    n_load = prob_load.model.n
-    m_load = prob_load.model.m
-
-    # Calculate cable lengths based on initial configuration
-    d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
-
-    # for i = 1:num_lift
-    #     solve!(prob_lift[i],opts)
-    # end
-    # solve!(prob_load,opts)
-
-    futures = [@spawnat w solve!(prob_lift[:L], opts_al) for w in workers()]
-    solve!(prob_load, opts)
-    wait.(futures)
-
-    # Generate cable constraints
-    X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
-    U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
-
-    X_load = deepcopy(prob_load.X)
-    U_load = deepcopy(prob_load.U)
-
-    for i = 1:num_lift
-        update_lift!(prob_lift[i],i,X_lift,X_load,U_load,d[i])
-    end
-    update_load!(prob_load,X_lift,U_lift,d)
-
-    # Create augmented Lagrangian problems, solvers
-    solver_lift_al = []
-    prob_lift_al = []
-    for i = 1:num_lift
-
-        solver = TO.AbstractSolver(prob_lift[i],opts)
-        prob = AugmentedLagrangianProblem(prob_lift[i],solver)
-        prob.model = gen_lift_model(X_load,N,dt)
-
-        push!(solver_lift_al,solver)
-        push!(prob_lift_al,prob)
-    end
-
-
-    solver_load_al = TO.AbstractSolver(prob_load,opts)
-    prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
-    prob_load_al.model = gen_load_model(X_lift,N,dt)
-
-    for ii = 1:opts.iterations
-        # Solve lift agents
-        for i = 1:num_lift
-
-            TO.solve_aula!(prob_lift_al[i],solver_lift_al[i])
-
-            # Update constraints (sequentially)
-            if admm_type == :sequential
-                X_lift[i] .= prob_lift_al[i].X
-                U_lift[i] .= prob_lift_al[i].U
-            end
-        end
-
-        # Update constraints (parallel)
-        if admm_type == :parallel
-            for i = 1:num_lift
-                X_lift[i] .= prob_lift_al[i].X
-                U_lift[i] .= prob_lift_al[i].U
-            end
-        end
-
-        # Solve load
-        # return prob_lift,prob_load,1,1
-
-        prob_load_al.model = gen_load_model(X_lift,N,dt)
-        TO.solve_aula!(prob_load_al,solver_load_al)
-
-        # Update constraints
-        X_load .= prob_load_al.X
-        U_load .= prob_load_al.U
-
-        for i = 1:num_lift
-            prob_lift_al[i].model = gen_lift_model(X_load,N,dt)
-        end
-
-        # Update lift constraints prior to evaluating convergence
-        for i = 1:num_lift
-            TO.update_constraints!(prob_lift_al[i].obj.C,prob_lift_al[i].obj.constraints, prob_lift_al[i].X, prob_lift_al[i].U)
-            TO.update_active_set!(prob_lift_al[i].obj)
-        end
-
-        max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
-        println(max_c)
-
-        if max_c < opts.constraint_tolerance
-            @info "ADMM problem solved"
-            break
-        end
-    end
-
-    return prob_lift_al, prob_load_al, solver_lift_al, solver_load_al
-end
-
-
 
 function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
@@ -126,6 +17,8 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
     end
     solve!(prob_load,opts)
+
+    # return [prob_load;prob_lift], 1, 1, 1
 
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
@@ -378,23 +271,6 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
     return self_col_con
 end
 
-function init_cache(prob_load::Problem, probs::DArray)
-    # Initialize state and control caches
-    X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
-    U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])
-    X_traj = [[prob_load.X]; X_lift]
-    U_traj = [[prob_load.U]; U_lift]
-
-    X_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    U_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    @sync for w in workers()
-        @spawnat w begin
-            X_cache[:L] = X_traj
-            U_cache[:L] = U_traj
-        end
-    end
-    return X_cache, U_cache, X_lift, U_lift
-end
 
 function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3)
 

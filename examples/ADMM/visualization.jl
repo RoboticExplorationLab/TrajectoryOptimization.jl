@@ -132,7 +132,7 @@ function visualize_quadrotor_lift_system(vis, probs; door=:middle, n_slack=3)
     prob_lift = probs[2:end]
     r_lift = .275
     r_load = .2
-    ceiling = bounds(prob_lift[1].obj.constraints[2])[1].x_max[3]
+    ceiling = 2.1
     r_cylinder = 0.5
 
     _cyl = []
