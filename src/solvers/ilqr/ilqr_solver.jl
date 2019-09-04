@@ -127,17 +127,18 @@ function AbstractSolver(prob::Problem{T,D}, opts::iLQRSolverOptions{T}) where {T
         n = prob.model.n; m = prob.model.m; N = prob.N
         part_f = create_partition2(prob.model)
     end
+    n̄ = state_diff_size(prob.model)
 
     X̄  = [zeros(T,n)   for k = 1:N]
     Ū  = [zeros(T,m)   for k = 1:N-1]
 
-    K  = [zeros(T,m,n) for k = 1:N-1]
+    K  = [zeros(T,m,n̄) for k = 1:N-1]
     d  = [zeros(T,m)   for k = 1:N-1]
 
     # part_f = create_partition2(prob.model)
     ∇F = [PartedMatrix(zeros(n,n+m+1),part_f) for k = 1:N-1]
 
-    S  = [Expansion(prob,:x) for k = 1:N]
+    S  = [Expansion{T}(n̄,0) for k = 1:N]
     Q = [k < N ? Expansion(prob) : Expansion(prob,:x) for k = 1:N]
 
     ρ = zeros(T,1)

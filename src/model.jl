@@ -37,6 +37,7 @@ Dynamics jacobians, ∇f, should be of the form
     ∇f(Z,x,u,,p,dt) for discrete models
     where p is the same `NamedTuple` of parameters used in the dynamics
 """
+
 struct AnalyticalModel{M,D} <: Model{M,D}
     f::Function   # dynamics f(ẋ,x,u)
     ∇f::Function  # dynamics jacobian
@@ -46,6 +47,7 @@ struct AnalyticalModel{M,D} <: Model{M,D}
     params::NamedTuple
     evals::Vector{Int}
     info::Dict{Symbol,Any}
+    quat::Vector{UnitRange{Int}}
 
 
     """ $(SIGNATURES)
@@ -62,6 +64,16 @@ struct AnalyticalModel{M,D} <: Model{M,D}
             check_functions::Bool=false) where {M<:ModelType,D<:DynamicsType}
         d[:evals] = 0
         evals = [0;0]
+        # Check if dynamics have quaternions in the state
+        if :quat ∈ keys(d)
+            quat = d[:quat]
+            if quat isa UnitRange
+                quat = [quat]
+            end
+        else
+            quat = UnitRange{Int}[]
+        end
+
         if check_functions
             # Make dynamics inplace
             if is_inplace_dynamics(f,n,m,r)
@@ -70,9 +82,9 @@ struct AnalyticalModel{M,D} <: Model{M,D}
                 f! = wrap_inplace(f)
             end
             # ∇f! = _check_jacobian(D,f,∇f,n,m)
-            new{M,D}(f!,∇f,n,m,r,p,evals,d)
+            new{M,D}(f!,∇f,n,m,r,p,evals,d, quat)
         else
-            new{M,D}(f,∇f,n,m,r,p,evals,d)
+            new{M,D}(f,∇f,n,m,r,p,evals,d, quat)
         end
     end
 end
@@ -381,6 +393,107 @@ function dynamics(model::Model{Uncertain,D},xdot::AbstractVector,x::AbstractVect
     model.evals[1] += 1
 end
 
+
+
+num_quat(model::Model) = length(model.quat)
+has_quat(model::Model) = num_quat(model) != 0
+state_diff_size(model::Model) = has_quat(model) ? model.n - num_quat(model) : model.n
+
+"$(SIGNATURES) Calculate the difference between states `x` and `x0`. In Euclidean space this is simply `x-x0`"
+function state_diff(model::Model,x,x0)
+    if has_quat(model)
+        q = num_quat(model)
+        δx = zeros(eltype(x), length(x) - q)
+
+        part1, part2 = quat_partition(model)
+
+        dx = x - x0
+        for i = 1:2q+1
+            inds1 = part1[i]
+            inds2 = part2[i]
+            if isodd(i)  # not quaternion
+                δx[inds1] = dx[inds2]
+            else
+                q = Quaternion(x[inds2])
+                q0 = Quaternion(x0[inds2])
+                δx[inds1] = vec(inv(q0)*q)
+            end
+        end
+    else
+        δx = x - x0
+    end
+    return δx
+end
+
+function quat_partition(model::Model)
+    n = model.n
+    q = num_quat(model)
+    n̄ = n - q
+    part1 = Vector{UnitRange{Int}}(undef, 2q+1)
+    part2 = Vector{UnitRange{Int}}(undef, 2q+1)
+    start1 = 1
+    start2 = 1
+    for i = 1:q
+        inds = model.quat[i]
+        part1[2i-1] = start1:inds[1]-i
+        part1[2i] = inds[1:3] .- (i-1)
+        part2[2i-1] = start2:inds[1]-1
+        part2[2i] = inds
+        nx = length(part1[2i-1])
+        start1 += nx + 3
+        start2 += nx + 4
+    end
+    part1[end] = start1:n̄
+    part2[end] = start2:n
+    return part1, part2
+end
+
+
+function state_diff_jacobian(model::Model, x)
+    if has_quat(model)
+        n,m = model.n, model.m
+        q = num_quat(model)
+        n̄ = n - q
+        Gk = zeros(n̄,n)
+
+        part1, part2 = quat_partition(model)
+        for i = 1:2q+1
+            inds1 = part1[i]
+            inds2 = part2[i]
+            if isodd(i)  # not quaternion
+                Gk[inds1, inds2] = Diagonal(ones(length(inds1)))
+                @assert length(inds1) == length(inds2)
+            else  # quaternion
+                q = Quaternion(x[inds2])
+                G = Lmult(inv(q))[2:4,:]
+                Gk[inds1, inds2] = G
+            end
+        end
+        return Gk
+    else
+        return Diagonal(I,model.n)
+    end
+end
+
+function dynamics_expansion(Z::PartedMatrix, model::Model, x, u)
+    fdx, fdu = Z.xx, Z.xu
+    if has_quat(model)
+        G = state_diff_jacobian(model,x)
+        return G*fdx*G', G*fdu
+    else
+        return fdx, fdu
+    end
+end
+
+
+function cost_expansion(Q::Expansion, model::Model, x, u)
+    if has_quat(model)
+        G = state_diff_jacobian(model, x)
+        return G*Q.xx*G', Q.uu, Q.ux*G', G*Q.x, Q.u
+    else
+        return Q.xx, Q.uu, Q.ux, Q.x, Q.u
+    end
+end
 
 """
 $(TYPEDEF)

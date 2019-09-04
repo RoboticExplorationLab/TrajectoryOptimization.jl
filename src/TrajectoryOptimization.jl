@@ -144,6 +144,7 @@ include("rollout.jl")
 include("dynamics.jl")
 include("problems.jl")
 include("logger.jl")
+include("../dynamics/quaternions.jl")
 
 write_ipopt_options()
 end
