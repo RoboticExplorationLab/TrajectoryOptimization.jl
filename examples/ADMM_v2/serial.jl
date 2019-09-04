@@ -12,9 +12,9 @@ include("problem.jl")
 include("methods.jl")
 
 # Solver options
-verbose=true
+verbose=false
 
-opts_ilqr = iLQRSolverOptions(verbose=true,
+opts_ilqr = iLQRSolverOptions(verbose=false,
       iterations=500)
 
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
@@ -27,11 +27,16 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.0)
 
 num_lift = 3
-prob_load = gen_prob(:load)
-prob_lift = [gen_prob(i) for i = 1:3]
+prob_load = gen_prob(:load, quad_params, load_params)
+prob_lift = [gen_prob(i, quad_params, load_params) for i = 1:3]
 @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
+
+
+prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
+prob_lift2 = [gen_prob_all(quad_params, load_params, agent=i) for i = 1:num_lift]
+@time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift2,prob_load2,:parallel,opts_al)
 
 # include("visualization.jl")
 # vis = Visualizer()
 # open(vis)
-# visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
