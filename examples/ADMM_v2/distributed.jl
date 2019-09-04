@@ -51,6 +51,8 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 quat = true
 probs, prob_load = init_dist(quat=quat);
 @time sol, sol_solvers, xx = solve_admm(probs, prob_load, true, opts_al);
+
+if false
 @btime solve_admm($probs, $prob_load, $true, $opts_al);
 
 
@@ -71,3 +73,4 @@ output_traj(sol[4],idx,joinpath(pwd(),"trajectoriestraj2.txt"))
 println(sol[2].x0[1:3])
 println(sol[3].x0[1:3])
 println(sol[4].x0[1:3])
+end

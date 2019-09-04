@@ -13,12 +13,12 @@ include("solvers/augmented_lagrangian/augmented_lagrangian_solver.jl")
 include("solvers/augmented_lagrangian/augmented_lagrangian_methods.jl")
 
 
-include("solvers/direct/direct_solvers.jl")
+#include("solvers/direct/direct_solvers.jl")
 include("solvers/direct/sequential_newton.jl")
-include("solvers/direct/dircol.jl")
-include("solvers/direct/dircol_ipopt.jl")
-include("solvers/direct/dircol_snopt.jl")
-include("solvers/direct/moi.jl")
+#include("solvers/direct/dircol.jl")
+#include("solvers/direct/dircol_ipopt.jl")
+#include("solvers/direct/dircol_snopt.jl")
+#include("solvers/direct/moi.jl")
 include("solvers/direct/sequential_newton_solve.jl")
 include("solvers/direct/projected_newton.jl")
 
