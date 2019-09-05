@@ -100,10 +100,10 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONTROLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Initial controls
-    ulift, uload = calc_static_forces(xlift0, xload0, quad_params.m, mass_load, num_lift)
+    ulift, uload = calc_static_forces(α, quad_params.m, mass_load, num_lift)
 
     # initial control mid
-    uliftm, uloadm = calc_static_forces(xliftmid, xloadm, quad_params.m, mass_load, num_lift)
+    uliftm, uloadm = calc_static_forces(α, quad_params.m, mass_load, num_lift)
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -406,6 +406,15 @@ function calc_static_forces(xlift::Vector{T}, xload, lift_mass, load_mass, num_l
     ulift_r = [[0.;0.;0.;0.;f_mag[i]] for i = 1:num_lift]
     uload = f_mag
 
+
+    return ulift, uload
+end
+
+function calc_static_forces(α::Float64, lift_mass, load_mass, num_lift)
+    thrust = 9.81*(lift_mass + load_mass/num_lift)/4
+    f_mag = load_mass*9.81/(num_lift*cos(α))
+    ulift = [[thrust; thrust; thrust; thrust; f_mag] for i = 1:num_lift]
+    uload = ones(num_lift)*f_mag
     return ulift, uload
 end
 
