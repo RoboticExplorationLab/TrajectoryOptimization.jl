@@ -388,6 +388,7 @@ end
 
 function load_costs(n_load, m_load)
     q_diag = 0*ones(n_load)
+    q_diag[1] = 1e-3
     r_diag = 1*ones(m_load)
     qf_diag = 0*ones(n_load)
     return q_diag, r_diag, qf_diag

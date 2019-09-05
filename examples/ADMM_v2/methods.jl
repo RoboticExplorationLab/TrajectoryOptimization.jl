@@ -1,14 +1,14 @@
 
-function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, quad_params, load_params, parallel, opts, return_early=false, n_slack=3)
+function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, quad_params, load_params, parallel, opts; max_iters, n_slack=3)
 	probs = copy_probs(probs0)
 	prob_load = copy(prob_load0)
 
-	solve_admm_1slack(probs, prob_load, quad_params, load_params, parallel, opts, return_early, n_slack)
+	solve_admm_1slack(probs, prob_load, quad_params, load_params, parallel, opts, max_iters, n_slack)
 end
 
 copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 
-function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts,return_early=false, n_slack=3)
+function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts, max_iters=3, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
 
     # Problem dimensions
@@ -28,9 +28,6 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
     end
     solve!(prob_load,opts)
 
-	if return_early
-    	return prob_lift,prob_load, 1, 1
-	end
 
     #~~~~~~~~~~~~~~~~~~~~ UPDATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Generate cable constraints
@@ -63,7 +60,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
     prob_load_al.model = gen_load_model(X_lift,N,dt,load_params)
 
     #~~~~~~~~~~~~~~~~~~~~ SOLVE ADMM ~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    for ii = 1:opts.iterations
+    for ii = 1:max_iters
         # Solve lift agents
         for i = 1:num_lift
 
