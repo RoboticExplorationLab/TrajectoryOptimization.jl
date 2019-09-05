@@ -1,9 +1,9 @@
 include("methods.jl")
 
-function solve_admm(probs0::DArray, prob_load0::Problem, parallel, opts, n_slack=3)
+function solve_admm(probs0::DArray, prob_load0::Problem, quad_params, load_params, parallel, opts, n_slack=3)
 	probs = copy_probs(probs0)
 	prob_load = copy(prob_load0)
-	solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack)
+	solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack)
 end
 
 function copy_probs(probs::DArray)
@@ -14,7 +14,7 @@ function copy_probs(probs::DArray)
     return probs2
 end
 
-function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
+function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack=3)
 
 
 	N = prob_load.N; dt = prob_load.dt
@@ -86,13 +86,13 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
             probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
-			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt)
+			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params)
         end
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
-	prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt)
+	prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt,load_params)
 
 	max_iters = 10
 	for ii = 1:max_iters
@@ -119,7 +119,7 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
 
         # Solve AL load problem
 		@info ("Solving load AL problem...")
-		prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt)
+		prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt,load_params)
         TO.solve_aula!(prob_load, solver_load)
 
         # Send trajectories
@@ -134,7 +134,7 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
             @spawnat w begin
                 X_cache[:L][1] .= prob_load.X
                 U_cache[:L][1] .= prob_load.U
-				probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt)
+				probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params)
             end
 
         end

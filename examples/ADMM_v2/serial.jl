@@ -24,26 +24,40 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     cost_tolerance_intermediate=1.0e-4,
     iterations=30,
     penalty_scaling=2.0,
-    penalty_initial=10.0)
+    penalty_initial=10.)
 
 num_lift = 3
-quat = false
+quat = true
 obs = true
 prob_load = gen_prob(:load, quad_params, load_params, quat=quat,obs=obs)
 prob_lift = [gen_prob(i, quad_params, load_params, quat=quat, obs=obs) for i = 1:3]
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,quad_params, load_params, :sequential,opts_al,true)
-@btime solve_admm($prob_lift, $prob_load,$quad_params, $load_params :sequential, $opts_al)
-
-
-
-prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
-prob_lift2 = [gen_prob_all(quad_params, load_params, agent=i) for i = 1:num_lift]
-@time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift2,prob_load2,quad_params, load_params,:parallel,opts_al)
-
-include("visualization.jl")
-vis = Visualizer()
-open(vis)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,quad_params, load_params, :parallel,opts_al,false)
+# @btime solve_admm($prob_lift, $prob_load,$quad_params, $load_params :sequential, $opts_al)
+#
+#
+# prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
+# prob_lift2 = [gen_prob_all(quad_params, load_params, agent=i) for i = 1:num_lift]
+# @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift2,prob_load2,quad_params, load_params,:parallel,opts_al)
+#
+# include("visualization.jl")
+# vis = Visualizer()
+# open(vis)
 visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
 
-plot(plift_al[1].U,1:4)
+# for i = 1:num_lift
+#     initial_controls!(prob_lift[i],[plift_al[i].U[end] for k = 1:prob_load.N])
+#     prob_lift[i].x0[4:7] = plift_al[i].X[end][4:7]
+#     rollout!(prob_lift[i])
+#     println(plift_al[i].X[end][4:7])
+#     println(plift_al[i].U[end])
+# end
+# initial_controls!(prob_load,[pload_al.U[end] for k = 1:prob_load.N])
+# println(pload_al.U[end])
+#
+# rollout!(prob_load)
+#
+# visualize_quadrotor_lift_system(vis, [[prob_load]; prob_lift])
+
+#
+plot(plift_al[2].U,1:4)

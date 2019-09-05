@@ -40,10 +40,10 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
         _cyl = []
         push!(_cyl,(goal_dist/2.,1.,r_cylinder))
         push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
-        push!(_cyl,(goal_dist/2. -0.5,1.,r_cylinder))
-        push!(_cyl,(goal_dist/2. -0.5,-1.,r_cylinder))
-        push!(_cyl,(goal_dist/2. +0.5,1.,r_cylinder))
-        push!(_cyl,(goal_dist/2. +0.5,-1.,r_cylinder))
+        # push!(_cyl,(goal_dist/2. -0.5,1.,r_cylinder))
+        # push!(_cyl,(goal_dist/2. -0.5,-1.,r_cylinder))
+        # push!(_cyl,(goal_dist/2. +0.5,1.,r_cylinder))
+        # push!(_cyl,(goal_dist/2. +0.5,-1.,r_cylinder))
         addcylinders!(vis,_cyl,3.)
     end
 

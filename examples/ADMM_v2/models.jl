@@ -2,7 +2,7 @@ include(joinpath(pwd(),"dynamics/quaternions.jl"))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~ MODEL PARAMETERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-load_params = (m=0.35,
+load_params = (m=0.9,
             gravity=SVector(0,0,-9.81),
             radius=0.2)
 

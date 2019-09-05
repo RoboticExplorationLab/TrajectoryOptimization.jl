@@ -41,6 +41,17 @@ end
 
 function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false, obs=true)
 
+    # statically stable initial config
+    q10 = [0.99115, 4.90375e-16, 0.132909, -9.56456e-17]
+    u10 = [3.32131, 3.32225, 3.32319, 3.32225, 4.64966]
+    q20 = [0.99115, -0.115103, -0.0664547, 1.32851e-17]
+    u20 = [3.32272, 3.32144, 3.32178, 3.32307, 4.64966]
+    q30 = [0.99115, 0.115103, -0.0664547, 1.92768e-16]
+    u30 = [3.32272, 3.32307, 3.32178, 3.32144, 4.64966]
+    uload = [4.64966, 4.64966, 4.64966]
+
+    q_lift_static = [q10, q20, q30]
+    ulift = [u10, u20, u30]
 
     # Params
     dt = 0.2
@@ -78,12 +89,23 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
     rf_load = copy(r0_load)
     rf_load[1] += goal_dist
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
+
+
+
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
+
+    for i = 1:num_lift
+        xlift0[i][4:7] = q_lift_static[i]
+    end
+    # for i = 1:num_lift
+    #     xliftf[i][4:7] = q_lift_static[i]
+    # end
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MIDPOINT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # midpoint desired configuration
     rm_load = [goal_dist/2, 0, r0_load[3]]
+    # rm_load = r0_load
     rm_lift = get_quad_locations(rm_load, d, β, num_lift, config=:doorway)
 
     xliftmid = [zeros(n_lift) for i = 1:num_lift]
@@ -97,10 +119,9 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
     xloadm = zeros(n_load)
     xloadm[1:3] = rm_load
 
-
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONTROLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Initial controls
-    ulift, uload = calc_static_forces(xlift0, xload0, quad_params.m, mass_load, num_lift)
+    # ulift, uload = calc_static_forces(xlift0, xload0, quad_params.m, mass_load, num_lift)
 
     # initial control mid
     uliftm, uloadm = calc_static_forces(xliftmid, xloadm, quad_params.m, mass_load, num_lift)
@@ -121,7 +142,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
 
     # Control limits
     u_min_lift = [0,0,0,0,-Inf]
-    u_max_lift = ones(m_lift)*19/4
+    u_max_lift = ones(m_lift)*(mass_load + mass_lift)*9.81/4
     u_max_lift[end] = Inf
 
     x_min_lift = -Inf*ones(n_lift)
@@ -378,8 +399,12 @@ end
 function quad_costs(n_lift, m_lift)
     q_diag = 1e-1*ones(n_lift)
     q_diag[1] = 1e-3
+    q_diag[4:7] .*= 2.0
 
-    r_diag = 1e-3*ones(m_lift)
+    # q_diag = 1000.0*ones(n_lift)
+    # q_diag[4:7] .= 1.0e-4
+
+    r_diag = 2.0e-3*ones(m_lift)
     r_diag[end] = 1
 
     qf_diag = 100*ones(n_lift)
@@ -387,9 +412,13 @@ function quad_costs(n_lift, m_lift)
 end
 
 function load_costs(n_load, m_load)
-    q_diag = 0*ones(n_load)
+    q_diag = 0.5e-1*ones(n_load)
     r_diag = 1*ones(m_load)
-    qf_diag = 0*ones(n_load)
+    qf_diag = 0.0*ones(n_load)
+
+    # q_diag = 1000.0*ones(n_load)
+    # r_diag = 1*ones(m_load)
+    # qf_diag = 1000.0*ones(n_load)
     return q_diag, r_diag, qf_diag
 end
 
@@ -413,9 +442,9 @@ function door_obstacles(r_cylinder=0.5, x_door=3.0)
 
     push!(_cyl,(x_door, 1.,r_cylinder))
     push!(_cyl,(x_door,-1.,r_cylinder))
-    push!(_cyl,(x_door-0.5, 1.,r_cylinder))
-    push!(_cyl,(x_door-0.5,-1.,r_cylinder))
-    push!(_cyl,(x_door+0.5, 1.,r_cylinder))
-    push!(_cyl,(x_door+0.5,-1.,r_cylinder))
+    # push!(_cyl,(x_door-0.5, 1.,r_cylinder))
+    # push!(_cyl,(x_door-0.5,-1.,r_cylinder))
+    # push!(_cyl,(x_door+0.5, 1.,r_cylinder))
+    # push!(_cyl,(x_door+0.5,-1.,r_cylinder))
     return _cyl
 end
