@@ -31,7 +31,7 @@ function visualize(vis,prob,num_lift=3)
     for k = 1:prob.N
         MeshCat.atframe(anim,vis,k) do frame
             # cables
-            x_load = prob.X[k][3*13 .+ (1:3)]
+            x_load = prob.X[k][num_lift*13 .+ (1:3)]
             for i = 1:num_lift
                 x_lift = prob.X[k][(i-1)*13 .+ (1:3)]
                 settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
@@ -60,19 +60,22 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-prob = gen_prob(:batch, quad_params, load_params, quat=true, obs=true)
+num_lift = 6
+obs = false
+prob = gen_prob(:batch, quad_params, load_params,
+    num_lift=num_lift, quat=false, obs=obs)
 # prob = gen_prob_all(quad_params, load_params, agent=:batch)
 
 # @btime solve($prob,$opts_al)
 @time solve!(prob,opts_al)
-@btime solve($prob,$opts_al)
+# @btime solve($prob,$opts_al)
 
 max_violation(prob)
 TO.findmax_violation(prob)
 
 vis = Visualizer()
 open(vis)
-visualize(vis,prob)
+visualize(vis,prob,num_lift)
 
 #=
 Notes:
