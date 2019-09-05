@@ -6,6 +6,7 @@ using FileIO
 using MeshIO
 using LinearAlgebra
 using ForwardDiff
+using Combinatorics
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
 

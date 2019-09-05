@@ -94,8 +94,10 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
 
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
-    for i = 1:num_lift
-        xlift0[i][4:7] = q_lift_static[i]
+    if num_lift == 3
+        for i = 1:num_lift
+            xlift0[i][4:7] = q_lift_static[i]
+        end
     end
     # for i = 1:num_lift
     #     xliftf[i][4:7] = q_lift_static[i]
@@ -403,10 +405,11 @@ function quad_costs(n_lift, m_lift)
     q_diag[1] = 1e-3
     q_diag[4:7] .*= 25.0
 
-    # q_diag = 1000.0*ones(n_lift)
-    # q_diag[4:7] .= 1.0e-4
+
 
     r_diag = 2.0e-3*ones(m_lift)
+
+    # r_diag = 1.0e-3*ones(m_lift)
     r_diag[end] = 1
 
     qf_diag = 100*ones(n_lift)
@@ -414,7 +417,8 @@ function quad_costs(n_lift, m_lift)
 end
 
 function load_costs(n_load, m_load)
-    q_diag = 0.5e-1*ones(n_load)
+    q_diag = 0.5e-1*ones(n_load) #
+
     # q_diag = 0*ones(n_load)
     # q_diag[1] = 1e-3
     r_diag = 1*ones(m_load)
