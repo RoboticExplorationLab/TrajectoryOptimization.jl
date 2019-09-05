@@ -39,9 +39,12 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
     return x_lift
 end
 
-function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false, obs=true)
+function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false, obs=true, trim=false)
+    if trim
+        obs=false
+    end
 
-    # statically stable initial config
+    #trim conditions for statically stable initial config (num_lift = 3)
     q10 = [0.99115, 4.90375e-16, 0.132909, -9.56456e-17]
     u10 = [3.32131, 3.32225, 3.32319, 3.32225, 4.64966]
     q20 = [0.99115, -0.115103, -0.0664547, 1.32851e-17]
@@ -91,8 +94,11 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
 
 
-
-    xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
+    if trim
+        xliftf, xloadf = get_states(r0_load, n_lift, n_load, num_lift, d, α)
+    else
+        xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
+    end
 
     if num_lift == 3
         for i = 1:num_lift
@@ -130,8 +136,13 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    q_lift, r_lift, qf_lift = quad_costs(n_lift, m_lift)
-    q_load, r_load, qf_load = load_costs(n_load, m_load)
+    if trim
+        q_lift, r_lift, qf_lift = quad_trim_costs(n_lift, m_lift)
+        q_load, r_load, qf_load = load_trim_costs(n_load, m_load)
+    else
+        q_lift, r_lift, qf_lift = quad_costs(n_lift, m_lift)
+        q_load, r_load, qf_load = load_costs(n_load, m_load)
+    end
 
     # Midpoint objective
     q_lift_mid = copy(q_lift)
@@ -430,18 +441,44 @@ function load_costs(n_load, m_load)
     return q_diag, r_diag, qf_diag
 end
 
+function quad__trim_costs(n_lift, m_lift)
+    q_diag = 1000.0*ones(n_lift)
+    q_diag[4:7] .*= 1.0e-4
+
+    r_diag = 1.0e-3*ones(m_lift)
+
+    # r_diag = 1.0e-3*ones(m_lift)
+    r_diag[end] = 1
+
+    qf_diag = 1000.0*ones(n_lift)
+    return q_diag, r_diag, qf_diag
+end
+
+function load_trim_costs(n_load, m_load)
+    q_diag = 1000.0*ones(n_load) #
+
+    # q_diag = 0*ones(n_load)
+    # q_diag[1] = 1e-3
+    r_diag = 1*ones(m_load)
+    qf_diag = 1000.0*ones(n_load)
+
+    # q_diag = 1000.0*ones(n_load)
+    # r_diag = 1*ones(m_load)
+    # qf_diag = 1000.0*ones(n_load)
+    return q_diag, r_diag, qf_diag
+end
+
 function calc_static_forces(xlift::Vector{T}, xload, lift_mass, load_mass, num_lift) where T
-    f1 = normalize(xlift[1][1:3] - xload[1:3])
-    f2 = normalize(xlift[2][1:3] - xload[1:3])
-    f3 = normalize(xlift[3][1:3] - xload[1:3])
-    f_mag = hcat(f1, f2, f3)\[0;0;9.81*load_mass]
-    ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
+    # f1 = normalize(xlift[1][1:3] - xload[1:3])
+    # f2 = normalize(xlift[2][1:3] - xload[1:3])
+    # f3 = normalize(xlift[3][1:3] - xload[1:3])
+    # f_mag = hcat(f1, f2, f3)\[0;0;9.81*load_mass]
+    # ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
 
     thrust = 9.81*(lift_mass + load_mass/num_lift)/4
-    ulift = [[thrust; thrust; thrust; thrust; f_mag[i]] for i = 1:num_lift]
-    ulift_r = [[0.;0.;0.;0.;f_mag[i]] for i = 1:num_lift]
+    ulift = [[thrust; thrust; thrust; thrust; load_mass/num_lift] for i = 1:num_lift]
+    ulift_r = [[0.;0.;0.;0.;load_mass/num_lift] for i = 1:num_lift]
     uload = f_mag
-
 
     return ulift, uload
 end
