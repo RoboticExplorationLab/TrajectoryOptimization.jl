@@ -39,6 +39,10 @@ function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
     _cyl = []
     push!(_cyl,(goal_dist/2.,1.,r_cylinder))
     push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
+    push!(_cyl,(goal_dist/2. -0.5,1.,r_cylinder))
+    push!(_cyl,(goal_dist/2. -0.5,-1.,r_cylinder))
+    push!(_cyl,(goal_dist/2. +0.5,1.,r_cylinder))
+    push!(_cyl,(goal_dist/2. +0.5,-1.,r_cylinder))
 
     num_lift = length(prob_lift)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]

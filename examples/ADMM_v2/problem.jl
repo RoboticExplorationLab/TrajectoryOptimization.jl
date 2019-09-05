@@ -74,7 +74,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONDITIONS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
     # Initial conditions
-    r0_load = [0,0,0.5]
+    r0_load = [0,0,0.25]
     rf_load = copy(r0_load)
     rf_load[1] += goal_dist
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
@@ -397,5 +397,9 @@ function door_obstacles(r_cylinder=0.5, x_door=3.0)
 
     push!(_cyl,(x_door, 1.,r_cylinder))
     push!(_cyl,(x_door,-1.,r_cylinder))
+    push!(_cyl,(x_door-0.5, 1.,r_cylinder))
+    push!(_cyl,(x_door-0.5,-1.,r_cylinder))
+    push!(_cyl,(x_door+0.5, 1.,r_cylinder))
+    push!(_cyl,(x_door+0.5,-1.,r_cylinder))
     return _cyl
 end

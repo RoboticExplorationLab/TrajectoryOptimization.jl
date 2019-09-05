@@ -2,7 +2,7 @@
 function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, parallel, opts, n_slack=3)
 	probs = copy_probs(probs0)
 	prob_load = copy(prob_load0)
-	
+
 	solve_admm_1slack(probs, prob_load, parallel, opts, n_slack)
 end
 

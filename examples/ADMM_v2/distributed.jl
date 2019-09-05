@@ -67,10 +67,23 @@ open(vis)
 visualize_quadrotor_lift_system(vis, sol)
 
 idx = [(1:3)...,(7 .+ (1:3))...]
-output_traj(sol[2],idx,joinpath(pwd(),"trajectoriestraj0.txt"))
-output_traj(sol[3],idx,joinpath(pwd(),"trajectoriestraj1.txt"))
-output_traj(sol[4],idx,joinpath(pwd(),"trajectoriestraj2.txt"))
+output_traj(sol[2],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj0.txt"))
+output_traj(sol[3],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj1.txt"))
+output_traj(sol[4],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj2.txt"))
 println(sol[2].x0[1:3])
 println(sol[3].x0[1:3])
 println(sol[4].x0[1:3])
 end
+
+pwd()
+output_traj(sol[2],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj0.txt"))
+output_traj(sol[3],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj1.txt"))
+output_traj(sol[4],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj2.txt"))
+println(sol[2].x0[1:3])
+println(sol[3].x0[1:3])
+println(sol[4].x0[1:3])
+
+include("visualization.jl")
+vis = Visualizer()
+open(vis)
+visualize_quadrotor_lift_system(vis, sol)
