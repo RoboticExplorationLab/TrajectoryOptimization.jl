@@ -10,6 +10,7 @@ copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 
 function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts, max_iters=3, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
+	quat = TO.has_quat(prob_lift[1].model)
 
     # Problem dimensions
     num_lift = length(prob_lift)
@@ -49,7 +50,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
-        prob.model = gen_lift_model(X_load,N,dt,quad_params)
+        prob.model = gen_lift_model(X_load,N,dt,quad_params,quat)
 
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
@@ -91,7 +92,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
         U_load .= prob_load_al.U
 
         for i = 1:num_lift
-            prob_lift_al[i].model = gen_lift_model(X_load,N,dt,quad_params)
+            prob_lift_al[i].model = gen_lift_model(X_load,N,dt,quad_params,quat)
         end
 
         # Update lift constraints prior to evaluating convergence

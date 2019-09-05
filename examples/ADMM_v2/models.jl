@@ -119,7 +119,7 @@ function gen_load_model_initial(xload0,xlift0,load_params)
     Model(double_integrator_3D_dynamics_load!,6,num_lift)
 end
 
-function gen_lift_model_initial(xload0,xlift0,quad_params)
+function gen_lift_model_initial(xload0,xlift0,quad_params,quat=false)
 
         function quadrotor_lift_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
             q = normalize(Quaternion(view(x,4:7)))
@@ -160,10 +160,14 @@ function gen_lift_model_initial(xload0,xlift0,quad_params)
             ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
             return tau, omega, J, Jinv
         end
-        Model(quadrotor_lift_dynamics!,13,5,quad_params)
+        info = Dict{Symbol,Any}()
+        if quat
+            info[:quat] = [4:7]
+        end
+        Model(quadrotor_lift_dynamics!,13,5,quad_params,info)
 end
 
-function gen_lift_model(X_load,N,dt,quad_params)
+function gen_lift_model(X_load,N,dt,quad_params,quat=false)
       model = Model[]
 
       for k = 1:N-1
@@ -206,7 +210,12 @@ function gen_lift_model(X_load,N,dt,quad_params)
             ẋ[11:13] = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
             return tau, omega, J, Jinv
         end
-        push!(model,midpoint(Model(quadrotor_lift_dynamics!,13,5,quad_params),dt))
+        info = Dict{Symbol,Any}()
+        if quat
+            info[:quat] = [(4:7) .+ i for i in 0:n_lift:n_lift*num_lift-1]
+        end
+        model_k = Model(quadrotor_lift_dynamics!,13,5,quad_params,info)
+        push!(model,midpoint(model_k,dt))
     end
     model
 end
