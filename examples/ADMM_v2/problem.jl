@@ -93,7 +93,6 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
     rf_load[1] += goal_dist
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
 
-
     if trim
         xliftf, xloadf = get_states(r0_load, n_lift, n_load, num_lift, d, α)
     else

@@ -14,7 +14,7 @@ include("problem.jl")
 include("methods.jl")
 
 # Solver options
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=500)
@@ -31,27 +31,22 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 num_lift = 3
 quat = true
-obs = true
-prob_load = gen_prob(:load, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs)
-prob_lift = [gen_prob(i, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs) for i = 1:num_lift]
-size(prob_load)
+r0_load = [-1, 0, 0.25]
+scenario = :doorway
+prob_load = gen_prob(:load, quad_params, load_params, r0_load,
+    num_lift=num_lift, quat=quat, scenario=scenario)
+prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
+    num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
-    load_params, :parallel, opts_al, max_iters=10)
-size(pload_al)
+    load_params, :parallel, opts_al, max_iters=0)
+plift_al[1].x0
+pload_al.x0
 
-num_lift = 4
-quat = false
-obs = false
-prob_load = gen_prob(:load, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs)
-prob_lift = [gen_prob(i, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs) for i = 1:num_lift]
-size(prob_load)
-# @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
-    load_params, :sequential, opts_al, max_iters=1)
-size(pload_al)
-
-# @btime solve_admm($prob_lift, $prob_load,$quad_params, $load_params :sequential, $opts_al)
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
+#=
+x: [-0.5, 0.5]
+=#
 
 visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
 
