@@ -90,3 +90,47 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
     end
     MeshCat.setanimation!(vis,anim)
 end
+
+function visualize_batch(vis,prob,obs=true,num_lift=3)
+
+    # camera angle
+    # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
+
+    if obs
+        _cyl = door_obstacles()
+        addcylinders!(vis, _cyl, 2.1)
+    end
+    x0 = prob.x0
+    d = norm(x0[1:3] - x0[num_lift*13 .+ (1:3)])
+
+    # intialize system
+    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
+    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
+    obj = joinpath(urdf_folder, "quadrotor_base.obj")
+
+    quad_scaling = 0.085
+    robot_obj = FileIO.load(obj)
+    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
+    for i = 1:num_lift
+        setobject!(vis["lift$i"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+        cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d),convert(Float32,0.01))
+        setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+    end
+    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,0.2)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
+
+    anim = MeshCat.Animation(convert(Int,floor(1.0/prob.dt)))
+    for k = 1:prob.N
+        MeshCat.atframe(anim,vis,k) do frame
+            # cables
+            x_load = prob.X[k][num_lift*13 .+ (1:3)]
+            for i = 1:num_lift
+                x_lift = prob.X[k][(i-1)*13 .+ (1:3)]
+                q_lift = prob.X[k][((i-1)*13 + 3) .+ (1:4)]
+                settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
+                settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(q_lift...))))
+            end
+            settransform!(frame["load"], Translation(x_load...))
+        end
+    end
+    MeshCat.setanimation!(vis,anim)
+end
