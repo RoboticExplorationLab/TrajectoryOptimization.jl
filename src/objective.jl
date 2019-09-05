@@ -62,6 +62,7 @@ function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
     cost_expansion!(Q[N],c[N],X[N])
 end
 
+import Base.size
 @doc raw"""```julia
 LQRObjective(Q, R, Qf, xf, N)
 ```

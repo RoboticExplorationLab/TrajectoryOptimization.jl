@@ -4,12 +4,12 @@ Primary module for setting up and solving trajectory optimization problems.
 """
 module TrajectoryOptimization
 
+using LinearAlgebra
 using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
-using Interpolations
-using RecipesBase
-using LinearAlgebra
+# using Interpolations
+# using RecipesBase
 using Statistics
 using Random
 using SparseArrays
@@ -142,9 +142,9 @@ include("problem.jl")
 include("solvers.jl")
 include("rollout.jl")
 include("dynamics.jl")
-include("problems.jl")
+# include("problems.jl")
 include("logger.jl")
 include("../dynamics/quaternions.jl")
 
-write_ipopt_options()
+# write_ipopt_options()
 end
