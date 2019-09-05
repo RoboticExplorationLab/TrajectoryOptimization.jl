@@ -92,8 +92,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     end
 
     # Initial conditions
-    rf_load = copy(r0_load)
-    rf_load[1] += goal_dist
+    rf_load = [goal_dist, 0, r0_load[3]]
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
@@ -413,13 +412,12 @@ function quad_costs(n_lift, m_lift, scenario=:doorway)
 
         qf_diag = copy(q_diag)*100
     else
-        q_diag = 1e-1*ones(n_lift)
+         q_diag = 1e-1*ones(n_lift)
         q_diag[1] = 1e-3
-        q_diag[13] = 1.0
-        # q_diag[4:7] .*= 25.0
-        q_diag 
+        q_diag[4:7] .*= 25.0
 
         r_diag = 2.0e-3*ones(m_lift)
+
         # r_diag = 1.0e-3*ones(m_lift)
         r_diag[end] = 1
 
@@ -445,6 +443,7 @@ function load_costs(n_load, m_load, scenario=:doorway)
         # q_diag = 1000.0*ones(n_load)
         # r_diag = 1*ones(m_load)
         # qf_diag = 1000.0*ones(n_load)
+
     end
     return q_diag, r_diag, qf_diag
 end
