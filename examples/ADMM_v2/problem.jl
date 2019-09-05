@@ -105,7 +105,6 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MIDPOINT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # midpoint desired configuration
     rm_load = [goal_dist/2, 0, r0_load[3]]
-    # rm_load = r0_load
     rm_lift = get_quad_locations(rm_load, d, β, num_lift, config=:doorway)
 
     xliftmid = [zeros(n_lift) for i = 1:num_lift]
@@ -121,10 +120,11 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONTROLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Initial controls
-    # ulift, uload = calc_static_forces(xlift0, xload0, quad_params.m, mass_load, num_lift)
-
+    if num_lift != 3
+        ulift, uload = calc_static_forces(α, quad_params.m, mass_load, num_lift)
+    end
     # initial control mid
-    uliftm, uloadm = calc_static_forces(xliftmid, xloadm, quad_params.m, mass_load, num_lift)
+    uliftm, uloadm = calc_static_forces(α, quad_params.m, mass_load, num_lift)
 
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -399,7 +399,7 @@ end
 function quad_costs(n_lift, m_lift)
     q_diag = 1e-1*ones(n_lift)
     q_diag[1] = 1e-3
-    q_diag[4:7] .*= 2.0
+    q_diag[4:7] .*= 25.0
 
     # q_diag = 1000.0*ones(n_lift)
     # q_diag[4:7] .= 1.0e-4
@@ -413,6 +413,8 @@ end
 
 function load_costs(n_load, m_load)
     q_diag = 0.5e-1*ones(n_load)
+    # q_diag = 0*ones(n_load)
+    # q_diag[1] = 1e-3
     r_diag = 1*ones(m_load)
     qf_diag = 0.0*ones(n_load)
 
@@ -434,6 +436,15 @@ function calc_static_forces(xlift::Vector{T}, xload, lift_mass, load_mass, num_l
     ulift_r = [[0.;0.;0.;0.;f_mag[i]] for i = 1:num_lift]
     uload = f_mag
 
+
+    return ulift, uload
+end
+
+function calc_static_forces(α::Float64, lift_mass, load_mass, num_lift)
+    thrust = 9.81*(lift_mass + load_mass/num_lift)/4
+    f_mag = load_mass*9.81/(num_lift*cos(α))
+    ulift = [[thrust; thrust; thrust; thrust; f_mag] for i = 1:num_lift]
+    uload = ones(num_lift)*f_mag
     return ulift, uload
 end
 

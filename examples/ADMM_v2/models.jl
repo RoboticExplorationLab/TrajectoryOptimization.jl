@@ -94,17 +94,17 @@ end
 
 
 function gen_load_model_initial(xload0,xlift0,load_params)
+    num_lift = length(xlift0)
     mass_load = load_params.m
     function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
-        Δx1 = (xlift0[1][1:3] - xload0[1:3])
-        Δx2 = (xlift0[2][1:3] - xload0[1:3])
-        Δx3 = (xlift0[3][1:3] - xload0[1:3])
-        u_slack1 = u[1]*Δx1/norm(Δx1)
-        u_slack2 = u[2]*Δx2/norm(Δx2)
-        u_slack3 = u[3]*Δx3/norm(Δx3)
-        Dynamics.double_integrator_3D_dynamics!(ẋ,x,(u_slack1+u_slack2+u_slack3)/mass_load)
+        Δx = [xlift[1:3] - xload0[1:3] for xlift in xlift0]
+        u_slack = @SVector zeros(3)
+        for i = 1:num_lift
+            u_slack += u[i]*normalize(Δx[i])
+        end
+        Dynamics.double_integrator_3D_dynamics!(ẋ, x, u_slack/mass_load)
     end
-    Model(double_integrator_3D_dynamics_load!,6,3)
+    Model(double_integrator_3D_dynamics_load!,6,num_lift)
 end
 
 function gen_lift_model_initial(xload0,xlift0,quad_params)
@@ -200,20 +200,19 @@ function gen_lift_model(X_load,N,dt,quad_params)
 end
 
 function gen_load_model(X_lift,N,dt,load_params)
-      model = Model[]
-      mass_load = load_params.m
-      for k = 1:N-1
-          function double_integrator_3D_dynamics_load!(ẋ,x,u)
-              Δx1 = X_lift[1][k][1:3] - x[1:3]
-              Δx2 = X_lift[2][k][1:3] - x[1:3]
-              Δx3 = X_lift[3][k][1:3] - x[1:3]
-
-              u_slack1 = u[1]*Δx1/norm(Δx1)
-              u_slack2 = u[2]*Δx2/norm(Δx2)
-              u_slack3 = u[3]*Δx3/norm(Δx3)
-              Dynamics.double_integrator_3D_dynamics!(ẋ,x,(u_slack1+u_slack2+u_slack3)/mass_load)
-          end
-        push!(model,midpoint(Model(double_integrator_3D_dynamics_load!,6,3),dt))
+    model = Model[]
+    mass_load = load_params.m
+    num_lift = length(X_lift)
+    for k = 1:N-1
+        function double_integrator_3D_dynamics_load!(ẋ,x,u) where T
+            Δx = [xlift[k][1:3] - x[1:3] for xlift in X_lift]
+            u_slack = @SVector zeros(3)
+            for i = 1:num_lift
+                u_slack += u[i]*Δx[i]/norm(Δx[i])
+            end
+            Dynamics.double_integrator_3D_dynamics!(ẋ, x, u_slack/mass_load)
+        end
+        push!(model,midpoint(Model(double_integrator_3D_dynamics_load!,6, num_lift),dt))
     end
     model
 end

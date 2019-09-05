@@ -6,6 +6,7 @@ using FileIO
 using MeshIO
 using LinearAlgebra
 using ForwardDiff
+using TrajectoryOptimization
 const TO = TrajectoryOptimization
 
 include("problem.jl")
@@ -26,23 +27,40 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
+
 num_lift = 3
 quat = true
 obs = true
-prob_load = gen_prob(:load, quad_params, load_params, quat=quat,obs=obs)
-prob_lift = [gen_prob(i, quad_params, load_params, quat=quat, obs=obs) for i = 1:3]
+prob_load = gen_prob(:load, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs)
+prob_lift = [gen_prob(i, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs) for i = 1:num_lift]
+size(prob_load)
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
-@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift,prob_load,quad_params, load_params, :parallel,opts_al,false)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
+    load_params, :parallel, opts_al, max_iters=10)
+size(pload_al)
+
+num_lift = 4
+quat = false
+obs = false
+prob_load = gen_prob(:load, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs)
+prob_lift = [gen_prob(i, quad_params, load_params, num_lift=num_lift, quat=quat, obs=obs) for i = 1:num_lift]
+size(prob_load)
+# @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
+@time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
+    load_params, :sequential, opts_al, max_iters=1)
+size(pload_al)
+
 # @btime solve_admm($prob_lift, $prob_load,$quad_params, $load_params :sequential, $opts_al)
-#
-#
-# prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
-# prob_lift2 = [gen_prob_all(quad_params, load_params, agent=i) for i = 1:num_lift]
-# @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift2,prob_load2,quad_params, load_params,:parallel,opts_al)
-#
-# include("visualization.jl")
-# vis = Visualizer()
-# open(vis)
+
+visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
+
+prob_load2 = gen_prob_all(quad_params, load_params, agent=:load)
+prob_lift2 = [gen_prob_all(quad_params, load_params, agent=i) for i = 1:num_lift]
+@time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift2,prob_load2,quad_params, load_params,:parallel,opts_al)
+
+include("visualization.jl")
+vis = Visualizer()
+open(vis)
 visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
 
 # for i = 1:num_lift
