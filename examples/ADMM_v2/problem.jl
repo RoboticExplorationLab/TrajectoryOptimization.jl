@@ -129,8 +129,6 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     # initial control mid
     uliftm, uloadm = calc_static_forces(α, quad_params.m, mass_load, num_lift)
 
-
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ OBJECTIVE ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     q_lift, r_lift, qf_lift = quad_costs(n_lift, m_lift, scenario)
     q_load, r_load, qf_load = load_costs(n_load, m_load, scenario)
 
@@ -403,14 +401,24 @@ end
 
 function quad_costs(n_lift, m_lift, scenario=:doorway)
     if scenario == :hover
-        q_diag = 1e-1*ones(n_lift)
-        q_diag[1:3] = 1.0
-        q_diag[4:7] = 1e-6
+        q_diag = 10.0*ones(n_lift)
+        q_diag[4:7] .= 1e-6
 
-        r_diag = 2.0e-3*ones(m_lift)
+        r_diag = 1.0e-3*ones(m_lift)
         r_diag[end] = 1
 
-        qf_diag = copy(q_diag)*100
+        qf_diag = copy(q_diag)*10.0
+    elseif scenario == :p2p
+        q_diag = 1.0*ones(n_lift)
+        q_diag[1] = 1e-5
+        # q_diag[4:7] .*= 25.0
+        # q_diag
+
+        r_diag = 1.0e-3*ones(m_lift)
+        # r_diag = 1.0e-3*ones(m_lift)
+        r_diag[end] = 1
+
+        qf_diag = 100*ones(n_lift)
     else
          q_diag = 1e-1*ones(n_lift)
         q_diag[1] = 1e-3
@@ -428,10 +436,21 @@ end
 
 function load_costs(n_load, m_load, scenario=:doorway)
     if scenario == :hover
-        q_diag = 1e-1*ones(n_load) #
-        q_diag[1:3] = 1.0
+        q_diag = 10.0*ones(n_load) #
+
+        r_diag = 1*ones(m_load)
+        qf_diag = 10.0*ones(n_load)
+    elseif scenario == :p2p
+        q_diag = 1.0*ones(n_load) #
+
+        # q_diag = 0*ones(n_load)
+        q_diag[1] = 1.0e-5
         r_diag = 1*ones(m_load)
         qf_diag = 0.0*ones(n_load)
+
+        # q_diag = 1000.0*ones(n_load)
+        # r_diag = 1*ones(m_load)
+        # qf_diag = 1000.0*ones(n_load)
     else
         q_diag = 0.5e-1*ones(n_load) #
 
@@ -446,22 +465,6 @@ function load_costs(n_load, m_load, scenario=:doorway)
 
     end
     return q_diag, r_diag, qf_diag
-end
-
-function calc_static_forces(xlift::Vector{T}, xload, lift_mass, load_mass, num_lift) where T
-    f1 = normalize(xlift[1][1:3] - xload[1:3])
-    f2 = normalize(xlift[2][1:3] - xload[1:3])
-    f3 = normalize(xlift[3][1:3] - xload[1:3])
-    f_mag = hcat(f1, f2, f3)\[0;0;9.81*load_mass]
-    ff = [f_mag[1]*f1, f_mag[2]*f2, f_mag[3]*f3]
-
-    thrust = 9.81*(lift_mass + load_mass/num_lift)/4
-    ulift = [[thrust; thrust; thrust; thrust; f_mag[i]] for i = 1:num_lift]
-    ulift_r = [[0.;0.;0.;0.;f_mag[i]] for i = 1:num_lift]
-    uload = f_mag
-
-
-    return ulift, uload
 end
 
 function calc_static_forces(α::Float64, lift_mass, load_mass, num_lift)
