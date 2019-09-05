@@ -173,31 +173,33 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
         end
     end
 
+    # Batch constraints
+    r_inds = [(1:3) .+ i for i in (0:13:13*num_lift)]
+    s_inds = 5:5:5*num_lift
+    s_load = (1:num_lift) .+ 5*num_lift
     function distance_constraint(c,x,u=zeros(m_batch))
-        xload = x[3*13 .+ (1:3)]
-        c[1] = norm(x[1:3] - xload)^2 - d^2
-        c[2] = norm(x[13 .+ (1:3)] - xload)^2 - d^2
-        c[3] = norm(x[2*13 .+ (1:3)] - xload)^2 - d^2
-
+        r_load = x[r_inds[end]]
+        for i = 1:num_lift
+            r_lift = x[r_inds[i]]
+            c[i] = norm(r_lift - r_load)^2 - d^2
+        end
         return nothing
     end
 
     function force_constraint(c,x,u)
-        c[1] = u[5] - u[3*5 + 1]
-        c[2] = u[10] - u[3*5 + 2]
-        c[3] = u[15] - u[3*5 + 3]
+        u_load = u[s_load]
+        for i = 1:num_lift
+            c[i] = u[s_inds[i]] - u_load[i]
+        end
         return nothing
     end
 
+    quad_pairs = combinations(1:num_lift, 2)
     function collision_constraint(c,x,u=zeros(m_batch))
-        x1 = x[1:3]
-        x2 = x[13 .+ (1:3)]
-        x3 = x[2*13 .+ (1:3)]
-
-        c[1] = circle_constraint(x1,x2[1],x2[2],3*lift_radius)
-        c[2] = circle_constraint(x2,x3[1],x3[2],3*lift_radius)
-        c[3] = circle_constraint(x3,x1[1],x1[2],3*lift_radius)
-
+        r_lift = [x[inds] for inds in r_inds]
+        for (i,j) in quad_pairs
+            circle_constraint(r_lift[i], r_lift[j][1], r_lift[j][2], 2*lift_radius)
+        end
         return nothing
     end
 
@@ -214,7 +216,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
                 c_shift += 1
                 n_shift += 13
             end
-            c[c_shift] = circle_constraint(x[3*13 .+ (1:3)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*lift_radius)
+            c[c_shift] = circle_constraint(x[num_lift*13 .+ (1:3)],_cyl[p][1],_cyl[p][2],_cyl[p][3] + 1.25*lift_radius)
             c_shift += 1
         end
     end
@@ -354,7 +356,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false,
         cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
         dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch, num_lift, :distance)
         for_con = Constraint{Equality}(force_constraint,n_batch,m_batch, num_lift, :force)
-        col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, 3, :collision)
+        col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, binomial(num_lift, 2), :collision)
         goal = goal_constraint(xf)
 
         con = Constraints(N)

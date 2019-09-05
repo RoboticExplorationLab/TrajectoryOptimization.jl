@@ -65,27 +65,39 @@ function batch_dynamics!(ẋ,x,u, params)
     lift_params = params.lift
     load_params = params.load
     load_mass = load_params.m
+    n_batch = length(x)
+    num_lift = (n_batch - 6) ÷ 13
 
-    x1 = x[1:3]
-    x2 = x[13 .+ (1:3)]
-    x3 = x[2*13 .+ (1:3)]
+    lift_inds = [(1:13) .+ i for i in (0:13:13*num_lift-1)]
+    load_inds = (1:6) .+ 13*num_lift
+    r_inds = [(1:3) .+ i for i in (0:13:13*num_lift)]
+    s_inds = 5:5:5*num_lift
+    u_inds = [(1:4) .+ i for i in (0:5:5*num_lift-1)]
 
-    xload = x[3*13 .+ (1:3)]
+    # Get 3D positions
+    r = [x[inds] for inds in r_inds]
+    rlift = r[1:num_lift]
+    rload = r[end]
 
-    dir1 = (xload - x1)/norm(xload - x1)
-    dir2 = (xload - x2)/norm(xload - x2)
-    dir3 = (xload - x3)/norm(xload - x3)
+    # Get control values
+    u_quad = [u[ind] for ind in u_inds]
+    u_load = u[(1:num_lift) .+ 5*num_lift]
+    s_quad = u[s_inds]
 
-    lift_control_1 = [u[1:4]; u[5]*dir1]
-    lift_control_2 = [u[5 .+ (1:4)]; u[10]*dir2]
-    lift_control_3 = [u[2*5 .+ (1:4)]; u[15]*dir3]
-    u_slack_load = -1.0*(u[3*5 + 1]*dir1 + u[3*5 + 2]*dir2 + u[3*5 + 3]*dir3)
+    dir = [(rload - r)/norm(rload - r) for r in rlift]
 
-    lift_dynamics!(view(ẋ,1:13),x[1:13],lift_control_1,lift_params)
-    lift_dynamics!(view(ẋ,13 .+ (1:13)),x[13 .+ (1:13)],lift_control_2,lift_params)
-    lift_dynamics!(view(ẋ,2*13 .+ (1:13)),x[2*13 .+ (1:13)],lift_control_3,lift_params)
+    lift_control = [[u_quad[i]; s_quad[i]*dir[i]] for i = 1:num_lift]
+    u_slack_load = -1.0*sum(dir .* u_load)
 
-    load_dynamics!(view(ẋ,3*13 .+ (1:6)),x[3*13 .+ (1:6)],u_slack_load/load_mass)
+    for i = 1:num_lift
+        inds = lift_inds[i]
+        lift_dynamics!(view(ẋ,inds), x[inds], lift_control[i], lift_params)
+    end
+    # lift_dynamics!(view(ẋ,13 .+ (1:13)),x[13 .+ (1:13)],lift_control_2,lift_params)
+    # lift_dynamics!(view(ẋ,2*13 .+ (1:13)),x[2*13 .+ (1:13)],lift_control_3,lift_params)
+
+    # load_dynamics!(view(ẋ,3*13 .+ (1:6)),x[3*13 .+ (1:6)],u_slack_load/load_mass)
+    load_dynamics!(view(ẋ, load_inds), x[load_inds], u_slack_load/load_mass)
 
     return nothing
 end
