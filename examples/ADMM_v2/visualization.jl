@@ -28,21 +28,25 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
-function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
+function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     r_lift = .275
     r_load = .2
 
-    r_cylinder = 0.5
-    goal_dist = 6.0
-    _cyl = []
-    push!(_cyl,(goal_dist/2.,1.,r_cylinder))
-    push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
-    push!(_cyl,(goal_dist/2. -0.5,1.,r_cylinder))
-    push!(_cyl,(goal_dist/2. -0.5,-1.,r_cylinder))
-    push!(_cyl,(goal_dist/2. +0.5,1.,r_cylinder))
-    push!(_cyl,(goal_dist/2. +0.5,-1.,r_cylinder))
+    if obs
+        r_cylinder = 0.5
+        goal_dist = 6.0
+        _cyl = []
+        push!(_cyl,(goal_dist/2.,1.,r_cylinder))
+        push!(_cyl,(goal_dist/2.,-1.,r_cylinder))
+        push!(_cyl,(goal_dist/2. -0.5,1.,r_cylinder))
+        push!(_cyl,(goal_dist/2. -0.5,-1.,r_cylinder))
+        push!(_cyl,(goal_dist/2. +0.5,1.,r_cylinder))
+        push!(_cyl,(goal_dist/2. +0.5,-1.,r_cylinder))
+        addcylinders!(vis,_cyl,3.)
+    end
+
 
     num_lift = length(prob_lift)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
@@ -69,7 +73,6 @@ function visualize_quadrotor_lift_system(vis, probs, n_slack=3)
     end
     setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,r_load)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
 
-    addcylinders!(vis,_cyl,3.)
 
     anim = MeshCat.Animation(convert(Int,floor(1/prob_lift[1].dt)))
     for k = 1:prob_lift[1].N

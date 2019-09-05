@@ -94,7 +94,8 @@ function solve_admm_1slack_dist(probs, prob_load, parallel, opts, n_slack=3)
 
 	prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt)
 
-	for ii = 1:10
+	max_iters = 10
+	for ii = 1:max_iters
         # Solve each AL lift problem
 		@info "Solving AL lift problems..."
 		if parallel

@@ -39,7 +39,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
     return x_lift
 end
 
-function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
+function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false, obs=true)
 
 
     # Params
@@ -121,7 +121,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
 
     # Control limits
     u_min_lift = [0,0,0,0,-Inf]
-    u_max_lift = ones(m_lift)*12/4
+    u_max_lift = ones(m_lift)*19/4
     u_max_lift[end] = Inf
 
     x_min_lift = -Inf*ones(n_lift)
@@ -210,22 +210,29 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
         obj_load = LQRObjective(Q_load,R_load,Qf_load,xloadf,N,uload)
         Q_mid_load = Diagonal(q_load_mid)
         cost_mid_load = LQRCost(Q_mid_load,R_load,xloadm,uloadm)
-        obj_load.cost[Nmid] = cost_mid_load
-
+        if obs
+            obj_load.cost[Nmid] = cost_mid_load
+        end
         # Constraints
         obs_load = Constraint{Inequality}(cI_cylinder_load,n_load,m_load,length(_cyl),:obs_load)
         bnd_load = BoundConstraint(n_load,m_load, x_min=x_min_load, u_min=u_min_load)
         constraints_load = Constraints(N)
         for k = 2:N-1
-            constraints_load[k] += bnd_load + obs_load
+            constraints_load[k] += bnd_load
+            if obs
+                constraints_load[k] += obs_load
+            end
         end
-        constraints_load[N] += goal_constraint(xloadf) + bnd_load + obs_load
+        constraints_load[N] += goal_constraint(xloadf) + bnd_load
+        if obs
+            constraints_load[N] += obs_load
+        end
 
         # Initial controls
         U0_load = [uload for k = 1:N-1]
 
         # Create problem
-        prob_load = Problem(gen_load_model_initial(xload0,xlift0),
+        prob_load = Problem(gen_load_model_initial(xload0,xlift0,load_params),
             obj_load,
             U0_load,
             integration=:midpoint,
@@ -243,10 +250,12 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
         Qf_lift = Diagonal(qf_lift)
         obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
 
-        Q_mid_lift = Diagonal(q_lift_mid)
-        cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
-        for i = 1:num_lift
-            obj_lift[i].cost[Nmid] = cost_mid_lift[i]
+        if obs
+            Q_mid_lift = Diagonal(q_lift_mid)
+            cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
+            for i = 1:num_lift
+                obj_lift[i].cost[Nmid] = cost_mid_lift[i]
+            end
         end
 
 
@@ -259,7 +268,10 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
             con = Constraints(N)
             # con[1] += bnd1
             for k = 1:N
-                con[k] += bnd_lift + obs_lift
+                con[k] += bnd_lift
+                if obs
+                    con[k] += obs_lift
+                end
             end
             push!(constraints_lift,copy(con))
         end
@@ -269,7 +281,7 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
 
         # Create problem
         i = agent
-        prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i]),
+        prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i],quad_params),
             obj_lift[i],
             U0_lift[i],
             integration=:midpoint,
@@ -293,7 +305,6 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
         x0 = vcat(xlift0...,xload0)
         xf = vcat(xliftf...,xloadf)
 
-
         # objective costs
         Q = Diagonal([repeat(q_lift, num_lift); q_load])
         R = Diagonal([repeat(r_lift, num_lift); r_load])
@@ -304,19 +315,19 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
         obj = LQRObjective(Q,R,Qf,xf,N,u0)
 
         # Midpoint
-        xm = vcat(xliftmid...,xloadm)
-        um = vcat(uliftm...,uloadm)
-        Q_mid = Diagonal([repeat(q_lift_mid, num_lift); q_load_mid])
-        cost_mid = LQRCost(Q_mid,R,xm,um)
-        obj.cost[Nmid] = cost_mid
-
+        if obs
+            xm = vcat(xliftmid...,xloadm)
+            um = vcat(uliftm...,uloadm)
+            Q_mid = Diagonal([repeat(q_lift_mid, num_lift); q_load_mid])
+            cost_mid = LQRCost(Q_mid,R,xm,um)
+            obj.cost[Nmid] = cost_mid
+        end
         # Bound Constraints
         u_l = [repeat(u_min_lift, num_lift); u_min_load]
         u_u = [repeat(u_max_lift, num_lift); u_max_load]
         x_l = [repeat(x_min_lift, num_lift); x_min_load]
         x_u = [repeat(x_max_lift, num_lift); x_max_load]
         bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u, x_min=x_l, x_max=x_u)
-
 
         # Constraints
         cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
@@ -327,9 +338,15 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
 
         con = Constraints(N)
         for k = 1:N-1
-            con[k] += dist_con + for_con + bnd + col_con + cyl
+            con[k] += dist_con + for_con + bnd + col_con
+            if obs
+                con[k] += cyl
+            end
         end
         con[N] +=  goal + col_con  + dist_con
+        if obs
+            con[N] += cyl
+        end
 
         # Create problem
         prob = Problem(model_batch, obj, constraints=con,
@@ -342,7 +359,6 @@ function gen_prob(agent, quad_params, load_params; num_lift=3, N=51, quat=false)
 
         prob
     end
-
 
 end
 

@@ -50,10 +50,10 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 quat = true
 probs, prob_load = init_dist(quat=quat);
-@time sol, sol_solvers, xx = solve_admm(probs, prob_load, true, opts_al);
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al);
 
 if false
-@btime solve_admm($probs, $prob_load, $true, $opts_al);
+@btime solve_admm($probs, $prob_load, $quad_params, $load_params, $true, $opts_al);
 
 
 X_cache, U_cache, X_lift, U_lift = init_cache(prob_load, probs);

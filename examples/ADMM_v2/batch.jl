@@ -60,7 +60,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-prob = gen_prob(:batch, quad_params, load_params, quat=true)
+prob = gen_prob(:batch, quad_params, load_params, quat=true, obs=true)
 # prob = gen_prob_all(quad_params, load_params, agent=:batch)
 
 # @btime solve($prob,$opts_al)
