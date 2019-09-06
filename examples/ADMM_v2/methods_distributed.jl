@@ -6,9 +6,9 @@ function solve_admm(probs0::DArray, prob_load0::Problem, quad_params, load_param
 	solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack)
 end
 
-function copy_probs(probs::DArray)
-    probs2 = ddata(T=eltype(probs))
-    @sync for w in workers()
+function copy_probs(probs::DArray,num_lift=length(probs))
+    probs2 = ddata(T=eltype(probs),pids=workers()[1:num_lift])
+    @sync for w in workers()[1:num_lift]
         @spawnat w probs2[:L] = copy(probs[:L])
     end
     return probs2
@@ -17,7 +17,7 @@ end
 function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack=3)
 	num_lift = length(probs)
 
-	quat = all(fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in workers()[1:num_lift]]))
+	quat = fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in workers()[1:num_lift]])[1]
 	N = prob_load.N; dt = prob_load.dt
 
     # Problem dimensions
@@ -43,8 +43,8 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
     X_traj = [[prob_load.X]; X_lift]
     U_traj = [[prob_load.U]; U_lift]
 
-    X_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    U_cache = ddata(T=Vector{Vector{Vector{Float64}}});
+    X_cache = ddata(T=Vector{Vector{Vector{Float64}}},pids=workers()[1:num_lift]);
+    U_cache = ddata(T=Vector{Vector{Vector{Float64}}},pids=workers()[1:num_lift]);
     @sync for w in workers()[1:num_lift]
         @spawnat w begin
             X_cache[:L] = X_traj
@@ -81,7 +81,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
         @spawnat w update_lift!(probs[:L], agent, X_cache[:L][2:4], X_cache[:L][1], U_cache[:L][1], d[agent])
 	end
 
-	solvers_al = ddata(T=AugmentedLagrangianSolver{Float64});
+	solvers_al = ddata(T=AugmentedLagrangianSolver{Float64},pids=workers()[1:num_lift]);
     @sync for w in workers()[1:num_lift]
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
@@ -179,8 +179,8 @@ function init_cache(prob_load::Problem, probs::DArray)
     X_traj = [[prob_load.X]; X_lift]
     U_traj = [[prob_load.U]; U_lift]
 
-    X_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    U_cache = ddata(T=Vector{Vector{Vector{Float64}}});
+    X_cache = ddata(T=Vector{Vector{Vector{Float64}}},pids=workers()[1:num_lift]);
+    U_cache = ddata(T=Vector{Vector{Vector{Float64}}},pids=workers()[1:num_lift]);
     @sync for w in workers()[1:num_lift]
         @spawnat w begin
             X_cache[:L] = X_traj
@@ -200,7 +200,7 @@ end
 function trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts)
 	prob_lift, prob_load = trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts)
 
-	probs = ddata(T=Problem{Float64,Discrete});
+	probs = ddata(T=Problem{Float64,Discrete},pids=workers()[1:num_lift]);
 	@sync for (j,w) in enumerate(workers()[1:num_lift])
 		@spawnat w probs[:L] = prob_lift[j]
 	end

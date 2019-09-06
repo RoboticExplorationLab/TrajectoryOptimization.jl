@@ -1,13 +1,12 @@
 using Random
-using Distributions
 using Logging
 using Distributed
 using DistributedArrays
 using TimerOutputs
 using BenchmarkTools
 
-if nworkers() != 3
-	addprocs(3,exeflags="--project=$(@__DIR__)")
+if nworkers() != 15
+	addprocs(15,exeflags="--project=$(@__DIR__)")
 end
 import TrajectoryOptimization: Discrete
 
@@ -39,26 +38,42 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-num_lift = 3
 quat = true
 parallel = true
 r0_load = [0, 0, 0.25]
-prob_lift, prob_load = trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts_al);
+t_cache = []
+# num_lift_cache = collect(3:4)
+# include("visualization.jl")
+# vis = Visualizer()
+# open(vis)
+num_lift = 4
 
-@time sol, sol_solver, sol_x = solve_admm(prob_lift, prob_load, quad_params,
+prob_lift, prob_load = trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts_al);
+wait.([@spawnat w reset_control_reference!(prob_lift[:L]) for w in workers()[1:num_lift]])
+@time solve_admm(prob_lift, prob_load, quad_params,
     load_params, parallel, opts_al);
 
+copy_probs(prob_lift);
 
-include("visualization.jl")
-vis = Visualizer()
-open(vis)
-visualize_quadrotor_lift_system(vis, sol,false)
+for num_lift = 3:4
 
+	# prob_lift, prob_load = trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts_al);
+	# wait.([@spawnat w reset_control_reference!(prob_lift[:L]) for w in workers()[1:num_lift]])
+	# @time solve_admm(prob_lift, prob_load, quad_params,
+	#     load_params, parallel, opts_al);
 
+	prob_lift, prob_load = trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts_al);
+	t = @elapsed begin
+		wait.([@spawnat w reset_control_reference!(prob_lift[:L]) for w in workers()[1:num_lift]])
+		solve_admm(prob_lift, prob_load, quad_params,
+	    load_params, parallel, opts_al);
+	end
+	push!(t_cache,t)
 
+	# visualize_quadrotor_lift_system(vis, sol,false)
+end
 
-
-
+t_cache
 using Plots
 plot(n,tb)
 plot!(n,tp,xlabel="number of lift agents",ylabel="time (s)")
@@ -67,8 +82,6 @@ using PGFPlots
 const PGF = PGFPlots
 
 
-tb = [1.355, 3.709, 5.165, 10.572, 11.565]
-tp = [.717, .809, .895, 1.042, 1.148]
 
 _tb = PGF.Plots.Linear(n,tb,mark="o",style="color=orange, thick")
 _tp = PGF.Plots.Linear(n,tp,mark="o",style="color=blue, thick")
