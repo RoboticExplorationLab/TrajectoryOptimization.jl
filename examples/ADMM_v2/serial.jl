@@ -29,10 +29,10 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 
 
-num_lift = 3
+num_lift = 4
 quat = true
 r0_load = [0, 0, 0.25]
-scenario = :doorway
+scenario = :p2p
 prob_load = gen_prob(:load, quad_params, load_params, r0_load,
     num_lift=num_lift, quat=quat, scenario=scenario)
 prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
@@ -44,14 +44,11 @@ Q = prob_lift[1].obj[51].Q
 
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
 # prob_lift, prob_load = trim_conditions(num_lift, r0_load, quad_params, load_params, quat, opts_al)
+reset_control_reference!.(prob_lift)
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
     load_params, :parallel, opts_al, max_iters=3)
 @btime begin
-    for k = 1:prob_load.N-1
-        for i = 1:num_lift
-            prob_lift[i].obj[k].r[5] = 0
-        end
-    end
+    reset_control_reference!.($prob_lift)
     solve_admm($prob_lift, $prob_load, $quad_params,
         $load_params, :sequential, $opts_al, max_iters=3)
 end
