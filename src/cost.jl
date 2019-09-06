@@ -121,10 +121,10 @@ mutable struct QuadraticCost{T} <: CostFunction
         if !isposdef(R)
             @warn "R is not positive definite"
         end
-        if !ispossemidef(Q)
-            err = ArgumentError("Q must be positive semi-definite")
-            throw(err)
-        end
+        # if !ispossemidef(Q)
+        #     err = ArgumentError("Q must be positive semi-definite")
+        #     throw(err)
+        # end
 
         new{T}(Q,R,H,q,r,c)
     end

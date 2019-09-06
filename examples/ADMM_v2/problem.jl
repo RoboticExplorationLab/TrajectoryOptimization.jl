@@ -283,17 +283,27 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
         u0[end] = 0
 
+        # Model
+        model = gen_lift_model_initial(xload0,xlift0[agent],quad_params,quat)
+
         # Objective
         Q_lift = Diagonal(q_lift)
         R_lift = Diagonal(r_lift)
         Qf_lift = Diagonal(qf_lift)
-        obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,u0) for i = 1:num_lift]
+        if quat
+            Gf = TO.state_diff_jacobian(model, xliftf[agent])
+            q_diag = diag(Q_lift)[1:n_lift .!= 4]
+            Q_lift = Gf'*Diagonal(q_diag)*Gf
+            qf_diag = diag(Q_lift)[1:n_lift .!= 4]
+            Qf_lift = Gf'*Diagonal(qf_diag)*Gf
+        end
+        obj_lift = LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[agent],N,u0)
 
         if obs
             Q_mid_lift = Diagonal(q_lift_mid)
-            cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],u0) for i = 1:num_lift]
+            cost_mid_lift = LQRCost(Q_mid_lift,R_lift,xliftmid[agent],u0)
             for i = 1:num_lift
-                obj_lift[i].cost[Nmid] = cost_mid_lift[i]
+                obj_lift.cost[Nmid] = cost_mid_lift
             end
         end
 
@@ -302,17 +312,12 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         bnd_lift = BoundConstraint(n_lift,m_lift,u_min=u_min_lift,u_max=u_max_lift,x_min=x_min_lift,x_max=x_max_lift)
         obs_lift = Constraint{Inequality}(cI_cylinder_lift,n_lift,m_lift,length(_cyl),:obs_lift)
 
-        constraints_lift = []
-        for i = 1:num_lift
-            con = Constraints(N)
-            # con[1] += bnd1
-            for k = 1:N
-                con[k] += bnd_lift
-                if obs
-                    con[k] += obs_lift
-                end
+        con = Constraints(N)
+        for k = 1:N
+            con[k] += bnd_lift
+            if obs
+                con[k] += obs_lift
             end
-            push!(constraints_lift,copy(con))
         end
 
         # Initial controls
@@ -322,11 +327,11 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
         # Create problem
         i = agent
-        prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i],quad_params,quat),
-            obj_lift[i],
+        prob_lift = Problem(model,
+            obj_lift,
             U0,
             integration=:midpoint,
-            constraints=constraints_lift[i],
+            constraints=con,
             x0=xlift0[i],
             xf=xliftf[i],
             N=N,
