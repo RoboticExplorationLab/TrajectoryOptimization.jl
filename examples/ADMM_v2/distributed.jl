@@ -24,12 +24,12 @@ const TO = TrajectoryOptimization
 @everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
 @everywhere include(joinpath(dirname(@__FILE__),"models.jl"))
 
-function init_dist(;quat=false)
+function init_dist(;quat=false, scenario=:doorway)
 	probs = ddata(T=Problem{Float64,Discrete});
 	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, quat=quat)
+		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, quat=quat, scenario=scenario)
 	end
-	prob_load = gen_prob(:load, quad_params, load_params, quat=quat)
+	prob_load = gen_prob(:load, quad_params, load_params, quat=quat, scenario=scenario)
 
 	return probs, prob_load
 end
@@ -48,13 +48,19 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-quat = true
-obs = true
-probs, prob_load = init_dist(quat=quat);
-@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, obs, opts_al);
+quat = false
+scenario = :doorway
+probs, prob_load = init_dist(quat=quat, scenario=scenario);
+wait.([@spawnat w reset_control_reference!(probs[:L]) for w in workers()])
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al);
 
-if false
+@btime begin
+	wait.([@spawnat w reset_control_reference!(probs[:L]) for w in workers()])
+	@time solve_admm($probs, $prob_load, $quad_params, $load_params, true, $opts_al);
+end
+
 @btime solve_admm($probs, $prob_load, $quad_params, $load_params, $true, $opts_al);
+if false
 
 
 X_cache, U_cache, X_lift, U_lift = init_cache(prob_load, probs);
