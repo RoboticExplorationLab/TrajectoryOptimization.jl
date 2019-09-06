@@ -61,7 +61,14 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     # tf = 10.0  # sec
     goal_dist = 6.0  # m
     d = 1.55   # rope length (m)
+
     r_config = 1.2  # radius of initial configuration
+
+    if num_lift > 6
+        d *= 2.5
+        r_config *= 2.5
+    end
+
     β = deg2rad(50)  # fan angle (radians)
     Nmid = convert(Int,floor(N/2))+1
     r_cylinder = 0.5
@@ -96,7 +103,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
-    if num_lift == 3
+    if num_lift == 3 && agent != :batch
         for i = 1:num_lift
             xlift0[i][4:7] = q_lift_static[i]
             xliftf[i][4:7] = q_lift_static[i]
@@ -122,7 +129,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ INITIAL CONTROLS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Initial controls
-    if num_lift != 3
+    if !(num_lift == 3 && scenario == :doorway)
         ulift, uload = calc_static_forces(α, quad_params.m, mass_load, num_lift)
     end
 
@@ -149,7 +156,8 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     x_min_lift = -Inf*ones(n_lift)
     x_min_lift[3] = 0
     x_max_lift = Inf*ones(n_lift)
-    x_max_lift[3] = ceiling
+
+
 
     u_min_load = zeros(num_lift)
     u_max_load = ones(m_load)*Inf
@@ -157,7 +165,11 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     x_min_load = -Inf*ones(n_load)
     x_min_load[3] = 0
     x_max_load = Inf*ones(n_load)
-    x_max_load[3] = ceiling
+
+    if scenario == :doorway
+        x_max_lift[3] = ceiling
+        x_max_load[3] = ceiling
+    end
 
 
     # Obstacles

@@ -6,7 +6,7 @@ include("problem.jl")
 
 
 # Solver options
-verbose=false
+verbose=true
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=250)
@@ -24,7 +24,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 # Create Problem
 num_lift = 3
 obs = false
-quat = true
+quat = false
 r0_load = [0,0,0.25]
 prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=:doorway,num_lift=num_lift,quat=quat)
 
@@ -36,7 +36,7 @@ TO.findmax_violation(prob)
 
 vis = Visualizer()
 open(vis)
-visualize_batch(vis,prob,num_lift)
+visualize_batch(vis,prob,obs,num_lift)
 
 #=
 Notes:
