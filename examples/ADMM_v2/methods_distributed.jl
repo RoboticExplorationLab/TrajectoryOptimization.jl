@@ -15,8 +15,7 @@ function copy_probs(probs::DArray)
 end
 
 function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack=3)
-
-
+	quat = all(fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in workers()]))
 	N = prob_load.N; dt = prob_load.dt
 
     # Problem dimensions
@@ -86,7 +85,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
             probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
-			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params)
+			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params,quat)
         end
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
@@ -134,7 +133,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
             @spawnat w begin
                 X_cache[:L][1] .= prob_load.X
                 U_cache[:L][1] .= prob_load.U
-				probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params)
+				probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params,quat)
             end
 
         end

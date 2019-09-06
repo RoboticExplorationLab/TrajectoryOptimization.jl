@@ -1,3 +1,4 @@
+using Combinatorics
 include("models.jl")
 
 """
@@ -524,8 +525,8 @@ function door_obstacles(r_cylinder=0.5, x_door=3.0)
 
     push!(_cyl,(x_door, 1.,r_cylinder))
     push!(_cyl,(x_door,-1.,r_cylinder))
-    # push!(_cyl,(x_door-0.5, 1.,r_cylinder))
-    # push!(_cyl,(x_door-0.5,-1.,r_cylinder))
+    push!(_cyl,(x_door-0.5, 1.,r_cylinder))
+    push!(_cyl,(x_door-0.5,-1.,r_cylinder))
     # push!(_cyl,(x_door+0.5, 1.,r_cylinder))
     # push!(_cyl,(x_door+0.5,-1.,r_cylinder))
     return _cyl

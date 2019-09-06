@@ -22,7 +22,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-num_lift = 15
+num_lift = 3
 obs = false
 quat = true
 r0_load = [0,0,0.25]
