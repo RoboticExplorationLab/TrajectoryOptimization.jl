@@ -212,7 +212,7 @@ function gen_lift_model(X_load,N,dt,quad_params,quat=false)
         end
         info = Dict{Symbol,Any}()
         if quat
-            info[:quat] = [(4:7) .+ i for i in 0:n_lift:n_lift*num_lift-1]
+            info[:quat] = [4:7]
         end
         model_k = Model(quadrotor_lift_dynamics!,13,5,quad_params,info)
         push!(model,midpoint(model_k,dt))
