@@ -305,7 +305,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
         # Create problem
         i = agent
-        prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i],quad_params),
+        prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i],quad_params,quat),
             obj_lift[i],
             U0_lift[i],
             integration=:midpoint,
