@@ -268,15 +268,18 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
     elseif agent ∈ 1:num_lift
 
+        u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
+        u0[end] = 0
+
         # Objective
         Q_lift = Diagonal(q_lift)
         R_lift = Diagonal(r_lift)
         Qf_lift = Diagonal(qf_lift)
-        obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,ulift[i]) for i = 1:num_lift]
+        obj_lift = [LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[i],N,u0) for i = 1:num_lift]
 
         if obs
             Q_mid_lift = Diagonal(q_lift_mid)
-            cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],uliftm[i]) for i = 1:num_lift]
+            cost_mid_lift = [LQRCost(Q_mid_lift,R_lift,xliftmid[i],u0) for i = 1:num_lift]
             for i = 1:num_lift
                 obj_lift[i].cost[Nmid] = cost_mid_lift[i]
             end
@@ -302,12 +305,14 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
         # Initial controls
         U0_lift = [[ulift[i] for k = 1:N-1] for i = 1:num_lift]
+        U0 = [u0 for k = 1:N-1]
+        # U0 = U0_lift[agent]
 
         # Create problem
         i = agent
         prob_lift = Problem(gen_lift_model_initial(xload0,xlift0[i],quad_params,quat),
             obj_lift[i],
-            U0_lift[i],
+            U0,
             integration=:midpoint,
             constraints=constraints_lift[i],
             x0=xlift0[i],
