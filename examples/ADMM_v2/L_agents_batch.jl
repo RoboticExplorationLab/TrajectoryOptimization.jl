@@ -1,11 +1,13 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
 const TO = TrajectoryOptimization
+using BenchmarkTools
+
 include("visualization.jl")
 include("problem.jl")
 include("methods.jl")
 
 # Solver options
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=250)
@@ -21,24 +23,22 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-num_lift = 5
 obs = false
 quat= false
 r0_load = [0, 0, 0.25]
-prob = trim_conditions_batch(num_lift,r0_load,quad_params,load_params,quat,opts_al)
 
-rollout!(prob)
-prob.x0
-# @btime solve($prob,$opts_al)
-@time solve!(prob,opts_al)
-# @btime solve($prob,$opts_al)
+num_lift = collect(3:4)
+timing = []
+for nn = 3:15
+    prob = trim_conditions_batch(nn,r0_load,quad_params,load_params,quat,opts_al)
+    solve(prob,opts_al)
+    t = @belapsed solve($prob,$opts_al)
+    push!(timing,t)
+end
 
-max_violation(prob)
-TO.findmax_violation(prob)
-
-vis = Visualizer()
-open(vis)
-visualize_batch(vis,prob,false,num_lift)
+# vis = Visualizer()
+# open(vis)
+# visualize_batch(vis,sol,obs,num_lift)
 
 #=
 Notes:

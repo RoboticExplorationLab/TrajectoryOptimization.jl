@@ -9,6 +9,7 @@ using ForwardDiff
 using Combinatorics
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
+using BenchmarkTools
 
 include("problem.jl")
 include("methods.jl")
@@ -36,9 +37,8 @@ prob_lift, prob_load = trim_conditions(num_lift,r0_load,quad_params,load_params,
 
 # visualize_quadrotor_lift_system(vis, [[prob_load]; prob_lift])
 
-
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
-    load_params, :sequential, opts_al, max_iters=10)
+    load_params, :parallel, opts_al, max_iters=10)
 
 
 include("visualization.jl")
