@@ -324,3 +324,53 @@ function update_load!(prob_load,X_lift,U_lift,d,n_slack=3)
         prob_load.constraints[k] += cable_load[k]
     end
 end
+
+function trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts)
+    scenario = :hover
+    prob_load_trim = gen_prob(:load, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+    prob_lift_trim = [gen_prob(i, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+
+    lift_trim, load_trim, slift_al, sload_al = solve_admm(prob_lift_trim, prob_load_trim, quad_params,
+            load_params, :sequential, opts_al, max_iters=5)
+
+    scenario = :p2p
+    prob_load = gen_prob(:load, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+
+    initial_controls!(prob_load,[load_trim.U[end] for k = 1:prob_load.N])
+    # rollout!(prob_load)
+    prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+
+    for i = 1:num_lift
+        prob_lift[i].x0[4:7] = lift_trim[i].X[end][4:7]
+        prob_lift[i].xf[4:7] = lift_trim[i].X[end][4:7]
+        initial_controls!(prob_lift[i],[lift_trim[i].U[end] for k = 1:prob_lift[i].N])
+        # rollout!(prob_lift[i])
+    end
+
+    return prob_lift, prob_load
+end
+
+function trim_conditions_batch(num_lift,r0_load,quad_params,load_params,quat,opts)
+    scenario = :hover
+    prob_batch_trim = gen_prob(:batch, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+
+	trim, trim_solver = solve(prob_batch_trim,opts)
+
+    scenario = :p2p
+    prob_batch = gen_prob(:batch, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+	#
+    initial_controls!(prob_batch,[trim.U[end] for k = 1:prob_batch.N-1])
+
+    for i = 1:num_lift
+        prob_batch.x0[(i-1)*13 .+ (4:7)] = trim.X[end][(i-1)*13 .+ (4:7)]
+        prob_batch.xf[(i-1)*13 .+ (4:7)] = trim.X[end][(i-1)*13 .+ (4:7)]
+    end
+
+    return prob_batch
+end

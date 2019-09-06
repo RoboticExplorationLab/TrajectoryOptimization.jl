@@ -351,14 +351,20 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         u_u = [repeat(u_max_lift, num_lift); u_max_load]
         x_l = [repeat(x_min_lift, num_lift); x_min_load]
         x_u = [repeat(x_max_lift, num_lift); x_max_load]
+        x_l_N = copy(x_l)
+        x_u_N = copy(x_u)
+        x_l_N[end-(n_load-1):end] = [rf_load;zeros(3)]
+        x_u_N[end-(n_load-1):end] = [rf_load;zeros(3)]
+
         bnd = BoundConstraint(n_batch,m_batch,u_min=u_l,u_max=u_u, x_min=x_l, x_max=x_u)
+        bndN = BoundConstraint(n_batch,m_batch,x_min=x_l_N,x_max=x_u_N)
 
         # Constraints
         cyl = Constraint{Inequality}(cI_cylinder,n_batch,m_batch,(num_lift+1)*length(_cyl),:cyl)
         dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch, num_lift, :distance)
         for_con = Constraint{Equality}(force_constraint,n_batch,m_batch, num_lift, :force)
         col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, binomial(num_lift, 2), :collision)
-        goal = goal_constraint(xf)
+        # goal = goal_constraint(xf)
 
         con = Constraints(N)
         for k = 1:N-1
@@ -367,7 +373,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
                 con[k] += cyl
             end
         end
-        con[N] +=  goal + col_con  + dist_con
+        con[N] +=  col_con  + dist_con + bndN
         if obs
             con[N] += cyl
         end
