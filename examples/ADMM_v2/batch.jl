@@ -6,7 +6,6 @@ include("problem.jl")
 include("methods.jl")
 
 
-
 # Solver options
 verbose=true
 

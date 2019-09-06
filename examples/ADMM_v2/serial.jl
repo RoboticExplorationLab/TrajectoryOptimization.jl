@@ -29,17 +29,21 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 
 
-num_lift = 4
+num_lift = 3
 quat = true
 r0_load = [0, 0, 0.25]
-scenario = :p2p
+scenario = :doorway
 prob_load = gen_prob(:load, quad_params, load_params, r0_load,
     num_lift=num_lift, quat=quat, scenario=scenario)
 prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
     num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
 
+TO.state_diff_jacobian(prob_lift[1].model, prob_lift[1].xf)
+Q_quat = prob_lift[1].obj[51].Q
+Q = prob_lift[1].obj[51].Q
+
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
-prob_lift, prob_load = trim_conditions(num_lift, r0_load, quad_params, load_params, quat, opts_al)
+# prob_lift, prob_load = trim_conditions(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
     load_params, :parallel, opts_al, max_iters=3)
 @btime solve_admm($prob_lift, $prob_load, $quad_params,
