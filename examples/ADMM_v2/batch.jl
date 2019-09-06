@@ -1,4 +1,5 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
+using Combinatorics
 const TO = TrajectoryOptimization
 include("visualization.jl")
 include("problem.jl")
@@ -7,7 +8,7 @@ include("methods.jl")
 
 
 # Solver options
-verbose=false
+verbose=true
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=50)
@@ -24,7 +25,6 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 # Create Problem
 num_lift = 3
-obs = true
 quat = true
 r0_load = [0,0,0.25]
 scenario = :doorway
@@ -35,10 +35,7 @@ TO.has_quat(prob.model)
 prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 @time solve(prob,opts_al)
 @time solve!(prob, opts_al)
-visualize_batch(vis,prob,obs,num_lift)
-
-max_violation(prob)
-TO.findmax_violation(prob)
+visualize_batch(vis,prob,true,num_lift)
 
 vis = Visualizer()
 open(vis)
