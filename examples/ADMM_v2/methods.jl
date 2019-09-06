@@ -339,7 +339,7 @@ function trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts)
         num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
 
     lift_trim, load_trim, slift_al, sload_al = solve_admm(prob_lift_trim, prob_load_trim, quad_params,
-            load_params, :sequential, opts_al, max_iters=5)
+            load_params, :sequential, opts, max_iters=5)
 
     scenario = :p2p
     prob_load = gen_prob(:load, quad_params, load_params, r0_load,

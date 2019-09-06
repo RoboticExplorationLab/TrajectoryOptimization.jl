@@ -15,11 +15,12 @@ function copy_probs(probs::DArray)
 end
 
 function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, n_slack=3)
-	quat = all(fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in workers()]))
+	num_lift = length(probs)
+
+	quat = all(fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in workers()[1:num_lift]]))
 	N = prob_load.N; dt = prob_load.dt
 
     # Problem dimensions
-    num_lift = length(probs)
     # n_lift = 13
     # m_lift = 5
     # n_load = prob_load.model.n
@@ -27,32 +28,32 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 
     # Calculate cable lengths based on initial configuration
 	x0_load = prob_load.x0
-    x0_lift = fetch.([@spawnat w probs[:L].x0 for w in workers()])
+    x0_lift = fetch.([@spawnat w probs[:L].x0 for w in workers()[1:num_lift]])
     d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
 
 	@info "Pre-system solve"
-    futures = [@spawnat w solve!(probs[:L], opts_al) for w in workers()]
+    futures = [@spawnat w solve!(probs[:L], opts_al) for w in workers()[1:num_lift]]
     solve!(prob_load, opts)
     wait.(futures)
 
 	@info "System solve"
 	# Initialize state and control caches
-    X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
-    U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])
+    X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()[1:num_lift]])
+    U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()[1:num_lift]])
     X_traj = [[prob_load.X]; X_lift]
     U_traj = [[prob_load.U]; U_lift]
 
     X_cache = ddata(T=Vector{Vector{Vector{Float64}}});
     U_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    @sync for w in workers()
+    @sync for w in workers()[1:num_lift]
         @spawnat w begin
             X_cache[:L] = X_traj
             U_cache[:L] = U_traj
         end
     end
 
-    X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
-    U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
+    X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()[1:num_lift]])
+    U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()[1:num_lift]])
     for i = 1:num_lift
         X_lift[i] .= X_lift0[i]
         U_lift[i] .= U_lift0[i]
@@ -62,7 +63,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 	update_load!(prob_load,X_lift,U_lift,d)
 
     # Send trajectories
-    @sync for w in workers()
+    @sync for w in workers()[1:num_lift]
         for i = 2:(num_lift+1)
             @spawnat w begin
                 X_cache[:L][i] .= X_lift0[i-1]
@@ -76,12 +77,12 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
     end
 
     # Update lift problems
-    @sync for (agent,w) in enumerate(workers())
+    @sync for (agent,w) in enumerate(workers()[1:num_lift])
         @spawnat w update_lift!(probs[:L], agent, X_cache[:L][2:4], X_cache[:L][1], U_cache[:L][1], d[agent])
 	end
 
 	solvers_al = ddata(T=AugmentedLagrangianSolver{Float64});
-    @sync for w in workers()
+    @sync for w in workers()[1:num_lift]
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
             probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
@@ -98,18 +99,18 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
         # Solve each AL lift problem
 		@info "Solving AL lift problems..."
 		if parallel
-        	future = [@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()]
+        	future = [@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]) for w in workers()[1:num_lift]]
         	wait.(future)
 
 			# Get Trajectories
-			X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()])
-			U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()])
+			X_lift0 = fetch.([@spawnat w probs[:L].X for w in workers()[1:num_lift]])
+			U_lift0 = fetch.([@spawnat w probs[:L].U for w in workers()[1:num_lift]])
 			for i = 1:num_lift
 				X_lift[i] .= X_lift0[i]
 				U_lift[i] .= U_lift0[i]
 			end
 		else
-			for (i,w) in enumerate(workers())
+			for (i,w) in enumerate(workers()[1:num_lift])
 				wait(@spawnat w TO.solve_aula!(probs[:L], solvers_al[:L]))
 				X_lift[i] .= fetch(@spawnat w probs[:L].X)
 				U_lift[i] .= fetch(@spawnat w probs[:L].U)
@@ -123,7 +124,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 
         # Send trajectories
 		@info "Sending trajectories back..."
-        @sync for w in workers()
+        @sync for w in workers()[1:num_lift]
             for i = 2:(num_lift+1)
                 @spawnat w begin
                     X_cache[:L][i] .= X_lift[i-1]
@@ -140,14 +141,14 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 
         # Update lift constraints prior to evaluating convergence
 		@info "Updating constraints"
-        @sync for w in workers()
+        @sync for w in workers()[1:num_lift]
             @spawnat w begin
                 TO.update_constraints!(probs[:L].obj.C, probs[:L].obj.constraints, probs[:L].X, probs[:L].U)
                 TO.update_active_set!(probs[:L].obj)
             end
         end
 
-        max_c = maximum(fetch.([@spawnat w max_violation(solvers_al[:L]) for w in workers()]))
+        max_c = maximum(fetch.([@spawnat w max_violation(solvers_al[:L]) for w in workers()[1:num_lift]]))
         max_c = max(max_c, max_violation(solver_load))
 		solver_load.stats[:iters_ADMM] = ii
 		solver_load.stats[:viol_ADMM] = max_c
@@ -159,7 +160,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 			@info "Solve failed to converge"
         end
     end
-	@sync for w in workers()
+	@sync for w in workers()[1:num_lift]
 		@spawnat w probs[:L] = update_problem(probs[:L], constraints=probs[:L].obj.constraints)
 	end
 
@@ -170,15 +171,17 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 end
 
 function init_cache(prob_load::Problem, probs::DArray)
+	num_lift = length(probs)
+
     # Initialize state and control caches
-    X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()])
-    U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()])
+    X_lift = fetch.([@spawnat w deepcopy(probs[:L].X) for w in workers()[1:num_lift]])
+    U_lift = fetch.([@spawnat w deepcopy(probs[:L].U) for w in workers()[1:num_lift]])
     X_traj = [[prob_load.X]; X_lift]
     U_traj = [[prob_load.U]; U_lift]
 
     X_cache = ddata(T=Vector{Vector{Vector{Float64}}});
     U_cache = ddata(T=Vector{Vector{Vector{Float64}}});
-    @sync for w in workers()
+    @sync for w in workers()[1:num_lift]
         @spawnat w begin
             X_cache[:L] = X_traj
             U_cache[:L] = U_traj
@@ -189,6 +192,18 @@ end
 
 combine_problems(prob_load, probs::Vector) = [[prob_load]; probs]
 function combine_problems(prob_load, probs::DArray)
-    problems = fetch.([@spawnat w probs[:L] for w in workers()])
+	num_lift = length(probs)
+    problems = fetch.([@spawnat w probs[:L] for w in workers()[1:num_lift]])
     combine_problems(prob_load, problems)
+end
+
+function trim_conditions_dist(num_lift,r0_load,quad_params,load_params,quat,opts)
+	prob_lift, prob_load = trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts)
+
+	probs = ddata(T=Problem{Float64,Discrete});
+	@sync for (j,w) in enumerate(workers()[1:num_lift])
+		@spawnat w probs[:L] = prob_lift[j]
+	end
+
+    return probs, prob_load
 end
