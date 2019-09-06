@@ -6,10 +6,10 @@ include("problem.jl")
 
 
 # Solver options
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
-      iterations=250)
+      iterations=50)
 
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr,
@@ -22,24 +22,28 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-num_lift = 3
+num_lift = 15
 obs = false
-quat = false
+quat = true
 r0_load = [0,0,0.25]
-prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=:doorway,num_lift=num_lift,quat=quat)
+scenario = :p2p
+prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario,num_lift=num_lift,quat=quat)
+TO.has_quat(prob.model)
 
 # @btime solve($prob,$opts_al)
-@time solve!(prob,opts_al)
+prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
+@time solve(prob,opts_al)
+@time solve!(prob, opts_al)
+visualize_batch(vis,prob,obs,num_lift)
 
 max_violation(prob)
 TO.findmax_violation(prob)
 
 vis = Visualizer()
 open(vis)
-visualize_batch(vis,prob,obs,num_lift)
 
 #=
 Notes:
-Fastest solve with midpoint cost = 10.0
-Smoothest solution with midpoint cost = 1.0
+N lift is faster with trim conditions
+Doorway is also faster with trim conditions
 =#

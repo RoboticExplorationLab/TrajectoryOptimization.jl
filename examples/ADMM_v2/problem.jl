@@ -210,8 +210,9 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     quad_pairs = combinations(1:num_lift, 2)
     function collision_constraint(c,x,u=zeros(m_batch))
         r_lift = [x[inds] for inds in r_inds]
-        for (i,j) in quad_pairs
-            circle_constraint(r_lift[i], r_lift[j][1], r_lift[j][2], 2*lift_radius)
+        for (p,pair) in enumerate(quad_pairs)
+            i,j = pair
+            c[p] = circle_constraint(r_lift[i], r_lift[j][1], r_lift[j][2], 2*lift_radius)
         end
         return nothing
     end
@@ -294,7 +295,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             Gf = TO.state_diff_jacobian(model, xliftf[agent])
             q_diag = diag(Q_lift)[1:n_lift .!= 4]
             Q_lift = Gf'*Diagonal(q_diag)*Gf
-            qf_diag = diag(Q_lift)[1:n_lift .!= 4]
+            qf_diag = diag(Qf_lift)[1:n_lift .!= 4]
             Qf_lift = Gf'*Diagonal(qf_diag)*Gf
         end
         obj_lift = LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[agent],N,u0)
@@ -338,6 +339,9 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             dt=dt)
 
     elseif agent == :batch
+        u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
+        u0[end] = 0
+        # ulift = [u0 for i = 1:num_lift]
 
         # Dynamics
         info = Dict{Symbol,Any}()
@@ -352,9 +356,21 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         xf = vcat(xliftf...,xloadf)
 
         # objective costs
-        Q = Diagonal([repeat(q_lift, num_lift); q_load])
         R = Diagonal([repeat(r_lift, num_lift); r_load])
-        Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
+        if quat && false
+            Gf = TO.state_diff_jacobian(model_batch, xf)
+            q_lift = q_lift[1:n_lift .!= 4]
+            qf_lift = q_lift[1:n_lift .!= 4]
+
+            Q = Diagonal([repeat(q_lift, num_lift); q_load])
+            Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
+
+            Q= Gf'*Diagonal(q_diag)*Gf
+            Qf= Gf'*Diagonal(qf_diag)*Gf
+        else
+            Q = Diagonal([repeat(q_lift, num_lift); q_load])
+            Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
+        end
 
         # Create objective
         u0 = vcat(ulift...,uload)
@@ -436,7 +452,7 @@ function quad_costs(n_lift, m_lift, scenario=:doorway)
         r_diag[end] = 1
 
         qf_diag = copy(q_diag)*10.0
-    elseif scenario == :p2p
+    elseif scenario == :p2pa
         q_diag = 1.0*ones(n_lift)
         q_diag[1] = 1e-5
         # q_diag[4:7] .*= 25.0
