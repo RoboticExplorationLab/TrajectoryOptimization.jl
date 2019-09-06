@@ -36,17 +36,21 @@ if worker_includes
 end
 worker_includes = false
 
-function init_dist(;quat=false)
+function init_dist(;num_lift=3, quat=false, scenario=:doorway)
 	probs = ddata(T=Problem{Float64,Discrete});
-	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, quat=quat)
+	@sync for (j,w) in enumerate(worker_quads(num_lift))
+		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params,
+			num_lift=num_lift, quat=quat, scenario=scenario)
 	end
-	prob_load = gen_prob(:load, quad_params, load_params, quat=quat)
+	prob_load = gen_prob(:load, quad_params, load_params,
+		num_lift=num_lift, quat=quat, scenario=scenario)
 
 	return probs, prob_load
 end
 
-function run_dist(quat)
+
+function run_dist(quat, benchmark=false)
+
     verbose = false
 
     opts_ilqr = iLQRSolverOptions(verbose=verbose,
@@ -61,11 +65,22 @@ function run_dist(quat)
         penalty_scaling=2.0,
         penalty_initial=10.)
 
-    probs, prob_load = init_dist(quat=quat);
-    @time sol, sol_solvers, xx = solve_admm(probs, prob_load, true, opts_al);
+    num_lift = 3
+    scenario = :doorway
+    probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario);
+    wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
+    @time out = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=1);
+
+    if benchmark
+        @btime begin
+	        wait.([@spawnat w reset_control_reference!(probs[:L]) for w in workers()])
+	        @time solve_admm($probs, $prob_load, $quad_params, $load_params, true, $opts_al);
+        end
+    end
+    return out
 end
 
-function run_serial(quat)
+function run_serial(quat, benchmark=false)
     verbose=false
 
     opts_ilqr = iLQRSolverOptions(verbose=false,
@@ -80,13 +95,28 @@ function run_serial(quat)
         penalty_scaling=2.0,
         penalty_initial=10.0)
 
+       
     num_lift = 3
-    prob_load = gen_prob(:load, quad_params, load_params, quat=quat)
-    prob_lift = [gen_prob(i, quad_params, load_params, quat=quat) for i = 1:3]
-    @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, :sequential, opts_al)
+    r0_load = [0, 0, 0.25]
+    scenario = :doorway
+    prob_load = gen_prob(:load, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+    prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+    reset_control_reference!.(prob_lift)
+    @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
+        load_params, :sequential, opts_al, max_iters=3)
+
+    if benchmark
+        @btime begin
+            reset_control_reference!.($prob_lift)
+            solve_admm($prob_lift, $prob_load, $quad_params,
+                $load_params, :sequential, $opts_al, max_iters=3)
+        end
+    end
 end
 
-function run_batch(quat)
+function run_batch(quat, benchmark=false)
     verbose=false
 
     opts_ilqr = iLQRSolverOptions(verbose=verbose,
@@ -105,8 +135,11 @@ function run_batch(quat)
     # Create Problem
     prob = gen_prob(:batch, quad_params, load_params, quat=quat)
     # prob = gen_prob_all(quad_params, load_params, agent=:batch)
-
-    # @btime solve($prob,$opts_al)
+    
+    if benchmark
+        @btime solve($prob,$opts_al)
+    end
     @time solve!(prob,opts_al)
+    return prob
 end
 

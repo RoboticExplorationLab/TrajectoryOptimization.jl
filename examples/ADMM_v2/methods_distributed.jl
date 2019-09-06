@@ -37,7 +37,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
     d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
 
 	@info "Pre-system solve"
-    futures = [@spawnat w solve!(probs[:L], opts_al) for w in worker_quads(num_lift)]
+    futures = [@spawnat w solve!(probs[:L], opts) for w in worker_quads(num_lift)]
     solve!(prob_load, opts)
     wait.(futures)
 
