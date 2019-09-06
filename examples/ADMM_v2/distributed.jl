@@ -49,8 +49,9 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 
 quat = true
+obs = true
 probs, prob_load = init_dist(quat=quat);
-@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al);
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, obs, opts_al);
 
 if false
 @btime solve_admm($probs, $prob_load, $quad_params, $load_params, $true, $opts_al);

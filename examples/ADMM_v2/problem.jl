@@ -1,3 +1,4 @@
+using Combinatorics
 include("models.jl")
 
 """
