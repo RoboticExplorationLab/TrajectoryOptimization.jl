@@ -1,53 +1,16 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
+using Combinatorics
 const TO = TrajectoryOptimization
-include(joinpath(dirname(@__FILE__),"../ADMM/visualization.jl"))
-include(joinpath(dirname(@__FILE__),"problem.jl"))
+include("visualization.jl")
+include("problem.jl")
+include("methods.jl")
 
-function visualize(vis,prob,num_lift=3)
-
-    # camera angle
-    # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
-    _cyl = door_obstacles()
-    addcylinders!(vis, _cyl, 2.1)
-    x0 = prob.x0
-    d = norm(x0[1:3] - x0[num_lift*13 .+ (1:3)])
-
-    # intialize system
-    traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
-    urdf_folder = joinpath(traj_folder, "dynamics","urdf")
-    obj = joinpath(urdf_folder, "quadrotor_base.obj")
-
-    quad_scaling = 0.085
-    robot_obj = FileIO.load(obj)
-    robot_obj.vertices .= robot_obj.vertices .* quad_scaling
-    for i = 1:num_lift
-        setobject!(vis["lift$i"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
-        cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d),convert(Float32,0.01))
-        setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
-    end
-    setobject!(vis["load"],HyperSphere(Point3f0(0), convert(Float32,0.2)) ,MeshPhongMaterial(color=RGBA(0, 1, 0, 1.0)))
-
-    anim = MeshCat.Animation(convert(Int,floor(1.0/prob.dt)))
-    for k = 1:prob.N
-        MeshCat.atframe(anim,vis,k) do frame
-            # cables
-            x_load = prob.X[k][3*13 .+ (1:3)]
-            for i = 1:num_lift
-                x_lift = prob.X[k][(i-1)*13 .+ (1:3)]
-                settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
-                settransform!(frame["lift$i"], Translation(x_lift...))
-            end
-            settransform!(frame["load"], Translation(x_load...))
-        end
-    end
-    MeshCat.setanimation!(vis,anim)
-end
 
 # Solver options
 verbose=false
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
-      iterations=250)
+      iterations=50)
 
 opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     opts_uncon=opts_ilqr,
@@ -60,22 +23,25 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 
 # Create Problem
-prob = gen_prob(:batch, quad_params, load_params, quat=true)
-# prob = gen_prob_all(quad_params, load_params, agent=:batch)
+num_lift = 3
+quat = true
+r0_load = [0,0,0.25]
+scenario = :doorway
+prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario,num_lift=num_lift,quat=quat)
+TO.has_quat(prob.model)
 
 # @btime solve($prob,$opts_al)
-@time solve!(prob,opts_al)
-@btime solve($prob,$opts_al)
-
-max_violation(prob)
-TO.findmax_violation(prob)
+prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
+@btime solve($prob, $opts_al)
+@time solver = solve!(prob, opts_al)
+visualize_batch(vis,prob,true,num_lift)
+solver.stats[:iterations]
 
 vis = Visualizer()
 open(vis)
-visualize(vis,prob)
 
 #=
 Notes:
-Fastest solve with midpoint cost = 10.0
-Smoothest solution with midpoint cost = 1.0
+N lift is faster with trim conditions
+Doorway is also faster with trim conditions
 =#

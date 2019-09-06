@@ -1,15 +1,17 @@
 
-function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, parallel, opts, n_slack=3)
+function solve_admm(probs0::Vector{<:Problem}, prob_load0::Problem, quad_params, load_params, parallel, opts; max_iters, n_slack=3)
 	probs = copy_probs(probs0)
 	prob_load = copy(prob_load0)
-	
-	solve_admm_1slack(probs, prob_load, parallel, opts, n_slack)
+
+	solve_admm_1slack(probs, prob_load, quad_params, load_params, parallel, opts, max_iters, n_slack)
 end
 
 copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 
-function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
+function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts, max_iters=3, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
+	quat = TO.has_quat(prob_lift[1].model)
+	@show quat
 
     # Problem dimensions
     num_lift = length(prob_lift)
@@ -21,17 +23,17 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
     # Calculate cable lengths based on initial configuration
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
-
     #~~~~~~~~~~~~~~~~~~~~ SOLVE INITIAL PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Solve the initial problems
+	@info "Initial solve"
     for i = 1:num_lift
         solve!(prob_lift[i],opts)
     end
     solve!(prob_load,opts)
 
-    # return [prob_load;prob_lift], 1, 1, 1
 
     #~~~~~~~~~~~~~~~~~~~~ UPDATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	@info "Update problems"
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
     U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
@@ -51,7 +53,7 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
-        prob.model = gen_lift_model(X_load,N,dt)
+        prob.model = gen_lift_model(X_load,N,dt,quad_params,quat)
 
         push!(solver_lift_al,solver)
         push!(prob_lift_al,prob)
@@ -59,11 +61,12 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
     solver_load_al = TO.AbstractSolver(prob_load,opts)
     prob_load_al = AugmentedLagrangianProblem(prob_load,solver_load_al)
-    prob_load_al.model = gen_load_model(X_lift,N,dt)
+    prob_load_al.model = gen_load_model(X_lift,N,dt,load_params)
 
     #~~~~~~~~~~~~~~~~~~~~ SOLVE ADMM ~~~~~~~~~~~~~~~~~~~~~~~~~~#
-    for ii = 1:opts.iterations
+    for ii = 1:max_iters
         # Solve lift agents
+		@info "Solve quads"
         for i = 1:num_lift
 
             TO.solve_aula!(prob_lift_al[i],solver_lift_al[i])
@@ -73,6 +76,7 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
+			@info "\tquad $i"
         end
 
         # Update constraints (parallel)
@@ -85,7 +89,8 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
 
         # Solve load
         # return prob_lift,prob_load,1,1
-        prob_load_al.model = gen_load_model(X_lift,N,dt)
+		@info "Solve load"
+        prob_load_al.model = gen_load_model(X_lift,N,dt,load_params)
         TO.solve_aula!(prob_load_al,solver_load_al)
 
         # Update constraints
@@ -93,7 +98,7 @@ function solve_admm_1slack(prob_lift, prob_load, admm_type, opts, n_slack=3)
         U_load .= prob_load_al.U
 
         for i = 1:num_lift
-            prob_lift_al[i].model = gen_lift_model(X_load,N,dt)
+            prob_lift_al[i].model = gen_lift_model(X_load,N,dt,quad_params,quat)
         end
 
         # Update lift constraints prior to evaluating convergence
@@ -301,8 +306,14 @@ function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3)
     r_lift = .275
     self_col = gen_self_collision_constraints(X_lift,i,n,m,.275,n_slack)
 
+    # Objective
+	r5 = prob_lift.obj[1].c  # had to stash it somewhere...
+
     # Add system constraints to problems
     for k = 1:N
+		if k < N
+			prob_lift.obj[k].r[5] = r5
+		end
         prob_lift.constraints[k] += cable_lift[k]
         prob_lift.constraints[k] += self_col[k]
     end
@@ -318,4 +329,54 @@ function update_load!(prob_load,X_lift,U_lift,d,n_slack=3)
     for k = 1:N
         prob_load.constraints[k] += cable_load[k]
     end
+end
+
+function trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts)
+    scenario = :hover
+    prob_load_trim = gen_prob(:load, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+    prob_lift_trim = [gen_prob(i, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+
+    lift_trim, load_trim, slift_al, sload_al = solve_admm(prob_lift_trim, prob_load_trim, quad_params,
+            load_params, :sequential, opts, max_iters=5)
+
+    scenario = :p2p
+    prob_load = gen_prob(:load, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+
+    initial_controls!(prob_load,[load_trim.U[end] for k = 1:prob_load.N])
+    # rollout!(prob_load)
+    prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+
+    for i = 1:num_lift
+        prob_lift[i].x0[4:7] = lift_trim[i].X[end][4:7]
+        prob_lift[i].xf[4:7] = lift_trim[i].X[end][4:7]
+        initial_controls!(prob_lift[i],[lift_trim[i].U[end] for k = 1:prob_lift[i].N])
+        # rollout!(prob_lift[i])
+    end
+
+    return prob_lift, prob_load
+end
+
+function trim_conditions_batch(num_lift,r0_load,quad_params,load_params,quat,opts)
+    scenario = :hover
+    prob_batch_trim = gen_prob(:batch, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+
+	trim, trim_solver = solve(prob_batch_trim,opts)
+
+    scenario = :p2p
+    prob_batch = gen_prob(:batch, quad_params, load_params, r0_load,
+        num_lift=num_lift, quat=quat, scenario=scenario)
+	#
+    initial_controls!(prob_batch,[trim.U[end] for k = 1:prob_batch.N-1])
+
+    for i = 1:num_lift
+        prob_batch.x0[(i-1)*13 .+ (4:7)] = trim.X[end][(i-1)*13 .+ (4:7)]
+        prob_batch.xf[(i-1)*13 .+ (4:7)] = trim.X[end][(i-1)*13 .+ (4:7)]
+    end
+
+    return prob_batch
 end
