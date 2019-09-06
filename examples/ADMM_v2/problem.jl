@@ -283,7 +283,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     elseif agent ∈ 1:num_lift
 
         u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
-        u0[end] = 0
+        u0[end] = 0 #ulift[1][end]
 
         # Model
         model = gen_lift_model_initial(xload0,xlift0[agent],quad_params,quat)
@@ -300,6 +300,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             Qf_lift = Gf'*Diagonal(qf_diag)*Gf
         end
         obj_lift = LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[agent],N,u0)
+        obj_lift[1].c = -ulift[1][end]*r_lift[end]
 
         if obs
             Q_mid_lift = Diagonal(q_lift_mid)
@@ -341,8 +342,9 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
     elseif agent == :batch
         u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
-        u0[end] = 0
-        # ulift = [u0 for i = 1:num_lift]
+        @show ulift[1][end]
+        u0[end] = ulift[1][end]
+        ulift = [u0 for i = 1:num_lift]
 
         # Dynamics
         info = Dict{Symbol,Any}()
@@ -358,16 +360,16 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
         # objective costs
         R = Diagonal([repeat(r_lift, num_lift); r_load])
-        if quat && false
+        if quat
             Gf = TO.state_diff_jacobian(model_batch, xf)
             q_lift = q_lift[1:n_lift .!= 4]
-            qf_lift = q_lift[1:n_lift .!= 4]
+            qf_lift = qf_lift[1:n_lift .!= 4]
 
             Q = Diagonal([repeat(q_lift, num_lift); q_load])
             Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])
 
-            Q= Gf'*Diagonal(q_diag)*Gf
-            Qf= Gf'*Diagonal(qf_diag)*Gf
+            Q= Gf'*Q*Gf
+            Qf= Gf'*Qf*Gf
         else
             Q = Diagonal([repeat(q_lift, num_lift); q_load])
             Qf = Diagonal([repeat(qf_lift, num_lift); qf_load])

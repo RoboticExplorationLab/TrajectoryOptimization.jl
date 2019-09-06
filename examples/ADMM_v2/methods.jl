@@ -306,8 +306,14 @@ function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3)
     r_lift = .275
     self_col = gen_self_collision_constraints(X_lift,i,n,m,.275,n_slack)
 
+    # Objective
+	r5 = prob_lift.obj[1].c  # had to stash it somewhere...
+
     # Add system constraints to problems
     for k = 1:N
+		if k < N
+			prob_lift.obj[k].r[5] = r5
+		end
         prob_lift.constraints[k] += cable_lift[k]
         prob_lift.constraints[k] += self_col[k]
     end
