@@ -11,6 +11,7 @@ copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts, max_iters=3, n_slack=3)
     N = prob_load.N; dt = prob_load.dt
 	quat = TO.has_quat(prob_lift[1].model)
+	@show quat
 
     # Problem dimensions
     num_lift = length(prob_lift)
@@ -24,6 +25,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
 
     #~~~~~~~~~~~~~~~~~~~~ SOLVE INITIAL PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Solve the initial problems
+	@info "Initial solve"
     for i = 1:num_lift
         solve!(prob_lift[i],opts)
     end
@@ -31,6 +33,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
 
 
     #~~~~~~~~~~~~~~~~~~~~ UPDATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+	@info "Update problems"
     # Generate cable constraints
     X_lift = [deepcopy(prob_lift[i].X) for i = 1:num_lift]
     U_lift = [deepcopy(prob_lift[i].U) for i = 1:num_lift]
@@ -63,6 +66,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
     #~~~~~~~~~~~~~~~~~~~~ SOLVE ADMM ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     for ii = 1:max_iters
         # Solve lift agents
+		@info "Solve quads"
         for i = 1:num_lift
 
             TO.solve_aula!(prob_lift_al[i],solver_lift_al[i])
@@ -72,6 +76,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
                 X_lift[i] .= prob_lift_al[i].X
                 U_lift[i] .= prob_lift_al[i].U
             end
+			@info "\tquad $i"
         end
 
         # Update constraints (parallel)
@@ -84,6 +89,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
 
         # Solve load
         # return prob_lift,prob_load,1,1
+		@info "Solve load"
         prob_load_al.model = gen_load_model(X_lift,N,dt,load_params)
         TO.solve_aula!(prob_load_al,solver_load_al)
 
