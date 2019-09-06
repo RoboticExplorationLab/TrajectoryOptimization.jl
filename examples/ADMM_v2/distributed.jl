@@ -52,13 +52,11 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_scaling=2.0,
     penalty_initial=10.)
 
-quat = false
-num_lift = 5
-scenario = :p2p
+quat = true
+num_lift = 3
+scenario = :doorway
 scenario == :doorway ? obs = true : obs = false
 probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario);
-@everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
-length(probs)
 wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
 @time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=1);
 TO.solve_aula!(sol[5], sol_solvers[5])
@@ -84,6 +82,23 @@ include("visualization.jl")
 vis = Visualizer()
 open(vis)
 visualize_quadrotor_lift_system(vis, sol, obs)
+settransform!(vis["/Cameras/default"], compose(Translation(-7,0, -3),LinearMap(RotX(0)*RotZ(0))))
+
+# grab frames
+settransform!(vis["/Cameras/default"], compose(Translation(3.5, 0, 6.),LinearMap(RotX(0)*RotY(-pi/3))))
+
+kk = [1,13,26,39,51]
+k = 51
+n_slack = 3
+x_load = sol[1].X[k][1:n_slack]
+
+for i = 1:num_lift
+	x_lift = sol[i+1].X[k][1:n_slack]
+	settransform!(vis["cable"]["$i"], cable_transform(x_lift,x_load))
+	settransform!(vis["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(sol[i+1].X[k][4:7]...))))
+end
+settransform!(vis["load"], Translation(x_load...))
+##
 
 idx = [(1:3)...,(7 .+ (1:3))...]
 output_traj(sol[2],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj0.txt"))

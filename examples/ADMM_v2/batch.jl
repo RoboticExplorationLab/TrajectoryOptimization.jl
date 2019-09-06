@@ -40,6 +40,7 @@ solver.stats[:iterations]
 vis = Visualizer()
 open(vis)
 
+max_violation(prob)
 #=
 Notes:
 N lift is faster with trim conditions
