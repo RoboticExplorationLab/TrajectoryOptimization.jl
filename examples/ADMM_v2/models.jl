@@ -1,4 +1,4 @@
-include(joinpath(pwd(),"dynamics/quaternions.jl"))
+include(joinpath(dirname(@__FILE__),"../../dynamics/quaternions.jl"))
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~ MODEL PARAMETERS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
