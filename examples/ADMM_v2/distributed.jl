@@ -9,6 +9,7 @@ using BenchmarkTools
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
 end
+addworkers(n) = addprocs(n,exeflags="--project=$(@__DIR__)")
 import TrajectoryOptimization: Discrete
 
 using TrajectoryOptimization
@@ -24,12 +25,15 @@ const TO = TrajectoryOptimization
 @everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
 @everywhere include(joinpath(dirname(@__FILE__),"models.jl"))
 
-function init_dist(;quat=false, scenario=:doorway)
+function init_dist(;num_lift=3, quat=false, scenario=:doorway)
 	probs = ddata(T=Problem{Float64,Discrete});
-	@sync for (j,w) in enumerate(workers())
-		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, quat=quat, scenario=scenario)
+	@show length(probs)
+	@sync for (j,w) in enumerate(worker_quads(num_lift))
+		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params,
+			num_lift=num_lift, quat=quat, scenario=scenario)
 	end
-	prob_load = gen_prob(:load, quad_params, load_params, quat=quat, scenario=scenario)
+	prob_load = gen_prob(:load, quad_params, load_params,
+		num_lift=num_lift, quat=quat, scenario=scenario)
 
 	return probs, prob_load
 end
@@ -49,10 +53,18 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=10.)
 
 quat = false
-scenario = :doorway
-probs, prob_load = init_dist(quat=quat, scenario=scenario);
-wait.([@spawnat w reset_control_reference!(probs[:L]) for w in workers()])
-@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al);
+num_lift = 5
+scenario = :p2p
+scenario == :doorway ? obs = true : obs = false
+probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario);
+@everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
+length(probs)
+wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=1);
+TO.solve_aula!(sol[5], sol_solvers[5])
+prob_lift = fetch(@spawn w probs[])
+length(sol)
+size(sol[2])
 
 @btime begin
 	wait.([@spawnat w reset_control_reference!(probs[:L]) for w in workers()])
@@ -71,7 +83,7 @@ cache = (X_cache=X_cache, U_cache=U_cache, X_lift=X_lift, U_lift=U_lift);
 include("visualization.jl")
 vis = Visualizer()
 open(vis)
-visualize_quadrotor_lift_system(vis, sol)
+visualize_quadrotor_lift_system(vis, sol, obs)
 
 idx = [(1:3)...,(7 .+ (1:3))...]
 output_traj(sol[2],idx,joinpath(pwd(),"examples/ADMM_v2/trajectories/traj0.txt"))
