@@ -78,7 +78,7 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 
     # Update lift problems
     @sync for (agent,w) in enumerate(workers()[1:num_lift])
-        @spawnat w update_lift!(probs[:L], agent, X_cache[:L][2:4], X_cache[:L][1], U_cache[:L][1], d[agent])
+        @spawnat w update_lift!(probs[:L], agent, X_cache[:L][2:(num_lift+1)], X_cache[:L][1], U_cache[:L][1], d[agent])
 	end
 
 	solvers_al = ddata(T=AugmentedLagrangianSolver{Float64},pids=workers()[1:num_lift]);
