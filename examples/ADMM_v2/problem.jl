@@ -104,7 +104,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     xlift0, xload0 = get_states(r0_load, n_lift, n_load, num_lift, d, α)
     xliftf, xloadf = get_states(rf_load, n_lift, n_load, num_lift, d, α)
 
-    if num_lift == 3 && agent != :batch
+    if num_lift == 3
         for i = 1:num_lift
             xlift0[i][4:7] = q_lift_static[i]
             xliftf[i][4:7] = q_lift_static[i]
@@ -532,4 +532,10 @@ function door_obstacles(r_cylinder=0.5, x_door=3.0)
     # push!(_cyl,(x_door+0.5, 1.,r_cylinder))
     # push!(_cyl,(x_door+0.5,-1.,r_cylinder))
     return _cyl
+end
+
+function reset_control_reference!(prob::Problem)
+    for k = 1:prob.N-1
+        prob.obj[k].r[5] = 0
+    end
 end

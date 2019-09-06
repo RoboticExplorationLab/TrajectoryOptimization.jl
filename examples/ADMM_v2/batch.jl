@@ -7,7 +7,7 @@ include("methods.jl")
 
 
 # Solver options
-verbose=true
+verbose=false
 
 opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=50)
@@ -32,9 +32,10 @@ TO.has_quat(prob.model)
 
 # @btime solve($prob,$opts_al)
 prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
-@time solve(prob,opts_al)
-@time solve!(prob, opts_al)
+@btime solve($prob, $opts_al)
+@time solver = solve!(prob, opts_al)
 visualize_batch(vis,prob,true,num_lift)
+solver.stats[:iterations]
 
 vis = Visualizer()
 open(vis)

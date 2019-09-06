@@ -46,8 +46,17 @@ Q = prob_lift[1].obj[51].Q
 # prob_lift, prob_load = trim_conditions(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,
     load_params, :parallel, opts_al, max_iters=3)
+@btime begin
+    for k = 1:prob_load.N-1
+        for i = 1:num_lift
+            prob_lift[i].obj[k].r[5] = 0
+        end
+    end
+    solve_admm($prob_lift, $prob_load, $quad_params,
+        $load_params, :sequential, $opts_al, max_iters=3)
+end
 @btime solve_admm($prob_lift, $prob_load, $quad_params,
-    $load_params, :parallel, $opts_al, max_iters=3)
+    $load_params, :parallel, $opts_al, max_iters=3)B
 
 visualize_quadrotor_lift_system(vis, [[pload_al]; plift_al])
 #=
