@@ -126,6 +126,16 @@ function _backwardpass_sqrt!(prob::Problem,solver::iLQRSolver)
         end
 
         #TODO regularization scheme
+        if cond(Quu_reg) > 1e8
+            regularization_update!(solver,:increase)
+
+            # reset backward pass
+            k = N-1
+            ΔV[1] = 0.
+            ΔV[2] = 0.
+            continue
+        end
+
 
         # Compute gains
         K[k] = -Quu_reg\(Quu_reg'\Qux_reg)
