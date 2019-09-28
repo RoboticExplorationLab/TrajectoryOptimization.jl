@@ -177,6 +177,8 @@ function reset!(solver::AugmentedLagrangianSolver{T}) where T
     solver.stats[:cost]             = T[]
     solver.stats[:c_max]            = T[]
     solver.stats[:penalty_max]      = T[]
+    solver.stats[:S_cond]           = T[]
+    solver.stats[:Q_cond]           = T[]
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.λ[k] .*= 0

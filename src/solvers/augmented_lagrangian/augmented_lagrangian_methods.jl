@@ -87,6 +87,8 @@ function record_iteration!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T
     push!(solver.stats[:c_max],c_max)
     push!(solver.stats[:penalty_max],max_penalty(solver))
     push!(solver.stats_uncon, copy(unconstrained_solver.stats))
+    push!(solver.stats[:S_cond], maximum(map(S->cond(S.xx), solver.solver_uncon.S)))
+    push!(solver.stats[:Q_cond], maximum(map(Q->cond(Q.uu), solver.solver_uncon.Q[1:end-1])))
 
     @logmsg OuterLoop :iter value=solver.stats[:iterations]
     @logmsg OuterLoop :total value=solver.stats[:iterations_total]
