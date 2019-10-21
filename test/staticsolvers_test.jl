@@ -1,4 +1,5 @@
 using StaticArrays, LinearAlgebra
+using InteractiveUtils
 
 max_con_viol = 1.0e-8
 verbose=false
@@ -49,13 +50,13 @@ Z ≈ ∇fc(x,u)
 @btime fc($x,$u)
 @btime dynamics($quad,$x,$u)
 @btime dynamics($quad,$xs,$us)
-@btime dynamics($quad_,$xs,$us)
+@btime dynamics($quad_,$xs,$us) # Fastest
 
 @btime jacobian!($Z,$model,$x,$u)
 @btime jacobian($quad,$x,$u)
 @btime jacobian($quad,$xs,$us)
 @btime jacobian($quad_,$xs,$us)
-@btime jacobian($quad_,$zs)
+@btime jacobian($quad_,$zs) # fastest, 0 allocs
 
 
 # Discrete Time
@@ -84,7 +85,7 @@ discrete_jacobian(quad_,xs,us,dt) ≈ discrete_jacobian(quad_,ss) ≈ discrete_j
 @btime f_d2($xs,$us,$dt)
 @btime dynamics($quad_d,$x,$u,$dt)
 @btime dynamics($quad_d,$xs,$us,$dt)
-@btime discrete_dynamics($quad_,$x,$u,$dt)
+@btime discrete_dynamics($quad_,$x,$u,$dt) # fastest, 0 allocs
 
 @btime model_d.∇f($S,$x,$u,$dt)
 @btime jacobian($quad_d,$x,$u,$dt)
@@ -94,9 +95,17 @@ discrete_jacobian(quad_,xs,us,dt) ≈ discrete_jacobian(quad_,ss) ≈ discrete_j
 @btime discrete_jacobian($quad_,$ss) # 0 alloc
 @btime discrete_jacobian($quad_,$zs,$dt) # 0 alloc, 3x faster than in place
 
+typeof(zs)
+zs isa SVector{17,Float64}
+
+Z0 = [zs for k = 1:N]
+Z0 isa Vector{SVector{17,Float64}}
+SVector{n}(xf)
 
 # Solve the problem using the old method
 prob = copy(Problems.quad_obs)
+sprob = StaticProblem(quad_d, obj, SVector{n}(x0), SVector{n}(xf), Z0, N, dt, prob.tf)
+quad_d
 dt = prob.dt
 opts_ilqr = iLQRSolverOptions()
 r0,s0 = solve(prob,opts_ilqr)
