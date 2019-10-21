@@ -32,6 +32,9 @@ import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]
 
+"Allow iteration" 
+Base.iterate(obj::Objective, start=1) = Base.iterate(obj.cost, start)
+
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
 """```julia

@@ -57,12 +57,16 @@ mutable struct StaticExpansion{T,N,M,L1,L2,L3}
         ux = @SMatrix zeros(m,n)
         new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
     end
-    function StaticExpansion(x::SVector{n,T},u::SVector{m,T},xx,uu,ux) where {n,m,T}
-        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    function StaticExpansion(x::SVector{N,T}, u::SVector{M,T},
+            xx::AbstractArray, uu::AbstractArray, ux::SMatrix{M,N,T,L3}) where {T,N,M,L1,L2,L3}
+        new{T,N,M,N*N,M*M,L3}(x,u,xx,uu,ux)
     end
-    function StaticExpansion(x,u,xx,uu,ux::SMatrix{m,n,T}) where {n,m,T}
-        new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
-    end
+    # function StaticExpansion(x::SVector{n,T},u::SVector{m,T},xx,uu,ux) where {n,m,T}
+    #     new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    # end
+    # function StaticExpansion(x,u,xx,uu,ux::SMatrix{m,n,T}) where {n,m,T}
+    #     new{T,n,m,n*n,m*m,n*m}(x,u,xx,uu,ux)
+    # end
 end
 
 
@@ -228,6 +232,16 @@ function cost_expansion!(Q::Expansion{T}, cost::QuadraticCost,
     Q.ux .= cost.H
     Q*dt
     return nothing
+end
+
+function cost_expansion(cost::QuadraticCost,
+        x::AbstractVector{T}, u::AbstractVector{T}) where T
+    Qx = cost.Q*x + cost.q + cost.H'*u
+    Qu = cost.R*u + cost.r + cost.H*x
+    Qxx = cost.Q
+    Quu = cost.R
+    Qux = cost.H
+    return Qx, Qu, Qxx, Quu, Qux
 end
 
 function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVector{T}) where T
