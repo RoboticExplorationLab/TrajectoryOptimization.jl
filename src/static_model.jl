@@ -149,7 +149,7 @@ function generate_discrete_jacobian(model::M) where {M<:AbstractModel}
     end
     @eval begin
         discrete_jacobian(model::$(M), x, u, dt) = $(∇fd)(x, u, dt)
-        discrete_jacobian(model::$(M), z) = $(∇fd)(z)
+        discrete_jacobian(model::$(M), z::AbstractVector) = $(∇fd)(z)
         discrete_jacobian(model::$(M), z, dt) = $(∇fd)(z, dt)
     end
 end

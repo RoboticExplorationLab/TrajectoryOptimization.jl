@@ -169,7 +169,7 @@ end
 function rk3_gen(model::AbstractModel)
        # Runge-Kutta 3 (zero order hold)
    @eval begin
-       function discrete_dynamics(model, x, u, dt)
+       function discrete_dynamics(model::$(typeof(model)), x, u, dt)
            k1 = dynamics(model, x, u)*dt;
            k2 = dynamics(model, x + k1/2, u)*dt;
            k3 = dynamics(model, x - k1 + 2*k2, u)*dt;
