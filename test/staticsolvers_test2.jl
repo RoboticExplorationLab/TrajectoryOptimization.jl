@@ -50,6 +50,9 @@ dyn = [xs for k = 1:N]
 
 # Dynamics jacobians
 ∇f = silqr.∇F
+jacobian!(prob, ilqr)
+discrete_jacobian!(∇f, quad_, Z)
+silqr.∇F ≈ ilqr.∇F
 @btime jacobian!($prob, $ilqr)
 @btime discrete_jacobian!($∇f, $quad_, $Z) # ≈3x faster
 
@@ -60,6 +63,7 @@ R = (1.0e-2)*Diagonal(@SVector ones(m))
 Qf = 1.0*Diagonal(@SVector ones(n))
 obj = LQRObjective(Q,R,Qf,xf,N)
 
+cost(prob) ≈ cost(obj, Z)
 @btime cost($prob)
 @btime cost($obj, $Z) # 7.5x faster
 
@@ -72,6 +76,12 @@ E = CostExpansion(
     [@SMatrix zeros(m,m) for k = 1:N],
     [@SMatrix zeros(m,n) for k = 1:N]
 )
+cost_exupansion!(prob, ilqr)
+cost_expansion(E, obj, Z)
+all([E.xx[k] ≈ ilqr.Q[k].xx for k in eachindex(E.xx)])
+all([E.uu[k] ≈ ilqr.Q[k].uu for k = 1:N-1])
+all([E.x[k] ≈ ilqr.Q[k].x for k in eachindex(E.x)])
+all([E.u[k] ≈ ilqr.Q[k].u for k = 1:N-1])
 
 @btime cost_expansion!($prob, $ilqr)
 @btime cost_expansion($E, $obj, $Z)  # 7x faster

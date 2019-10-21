@@ -70,15 +70,18 @@ xdot ≈ f_d(x,u,dt)
 xdot ≈ f_d2(x,u,dt)
 f_d(x,u,dt) isa SVector
 rk3_gen(quad_)
-discrete_dynamics(quad_,xs,us,dt)
+discrete_dynamics(quad_,xs,us,dt) ≈ dynamics(quad_d,x,u,dt)
+
+
 
 S = zeros(n,n+m+1)
 model_d.∇f(S,x,u,dt)
 S ≈ jacobian(quad_d,x,u,dt)
+@which jacobian(quad_d,x,u,dt)
 ss = [xs;us; (@SVector [dt])]
 s = [x;u;dt]
 generate_discrete_jacobian(quad_)
-discrete_jacobian(quad_,xs,us,dt) ≈ discrete_jacobian(quad_,ss) ≈ discrete_jacobian(quad_,zs,dt)
+discrete_jacobian(quad_,xs,us,dt) ≈ discrete_jacobian(quad_,ss) ≈ discrete_jacobian(quad_,zs,dt) ≈ S
 
 @btime model_d.f($xdot,$x,$u,$dt)
 @btime f_d($xs,$us,$dt)
