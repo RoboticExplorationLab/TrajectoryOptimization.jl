@@ -1,38 +1,41 @@
+using StaticArrays
 
-# struct SProblem{L<:AbstractModel,T<:AbstractFloat,NM,N}
-#     model::L
-#     obj::Objective
-#     x0::SVector{N,T}
-#     xf::SVector{N,T}
-#     Z::Vector{SVector{NM,T}}
-#     N::Int
-#     dt::T
-#     tf::T
-#
-# end
-
-
-struct KnotPoint{T,N,M,NM}
+mutable struct KnotPoint{T,N,M,NM}
     z::SVector{NM,T}
     _x::SVector{N,Int}
     _u::SVector{M,Int}
+    _inds::SVector{NM,Bool}
     dt::T
 end
 
-function KnotPoint(x::AbstractVector, u::AbstractVector, dt::Real)
+function KnotPoint(x::AbstractVector, u::AbstractVector, dt::Float64)
     n = length(x)
     m = length(u)
+    xinds = ones(Bool, n+m)
+    xinds[n+1:end] .= 0
     _x = SVector{n}(1:n)
     _u = SVector{m}(n .+ (1:m))
+    _inds = SVector{n+m}(xinds)
     z = SVector{n+m}([x;u])
-    KnotPoint(z,_x,_u, dt)
+    KnotPoint(z, _x, _u, _inds, dt)
 end
+
+# function KnotPoint(x::Vector, u::Vector, dt::Float64)
+#     n = length(x)
+#     m = length(u)
+#     xinds = ones(Bool, n+m)
+#     xinds[n+1:end] .= 0
+#     _x = SVector{n}(1:n)
+#     _u = SVector{m}(n .+ (1:m))
+#     _inds = SVector{n+m}(xinds)
+#     z = SVector{n+m}([x;u])
+#     KnotPoint(z, _x, _u, _inds, dt)
+# end
 
 function KnotPoint(x::AbstractVector, m::Int)
     u = zeros(m)
     KnotPoint(x, u, 0.)
 end
-
 
 @inline state(z::KnotPoint) = z.z[z._x]
 @inline control(z::KnotPoint) = z.z[z._u]
@@ -43,6 +46,13 @@ const Traj = Vector{<:KnotPoint}
 @inline function discrete_dynamics(model::AbstractModel, z::KnotPoint)
     discrete_dynamics(model, state(z), control(z), z.dt)
 end
+
+function propagate_dynamics(model::AbstractModel, z_::KnotPoint, z::KnotPoint)
+    x_next = discrete_dynamics(model, z)
+    z_.z = [x_next; control(z_)]
+end
+
+
 
 @inline function discrete_jacobian(model::AbstractModel, z::KnotPoint)
     discrete_jacobian(model, z.z, z.dt)
@@ -77,7 +87,7 @@ function cost(obj::Objective, Z::Traj)
 end
 
 function cost_expansion(cost::CostFunction, z::KnotPoint)
-    Qx, Qu, Qxx, Quu, Qux = cost_expansion(cost, state(z), control(z), z.dt)
+    Qx, Qu, Qxx, Quu, Qux = cost_expansion(cost, state(z), control(z))
     if is_terminal(z)
         dt_x = 1.0
         dt_u = 0.0
@@ -102,4 +112,39 @@ struct CostExpansion{T,N,M,L1,L2,L3}
     xx::Vector{SMatrix{N,N,T,L1}}
     uu::Vector{SMatrix{M,M,T,L2}}
     ux::Vector{SMatrix{M,N,T,L3}}
+end
+
+function CostExpansion(n,m,N)
+    CostExpansion(
+        [@SVector zeros(n) for k = 1:N],
+        [@SVector zeros(m) for k = 1:N],
+        [@SMatrix zeros(n,n) for k = 1:N],
+        [@SMatrix zeros(m,m) for k = 1:N],
+        [@SMatrix zeros(m,n) for k = 1:N] )
+end
+
+function Base.getindex(Q::CostExpansion, k::Int)
+    return (x=Q.x[k], u=Q.u[k], xx=Q.xx[k], uu=Q.uu[k], ux=Q.ux[k])
+end
+
+
+struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
+    model::L
+    obj::Objective
+    xf::SVector{N,T}
+    x0::SVector{N,T}
+    Z::Vector{KnotPoint{T,N,M,NM}}
+    N::Int
+    dt::T
+    tf::T
+end
+
+Base.size(prob::StaticProblem{L,T,N,M,NM}) where {L,T,N,M,NM} = (N, M, prob.N)
+
+function rollout!(prob::StaticProblem)
+    prob.Z[1].z = [prob.x0; control(prob.Z[1])]
+    for k = 2:prob.N
+        # discrete_dynamics(prob.model, prob.Z[k], prob.Z[k-1])
+        propagate_dynamics(prob.model, prob.Z[k], prob.Z[k-1])
+    end
 end

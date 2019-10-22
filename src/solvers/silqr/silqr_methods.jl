@@ -1,7 +1,7 @@
 
 # Generic solve methods
 "iLQR solve method"
-function solve!(prob::Problem{T,Discrete}, solver::iLQRSolver{T}) where T<:AbstractFloat
+function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:AbstractFloat
     reset!(solver)
     to = solver.stats[:timer]
 
@@ -63,6 +63,88 @@ function cost_expansion!(prob::Problem{T}, solver::StaticiLQRSolver{T}) where T
     cost_expansion!(E[N], prob.obj[N], X[N])
     nothing
 end
+
+function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
+    n,m,N = size(prob)
+
+    # Objective
+    obj = prob.obj
+
+    # Extract variables
+    Z = prob.Z; K = solver.K; d = solver.d;
+    S = solver.S
+    Q = solver.Q
+
+    # Terminal cost-to-go
+    S.xx[N] = Q.xx[N]
+    S.x[N] = Q.x[N]
+
+    # Initialize expecte change in cost-to-go
+    ΔV = @SVector zeros(2)
+
+    k = N-1
+    while k > 0
+        ix = Z[k]._x
+        iu = Z[k]._u
+
+        fdx = solver.∇F[k][ix,ix]
+        fdu = solver.∇F[k][ix,iu]
+
+        Qk = getQ(Q,k)
+
+        Q.x[k] += fdx'S.x[k+1]
+        Q.u[k] += fdu'S.x[k+1]
+        Q.xx[k] += fdx'S.xx[k+1]*fdx
+        Q.uu[k] += fdu'S.xx[k+1]*fdu
+        Q.ux[k] += fdu'S.xx[k+1]*fdx
+
+        if solver.opts.bp_reg_type == :state
+            Quu_reg = Q.uu[k] + solver.ρ[1]*fdu'fdu
+            Qux_reg = Q.ux[k] + solver.ρ[1]*fdu'fdx
+        elseif solver.opts.bp_reg_type == :control
+            Quu_reg = Q.uu[k] + solver.ρ[1]*I
+            Qux_reg = Q.ux[k]
+        end
+
+        # Regularization
+
+        # Compute gains
+        K[k] = -(Quu_reg\Qux_reg)
+        d[k] = -(Quu_reg\Q.u[k])
+
+        # Calculate cost-to-go (using unregularized Quu and Qux)
+        S.x[k]  =  Q.x[k] + K[k]'*Q.uu[k]*d[k] + K[k]'* Q.u[k] + Q.ux[k]'d[k]
+        S.xx[k] = Q.xx[k] + K[k]'*Q.uu[k]*K[k] + K[k]'*Q.ux[k] + Q.ux[k]'K[k]
+        S.xx[k] = 0.5*(S.xx[k] + S.xx[k]')
+
+        # calculated change is cost-to-go over entire trajectory
+        ΔV += @SVector [d[k]'*Q.u[k], 0.5*d[k]'*Q.uu[k]*d[k]]
+
+        k -= 1
+    end
+
+    return ΔV
+    
+end
+
+function _ctg_expansion(Q, S, A, B)
+    (x=Q.x + A'S.x,
+     u=Q.u + B'S.x,
+     xx=Q.xx + A'S.xx*A,
+     uu=Q.uu + B'S.xx*B,
+     ux=Q.ux + B'S.xx*A)
+end
+
+
+
+function _cost_to_go(Q,K,d)
+    ΔV = @SVector [d'Q.u, 0.5*d'Q.uu*d]
+    Sx = Q.x + K'Q.uu*d + K'Q.u + Q.ux'd
+    Sxx = Q.xx + K'Q.uu*K + K'Q.ux + Q.ux'K
+    return ΔV, Sx, Sxx
+end
+
+
 
 function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
     n,m,N = size(prob)
@@ -233,8 +315,8 @@ function forwardpass!(prob::Problem, solver::StaticiLQRSolver, ΔV::Array, J_pre
 end
 
 "Simulate state trajectory with feedback control"
-function rollout!(prob::Problem{T}, solver::StaticiLQRSolver{T},alpha::T=1.0) where T
-    X = prob.X; U = prob.U
+function rollout!(prob::StaticProblem{T}, solver::StaticiLQRSolver{T},alpha::T=1.0) where T
+    Z = prob.Z
     K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
     X̄[1] = prob.x0
     Dt = get_dt_traj(prob)
@@ -256,6 +338,8 @@ function rollout!(prob::Problem{T}, solver::StaticiLQRSolver{T},alpha::T=1.0) wh
     end
     return true
 end
+
+
 
 function state_diff(x̄::AbstractVector{T}, x::AbstractVector{T}, prob::Problem{T},  solver::StaticiLQRSolver{T}) where T
     if true

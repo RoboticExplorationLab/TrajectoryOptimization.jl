@@ -138,8 +138,8 @@ function generate_discrete_jacobian(model::M) where {M<:AbstractModel}
     ix,iu,idt = 1:n, n .+ (1:m), n+m+1
     fd_aug(z) = discrete_dynamics(model, view(z,ix), view(z,iu), z[idt])
     ∇fd(z) = ForwardDiff.jacobian(fd_aug, z)
-    ∇fd(z::SVector,dt) = ForwardDiff.jacobian(fd_aug, [z; @SVector [dt]])
-    ∇fd(x::SVector,u::SVector,dt) = ∇fd([x;u; @SVector [dt]])
+    ∇fd(z,dt) = ForwardDiff.jacobian(fd_aug, [z; @SVector [dt]])
+    ∇fd(x,u::SVector,dt) = ∇fd([x;u; @SVector [dt]])
     ∇fd(x,u,dt) = begin
         z = zeros(n+m)
         z[ix] = x
