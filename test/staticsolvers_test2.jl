@@ -44,7 +44,7 @@ R = (1.0e-2)*Diagonal(@SVector ones(m))
 Qf = 1.0*Diagonal(@SVector ones(n))
 obj = LQRObjective(Q,R,Qf,xf,N)
 
-sprob = StaticProblem(quad_, obj, x0, xf, Z, N, dt, prob.tf)
+sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 
 # Build Solver
 silqr = StaticiLQRSolver(prob)
@@ -71,7 +71,7 @@ silqr.∇F ≈ ilqr.∇F
 # Objective
 cost(prob) ≈ cost(obj, Z)
 @btime cost($prob)
-@btime cost($obj, $Z) # 7.5x faster
+@btime cost($(sprob.obj), $Z) # 7.5x faster
 
 
 # Cost expansion
@@ -96,7 +96,7 @@ Z[N] = KnotPoint(x,m)
 
 prob = copy(Problems.quad_obs)
 initial_controls!(prob, [u for k = 1:N-1])
-sprob = StaticProblem(quad_, obj, xf, x0, Z, N, dt, prob.tf)
+sprob = StaticProblem(quad_, obj, xf, x0, Z, deepcopy(Z), N, dt, prob.tf)
 rollout!(sprob)
 rollout!(prob)
 all([state(sprob.Z[k]) ≈ prob.X[k] for k = 1:N])
@@ -113,41 +113,28 @@ cost_expansion(silqr.Q, sprob.obj, sprob.Z)
 jacobian!(prob, ilqr)
 discrete_jacobian!(silqr.∇F, quad_, Z)
 backwardpass!(prob, ilqr)
-backwardpass!(sprob, silqr)
+ΔV = backwardpass!(sprob, silqr)
 @btime backwardpass!($prob, $ilqr)
 @btime backwardpass!($sprob, $silqr) # 11x speedup
 
-using InteractiveUtils
-@btime _cost_to_go($Qk, $silqr.K[N-1], $silqr.d[N-1])
 silqr.K ≈ ilqr.K
 silqr.d ≈ ilqr.d
 
 
+# Rollout
+rollout!(prob, ilqr, 1.0)
+rollout!(sprob, silqr, 1.0)
+all([state(sprob.Z̄[k]) ≈ ilqr.X̄[k] for k in eachindex(sprob.Z)])
 
+@btime rollout!($prob, $ilqr, 1.0)
+@btime rollout!($sprob, $silqr, 1.0)  # 8.5x speedup
 
-Quu_reg = @SMatrix zeros(5,5)
-Quu_reg += I(5)
+# Forward pass
+J_prev = cost(sprob.obj, sprob.Z)
+forwardpass!(prob, ilqr, Vector(ΔV), J_prev)
+forwardpass!(sprob, silqr, ΔV, J_prev)
+all([state(sprob.Z̄[k]) ≈ ilqr.X̄[k] for k in eachindex(sprob.Z)])
+all([control(sprob.Z̄[k]) ≈ ilqr.Ū[k] for k in 1:N-1])
 
-cholesky(Matrix(Quu_reg), check=false)
-@btime cholesky($Quu_reg)
-@btime cholesky(Matrix($Quu_reg), check=false)
-cholesky(Array(Quu_reg), check=false)
-isposdef(Quu_reg)
-
-silqr.opts.bp_reg_type
-
-silqr.∇F[1]
-
-
-silqr.S.xx
-
-function getQ(Q,k)
-    return (x=Q.x[k], u=Q.u[k], xx=Q.xx[k], uu=Q.uu[k], ux=Q.ux[k])
-end
-Qk = getQ(silqr.Q,1)
-Qk.x = @SVector ones(13)
-@btime getQ($silqr.Q, 1)
-@btime $silqr.Q[1]
-
-mychol(Size(Quu_reg), Quu_reg)
-LAPACK.potrf!('U', Quu_reg)
+@btime forwardpass!($prob, $ilqr, $(Vector(ΔV)), $J_prev)
+@btime forwardpass!($sprob, $silqr, $ΔV, $J_prev) # 8.5x speedup

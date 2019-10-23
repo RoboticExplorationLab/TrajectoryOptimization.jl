@@ -90,8 +90,6 @@ function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
         fdx = solver.∇F[k][ix,ix]
         fdu = solver.∇F[k][ix,iu]
 
-        Qk = getQ(Q,k)
-
         Q.x[k] += fdx'S.x[k+1]
         Q.u[k] += fdu'S.x[k+1]
         Q.xx[k] += fdx'S.xx[k+1]*fdx
@@ -124,109 +122,73 @@ function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
     end
 
     return ΔV
-    
+
 end
 
-function _ctg_expansion(Q, S, A, B)
-    (x=Q.x + A'S.x,
-     u=Q.u + B'S.x,
-     xx=Q.xx + A'S.xx*A,
-     uu=Q.uu + B'S.xx*B,
-     ux=Q.ux + B'S.xx*A)
-end
-
-
-
-function _cost_to_go(Q,K,d)
-    ΔV = @SVector [d'Q.u, 0.5*d'Q.uu*d]
-    Sx = Q.x + K'Q.uu*d + K'Q.u + Q.ux'd
-    Sxx = Q.xx + K'Q.uu*K + K'Q.ux + Q.ux'K
-    return ΔV, Sx, Sxx
-end
-
-
-
-function backwardpass!(prob::Problem, solver::StaticiLQRSolver)
-    n,m,N = size(prob)
-
-    # Objective
+function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev)
+    Z = prob.Z; Z̄ = prob.Z̄
     obj = prob.obj
 
-    X = prob.X; U = prob.U; K = solver.K; d = solver.d
+    J::Float64 = Inf 
+    α = 1.0
+    iter = 0
+    z = -1.0
+    expected = 0.0
+    flag = true
 
-    S = solver.S
-    Q = solver.Q
+    while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
 
-    # Terminal cost-to-go
-    S[N].xx = copy(Q[N].xx)
-    S[N].x = copy(Q[N].x)
+        # Check that maximum number of line search decrements has not occured
+        if iter > solver.opts.iterations_linesearch
+            for k in eachindex(Z)
+                Z̄[k] = Z[k]
+            end
+            J = cost(obj, Z̄)
 
-    # Initialize expected change in cost-to-go
-    ΔV = zeros(2)
+            z = 0
+            α = 0.0
+            expected = 0.0
 
-    # ix = @SVector [i for i = 1:n]
-    # iu = @SVector [i for i = 1:m]
-    ix, iu = 1:n, n .+ (1:m)
-
-    # Backward pass
-    k = N-1
-    while k >= 1
-        fdx, fdu = solver.∇F[k][ix,ix], solver.∇F[k][ix,iu]
-
-        Q[k].x += fdx'*S[k+1].x
-        Q[k].u += fdu'*S[k+1].x
-        Q[k].xx += fdx'*S[k+1].xx*fdx
-        Q[k].uu += fdu'*S[k+1].xx*fdu
-        Q[k].ux += fdu'*S[k+1].xx*fdx
-
-        if solver.opts.bp_reg_type == :state
-            # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*fdu'*fdu,check=false)
-            Quu_reg = Q[k].uu + solver.ρ[1]*fdu'*fdu
-            Qux_reg = Q[k].ux + solver.ρ[1]*fdu'*fdx
-        elseif solver.opts.bp_reg_type == :control
-            # Quu_reg = cholesky(Q[k].uu + solver.ρ[1]*I,check=false)
-            Quu_reg = Q[k].uu + solver.ρ[1]*Diagonal(ones(prob.model.m))
-            Qux_reg = Q[k].ux
+            regularization_update!(solver, :increase)
+            solver.ρ[1] += solver.opts.bp_reg_fp
+            break
         end
 
+        # Otherwise, rollout a new trajectory for current alpha
+        flag = rollout!(prob, solver, α)
 
-
-        # Regularization
-        # if Quu_reg.info == -1
-        if !isposdef(Hermitian(Array(Quu_reg)))
-            # increase regularization
-
-            @logmsg InnerIters "Regularizing Quu "
-            regularization_update!(solver,:increase)
-
-            # reset backward pass
-            k = N-1
-            ΔV[1] = 0.
-            ΔV[2] = 0.
+        # Check if rollout completed
+        if ~flag
+            # Reduce step size if rollout returns non-finite values (NaN or Inf)
+            # @logmsg InnerIters "Non-finite values in rollout"
+            iter += 1
+            α /= 2.0
             continue
         end
 
-        # Compute gains
-        K[k] = -1.0*(Quu_reg\Qux_reg)
-        d[k] = -1.0*(Quu_reg\Q[k].u)
 
-        # Calculate cost-to-go (using unregularized Quu and Qux)
-        S[k].x  =  Q[k].x + K[k]'*Q[k].uu*d[k] + K[k]'* Q[k].u + Q[k].ux'*d[k]
-        S[k].xx = Q[k].xx + K[k]'*Q[k].uu*K[k] + K[k]'*Q[k].ux + Q[k].ux'*K[k]
-        S[k].xx = 0.5*(S[k].xx + S[k].xx')
+        # Calcuate cost
+        J = cost(obj, Z̄)
 
-        # calculated change is cost-to-go over entire trajectory
-        ΔV[1] += d[k]'*Q[k].u
-        ΔV[2] += 0.5*d[k]'*Q[k].uu*d[k]
+        expected::Float64 = -α*(ΔV[1] + α*ΔV[2])
+        if expected > 0.0
+            z::Float64  = (J_prev - J)/expected
+        else
+            z = -1.0
+        end
 
-        k = k - 1;
+        iter += 1
+        α /= 2.0
     end
 
-    # decrease regularization after backward pass
-    # regularization_update!(solver,:decrease)
+    if J > J_prev
+        # error("Error: Cost increased during Forward Pass")
+    end
 
-    return ΔV
+    return J
+
 end
+
 
 """
 $(SIGNATURES)
@@ -314,31 +276,28 @@ function forwardpass!(prob::Problem, solver::StaticiLQRSolver, ΔV::Array, J_pre
     return J
 end
 
-"Simulate state trajectory with feedback control"
-function rollout!(prob::StaticProblem{T}, solver::StaticiLQRSolver{T},alpha::T=1.0) where T
-    Z = prob.Z
-    K = solver.K; d = solver.d; X̄ = solver.X̄; Ū = solver.Ū
-    X̄[1] = prob.x0
-    Dt = get_dt_traj(prob)
+function rollout!(prob::StaticProblem, solver::StaticiLQRSolver, α=1.0)
+    Z = prob.Z; Z̄ = prob.Z̄
+    K = solver.K; d = solver.d;
 
-    for k = 2:prob.N
-        # Calculate state trajectory difference
-        δx = state_diff(X̄[k-1],X[k-1],prob,solver)
+    Z̄[1].z = [prob.x0; control(Z[1])]
 
-        # Calculate updated control
-        Ū[k-1] = U[k-1] + K[k-1]*δx + alpha*d[k-1]
+    temp = 0.0
 
-        # Propagate dynamics
-        X̄[k] = dynamics(prob.model, X̄[k-1], Ū[k-1], Dt[k])
+    for k = 1:prob.N-1
+        δx = state(Z̄[k]) - state(Z[k])
+        δu = K[k]*δx + α*d[k]
+        Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
 
-        # Check that rollout has not diverged
-        if ~(norm(X̄[k],Inf) < solver.opts.max_state_value && norm(Ū[k-1],Inf) < solver.opts.max_control_value)
+        propagate_dynamics(prob.model, Z̄[k+1], Z̄[k])
+
+        temp = norm(Z̄[k+1].z)
+        if temp > solver.opts.max_state_value
             return false
         end
     end
     return true
 end
-
 
 
 function state_diff(x̄::AbstractVector{T}, x::AbstractVector{T}, prob::Problem{T},  solver::StaticiLQRSolver{T}) where T

@@ -78,13 +78,14 @@ function stage_cost(cost::CostFunction, z::KnotPoint)
     end
 end
 
-function cost(obj::Objective, Z::Traj)
+function cost(obj::Objective, Z::Traj)::Float64
     J = 0.0
     for k in eachindex(Z)
         J += stage_cost(obj[k], Z[k])
     end
     return J
 end
+
 
 function cost_expansion(cost::CostFunction, z::KnotPoint)
     Qx, Qu, Qxx, Quu, Qux = cost_expansion(cost, state(z), control(z))
@@ -134,6 +135,7 @@ struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
     xf::SVector{N,T}
     x0::SVector{N,T}
     Z::Vector{KnotPoint{T,N,M,NM}}
+    Z̄::Vector{KnotPoint{T,N,M,NM}}
     N::Int
     dt::T
     tf::T
