@@ -2,55 +2,97 @@
 # Generic solve methods
 "iLQR solve method"
 function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:AbstractFloat
-    reset!(solver)
-    to = solver.stats[:timer]
+    solver.stats.iterations = 0
+    # reset!(solver)
+    # to = solver.stats[:timer]
+    Z = prob.Z; Z̄ = prob.Z̄;
+
 
     n,m,N = size(prob)
     J = Inf
+    _J = prob.obj.J
 
-    logger = default_logger(solver)
+    # logger = default_logger(solver)
 
     # Initial rollout
     rollout!(prob)
-    live_plotting(prob,solver)
+    # live_plotting(prob,solver)
 
-    J_prev = cost(prob)
+    cost!(_J, prob.obj, prob.Z)
+    J_prev = sum(_J)
 
+    for i = 1:solver.opts.iterations
+        J = step!(prob, solver, J_prev, _J)
 
-    with_logger(logger) do
-        record_iteration!(prob, solver, J_prev, Inf)
-        for i = 1:solver.opts.iterations
-            J = step!(prob, solver, J_prev)
-
-            # check for cost blow up
-            if J > solver.opts.max_cost_value
-                @warn "Cost exceeded maximum cost"
-                return solver
-            end
-
-            @timeit to "copy" begin
-                copyto!(prob.X, solver.X̄)
-                copyto!(prob.U, solver.Ū)
-            end
-
-            dJ = abs(J - J_prev)
-            J_prev = copy(J)
-            record_iteration!(prob, solver, J, dJ)
-            live_plotting(prob,solver)
-
-            println(logger, InnerLoop)
-            @timeit to "convergence" evaluate_convergence(solver) ? break : nothing
+        # check for cost blow up
+        if J > solver.opts.max_cost_value
+            # @warn "Cost exceeded maximum cost"
+            return solver
         end
+
+        for k = 1:N
+            Z[k].z = Z̄[k].z
+        end
+
+        dJ = abs(J - J_prev)
+        J_prev = copy(J)
+        gradient_todorov!(prob, solver)
+
+        record_iteration!(solver, J, dJ)
+        evaluate_convergence(solver) ? break : nothing
     end
     return solver
 end
 
-function step!(prob::Problem{T}, solver::StaticiLQRSolver{T}, J::T) where T
-    to = solver.stats[:timer]
-    @timeit to "jacobians" jacobian!(prob,solver)   # TODO: rename this to dynamics jacobian
-    @timeit to "cost expansion" cost_expansion!(prob,solver)
-    @timeit to "backward pass" ΔV = backwardpass!(prob,solver)
-    @timeit to "forward pass" forwardpass!(prob,solver,ΔV,J)
+
+function step!(prob::StaticProblem, solver::StaticiLQRSolver, J)
+    discrete_jacobian!(solver.∇F, prob.model, prob.Z)
+    cost_expansion(solver.Q, prob.obj, prob.Z)
+    ΔV = backwardpass!(prob, solver)
+    forwardpass!(prob, solver, ΔV, J)
+end
+
+function record_iteration!(solver::StaticiLQRSolver, J, dJ)
+    solver.stats.iterations += 1
+    i = solver.stats.iterations::Int
+    solver.stats.cost[i] = J
+    solver.stats.dJ[i] = dJ
+    solver.stats.gradient[i] = mean(solver.grad)
+    return nothing
+end
+
+function gradient_todorov!(prob::StaticProblem, solver::StaticiLQRSolver)
+    for k in eachindex(solver.d)
+        solver.grad[k] = maximum( abs.(solver.d[k]) ./ (abs.(control(prob.Z[k])) .+ 1) )
+    end
+end
+
+function evaluate_convergence(solver::StaticiLQRSolver)
+    # Get current iterations
+    i = solver.stats.iterations
+
+    # Check for cost convergence
+    # note the  dJ > 0 criteria exists to prevent loop exit when forward pass makes no improvement
+    if 0.0 < solver.stats.dJ[i] < solver.opts.cost_tolerance
+        return true
+    end
+
+    # Check for gradient convergence
+    if solver.stats.gradient[i] < solver.opts.gradient_norm_tolerance
+        return true
+    end
+
+    # Check total iterations
+    if i >= solver.opts.iterations
+        return true
+    end
+
+    # Outer loop update if forward pass is repeatedly unsuccessful
+    if solver.stats.dJ_zero_counter > solver.opts.dJ_counter_limit
+        return true
+    end
+
+    return false
 end
 
 function cost_expansion!(prob::Problem{T}, solver::StaticiLQRSolver{T}) where T
@@ -121,6 +163,8 @@ function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
         k -= 1
     end
 
+    regularization_update!(solver, :decrease)
+
     return ΔV
 
 end
@@ -129,7 +173,8 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
     Z = prob.Z; Z̄ = prob.Z̄
     obj = prob.obj
 
-    J::Float64 = Inf 
+    _J = prob.obj.J
+    J::Float64 = Inf
     α = 1.0
     iter = 0
     z = -1.0
@@ -143,7 +188,8 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
             for k in eachindex(Z)
                 Z̄[k] = Z[k]
             end
-            J = cost(obj, Z̄)
+            cost!(_J, obj, Z̄)
+            J = sum(_J)
 
             z = 0
             α = 0.0
@@ -168,7 +214,8 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
 
 
         # Calcuate cost
-        J = cost(obj, Z̄)
+        cost!(_J, obj, Z̄)
+        J = sum(_J)
 
         expected::Float64 = -α*(ΔV[1] + α*ΔV[2])
         if expected > 0.0
@@ -182,99 +229,13 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
     end
 
     if J > J_prev
-        # error("Error: Cost increased during Forward Pass")
-    end
-
-    return J
-
-end
-
-
-"""
-$(SIGNATURES)
-Propagate dynamics with a line search (in-place)
-"""
-function forwardpass!(prob::Problem, solver::StaticiLQRSolver, ΔV::Array, J_prev::Float64)
-    # Pull out values from results
-    X = prob.X; U = prob.U; X̄ = solver.X̄; Ū = solver.Ū
-
-    J = Inf
-    alpha = 1.0
-    iter = 0
-    z = -1.
-    expected = 0.
-
-    logger = current_logger()
-    to = solver.stats[:timer]
-    # @logmsg InnerIters :iter value=0
-    # @logmsg InnerIters :cost value=J_prev
-    while (z ≤ solver.opts.line_search_lower_bound || z > solver.opts.line_search_upper_bound) && J >= J_prev
-
-        # Check that maximum number of line search decrements has not occured
-        if iter > solver.opts.iterations_linesearch
-            # set trajectories to original trajectory
-            copyto!(X̄,X)
-            copyto!(Ū,U)
-
-            J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))
-
-            z = 0.
-            alpha = 0.0
-            expected = 0.
-
-            # @logmsg InnerLoop "Max iterations (forward pass)"
-            regularization_update!(solver,:increase) # increase regularization
-            solver.ρ[1] += solver.opts.bp_reg_fp
-            break
-        end
-
-        # Otherwise, rollout a new trajectory for current alpha
-        @timeit to "rollout" flag = rollout!(prob,solver,alpha)
-
-        # Check if rollout completed
-        if ~flag
-            # Reduce step size if rollout returns non-finite values (NaN or Inf)
-            # @logmsg InnerIters "Non-finite values in rollout"
-            iter += 1
-            alpha /= 2.0
-            continue
-        end
-
-        # Calcuate cost
-        @timeit to "cost" J = cost(prob.obj, X̄, Ū, get_dt_traj(prob,Ū))   # Unconstrained cost
-
-        expected = -alpha*(ΔV[1] + alpha*ΔV[2])
-        if expected > 0
-            z  = (J_prev - J)/expected
-        else
-            @logmsg InnerIters "Non-positive expected decrease"
-            z = -1
-        end
-
-        iter += 1
-        alpha /= 2.0
-
-        # Log messages
-        # @logmsg InnerIters :iter value=iter
-        # @logmsg InnerIters :α value=2*alpha
-        # @logmsg InnerIters :cost value=J
-        # @logmsg InnerIters :z value=z
-
-    end  # forward pass loop
-
-    # @logmsg InnerLoop :cost value=J
-    # @logmsg InnerLoop :dJ value=J_prev-J
-    @logmsg InnerLoop :expected value=expected
-    @logmsg InnerLoop :z value=z
-    @logmsg InnerLoop :α value=2*alpha
-    @logmsg InnerLoop :ρ value=solver.ρ[1]
-
-    if J > J_prev
         error("Error: Cost increased during Forward Pass")
     end
 
     return J
+
 end
+
 
 function rollout!(prob::StaticProblem, solver::StaticiLQRSolver, α=1.0)
     Z = prob.Z; Z̄ = prob.Z̄
@@ -305,5 +266,22 @@ function state_diff(x̄::AbstractVector{T}, x::AbstractVector{T}, prob::Problem{
         x̄ - x
     else
         nothing #TODO quaternion
+    end
+end
+
+
+function regularization_update!(solver::StaticiLQRSolver,status::Symbol=:increase)
+    # println("reg $(status)")
+    if status == :increase # increase regularization
+        # @logmsg InnerLoop "Regularization Increased"
+        solver.dρ[1] = max(solver.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)
+        solver.ρ[1] = max(solver.ρ[1]*solver.dρ[1], solver.opts.bp_reg_min)
+        # if solver.ρ[1] > solver.opts.bp_reg_max
+        #     @warn "Max regularization exceeded"
+        # end
+    elseif status == :decrease # decrease regularization
+        # TODO: Avoid divides by storing the decrease factor (divides are 10x slower)
+        solver.dρ[1] = min(solver.dρ[1]/solver.opts.bp_reg_increase_factor, 1.0/solver.opts.bp_reg_increase_factor)
+        solver.ρ[1] = solver.ρ[1]*solver.dρ[1]*(solver.ρ[1]*solver.dρ[1]>solver.opts.bp_reg_min)
     end
 end

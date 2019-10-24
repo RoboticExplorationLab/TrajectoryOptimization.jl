@@ -1,5 +1,22 @@
 
 
+@with_kw mutable struct iLQRStats{T}
+    iterations::Int = 0
+    cost::Vector{T} = [0.]
+    dJ::Vector{T} = [0.]
+    gradient::Vector{T} = [0.]
+    dJ_zero_counter::Int = 0
+end
+
+function reset!(stats::iLQRStats, N=0)
+    stats.iterations = 0
+    stats.cost = zeros(N)
+    stats.dJ = zeros(N)
+    stats.gradient = zeros(N)
+    stats.dJ_zero_counter = 0
+end
+
+
 """$(TYPEDEF)
 Solver options for the iterative LQR (iLQR) solver.
 $(FIELDS)
@@ -89,7 +106,7 @@ The main algorithm consists of two parts:
 """
 struct StaticiLQRSolver{T,N,M,NM,G,Q} <: AbstractSolver{T}
     opts::StaticiLQRSolverOptions{T}
-    stats::Dict{Symbol,Any}
+    stats::iLQRStats{T}
 
     # Data variables
     X̄::Vector{N} # states (n,N)
@@ -105,6 +122,8 @@ struct StaticiLQRSolver{T,N,M,NM,G,Q} <: AbstractSolver{T}
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
+
+    grad::Vector{T} # Gradient
 end
 
 function StaticiLQRSolver(prob::Problem{T},opts=StaticiLQRSolverOptions{T}()) where T
@@ -113,7 +132,7 @@ end
 
 function AbstractSolver(prob::Problem{T,D}, opts::StaticiLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # Init solver statistics
-    stats = Dict{Symbol,Any}(:timer=>TimerOutput())
+    stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
 
     # Init solver results
     n = prob.model.n; m = prob.model.m; N = prob.N
@@ -132,20 +151,19 @@ function AbstractSolver(prob::Problem{T,D}, opts::StaticiLQRSolverOptions{T}) wh
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
-    solver = StaticiLQRSolver(opts,stats,X̄,Ū,K,d,∇F,S,Q,ρ,dρ)
+    grad = zeros(T,N-1)
+
+    solver = StaticiLQRSolver(opts,stats,X̄,Ū,K,d,∇F,S,Q,ρ,dρ,grad)
 
     reset!(solver)
     return solver
 end
 
 function reset!(solver::StaticiLQRSolver{T}) where T
-    solver.stats[:iterations]      = 0
-    solver.stats[:cost]            = T[]
-    solver.stats[:dJ]              = T[]
-    solver.stats[:gradient]        = T[]
-    solver.stats[:dJ_zero_counter] = 0
+    reset!(solver.stats, length(solver.X̄))
     solver.ρ[1] = 0.0
     solver.dρ[1] = 0.0
+    return nothing
 end
 
 function copy(r::StaticiLQRSolver{T}) where T
