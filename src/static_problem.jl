@@ -79,12 +79,17 @@ function stage_cost(cost::CostFunction, z::KnotPoint)
 end
 
 function cost(obj::Objective, Z::Traj)::Float64
-    J = 0.0
+    J::Float64 = 0.0
     for k in eachindex(Z)
-        J += stage_cost(obj[k], Z[k])
+        J += stage_cost(obj[k], Z[k])::Float64
     end
     return J
 end
+
+@inline function cost!(obj::Objective, Z::Traj)
+    map!(stage_cost, obj.J, obj.cost, Z)
+end
+
 
 
 function cost_expansion(cost::CostFunction, z::KnotPoint)
@@ -132,8 +137,8 @@ end
 struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
     model::L
     obj::Objective
-    xf::SVector{N,T}
     x0::SVector{N,T}
+    xf::SVector{N,T}
     Z::Vector{KnotPoint{T,N,M,NM}}
     Z̄::Vector{KnotPoint{T,N,M,NM}}
     N::Int
@@ -142,6 +147,9 @@ struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
 end
 
 Base.size(prob::StaticProblem{L,T,N,M,NM}) where {L,T,N,M,NM} = (N, M, prob.N)
+
+state(prob::StaticProblem) = [state(z) for z in prob.Z]
+control(prob::StaticProblem) = [state(prob.Z[k]) for k = 1:prob.N - 1]
 
 function rollout!(prob::StaticProblem)
     prob.Z[1].z = [prob.x0; control(prob.Z[1])]
