@@ -117,7 +117,7 @@ $(SIGNATURES)
 """
 function gradient_todorov(prob::Problem,solver::iLQRSolver)
     N = prob.N
-    maxes = zeros(N)
+    maxes = zeros(N-1)
     for k = 1:N-1
         maxes[k] = maximum(abs.(solver.d[k])./(abs.(prob.U[k]).+1))
     end
