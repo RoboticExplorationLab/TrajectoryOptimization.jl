@@ -126,11 +126,11 @@ struct StaticiLQRSolver{T,N,M,NM,G,Q} <: AbstractSolver{T}
     grad::Vector{T} # Gradient
 end
 
-function StaticiLQRSolver(prob::Problem{T},opts=StaticiLQRSolverOptions{T}()) where T
+function StaticiLQRSolver(prob::StaticProblem, opts=StaticiLQRSolverOptions())
      AbstractSolver(prob, opts)
 end
 
-function AbstractSolver(prob::Problem{T,D}, opts::StaticiLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
+function AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
 

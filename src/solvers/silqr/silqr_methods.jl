@@ -18,11 +18,11 @@ function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:Abstr
     rollout!(prob)
     # live_plotting(prob,solver)
 
-    cost!(_J, prob.obj, prob.Z)
+    cost!(prob.obj, prob.Z)
     J_prev = sum(_J)
 
     for i = 1:solver.opts.iterations
-        J = step!(prob, solver, J_prev, _J)
+        J = step!(prob, solver, J_prev)
 
         # check for cost blow up
         if J > solver.opts.max_cost_value
@@ -201,7 +201,7 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
             for k in eachindex(Z)
                 Z̄[k] = Z[k]
             end
-            cost!(_J, obj, Z̄)
+            cost!(obj, Z̄)
             J = sum(_J)
 
             z = 0
@@ -227,7 +227,7 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
 
 
         # Calcuate cost
-        cost!(_J, obj, Z̄)
+        cost!(obj, Z̄)
         J = sum(_J)
 
         expected::Float64 = -α*(ΔV[1] + α*ΔV[2])
