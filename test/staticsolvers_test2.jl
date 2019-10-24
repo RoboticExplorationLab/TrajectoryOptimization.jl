@@ -186,6 +186,9 @@ prob = copy(Problems.quad_obs)
 initial_controls!(prob, U0)
 sprob = StaticProblem(quad_, obj, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
+silqr = StaticiLQRSolver(sprob)
+ilqr = iLQRSolver(prob)
+
 solve!(prob, ilqr)
 solve!(sprob, silqr)
 norm(state(sprob) - prob.X)
