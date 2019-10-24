@@ -14,25 +14,26 @@ Objective(costs::Vector{<:CostFunction}, cost_term)
 """
 struct Objective{C} <: AbstractObjective
     cost::Vector{C}
+    J::Vector{Float64}
 end
 
 function Objective(cost::CostFunction,N::Int)
-    Objective([cost for k = 1:N])
+    Objective([cost for k = 1:N], zeros(N))
 end
 
 function Objective(cost::CostFunction,cost_terminal::CostFunction,N::Int)
-    Objective([k < N ? cost : cost_terminal for k = 1:N])
+    Objective([k < N ? cost : cost_terminal for k = 1:N], zeros(N))
 end
 
 function Objective(cost::CostTrajectory,cost_terminal::CostFunction)
-    Objective([cost...,cost_terminal])
+    Objective([cost...,cost_terminal], zeros(N))
 end
 
 import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]
 
-"Allow iteration" 
+"Allow iteration"
 Base.iterate(obj::Objective, start=1) = Base.iterate(obj.cost, start)
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
@@ -84,7 +85,7 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf:
     ℓ = QuadraticCost(Q, R, H, q, r, c)
     ℓN = QuadraticCost(Qf, qf, cf)
 
-    Objective([k < N ? ℓ : ℓN for k = 1:N])
+    Objective(ℓ, ℓN, N)
 end
 
 function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int) where {T,S<:SVector}
@@ -100,5 +101,5 @@ function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray, Qf::Abs
 
     ℓN = QuadraticCost(Qf, R, H, qf, r, cf)
 
-    Objective([k < N ? ℓ : ℓN for k = 1:N])
+    Objective(ℓ, ℓN, N)
 end
