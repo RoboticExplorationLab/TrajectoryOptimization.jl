@@ -18,6 +18,7 @@ Generate the continuous dynamics Jacobian for a dynamics model.
 The resulting function should be non-allocating if the original dynamics function is non-allocating
 """
 function generate_jacobian(model::M) where {M<:AbstractModel}
+    n,m = model.n, model.m
     ix,iu = 1:n, n .+ (1:m)
     f_aug(z) = dynamics(model, view(z,ix), view(z,iu))
     ∇f(z) = ForwardDiff.jacobian(f_aug,z)
