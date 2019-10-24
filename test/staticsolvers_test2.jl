@@ -1,5 +1,5 @@
-using LabelledArrays
 
+# Original problem
 prob = copy(Problems.quad_obs)
 n,m,N = size(prob)
 dt = prob.dt
@@ -9,6 +9,15 @@ quad_ = Dynamics.Quadrotor()
 generate_jacobian(quad_)
 rk3_gen(quad_)
 generate_discrete_jacobian(quad_)
+
+
+# Static Objective
+x0 = SVector{n}(prob.x0)
+xf = SVector{n}(prob.xf)
+Q = (1.0e-3)*Diagonal(@SVector ones(n))  # use static diagonal to avoid allocations
+R = (1.0e-2)*Diagonal(@SVector ones(m))
+Qf = 1.0*Diagonal(@SVector ones(n))
+obj = LQRObjective(Q,R,Qf,xf,N)
 
 
 # Test model
@@ -37,13 +46,6 @@ Z[end] = KnotPoint(xs,m)
 
 
 # Build Problem
-x0 = SVector{n}(prob.x0)
-xf = SVector{n}(prob.xf)
-Q = (1.0e-3)*Diagonal(@SVector ones(n))  # use static diagonal to avoid allocations
-R = (1.0e-2)*Diagonal(@SVector ones(m))
-Qf = 1.0*Diagonal(@SVector ones(n))
-obj = LQRObjective(Q,R,Qf,xf,N)
-
 sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 
 # Build Solver
@@ -75,7 +77,6 @@ cost(prob) ≈ cost(obj, Z)
 
 
 # Cost expansion
-E = silqr.Q
 cost_expansion!(prob, ilqr)
 cost_expansion(E, obj, Z)
 all([E.xx[k] ≈ ilqr.Q[k].xx for k in eachindex(E.xx)])
@@ -96,7 +97,7 @@ Z[N] = KnotPoint(x,m)
 
 prob = copy(Problems.quad_obs)
 initial_controls!(prob, [u for k = 1:N-1])
-sprob = StaticProblem(quad_, obj, xf, x0, Z, deepcopy(Z), N, dt, prob.tf)
+sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 rollout!(sprob)
 rollout!(prob)
 all([state(sprob.Z[k]) ≈ prob.X[k] for k = 1:N])
@@ -114,27 +115,92 @@ jacobian!(prob, ilqr)
 discrete_jacobian!(silqr.∇F, quad_, Z)
 backwardpass!(prob, ilqr)
 ΔV = backwardpass!(sprob, silqr)
-@btime backwardpass!($prob, $ilqr)
-@btime backwardpass!($sprob, $silqr) # 11x speedup
 
 silqr.K ≈ ilqr.K
 silqr.d ≈ ilqr.d
+
+@btime backwardpass!($prob, $ilqr)
+@btime backwardpass!($sprob, $silqr) # 11x speedup
+
 
 
 # Rollout
 rollout!(prob, ilqr, 1.0)
 rollout!(sprob, silqr, 1.0)
 all([state(sprob.Z̄[k]) ≈ ilqr.X̄[k] for k in eachindex(sprob.Z)])
+all([state(sprob.Z[k]) ≈ prob.X[k] for k in eachindex(sprob.Z)])
+all([control(sprob.Z[k]) ≈ prob.U[k] for k in eachindex(prob.U)])
 
 @btime rollout!($prob, $ilqr, 1.0)
 @btime rollout!($sprob, $silqr, 1.0)  # 8.5x speedup
 
 # Forward pass
-J_prev = cost(sprob.obj, sprob.Z)
+_J = zeros(N)
+cost!(_J, sprob.obj, sprob.Z)
+J_prev = sum(_J)
 forwardpass!(prob, ilqr, Vector(ΔV), J_prev)
-forwardpass!(sprob, silqr, ΔV, J_prev)
+forwardpass!(sprob, silqr, ΔV, J_prev, _J)
 all([state(sprob.Z̄[k]) ≈ ilqr.X̄[k] for k in eachindex(sprob.Z)])
 all([control(sprob.Z̄[k]) ≈ ilqr.Ū[k] for k in 1:N-1])
+all([state(sprob.Z[k]) ≈ prob.X[k] for k in 1:N-1])
 
 @btime forwardpass!($prob, $ilqr, $(Vector(ΔV)), $J_prev)
-@btime forwardpass!($sprob, $silqr, $ΔV, $J_prev) # 8.5x speedup
+@btime forwardpass!($sprob, $silqr, $ΔV, $J_prev, $_J) # 8.5x speedup
+
+# Test Entire Step
+x = zeros(n)*NaN
+u = ones(m)
+Z = [KnotPoint(x,u,dt) for k = 1:N]
+Z[N] = KnotPoint(x,m)
+
+prob = copy(Problems.quad_obs)
+initial_controls!(prob, [u for k = 1:N-1])
+sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
+
+rollout!(sprob)
+rollout!(prob)
+J_prev = cost(prob)
+J_prev == cost(sprob.obj, sprob.Z)
+
+step!(sprob, silqr, J_prev)
+step!(prob, ilqr, J_prev)
+
+@btime step!($prob, $ilqr, $J_prev)
+@btime step!($sprob, $silqr, $J_prev) # 9.5x faster
+
+gradient_todorov!(sprob, silqr)
+mean(silqr.grad) ≈ gradient_todorov(prob, ilqr)
+
+@btime gradient_todorov($prob, $ilqr)
+@btime gradient_todorov!($sprob, $silqr, $grad) # 3.5x faster
+
+
+# Test entire solve
+x = zeros(n)*NaN
+u = ones(m)
+U0 = [u for k = 1:N-1]
+Z = [KnotPoint(x,u,dt) for k = 1:N]
+Z[N] = KnotPoint(x,m)
+
+prob = copy(Problems.quad_obs)
+initial_controls!(prob, U0)
+sprob = StaticProblem(quad_, obj, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+
+solve!(prob, ilqr)
+solve!(sprob, silqr)
+norm(state(sprob) - prob.X)
+
+
+@btime begin
+    initial_controls!($prob, $U0)
+    solve!($prob, $ilqr)
+end
+ilqr.stats[:iterations]
+
+@btime begin
+    for k = 1:$N
+        $sprob.Z[k].z = $Z[k].z
+    end
+    solve!($sprob, $silqr)  # 13x faster!!! (0 allocs)
+end
+silqr.stats.iterations
