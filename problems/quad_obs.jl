@@ -86,4 +86,4 @@ end
 constraints[N] += bnd_xf
 
 quad_obs = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
-initial_controls!(quadrotor,U_hover); # initialize problem with control
+initial_controls!(quad_obs,U_hover); # initialize problem with control
