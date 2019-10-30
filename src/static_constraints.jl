@@ -1,11 +1,12 @@
-using StaticArrays, ForwardDiff, BenchmarkTools, LinearAlgebra
+# using StaticArrays, ForwardDiff, BenchmarkTools, LinearAlgebra
 
-abstract type ConstraintType end
-abstract type Equality <: ConstraintType end
-abstract type Inequality <: ConstraintType end
-abstract type Null <: ConstraintType end
-abstract type AbstractConstraint{S<:ConstraintType} end
+# abstract type ConstraintType end
+# abstract type Equality <: ConstraintType end
+# abstract type Inequality <: ConstraintType end
+# abstract type Null <: ConstraintType end
+# abstract type AbstractConstraint{S<:ConstraintType} end
 
+pos(x) = max(x,0)
 
 struct KnotConstraint{T,P,NM,PNM,C}
 	con::C
@@ -45,6 +46,7 @@ duals(con::KnotConstraint) = con.λ
 duals(con::KnotConstraint, k::Int) = con.λ[_index(con,k)]
 penalty(con::KnotConstraint) = con.μ
 penalty(con::KnotConstraint, k::Int) = con.μ[_index(con,k)]
+penalty_matrix(con::KnotConstraint, i::Int) = Diagonal(con.active[i] .* con.μ[i])
 
 function evaluate(con::KnotConstraint, Z::Traj)
 	for i in eachindex(con.vals)
@@ -87,18 +89,60 @@ function max_violation!(con::KnotConstraint{T,P,NM,PNM,C}) where
 	return nothing
 end
 
+function cost!(J, con::KnotConstraint, Z)
+	for (i,k) in enumerate(con.inds)
+		c = con.vals[i]
+		λ = con.λ[i]
+		Iμ = penalty_matrix(con, i)
+		J[k] += λ'c + 0.5*c'Iμ*c
+	end
+end
+
+
+"""
+Assumes constraints, active set, and constrint jacobian have all been calculated
+"""
+function cost_expansion(E, con::KnotConstraint, Z)
+	ix,iu = Z[1]._x, Z[1]._u
+	@inbounds for i in eachindex(con.inds)
+		k = con.inds[i]
+		c = con.vals[i]
+		λ = con.λ[i]
+		μ = con.μ[i]
+		a = con.active[i]
+		Iμ = Diagonal( a .* μ )
+		cx = con.∇c[i][:,ix]
+		cu = con.∇c[i][:,iu]
+
+		E.xx[k] += cx'Iμ*cx
+		E.uu[k] += cu'Iμ*cu
+		E.ux[k] += cu'Iμ*cx
+
+		g = Iμ*c + λ
+		E.x[k] += cx'g
+		E.u[k] += cu'g
+	end
+end
+
+function dual_update!(con::KnotConstraint{T,P,NM,PNM,C}) where
+		{T,P,NM,PNM,C<:AbstractConstraint{Equality}}
+	λ = con.λ
+	c = con.vals
+	μ = con.μ
+	for i in eachindex(con.inds)
+		λ[i] = saturate(@. λ[i] + μ[i] * c[i], solver.opts.dual_max, sovler.opts.) 
 
 
 
-struct ConstraintSet{T}
+struct ConstraintSets{T}
 	constraints::Vector{<:KnotConstraint}
 	p::Vector{T}
 	c_max::Vector{T}
 end
 
-Base.length(conSet::ConstraintSet, k) = constraints.p[k]
+Base.length(conSet::ConstraintSets, k) = constraints.p[k]
 
-function ConstraintSet(constraints, N)
+function ConstraintSets(constraints, N)
 	p = zeros(N)
 	c_max = zeros(length(constraints))
 	for con in constraints
@@ -106,10 +150,10 @@ function ConstraintSet(constraints, N)
 			p[k] += length(con, k)
 		end
 	end
-	ConstraintSet(constraints, p, c_max)
+	ConstraintSets(constraints, p, c_max)
 end
 
-function max_violation!(conSet::ConstraintSet{T}) where T
+function max_violation!(conSet::ConstraintSets{T}) where T
 	for i in eachindex(conSet.constraints)
 		max_violation!(conSet.constraints[i])
 		c_max = conSet.c_max::Vector{T}
@@ -117,6 +161,26 @@ function max_violation!(conSet::ConstraintSet{T}) where T
 	end
 end
 
+function evaluate(conSet::ConstraintSets, Z::Traj)
+	for con in conSet.constraints
+		evaluate(con, Z)
+	end
+end
+
+function jacobian(conSet::ConstraintSets, Z::Traj)
+	for con in conSet.constraints
+		jacobian(con, Z)
+	end
+end
+
+function update_active_set!(conSet::ConstraintSets, Z::Traj)
+	for con in conSet.constraints
+		update_active_set!(con)
+	end
+end
+
+Base.iterate(conSet::ConstraintSets) = @inbounds (conSet.constraints[1], 1)
+Base.iterate(conSet::ConstraintSets, i) = @inbounds i >= length(conSet.constraints) ? nothing : (conSet.constraints[i+1], i+1)
 
 
 
@@ -154,7 +218,7 @@ function evaluate(con::NormConstraint, x, u)
 end
 
 
-struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality}
+struct StaticBoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality}
 	n::Int
 	m::Int
 	z_max::SVector{NM,T}
@@ -164,7 +228,7 @@ struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality}
 	active_N::SVector{PN,Int}
 end
 
-function BoundConstraint(n, m; x_max=zeros(n)*Inf, x_min=zeros(n)*-Inf,
+function StaticBoundConstraint(n, m; x_max=zeros(n)*Inf, x_min=zeros(n)*-Inf,
 		u_max=zeros(m)*Inf, u_min=zeros(m)*-Inf)
 	z_max = [x_max; u_max]
 	z_min = [x_min; u_min]
@@ -182,27 +246,27 @@ function BoundConstraint(n, m; x_max=zeros(n)*Inf, x_min=zeros(n)*-Inf,
 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
 
 
-	BoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
+	StaticBoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
 end
 
-Base.size(bnd::BoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
+Base.size(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
 
-function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PNM}
+function evaluate(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PNM}
 	bnd.B*SVector{NM}([x; u]) + bnd.b
 end
 
-function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x::SVector{n,T}) where {T,P,PN,NM,PNM,n}
+function evaluate(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}, x::SVector{n,T}) where {T,P,PN,NM,PNM,n}
 	ix = SVector{n}(1:n)
 	B_N = bnd.B[bnd.active_N, ix]
 	b_N = bnd.b[bnd.active_N]
 	B_N*x + b_N
 end
 
-function jacobian(bnd::BoundConstraint, x, u)
+function jacobian(bnd::StaticBoundConstraint, x, u)
 	bnd.B
 end
 
-function jacobian(bnd::BoundConstraint, x::SVector{n,T}) where{n,T}
+function jacobian(bnd::StaticBoundConstraint, x::SVector{n,T}) where{n,T}
 	ix = SVector{n}(1:n)
 	bnd.B[bnd.active_N, ix]
 end

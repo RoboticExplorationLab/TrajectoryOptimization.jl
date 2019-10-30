@@ -54,8 +54,34 @@ constraints = [con1, con2]
 @btime max_violation!($con2)
 
 
-conSet = ConstraintSet(constraints, N)
+conSet = ConstraintSets(constraints, N)
+max_violation!(conSet)
 @btime max_violation!($conSet)
+
+@btime jacobian($conSet, $Z)
+
+
+# AL Objective
+xf = @SVector zeros(n)
+Q = Diagonal(@SVector ones(n))
+R = Diagonal(@SVector ones(m))
+Qf = Diagonal(@SVector ones(n))
+obj = LQRObjective(Q,R,Qf,xf,N)
+
+alobj = StaticALObjective3(obj, conSet)
+E = CostExpansion(n,m,N)
+@btime cost_expansion($E, $obj, $Z)
+cost_expansion(E,alobj,Z)
+@btime cost_expansion($Q,$alobj,$Z)
+
+cost_expansion(E, con1, Z)
+@btime cost_expansion($E, $con1, $Z)
+J = obj.J
+@btime cost!($J, $con1, $Z)
+@btime cost!($alobj, $Z)
+
+
+
 
 
 

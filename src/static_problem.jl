@@ -1,7 +1,6 @@
 using StaticArrays
 
 """
-$(TYPEDEF)
 Stores the states and controls for a single knot point
 """
 mutable struct KnotPoint{T,N,M,NM}

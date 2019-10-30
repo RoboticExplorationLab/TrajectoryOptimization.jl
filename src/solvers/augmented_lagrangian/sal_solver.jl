@@ -41,8 +41,33 @@ function AbstractSolver(prob::StaticProblem{T,D}, opts::AugmentedLagrangianSolve
 end
 
 
+struct StaticALObjective3{T} <: AbstractObjective
+    obj::Objective
+    constraints::ConstraintSets{T}
+end
 
-struct StaticALObjective{T} <: AbstractObjective
-    cost::Vector{<:CostFunction}
-    constraints::ConstraintSet{T}
+
+function cost!(obj::StaticALObjective3, Z::Traj)
+    # Calculate unconstrained cost
+    cost!(obj.obj, Z)
+
+    # Calculate constrained cost
+    for con in obj.constraints.constraints
+        cost!(obj.obj.J, con, Z)
+    end
+end
+
+function cost_expansion(E, obj::StaticALObjective3, Z::Traj)
+    # Update constraint jacobians
+    jacobian(obj.constraints, Z)
+
+    ix, iu = Z[1]._x, Z[1]._u
+
+    # Calculate expansion of original objective
+    cost_expansion(E, obj.obj, Z)
+
+    # Add in expansion of constraints
+    for con in obj.constraints.constraints
+        cost_expansion(E, con, Z)
+    end
 end
