@@ -24,7 +24,7 @@ end
 
 function rollout!(prob::Problem{T}) where T
     N = prob.N
-    if !all(isfinite.(to_array(prob.X)))
+    if true #!all(isfinite.(to_array(prob.X)))
         prob.X[1] = prob.x0
         rollout!(prob.X, prob.model, prob.U, get_dt_traj(prob))
     end
