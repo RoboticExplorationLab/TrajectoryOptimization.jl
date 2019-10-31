@@ -54,9 +54,9 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
+struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,O<:AbstractObjective,N,M,NM}
     model::L
-    obj::Objective
+    obj::O
     constraints::ConstraintSets
     x0::SVector{N,T}
     xf::SVector{N,T}

@@ -10,7 +10,7 @@ function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:Abstr
 
     n,m,N = size(prob)
     J = Inf
-    _J = prob.obj.J
+    _J = get_J(prob.obj)
 
     # logger = default_logger(solver)
 
@@ -186,7 +186,7 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
     Z = prob.Z; Z̄ = prob.Z̄
     obj = prob.obj
 
-    _J = prob.obj.J
+    _J = get_J(prob.obj)
     J::Float64 = Inf
     α = 1.0
     iter = 0

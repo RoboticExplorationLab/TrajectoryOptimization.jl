@@ -44,7 +44,9 @@ end
 
 function convertProblem(prob::StaticProblem, solver::StaticALSolver)
     alobj = StaticALObjective(prob.obj, prob.constraints)
-
+    rollout!(prob)
+    StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
+        prob.x0, prob.xf, prob.Z, prob.Z̄, prob.N, prob.dt, prob.tf)
 end
 
 
@@ -52,6 +54,8 @@ struct StaticALObjective{T} <: AbstractObjective
     obj::Objective
     constraints::ConstraintSets{T}
 end
+
+get_J(obj::StaticALObjective) = obj.obj.J
 
 
 function cost!(obj::StaticALObjective, Z::Traj)

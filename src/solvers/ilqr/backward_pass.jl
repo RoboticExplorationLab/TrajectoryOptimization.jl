@@ -51,6 +51,7 @@ function _backwardpass!(prob::Problem,solver::iLQRSolver)
         # if Quu_reg.info == -1
         if !isposdef(Hermitian(Quu_reg))
             # increase regularization
+            println("Regularizing Quu")
 
             @logmsg InnerIters "Regularizing Quu "
             regularization_update!(solver,:increase)

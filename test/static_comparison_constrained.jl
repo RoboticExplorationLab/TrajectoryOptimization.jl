@@ -140,9 +140,9 @@ z = [x;u]
 
 # Static problem
 z = KnotPoint(xs,us,dt)
-Z = [z for k = 1:N]
+Z = [ KnotPoint(xs,us,dt) for k = 1:N]
 Z[end] = KnotPoint(xs,m)
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
 ############################################################################################
 #                               PROBLEM TESTS                                              #
@@ -259,6 +259,104 @@ all([E.u[k] ≈ ilqr.Q[k].u for k = 1:N-1])
 
 max_violation(alsolver)
 max_violation!(conSet)
+maximum(conSet.c_max)
 maximum(conSet.c_max) == max_violation(alsolver)
 @btime max_violation($alsolver)
 @btime max_violation!($conSet)  # 6.5x faster
+
+
+
+xs = SVector{n}(x0)
+Z = [ KnotPoint(xs,us,dt) for k = 1:N]
+Z[end] = KnotPoint(xs,m)
+X = state.(Z)
+U = control.(Z)
+
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+
+prob = copy(quad_obs)
+initial_states!(prob, X)
+initial_controls!(prob, U)
+
+prob_al = AugmentedLagrangianProblem(prob, alsolver)
+sprob_al = convertProblem(sprob, salsolver)
+cost(sprob_al) ≈ cost(prob_al)
+
+ilqr = alsolver.solver_uncon
+silqr = salsolver.solver_uncon
+
+cost_expansion!(prob_al, ilqr)
+cost_expansion(silqr.Q, sprob_al.obj, sprob.Z)
+all([silqr.Q.xx[k] ≈ ilqr.Q[k].xx for k = 1:N])
+all([silqr.Q.uu[k] ≈ ilqr.Q[k].uu for k = 1:N-1])
+all([silqr.Q.x[k] ≈ ilqr.Q[k].x for k = 1:N])
+all([silqr.Q.u[k] ≈ ilqr.Q[k].u for k = 1:N-1])
+
+jacobian!(prob_al, ilqr)
+discrete_jacobian!(silqr.∇F, sprob_al.model, sprob_al.Z)
+ilqr.∇F ≈ silqr.∇F
+
+ΔV  = backwardpass!(prob_al, ilqr)
+ΔVs = backwardpass!(sprob_al, silqr)
+ΔV ≈ ΔVs
+ilqr.K ≈ silqr.K
+all([state(sprob_al.Z[k]) ≈ prob_al.X[k] for k = 1:N])
+all([control(sprob_al.Z[k]) ≈ prob_al.U[k] for k in 1:N-1])
+
+rollout!(prob_al, ilqr, 1.0)
+rollout!(sprob_al, silqr, 1.0)
+all([state(sprob_al.Z̄[k]) ≈ ilqr.X̄[k] for k = 1:N])
+
+
+reset!(silqr)
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+
+prob = copy(quad_obs)
+initial_states!(prob, X)
+initial_controls!(prob, U)
+
+alsolver.opts.opts_uncon.iterations = 50
+salsolver.opts.opts_uncon.iterations = 50
+
+prob_al = AugmentedLagrangianProblem(prob, alsolver)
+sprob_al = convertProblem(sprob, salsolver)
+silqr.opts.iterations
+
+@btime begin
+    initial_controls!($prob_al, $U)
+    solve!($prob_al, $ilqr)
+end
+ilqr.stats[:iterations]
+
+@btime begin
+    for k = 1:$N
+        $sprob_al.Z[k].z = $Z[k].z
+    end
+    solve!($sprob_al, $silqr)  # 21x faster!!! (0 allocs)
+end
+silqr.stats.iterations
+solve!(prob_al, ilqr)
+solve!(sprob_al, silqr)
+
+ilqr.stats[:iterations]
+silqr.stats.iterations
+plot(ilqr.stats[:cost][2:end])
+plot!(silqr.stats.cost)
+cost(prob_al)
+cost(sprob_al)
+norm(state(sprob_al) - prob_al.X)
+
+ilqr.ρ[1]
+silqr.dρ[1]
+silqr.ρ[1] = 0
+silqr.dρ[1] = 0
+ilqr.K[N-1]
+silqr.K[N-1]
+
+solve!(salprob, silqr)
+@btime solve!($salprob, $salsolver)
+cost!(salprob.obj, Z)
+
+
+cost(prob_al)
+solve!(prob_al, alsolver.solver_uncon)

@@ -160,7 +160,7 @@ function AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions{T}) w
 end
 
 function reset!(solver::StaticiLQRSolver{T}) where T
-    reset!(solver.stats, length(solver.X̄))
+    reset!(solver.stats, solver.opts.iterations)
     solver.ρ[1] = 0.0
     solver.dρ[1] = 0.0
     return nothing

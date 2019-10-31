@@ -29,6 +29,8 @@ function Objective(cost::CostTrajectory,cost_terminal::CostFunction)
     Objective([cost...,cost_terminal], zeros(N))
 end
 
+get_J(obj::Objective) = obj.J
+
 import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]

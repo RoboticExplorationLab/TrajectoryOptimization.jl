@@ -82,7 +82,7 @@ end
 
 function viol_eq(v::T, a)::T where T
 	for i in eachindex(a)
-		v = max(v, a[i])
+		v = max(v, abs(a[i]))
 	end
 	return v
 end
@@ -159,18 +159,18 @@ struct ConstraintSets{T}
 	c_max::Vector{T}
 end
 
-Vector{KnotConstraint}()
-function ConstraintSets()
+function ConstraintSets(N)
 	constraints = Vector{KnotConstraint}()
-	p = zeros(Int,0)
-	c_max = zeros(0)
+	p = zeros(Int,N)
+	c_max = zeros(N)
+	ConstraintSets(constraints,p,c_max)
 end
 
 
 Base.length(conSet::ConstraintSets, k) = constraints.p[k]
 
 function ConstraintSets(constraints, N)
-	p = zeros(N)
+	p = zeros(Int,N)
 	c_max = zeros(length(constraints))
 	for con in constraints
 		for k = 1:N
@@ -182,9 +182,9 @@ end
 
 function max_violation!(conSet::ConstraintSets{T}) where T
 	for i in eachindex(conSet.constraints)
-		max_violation!(conSet.constraints[i])
-		# c_max = conSet.constraints[i].c_max::Vector{T}
-		# conSet.c_max[i] = get_c_max(conSet.constraints[i])
+		con = conSet.constraints[i]
+		max_violation!(con)
+		conSet.c_max[i] = maximum(con.c_max::Vector{T})
 	end
 end
 
@@ -217,7 +217,7 @@ struct GoalConstraint{T,N} <: AbstractConstraint{Equality}
 	GoalConstraint(xf::SVector{N,T}) where {N,T} = new{T,N}(xf, Diagonal(@SVector ones(N)))
 end
 size(con::GoalConstraint{T,N}) where {T,N} = (N,0,N)
-evaluate(con::GoalConstraint,z::KnotPoint) = state(z) - con.xf
+evaluate(con::GoalConstraint,x,u) = x - con.xf
 jacobian(con::GoalConstraint,z::KnotPoint) = con.Ix
 
 struct CircleConstraint{T,P} <: AbstractConstraint{Inequality}
