@@ -39,6 +39,7 @@ end
 Generate the discrete dynamics Jacobian for a dynamics model
 """
 function generate_discrete_jacobian(model::M) where {M<:AbstractModel}
+    n,m = model.n, model.m
     ix,iu,idt = 1:n, n .+ (1:m), n+m+1
     fd_aug(z) = discrete_dynamics(model, view(z,ix), view(z,iu), z[idt])
     ∇fd(z) = ForwardDiff.jacobian(fd_aug, z)

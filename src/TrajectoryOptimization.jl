@@ -144,7 +144,6 @@ include("problem.jl")
 include("solvers.jl")
 include("rollout.jl")
 include("dynamics.jl")
-include("problems.jl")
 include("logger.jl")
 
 include("knotpoint.jl")
@@ -153,6 +152,8 @@ include("static_problem.jl")
 include("static_model.jl")
 include("solvers/silqr/silqr_solver.jl")
 include("solvers/silqr/silqr_methods.jl")
+
+include("problems.jl")
 
 write_ipopt_options()
 end
