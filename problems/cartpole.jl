@@ -1,3 +1,7 @@
+const TO = TrajectoryOptimization
+import TrajectoryOptimization: KnotPoint, StaticBoundConstraint, GoalConstraint, StaticProblem, KnotConstraint, ConstraintSets
+using StaticArrays
+
 # Cartpole
 T = Float64
 model = TrajectoryOptimization.Dynamics.cartpole
@@ -14,9 +18,11 @@ xf = [0.; pi; 0.; 0.] # (ie, swing up)
 N = 101
 tf = 5.
 dt = tf/(N-1)
-U0 = [0.01*ones(m) for k = 1:N-1]
+u0 = 0.01*ones(m)
+U0 = [u0 for k = 1:N-1]
 obj = TrajectoryOptimization.LQRObjective(Q,R,Qf,xf,N)
-bnd = BoundConstraint(n,m,u_min=-3.,u_max=3.)
+u_bnd = 3.0
+bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
 goal = goal_constraint(xf)
 constraints = Constraints(N)
 for k = 1:N-1
@@ -26,3 +32,30 @@ constraints[N] += goal
 
 cartpole = TrajectoryOptimization.Problem(model_d, obj, constraints=constraints,x0=x0, xf=xf, N=N, dt=dt)
 initial_controls!(cartpole, U0)
+
+
+model = Dynamics.Cartpole()
+TO.generate_jacobian(model)
+TO.rk3_gen(model)
+TO.generate_discrete_jacobian(model)
+
+Q = 1.0e-2*Diagonal(@SVector ones(n))
+Qf = 100.0*Diagonal(@SVector ones(n))
+R = 1.0e-1*Diagonal(@SVector ones(m))
+x0 = SVector{n}(x0)
+xf = SVector{n}(xf)
+obj = LQRObjective(Q,R,Qf,xf,N)
+
+xs = NaN*@SVector zeros(n)
+us = SVector{m}(u0)
+Z = [KnotPoint(xs,us,dt) for k = 1:N]
+Z[end] = KnotPoint(xs,m)
+
+bnd = StaticBoundConstraint(n,m, u_min=-u_bnd*(@SVector ones(m)), u_max=u_bnd*(@SVector ones(m)))
+goal = GoalConstraint(SVector{n}(xf))
+con_bnd = KnotConstraint(bnd, 1:N-1)
+con_goal = KnotConstraint(goal, N:N)
+conSet = ConstraintSets([con_bnd, con_goal], N)
+
+cartpole_static = StaticProblem(model, obj, conSet, x0, xf,
+    deepcopy(Z), deepcopy(Z), N, dt, dt*(N-1))
