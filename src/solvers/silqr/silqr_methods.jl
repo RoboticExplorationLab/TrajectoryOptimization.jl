@@ -225,7 +225,6 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
             continue
         end
 
-
         # Calcuate cost
         cost!(obj, Z̄)
         J = sum(_J)
@@ -265,10 +264,15 @@ function rollout!(prob::StaticProblem, solver::StaticiLQRSolver, α=1.0)
 
     for k = 1:prob.N-1
         δx = state(Z̄[k]) - state(Z[k])
-        δu = K[k]*δx + α*d[k]
-        Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
+        ū = control(Z[k]) + K[k]*δx + α*d[k]
+        Z̄[k].z = [state(Z̄[k]); ū]
 
-        propagate_dynamics(prob.model, Z̄[k+1], Z̄[k])
+        # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
+        Z̄[k+1].z = [discrete_dynamics(prob.model, state(Z̄[k]), ū, Z̄[k].dt);
+            control(Z[k+1])]
+
+
+        # propagate_dynamics(prob.model, Z̄[k+1], Z̄[k])
 
         temp = norm(Z̄[k+1].z)
         if temp > solver.opts.max_state_value
