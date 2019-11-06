@@ -17,6 +17,9 @@ function reset!(stats::ALStats, L=0)
     stats.penalty_max = zeros(L)
 end
 
+
+
+
 struct StaticALSolver{T,S<:AbstractSolver} <: AbstractSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
     stats::ALStats{T}
@@ -38,7 +41,14 @@ function AbstractSolver(prob::StaticProblem{L,T}, opts::AugmentedLagrangianSolve
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
 
     solver_uncon = AbstractSolver(prob, opts.opts_uncon)
-    StaticALSolver(opts,stats,stats_uncon,solver_uncon)
+    solver = StaticALSolver(opts,stats,stats_uncon,solver_uncon)
+    reset!(solver)
+    return solver
+end
+
+function reset!(solver::StaticALSolver)
+    reset!(solver.stats, solver.opts.iterations)
+    reset!(solver.solver_uncon)
 end
 
 
@@ -48,6 +58,7 @@ function convertProblem(prob::StaticProblem, solver::StaticALSolver)
     StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
         prob.x0, prob.xf, prob.Z, prob.Z̄, prob.N, prob.dt, prob.tf)
 end
+
 
 
 struct StaticALObjective{T} <: AbstractObjective

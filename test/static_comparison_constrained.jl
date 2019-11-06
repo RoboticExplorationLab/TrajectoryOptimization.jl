@@ -265,6 +265,10 @@ maximum(conSet.c_max) == max_violation(alsolver)
 @btime max_violation!($conSet)  # 6.5x faster
 
 
+############################################################################################
+#                                TEST ENTIRE SOLVE                                         #
+############################################################################################
+reset!(conSet, sopts)
 
 xs = SVector{n}(x0)
 Z = [ KnotPoint(xs,us,dt) for k = 1:N]
@@ -276,7 +280,12 @@ sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, d
 
 prob = copy(quad_obs)
 initial_states!(prob, X)
-initial_controls!(prob, U)
+
+# Augmented Lagrangian Solver
+sopts = AugmentedLagrangianSolverOptions{Float64}()
+sopts.opts_uncon = StaticiLQRSolverOptions{Float64}()
+alsolver = AugmentedLagrangianSolver(prob)
+salsolver = StaticALSolver(sprob, sopts)
 
 prob_al = AugmentedLagrangianProblem(prob, alsolver)
 sprob_al = convertProblem(sprob, salsolver)
@@ -335,28 +344,231 @@ ilqr.stats[:iterations]
     solve!($sprob_al, $silqr)  # 21x faster!!! (0 allocs)
 end
 silqr.stats.iterations
+initial_controls!(prob_al, U)
 solve!(prob_al, ilqr)
+for k = 1:N
+    sprob_al.Z[k].z = Z[k].z
+end
 solve!(sprob_al, silqr)
 
-ilqr.stats[:iterations]
-silqr.stats.iterations
-plot(ilqr.stats[:cost][2:end])
-plot!(silqr.stats.cost)
 cost(prob_al)
 cost(sprob_al)
-norm(state(sprob_al) - prob_al.X)
 
-ilqr.ρ[1]
-silqr.dρ[1]
-silqr.ρ[1] = 0
-silqr.dρ[1] = 0
-ilqr.K[N-1]
-silqr.K[N-1]
+@btime dual_update!($sprob_al, $salsolver)
+@btime penalty_update!($sprob_al, $salsolver)
 
-solve!(salprob, silqr)
-@btime solve!($salprob, $salsolver)
-cost!(salprob.obj, Z)
+@btime reset!($con_bnd, $salsolver.opts)
+@btime reset!($conSet, $salsolver.opts)
 
 
-cost(prob_al)
-solve!(prob_al, alsolver.solver_uncon)
+reset!(silqr)
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+
+prob = copy(quad_obs)
+initial_states!(prob, X)
+initial_controls!(prob, U)
+
+alsolver.opts.opts_uncon.iterations = 50
+salsolver.opts.opts_uncon.iterations = 50
+
+prob_al = AugmentedLagrangianProblem(prob, alsolver)
+sprob_al = convertProblem(sprob, salsolver)
+silqr.opts.iterations
+reset!(conSet, salsolver.opts)
+
+reset!(salsolver)
+reset!(salsolver.stats, 30)
+salsolver.stats.c_max
+salsolver.opts.iterations
+@btime begin
+    for k = 1:$N
+        $sprob_al.Z[k].z = $Z[k].z
+    end
+    reset!($conSet, $salsolver.opts)
+    solve!($sprob_al, $salsolver)  # 21x faster!!! (0 allocs)
+end
+
+
+# Test entire constrained solve
+xs = SVector{n}(x0)
+Z = [ KnotPoint(xs,us,dt) for k = 1:N]
+Z[end] = KnotPoint(xs,m)
+X = state.(Z)
+U = control.(Z)
+
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+    N, dt, prob.tf)
+
+prob = copy(quad_obs)
+initial_states!(prob, X)
+
+# Augmented Lagrangian Solver
+opts = AugmentedLagrangianSolverOptions{Float64}(verbose=true,
+    iterations=25,
+    cost_tolerance=1.0e-5,
+    cost_tolerance_intermediate=1.0e-3,
+    constraint_tolerance=1e-4,
+    penalty_scaling=10.,
+    penalty_initial=0.1)
+sopts = AugmentedLagrangianSolverOptions{Float64}(verbose=true,
+    iterations=25,
+    cost_tolerance=1.0e-5,
+    cost_tolerance_intermediate=1.0e-3,
+    constraint_tolerance=1e-4,
+    penalty_scaling=10.,
+    penalty_initial=0.1)
+sopts.opts_uncon = StaticiLQRSolverOptions{Float64}()
+alsolver = AugmentedLagrangianSolver(prob, opts)
+salsolver = StaticALSolver(sprob, sopts)
+
+
+prob = copy(quad_obs)
+solve!(prob, alsolver)
+max_violation(prob)
+maximum.(alsolver.C)
+alsolver.C[end]
+alsolver.stats
+
+sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+    N, dt, prob.tf)
+salsolver = StaticALSolver(sprob, sopts)
+sprob_al = convertProblem(sprob, salsolver)
+reset!(conSet, sopts)
+solve!(sprob_al, salsolver)
+
+
+
+
+function reset_problem(opts)
+    xs = SVector{n}(x0)
+    Z = [ KnotPoint(xs,us,dt) for k = 1:N]
+    Z[end] = KnotPoint(xs,m)
+    X = state.(Z)
+    U = control.(Z)
+
+    prob = copy(quad_obs)
+    initial_states!(prob, X)
+
+    # Augmented Lagrangian Solver
+    opts.opts_uncon = iLQRSolverOptions{Float64}()
+    alsolver = AugmentedLagrangianSolver(prob, opts)
+
+    prob_al = AugmentedLagrangianProblem(prob, alsolver)
+    return prob_al, alsolver
+end
+
+function reset_sproblem(opts)
+    sopts = AugmentedLagrangianSolverOptions()
+    reset!(conSet, sopts)
+
+    xs = SVector{n}(x0)
+    Z = [ KnotPoint(xs,us,dt) for k = 1:N]
+    Z[end] = KnotPoint(xs,m)
+    X = state.(Z)
+    U = control.(Z)
+
+    sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+        N, dt, prob.tf)
+
+    # Augmented Lagrangian Solver
+    opts.opts_uncon = StaticiLQRSolverOptions{Float64}()
+    salsolver = StaticALSolver(sprob, opts)
+
+    sprob_al = convertProblem(sprob, salsolver)
+    return sprob_al, salsolver
+end
+
+function copy_traj(prob::StaticProblem, solver)
+    for k = 1:N
+        sprob_al.Z[k].z = sprob_al.Z̄[k].z
+    end
+end
+
+function copy_traj(prob::Problem, solver)
+    copyto!(prob_al.X, ilqr.X̄)
+    copyto!(prob_al.U, ilqr.Ū)
+end
+
+
+function take_steps(prob, solver, steps=1)
+    J_prev = cost(prob)
+    for i = 1:steps
+        J = step!(prob, solver, J_prev)
+        copy_traj(prob, solver)
+        dJ = J_prev - J
+        # println("   iter $i: J = $J, dJ = $dJ")
+        J_prev = J
+    end
+    return J_prev
+end
+
+opts = AugmentedLagrangianSolverOptions{Float64}(verbose=true,
+    iterations=25,
+    cost_tolerance=1.0e-5,
+    cost_tolerance_intermediate=1.0e-3,
+    constraint_tolerance=1e-4,
+    penalty_scaling=10.,
+    penalty_initial=0.1)
+prob_al, alsolver = reset_problems(opts)
+sprob_al, salsolver = reset_sproblem(opts)
+
+ilqr = alsolver.solver_uncon
+silqr = salsolver.solver_uncon
+
+take_steps(prob_al, ilqr, 50)
+take_steps(sprob_al, silqr, 50)
+
+dual_update!(prob_al, alsolver)
+penalty_update!(prob_al, alsolver)
+
+dual_update!(sprob_al, salsolver)
+penalty_update!(sprob_al, salsolver)
+
+max_violation(sprob_al)
+max_violation(alsolver)
+
+# Normal Step
+jacobian!(prob_al,ilqr)
+cost_expansion!(prob_al,ilqr)
+δv = backwardpass!(prob_al,ilqr)
+J = forwardpass!(prob_al,ilqr,δv,J_prev)
+
+# Static step
+discrete_jacobian!(silqr.∇F, sprob_al.model, sprob_al.Z)
+cost_expansion(silqr.Q, sprob_al.obj, sprob_al.Z)
+ΔV = backwardpass!(sprob_al, silqr)
+Js = forwardpass!(sprob_al, silqr, ΔV, J_prev)
+
+α = 1.0
+rollout!(prob_al, ilqr, α)
+rollout!(sprob_al, silqr, α)
+@btime rollout!($sprob_al, $silqr, $α)
+cost!(sprob_al.obj, sprob_al.Z̄)
+_Js = sum( get_J(sprob_al.obj) )
+_J = cost(prob_al.obj, ilqr.X̄, ilqr.Ū, get_dt_traj(prob_al))
+_Js - _J
+α /= 2
+
+all([state(sprob_al.Z̄[k]) ≈ ilqr.X̄[k] for k = 1:N])
+all([control(sprob_al.Z̄[k]) ≈ ilqr.Ū[k] for k in 1:N-1])
+
+
+J = forwardpass!(prob_al,ilqr,δv,J_prev)
+Js = forwardpass!(sprob_al, silqr, ΔV, J_prev)
+
+
+all([silqr.Q.xx[k] ≈ ilqr.Q[k].xx for k = 1:N])
+all([silqr.Q.uu[k] ≈ ilqr.Q[k].uu for k = 1:N-1])
+all([silqr.Q.x[k] ≈ ilqr.Q[k].x for k = 1:N])
+all([silqr.Q.u[k] ≈ ilqr.Q[k].u for k = 1:N-1])
+ilqr.∇F ≈ silqr.∇F
+
+δv ≈ ΔV
+ilqr.K ≈ silqr.K
+ilqr.d ≈ silqr.d
+all([state(sprob_al.Z[k]) ≈ prob_al.X[k] for k = 1:N])
+all([control(sprob_al.Z[k]) ≈ prob_al.U[k] for k in 1:N-1])
+
+
+J_prev = forwardpass!(sprob_al, silqr, ΔV, J_prev)
+forwardpass!(prob_al, ilqr, ΔV, J_prev) ≈ J_prev

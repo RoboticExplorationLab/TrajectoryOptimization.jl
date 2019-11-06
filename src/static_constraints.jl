@@ -6,8 +6,6 @@
 # abstract type Null <: ConstraintType end
 # abstract type AbstractConstraint{S<:ConstraintType} end
 
-pos(x) = max(x,0)
-
 struct KnotConstraint{T,P,NM,PNM,C}
 	con::C
 	inds::UnitRange{Int}
@@ -141,17 +139,51 @@ function cost_expansion(E, con::KnotConstraint, Z)
 	end
 end
 
-function dual_update!(con::KnotConstraint{T,P,NM,PNM,C}) where
+function dual_update!(con::KnotConstraint{T,P,NM,PNM,C},
+		opts::AugmentedLagrangianSolverOptions{T}) where
 		{T,P,NM,PNM,C<:AbstractConstraint{Equality}}
 	λ = con.λ
 	c = con.vals
 	μ = con.μ
 	for i in eachindex(con.inds)
-		λ[i] = saturate(@. λ[i] + μ[i] * c[i], solver.opts.dual_max)
+		λ[i] = clamp.(λ[i] + μ[i] .* c[i], -opts.dual_max, opts.dual_max)
+	end
+end
+
+function dual_update!(con::KnotConstraint{T,P,NM,PNM,C},
+		opts::AugmentedLagrangianSolverOptions{T}) where
+		{T,P,NM,PNM,C<:AbstractConstraint{Inequality}}
+	λ = con.λ
+	c = con.vals
+	μ = con.μ
+	for i in eachindex(con.inds)
+		λ[i] = clamp.(λ[i] + μ[i] .* c[i], 0.0, opts.dual_max)
+	end
+end
+
+function penalty_update!(con::KnotConstraint{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+	ϕ = opts.penalty_scaling
+	μ = con.μ
+	for i in eachindex(con.inds)
+		μ[i] = clamp.(ϕ * μ[i], 0.0, opts.penalty_max)
+	end
+end
+
+function reset!(con::KnotConstraint{T,P}, opts::AugmentedLagrangianSolverOptions{T}) where {T,P}
+	λ = con.λ
+	c = con.vals
+	μ = con.μ
+	for i in eachindex(con.inds)
+		μ[i] = opts.penalty_initial * @SVector ones(T,P)
+		c[i] *= 0.0
+		λ[i] *= 0.0
 	end
 end
 
 
+############################################################################################
+#  								CONSTRAINT SETS 										   #
+############################################################################################
 
 struct ConstraintSets{T}
 	constraints::Vector{<:KnotConstraint}
@@ -209,7 +241,18 @@ end
 Base.iterate(conSet::ConstraintSets) = @inbounds (conSet.constraints[1], 1)
 Base.iterate(conSet::ConstraintSets, i) = @inbounds i >= length(conSet.constraints) ? nothing : (conSet.constraints[i+1], i+1)
 
+function reset!(conSet::ConstraintSets, opts)
+	for con in conSet.constraints
+		reset!(con, opts)
+	end
+end
 
+
+
+
+############################################################################################
+#                              CUSTOM CONSTRAINTS 										   #
+############################################################################################
 
 struct GoalConstraint{T,N} <: AbstractConstraint{Equality}
 	xf::SVector{N,T}
@@ -288,8 +331,8 @@ struct StaticBoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality}
 	active_N::SVector{PN,Int}
 end
 
-function StaticBoundConstraint(n, m; x_max=zeros(n)*Inf, x_min=zeros(n)*-Inf,
-		u_max=zeros(m)*Inf, u_min=zeros(m)*-Inf)
+function StaticBoundConstraint(n, m; x_max=Inf*(@SVector zeros(n)), x_min=-Inf*(@SVector zeros(n)),
+		u_max=Inf*(@SVector zeros(m)), u_min=-Inf*(@SVector zeros(m)))
 	z_max = [x_max; u_max]
 	z_min = [x_min; u_min]
 	b = [-z_max; z_min]

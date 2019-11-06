@@ -1,14 +1,16 @@
 
 # Original problem
-prob = copy(Problems.quad_obs)
+# prob = copy(Problems.quad_obs)
+prob = copy(Problems.cartpole)
 n,m,N = size(prob)
 dt = prob.dt
 
 # Generate model
-quad_ = Dynamics.Quadrotor()
-generate_jacobian(quad_)
-rk3_gen(quad_)
-generate_discrete_jacobian(quad_)
+# quad_ = Dynamics.Quadrotor()
+model_ = Dynamics.Cartpole()
+generate_jacobian(model_)
+rk3_gen(model_)
+generate_discrete_jacobian(model_)
 
 
 # Static Objective
@@ -28,13 +30,13 @@ z = [x;u]
 initial_controls!(prob, [u for k = 1:N-1])
 initial_states!(prob, [x for k = 1:N])
 
-@btime dynamics($quad_,$xs,$us)
+@btime dynamics($model_,$xs,$us)
 @btime evaluate!($x, $prob.model, $x, $u, $dt)
-@btime discrete_dynamics($quad_,$xs,$us,$dt) # 11x faster
+@btime discrete_dynamics($model_,$xs,$us,$dt) # 11x faster
 
 
-@btime jacobian($quad_,$zs)
-@btime discrete_jacobian($quad_,$zs,$dt)
+@btime jacobian($model_,$zs)
+@btime discrete_jacobian($model_,$zs,$dt)
 
 # Build Trajectory
 z = KnotPoint(xs,us,dt)
