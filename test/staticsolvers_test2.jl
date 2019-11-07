@@ -125,7 +125,6 @@ silqr.d ≈ ilqr.d
 @btime backwardpass!($sprob, $silqr) # 11x speedup
 
 
-
 # Rollout
 rollout!(prob, ilqr, 1.0)
 rollout!(sprob, silqr, 1.0)

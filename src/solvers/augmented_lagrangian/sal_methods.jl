@@ -4,7 +4,7 @@ function solve!(prob::StaticProblem{L,T,StaticALObjective{T}}, solver::StaticALS
     conSet = prob.obj.constraints
     solver.stats.iterations = 0
     solver_uncon = solver.solver_uncon::S
-    cost!(prob.obj, Z)
+    cost!(prob.obj, prob.Z)
     J_ = get_J(prob.obj)
     J = sum(J_)
 
@@ -16,16 +16,15 @@ function solve!(prob::StaticProblem{L,T,StaticALObjective{T}}, solver::StaticALS
         J = sum(J_)
         c_max = maximum(conSet.c_max)
 
+
         record_iteration!(prob, solver, J, c_max)
-        println("Iteration ", i, ": cost = ", J, " c_max = ", c_max)
 
         converged = evaluate_convergence(solver)
         if converged
-            println("Converged at interation $i")
             break
         end
 
-        reset!(solver_uncon)
+        reset!(solver_uncon, false)
     end
     return solver
 end

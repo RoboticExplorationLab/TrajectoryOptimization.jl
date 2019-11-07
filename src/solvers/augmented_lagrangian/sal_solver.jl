@@ -56,7 +56,7 @@ function convertProblem(prob::StaticProblem, solver::StaticALSolver)
     alobj = StaticALObjective(prob.obj, prob.constraints)
     rollout!(prob)
     StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
-        prob.x0, prob.xf, prob.Z, prob.Z̄, prob.N, prob.dt, prob.tf)
+        prob.x0, prob.xf, deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.dt, prob.tf)
 end
 
 
