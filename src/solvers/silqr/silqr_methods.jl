@@ -3,6 +3,8 @@
 "iLQR solve method (non-allocating)"
 function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:AbstractFloat
     solver.stats.iterations = 0
+    solver.ρ[1] = 0.0
+    solver.dρ[1] = 0.0
     # reset!(solver)
     # to = solver.stats[:timer]
     Z = prob.Z; Z̄ = prob.Z̄;
@@ -199,7 +201,7 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
         # Check that maximum number of line search decrements has not occured
         if iter > solver.opts.iterations_linesearch
             for k in eachindex(Z)
-                Z̄[k] = Z[k]
+                Z̄[k].z = Z[k].z
             end
             cost!(obj, Z̄)
             J = sum(_J)

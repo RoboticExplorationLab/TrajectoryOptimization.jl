@@ -50,7 +50,7 @@ solve!(prob_al, ilqr)
 solve!(sprob_al, silqr)
 norm(state(sprob_al) - prob_al.X)
 
-for i = 1:5
+for i = 1:10
     dual_update!(prob_al, al)
     penalty_update!(prob_al, al)
 
