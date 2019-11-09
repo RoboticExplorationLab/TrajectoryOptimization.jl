@@ -61,6 +61,7 @@ end
 
 
 
+
 struct StaticALObjective{T} <: AbstractObjective
     obj::Objective
     constraints::ConstraintSets{T}
@@ -68,6 +69,7 @@ end
 
 get_J(obj::StaticALObjective) = obj.obj.J
 
+TrajectoryOptimization.num_constraints(prob::StaticProblem{L,T,<:StaticALObjective}) where {L,T} = prob.obj.constraints.p
 
 function cost!(obj::StaticALObjective, Z::Traj)
     # Calculate unconstrained cost
@@ -96,17 +98,11 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
     end
 end
 
-
-struct ALProblem{L<:AbstractModel,T<:AbstractFloat,N,M,NM}
-    prob::StaticProblem{L,T,N,M,NM}
-    obj::StaticALObjective{T}
-    x0::SVector{N,T}
-    xf::SVector{N,T}
-    Z::Vector{KnotPoint{T,N,M,NM}}
-    Z̄::Vector{KnotPoint{T,N,M,NM}}
-    N::Int
-    dt::T
-    tf::T
+StaticALProblem{L,T,N,M,NM} = StaticProblem{L,T,<:StaticALObjective,N,M,NM}
+function get_constraints(prob::StaticProblem)
+    if prob isa StaticALProblem
+        prob.obj.constraints
+    else
+        prob.constraints
+    end
 end
-
-Base.size(prob::ALProblem{L,T,N,M,NM}) where {L,T,N,M,NM} = (N, M, prob.prob.N)

@@ -68,7 +68,7 @@ struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,O<:AbstractObjective,N,M,
 end
 
 "Get number of states, controls, and knot points"
-Base.size(prob::StaticProblem{L,T,N,M,NM}) where {L,T,N,M,NM} = (N, M, prob.N)
+Base.size(prob::StaticProblem{L,T,O,N,M,NM}) where {L,T,O,N,M,NM} = (N, M, prob.N)
 
 "Get the state trajectory"
 state(prob::StaticProblem) = [state(z) for z in prob.Z]
@@ -86,3 +86,6 @@ function copy(prob::StaticProblem)
     StaticProblem(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
         deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.dt, prob.tf)
 end
+
+get_constraints(prob::StaticProblem) = prob.constraints
+TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p 

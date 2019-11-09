@@ -152,6 +152,8 @@ include("static_problem.jl")
 include("static_model.jl")
 include("solvers/silqr/silqr_solver.jl")
 include("solvers/silqr/silqr_methods.jl")
+include("solvers/augmented_lagrangian/sal_solver.jl")
+include("solvers/augmented_lagrangian/sal_methods.jl")
 
 include("problems.jl")
 
