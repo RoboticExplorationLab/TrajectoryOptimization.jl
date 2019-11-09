@@ -1,0 +1,241 @@
+
+struct StaticPrimals{T<:Real,N,M}
+    Z::Vector{T}
+    xinds::Vector{SVector{N,Int}}
+    uinds::Vector{SVector{M,Int}}
+    equal::Bool
+end
+
+function StaticPrimals(n::Int, m::Int, N::Int, equal=false)
+    NN = n*N + m*(N-1) + equal*m
+    Z = zeros(NN)
+    uN = N-1 + equal
+
+    xinds = [SVector{n}((n+m)*(k-1) .+ (1:n)) for k = 1:N]
+    uinds = [SVector{m}(n + (n+m)*(k-1) .+ (1:m)) for k = 1:N]
+    StaticPrimals(Z,xinds,uinds,equal)
+end
+
+function Base.copyto!(P::StaticPrimals, Z::Traj)
+    for k in eachindex(P.uinds)
+        inds = [P.xinds[k]; P.uinds[k]]
+        P.Z[inds] = Z[k].z
+    end
+    if !P.equal
+        P.Z[P.xinds[end]] = state(Z[end])
+    end
+    return nothing
+end
+
+function Base.copyto!(Z::Traj, P::StaticPrimals)
+    for k in eachindex(P.uinds)
+        inds = [P.xinds[k]; P.uinds[k]]
+        Z[k].z = P.Z[inds]
+    end
+    if !P.equal
+        xN = P.Z[P.xinds[end]]
+        Z[end].z = [xN; control(Z[end])]
+    end
+    return nothing
+end
+
+@with_kw mutable struct StaticPNStats{T}
+    iterations::Int = 0
+    c_max::Vector{T} = zeros(1)
+    cost::Vector{T} = zeros(1)
+end
+
+
+@with_kw mutable struct StaticPNSolverOptions{T} <: DirectSolverOptions{T}
+    verbose::Bool = true
+    n_steps::Int = 1
+    solve_type::Symbol = :feasible
+    active_set_tolerance::T = 1e-3
+    feasibility_tolerance::T = 1e-6
+end
+
+function gen_con_inds(conSet::ConstraintSets)
+    n,m = size(conSet.constraints[1])
+    N = length(conSet.p)
+    numcon = length(conSet.constraints)
+    conLen = length.(conSet.constraints)
+
+    dyn = [@SVector ones(Int,n) for k = 1:N]
+    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
+
+    # Initial condition
+    dyn[1] = 1:n
+    idx = n
+
+    # Dynamics and general constraints
+    for k = 1:N-1
+        dyn[k+1] = idx .+ (1:n)
+        idx += n
+        for (i,con) in enumerate(conSet.constraints)
+            if k ∈ con.inds
+                cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+                idx += conLen[i]
+            end
+        end
+    end
+
+    # Terminal constraints
+    for (i,con) in enumerate(conSet.constraints)
+        if N ∈ con.inds
+            cons[i][_index(con,N)] = idx .+ (1:conLen[i])
+            idx += conLen[i]
+        end
+    end
+
+    # return dyn
+    return dyn,cons
+end
+
+
+struct StaticPNSolver{T,N,M,NM,NNM} <: DirectSolver{T}
+    opts::StaticPNSolverOptions{T}
+    stats::StaticPNStats{T}
+    P::StaticPrimals{T,N,M}
+    H::SparseMatrixCSC{T,Int}
+    g::Vector{T}
+    D::SparseMatrixCSC{T,Int}
+    d::Vector{T}
+
+    fVal::Vector{SVector{N,T}}
+    ∇F::Vector{SMatrix{N,NM,T,NNM}}
+    active_set::Vector{Bool}
+
+    dyn_inds::Vector{SVector{N,Int}}
+    con_inds::Vector{Vector{SV} where SV}
+end
+
+function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=StaticPNSolverOptions()) where {L,T}
+    n,m,N = size(prob)
+    NN = n*N + m*(N-1)
+    stats = StaticPNStats()
+    NP = n*N + sum(num_constraints(prob))
+
+    # Create concatenated primal vars
+    P = StaticPrimals(n,m,N)
+
+    # Allocate Cost Hessian & Gradient
+    H = spzeros(NN,NN)
+    g = zeros(NN)
+
+    D = spzeros(NP,NN)
+    d = zeros(NP)
+
+    fVal = [@SVector zeros(n) for k = 1:N]
+    ∇F = [@SMatrix zeros(n,n+m+1) for k = 1:N]
+    ∇F[1] = Matrix(I,n,n+m+1) # Set this once since it's constant
+    active_set = zeros(Bool,NP)
+
+    dyn_inds, con_inds = gen_con_inds(prob.obj.constraints)
+
+    StaticPNSolver(opts, stats, P, H, g, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
+end
+
+function update_constraints!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
+    conSet = get_constraints(prob)
+    evaluate(conSet, Z)
+    solver.fVal[1] = state(Z[1]) - prob.x0
+    for k in 1:prob.N-1
+        solver.fVal[k+1] = discrete_dynamics(prob.model, Z[k]) - state(Z[k+1])
+    end
+end
+
+function constraint_jacobian!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
+    n,m,N = size(prob)
+    conSet = get_constraints(prob)
+    jacobian(conSet, Z)
+    for k = 2:N
+        solver.∇F[k] = discrete_jacobian(prob.model, Z[k-1])
+    end
+    return nothing
+end
+
+function copy_inds(dest, src, inds)
+    for i in eachindex(inds)
+        dest[inds[i]] = src[i]
+    end
+end
+
+function copy_jacobian!(D, con::KnotConstraint, cinds, xinds, uinds)
+    N = length(xinds)
+    if N in con.inds
+        for (i,k) in enumerate(con.inds)
+            D[cinds[i], xinds[k]] .= con.∇c[i]
+        end
+    else
+        for (i,k) in enumerate(con.inds)
+            zind = [xinds[k]; uinds[k]]
+            D[cinds[i], zind] .= con.∇c[i]
+        end
+    end
+end
+
+function copy_constraints!(prob::StaticProblem, solver::StaticPNSolver)
+    conSet = get_constraints(prob)
+    for (k,inds) in enumerate(solver.dyn_inds)
+        solver.d[inds] = solver.fVal[k]
+    end
+    for i = 1:length(conSet.constraints)
+        copy_inds(solver.d, conSet.constraints[i].vals, solver.con_inds[i])
+        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
+    end
+    return nothing
+end
+
+function copy_jacobians!(prob::StaticProblem, solver::StaticPNSolver)
+    n,m,N = size(prob)
+    conSet = get_constraints(prob)
+    xinds, uinds = solver.P.xinds, solver.P.uinds
+    xi,ui = xinds[1], uinds[1]
+    zi = [xi;ui]
+    dinds = solver.dyn_inds
+    cinds = solver.con_inds
+    zind = [xinds[1]; uinds[1]]
+    solver.D[dinds[1], zind] .= solver.∇F[1][:,zi]
+    for k = 1:N-1
+        zind = [xinds[k]; uinds[k]]
+        solver.D[dinds[k+1], zind] .= solver.∇F[k+1][:,zi]
+        solver.D[dinds[k+1], xinds[k+1]] .= -I(n)
+    end
+
+    for i = 1:length(conSet.constraints)
+        copy_jacobian!(solver.D, conSet.constraints[i], cinds[i], xinds, uinds)
+    end
+    return nothing
+end
+
+function active_constraints(prob::StaticProblem, solver::StaticPNSolver)
+    conSet = get_constraints(prob)
+    for (k,inds) in enumerate(solver.dyn_inds)
+        solver.d[inds] = solver.fVal[k]
+    end
+    for i = 1:length(conSet.constraints)
+        copy_inds(solver.d, conSet.constraints[i].vals, solver.con_inds[i])
+        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
+    end
+    return solver.d[solver.active_set]  # this allocates
+end
+
+
+function cost_expansion(E, prob::StaticALProblem, solver::StaticPNSolver)
+    cost_expansion(E, prob.obj.obj, prob.Z)
+    N = prob.N
+    xinds, uinds = solver.P.xinds, solver.P.uinds
+    H = solver.H
+    g = solver.g
+
+    for k = 1:N-1
+        H[xinds[k],xinds[k]] .= E.xx[k]
+        H[uinds[k],uinds[k]] .= E.uu[k]
+        H[uinds[k],xinds[k]] .= E.ux[k]
+        g[xinds[k]] .= E.x[k]
+        g[uinds[k]] .= E.u[k]
+    end
+    H[xinds[N],xinds[N]] .= E.xx[N]
+    g[xinds[N]] .= E.x[N]
+    return nothing
+end

@@ -104,3 +104,75 @@ silqr.ρ[1]
 
 max_violation(al)
 max_violation(sprob_al)
+
+
+# Projected Newton
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
+
+ilqr = iLQRSolver(prob)
+silqr = StaticiLQRSolver(sprob)
+
+al = AugmentedLagrangianSolver(prob)
+prob_al = AugmentedLagrangianProblem(prob, al)
+
+sopts = AugmentedLagrangianSolverOptions{Float64}()
+sopts.opts_uncon = StaticiLQRSolverOptions()
+reset!(sprob.constraints, sopts)
+sal = StaticALSolver(sprob, sopts)
+sprob_al = convertProblem(sprob, sal)
+
+# Solve with Augmented Lagrangian
+solve!(prob, al)
+solve!(sprob_al, sal)
+max_violation(al)
+max_violation(sprob_al)
+state(sprob_al) ≈ prob.X
+control(sprob_al) ≈ prob.U
+
+# Finish with Projected Newton
+pn = ProjectedNewtonSolver(prob)
+spn = StaticPNSolver(sprob_al)
+
+update_constraints!(prob, pn)
+dynamics_constraints!(prob, pn)
+update_constraints!(sprob_al, spn)
+copy_constraints!(sprob_al, spn)
+Vector(pn.y) ≈ spn.d
+
+@btime begin
+    update_constraints!($prob, $pn)
+    dynamics_constraints!($prob, $pn)
+end
+@btime begin
+    update_constraints!($sprob_al, $spn)
+    copy_constraints!($sprob_al, $spn)
+end  # 50x faster
+
+
+dynamics_jacobian!(prob, pn)
+constraint_jacobian!(prob, pn)
+constraint_jacobian!(sprob_al, spn)
+copy_jacobians!(sprob_al, spn)
+pn.Y ≈ Matrix(spn.D)
+Matrix(spn.D)
+pn.Y .≈ spn.D
+pn.y ≈ spn.d
+@btime begin
+    dynamics_jacobian!($prob, $pn)
+    constraint_jacobian!($prob, $pn)
+end
+
+@btime begin
+    constraint_jacobian!(sprob_al, spn)
+    copy_jacobians!(sprob_al, spn)
+end
+
+active_constraints(sprob_al, spn)
+@btime active_constraints($sprob_al, $spn)
+
+@btime constraint_jacobian!($sprob_al, $spn)
+
+E = CostExpansion(size(prob)...)
+cost_expansion(E, sprob_al, spn)
+@btime cost_expansion($E, $sprob_al, $spn)
