@@ -155,24 +155,67 @@ constraint_jacobian!(prob, pn)
 constraint_jacobian!(sprob_al, spn)
 copy_jacobians!(sprob_al, spn)
 pn.Y ≈ Matrix(spn.D)
-Matrix(spn.D)
-pn.Y .≈ spn.D
-pn.y ≈ spn.d
 @btime begin
     dynamics_jacobian!($prob, $pn)
     constraint_jacobian!($prob, $pn)
 end
-
 @btime begin
-    constraint_jacobian!(sprob_al, spn)
-    copy_jacobians!(sprob_al, spn)
-end
+    constraint_jacobian!($sprob_al, $spn)
+    copy_jacobians!($sprob_al, $spn)
+end # 20x faster
 
-active_constraints(sprob_al, spn)
-@btime active_constraints($sprob_al, $spn)
+active_set!(prob, pn)
+update_active_set!(sprob_al, spn)
+pn.a.duals ≈ spn.active_set
 
-@btime constraint_jacobian!($sprob_al, $spn)
-
+cost_expansion!(prob, pn)
 E = CostExpansion(size(prob)...)
 cost_expansion(E, sprob_al, spn)
-@btime cost_expansion($E, $sprob_al, $spn)
+pn.H ≈ spn.H
+pn.g ≈ spn.g
+
+copyto!(spn.P, sprob_al.Z)
+
+# Test solve
+ρ = 1e-2
+H = Diagonal(pn.H)
+Hs = Diagonal(spn.H)
+
+Y,y = active_constraints(prob, pn)
+D,d = active_constraints(sprob_al, spn)
+Y ≈ D
+y ≈ d
+
+HinvY = H\Y'
+HinvD = Hs\D'
+
+S = Symmetric(Y*HinvY)
+Ss = Symmetric(D*HinvD)
+S ≈ Ss
+
+Sreg = cholesky(S + ρ*I)
+Ssreg = cholesky(Ss + ρ*I)
+
+
+# Linesearch
+a = pn.a.duals
+as = spn.active_set
+
+Z = primals(pn.V)
+Zs = spn.P.Z
+Z ≈ Zs
+
+Z_ = copy(Z)
+Zs_ = copy(Zs)
+
+α = 1.0
+ϕ = 0.5
+count = 1
+
+δλ = reg_solve(S, y, Sreg, 1e-8, 25)
+δλs = reg_solve(Ss, d, Ssreg, 1e-8, 25)
+δλ ≈ δλs
+
+δZ = -HinvY*δλ
+δZs = -HinvD*δλs
+δZ ≈ δZs

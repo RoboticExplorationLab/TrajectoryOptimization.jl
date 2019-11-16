@@ -127,13 +127,27 @@ function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=Stati
 
     fVal = [@SVector zeros(n) for k = 1:N]
     ∇F = [@SMatrix zeros(n,n+m+1) for k = 1:N]
-    ∇F[1] = Matrix(I,n,n+m+1) # Set this once since it's constant
     active_set = zeros(Bool,NP)
 
     dyn_inds, con_inds = gen_con_inds(prob.obj.constraints)
 
+    # Set constant pieces of the Jacobian
+    xinds,uinds = P.xinds, P.uinds
+    ∇F[1] = Matrix(I,n,n+m+1)
+    Ix = ∇F[1][:,xinds[1]]
+    for k = 1:N-1
+        D[dinds[k+1], xinds[k+1]] .= -Ix
+    end
+
+    # Set constant elements of active set
+    for ind in dyn_inds
+        active_set[ind] .= true
+    end
+
     StaticPNSolver(opts, stats, P, H, g, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
 end
+
+primals(solver::StaticPNSolver) = solver.P.Z
 
 function update_constraints!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
     conSet = get_constraints(prob)
@@ -141,6 +155,14 @@ function update_constraints!(prob::StaticProblem, solver::StaticPNSolver, Z=prob
     solver.fVal[1] = state(Z[1]) - prob.x0
     for k in 1:prob.N-1
         solver.fVal[k+1] = discrete_dynamics(prob.model, Z[k]) - state(Z[k+1])
+    end
+end
+
+function update_active_set!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
+    conSet = get_constraints(prob)
+    update_active_set!(conSet, Z, solver.opts.active_set_tolerance)
+    for i = 1:length(conSet.constraints)
+        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
     end
 end
 
@@ -181,7 +203,6 @@ function copy_constraints!(prob::StaticProblem, solver::StaticPNSolver)
     end
     for i = 1:length(conSet.constraints)
         copy_inds(solver.d, conSet.constraints[i].vals, solver.con_inds[i])
-        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
     end
     return nothing
 end
@@ -194,12 +215,14 @@ function copy_jacobians!(prob::StaticProblem, solver::StaticPNSolver)
     zi = [xi;ui]
     dinds = solver.dyn_inds
     cinds = solver.con_inds
+    In = solver.∇F[1][:,xi]
+
     zind = [xinds[1]; uinds[1]]
     solver.D[dinds[1], zind] .= solver.∇F[1][:,zi]
     for k = 1:N-1
         zind = [xinds[k]; uinds[k]]
         solver.D[dinds[k+1], zind] .= solver.∇F[k+1][:,zi]
-        solver.D[dinds[k+1], xinds[k+1]] .= -I(n)
+        # solver.D[dinds[k+1], xinds[k+1]] .= -In
     end
 
     for i = 1:length(conSet.constraints)
@@ -209,15 +232,7 @@ function copy_jacobians!(prob::StaticProblem, solver::StaticPNSolver)
 end
 
 function active_constraints(prob::StaticProblem, solver::StaticPNSolver)
-    conSet = get_constraints(prob)
-    for (k,inds) in enumerate(solver.dyn_inds)
-        solver.d[inds] = solver.fVal[k]
-    end
-    for i = 1:length(conSet.constraints)
-        copy_inds(solver.d, conSet.constraints[i].vals, solver.con_inds[i])
-        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
-    end
-    return solver.d[solver.active_set]  # this allocates
+    return solver.D[solver.active_set, :], solver.d[solver.active_set]  # this allocates
 end
 
 
