@@ -48,15 +48,25 @@ sprob_al = convertProblem(sprob, sal)
 solve!(prob, al)
 max_violation(prob)
 
-solve!(sprob_al, sal)
-max_violation(sprob_al)
-
-for k = 1:sprob.N
-    sprob_al.Z[k].z = [x0*NaN; u0]
+U0 = [Vector(u0) for k = 1:prob.N-1]
+@time begin
+    initial_controls!(prob, U0)
+    solve!(prob, al)
 end
-reset!(sprob_al.obj.constraints, sopts)
+al.stats[:iterations]
+max_violation(prob)
 
-solve!(sprob_al, sal)  # 55x speedup
+x0 = sprob.x0
+u0 = control(sprob)[1]
+@time begin
+    for k = 1:sprob.N
+        sprob_al.Z[k].z = [x0*NaN; u0]
+    end
+    reset!(sprob_al.obj.constraints, sopts)
+
+    solve!(sprob_al, sal)  # 55x speedup
+end
+sal.stats.iterations
 max_violation(sprob_al)
 
 @btime begin
@@ -69,15 +79,8 @@ end
         $sprob_al.Z[k].z = [$x0*NaN; $u0]
     end
     reset!($sprob_al.obj.constraints, $sal.opts)
-    solve!($sprob_al, $sal)  # 92x faster!!!
+    solve!($sprob_al, $sal)  # 65x faster!!!
 end
-
-function myreset(solver::StaticALSolver{T,S}) where {T,S}
-    solver_uncon = solver.solver_uncon::S
-    reset!(solver_uncon)
-end
-@btime myreset($sal)
-@btime reset!($sal.solver_uncon, false)
 
 
 ilqr = iLQRSolver(prob_al)

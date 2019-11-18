@@ -71,6 +71,17 @@ end
 update_active_set!(con::KnotConstraint{T,P,NM,PNM,C}, tol=0.0) where
 	{T,P,NM,PNM,C<:AbstractConstraint{Equality}} = nothing
 
+function update_active_set!(con::KnotConstraint{T,P,NM,PNM,C}, ::Val{tol}) where
+		{T,P,NM,PNM,C<:AbstractConstraint{Inequality},tol}
+	for i in eachindex(con.vals)
+		con.active[i] = @. (con.vals[i] >= tol) | (con.λ[i] > 0)
+	end
+	return nothing
+end
+
+update_active_set!(con::KnotConstraint{T,P,NM,PNM,C}, ::Val{tol}) where
+	{T,P,NM,PNM,C<:AbstractConstraint{Equality},tol} = nothing
+
 function viol_ineq(v::T, a)::T where T
 	for i in eachindex(a)
 		v = max(v, max(a[i], 0.0))

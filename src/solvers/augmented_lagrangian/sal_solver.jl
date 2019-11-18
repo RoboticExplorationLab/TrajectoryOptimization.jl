@@ -77,7 +77,7 @@ function cost!(obj::StaticALObjective, Z::Traj)
 
     # Calculate constrained cost
     evaluate(obj.constraints, Z)
-    update_active_set!(obj.constraints, Z)
+    update_active_set!(obj.constraints, Z, Val(0.0))
     for con in obj.constraints.constraints
         cost!(obj.obj.J, con, Z)
     end
