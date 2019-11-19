@@ -104,6 +104,7 @@ Base.size(Z::Primals) = length(Z.X[1]), length(Z.U[1]), length(Z.X)
 Base.length(Z::Primals) = length(Z.Z)
 Base.copy(Z::Primals) = Primals(copy(Z.Z),Z)
 
+
 function pack(prob::Problem{T}) where T
     n,m,N = size(prob)
     part_z = create_partition(n,m,N,N)
@@ -224,6 +225,14 @@ function Base.copy(V::PrimalDual)
     active_set = copy(V.active_set)
     a = [view(active_set, V.a[k].indices[1]) for k = 1:N]
     PrimalDual(V2, Z, X, U, Y, ν, λ, active_set, a)
+end
+
+function Base.copyto!(V::PrimalDual, X, U)
+    for k = 1:length(U)
+        V.X[k] .= X[k]
+        V.U[k] .= U[k]
+    end
+    V.X[end] .= X[end]
 end
 
 import Base: size, length, getindex, setindex

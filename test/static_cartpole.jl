@@ -135,6 +135,7 @@ control(sprob_al) ≈ prob.U
 
 # Finish with Projected Newton
 pn = ProjectedNewtonSolver(prob)
+P = StaticPrimals(size(sprob)...)
 spn = StaticPNSolver(sprob_al)
 
 update_constraints!(prob, pn)
@@ -150,7 +151,7 @@ end
 @btime begin
     update_constraints!($sprob_al, $spn)
     copy_constraints!($sprob_al, $spn)
-end  # 50x faster
+end  # 45x faster
 
 
 dynamics_jacobian!(prob, pn)
@@ -165,7 +166,7 @@ end
 @btime begin
     constraint_jacobian!($sprob_al, $spn)
     copy_jacobians!($sprob_al, $spn)
-end # 20x faster
+end # 19x faster
 
 active_set!(prob, pn)
 update_active_set!(sprob_al, spn)
@@ -205,15 +206,18 @@ a = pn.a.duals
 as = spn.active_set
 
 Z = primals(pn.V)
-Zs = spn.P.Z
-Z ≈ Zs
+P = spn.P
+Zs = sprob_al.Z
+Z ≈ spn.P.Z
 
-Z_ = copy(Z)
-Zs_ = copy(Zs)
+V_ = copy(pn.V)
+Z_ = primals(V_)
+P_ = copy(spn.P)
+Zs_ = sprob_al.Z̄
 
 α = 1.0
 ϕ = 0.5
-count = 1
+cnt = 1
 
 δλ = reg_solve(S, y, Sreg, 1e-8, 25)
 δλs = reg_solve(Ss, d, Ssreg, 1e-8, 25)
@@ -222,3 +226,79 @@ count = 1
 δZ = -HinvY*δλ
 δZs = -HinvD*δλs
 δZ ≈ δZs
+
+Z_ .= Z + α*δZ
+P_.Z .= P.Z + α*δZs
+Z_ ≈ P_.Z
+
+dynamics_constraints!(prob, pn, V_)
+update_constraints!(prob, pn, V_)
+y = pn.y[a]
+
+copyto!(Zs_, P_)
+update_constraints!(sprob_al, spn, Zs_)
+copy_constraints!(sprob_al, spn)
+d = spn.d[as]
+y ≈ d
+
+norm(y,Inf)
+norm(d,Inf)
+
+
+# Entire PN solve
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
+
+ilqr = iLQRSolver(prob)
+silqr = StaticiLQRSolver(sprob)
+
+al = AugmentedLagrangianSolver(prob)
+prob_al = AugmentedLagrangianProblem(prob, al)
+
+sopts = AugmentedLagrangianSolverOptions{Float64}()
+sopts.opts_uncon = StaticiLQRSolverOptions()
+reset!(sprob.constraints, sopts)
+sal = StaticALSolver(sprob, sopts)
+sprob_al = convertProblem(sprob, sal)
+
+# Solve with Augmented Lagrangian
+solve!(prob, al)
+solve!(sprob_al, sal)
+max_violation(al)
+max_violation(sprob_al)
+state(sprob_al) ≈ prob.X
+control(sprob_al) ≈ prob.U
+
+Xsol = deepcopy(prob.X)
+Usol = deepcopy(prob.U)
+Zsol = deepcopy(sprob_al.Z)
+
+# Finish with Projected Newton
+pn = ProjectedNewtonSolver(prob)
+P = StaticPrimals(size(sprob)...)
+spn = StaticPNSolver(sprob_al)
+
+pn.opts.verbose = true
+spn.opts.verbose = true
+
+copyto!(pn.V, Xsol, Usol)
+update!(prob, pn)
+max_violation(pn)
+solve!(prob, pn)
+max_violation(pn)
+
+initial_trajectory!(sprob_al, Zsol)
+solve!(sprob_al, spn)
+
+pn.opts.verbose = false
+spn.opts.verbose = false
+
+@btime begin
+    copyto!($pn.V, $Xsol, $Usol)
+    solve!($prob, $pn)
+end
+
+@btime begin
+    initial_trajectory!($sprob_al, $Zsol)
+    solve!($sprob_al, $spn) # 8.5x faster
+end

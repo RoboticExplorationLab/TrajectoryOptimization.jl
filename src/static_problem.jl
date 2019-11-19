@@ -75,6 +75,12 @@ state(prob::StaticProblem) = [state(z) for z in prob.Z]
 "Get the control trajectory"
 control(prob::StaticProblem) = [control(prob.Z[k]) for k = 1:prob.N - 1]
 
+function initial_trajectory!(prob::StaticProblem, Z::Traj)
+    for k = 1:prob.N
+        prob.Z[k].z = Z[k].z
+    end
+end
+
 TrajectoryOptimization.num_constraints(prob::StaticProblem) = prob.constraints.p
 
 function cost(prob::StaticProblem)
@@ -88,4 +94,4 @@ function copy(prob::StaticProblem)
 end
 
 get_constraints(prob::StaticProblem) = prob.constraints
-TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p 
+TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p

@@ -16,8 +16,13 @@ function StaticPrimals(n::Int, m::Int, N::Int, equal=false)
     StaticPrimals(Z,xinds,uinds,equal)
 end
 
+function Base.copy(P::StaticPrimals)
+    StaticPrimals(copy(P.Z),P.xinds,P.uinds,P.equal)
+end
+
 function Base.copyto!(P::StaticPrimals, Z::Traj)
-    for k in eachindex(P.uinds)
+    uN = P.equal ? length(Z) : length(Z)-1
+    for k in 1:uN
         inds = [P.xinds[k]; P.uinds[k]]
         P.Z[inds] = Z[k].z
     end
@@ -28,7 +33,8 @@ function Base.copyto!(P::StaticPrimals, Z::Traj)
 end
 
 function Base.copyto!(Z::Traj, P::StaticPrimals)
-    for k in eachindex(P.uinds)
+    uN = P.equal ? length(Z) : length(Z)-1
+    for k in 1:uN
         inds = [P.xinds[k]; P.uinds[k]]
         Z[k].z = P.Z[inds]
     end
@@ -92,12 +98,16 @@ function gen_con_inds(conSet::ConstraintSets)
 end
 
 
-struct StaticPNSolver{T,N,M,NM,NNM} <: DirectSolver{T}
+struct StaticPNSolver{T,N,M,NM,NNM,L1,L2,L3} <: DirectSolver{T}
     opts::StaticPNSolverOptions{T}
     stats::StaticPNStats{T}
     P::StaticPrimals{T,N,M}
+    P̄::StaticPrimals{T,N,M}
+
     H::SparseMatrixCSC{T,Int}
     g::Vector{T}
+    E::CostExpansion{T,N,M,L1,L2,L3}
+
     D::SparseMatrixCSC{T,Int}
     d::Vector{T}
 
@@ -117,10 +127,12 @@ function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=Stati
 
     # Create concatenated primal vars
     P = StaticPrimals(n,m,N)
+    P̄ = StaticPrimals(n,m,N)
 
     # Allocate Cost Hessian & Gradient
     H = spzeros(NN,NN)
     g = zeros(NN)
+    E = CostExpansion(n,m,N)
 
     D = spzeros(NP,NN)
     d = zeros(NP)
@@ -136,7 +148,7 @@ function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=Stati
     ∇F[1] = Matrix(I,n,n+m+1)
     Ix = ∇F[1][:,xinds[1]]
     for k = 1:N-1
-        D[dinds[k+1], xinds[k+1]] .= -Ix
+        D[dyn_inds[k+1], xinds[k+1]] .= -Ix
     end
 
     # Set constant elements of active set
@@ -144,7 +156,7 @@ function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=Stati
         active_set[ind] .= true
     end
 
-    StaticPNSolver(opts, stats, P, H, g, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
+    StaticPNSolver(opts, stats, P, P̄, H, g, E, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
 end
 
 primals(solver::StaticPNSolver) = solver.P.Z
@@ -236,7 +248,8 @@ function active_constraints(prob::StaticProblem, solver::StaticPNSolver)
 end
 
 
-function cost_expansion(E, prob::StaticALProblem, solver::StaticPNSolver)
+function cost_expansion!(prob::StaticALProblem, solver::StaticPNSolver)
+    E = solver.E
     cost_expansion(E, prob.obj.obj, prob.Z)
     N = prob.N
     xinds, uinds = solver.P.xinds, solver.P.uinds
