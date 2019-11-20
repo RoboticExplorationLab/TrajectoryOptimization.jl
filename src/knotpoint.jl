@@ -33,10 +33,15 @@ end
 @inline is_terminal(z::KnotPoint) = z.dt == 0
 
 const Traj = Vector{<:KnotPoint}
+traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
+
 
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DYNAMICS FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+"Evaluate the continuous dynamics for a knot point"
+@inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
+
 "Evaluate the discrete dynamics for a knot point"
 @inline function discrete_dynamics(model::AbstractModel, z::KnotPoint)
     discrete_dynamics(model, state(z), control(z), z.dt)
@@ -92,9 +97,10 @@ end
 end
 
 
-"Calculate the 2nd order expansion of the cost at a knot point"
-function cost_expansion(cost::CostFunction, z::KnotPoint)
-    Qx, Qu, Qxx, Quu, Qux = cost_expansion(cost, state(z), control(z))
+
+"Get Qx, Qu pieces of gradient of cost function, multiplied by dt"
+function cost_gradient(cost::CostFunction, z::KnotPoint)
+    Qx, Qu = gradient(cost, state(z), control(z))
     if is_terminal(z)
         dt_x = 1.0
         dt_u = 0.0
@@ -102,13 +108,42 @@ function cost_expansion(cost::CostFunction, z::KnotPoint)
         dt_x = z.dt
         dt_u = z.dt
     end
-    return Qx*dt_x, Qu*dt_u, Qxx*dt_x, Quu*dt_u, Qux*dt_u
+    return Qx*dt_x, Qu*dt_u
+end
+
+"Get Qxx, Quu, Qux pieces of Hessian of cost function, multiplied by dt"
+function cost_hessian(cost::CostFunction, z::KnotPoint)
+    Qxx, Quu, Qux = hessian(cost, state(z), control(z))
+    if is_terminal(z)
+        dt_x = 1.0
+        dt_u = 0.0
+    else
+        dt_x = z.dt
+        dt_u = z.dt
+    end
+    return Qxx*dt_x, Quu*dt_u, Qux*dt_u
+end
+
+"Calculate the 2nd order expansion of the cost at a knot point"
+cost_expansion(cost::CostFunction, z::KnotPoint) =
+    cost_gradient(cost, z)..., cost_hessian(cost, z)...
+
+function cost_gradient!(E, obj::Objective, Z::Traj)
+    N = length(Z)
+    for k in eachindex(Z)
+        E.x[k], E.u[k] = cost_gradient(obj[k], Z[k])
+    end
+end
+
+function cost_hessian!(E, obj::Objective, Z::Traj)
+    N = length(Z)
+    for k in eachindex(Z)
+        E.xx[k], E.uu[k], E.ux[k] = cost_hessian(obj[k], Z[k])
+    end
 end
 
 "Expand cost for entire trajectory"
 function cost_expansion(E, obj::Objective, Z::Traj)
-    N = length(Z)
-    for k in eachindex(Z)
-        E.x[k], E.u[k], E.xx[k], E.uu[k], E.ux[k] = cost_expansion(obj[k], Z[k])
-    end
+    cost_gradient!(E, obj, Z)
+    cost_hessian!(E, obj, Z)
 end

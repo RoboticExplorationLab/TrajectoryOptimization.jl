@@ -45,6 +45,23 @@ function Base.copyto!(Z::Traj, P::StaticPrimals)
     return nothing
 end
 
+function Base.copyto!(Z::Traj, V::Vector{<:Real},
+        xinds::Vector{<:AbstractVector}, uinds::Vector{<:AbstractVector})
+    n,m,N = traj_size(Z)
+    equal = (n+m)*N == length(V)
+
+    uN = equal ? N : N-1
+    for k in 1:uN
+        inds = [xinds[k]; uinds[k]]
+        Z[k].z = V[inds]
+    end
+    if !equal
+        xN = V[xinds[end]]
+        Z[end].z = [xN; control(Z[end])]
+    end
+    return nothing
+end
+
 @with_kw mutable struct StaticPNStats{T}
     iterations::Int = 0
     c_max::Vector{T} = zeros(1)
@@ -161,7 +178,7 @@ end
 
 primals(solver::StaticPNSolver) = solver.P.Z
 
-function update_constraints!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
+function update_constraints!(prob::StaticProblem, solver::DirectSolver, Z=prob.Z)
     conSet = get_constraints(prob)
     evaluate(conSet, Z)
     solver.fVal[1] = state(Z[1]) - prob.x0
@@ -178,11 +195,22 @@ function update_active_set!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.
     end
 end
 
-function constraint_jacobian!(prob::StaticProblem, solver::StaticPNSolver, Z=prob.Z)
+function constraint_jacobian!(prob::StaticProblem, solver::DirectSolver, Z=prob.Z)
     n,m,N = size(prob)
     conSet = get_constraints(prob)
     jacobian(conSet, Z)
     for k = 2:N
+        solver.∇F[k] = discrete_jacobian(prob.model, Z[k-1])
+    end
+    return nothing
+end
+
+function constraint_jacobian_structure!(prob::StaticProblem, solver::DirectSolver, Z=prob.Z)
+    n,m,N = size(prob)
+    conSet = get_constraints(prob)
+    jacobian(conSet, Z)
+    for k = 1:N
+        solver.∇F[k] =
         solver.∇F[k] = discrete_jacobian(prob.model, Z[k-1])
     end
     return nothing
@@ -194,7 +222,7 @@ function copy_inds(dest, src, inds)
     end
 end
 
-function copy_jacobian!(D, con::KnotConstraint, cinds, xinds, uinds)
+function copy_jacobian!(D, con::ConstraintVals, cinds, xinds, uinds)
     N = length(xinds)
     if N in con.inds
         for (i,k) in enumerate(con.inds)
@@ -208,18 +236,18 @@ function copy_jacobian!(D, con::KnotConstraint, cinds, xinds, uinds)
     end
 end
 
-function copy_constraints!(prob::StaticProblem, solver::StaticPNSolver)
+function copy_constraints!(prob::StaticProblem, solver::DirectSolver, d=solver.d)
     conSet = get_constraints(prob)
     for (k,inds) in enumerate(solver.dyn_inds)
-        solver.d[inds] = solver.fVal[k]
+        d[inds] = solver.fVal[k]
     end
     for i = 1:length(conSet.constraints)
-        copy_inds(solver.d, conSet.constraints[i].vals, solver.con_inds[i])
+        copy_inds(d, conSet.constraints[i].vals, solver.con_inds[i])
     end
     return nothing
 end
 
-function copy_jacobians!(prob::StaticProblem, solver::StaticPNSolver)
+function copy_jacobians!(prob::StaticProblem, solver::DirectSolver, D=solver.D)
     n,m,N = size(prob)
     conSet = get_constraints(prob)
     xinds, uinds = solver.P.xinds, solver.P.uinds
@@ -230,15 +258,15 @@ function copy_jacobians!(prob::StaticProblem, solver::StaticPNSolver)
     In = solver.∇F[1][:,xi]
 
     zind = [xinds[1]; uinds[1]]
-    solver.D[dinds[1], zind] .= solver.∇F[1][:,zi]
+    D[dinds[1], zind] .= solver.∇F[1][:,zi]
     for k = 1:N-1
         zind = [xinds[k]; uinds[k]]
-        solver.D[dinds[k+1], zind] .= solver.∇F[k+1][:,zi]
+        D[dinds[k+1], zind] .= solver.∇F[k+1][:,zi]
         # solver.D[dinds[k+1], xinds[k+1]] .= -In
     end
 
     for i = 1:length(conSet.constraints)
-        copy_jacobian!(solver.D, conSet.constraints[i], cinds[i], xinds, uinds)
+        copy_jacobian!(D, conSet.constraints[i], cinds[i], xinds, uinds)
     end
     return nothing
 end
