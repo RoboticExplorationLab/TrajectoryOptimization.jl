@@ -1,5 +1,5 @@
 const TO = TrajectoryOptimization
-import TrajectoryOptimization: KnotPoint, StaticBoundConstraint, GoalConstraint, StaticProblem, KnotConstraint, ConstraintSets
+import TrajectoryOptimization: KnotPoint, StaticBoundConstraint, GoalConstraint, StaticProblem, ConstraintVals, ConstraintSets
 using StaticArrays
 
 # Cartpole
@@ -53,8 +53,8 @@ Z[end] = KnotPoint(xs,m)
 
 bnd = StaticBoundConstraint(n,m, u_min=-u_bnd*(@SVector ones(m)), u_max=u_bnd*(@SVector ones(m)))
 goal = GoalConstraint(SVector{n}(xf))
-con_bnd = KnotConstraint(bnd, 1:N-1)
-con_goal = KnotConstraint(goal, N:N)
+con_bnd = ConstraintVals(bnd, 1:N-1)
+con_goal = ConstraintVals(goal, N:N)
 conSet = ConstraintSets([con_bnd, con_goal], N)
 
 cartpole_static = StaticProblem(model, obj, conSet, x0, xf,

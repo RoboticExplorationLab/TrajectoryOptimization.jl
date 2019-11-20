@@ -126,10 +126,10 @@ sbnd = StaticBoundConstraint(n,m, u_min=SVector{m}(u_min*ones(m)), u_max=SVector
     x_min=SVector{n}(x_min), x_max=SVector{n}(x_max))
 sgoal = GoalConstraint(SVector{n}(xf))
 
-con_cyl = KnotConstraint(scyl_con, 1:N-1)
-con_sph = KnotConstraint(ssph_con, 1:N-1)
-con_bnd = KnotConstraint(sbnd, 1:N-1)
-con_goal = KnotConstraint(sgoal, N:N)
+con_cyl = ConstraintVals(scyl_con, 1:N-1)
+con_sph = ConstraintVals(ssph_con, 1:N-1)
+con_bnd = ConstraintVals(sbnd, 1:N-1)
+con_goal = ConstraintVals(sgoal, N:N)
 conSet = ConstraintSets([con_cyl, con_sph, con_bnd, con_goal], N)
 
 # Test arrays

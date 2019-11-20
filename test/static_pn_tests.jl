@@ -31,9 +31,9 @@ u_min = @SVector [-2.,0]
 u_max = @SVector [2.,3]
 bnd = StaticBoundConstraint(n,m, x_min=x_min, x_max=x_max,
     u_min=u_min, u_max=u_max)
-bnd_con = KnotConstraint(bnd, 1:N-1)
+bnd_con = ConstraintVals(bnd, 1:N-1)
 goal = GoalConstraint(xf)
-goal_con = KnotConstraint(goal, N:N)
+goal_con = ConstraintVals(goal, N:N)
 cons = [bnd_con, goal_con]
 conSet = ConstraintSets(cons, N)
 

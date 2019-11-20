@@ -3,16 +3,16 @@ using BenchmarkTools
 using DocStringExtensions
 
 "Sense of a constraint (inequality / equality / null)"
-abstract type ConstraintType end
+abstract type ConstraintSense end
 "Inequality constraints"
-abstract type Equality <: ConstraintType end
+abstract type Equality <: ConstraintSense end
 "Equality constraints"
-abstract type Inequality <: ConstraintType end
+abstract type Inequality <: ConstraintSense end
 "An empty constraint"
-abstract type Null <: ConstraintType end
+abstract type Null <: ConstraintSense end
 
 abstract type GeneralConstraint end
-abstract type AbstractConstraint{S<:ConstraintType} <: GeneralConstraint end
+abstract type AbstractConstraint{S<:ConstraintSense} <: GeneralConstraint end
 
 import Base.+
 function +(C::Vector{<:GeneralConstraint}, con::GeneralConstraint)
@@ -73,7 +73,7 @@ struct Constraint{S} <: AbstractConstraint{S}
     inputs::Symbol
 
     function Constraint{S}(c::Function, ∇c::Function, p::Int, label::Symbol,
-            inds::Vector{Vector{Int}}, type::Symbol, inputs::Symbol) where S <: ConstraintType
+            inds::Vector{Vector{Int}}, type::Symbol, inputs::Symbol) where S <: ConstraintSense
         if type ∉ [:all,:stage,:terminal]
             ArgumentError(string(type) * " is not a supported constraint type")
         end
@@ -83,14 +83,14 @@ end
 
 "$(TYPEDEF) Create a stage-wise constraint, using ForwardDiff to generate the Jacobian"
 function Constraint{S}(c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintSense
     ∇c,c_aug = generate_jacobian(c,n,m,p)
     Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint using ForwardDiff"
 function Constraint{S}(c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=:terminal, inputs=:x) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=:terminal, inputs=:x) where S<:ConstraintSense
     m = 0
     ∇c,c_aug = generate_jacobian(c,n,m,p)
     Constraint{S}(c, ∇c, p, label, inds, term, inputs)
@@ -98,13 +98,13 @@ end
 
 "$(TYPEDEF) Create a constraint, providing an analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, m::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:m)], term=con_methods(c), inputs=:xu) where S<:ConstraintSense
     Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 
 "Create a terminal constraint with analytical Jacobian"
 function Constraint{S}(c::Function, ∇c::Function, n::Int, p::Int, label::Symbol;
-        inds=[collect(1:n), collect(1:0)], term=:terminal, inputs=:x) where S<:ConstraintType
+        inds=[collect(1:n), collect(1:0)], term=:terminal, inputs=:x) where S<:ConstraintSense
     Constraint{S}(c, ∇c, p, label, inds, term, inputs)
 end
 

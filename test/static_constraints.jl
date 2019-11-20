@@ -24,8 +24,8 @@ generate_jacobian(normcon)
 @btime jacobian($circlecon, $z)
 @btime jacobian($normcon, $z)
 
-con1 = KnotConstraint(circlecon, 1:N)
-con2 = KnotConstraint(normcon, 1:4)
+con1 = ConstraintVals(circlecon, 1:N)
+con2 = ConstraintVals(normcon, 1:4)
 
 function eval_constraint(con, Z)
 	for k in con.inds
