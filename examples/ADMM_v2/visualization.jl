@@ -28,15 +28,26 @@ function addcylinders!(vis,cylinders,height=1.5)
     end
 end
 
-function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
+function visualize_quadrotor_lift_system(vis, probs, scenario=:doorway, n_slack=3)
     prob_load = probs[1]
     prob_lift = probs[2:end]
     r_lift = .275
     r_load = .2
 
+    obs = scenario == :doorway
+
     if obs
         _cyl = door_obstacles()
         addcylinders!(vis,_cyl,2.1)
+    end
+
+    if scenario == :slot
+        slot_min = 0.5
+        slot_max = 1.5
+        block1 = HyperRectangle(4.5, -2, 0, 1, 4, slot_min) 
+        block2 = HyperRectangle(4.5, -2, slot_max, 1, 4, 1)
+        setobject!(vis["slot"]["block1"], block1, MeshPhongMaterial(color=RGBA(0,1,0,0.7)))
+        setobject!(vis["slot"]["block2"], block2, MeshPhongMaterial(color=RGBA(0,1,0,0.7)))
     end
 
 
