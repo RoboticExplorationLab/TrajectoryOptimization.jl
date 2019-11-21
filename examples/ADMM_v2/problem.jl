@@ -180,7 +180,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     x_min_load_slot = copy(x_min_load)
     x_max_load_slot = copy(x_max_load)
     x_min_load_slot[3] = slot_min
-    x_max_load_slot[3] = slot_max 
+    x_max_load_slot[3] = slot_max
 
     # Obstacles
     _cyl = door_obstacles()
@@ -193,6 +193,17 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     function cI_cylinder_load(c,x,u)
         for i = 1:length(_cyl)
             c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*load_radius)
+        end
+    end
+
+    slot_horiz, slot_vert = slot_obstacles()
+    function slot_obstacles_constraint(c,x,u)
+        for (i,cyl) in enumerate(slot_horiz)
+            c[i] = circle_constraint([x[1], x[3]], cyl[1], cyl[2], cyl[3] + lift_radius)
+        end
+        n_horiz = length(slot_horiz)
+        for (i,cyl) in enumerate(slot_vert)
+            c[i+n_horiz] = circle_constraint([x[1], x[2]], cyl[1], cyl[2], cyl[3] + lift_radius)
         end
     end
 
@@ -265,10 +276,13 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         bnd_load = BoundConstraint(n_load,m_load, x_min=x_min_load, u_min=u_min_load)
         bnd_slot = BoundConstraint(n_load,m_load, x_min=x_min_load_slot, x_max=x_max_load_slot,
             u_min=u_min_load)
+        obs_slot = Constraint{Inequality}(slot_obstacles_constraint,
+            n_load, m_load, length(slot_horiz) + length(slot_vert), :obs_slot)
         constraints_load = Constraints(N)
         for k = 2:N-1
-            if scenario == :slot && (Nmid < k < N*3÷4)
-                constraints_load[k] += bnd_slot
+            if scenario == :slot
+                # constraints_load[k] += bnd_slot
+                constraints_load[k] += obs_slot
             else
                 constraints_load[k] += bnd_load
                 if obs
@@ -331,11 +345,14 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         bnd_slot = BoundConstraint(n_lift,m_lift, u_min=u_min_lift, u_max=u_max_lift,
             x_min=x_min_lift_slot, x_max=x_max_lift_slot)
         obs_lift = Constraint{Inequality}(cI_cylinder_lift,n_lift,m_lift,length(_cyl),:obs_lift)
+        obs_slot = Constraint{Inequality}(slot_obstacles_constraint,n_lift,m_lift,
+            length(slot_horiz)+length(slot_vert),:obs_lift)
 
         con = Constraints(N)
         for k = 1:N
-            if scenario == :slot && (Nmid < k < N*3÷4)
-                con[k] += bnd_slot
+            if scenario == :slot #&& (Nmid < k < N*3÷4)
+                # con[k] += bnd_slot
+                con[k] += obs_slot
             else
                 con[k] += bnd_lift
                 if obs
@@ -560,4 +577,15 @@ function reset_control_reference!(prob::Problem)
     for k = 1:prob.N-1
         prob.obj[k].r[5] = 0
     end
+end
+
+@everywhere function slot_obstacles()
+    horiz = [[2.0, 2., 0.5],
+             [2.0, 0., 0.5],
+             [4.0, 2.5, 0.5]]
+    vert  = [[2.0, 2.0, 0.5],
+             [2.0,-2.0, 0.5],
+             [4.0,-1.0, 0.5],
+             [4.0, 1.0, 0.5]]
+    return horiz, vert
 end

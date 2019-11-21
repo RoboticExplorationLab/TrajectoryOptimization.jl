@@ -54,13 +54,14 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 quat = true
 num_lift = 3
-scenario = :doorway
+scenario = :slot
 scenario == :doorway ? obs = true : obs = false
-r0_load = [0.,-0.0, 0.25]
+r0_load = [0.,-1., 0.25]
 probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario, r0_load=r0_load);
 wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
 @time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=2);
-visualize_quadrotor_lift_system(vis, sol, obs)
+visualize_quadrotor_lift_system(vis, sol, scenario)
+sol[1].obj.constraints
 door_obstacles()
 
 TO.solve_aula!(sol[5], sol_solvers[5])
