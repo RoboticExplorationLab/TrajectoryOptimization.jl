@@ -174,7 +174,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
 
     # Obstacles
-    _cyl = door_obstacles(r_cylinder, goal_dist/2)
+    _cyl = door_obstacles()
     function cI_cylinder_lift(c,x,u)
         for i = 1:length(_cyl)
             c[i] = circle_constraint(x[1:3],_cyl[i][1],_cyl[i][2],_cyl[i][3] + 1.25*lift_radius)
@@ -218,7 +218,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         return nothing
     end
 
-    _cyl = door_obstacles(r_cylinder)
+    # _cyl = door_obstacles()
 
     function cI_cylinder(c,x,u)
         c_shift = 1
@@ -522,13 +522,14 @@ function calc_static_forces(α::Float64, lift_mass, load_mass, num_lift)
     return ulift, uload
 end
 
-function door_obstacles(r_cylinder=0.5, x_door=3.0)
+@everywhere function door_obstacles(r_cylinder=0.5, x_door=3.0)
     _cyl = NTuple{3,Float64}[]
 
-    push!(_cyl,(x_door, 1.,r_cylinder))
-    push!(_cyl,(x_door,-1.,r_cylinder))
-    push!(_cyl,(x_door-0.5, 1.,r_cylinder))
-    push!(_cyl,(x_door-0.5,-1.,r_cylinder))
+    off = -0.15  # -0.15
+    push!(_cyl,(x_door,      1. +off, r_cylinder))
+    push!(_cyl,(x_door,     -1. -off, r_cylinder))
+    push!(_cyl,(x_door-0.5,  1. +off, r_cylinder))
+    push!(_cyl,(x_door-0.5, -1. -off, r_cylinder))
     # push!(_cyl,(x_door+0.5, 1.,r_cylinder))
     # push!(_cyl,(x_door+0.5,-1.,r_cylinder))
     return _cyl

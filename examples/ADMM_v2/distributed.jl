@@ -5,6 +5,7 @@ using Distributed
 using DistributedArrays
 using TimerOutputs
 using BenchmarkTools
+using TrajectoryOptimization
 
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
@@ -12,7 +13,6 @@ end
 addworkers(n) = addprocs(n,exeflags="--project=$(@__DIR__)")
 import TrajectoryOptimization: Discrete
 
-using TrajectoryOptimization
 const TO = TrajectoryOptimization
 @everywhere using TrajectoryOptimization
 @everywhere const TO = TrajectoryOptimization
@@ -25,14 +25,14 @@ const TO = TrajectoryOptimization
 @everywhere include(joinpath(dirname(@__FILE__),"methods.jl"))
 @everywhere include(joinpath(dirname(@__FILE__),"models.jl"))
 
-function init_dist(;num_lift=3, quat=false, scenario=:doorway)
+function init_dist(;num_lift=3, quat=false, scenario=:doorway, r0_load=[0,0,0.25])
 	probs = ddata(T=Problem{Float64,Discrete});
 	@show length(probs)
 	@sync for (j,w) in enumerate(worker_quads(num_lift))
-		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params,
+		@spawnat w probs[:L] = gen_prob(j, quad_params, load_params, r0_load,
 			num_lift=num_lift, quat=quat, scenario=scenario)
 	end
-	prob_load = gen_prob(:load, quad_params, load_params,
+	prob_load = gen_prob(:load, quad_params, load_params, r0_load,
 		num_lift=num_lift, quat=quat, scenario=scenario)
 
 	return probs, prob_load
@@ -56,9 +56,13 @@ quat = true
 num_lift = 3
 scenario = :doorway
 scenario == :doorway ? obs = true : obs = false
-probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario);
+r0_load = [0.,-0.5,0.25]
+probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario, r0_load=r0_load);
 wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
-@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=1);
+@time sol, sol_solvers, xx = solve_admm(probs, prob_load, quad_params, load_params, true, opts_al, max_iters=2);
+visualize_quadrotor_lift_system(vis, sol, obs)
+door_obstacles()
+
 TO.solve_aula!(sol[5], sol_solvers[5])
 prob_lift = fetch(@spawn w probs[])
 length(sol)

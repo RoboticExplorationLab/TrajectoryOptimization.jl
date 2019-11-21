@@ -36,7 +36,7 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
 
     if obs
         _cyl = door_obstacles()
-        addcylinders!(vis,_cyl,3.)
+        addcylinders!(vis,_cyl,2.1)
     end
 
 
@@ -44,7 +44,7 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
     d = [norm(prob_lift[i].x0[1:n_slack] - prob_load.x0[1:n_slack]) for i = 1:num_lift]
 
     # camera angle
-    settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
+    # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
     # load in quad mesh
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
@@ -55,10 +55,13 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
     robot_obj = FileIO.load(obj)
     robot_obj.vertices .= robot_obj.vertices .* quad_scaling
 
+    col_cylinder = Cylinder(Point3f0([0,0,0]), Point3f0([0,0,3.]), Float32(0.275))
+
     # intialize system
     for i = 1:num_lift
         # setobject!(vis["lift$i"]["sphere"],HyperSphere(Point3f0(0), convert(Float32,r_lift)) ,MeshPhongMaterial(color=RGBA(0, 0, 0, 0.25)))
         setobject!(vis["lift$i"]["robot"],robot_obj,MeshPhongMaterial(color=RGBA(0, 0, 0, 1.0)))
+        # setobject!(vis["collision$i"], col_cylinder, MeshPhongMaterial(color=RGBA(0, 1, 0, 0.5)))
 
         cable = Cylinder(Point3f0(0,0,0),Point3f0(0,0,d[i]),convert(Float32,0.01))
         setobject!(vis["cable"]["$i"],cable,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
@@ -75,6 +78,7 @@ function visualize_quadrotor_lift_system(vis, probs, obs=true, n_slack=3)
                 x_lift = prob_lift[i].X[k][1:n_slack]
                 settransform!(frame["cable"]["$i"], cable_transform(x_lift,x_load))
                 settransform!(frame["lift$i"], compose(Translation(x_lift...),LinearMap(Quat(prob_lift[i].X[k][4:7]...))))
+                # settransform!(frame["collision$i"], Translation(x_lift...))
 
             end
             settransform!(frame["load"], Translation(x_load...))
