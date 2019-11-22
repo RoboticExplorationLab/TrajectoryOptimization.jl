@@ -41,7 +41,7 @@ function get_quad_locations(x_load::Vector, d::Real, α=π/4, num_lift=3;
 end
 
 function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
-        num_lift=3, N=51, quat=false, scenario=:doorway)
+        num_lift=3, N=51, quat=false, scenario=:doorway, initial_problem=true)
 
     scenario == :doorway ? obs = true : obs = false
 
@@ -280,11 +280,11 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             n_load, m_load, length(slot_horiz) + length(slot_vert), :obs_slot)
         constraints_load = Constraints(N)
         for k = 2:N-1
+            constraints_load[k] += bnd_load
             if scenario == :slot
                 # constraints_load[k] += bnd_slot
                 constraints_load[k] += obs_slot
             else
-                constraints_load[k] += bnd_load
                 if obs
                     constraints_load[k] += obs_load
                 end
@@ -294,6 +294,7 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         if obs
             constraints_load[N] += obs_load
         end
+
 
         # Initial controls
         U0_load = [uload for k = 1:N-1]
@@ -309,10 +310,22 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             N=N,
             dt=dt)
 
+        if initial_problem
+            cable_load = gen_load_cable_constraints_1slack(X_lift,U_lift,n,m,d,n_slack)
+
+            for k = 1:N
+                prob_load.constraints[k] += cable_load[k]
+            end
+        end
+
     elseif agent ∈ 1:num_lift
 
         u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
-        u0[end] = 0 #ulift[1][end]
+        if initial_problem
+            u0[end] = 0 #ulift[1][end]
+        else
+            u0[end] = ulift[1][end]
+        end
 
         # Model
         model = gen_lift_model_initial(xload0,xlift0[agent],quad_params,quat)
@@ -329,7 +342,9 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             Qf_lift = Gf'*Diagonal(qf_diag)*Gf
         end
         obj_lift = LQRObjective(Q_lift,R_lift,Qf_lift,xliftf[agent],N,u0)
-        obj_lift[1].c = -ulift[1][end]*r_lift[end]
+        if initial_problem
+            obj_lift[1].c = -ulift[1][end]*r_lift[end]
+        end
 
         if obs
             Q_mid_lift = Diagonal(q_lift_mid)
@@ -350,11 +365,11 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
         con = Constraints(N)
         for k = 1:N
+            con[k] += bnd_lift
             if scenario == :slot #&& (Nmid < k < N*3÷4)
                 # con[k] += bnd_slot
                 con[k] += obs_slot
             else
-                con[k] += bnd_lift
                 if obs
                     con[k] += obs_lift
                 end
@@ -380,7 +395,6 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
 
     elseif agent == :batch
         u0 = ones(m_lift)*9.81*(load_params.m + quad_params.m/num_lift)/4
-        @show ulift[1][end]
         u0[end] = ulift[1][end]
         ulift = [u0 for i = 1:num_lift]
 
@@ -493,7 +507,7 @@ function quad_costs(n_lift, m_lift, scenario=:doorway)
         r_diag[end] = 1
 
         qf_diag = copy(q_diag)*10.0
-    elseif scenario == :p2pa
+    elseif scenario == :p2p
         q_diag = 1.0*ones(n_lift)
         q_diag[1] = 1e-5
         # q_diag[4:7] .*= 25.0
@@ -505,7 +519,7 @@ function quad_costs(n_lift, m_lift, scenario=:doorway)
 
         qf_diag = 100*ones(n_lift)
     else
-         q_diag = 1e-1*ones(n_lift)
+        q_diag = 1e-1*ones(n_lift)
         q_diag[1] = 1e-3
         q_diag[4:7] .*= 25.0
 
@@ -585,7 +599,7 @@ end
              [4.0, 2.5, 0.5]]
     vert  = [[2.0, 2.0, 0.5],
              [2.0,-2.0, 0.5],
-             [4.0,-1.0, 0.5],
-             [4.0, 1.0, 0.5]]
+             [4.0,-1.2+0.0, 0.6],
+             [4.0, 1.2+0.0, 0.6]]
     return horiz, vert
 end

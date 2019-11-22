@@ -63,6 +63,8 @@ $(FIELDS)
     "terminal solve when maximum penalty is reached."
     kickout_max_penalty::Bool = false
 
+    cache_trajectories::Bool = false
+
 end
 
 
@@ -136,7 +138,9 @@ function AbstractSolver(prob::Problem{T,D}, opts::AugmentedLagrangianSolverOptio
 
     solver_uncon = AbstractSolver(prob,opts.opts_uncon)
 
-    AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set,solver_uncon)
+    solver = AugmentedLagrangianSolver{T}(opts,stats,stats_uncon,C,copy(C),∇C,λ,μ,active_set,solver_uncon)
+    reset!(solver)
+    return solver
 end
 
 
@@ -177,10 +181,16 @@ function reset!(solver::AugmentedLagrangianSolver{T}) where T
     solver.stats[:cost]             = T[]
     solver.stats[:c_max]            = T[]
     solver.stats[:penalty_max]      = T[]
+    solver.stats[:timestamp]        = T[]
+    solver.stats[:cost_uncon]       = T[]
     n,m,N = get_sizes(solver)
     for k = 1:N
         solver.λ[k] .*= 0
         solver.μ[k] .= solver.μ[k]*0 .+ solver.opts.penalty_initial
+    end
+    if solver.opts.cache_trajectories
+        solver.stats[:X] = Vector{Vector{T}}[]
+        solver.stats[:U] = Vector{Vector{T}}[]
     end
 end
 

@@ -31,11 +31,15 @@ scenario = :doorway
 
 prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift,quat=quat)
 TO.has_quat(prob.model)
+rollout!(prob)
+prob.U
+cost(prob)
 
 # @btime solve($prob,$opts_al)
 # prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 # @btime solve($prob, $opts_al)
 @time solver = solve!(prob, opts_al)
+solver.stats[:cost]
 visualize_batch(vis,prob,true,num_lift)
 solver.stats[:iterations]
 

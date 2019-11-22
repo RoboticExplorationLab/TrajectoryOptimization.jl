@@ -20,6 +20,7 @@ function copy_probs(probs::DProbs, num_lift=length(probs))
 end
 
 function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, parallel, opts, max_iters=3, n_slack=3)
+	tstart = time()
 	num_lift = length(probs)
 
 	quat = fetch.([@spawnat w TO.has_quat(probs[:L].model) for w in worker_quads(num_lift)])[1]
@@ -36,9 +37,17 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
     x0_lift = fetch.([@spawnat w probs[:L].x0 for w in worker_quads(num_lift)])
     d = [norm(x0_load[1:3]-x0_lift[i][1:3]) for i = 1:num_lift]
 
+	solvers_init = ddata(T=AugmentedLagrangianSolver{Float64},pids=worker_quads(num_lift));
+	@sync for w in worker_quads(num_lift)
+		@spawnat w solvers_init[:L] = AugmentedLagrangianSolver(probs[:L], opts)
+	end
+	solver_init = AugmentedLagrangianSolver(prob_load, opts)
+	solver_init.stats[:tstart] = tstart
+	wait.([@spawnat w solvers_init[:L].stats[:tstart] = tstart for w in worker_quads(num_lift)])
+
 	@info "Pre-system solve"
-    futures = [@spawnat w solve!(probs[:L], opts) for w in worker_quads(num_lift)]
-    solve!(prob_load, opts)
+    futures = [@spawnat w solve!(probs[:L], solvers_init[:L]) for w in worker_quads(num_lift)]
+    solve!(prob_load, solver_init)
     wait.(futures)
 
 	@info "System solve"
@@ -86,15 +95,18 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
         @spawnat w update_lift!(probs[:L], agent, X_cache[:L][2:(num_lift+1)], X_cache[:L][1], U_cache[:L][1], d[agent])
 	end
 
+	# Create solvers
 	solvers_al = ddata(T=AugmentedLagrangianSolver{Float64},pids=worker_quads(num_lift));
     @sync for w in worker_quads(num_lift)
         @spawnat w begin
             solvers_al[:L] = AugmentedLagrangianSolver(probs[:L], opts)
             probs[:L] = AugmentedLagrangianProblem(probs[:L],solvers_al[:L])
 			probs[:L].model = gen_lift_model(X_cache[:L][1],probs[:L].N,probs[:L].dt,quad_params,quat)
+			solvers_al[:L].stats[:tstart] = tstart
         end
     end
     solver_load = AugmentedLagrangianSolver(prob_load, opts)
+	solver_load.stats[:tstart] = tstart
     prob_load = AugmentedLagrangianProblem(prob_load, solver_load)
 
 	prob_load.model = gen_load_model(X_lift,prob_load.N,prob_load.dt,load_params)
@@ -171,7 +183,9 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 	solvers = combine_problems(solver_load, solvers_al)
 	problems = combine_problems(prob_load, probs)
 
-	return problems, solvers, X_cache
+	solvers_init = combine_problems(solver_init, solvers_init)
+
+	return problems, solvers, solvers_init, X_cache
 end
 
 function init_cache(prob_load::Problem, probs::DProbs)

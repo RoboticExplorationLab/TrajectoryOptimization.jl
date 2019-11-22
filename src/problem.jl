@@ -247,7 +247,7 @@ TrajectoryOptimization.num_constraints(prob::Problem) = num_constraints(prob.con
 "$(TYPEDSIGNATURES) Evaluate the current cost for the problem"
 cost(prob::Problem{T}) where T = cost(prob.obj, prob.X, prob.U, get_dt_traj(prob))::T
 
-function max_violation(prob::Problem{T})::T where T
+function max_violation(prob::Problem{T}, X=prob.X, U=prob.U)::T where T
     if is_constrained(prob)
         N = prob.N
         c_max = 0.0
@@ -255,7 +255,7 @@ function max_violation(prob::Problem{T})::T where T
             if num_stage_constraints(prob.constraints[k]) > 0
                 stage_con = stage(prob.constraints[k])
                 c = PartedVector(stage_con)
-                evaluate!(c,stage_con,prob.X[k],prob.U[k])
+                evaluate!(c,stage_con,X[k],U[k])
                 max_E = norm(c.equality,Inf)
                 max_I = maximum(pos.(c))
                 c_max = max(c_max,max(max_E,max_I))
@@ -263,7 +263,7 @@ function max_violation(prob::Problem{T})::T where T
         end
         if num_terminal_constraints(prob.constraints[N]) > 0
             c = PartedVector(prob.constraints[N],:terminal)
-            evaluate!(c,prob.constraints[N],prob.X[N])
+            evaluate!(c,prob.constraints[N],X[N])
             max_E = norm(c.equality,Inf)
             max_I = maximum(pos.(c))
             c_max = max(c_max,max(max_E,max_I))
@@ -283,7 +283,7 @@ Returns `(c_max, k_max, label, ind_max)` where
 * `label` is the label of the constraint with the maximum violation
 * `ind_max` is the index location of the maximum violation within the constraint with label `label` at time step `k_max`
 """
-function findmax_violation(prob::Problem{T}) where T
+function findmax_violation(prob::Problem{T}, X=prob.X, U=prob.U) where T
     k_max = 0
     label_max = :none
     ind_max = 0
@@ -297,7 +297,6 @@ function findmax_violation(prob::Problem{T}) where T
     end
 
     N = prob.N
-    X,U = prob.X, prob.U
     for k = 1:N-1
         if num_stage_constraints(constraints[k]) > 0
             for con in constraints[k]
@@ -316,6 +315,7 @@ function findmax_violation(prob::Problem{T}) where T
     if num_terminal_constraints(constraints[N]) > 0
         for con in constraints[N]
             c = zeros(length(con, :terminal))
+            length(c) > 0 || continue
             violation!(c, con, X[N])
             temp_max, temp_ind = findmax(c)
             if temp_max > c_max

@@ -9,6 +9,7 @@ end
 copy_probs(probs::Vector{<:Problem}) = copy.(probs)
 
 function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_type, opts, max_iters=3, n_slack=3)
+	tstart = time()
     N = prob_load.N; dt = prob_load.dt
 	quat = TO.has_quat(prob_lift[1].model)
 	@show quat
@@ -26,10 +27,14 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
     #~~~~~~~~~~~~~~~~~~~~ SOLVE INITIAL PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
     # Solve the initial problems
 	@info "Initial solve"
+	solvers_init = [AugmentedLagrangianSolver(prob, opts) for prob in prob_lift]
+	solver_init = AugmentedLagrangianSolver(prob_load, opts)
     for i = 1:num_lift
-        solve!(prob_lift[i],opts)
+		solvers_init[i].stats[:tstart] = tstart
+        solve!(prob_lift[i],solver_init[i])
     end
-    solve!(prob_load,opts)
+	solver_init.stats[:tstart] = tstart
+    solve!(prob_load,solver_init)
 
 
     #~~~~~~~~~~~~~~~~~~~~ UPDATE PROBLEMS ~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -52,6 +57,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
     for i = 1:num_lift
 
         solver = TO.AbstractSolver(prob_lift[i],opts)
+		solver.stats[:tstart] = tstart
         prob = AugmentedLagrangianProblem(prob_lift[i],solver)
         prob.model = gen_lift_model(X_load,N,dt,quad_params,quat)
 
@@ -107,7 +113,7 @@ function solve_admm_1slack(prob_lift, prob_load, quad_params, load_params, admm_
             TO.update_active_set!(prob_lift_al[i].obj)
         end
 
-        max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]...,max_violation(solver_load_al))
+        max_c = max([max_violation(solver_lift_al[i]) for i = 1:num_lift]..., max_violation(solver_load_al))
         println(max_c)
 
         if max_c < opts.constraint_tolerance
@@ -288,7 +294,7 @@ function gen_self_collision_constraints(X_lift,agent,n,m,r_lift,n_slack=3)
 end
 
 
-function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3)
+function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3, update_obj=true)
 
     n = prob_lift.model.n
     m = prob_lift.model.m
@@ -311,7 +317,7 @@ function update_lift!(prob_lift,i,X_lift,X_load,U_load,d,n_slack=3)
 
     # Add system constraints to problems
     for k = 1:N
-		if k < N
+		if k < N && update_obj
 			prob_lift.obj[k].r[5] = r5
 		end
         prob_lift.constraints[k] += cable_lift[k]

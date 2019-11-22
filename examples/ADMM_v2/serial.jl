@@ -33,17 +33,32 @@ num_lift = 3
 quat = true
 r0_load = [0, 0, 0.25]
 scenario = :doorway
+initial_problem = false
 prob_load = gen_prob(:load, quad_params, load_params, r0_load,
-    num_lift=num_lift, quat=quat, scenario=scenario)
+    num_lift=num_lift, quat=quat, scenario=scenario, initial_problem=initial_problem)
 prob_lift = [gen_prob(i, quad_params, load_params, r0_load,
-    num_lift=num_lift, quat=quat, scenario=scenario) for i = 1:num_lift]
+    num_lift=num_lift, quat=quat, scenario=scenario, initial_problem=initial_problem)
+    for i = 1:num_lift]
+probs = [prob_load; prob_lift]
+
+Qs = push!([prob.obj[1].Q for prob in prob_lift], prob_load.obj[1].Q)
+Rs = push!([prob.obj[1].R for prob in prob_lift], prob_load.obj[1].R)
+qs = push!([prob.obj[1].q for prob in prob_lift], prob_load.obj[1].q)
+rs = push!([prob.obj[1].r for prob in prob_lift], prob_load.obj[1].r)
+cs = push!([prob.obj[1].c for prob in prob_lift], prob_load.obj[1].c)
+cat(Qs... , dims=(1,2)) == prob.obj[1].Q
+cat(Rs... , dims=(1,2)) == prob.obj[1].R
+vcat(qs...) ≈ prob.obj[1].q
+vcat(rs...) ≈ prob.obj[1].r
+sum(cs) ==  prob.obj[1].c
+
+
 
 TO.state_diff_jacobian(prob_lift[1].model, prob_lift[1].xf)
 Q_quat = prob_lift[1].obj[51].Q
 Q = prob_lift[1].obj[51].Q
 
 prob_lift, prob_load = trim_conditions(num_lift,r0_load,quad_params,load_params,quat,opts_al);
-prob_lift
 # @time plift_al, pload_al, slift_al, sload_al = solve_admm_1slack(prob_lift,prob_load,:parallel,opts_al)
 # prob_lift, prob_load = trim_conditions(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 @time plift_al, pload_al, slift_al, sload_al = solve_admm(prob_lift, prob_load, quad_params,

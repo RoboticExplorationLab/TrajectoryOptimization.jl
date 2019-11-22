@@ -34,13 +34,13 @@ end
 
 function solve_aula!(prob_al::Problem{T,Discrete},solver::AugmentedLagrangianSolver{T},logger=default_logger(solver)) where T
     with_logger(logger) do
-        record_iteration!(solver, cost(prob_al), solver.solver_uncon)
+        record_iteration!(prob_al, solver, cost(prob_al), solver.solver_uncon)
         println(logger,OuterLoop)
         for i = 1:solver.opts.iterations
             set_tolerances!(solver,solver.solver_uncon,i)
             J = step!(prob_al, solver, solver.solver_uncon)
 
-            record_iteration!(solver, J, solver.solver_uncon)
+            record_iteration!(prob_al, solver, J, solver.solver_uncon)
 
             converged = evaluate_convergence(solver)
             println(logger,OuterLoop)
@@ -71,12 +71,13 @@ function step!(prob::Problem{T}, solver::AugmentedLagrangianSolver{T},
 
     # Solve the unconstrained problem
     solve!(prob, unconstrained_solver)
-    J = cost(prob)
 
     # Outer loop update
     dual_update!(prob, solver)
     penalty_update!(prob, solver)
     copyto!(solver.C_prev,solver.C)
+
+    J = cost(prob)
 
     return J
 end
@@ -91,17 +92,28 @@ function evaluate_convergence(solver::AugmentedLagrangianSolver{T}) where T
     converged || (solver.stats[:c_max][end] < solver.opts.constraint_tolerance ? true : false)
 end
 
-function record_iteration!(solver::AugmentedLagrangianSolver{T}, J::T,
+function record_iteration!(prob, solver::AugmentedLagrangianSolver{T}, J::T,
         unconstrained_solver::AbstractSolver) where T
     c_max = max_violation(solver)
 
     solver.stats[:iterations] += 1
     solver.stats[:iterations_total] += unconstrained_solver.stats[:iterations]
     push!(solver.stats[:iterations_inner], unconstrained_solver.stats[:iterations])
-    push!(solver.stats[:cost],J)
+    push!(solver.stats[:cost], J)
     push!(solver.stats[:c_max],c_max)
     push!(solver.stats[:penalty_max],max_penalty(solver))
     push!(solver.stats_uncon, copy(unconstrained_solver.stats))
+
+    if :tstart ∈ keys(solver.stats)
+        tstart = solver.stats[:tstart]
+        push!(solver.stats[:timestamp], time() - tstart)
+        J_uncon = cost(prob.obj.cost, prob.X, prob.U, get_dt_traj(prob))
+        push!(solver.stats[:cost_uncon], J_uncon)
+    end
+    if solver.opts.cache_trajectories
+        push!(solver.stats[:X], deepcopy(prob.X))
+        push!(solver.stats[:U], deepcopy(prob.U))
+    end
 
     @logmsg OuterLoop :iter value=solver.stats[:iterations]
     @logmsg OuterLoop :total value=solver.stats[:iterations_total]
