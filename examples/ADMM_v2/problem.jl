@@ -310,13 +310,6 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             N=N,
             dt=dt)
 
-        if initial_problem
-            cable_load = gen_load_cable_constraints_1slack(X_lift,U_lift,n,m,d,n_slack)
-
-            for k = 1:N
-                prob_load.constraints[k] += cable_load[k]
-            end
-        end
 
     elseif agent ∈ 1:num_lift
 

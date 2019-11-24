@@ -39,10 +39,16 @@ function solve_admm_1slack_dist(probs, prob_load, quad_params, load_params, para
 
 	solvers_init = ddata(T=AugmentedLagrangianSolver{Float64},pids=worker_quads(num_lift));
 	@sync for w in worker_quads(num_lift)
-		@spawnat w solvers_init[:L] = AugmentedLagrangianSolver(probs[:L], opts)
+		@spawnat w begin
+			solvers_init[:L] = AugmentedLagrangianSolver(probs[:L], opts)
+			solvers_init[:L].stats[:X0] = deepcopy(probs[:L].X)
+			solvers_init[:L].stats[:U0] = deepcopy(probs[:L].U)
+		end
 	end
 	solver_init = AugmentedLagrangianSolver(prob_load, opts)
 	solver_init.stats[:tstart] = tstart
+	solver_init.stats[:X0] = deepcopy(prob_load.X)
+	solver_init.stats[:U0] = deepcopy(prob_load.U)
 	wait.([@spawnat w solvers_init[:L].stats[:tstart] = tstart for w in worker_quads(num_lift)])
 
 	@info "Pre-system solve"
