@@ -239,7 +239,6 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
     end
 
     # _cyl = door_obstacles()
-
     function cI_cylinder(c,x,u)
         c_shift = 1
         n_slack = 3
@@ -255,6 +254,18 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
             c_shift += 1
         end
     end
+
+    n_slot = length(slot_vert) + length(slot_horiz)
+    function slot_batch(c,x,u)
+        r_lift = [x[inds] for inds in r_inds]
+        for i = 1:num_lift+1
+            inds = (1:n_slot) .+ (i-1)*n_slot
+            ci = view(c, inds)
+            slot_obstacles_constraint(ci,r_lift[i],zeros(m_lift))
+        end
+    end
+
+
 
 
 
@@ -450,12 +461,15 @@ function gen_prob(agent, quad_params, load_params, r0_load=[0,0,0.25];
         dist_con = Constraint{Equality}(distance_constraint,n_batch,m_batch, num_lift, :distance)
         for_con = Constraint{Equality}(force_constraint,n_batch,m_batch, num_lift, :force)
         col_con = Constraint{Inequality}(collision_constraint,n_batch,m_batch, binomial(num_lift, 2), :collision)
+        slot_con = Constraint{Inequality}(slot_batch,n_batch,m_batch, n_slot*(num_lift+1), :slot)
         # goal = goal_constraint(xf)
 
         con = Constraints(N)
         for k = 1:N-1
             con[k] += dist_con + for_con + bnd + col_con
-            if obs
+            if scenario == :slot
+                con[k] += slot_con
+            elseif obs
                 con[k] += cyl
             end
         end
@@ -592,7 +606,7 @@ end
              [4.0, 2.5, 0.5]]
     vert  = [[2.0, 2.0, 0.5],
              [2.0,-2.0, 0.5],
-             [4.0,-1.2+0.0, 0.6],
-             [4.0, 1.2+0.0, 0.6]]
+             [4.0,-1.2+0.0, 0.5],
+             [4.0, 1.2+0.0, 0.5]]
     return horiz, vert
 end

@@ -19,12 +19,12 @@ end
 
 function plot_cylinder(vis,c1,c2,radius,mat,name="")
     geom = Cylinder(Point3f0(c1),Point3f0(c2),convert(Float32,radius))
-    setobject!(vis["cyl"][name],geom,MeshPhongMaterial(color=RGBA(1, 0, 0, 1.0)))
+    setobject!(vis["cyl"][name],geom,mat)
 end
 
 function addcylinders!(vis,cylinders,height=1.5)
     for (i,cyl) in enumerate(cylinders)
-        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(0, 0, 1, 1.0)),"cyl_$i")
+        plot_cylinder(vis,[cyl[1],cyl[2],0],[cyl[1],cyl[2],height],cyl[3],MeshPhongMaterial(color=RGBA(1, 0, 0, 0.5)),"cyl_$i")
     end
 end
 
@@ -43,7 +43,7 @@ function visualize_quadrotor_lift_system(vis, probs, scenario=:doorway, n_slack=
     elseif scenario == :slot
         y_bnd = 3
         slot_horiz, slot_vert = slot_obstacles()
-        mat = MeshPhongMaterial(color=RGBA(1,0,0, 1.0))
+        mat = MeshPhongMaterial(color=RGBA(1,0,0, 0.5))
         for (i,cyl) in enumerate(slot_horiz)
             i == 3 ? y_bnd = 2 : y_bnd = 3
             c1 = [cyl[1], y_bnd, cyl[2]]
@@ -52,16 +52,6 @@ function visualize_quadrotor_lift_system(vis, probs, scenario=:doorway, n_slack=
         end
         addcylinders!(vis, slot_vert, ceiling+0.2)
         addcylinders!(vis, slot_vert[1:2], ceiling)
-    end
-
-
-    if scenario == :slot
-        slot_min = 0.5
-        slot_max = 1.5
-        block1 = HyperRectangle(4.5, -2, 0, 1, 4, slot_min)
-        block2 = HyperRectangle(4.5, -2, slot_max, 1, 4, 1)
-        setobject!(vis["slot"]["block1"], block1, MeshPhongMaterial(color=RGBA(0,1,0,0.0)))
-        setobject!(vis["slot"]["block2"], block2, MeshPhongMaterial(color=RGBA(0,1,0,0.0)))
     end
 
 

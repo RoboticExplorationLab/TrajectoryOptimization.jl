@@ -33,7 +33,7 @@ const TO = TrajectoryOptimization
 # Scenario
 quat = true
 num_lift = 3
-scenario = :slot
+scenario = :doorway
 scenario == :doorway ? obs = true : obs = false
 r0_load = [0, 1.5, 0.25]
 
@@ -79,9 +79,13 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
     penalty_initial=1.0e-3,
 	cache_trajectories=true)
 
-prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift,quat=quat)
-solver = AugmentedLagrangianSolver(prob, opts_al)
-@time sol_b, solver = solve(prob, solver)
+prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift, quat=quat)
+
+@time begin
+	solver = AugmentedLagrangianSolver(prob, opts_al)
+	solver.stats[:tstart] = time()
+	sol_b, solver = solve(prob, solver)
+end
 @btime begin
 	solver = AugmentedLagrangianSolver($prob, $opts_al)
 	$solver.stats[:tstart] = time()
@@ -266,16 +270,16 @@ function plot_stat!(stat, times, labels)
 end
 function plot_stat_pgf!(stat, times, labels)
 	inds = findall(label .== :presolve)
-	p2 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Presolve (ours)",
+	p2 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Presolve",
 		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
 	inds = findall(label .== :lift)
 	insert!(inds, 1, inds[1]-1)
-	p3 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Quads (ours)",
-		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
+	p3 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Quads",
+		style="color=$col, line width=$lwidth, solid, mark=*, mark options={$col}",)
 	inds = findall(label .== :load)
 	insert!(inds, 1, inds[1]-1)
-	p4 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Load (ours)",
-		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
+	p4 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Load",
+		style="color=$col, line width=$lwidth, dotted, mark=*, mark options={$col}",)
 	return p2, p3, p4
 end
 
@@ -291,10 +295,10 @@ plot_stat!(c_maxes, times, labels)
 
 resetPGFPlotsOptions()
 pushPGFPlotsOptions("scale=1.5")
-col = "green!80!black"
+col = "green!70!black"
 lwidth = 1.5
 
-p1 = PGF.Plots.Linear(times_b, Js_b, legendentry="Batch")
+p1 = PGF.Plots.Linear(times_b, Js_b, legendentry="Batch", style="line width=$lwidth")
 ps = plot_stat_pgf!(Js, times, labels)
 a = Axis([p1, ps...],
 	legendPos="north east",
@@ -305,7 +309,7 @@ a = Axis([p1, ps...],
 	style="grid=none")
 PGF.save("cost_convergence.tikz", a, include_preamble=false)
 
-c1 = PGF.Plots.Linear(times_b, c_maxes_b, legendentry="Batch")
+c1 = PGF.Plots.Linear(times_b, c_maxes_b, legendentry="Batch", style="line width=$lwidth")
 cs = plot_stat_pgf!(c_maxes, times, labels)
 thres = PGF.Plots.Linear([-1,times_b[end]*1.5], ones(2)*opts_al.constraint_tolerance,
 	legendentry="threshold", style="color=red, dashed, no marks")
