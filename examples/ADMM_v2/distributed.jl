@@ -70,122 +70,6 @@ solvers_init[1].stats
 
 visualize_quadrotor_lift_system(vis, sol, scenario)
 
-function recalc_stats(prob, solvers, solvers_init)
-	num_agents = length(solvers)
-	n_batch, m_batch, N = size(prob)
-	dt_traj = TO.get_dt_traj(prob)
-
-	Js = Float64[]
-	time = Float64[]
-	c_maxes = Float64[]
-
-	X_batch = [zeros(n_batch) for k = 1:N]
-	U_batch = [zeros(m_batch) for k = 1:N-1]
-
-	# Initial cost
-	X_load = solvers_init[1].stats[:X0]
-	U_load = solvers_init[1].stats[:U0]
-	X_lift = [solver.stats[:X0] for solver in solvers_init[2:end]]
-	U_lift = [solver.stats[:U0] for solver in solvers_init[2:end]]
-	for k = 1:N-1
-		x_lift = [x[k] for x in X_lift]
-		u_lift = [u[k] for u in U_lift]
-		X_batch[k] .= [vcat(x_lift...); X_load[k]]
-		U_batch[k] .= [vcat(u_lift...); U_load[k]]
-	end
-	x_lift = [x[N] for x in X_lift]
-	X_batch[N] .= [vcat(x_lift...); X_load[N]]
-	initial_controls!(prob, U_batch)
-	rollout!(prob)
-	J0 = cost(prob)
-	c_max = max_violation(prob)
-	push!(Js, J0)
-	push!(c_maxes, c_max)
-	push!(time, 0.0)
-
-	# Cost after initial solve
-	X_lift = [solver.stats[:X][end] for solver in solvers_init[2:end]]
-	U_lift = [solver.stats[:U][end] for solver in solvers_init[2:end]]
-	X_load = solvers_init[1].stats[:X][end]
-	U_load = solvers_init[1].stats[:U][end]
-	for k = 1:N-1
-		x_lift = [x[k] for x in X_lift]
-		u_lift = [u[k] for u in U_lift]
-		X_batch[k] .= [vcat(x_lift...); X_load[k]]
-		U_batch[k] .= [vcat(u_lift...); U_load[k]]
-	end
-	x_lift = [x[N] for x in X_lift]
-	X_batch[N] .= [vcat(x_lift...); X_load[N]]
-	J = cost(prob.obj, X_batch, U_batch, dt_traj)
-	c_max = max_violation(prob, X_batch, U_batch)
-	t_init = maximum([solver.stats[:timestamp][end] for solver in solvers_init])
-	push!(Js, J)
-	push!(c_maxes, c_max)
-	push!(time, t_init)
-
-
-	## PARALLEL SOLVE
-
-	# Get sample times
-	times = [copy(sol.stats[:timestamp]) for sol in solvers]
-	final_time = maximum([t[end] for t in times[2:end]])
-	[push!(t, final_time) for t in times[2:end]]
-	max_iter = maximum(length.(times[2:end]))
-	for i = 2:num_agents
-		fillend!(times[i], max_iter)
-	end
-	# t_sample = unique_approx(vcat(times[2:end]...))
-	t_sample = unique(sort(vcat(times[2:end]...)))
-
-	n_load, m_load, N = size(sol[1])
-	n_lift, m_lift = size(sol[2])
-	n_batch = n_lift*num_lift + n_load
-	m_batch = m_lift*num_lift + m_load
-
-	J_total = zeros(length(t_sample))
-	c_max_total = zeros(length(t_sample))
-
-	# Get load trajectory from initial solve
-	X_load = solvers_init[1].stats[:X][end]
-	U_load = solvers_init[1].stats[:U][end]
-
-	for (j,t) in enumerate(t_sample)
-		X = [zeros(n_batch) for k = 1:N]
-		U = [zeros(m_batch) for k = 1:N-1]
-
-		for k = 1:N
-			x_lift = Vector{Float64}[]
-			u_lift = Vector{Float64}[]
-			for i = 2:num_agents
-				Xs = solvers[i].stats[:X]
-				Us = solvers[i].stats[:U]
-				ts = solvers[i].stats[:timestamp]
-				Xi = sample_traj(t, ts, Xs)
-				Ui = sample_traj(t, ts, Us)
-				push!(x_lift, Xi[k])
-				k < N ? push!(u_lift, Ui[k]) : nothing
-			end
-			X_batch[k] .= [vcat(x_lift...); X_load[k]]
-			k < N ? U_batch[k] .= [vcat(u_lift...); U_load[k]] : nothing
-		end
-
-		J_total[j] = cost(prob.obj, X_batch, U_batch, dt_traj)
-		c_max_total[j] = max_violation(prob, X_batch, U_batch)
-	end
-	append!(Js, J_total)
-	append!(c_maxes, c_max_total)
-	append!(time, t_sample)
-
-	# Load solve
-	append!(Js, solvers[1].stats[:cost_uncon])
-	append!(c_maxes, solvers[1].stats[:c_max])
-	append!(time, solvers[1].stats[:timestamp])
-
-	return Js, c_maxes, time
-end
-Js, c_maxes, times = recalc_stats(prob, sol_solvers, solvers_init)
-plot(times, Js, markershape=:circle)
-plot(times, c_maxes, markershape=:circle)
 
 
 
@@ -243,20 +127,6 @@ function interp_trajectories(solvers)
 
 end
 t_sample = interp_trajectories(sol_solvers)
-
-
-function sample_traj(t, ts, Xs)
-	ind = findfirst(x-> x >= t, ts)
-	if isnothing(ind)
-		return Xs[end]
-	elseif ind > 1
-		return Xs[ind-1]
-	else
-		return Xs[1]
-	end
-end
-isnothing(findfirst(x->x > 20, [4,5,6]))
-isnothing()
 
 function plot_convergence(solvers, solvers_init)
 	num_agents = length(solvers)
@@ -321,8 +191,6 @@ t_sample = unique_approx(vcat(times[2:end]...))
 LinearInterpolation(times[2], costs[2])(t_sample)
 costs
 
-
-
 function fillend!(a,N)
 	n = length(a)
 	if n < N
@@ -344,8 +212,6 @@ end
 end
 
 @btime solve_admm($probs, $prob_load, $quad_params, $load_params, $true, $opts_al);
-if false
-
 
 X_cache, U_cache, X_lift, U_lift = init_cache(prob_load, probs);
 fetch(@spawnat 1 length(X_cache[:L]))

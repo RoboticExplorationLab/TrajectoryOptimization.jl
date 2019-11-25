@@ -27,7 +27,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 num_lift = 3
 quat = true
 r0_load = [-0.0,-0.0,0.25]
-scenario = :doorway
+scenario = :slot
 
 prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift,quat=quat)
 TO.has_quat(prob.model)
@@ -38,8 +38,11 @@ cost(prob)
 # @btime solve($prob,$opts_al)
 # prob = trim_conditions_batch(num_lift, r0_load, quad_params, load_params, quat, opts_al)
 # @btime solve($prob, $opts_al)
-@time solver = solve!(prob, opts_al)
-solver.stats[:cost]
+solver = AugmentedLagrangianSolver(prob, opts_al)
+solver.stats[:tstart] = time()
+prob.obj[1]
+@time solver = solve!(prob, solver)
+solver.stats[:cost_uncon]
 visualize_batch(vis,prob,true,num_lift)
 solver.stats[:iterations]
 

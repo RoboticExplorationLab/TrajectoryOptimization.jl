@@ -112,17 +112,27 @@ function visualize_quadrotor_lift_system(vis, probs, scenario=:doorway, n_slack=
     MeshCat.setanimation!(vis,anim)
 end
 
-function visualize_batch(vis,prob,obs=true,num_lift=3)
+function visualize_batch(vis,prob,scenario=:doorway,num_lift=3)
 
     # camera angle
     # settransform!(vis["/Cameras/default"], compose(Translation(5., -3, 3.),LinearMap(RotX(pi/25)*RotZ(-pi/2))))
 
+    obs = scenario == :doorway
     if obs
         _cyl = door_obstacles()
         addcylinders!(vis, _cyl, 2.1)
     end
     x0 = prob.x0
     d = norm(x0[1:3] - x0[num_lift*13 .+ (1:3)])
+
+    if scenario == :slot
+        slot_min = 0.5
+        slot_max = 1.5
+        block1 = HyperRectangle(4.5, -2, 0, 1, 4, slot_min)
+        block2 = HyperRectangle(4.5, -2, slot_max, 1, 4, 1)
+        setobject!(vis["slot"]["block1"], block1, MeshPhongMaterial(color=RGBA(0,1,0,0.0)))
+        setobject!(vis["slot"]["block2"], block2, MeshPhongMaterial(color=RGBA(0,1,0,0.0)))
+    end
 
     # intialize system
     traj_folder = joinpath(dirname(pathof(TrajectoryOptimization)),"..")
