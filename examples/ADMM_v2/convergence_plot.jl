@@ -33,7 +33,7 @@ const TO = TrajectoryOptimization
 # Scenario
 quat = true
 num_lift = 3
-scenario = :doorway
+scenario = :slot
 scenario == :doorway ? obs = true : obs = false
 r0_load = [0, 1.5, 0.25]
 
@@ -57,6 +57,11 @@ probs, prob_load = init_dist(num_lift=num_lift, quat=quat, scenario=scenario, r0
 wait.([@spawnat w reset_control_reference!(probs[:L]) for w in worker_quads(num_lift)])
 @time sol, sol_solvers, solvers_init, xx = solve_admm(probs, prob_load, quad_params,
 	load_params, true, opts_al, max_iters=1);
+@btime begin
+	wait.([@spawnat w reset_control_reference!($probs[:L]) for w in worker_quads($num_lift)])
+	@time solve_admm($probs, $prob_load, $quad_params,
+		$load_params, true, $opts_al, max_iters=1);
+end
 
 visualize_quadrotor_lift_system(vis, sol, scenario)
 
@@ -76,13 +81,17 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 
 prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift,quat=quat)
 solver = AugmentedLagrangianSolver(prob, opts_al)
-@time begin
-	solver.stats[:tstart] = time()
-	sol_b, solver = solve(prob, solver)
+@time sol_b, solver = solve(prob, solver)
+@btime begin
+	solver = AugmentedLagrangianSolver($prob, $opts_al)
+	$solver.stats[:tstart] = time()
+	solve($prob, $solver)
 end
 
 
 visualize_batch(vis,sol_b,scenario,num_lift)
+slot_obstacles()
+
 
 
 # Generate convergence plot
@@ -94,6 +103,14 @@ function sample_traj(t, ts, Xs)
 		return Xs[ind-1]
 	else
 		return Xs[1]
+	end
+end
+
+function fillend!(a,N)
+	n = length(a)
+	if n < N
+		tail = ones(N-n)*a[end]
+		append!(a, tail)
 	end
 end
 
@@ -262,6 +279,8 @@ function plot_stat_pgf!(stat, times, labels)
 	return p2, p3, p4
 end
 
+using Plots
+import Plots.plot
 plot(times_b, Js_b, markershape=:circle, label=:Batch, yscale=:log10,
 	ylabel=:Cost, xlabel="time (s)")
 plot_stat!(Js, times, labels)
