@@ -8,6 +8,9 @@ using BenchmarkTools
 using TrajectoryOptimization
 using Interpolations
 using Plots
+using PGFPlots
+using PGFPlots
+const PGF = PGFPlots
 
 if nworkers() != 3
 	addprocs(3,exeflags="--project=$(@__DIR__)")
@@ -236,14 +239,29 @@ times_b = solver.stats[:timestamp]
 
 function plot_stat!(stat, times, labels)
 	inds = findall(label .== :presolve)
-	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:dash, label="Pre-solve")
+	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:dash, label="Pre-solve (ours)")
 	inds = findall(label .== :lift)
 	insert!(inds, 1, inds[1]-1)
-	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:solid, label="Lift (parallel)")
+	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:solid, label="Quads - parallel (ours)")
 	inds = findall(label .== :load)
 	insert!(inds, 1, inds[1]-1)
-	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:dot, label="Load")
+	plot!(times[inds], stat[inds], markershape=:circle, color=3, style=:dot, label="Load (ours)")
 end
+function plot_stat_pgf!(stat, times, labels)
+	inds = findall(label .== :presolve)
+	p2 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Presolve (ours)",
+		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
+	inds = findall(label .== :lift)
+	insert!(inds, 1, inds[1]-1)
+	p3 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Quads (ours)",
+		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
+	inds = findall(label .== :load)
+	insert!(inds, 1, inds[1]-1)
+	p4 = PGF.Plots.Linear(times[inds], stat[inds], legendentry="Load (ours)",
+		style="color=$col, line width=$lwidth, dashed, mark=*, mark options={$col}",)
+	return p2, p3, p4
+end
+
 plot(times_b, Js_b, markershape=:circle, label=:Batch, yscale=:log10,
 	ylabel=:Cost, xlabel="time (s)")
 plot_stat!(Js, times, labels)
@@ -251,3 +269,33 @@ plot_stat!(Js, times, labels)
 plot(times_b, c_maxes_b, markershape=:circle, label=:Batch, yscale=:log10,
 	ylabel="Constraint Violation", xlabel="time (s)")
 plot_stat!(c_maxes, times, labels)
+
+resetPGFPlotsOptions()
+pushPGFPlotsOptions("scale=1.5")
+col = "green!80!black"
+lwidth = 1.5
+
+p1 = PGF.Plots.Linear(times_b, Js_b, legendentry="Batch")
+ps = plot_stat_pgf!(Js, times, labels)
+a = Axis([p1, ps...],
+	legendPos="north east",
+	ymode="log",
+	hideAxis=false,
+	xlabel="time (s)",
+	ylabel="cost",
+	style="grid=none")
+PGF.save("cost_convergence.tikz", a, include_preamble=false)
+
+c1 = PGF.Plots.Linear(times_b, c_maxes_b, legendentry="Batch")
+cs = plot_stat_pgf!(c_maxes, times, labels)
+thres = PGF.Plots.Linear([-1,times_b[end]*1.5], ones(2)*opts_al.constraint_tolerance,
+	legendentry="threshold", style="color=red, dashed, no marks")
+a = Axis([c1, cs..., thres],
+	xmin=-0.5, xmax=times_b[end]*1.1,
+	legendPos="north east",
+	ymode="log",
+	hideAxis=false,
+	xlabel="time (s)",
+	ylabel="constraint violation",
+	style="grid=none")
+PGF.save("constraint_convergence.tikz", a, include_preamble=false)
