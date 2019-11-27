@@ -37,9 +37,6 @@ end
 Expansion{T}(n::Int, m::Int) where T = Expansion{T,Matrix{T},Matrix{T}}(n,m)
 
 
-function Base.getindex(E::StaticExpansion,k::Int)
-    E.xx[k],E.uu[k],E.ux[k],E.x[k],E.u[k]
-end
 
 
 
@@ -223,11 +220,6 @@ function cost_expansion!(S::Expansion{T}, cost::QuadraticCost, xN::AbstractVecto
 end
 
 
-function cost_expansion!(E::StaticExpansion, cost::QuadraticCost, xN)
-    E.xx = cost.Q
-    E.x = cost.Q*xN + cost.q
-    return nothing
-end
 
 function gradient!(grad, cost::QuadraticCost,
         x::AbstractVector, u::AbstractVector,dt)

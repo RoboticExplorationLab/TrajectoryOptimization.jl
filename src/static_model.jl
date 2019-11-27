@@ -1,4 +1,6 @@
 
+@inline size(model::AbstractModel) = model.n, model.m
+
 "Generate discrete dynamics function for a dynamics model using RK3 integration"
 function rk3_gen(model::AbstractModel)
        # Runge-Kutta 3 (zero order hold)
@@ -9,6 +11,9 @@ function rk3_gen(model::AbstractModel)
            k3 = dynamics(model, x - k1 + 2*k2, u)*dt;
            x + (k1 + 4*k2 + k3)/6
        end
+       # @inline function discrete_dynamics(model::$(typeof(model)), Z::KnotPoint)
+       #     discrete_dynamics(model, state(Z), control(Z), Z.dt)
+       # end
    end
 end
 

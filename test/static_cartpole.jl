@@ -1,5 +1,6 @@
 prob = copy(Problems.cartpole)
 sprob = copy(Problems.cartpole_static)
+u0 = control(sprob)[1]
 
 ilqr = iLQRSolver(prob)
 silqr = StaticiLQRSolver(sprob)
@@ -21,7 +22,6 @@ U0 = [u0 for k = 1:prob.N-1]
 end
 
 x0 = sprob.x0
-u0 = control(sprob)[1]
 @btime begin
     for k = 1:$sprob.N
         $sprob.Z[k].z = [$x0*NaN; $u0]
@@ -33,8 +33,6 @@ end
 # Now make augmented lagragian problem
 prob = copy(Problems.cartpole)
 sprob = copy(Problems.cartpole_static)
-sprob2 = copy(Problems.cartpole_static)
-u0 = control(sprob)[1]
 
 al = AugmentedLagrangianSolver(prob)
 prob_al = AugmentedLagrangianProblem(prob, al)
@@ -47,6 +45,11 @@ sprob_al = convertProblem(sprob, sal)
 
 solve!(prob, al)
 max_violation(prob)
+
+solve!(sprob_al, sal)
+max_violation(sprob_al)
+
+
 
 U0 = [Vector(u0) for k = 1:prob.N-1]
 @time begin
