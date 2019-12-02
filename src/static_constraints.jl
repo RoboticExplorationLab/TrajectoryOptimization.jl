@@ -38,6 +38,8 @@ lower_bound(con::AbstractStaticConstraint{Inequality,W,P}) where {P,W} = -Inf*@S
 upper_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
 lower_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
 
+@inline is_bound(con::AbstractStaticConstraint) = false
+
 @inline precompute(con::AbstractStaticConstraint, Z::Traj) = nothing
 
 """
@@ -71,8 +73,8 @@ end
 
 for method in [:evaluate, :jacobian]
 	@eval begin
-			@inline $(method)(con::AbstractStaticConstraint{P,Stage}, Z::KnotPoint)   where P = $(method)(con, state(Z), control(Z))
-			@inline $(method)(con::AbstractStaticConstraint{P,State}, Z::KnotPoint)   where P = $(method)(con, state(Z))
+			@inline $(method)(con::AbstractStaticConstraint{P,Stage},   Z::KnotPoint) where P = $(method)(con, state(Z), control(Z))
+			@inline $(method)(con::AbstractStaticConstraint{P,State},   Z::KnotPoint) where P = $(method)(con, state(Z))
 			@inline $(method)(con::AbstractStaticConstraint{P,Control}, Z::KnotPoint) where P = $(method)(con, control(Z))
 
 			@inline $(method)(con::AbstractStaticConstraint{P,Coupled}, Z′::KnotPoint, Z::KnotPoint) where P =

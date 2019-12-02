@@ -1,28 +1,40 @@
 
-function collocation_constraints!(g, prob::Problem, solver::StaticDIRCOLSolver{T,HermiteSimpson})
-    fVal = solver.fVal
-    Xm = solver.Xm
-    Z = prob.Z
-    dinds = solver.dyn_inds
+function gen_con_inds(conSet::ConstraintSets)
+    n,m = size(conSet.constraints[1])
+    N = length(conSet.p)
+    numcon = length(conSet.constraints)
+    conLen = length.(conSet.constraints)
 
-    N = length(Z)
-    for k in eachindex(Z)
-        fVal[k] = dynamics(prob.model, Z[k])
-    end
+    dyn = [@SVector ones(Int,n) for k = 1:N]
+    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
+
+    # Initial condition
+    dyn[1] = 1:n
+    idx = n
+
+    # Dynamics and general constraints
     for k = 1:N-1
-        dt = Z[k].dt
-        Xm[k] = (state(Z[k+1]) + state(Z[k]))/2 + dt/8*(fVal[k] - fVal[k+1])
+        dyn[k+1] = idx .+ (1:n)
+        idx += n
+        for (i,con) in enumerate(conSet.constraints)
+            if k ∈ con.inds
+                cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+                idx += conLen[i]
+            end
+        end
     end
-    for k = 1:N-1
-        dt = Z[k].dt
-        fValm = dynamics(prob.model, Xm[k], ( control(Z[k]) + control(Z[k+1]) )/2 )
-        g[dinds[k]] = -state(Z[k+1]) + state(Z[k+1]) + dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+
+    # Terminal constraints
+    for (i,con) in enumerate(conSet.constraints)
+        if N ∈ con.inds
+            cons[i][_index(con,N)] = idx .+ (1:conLen[i])
+            idx += conLen[i]
+        end
     end
+
+    # return dyn
+    return dyn,cons
 end
-
-
-
-
 
 function get_bounds(conSet::ConstraintSets)
 

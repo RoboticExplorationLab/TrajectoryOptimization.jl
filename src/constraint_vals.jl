@@ -192,7 +192,7 @@ end
 ############################################################################################
 
 struct ConstraintSets{T}
-	constraints::Vector{<:ConstraintVals}
+	constraints::Vector{ConstraintVals}
 	p::Vector{Int}
 	c_max::Vector{T}
 end
@@ -215,7 +215,9 @@ function ConstraintSets(constraints, N)
 			p[k] += length(con, k)
 		end
 	end
-	ConstraintSets(constraints, p, c_max)
+	cons = ConstraintVals[]
+	append!(cons, constraints)
+	ConstraintSets(cons, p, c_max)
 end
 
 function num_constraints!(conSet::ConstraintSets)
@@ -226,6 +228,11 @@ function num_constraints!(conSet::ConstraintSets)
 			p[k] += length(con, k)
 		end
 	end
+end
+
+function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals)
+	push!(conSet.constraints, conVal)
+	num_constraints!(conSet)
 end
 
 function max_violation!(conSet::ConstraintSets{T}) where T

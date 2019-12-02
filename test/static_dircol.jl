@@ -27,7 +27,7 @@ zU,zL,gU,gL = get_bounds(conSet)
 @test gU == zero(gU)
 
 
-# Test Copying
+# Test Copying from vector to trajectory
 Z = sprob.Z
 P = StaticPrimals(n,m,N)
 NN = (n+m)*N
@@ -39,5 +39,3 @@ u = control(Z[1])
 copyto!(Z, V, P.xinds, P.uinds)
 @test Z[1].z[1:n] == V[1:n]
 @test Z[N].z == V[end-n-m+1:end]
-
-cost(sprob)

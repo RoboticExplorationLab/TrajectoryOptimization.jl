@@ -77,42 +77,6 @@ end
     feasibility_tolerance::T = 1e-6
 end
 
-function gen_con_inds(conSet::ConstraintSets)
-    n,m = size(conSet.constraints[1])
-    N = length(conSet.p)
-    numcon = length(conSet.constraints)
-    conLen = length.(conSet.constraints)
-
-    dyn = [@SVector ones(Int,n) for k = 1:N]
-    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
-
-    # Initial condition
-    dyn[1] = 1:n
-    idx = n
-
-    # Dynamics and general constraints
-    for k = 1:N-1
-        dyn[k+1] = idx .+ (1:n)
-        idx += n
-        for (i,con) in enumerate(conSet.constraints)
-            if k ∈ con.inds
-                cons[i][_index(con,k)] = idx .+ (1:conLen[i])
-                idx += conLen[i]
-            end
-        end
-    end
-
-    # Terminal constraints
-    for (i,con) in enumerate(conSet.constraints)
-        if N ∈ con.inds
-            cons[i][_index(con,N)] = idx .+ (1:conLen[i])
-            idx += conLen[i]
-        end
-    end
-
-    # return dyn
-    return dyn,cons
-end
 
 
 struct StaticPNSolver{T,N,M,NM,NNM,L1,L2,L3} <: DirectSolver{T}
