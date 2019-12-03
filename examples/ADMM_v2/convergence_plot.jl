@@ -9,7 +9,6 @@ using TrajectoryOptimization
 using Interpolations
 using Plots
 using PGFPlots
-using PGFPlots
 const PGF = PGFPlots
 
 if nworkers() != 3
@@ -35,7 +34,7 @@ quat = true
 num_lift = 3
 scenario = :doorway
 scenario == :doorway ? obs = true : obs = false
-r0_load = [0, 1.5, 0.25]
+r0_load = [0, 0.0, 0.25]
 
 # Solve distributed
 verbose=false

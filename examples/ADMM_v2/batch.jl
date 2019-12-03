@@ -1,5 +1,6 @@
 using ForwardDiff, LinearAlgebra, Plots, StaticArrays
 using Combinatorics
+using Distributed
 using TrajectoryOptimization
 const TO = TrajectoryOptimization
 include("visualization.jl")
@@ -26,7 +27,7 @@ opts_al = AugmentedLagrangianSolverOptions{Float64}(verbose=verbose,
 # Create Problem
 num_lift = 3
 quat = true
-r0_load = [-0.0,-0.0,0.25]
+r0_load = [-1.5,-1.5,0.25]
 scenario = :slot
 
 prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario, num_lift=num_lift,quat=quat)
@@ -43,7 +44,7 @@ solver.stats[:tstart] = time()
 prob.obj[1]
 @time solver = solve!(prob, solver)
 solver.stats[:cost_uncon]
-visualize_batch(vis,prob,true,num_lift)
+visualize_batch(vis,prob,scenario,num_lift)
 solver.stats[:iterations]
 
 vis = Visualizer()
