@@ -59,8 +59,6 @@ end
 al.stats[:iterations]
 max_violation(prob)
 
-x0 = sprob.x0
-u0 = control(sprob)[1]
 @time begin
     for k = 1:sprob.N
         sprob_al.Z[k].z = [x0*NaN; u0]
@@ -77,39 +75,14 @@ max_violation(sprob_al)
     solve($prob,$al)
 end
 
-@btime begin
+b = @benchmark begin
     for k = 1:$sprob.N
         $sprob_al.Z[k].z = [$x0*NaN; $u0]
     end
     reset!($sprob_al.obj.constraints, $sal.opts)
     solve!($sprob_al, $sal)  # 65x faster!!!
 end
-
-
-ilqr = iLQRSolver(prob_al)
-silqr = StaticiLQRSolver(sprob_al)
-
-solve!(prob_al, ilqr)
-solve!(sprob_al, silqr)
-norm(state(sprob_al) - prob_al.X)
-
-for i = 1:10
-    dual_update!(prob_al, al)
-    penalty_update!(prob_al, al)
-
-    dual_update!(sprob_al, sal)
-    penalty_update!(sprob_al, sal)
-
-    solve!(prob_al, ilqr)
-    solve!(sprob_al, silqr)
-end
-norm(state(sprob_al) - prob_al.X)
-
-ilqr.ρ[1]
-silqr.ρ[1]
-
-max_violation(al)
-max_violation(sprob_al)
+@test allocs(maximum(b)) == 0
 
 
 # Projected Newton
@@ -173,11 +146,12 @@ end # 19x faster
 
 active_set!(prob, pn)
 update_active_set!(sprob_al, spn)
+@btime update_active_set!($sprob_al, $spn)
 pn.a.duals ≈ spn.active_set
 
 cost_expansion!(prob, pn)
 E = CostExpansion(size(prob)...)
-cost_expansion(E, sprob_al, spn)
+cost_expansion!(sprob_al, spn)
 pn.H ≈ spn.H
 pn.g ≈ spn.g
 

@@ -258,7 +258,7 @@ end
 
 function update_active_set!(conSet::ConstraintSets, Z::Traj, tol=0.0)
 	for con in conSet.constraints
-		update_active_set!(con, tol)
+		update_active_set!(con, Val(tol))
 	end
 end
 

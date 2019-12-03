@@ -144,7 +144,7 @@ primals(solver::StaticPNSolver) = solver.P.Z
 
 function update_constraints!(prob::StaticProblem, solver::DirectSolver, Z=prob.Z)
     conSet = get_constraints(prob)
-    evaluate(conSet, Z)
+    evaluate!(conSet, Z)
     solver.fVal[1] = state(Z[1]) - prob.x0
     for k in 1:prob.N-1
         solver.fVal[k+1] = discrete_dynamics(prob.model, Z[k]) - state(Z[k+1])
@@ -162,7 +162,7 @@ end
 function constraint_jacobian!(prob::StaticProblem, solver::DirectSolver, Z=prob.Z)
     n,m,N = size(prob)
     conSet = get_constraints(prob)
-    jacobian(conSet, Z)
+    jacobian!(conSet, Z)
     for k = 2:N
         solver.∇F[k] = discrete_jacobian(prob.model, Z[k-1])
     end
