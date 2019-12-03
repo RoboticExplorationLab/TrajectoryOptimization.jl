@@ -81,7 +81,6 @@ function initial_trajectory!(prob::StaticProblem, Z::Traj)
     end
 end
 
-TrajectoryOptimization.num_constraints(prob::StaticProblem) = prob.constraints.p
 
 function cost(prob::StaticProblem)
     cost!(prob.obj, prob.Z)
@@ -93,5 +92,4 @@ function copy(prob::StaticProblem)
         deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.dt, prob.tf)
 end
 
-get_constraints(prob::StaticProblem) = prob.constraints
 TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p
