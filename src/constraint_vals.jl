@@ -51,8 +51,9 @@ penalty_matrix(con::ConstraintVals, i::Int) = Diagonal(con.active[i] .* con.μ[i
 lower_bound(con::ConstraintVals) = lower_bound(con.con)
 upper_bound(con::ConstraintVals) = upper_bound(con.con)
 
-evaluate!(con::ConstraintVals, Z::Traj) = evaluate!(con.vals, con.con, Z)
-jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z)
+evaluate!(con::ConstraintVals, Z::Traj) = evaluate!(con.vals, con.con, Z, con.inds)
+jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z, con.inds)
+
 
 
 function update_active_set!(con::ConstraintVals{T,W,C}, tol=0.0) where
