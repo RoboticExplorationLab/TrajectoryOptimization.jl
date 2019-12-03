@@ -32,7 +32,7 @@ end
 @inline control(z::KnotPoint) = z.z[z._u]
 @inline is_terminal(z::KnotPoint) = z.dt == 0
 
-const Traj = Vector{<:KnotPoint}
+const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
 
 

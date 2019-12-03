@@ -243,15 +243,15 @@ function max_violation!(conSet::ConstraintSets{T}) where T
 	end
 end
 
-function evaluate(conSet::ConstraintSets, Z::Traj)
+function evaluate!(conSet::ConstraintSets, Z::Traj)
 	for con in conSet.constraints
-		evaluate(con, Z)
+		evaluate!(con, Z)
 	end
 end
 
-function jacobian(conSet::ConstraintSets, Z::Traj)
+function jacobian!(conSet::ConstraintSets, Z::Traj)
 	for con in conSet.constraints
-		jacobian(con, Z)
+		jacobian!(con, Z)
 	end
 end
 

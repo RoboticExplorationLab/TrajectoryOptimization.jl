@@ -76,7 +76,7 @@ function cost!(obj::StaticALObjective, Z::Traj)
     cost!(obj.obj, Z)
 
     # Calculate constrained cost
-    evaluate(obj.constraints, Z)
+    evaluate!(obj.constraints, Z)
     update_active_set!(obj.constraints, Z, Val(0.0))
     for con in obj.constraints.constraints
         cost!(obj.obj.J, con, Z)
@@ -85,7 +85,7 @@ end
 
 function cost_expansion(E, obj::StaticALObjective, Z::Traj)
     # Update constraint jacobians
-    jacobian(obj.constraints, Z)
+    jacobian!(obj.constraints, Z)
 
     ix, iu = Z[1]._x, Z[1]._u
 

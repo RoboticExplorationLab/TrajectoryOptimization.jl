@@ -10,12 +10,13 @@ Z = [KnotPoint(x,u,dt) for k = 1:N]
 
 xc = @SVector [0,1,2,3.]
 yc = @SVector [0,2,2,0.]
+r = 0.5*@SVector ones(length(xc))
 vals = [@SVector zeros(length(xc)) for k = 1:N]
-circlecon = CircleConstraint(n,m,xc,yc, 0.5)
+circlecon = CircleConstraint(n,m,xc,yc,r)
 generate_jacobian(circlecon)
 
 vals2 = [@SVector zeros(1) for k = 1:N]
-normcon = NormConstraint(n,m,1, 1.0)
+normcon = NormConstraint(n,m,1.0)
 generate_jacobian(normcon)
 
 @btime evaluate($circlecon, $x, $u)
@@ -24,41 +25,47 @@ generate_jacobian(normcon)
 @btime jacobian($circlecon, $z)
 @btime jacobian($normcon, $z)
 
+∇c = [@SMatrix zeros(length(circlecon), n+m) for k = 1:N]
+@btime jacobian!($∇c, $circlecon, $Z)
+∇c = [@SMatrix zeros(length(normcon), n+m) for k = 1:N]
+@btime jacobian!($∇c, $normcon, $Z)
+
 con1 = ConstraintVals(circlecon, 1:N)
 con2 = ConstraintVals(normcon, 1:4)
 
-function eval_constraint(con, Z)
-	for k in con.inds
-		con.vals[k] = evaluate(con.con, state(Z[k]), control(Z[k]))
-	end
-end
+@btime evaluate!($con1.vals, $circlecon, $Z)
+@btime evaluate!($con1, $Z)
+con2.∇c
 
-function eval_constraints(constraints, Z)
-	for con in constraints
-		eval_constraint(con, Z)
-	end
-end
+jacobian!(con2.∇c, normcon, Z)
 
+@btime evaluate!($con1, $Z)
+@btime jacobian!($con1, $Z)
+@btime jacobian!($con2, $Z)
 
-@btime eval_constraint($con1, $Z)
-constraints = [con1, con2]
-@btime eval_constraints($constraints, $Z)
-
-@btime evaluate($con1, $Z)
-@btime jacobian($con1, $Z)
-
-@btime update_active_set!($con1)
+@btime update_active_set!($con1, $(Val(0.01)))
 @btime duals($con1, 3)
 
 @btime max_violation!($con1)
 @btime max_violation!($con2)
 
-
+constraints = [con1, con2]
 conSet = ConstraintSets(constraints, N)
+jacobian!(con1, Z)
+jacobian!(con2, Z)
+for con in conSet.constraints
+	jacobian!(con, Z)
+end
+
+
+@btime jacobian!($conSet, $Z)
+
+evaluate!(conSet, Z)
+jacobian!(conSet, Z)
+
 max_violation!(conSet)
 @btime max_violation!($conSet)
 
-@btime jacobian($conSet, $Z)
 
 
 # AL Objective

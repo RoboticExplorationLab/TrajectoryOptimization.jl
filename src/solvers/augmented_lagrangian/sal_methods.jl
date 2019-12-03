@@ -93,7 +93,7 @@ end
 
 function max_violation(prob::StaticProblem{L,T,<:StaticALObjective}) where {L,T}
     conSet = prob.obj.constraints
-    evaluate(conSet, prob.Z)
+    evaluate!(conSet, prob.Z)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end

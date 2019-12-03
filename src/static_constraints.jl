@@ -32,7 +32,7 @@ width(con::AbstractStaticConstraint{S,CoupledState}) where S = 2*size(con)[1]
 width(con::AbstractStaticConstraint{S,CoupledControl}) where S = 2*size(con)[2]
 width(con::AbstractStaticConstraint{S,<:General}) where S = Inf
 
-
+@inline length(con::AbstractStaticConstraint) = size(con)[3]
 upper_bound(con::AbstractStaticConstraint{Inequality,W,P}) where {P,W} = @SVector zeros(P)
 lower_bound(con::AbstractStaticConstraint{Inequality,W,P}) where {P,W} = -Inf*@SVector ones(P)
 upper_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
@@ -47,27 +47,31 @@ Default evaluation of a constraint over and entire trajectory.
 This should be the method used to evaluate constraints.
 Some constraints may choose to replace this generic method (e.g. dynamics constraints)
 """
-function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Stage}, Z::Traj) where P
-	@inbounds for k in eachindex(Z)
-		vals[k] = evaluate(con, Z[k])
+function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Stage},
+		Z::Traj, inds=1:length(Z)) where P
+	for (i,k) in enumerate(inds)
+		vals[i] = evaluate(con, Z[k])
 	end
 end
 
-function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Coupled}, Z::Traj) where P
-	@inbounds for k = 1:length(Z)-1
-		vals[k] = evaluate(con, Z[k+1], Z[k])
+function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Coupled},
+		Z::Traj, inds=1:length(Z)-1) where P
+	for (i,k) in enumerate(inds)
+		vals[i] = evaluate(con, Z[k+1], Z[k])
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Stage}, Z::Traj) where P
-	@inbounds for k in eachindex(Z)
-		∇c[k] = jacobian(con, Z[k])
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Stage},
+		Z::Traj, inds=1:length(Z)) where P
+	for (i,k) in enumerate(inds)
+		∇c[i] = jacobian(con, Z[k])
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Coupled}, Z::Traj) where P
-	@inbounds for k = 1:length(Z)-1
-		∇c[k] = jacobian(con, Z[k+1], Z[k])
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Coupled},
+	Z::Traj, inds=1:length(Z)-1) where P
+	for (i,k) in enumerate(inds)
+		∇c[i] = jacobian(con, Z[k+1], Z[k])
 	end
 end
 
@@ -137,7 +141,8 @@ function ExplicitDynamics{Q}(model::L, N::Int) where {L<:AbstractModel,Q<:Quadra
 	ExplicitDynamics{Float64,Q,L,n,n+m,n*(n+m)}(model, fVal, xMid, ∇f)
 end
 
-function evaluate!(vals::Vector{<:AbstractVector}, con::ExplicitDynamics{T,HermiteSimpson}, Z::Traj) where T
+function evaluate!(vals::Vector{<:AbstractVector}, con::ExplicitDynamics{T,HermiteSimpson},
+		Z::Traj, inds=1:length(Z)-1) where T
 	N = length(Z)
 	model = con.model
 	fVal = con.fVal
@@ -156,7 +161,8 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::ExplicitDynamics{T,Hermi
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ExplicitDynamics{T,HermiteSimpson,L,n}, Z::Traj) where {T,L,n}
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ExplicitDynamics{T,HermiteSimpson,L,n},
+		Z::Traj, inds=1:length(Z)-1) where {T,L,n}
 	N = length(Z)
 	model = con.model
 	∇f = con.∇f
@@ -221,7 +227,7 @@ function evaluate(con::CircleConstraint{T,P}, x, u) where {T,P}
 	xc = con.x
 	yc = con.y
 	r = con.radius
-	-(x[1] - xc).^2 - (x[2] - yc).^2 + r.^2
+	-(x[1] .- xc).^2 - (x[2] .- yc).^2 + r.^2
 end
 
 
