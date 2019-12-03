@@ -13,9 +13,14 @@ function gen_con_inds(conSet::ConstraintSets)
     idx = n
 
     # Dynamics and general constraints
+    if has_dynamics(conSet)
+        idx = 0
+    end
     for k = 1:N-1
-        dyn[k+1] = idx .+ (1:n)
-        idx += n
+        if !has_dynamics(conSet)
+            dyn[k+1] = idx .+ (1:n)
+            idx += n
+        end
         for (i,con) in enumerate(conSet.constraints)
             if k ∈ con.inds
                 cons[i][_index(con,k)] = idx .+ (1:conLen[i])
@@ -30,6 +35,12 @@ function gen_con_inds(conSet::ConstraintSets)
             cons[i][_index(con,N)] = idx .+ (1:conLen[i])
             idx += conLen[i]
         end
+    end
+    if has_dynamics(conSet)
+        dyn_con_inds = findfirst(x->x.con isa DynamicsConstraint, conSet.constraints)
+        dyn = copy(cons[dyn_con_inds])
+        init_con_inds = findfirst(x->x.con isa GoalConstraint, conSet.constraints)
+        insert!(dyn, 1, cons[init_con_inds][1])
     end
 
     # return dyn
@@ -86,4 +97,16 @@ function get_bounds(conSet::ConstraintSets)
         gU[dinds[k]] .= 0.0
     end
     return zU, zL, gU, gL
+end
+
+function add_dynamics_constraints!(prob::StaticProblem)
+    conSet = get_constraints(prob)
+
+    # Implicit dynamics
+    dyn_con = ConstraintVals( ImplicitDynamics(prob.model, prob.N), 1:prob.N-1 )
+    add_constraint!(conSet, dyn_con, 1)
+
+    # Initial condition
+    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
+    add_constraint!(conSet, init_con, 1)
 end

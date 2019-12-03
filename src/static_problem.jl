@@ -88,7 +88,7 @@ function cost(prob::StaticProblem)
 end
 
 function copy(prob::StaticProblem)
-    StaticProblem(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
+    StaticProblem(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
         deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.dt, prob.tf)
 end
 

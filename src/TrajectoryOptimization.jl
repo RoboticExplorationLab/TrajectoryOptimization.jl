@@ -155,8 +155,8 @@ include("solvers/silqr/silqr_methods.jl")
 include("solvers/augmented_lagrangian/sal_solver.jl")
 include("solvers/augmented_lagrangian/sal_methods.jl")
 include("solvers/direct/static_dircol.jl")
-include("solvers/direct/static_pn_methods.jl")
 include("solvers/direct/static_primals.jl")
+include("solvers/direct/static_pn_methods.jl")
 
 include("problems.jl")
 

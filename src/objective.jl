@@ -31,6 +31,8 @@ end
 
 get_J(obj::Objective) = obj.J
 
+Base.copy(obj::Objective) = Objective(copy(obj.cost), copy(obj.J))
+
 import Base.getindex
 
 getindex(obj::Objective,i::Int) = obj.cost[i]

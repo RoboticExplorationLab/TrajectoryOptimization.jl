@@ -71,6 +71,10 @@ get_J(obj::StaticALObjective) = obj.obj.J
 
 TrajectoryOptimization.num_constraints(prob::StaticProblem{L,T,<:StaticALObjective}) where {L,T} = prob.obj.constraints.p
 
+function Base.copy(obj::StaticALObjective)
+    StaticALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
+end
+
 function cost!(obj::StaticALObjective, Z::Traj)
     # Calculate unconstrained cost
     cost!(obj.obj, Z)

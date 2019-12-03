@@ -1,5 +1,6 @@
 model = Dynamics.Cartpole()
 prob = Problems.cartpole_static
+bnd = prob.constraints.constraints[1]
 n,m = size(prob)
 
 rollout!(prob)

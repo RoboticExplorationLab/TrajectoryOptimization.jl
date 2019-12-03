@@ -202,14 +202,14 @@ end
 #                              CUSTOM CONSTRAINTS 										   #
 ############################################################################################
 
-struct GoalConstraint{T,N} <: AbstractStaticConstraint{Equality,Stage,N}
+struct GoalConstraint{T,N} <: AbstractStaticConstraint{Equality,State,N}
 	xf::SVector{N,T}
 	Ix::Diagonal{T,SVector{N,T}}
 	GoalConstraint(xf::SVector{N,T}) where {N,T} = new{T,N}(xf, Diagonal(@SVector ones(N)))
 end
 size(con::GoalConstraint{T,N}) where {T,N} = (N,0,N)
-evaluate(con::GoalConstraint,x,u) = x - con.xf
-jacobian(con::GoalConstraint,z::KnotPoint) = con.Ix
+evaluate(con::GoalConstraint, x::SVector) = x - con.xf
+jacobian(con::GoalConstraint, z::KnotPoint) = con.Ix
 
 struct CircleConstraint{T,P} <: AbstractStaticConstraint{Inequality,Stage,P}
 	n::Int

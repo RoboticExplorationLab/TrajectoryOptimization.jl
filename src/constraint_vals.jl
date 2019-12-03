@@ -124,7 +124,7 @@ end
 """
 Assumes constraints, active set, and constrint jacobian have all been calculated
 """
-function cost_expansion(E, con::ConstraintVals{T,Stage}, Z) where T
+function cost_expansion(E, con::ConstraintVals{T,<:Stage}, Z) where T
 	ix,iu = Z[1]._x, Z[1]._u
 	@inbounds for i in eachindex(con.inds)
 		k = con.inds[i]
@@ -206,6 +206,14 @@ function ConstraintSets(N)
 end
 
 
+function has_dynamics(conSet::ConstraintSets)
+	for con in conSet.constraints
+		if con.con isa DynamicsConstraint
+			return true
+		end
+	end
+	return false
+end
 Base.length(conSet::ConstraintSets, k) = constraints.p[k]
 
 function ConstraintSets(constraints, N)
@@ -231,8 +239,12 @@ function num_constraints!(conSet::ConstraintSets)
 	end
 end
 
-function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals)
-	push!(conSet.constraints, conVal)
+function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
+	if idx == -1
+		push!(conSet.constraints, conVal)
+	else
+		insert!(conSet.constraints, idx, conVal)
+	end
 	num_constraints!(conSet)
 end
 
@@ -258,7 +270,7 @@ end
 
 function update_active_set!(conSet::ConstraintSets, Z::Traj, tol=0.0)
 	for con in conSet.constraints
-		update_active_set!(con, Val(tol))
+		update_active_set!(con, tol)
 	end
 end
 
