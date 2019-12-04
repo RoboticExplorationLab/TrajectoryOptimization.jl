@@ -99,12 +99,17 @@ MOI.eval_objective_gradient(d, grad_f, V)
 MOI.eval_objective_gradient(ds, grad_fs, V)
 grad_f ≈ grad_fs
 
+@btime MOI.eval_objective_gradient($d,  $grad_f,  $V)
+@btime MOI.eval_objective_gradient($ds, $grad_fs, $V)  # 78x faster
+
 # Test constraints
 g = zeros(NP)
 gs = zero(g)
 MOI.eval_constraint(d, g, V)
 MOI.eval_constraint(ds, gs, V)
 gs ≈ g
+@btime MOI.eval_constraint($d,  $g,  $V)
+@btime MOI.eval_constraint($ds, $gs, $V) # 35x faster
 
 # Test constraint jacobian
 nG = length(d.jac_struct)
@@ -113,3 +118,6 @@ jac_gs = zero(jac_g)
 MOI.eval_constraint_jacobian(d, jac_g, V)
 MOI.eval_constraint_jacobian(ds, jac_gs, V)
 jac_g ≈ jac_gs
+
+@btime MOI.eval_constraint_jacobian($d,  $jac_g,  $V)
+@btime MOI.eval_constraint_jacobian($ds, $jac_gs, $V)  # 40x faster 
