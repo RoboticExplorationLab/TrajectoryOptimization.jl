@@ -61,7 +61,7 @@ function MOI.eval_constraint(d::DIRCOLProblem, g, Z)
     update_constraints!(g_custom, d.prob, d.solver, X, U)
 
     # cache c_max
-    push!(d.solver.stats[:iter_time],time() - d.solver.stats[:iter_time][1])
+    # push!(d.solver.stats[:iter_time],time() - d.solver.stats[:iter_time][1])
     push!(d.solver.stats[:c_max],max_violation_dircol(d,Z,g))
 end
 

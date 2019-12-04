@@ -141,6 +141,8 @@ function ExplicitDynamics{Q}(model::L, N::Int) where {L<:AbstractModel,Q<:Quadra
 	ExplicitDynamics{Float64,Q,L,n,n+m,n*(n+m)}(model, fVal, xMid, ∇f)
 end
 
+quadrature_rule(::ExplicitDynamics{T,Q}) where {T,Q} = Q
+
 function evaluate!(vals::Vector{<:AbstractVector}, con::ExplicitDynamics{T,HermiteSimpson},
 		Z::Traj, inds=1:length(Z)-1) where T
 	N = length(Z)

@@ -302,11 +302,11 @@ max_violation(pn)
 solve!(prob, pn)
 max_violation(pn)
 
-initial_trajectory!(sprob_al, Zsol)
-solve!(sprob_al, spn)
+initial_trajectory!(sprob_d, Zsol)
+solve!(sprob_d, spn_d)
 
 pn.opts.verbose = false
-spn.opts.verbose = false
+spn_d.opts.verbose = false
 
 @btime begin
     copyto!($pn.V, $Xsol, $Usol)
@@ -316,4 +316,9 @@ end
 @btime begin
     initial_trajectory!($sprob_al, $Zsol)
     solve!($sprob_al, $spn) # 8.5x faster
+end
+
+@btime begin
+    initial_trajectory!($sprob_d, $Zsol)
+    solve!($sprob_d, $spn_d) # 8.5x faster
 end

@@ -7,6 +7,9 @@ z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
 
 sprob = copy(Problems.cartpole_static)
 n,m,N = size(sprob)
+hs_con = ConstraintVals( ExplicitDynamics{HermiteSimpson}(sprob.model, sprob.N), 1:sprob.N)
+add_constraint!(get_constraints(sprob), hs_con, 1)
+
 xlim = @SVector [10,Inf,Inf,Inf]
 ulim = @SVector [2]
 bnd1 = StaticBoundConstraint(n,m, u_min=-ulim/2, u_max=ulim/2)
@@ -28,6 +31,8 @@ zU,zL,gU,gL = get_bounds(conSet)
 
 
 # Test Copying from vector to trajectory
+sprob = copy(Problems.cartpole_static)
+n,m,N = size(sprob)
 Z = sprob.Z
 P = StaticPrimals(n,m,N)
 NN = (n+m)*N
@@ -39,3 +44,72 @@ u = control(Z[1])
 copyto!(Z, V, P.xinds, P.uinds)
 @test Z[1].z[1:n] == V[1:n]
 @test Z[N].z == V[end-n-m+1:end]
+
+@test (@allocated copyto!(Z, V, P.xinds, P.uinds)) == 0
+
+
+# Compare Solves
+prob = copy(Problems.cartpole)
+prob = update_problem(prob,model=Dynamics.cartpole)
+sprob = copy(Problems.cartpole_static)
+rollout!(sprob)
+initial_states!(prob, state(sprob))
+initial_controls!(prob, control(sprob))
+state(sprob) ≈ prob.X
+control(sprob) ≈ prob.U
+
+# Add dynamics constraint
+conSet = get_constraints(sprob)
+hs_con = ConstraintVals( ExplicitDynamics{HermiteSimpson}(sprob.model, sprob.N), 1:sprob.N-1)
+init_con = ConstraintVals( GoalConstraint(sprob.x0), 1:1)
+add_constraint!(get_constraints(sprob), hs_con, 1)
+add_constraint!(get_constraints(sprob), init_con, 1)
+
+# Build NLP problem
+bnds = remove_bounds!(prob)
+dircol = DIRCOLSolver(prob)
+z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
+d = DIRCOLProblem(prob, dircol, z_L, z_U, g_L, g_U)
+
+ds = StaticDIRCOLProblem(sprob)
+
+NN = num_primals(ds.solver)
+NP = num_duals(ds.solver)
+
+# Test bounds
+d.zL == ds.zL
+d.zU == ds.zU
+d.gL == ds.gL
+d.gU == ds.gU
+
+# Test jacobian structure
+d.jac_struct == ds.jac_struct
+
+# Test cost
+V = rand(NN)
+X,U = unpack(V, d.part_z)
+dt_traj = get_dt_traj(prob)
+MOI.eval_objective(d, V) ≈ MOI.eval_objective(ds, V)
+
+# Test cost gradient
+d = DIRCOLProblem(prob, dircol, z_L, z_U, g_L, g_U)
+grad_f = zeros(NN)
+grad_fs = zeros(NN)
+MOI.eval_objective_gradient(d, grad_f, V)
+MOI.eval_objective_gradient(ds, grad_fs, V)
+grad_f ≈ grad_fs
+
+# Test constraints
+g = zeros(NP)
+gs = zero(g)
+MOI.eval_constraint(d, g, V)
+MOI.eval_constraint(ds, gs, V)
+gs ≈ g
+
+# Test constraint jacobian
+nG = length(d.jac_struct)
+jac_g = zeros(nG)
+jac_gs = zero(jac_g)
+MOI.eval_constraint_jacobian(d, jac_g, V)
+MOI.eval_constraint_jacobian(ds, jac_gs, V)
+jac_g ≈ jac_gs
