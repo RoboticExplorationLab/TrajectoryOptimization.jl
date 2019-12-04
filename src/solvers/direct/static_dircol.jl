@@ -15,14 +15,14 @@ function gen_con_inds(conSet::ConstraintSets)
 			idx += conLen[i]
         end
     end
-
-    # Terminal constraints
-    for (i,con) in enumerate(conSet.constraints)
-        if N ∈ con.inds
-            cons[i][_index(con,N)] = idx .+ (1:conLen[i])
-            idx += conLen[i]
-        end
-    end
+	#
+    # # Terminal constraints
+    # for (i,con) in enumerate(conSet.constraints)
+    #     if N ∈ con.inds
+    #         cons[i][_index(con,N)] = idx .+ (1:conLen[i])
+    #         idx += conLen[i]
+    #     end
+    # end
 
     # return dyn
     return cons
@@ -245,7 +245,6 @@ function copy_jacobians!(prob::StaticProblem, solver::DirectSolver, D=solver.D)
     cinds = solver.con_inds
 
     for i = 1:length(conSet.constraints)
-		@show i
         copy_jacobian!(D, conSet.constraints[i], cinds[i], xinds, uinds)
     end
     return nothing

@@ -53,7 +53,7 @@ Z[end] = KnotPoint(xs,m)
 
 bnd = StaticBoundConstraint(n,m, u_min=-u_bnd*(@SVector ones(m)), u_max=u_bnd*(@SVector ones(m)))
 goal = GoalConstraint(SVector{n}(xf))
-con_bnd = ConstraintVals(bnd, 1:N)
+con_bnd = ConstraintVals(bnd, 1:N-1)
 con_goal = ConstraintVals(goal, N:N)
 conSet = ConstraintSets([con_bnd, con_goal], N)
 

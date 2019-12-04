@@ -27,6 +27,8 @@ x0 = sprob.x0
 end
 
 
+
+
 # Now make augmented lagragian problem
 prob = copy(Problems.cartpole)
 sprob = copy(Problems.cartpole_static)
@@ -290,7 +292,6 @@ add_dynamics_constraints!(sprob_d)
 
 # Finish with Projected Newton
 pn = ProjectedNewtonSolver(prob)
-P = StaticPrimals(size(sprob)...)
 spn = StaticPNSolver(sprob_d)
 
 pn.opts.verbose = true
@@ -303,10 +304,11 @@ solve!(prob, pn)
 max_violation(pn)
 
 initial_trajectory!(sprob_d, Zsol)
-solve!(sprob_d, spn_d)
+solve!(sprob_d, spn)
+conSet = get_constraints(sprob_d)
 
 pn.opts.verbose = false
-spn_d.opts.verbose = false
+spn.opts.verbose = false
 
 @btime begin
     copyto!($pn.V, $Xsol, $Usol)
@@ -314,11 +316,6 @@ spn_d.opts.verbose = false
 end
 
 @btime begin
-    initial_trajectory!($sprob_al, $Zsol)
-    solve!($sprob_al, $spn) # 8.5x faster
-end
-
-@btime begin
     initial_trajectory!($sprob_d, $Zsol)
-    solve!($sprob_d, $spn_d) # 8.5x faster
+    solve!($sprob_d, $spn) # 8.5x faster
 end

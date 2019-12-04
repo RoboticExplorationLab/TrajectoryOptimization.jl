@@ -117,7 +117,7 @@ struct StaticPNSolver{T,N,M,NM,NNM,L1,L2,L3} <: DirectSolver{T}
     con_inds::Vector{Vector{SV} where SV}
 end
 
-function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=StaticPNSolverOptions()) where {L,T}
+function StaticPNSolver(prob::StaticALProblem, opts=StaticPNSolverOptions())
     n,m,N = size(prob)
     NN = n*N + m*(N-1)
     stats = StaticPNStats()
@@ -143,23 +143,10 @@ function StaticPNSolver(prob::StaticProblem{L,T,<:StaticALObjective}, opts=Stati
     ∇F = [@SMatrix zeros(n,n+m+1) for k = 1:N]
     active_set = zeros(Bool,NP)
 
-    dyn_inds, con_inds = gen_con_inds(conSet)
+    con_inds = gen_con_inds(conSet)
 
     # Set constant pieces of the Jacobian
     xinds,uinds = P.xinds, P.uinds
-    ∇F[1] = Matrix(I,n,n+m+1)
-    Ix = ∇F[1][:,xinds[1]]
-    for k = 1:N-1
-        D[dyn_inds[k+1], xinds[k+1]] .= -Ix
-    end
-    if has_dynamics(conSet)
-        dyn_inds = SVector{n,Int}[]
-    end
-
-    # Set constant elements of active set
-    for ind in dyn_inds
-        active_set[ind] .= true
-    end
 
     StaticPNSolver(opts, stats, P, P̄, H, g, E, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
 end
