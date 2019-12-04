@@ -35,6 +35,10 @@ end
 const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
 
+function copy(Z::Traj)
+    Z_new = [KnotPoint(copy(z.z), z._x, z._u, z._inds, z.dt) for z in Z]
+end
+
 
 
 

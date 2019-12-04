@@ -138,6 +138,32 @@ function solve_moi(prob::Problem, opts::DIRCOLSolverOptions)
     return d.solver
 end
 
+function build_moi_problem(d::DIRCOLProblem)
+    NN = length(d.zL)
+    Z0 = Primals(d.prob, true)
+
+    has_objective = true
+    nlp_bounds = MOI.NLPBoundsPair.(d.gL, d.gU)
+    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
+
+    solver = Ipopt.Optimizer(print_level=0)
+    Z = MOI.add_variables(solver, NN)
+
+    # Add bound constraints
+    for i = 1:NN
+        zi = MOI.SingleVariable(Z[i])
+        MOI.add_constraint(solver, zi, MOI.LessThan(d.zU[i]))
+        MOI.add_constraint(solver, zi, MOI.GreaterThan(d.zL[i]))
+        MOI.set(solver, MOI.VariablePrimalStart(), Z[i], Z0.Z[i])
+    end
+
+    # Solve the problem
+    MOI.set(solver, MOI.NLPBlock(), block_data)
+    MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    return solver
+end
+
 function max_violation_dircol(d::DIRCOLProblem, Z, g)
     max_viol = 0.
     max_viol = max(max_viol,norm(max.(d.zL - Z,0),Inf))

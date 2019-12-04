@@ -120,4 +120,12 @@ MOI.eval_constraint_jacobian(ds, jac_gs, V)
 jac_g ≈ jac_gs
 
 @btime MOI.eval_constraint_jacobian($d,  $jac_g,  $V)
-@btime MOI.eval_constraint_jacobian($ds, $jac_gs, $V)  # 40x faster 
+@btime MOI.eval_constraint_jacobian($ds, $jac_gs, $V)  # 40x faster
+
+model = build_moi_problem(d)
+MOI.optimize!(model)
+
+model2 = build_moi_problem(ds)
+MOI.optimize!(model2)
+@btime MOI.optimize!($model)
+b = @benchmark MOI.optimize!($model2) # 25x faster, 1000x less memory

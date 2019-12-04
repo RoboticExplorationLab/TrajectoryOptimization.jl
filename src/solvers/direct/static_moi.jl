@@ -159,3 +159,28 @@ function solve_moi!(prob::StaticProblem, d::StaticDIRCOLProblem)
 
     status = MOI.get(solver, MOI.TerminationStatus())
 end
+
+function build_moi_problem(d::StaticDIRCOLProblem)
+    NN = length(d.zL)
+    V0 = zeros(NN)
+    xinds, uinds = primal_partition(d.solver)
+    copyto!(V0, d.prob.Z, xinds, uinds)
+
+    has_objective = true
+    nlp_bounds = MOI.NLPBoundsPair.(d.gL, d.gU)
+    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
+
+    solver = Ipopt.Optimizer(print_level=0)
+    V = MOI.add_variables(solver, NN)
+
+    MOI.add_constraints(solver, V, MOI.LessThan.(d.zU))
+    MOI.add_constraints(solver, V, MOI.GreaterThan.(d.zL))
+
+    MOI.set(solver, MOI.VariablePrimalStart(), V, V0)
+
+    # Set up NLP problem
+    MOI.set(solver, MOI.NLPBlock(), block_data)
+    MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    return solver
+end
