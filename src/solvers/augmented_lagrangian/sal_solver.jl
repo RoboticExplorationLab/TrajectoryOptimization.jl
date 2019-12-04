@@ -27,15 +27,15 @@ struct StaticALSolver{T,S<:AbstractSolver} <: AbstractSolver{T}
     solver_uncon::S
 end
 
-StaticALSolver(prob::StaticProblem{L,T,N,M,NM},
-    opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where {L,T,N,M,NM} =
+StaticALSolver(prob::StaticProblem{Q,T},
+    opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where {Q,T} =
     AbstractSolver(prob,opts)
 
 """$(TYPEDSIGNATURES)
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AbstractSolver(prob::StaticProblem{L,T}, opts::AugmentedLagrangianSolverOptions{T}) where {T<:AbstractFloat,L<:AbstractModel}
+function AbstractSolver(prob::StaticProblem{Q,T}, opts::AugmentedLagrangianSolverOptions{T}) where {Q,T<:AbstractFloat}
     # Init solver statistics
     stats = ALStats{T}()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
@@ -69,7 +69,7 @@ end
 
 get_J(obj::StaticALObjective) = obj.obj.J
 
-TrajectoryOptimization.num_constraints(prob::StaticProblem{L,T,<:StaticALObjective}) where {L,T} = prob.obj.constraints.p
+TrajectoryOptimization.num_constraints(prob::StaticProblem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
 
 function Base.copy(obj::StaticALObjective)
     StaticALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
@@ -102,7 +102,7 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
     end
 end
 
-StaticALProblem{L,T,N,M,NM} = StaticProblem{L,T,<:StaticALObjective,N,M,NM}
+StaticALProblem{T,Q,L,N,M,NM} = StaticProblem{Q,T,L,<:StaticALObjective,N,M,NM}
 function get_constraints(prob::StaticProblem)
     if prob isa StaticALProblem
         prob.obj.constraints

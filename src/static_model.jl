@@ -9,6 +9,11 @@ abstract type HermiteSimpson <: Explicit end
 
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
+
+"Set default integrator to RK3"
+@inline discrete_dynamics(model::AbstractModel, z::KnotPoint) =
+    discrete_dynamics(RK3, model, z)
+
 @inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:QuadratureRule =
     discrete_dynamics(Q, model, state(z), control(z), z.dt)
 
@@ -19,7 +24,9 @@ function discrete_dynamics(::Type{RK3}, model::AbstractModel, x, u, dt)
     x + (k1 + 4*k2 + k3)/6
 end
 
-@inline discrete_jacobian(::Type{Q}, model::AbstractModel, z)
+"Set default integrator to RK3"
+@inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
+    discrete_jacobian(RK3, model, z)
 
 function discrete_jacobian(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q <: QuadratureRule
     n,m = size(model)

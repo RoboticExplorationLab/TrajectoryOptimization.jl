@@ -54,7 +54,7 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,O<:AbstractObjective,N,M,NM}
+struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat,L<:AbstractModel,O<:AbstractObjective,N,M,NM}
     model::L
     obj::O
     constraints::ConstraintSets
@@ -65,10 +65,19 @@ struct StaticProblem{L<:AbstractModel,T<:AbstractFloat,O<:AbstractObjective,N,M,
     N::Int
     dt::T
     tf::T
+    function StaticProblem{Q}(model::L, obj::O, constraints::ConstraintSets,
+            x0::SVector, xf::SVector,
+            Z::Vector{KnotPoint{T,n,m,nm}}, Z̄::Traj, N::Int, dt::T, tf::T) where {T,Q,L,O,n,m,nm}
+        new{Q,T,L,O,n,m,nm}(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf)
+    end
 end
 
+"Use RK3 as default integration"
+StaticProblem(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf) =
+    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf)
+
 "Get number of states, controls, and knot points"
-Base.size(prob::StaticProblem{L,T,O,N,M,NM}) where {L,T,O,N,M,NM} = (N, M, prob.N)
+Base.size(prob::StaticProblem{Q,T,L,O,N,M,NM}) where {T,Q,L,O,N,M,NM} = (N, M, prob.N)
 
 "Get the state trajectory"
 state(prob::StaticProblem) = [state(z) for z in prob.Z]

@@ -52,7 +52,7 @@ struct StaticDIRCOLProblem{T,Q<:QuadratureRule} <: MOI.AbstractNLPEvaluator
     zU::Vector{T}
     gL::Vector{T}
     gU::Vector{T}
-    function StaticDIRCOLProblem(prob::StaticProblem{L,T}) where {L,T}
+    function StaticDIRCOLProblem(prob::StaticProblem{Q,T}) where {T,Q}
         conSet = get_constraints(prob)
         @assert has_dynamics(conSet)
         dyn_con = filter(x->x.con isa ExplicitDynamics, conSet.constraints)[1]

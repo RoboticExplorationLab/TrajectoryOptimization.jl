@@ -26,6 +26,8 @@ using BlockArrays
 using MathOptInterface
 using TimerOutputs
 
+import Base.copy
+
 export
     Dynamics,
     Problems
@@ -135,6 +137,7 @@ PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("constraints.jl")
 include("constraint_sets.jl")
+include("knotpoint.jl")
 include("cost.jl")
 include("model.jl")
 include("static_model.jl")
@@ -147,7 +150,7 @@ include("rollout.jl")
 include("dynamics.jl")
 include("logger.jl")
 
-include("knotpoint.jl")
+include("static_methods.jl")
 include("static_constraints.jl")
 include("static_problem.jl")
 include("solvers/silqr/silqr_solver.jl")

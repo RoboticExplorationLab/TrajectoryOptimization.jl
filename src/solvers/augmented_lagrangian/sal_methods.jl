@@ -1,5 +1,5 @@
 
-function solve!(prob::StaticProblem{L,T,StaticALObjective{T}}, solver::StaticALSolver{T,S}) where {L,T,S}
+function solve!(prob::StaticALProblem, solver::StaticALSolver{T,S}) where {T,S}
     c_max::T = Inf
     conSet = prob.obj.constraints
     solver.stats.iterations = 0
@@ -29,7 +29,7 @@ function solve!(prob::StaticProblem{L,T,StaticALObjective{T}}, solver::StaticALS
     return solver
 end
 
-function step!(prob::StaticProblem{L,T,<:StaticALObjective}, solver::StaticALSolver{T}) where {L,T}
+function step!(prob::StaticALProblem, solver::StaticALSolver) 
 
     # Solve the unconstrained problem
     solve!(prob, solver.solver_uncon)
@@ -75,23 +75,22 @@ function evaluate_convergence(solver::StaticALSolver)
     solver.stats.c_max[solver.stats.iterations] < solver.opts.constraint_tolerance
 end
 
-function dual_update!(prob::StaticProblem{L,T,<:StaticALObjective,N,M,NM},
-        solver::StaticALSolver) where {L,T,N,M,NM}
+function dual_update!(prob::StaticALProblem,
+        solver::StaticALSolver) where {T,Q,N,M,NM}
     conSet = prob.obj.constraints
     for i in eachindex(conSet.constraints)
         dual_update!(conSet.constraints[i], solver.opts)
     end
 end
 
-function penalty_update!(prob::StaticProblem{L,T,<:StaticALObjective,N,M,NM},
-        solver::StaticALSolver) where {L,T,N,M,NM}
+function penalty_update!(prob::StaticALProblem, solver::StaticALSolver)
     conSet = prob.obj.constraints
     for i in eachindex(conSet.constraints)
         penalty_update!(conSet.constraints[i], solver.opts)
     end
 end
 
-function max_violation(prob::StaticProblem{L,T,<:StaticALObjective}) where {L,T}
+function max_violation(prob::StaticALProblem)
     conSet = prob.obj.constraints
     evaluate!(conSet, prob.Z)
     max_violation!(conSet)
