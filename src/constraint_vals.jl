@@ -112,6 +112,13 @@ function max_violation!(con::ConstraintVals{T,W,C}) where
 	return nothing
 end
 
+function max_penalty!(con::ConstraintVals)
+	for i in eachindex(con.c_max)
+		con.c_max[i] = maximum(con.μ[i])
+	end
+	return nothing
+end
+
 get_c_max(con::ConstraintVals) = maximum(con.c_max)
 
 function cost!(J, con::ConstraintVals, Z)
@@ -216,6 +223,13 @@ function max_violation!(conSet::ConstraintSets{T}) where T
 		con = conSet.constraints[i]
 		max_violation!(con)
 		conSet.c_max[i] = maximum(con.c_max::Vector{T})
+	end
+end
+
+function max_penalty!(conSet::ConstraintSets)
+	for (i,con) in enumerate(conSet.constraints)
+		max_penalty!(con)
+		con.c_max[i] = maximum(con.c_max::Vector{T})
 	end
 end
 

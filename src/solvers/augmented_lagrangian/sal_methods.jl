@@ -51,6 +51,10 @@ function record_iteration!(prob::StaticProblem, solver::StaticALSolver{T,S},
     solver.stats.iterations_total += solver.solver_uncon.stats.iterations
     solver.stats.c_max[i] = c_max
 	solver.stats.cost[i] = J
+
+	conSet = get_constraints(prob)
+	max_penalty!(conSet)
+	solver.stats.penalty_max[i] = maximum(conSet.c_max)
     # solver.stats.
     # push!(solver.stats[:iterations_inner], unconstrained_solver.stats[:iterations])
     # push!(solver.stats[:cost],J)
@@ -74,9 +78,21 @@ function set_tolerances!(solver::StaticALSolver{T},
 end
 
 function evaluate_convergence(solver::StaticALSolver)
-    solver.stats.c_max[solver.stats.iterations] < solver.opts.constraint_tolerance
+	i = solver.stats.iterations
+    solver.stats.c_max[i] < solver.opts.constraint_tolerance ||
+		solver.stats.penalty_max[i] >= solver.opts.penalty_max
 end
 
+"General Dual Update"
+function dual_update!(prob::StaticALProblem,
+        solver::StaticALSolver) where {T,Q,N,M,NM}
+    conSet = prob.obj.constraints
+    for i in eachindex(conSet.constraints)
+        dual_update!(conSet.constraints[i], solver.opts)
+    end
+end
+
+"Dual Update for Equality Constraints"
 function dual_update!(con::ConstraintVals{T,W,C},
 		opts::StaticALSolverOptions{T}) where
 		{T,W,C<:AbstractStaticConstraint{Equality}}
@@ -88,14 +104,7 @@ function dual_update!(con::ConstraintVals{T,W,C},
 	end
 end
 
-function dual_update!(prob::StaticALProblem,
-        solver::StaticALSolver) where {T,Q,N,M,NM}
-    conSet = prob.obj.constraints
-    for i in eachindex(conSet.constraints)
-        dual_update!(conSet.constraints[i], solver.opts)
-    end
-end
-
+"Dual Update for Inequality Constraints"
 function dual_update!(con::ConstraintVals{T,W,C},
 		opts::StaticALSolverOptions{T}) where
 		{T,W,C<:AbstractStaticConstraint{Inequality}}
@@ -107,7 +116,7 @@ function dual_update!(con::ConstraintVals{T,W,C},
 	end
 end
 
-
+"General Penalty Update"
 function penalty_update!(prob::StaticALProblem, solver::StaticALSolver)
     conSet = prob.obj.constraints
     for i in eachindex(conSet.constraints)
@@ -115,7 +124,7 @@ function penalty_update!(prob::StaticALProblem, solver::StaticALSolver)
     end
 end
 
-
+"Penalty Update for ConstraintVals"
 function penalty_update!(con::ConstraintVals{T}, opts::StaticALSolverOptions{T}) where T
 	ϕ = opts.penalty_scaling
 	μ = con.μ
@@ -124,12 +133,6 @@ function penalty_update!(con::ConstraintVals{T}, opts::StaticALSolverOptions{T})
 	end
 end
 
-function max_violation(prob::StaticALProblem)
-    conSet = prob.obj.constraints
-    evaluate!(conSet, prob.Z)
-    max_violation!(conSet)
-    return maximum(conSet.c_max)
-end
 
 function reset!(con::ConstraintVals{T,W,C,P}, opts::StaticALSolverOptions{T}) where {T,W,C,P}
 	λ = con.λ
