@@ -1,3 +1,25 @@
+using StaticArrays, Test
+const TO = TrajectoryOptimization
+
+# Bounds constraints
+model = Dynamics.DubinsCar() n,m = size(model)
+x,u = rand(model)
+
+import TrajectoryOptimization: checkBounds
+u_max = @SVector fill(4,n)
+u_min = @SVector fill(-4,n)
+@test checkBounds(Val(n), u_max, u_min) == (u_max, u_min)
+@test_throws ArgumentError checkBounds(Val(n), u_min, u_max)
+@test checkBounds(Val(n), 4., u_min) == (u_max, u_min)
+@test checkBounds(Val(n), 4., -4) == (u_max, u_min)
+@test checkBounds(Val(n), u_max, -4) == (u_max, u_min)
+@test checkBounds(Val(n), u_max, -4.) == (u_max, u_min)
+@test checkBounds(Val(n), 4., 4) == (u_max, u_max)
+@test_throws ArgumentError checkBounds(Val(n), -4, 4)
+@test_throws ArgumentError checkBounds(Val(m), [Inf, 4], [-Inf, 5])
+u_max, u_min = checkBounds(Val(m), [Inf, 4], [-Inf, -2])
+@test u_max isa SVector
+@test u_min isa SVector
 
 n,m = 3,2
 

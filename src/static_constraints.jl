@@ -287,6 +287,11 @@ end
 
 function StaticBoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
+	# Check and convert bounds
+	x_max, x_min = checkBounds(Val(n), x_max, x_min)
+	u_max, u_min = checkBounds(Val(m), u_max, u_min)
+
+	# Concatenate bounds
 	z_max = [x_max; u_max]
 	z_min = [x_min; u_min]
 	b = [-z_max; z_min]
@@ -302,9 +307,24 @@ function StaticBoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@
 
 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
 
-
 	StaticBoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
 end
+
+function checkBounds(::Val{N}, u::AbstractVector, l::AbstractVector) where N
+	if all(u .>= l)
+		return SVector{N}(u), SVector{N}(l)
+	else
+		throw(ArgumentError("Upper bounds must be greater than or equal to lower bounds"))
+	end
+end
+
+checkBounds(sze::Val{N}, u::Real, l::Real) where N =
+	checkBounds(sze, (@SVector fill(u,N)), (@SVector fill(l,N)))
+checkBounds(sze::Val{N}, u::AbstractVector, l::Real) where N =
+	checkBounds(sze, u, (@SVector fill(l,N)))
+checkBounds(sze::Val{N}, u::Real, l::AbstractVector) where N =
+	checkBounds(sze, (@SVector fill(u,N)), l)
+
 
 Base.size(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
 is_bound(::StaticBoundConstraint) = true
