@@ -1,4 +1,10 @@
-using StaticArrays, ForwardDiff, BenchmarkTools, LinearAlgebra
+export
+	ImplicitDynamics,
+	ExplicitDynamics,
+	GoalConstraint,
+	StaticBoundConstraint,
+	CircleConstraint,
+	NormConstraint
 
 abstract type ConstraintSense end
 abstract type Equality <: ConstraintSense end

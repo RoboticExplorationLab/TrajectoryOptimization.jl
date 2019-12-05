@@ -126,6 +126,9 @@ export
     stage,
     interp_rows
 
+# Static methods
+
+
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray
 VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
@@ -152,6 +155,7 @@ include("logger.jl")
 
 include("static_methods.jl")
 include("static_constraints.jl")
+include("constraint_vals.jl")
 include("static_problem.jl")
 include("solvers/silqr/silqr_solver.jl")
 include("solvers/silqr/silqr_methods.jl")

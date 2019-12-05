@@ -1,3 +1,8 @@
+export
+    KnotPoint,
+    Traj,
+    state,
+    control
 
 """
 Stores the states and controls for a single knot point

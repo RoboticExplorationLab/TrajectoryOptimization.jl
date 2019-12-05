@@ -1,3 +1,6 @@
+export
+	ConstraintVals,
+	ConstraintSets
 
 struct ConstraintVals{T,W,C,P,NM,PNM}
 	con::C
@@ -146,46 +149,6 @@ function cost_expansion(E, con::ConstraintVals{T,<:Stage}, Z) where T
 	end
 end
 
-function dual_update!(con::ConstraintVals{T,W,C},
-		opts::AugmentedLagrangianSolverOptions{T}) where
-		{T,W,C<:AbstractStaticConstraint{Equality}}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], -opts.dual_max, opts.dual_max)
-	end
-end
-
-function dual_update!(con::ConstraintVals{T,W,C},
-		opts::AugmentedLagrangianSolverOptions{T}) where
-		{T,W,C<:AbstractStaticConstraint{Inequality}}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], 0.0, opts.dual_max)
-	end
-end
-
-function penalty_update!(con::ConstraintVals{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
-	ϕ = opts.penalty_scaling
-	μ = con.μ
-	for i in eachindex(con.inds)
-		μ[i] = clamp.(ϕ * μ[i], 0.0, opts.penalty_max)
-	end
-end
-
-function reset!(con::ConstraintVals{T,W,C,P}, opts::AugmentedLagrangianSolverOptions{T}) where {T,W,C,P}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	for i in eachindex(con.inds)
-		μ[i] = opts.penalty_initial * @SVector ones(T,P)
-		c[i] *= 0.0
-		λ[i] *= 0.0
-	end
-end
 
 
 ############################################################################################

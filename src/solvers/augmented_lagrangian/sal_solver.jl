@@ -1,3 +1,6 @@
+export
+    StaticALSolver,
+    StaticALSolverOptions
 
 @with_kw mutable struct ALStats{T}
     iterations::Int = 0

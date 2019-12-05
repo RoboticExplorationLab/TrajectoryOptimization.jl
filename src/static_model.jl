@@ -1,3 +1,15 @@
+export
+    AbstractModel,
+    dynamics,
+    discrete_dyanmics,
+    jacobian,
+    discrete_jacobian
+
+export
+    QuadratureRule,
+    RK3,
+    HermiteSimpson
+
 
 @inline Base.size(model::AbstractModel) = model.n, model.m
 

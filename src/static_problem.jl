@@ -1,4 +1,5 @@
-using StaticArrays
+export
+    StaticProblem
 
 """
 $(TYPEDEF)
