@@ -273,7 +273,7 @@ end
 Base.size(con::ControlNorm) = con.n, con.m
 
 function evaluate(con::ControlNorm, u)
-	return @SVector [norm(u) - con.val]
+	return @SVector [u'u - con.val^2]
 end
 
 
