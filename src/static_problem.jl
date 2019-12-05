@@ -64,18 +64,52 @@ struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat,L<:AbstractModel,O<:Abst
     Z::Vector{KnotPoint{T,N,M,NM}}
     Z̄::Vector{KnotPoint{T,N,M,NM}}
     N::Int
-    dt::T
     tf::T
     function StaticProblem{Q}(model::L, obj::O, constraints::ConstraintSets,
             x0::SVector, xf::SVector,
-            Z::Vector{KnotPoint{T,n,m,nm}}, Z̄::Traj, N::Int, dt::T, tf::T) where {T,Q,L,O,n,m,nm}
-        new{Q,T,L,O,n,m,nm}(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf)
+            Z::Vector{KnotPoint{T,n,m,nm}}, Z̄::Traj, N::Int, tf::T) where {T,Q,L,O,n,m,nm}
+        @assert length(Z) == N
+        @assert length(Z̄) == N
+        @assert length(obj.cost) == N
+        @assert traj_size(Z) == (n,m,N)
+        @assert traj_size(Z̄) == (n,m,N)
+        @assert length(x0) == n
+        @assert length(xf) == n
+        new{Q,T,L,O,n,m,nm}(model, obj, constraints, x0, xf, Z, Z̄, N, tf)
     end
 end
 
 "Use RK3 as default integration"
-StaticProblem(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf) =
-    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, Z̄, N, dt, tf)
+StaticProblem(model, obj, constraints, x0, xf, Z, Z̄, N, tf) =
+    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, Z̄, N, tf)
+
+function StaticProblem(model::L, obj::O, xf::AbstractVector;
+        constraints=ConstraintSets(length(obj.costs)),
+        x0=zero(xf), N::Int=length(obj.cost), tf=NaN,
+        Z=NaN,
+        Z̄=NaN,
+        integration=RK3) where {L,O}
+    n,m = size(model)
+    if isnan(tf)
+        if isnan(Z)
+            throw(ArgumentError("final time not specified. Must either specify it directly or pass in a trajectory"))
+        else
+            tf = mapreduce(z->z.dt, +, Z)
+        end
+    end
+    if isnan(Z)
+        dt = tf / (N-1)
+        Z = Traj(n,m,dt,N)
+    end
+    if isnan(Z̄)
+        dt = tf / (N-1)
+        Z̄ = Traj(n,m,dt,N)
+    end
+
+    StaticProblem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
+        Z, Z̄, N, tf)
+end
+
 
 "Get number of states, controls, and knot points"
 Base.size(prob::StaticProblem{Q,T,L,O,N,M,NM}) where {T,Q,L,O,N,M,NM} = (N, M, prob.N)
@@ -92,8 +126,12 @@ function initial_trajectory!(prob::StaticProblem, Z::Traj)
 end
 
 function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
+    N = prob.N
     Z = prob.Z
-    for k in 1:prob.N 
+    if length(U0) == N-1
+        push!(U0,U0[end])
+    end
+    for k in 1:N
         x = state(Z[k])
         Z[k].z = [x; U0[k]]
     end

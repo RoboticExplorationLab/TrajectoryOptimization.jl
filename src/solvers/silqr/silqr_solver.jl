@@ -1,3 +1,6 @@
+export
+    StaticiLQRSolverOptions,
+    StaticiLQRSolver
 
 
 @with_kw mutable struct iLQRStats{T}

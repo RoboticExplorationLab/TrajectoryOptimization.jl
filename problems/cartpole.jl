@@ -58,4 +58,4 @@ con_goal = ConstraintVals(goal, N:N)
 conSet = ConstraintSets([con_bnd, con_goal], N)
 
 cartpole_static = StaticProblem(model, obj, conSet, x0, xf,
-    deepcopy(Z), deepcopy(Z), N, dt, dt*(N-1))
+    deepcopy(Z), deepcopy(Z), N, dt*(N-1))

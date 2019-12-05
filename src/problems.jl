@@ -10,6 +10,7 @@ using LinearAlgebra
 using ForwardDiff
 using Plots
 using Random
+using StaticArrays
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")
