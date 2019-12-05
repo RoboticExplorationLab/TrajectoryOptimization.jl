@@ -35,9 +35,9 @@ initial_controls!(cartpole, U0)
 
 
 model = Dynamics.Cartpole()
-TO.generate_jacobian(model)
-TO.rk3_gen(model)
-TO.generate_discrete_jacobian(model)
+# TO.generate_jacobian(model)
+# TO.rk3_gen(model)
+# TO.generate_discrete_jacobian(model)
 
 Q = 1.0e-2*Diagonal(@SVector ones(n))
 Qf = 100.0*Diagonal(@SVector ones(n))

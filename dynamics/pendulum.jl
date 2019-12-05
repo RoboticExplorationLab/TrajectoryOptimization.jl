@@ -1,3 +1,4 @@
+
 ## Pendulum
 # https://github.com/HarvardAgileRoboticsLab/unscented-dynamic-programming/blob/master/pendulum_dynamics.m
 function pendulum_dynamics!(ẋ::AbstractVector{T},x::AbstractVector{T},u::AbstractVector{T}) where T
@@ -30,3 +31,21 @@ end
 
 n = 2; m = 1; r = 1
 pendulum_uncertain = UncertainModel(pendulum_dynamics_uncertain!,n,m,r)
+
+
+@with_kw mutable struct Pendulum{T} <: AbstractModel
+    mass::T = 1.
+    length::T = 0.5
+    b::T = 0.1
+    lc::T = 0.5
+    I::T = 0.25
+    g::T = 9.81
+end
+
+Base.size(::Pendulum) = 2,1
+
+function dynamics(p::Pendulum, x, u)
+    m = p.mass * p.lc * p.lc
+    @SVector [x[2],
+              u[1]/m - p.g*sin(x[1])/p.lc - p.b*x[2]/m]
+end

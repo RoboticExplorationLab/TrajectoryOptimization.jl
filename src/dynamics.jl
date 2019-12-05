@@ -6,7 +6,8 @@ using RigidBodyDynamics
 using LinearAlgebra
 using DocStringExtensions
 using StaticArrays
-import TrajectoryOptimization: dynamics, AbstractModel 
+using Parameters
+import TrajectoryOptimization: dynamics, AbstractModel
 
 export
     pendulum,

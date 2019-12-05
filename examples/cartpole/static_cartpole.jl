@@ -3,8 +3,6 @@ using LinearAlgebra
 using BenchmarkTools
 using Plots
 const TO = TrajectoryOptimization
-import TrajectoryOptimization: dynamics, RK3, AbstractModel, KnotPoint, Traj, StaticBoundConstraint, GoalConstraint,
-    ConstraintVals, ConstraintSets, StaticProblem, StaticALSolver
 import TrajectoryOptimization: dynamics
 
 # Define dynamics model

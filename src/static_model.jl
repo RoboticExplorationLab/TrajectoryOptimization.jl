@@ -10,7 +10,33 @@ export
     RK3,
     HermiteSimpson
 
+#=
+Convenient methods for creating state and control vectors directly from the model
+=#
+for method in [:rand, :zeros, :ones]
+    @eval begin
+        function Base.$(method)(model::AbstractModel)
+            n,m = size(model)
+            x = @SVector $(method)(n)
+            u = @SVector $(method)(m)
+            return x, u
+        end
+        function Base.$(method)(::Type{T}, model::AbstractModel) where T
+            n,m = size(model)
+            x = @SVector $(method)(T,n)
+            u = @SVector $(method)(T,m)
+            return x,u
+        end
+    end
+end
+function Base.fill(model::AbstractModel, val)
+    n,m = size(model)
+    x = @SVector fill(val,n)
+    u = @SVector fill(val,m)
+    return x, u
+end
 
+"""Default size method for model (assumes model has fields n and m)"""
 @inline Base.size(model::AbstractModel) = model.n, model.m
 
 abstract type QuadratureRule end
@@ -21,10 +47,10 @@ abstract type HermiteSimpson <: Explicit end
 
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
-function jacobian(model::AbstractModel)
+function jacobian(model::AbstractModel, z::KnotPoint)
     n,m = size(model)
     ix,iu = 1:n, n .+ (1:m)
-    f_aug(z) = dynamics(Q, model, view(z,ix), view(z,iu))
+    f_aug(z) = dynamics(model, view(z,ix), view(z,iu))
     s = z.z
     ForwardDiff.jacobian(f_aug, s)
 end
