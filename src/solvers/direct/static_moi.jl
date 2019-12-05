@@ -29,6 +29,7 @@ function StaticDIRCOLSolver(prob::StaticProblem)
     P = StaticPrimals(n,m,N)
     xinds, uinds = P.xinds, P.uinds
 
+    conSet = get_constraints(prob)
     blk_len = map(con->length(con.∇c[1]), conSet.constraints)
     con_len = map(con->length(con.∇c), conSet.constraints)
     linds = [[@SVector zeros(Int,blk) for i = 1:len] for (blk,len) in zip(blk_len, con_len)]
@@ -52,11 +53,10 @@ struct StaticDIRCOLProblem{T,Q<:QuadratureRule} <: MOI.AbstractNLPEvaluator
     zU::Vector{T}
     gL::Vector{T}
     gU::Vector{T}
-    function StaticDIRCOLProblem(prob::StaticProblem{Q,T}) where {T,Q}
+    function StaticDIRCOLProblem(prob0::StaticProblem{Q,T}) where {T,Q}
+        prob = copy(prob0)
         conSet = get_constraints(prob)
         @assert has_dynamics(conSet)
-        dyn_con = filter(x->x.con isa ExplicitDynamics, conSet.constraints)[1]
-        Q = quadrature_rule(dyn_con.con)
 
         # Remove bounds
         zU,zL,gU,gL = get_bounds(conSet)

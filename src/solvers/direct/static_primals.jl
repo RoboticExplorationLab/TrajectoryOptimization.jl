@@ -148,6 +148,7 @@ function StaticPNSolver(prob::StaticALProblem, opts=StaticPNSolverOptions())
     # Set constant pieces of the Jacobian
     xinds,uinds = P.xinds, P.uinds
 
+    dyn_inds = SVector{n,Int}[]
     StaticPNSolver(opts, stats, P, P̄, H, g, E, D, d, fVal, ∇F, active_set, dyn_inds, con_inds)
 end
 
@@ -188,7 +189,6 @@ function constraint_jacobian_structure(prob::StaticProblem, solver::DirectSolver
 
     # Number of knot points for each constraint
     con_len = map(con->length(con.∇c), conSet.constraints)
-            @show blk_len
 
     # Linear indices
     for (i,con) in enumerate(conSet.constraints)
