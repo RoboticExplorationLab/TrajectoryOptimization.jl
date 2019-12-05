@@ -226,10 +226,10 @@ function max_violation!(conSet::ConstraintSets{T}) where T
 	end
 end
 
-function max_penalty!(conSet::ConstraintSets)
+function max_penalty!(conSet::ConstraintSets{T}) where T
 	for (i,con) in enumerate(conSet.constraints)
 		max_penalty!(con)
-		con.c_max[i] = maximum(con.c_max::Vector{T})
+		conSet.c_max[i] = maximum(con.c_max::Vector{T})
 	end
 end
 
@@ -253,6 +253,7 @@ end
 
 Base.iterate(conSet::ConstraintSets) = @inbounds (conSet.constraints[1], 1)
 Base.iterate(conSet::ConstraintSets, i) = @inbounds i >= length(conSet.constraints) ? nothing : (conSet.constraints[i+1], i+1)
+@inline Base.getindex(conSet::ConstraintSets, i) = conSet.constraints[i]
 
 function reset!(conSet::ConstraintSets, opts)
 	for con in conSet.constraints
