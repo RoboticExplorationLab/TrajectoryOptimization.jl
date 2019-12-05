@@ -1,6 +1,7 @@
 export
     StaticProblem
 
+
 """
 $(TYPEDEF)
 Store the terms of the 2nd order expansion for the entire trajectory
@@ -149,7 +150,14 @@ end
 
 function copy(prob::StaticProblem)
     StaticProblem(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
-        deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.dt, prob.tf)
+        deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.tf)
 end
 
 TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p
+
+function max_violation(prob::StaticProblem)
+    conSet = get_constraints(prob)
+    evaluate!(conSet, prob.Z)
+    max_violation!(conSet)
+    return maximum(conSet.c_max)
+end

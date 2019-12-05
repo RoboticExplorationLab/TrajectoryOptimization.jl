@@ -127,7 +127,8 @@ export
     interp_rows
 
 # Static methods
-
+export
+    convertProblem
 
 # Trajectory Types
 Trajectory{T} = Vector{T} where T <: AbstractArray

@@ -138,7 +138,7 @@ function AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions{T}) w
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
 
     # Init solver results
-    n = prob.model.n; m = prob.model.m; N = prob.N
+    n,m,N = size(prob)
 
     X̄  = [@SVector zeros(T,n)   for k = 1:N]
     Ū  = [@SVector zeros(T,m)   for k = 1:N-1]
