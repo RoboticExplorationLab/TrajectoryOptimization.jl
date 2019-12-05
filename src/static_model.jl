@@ -21,6 +21,13 @@ abstract type HermiteSimpson <: Explicit end
 
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
+function jacobian(model::AbstractModel)
+    n,m = size(model)
+    ix,iu = 1:n, n .+ (1:m)
+    f_aug(z) = dynamics(Q, model, view(z,ix), view(z,iu))
+    s = z.z
+    ForwardDiff.jacobian(f_aug, s)
+end
 
 "Set default integrator to RK3"
 @inline discrete_dynamics(model::AbstractModel, z::KnotPoint) =

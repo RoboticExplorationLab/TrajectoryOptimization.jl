@@ -91,6 +91,18 @@ function initial_trajectory!(prob::StaticProblem, Z::Traj)
     end
 end
 
+function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
+    Z = prob.Z
+    for k in 1:prob.N 
+        x = state(Z[k])
+        Z[k].z = [x; U0[k]]
+    end
+end
+
+function initial_controls!(prob::StaticProblem, u0::AbstractVector{<:Real})
+    U0 = [copy(u0) for k = 1:prob.N]
+    initial_controls!(prob, U0)
+end
 
 function cost(prob::StaticProblem)
     cost!(prob.obj, prob.Z)

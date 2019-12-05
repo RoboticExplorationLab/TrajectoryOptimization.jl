@@ -40,6 +40,22 @@ end
 const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
 
-function copy(Z::Traj)
+function Base.copy(Z::Traj)
     Z_new = [KnotPoint(copy(z.z), z._x, z._u, z._inds, z.dt) for z in Z]
+end
+
+function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
+    x = Inf*@SVector ones(n)
+    u = @SVector zeros(m)
+    Traj(x,u,dt,N,equal)
+end
+
+function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int, equal=false)
+    equal ? uN = N : uN = N-1
+    Z = [KnotPoint(x,u,dt) for k = 1:uN]
+    if !equal
+        m = length(u)
+        push!(Z, KnotPoint(x,m))
+    end
+    return Z
 end
