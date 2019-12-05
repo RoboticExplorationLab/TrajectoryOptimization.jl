@@ -104,7 +104,7 @@ end
 
 abstract type DynamicsConstraint{W<:Coupled,P} <: AbstractStaticConstraint{Equality,W,P} end
 
-size(con::DynamicsConstraint) = con.model.n, con.model.m, con.model.n
+Base.size(con::DynamicsConstraint) = begin n,m = size(con.model); return n,m,n end
 
 struct ImplicitDynamics{T,L,N,NM,NNM} <: DynamicsConstraint{Dynamical,N}
 	model::L

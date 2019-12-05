@@ -256,7 +256,7 @@ $(SIGNATURES)
 Simulate forward the system with the optimal feedback gains from the iLQR backward pass.
 (non-allocating)
 """
-function rollout!(prob::StaticProblem, solver::StaticiLQRSolver, α=1.0)
+function rollout!(prob::StaticProblem{Q}, solver::StaticiLQRSolver, α=1.0) where Q
     Z = prob.Z; Z̄ = prob.Z̄
     K = solver.K; d = solver.d;
 
@@ -270,7 +270,7 @@ function rollout!(prob::StaticProblem, solver::StaticiLQRSolver, α=1.0)
         Z̄[k].z = [state(Z̄[k]); ū]
 
         # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
-        Z̄[k+1].z = [discrete_dynamics(prob.model, state(Z̄[k]), ū, Z̄[k].dt);
+        Z̄[k+1].z = [discrete_dynamics(Q, prob.model, state(Z̄[k]), ū, Z̄[k].dt);
             control(Z[k+1])]
 
 

@@ -95,7 +95,7 @@ function get_bounds(conSet::ConstraintSets)
     return zU, zL, gU, gL
 end
 
-function add_dynamics_constraints!(prob::StaticProblem)
+function add_dynamics_constraints!(prob::StaticProblem{<:Implicit})
     conSet = get_constraints(prob)
 
     # Implicit dynamics
@@ -105,6 +105,22 @@ function add_dynamics_constraints!(prob::StaticProblem)
     # Initial condition
     init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
     add_constraint!(conSet, init_con, 1)
+
+    return nothing
+end
+
+function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q<:QuadratureRule
+    conSet = get_constraints(prob)
+
+    # Implicit dynamics
+    dyn_con = ConstraintVals( ExplicitDynamics{Q}(prob.model, prob.N), 1:prob.N-1 )
+    add_constraint!(conSet, dyn_con, 1)
+
+    # Initial condition
+    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
+    add_constraint!(conSet, init_con, 1)
+
+    return nothing
 end
 
 function cost(prob::StaticProblem, solver::DirectSolver)
