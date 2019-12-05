@@ -15,30 +15,94 @@ function reset!(stats::ALStats, L=0)
     stats.iterations = 0
     stats.iterations_total = 0
     stats.iterations_inner = zeros(Int,L)
-    stats.cost = zeros(L)
-    stats.c_max = zeros(L)
-    stats.penalty_max = zeros(L)
+    stats.cost = zeros(L)*NaN
+    stats.c_max = zeros(L)*NaN
+    stats.penalty_max = zeros(L)*NaN
+end
+
+
+"""$(TYPEDEF)
+Solver options for the augmented Lagrangian solver.
+$(FIELDS)
+"""
+@with_kw mutable struct StaticALSolverOptions{T} <: AbstractSolverOptions{T}
+    "Print summary at each iteration."
+    verbose::Bool=false
+
+    "unconstrained solver options."
+    opts_uncon::AbstractSolverOptions{T} = StaticiLQRSolverOptions{T}()
+
+    "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve."
+    cost_tolerance::T = 1.0e-4
+
+    "dJ < ϵ_int, intermediate cost convergence criteria to enter outerloop of constrained solve."
+    cost_tolerance_intermediate::T = 1.0e-3
+
+    "gradient_norm < ϵ, gradient norm convergence criteria."
+    gradient_norm_tolerance::T = 1.0e-5
+
+    "gradient_norm_int < ϵ, gradient norm intermediate convergence criteria."
+    gradient_norm_tolerance_intermediate::T = 1.0e-5
+
+    "max(constraint) < ϵ, constraint convergence criteria."
+    constraint_tolerance::T = 1.0e-3
+
+    "max(constraint) < ϵ_int, intermediate constraint convergence criteria."
+    constraint_tolerance_intermediate::T = 1.0e-3
+
+    "maximum outerloop updates."
+    iterations::Int = 30
+
+    "minimum Lagrange multiplier."
+    dual_min::T = -1.0e8
+
+    "maximum Lagrange multiplier."
+    dual_max::T = 1.0e8
+
+    "maximum penalty term."
+    penalty_max::T = 1.0e8
+
+    "initial penalty term."
+    penalty_initial::T = 1.0
+
+    "penalty update multiplier; penalty_scaling > 0."
+    penalty_scaling::T = 10.0
+
+    "penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)."
+    penalty_scaling_no::T = 1.0
+
+    "ratio of current constraint to previous constraint violation; 0 < constraint_decrease_ratio < 1."
+    constraint_decrease_ratio::T = 0.25
+
+    "type of outer loop update (default, feedback)."
+    outer_loop_update_type::Symbol = :default
+
+    "numerical tolerance for constraint violation."
+    active_constraint_tolerance::T = 0.0
+
+    "terminal solve when maximum penalty is reached."
+    kickout_max_penalty::Bool = false
+
 end
 
 
 
-
 struct StaticALSolver{T,S<:AbstractSolver} <: AbstractSolver{T}
-    opts::AugmentedLagrangianSolverOptions{T}
+    opts::StaticALSolverOptions{T}
     stats::ALStats{T}
     stats_uncon::Vector{STATS} where STATS
     solver_uncon::S
 end
 
 StaticALSolver(prob::StaticProblem{Q,T},
-    opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where {Q,T} =
+    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,T} =
     AbstractSolver(prob,opts)
 
 """$(TYPEDSIGNATURES)
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AbstractSolver(prob::StaticProblem{Q,T}, opts::AugmentedLagrangianSolverOptions{T}) where {Q,T<:AbstractFloat}
+function AbstractSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions{T}) where {Q,T<:AbstractFloat}
     # Init solver statistics
     stats = ALStats{T}()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
