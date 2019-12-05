@@ -36,8 +36,7 @@ sprob = copy(Problems.cartpole_static)
 al = AugmentedLagrangianSolver(prob)
 prob_al = AugmentedLagrangianProblem(prob, al)
 
-sopts = AugmentedLagrangianSolverOptions{Float64}()
-sopts.opts_uncon = StaticiLQRSolverOptions()
+sopts = StaticALSolverOptions{Float64}()
 reset!(sprob.constraints, sopts)
 sal = StaticALSolver(sprob, sopts)
 sprob_al = convertProblem(sprob, sal)
@@ -319,3 +318,34 @@ end
     initial_trajectory!($sprob_d, $Zsol)
     solve!($sprob_d, $spn) # 8.5x faster
 end
+
+
+# DIRCOL
+prob = copy(Problems.cartpole)
+prob = update_problem(prob,model=Dynamics.cartpole)
+sprob = copy(Problems.cartpole_static)
+rollout!(sprob)
+initial_states!(prob, state(sprob))
+initial_controls!(prob, control(sprob))
+
+# Add dynamics constraint
+conSet = get_constraints(sprob)
+hs_con = ConstraintVals( ExplicitDynamics{HermiteSimpson}(sprob.model, sprob.N), 1:sprob.N-1)
+init_con = ConstraintVals( GoalConstraint(sprob.x0), 1:1)
+add_constraint!(get_constraints(sprob), hs_con, 1)
+add_constraint!(get_constraints(sprob), init_con, 1)
+
+# Build NLP problem
+bnds = remove_bounds!(prob)
+dircol = DIRCOLSolver(prob)
+z_U, z_L, g_U, g_L = get_bounds(prob, bnds)
+d = DIRCOLProblem(prob, dircol, z_L, z_U, g_L, g_U)
+ds = StaticDIRCOLProblem(sprob)
+
+model = build_moi_problem(d)
+MOI.optimize!(model)
+
+model2 = build_moi_problem(ds)
+MOI.optimize!(model2)
+@btime MOI.optimize!($model)
+b = @benchmark MOI.optimize!($model2) # 25x faster, 1000x less memory
