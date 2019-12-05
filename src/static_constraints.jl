@@ -261,8 +261,24 @@ function evaluate(con::SphereConstraint{T,P}, x, u) where {T,P}
 	# -(x[1] - xc).^2 .- (x[2] - yc).^2 .- (x[3] - zc).^2 .+ r.^2
 end
 
+struct ControlNorm{S,T} <: AbstractStaticConstraint{S,Control,1}
+	n::Int
+	m::Int
+	val::T
+	function ControlNorm{S}(n::Int,m::Int,val::T) where {S,T}
+		@assert val >= 0
+		new{S,T}(n,m,val)
+	end
+end
+Base.size(con::ControlNorm) = con.n, con.m
 
-struct NormConstraint{T} <: AbstractStaticConstraint{Equality,Stage,1}
+function evaluate(con::ControlNorm, u)
+	return @SVector [norm(u) - con.val]
+end
+
+
+
+struct NormConstraint{S,T} <: AbstractStaticConstraint{S,Stage,1}
 	n::Int
 	m::Int
 	val::T
