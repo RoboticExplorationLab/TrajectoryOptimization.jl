@@ -70,7 +70,7 @@ struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat,L<:AbstractModel,O<:Abst
             Z::Vector{KnotPoint{T,n,m,nm}}, Z̄::Traj, N::Int, tf::T) where {T,Q,L,O,n,m,nm}
         @assert length(Z) == N
         @assert length(Z̄) == N
-        @assert length(obj.cost) == N
+        @assert length(obj) == N
         @assert traj_size(Z) == (n,m,N)
         @assert traj_size(Z̄) == (n,m,N)
         @assert length(x0) == n
@@ -84,8 +84,8 @@ StaticProblem(model, obj, constraints, x0, xf, Z, Z̄, N, tf) =
     StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, Z̄, N, tf)
 
 function StaticProblem(model::L, obj::O, xf::AbstractVector;
-        constraints=ConstraintSets(length(obj.costs)),
-        x0=zero(xf), N::Int=length(obj.cost), tf=NaN,
+        constraints=ConstraintSets(length(obj)),
+        x0=zero(xf), N::Int=length(obj), tf=NaN,
         Z=NaN,
         Z̄=NaN,
         integration=RK3) where {L,O}

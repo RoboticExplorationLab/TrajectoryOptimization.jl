@@ -135,6 +135,7 @@ struct StaticALObjective{T} <: AbstractObjective
 end
 
 get_J(obj::StaticALObjective) = obj.obj.J
+Base.length(obj::StaticALObjective) = length(obj.obj)
 
 TrajectoryOptimization.num_constraints(prob::StaticProblem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
 
