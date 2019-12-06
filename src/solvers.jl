@@ -37,6 +37,30 @@ include("solvers/direct/direct_solvers_mintime.jl")
 include("solvers/direct/dircol_mintime.jl")
 include("solvers/direct/moi_mintime.jl")
 
+"Get the state trajectory"
+states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
+
+"Get the control trajectory"
+function controls(solver::AbstractSolver)
+    N = size(solver)[3]
+    Z = get_trajectory(solver)
+    [control(Z[k]) for k = 1:N-1]
+end
+
+
+function initial_states!(solver::AbstractSolver, X0)
+    Z = get_trajectory(solver)
+    for k in eachindex(Z)
+        Z[k].z = [X0[k]; control(Z[k])]
+    end
+end
+
+function initial_controls!(solver::AbstractSolver, U0)
+    Z = get_trajectory(solver)
+    for k in 1:size(solver)[3]-1
+        Z[k].z = [state(Z[k]); U0[k]]
+    end
+end
 
 # Get name of solver as a string
 solver_name(::iLQRSolverOptions) = "iLQR"

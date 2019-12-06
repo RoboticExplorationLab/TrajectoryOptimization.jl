@@ -89,7 +89,7 @@ end
 
 
 
-struct StaticALSolver{T,S<:AbstractSolver} <: AbstractSolver{T}
+struct StaticALSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
     opts::StaticALSolverOptions{T}
     stats::ALStats{T}
     stats_uncon::Vector{STATS} where STATS
@@ -133,7 +133,7 @@ Base.size(solver::StaticALSolver) = size(solver.solver_uncon)
 @inline get_trajectory(solver::StaticALSolver) = get_trajectory(solver.solver_uncon)
 @inline get_objective(solver::StaticALSolver) = get_objective(solver.solver_uncon)
 
-function max_violation(solver::StaticALSolver{T})
+function max_violation(solver::StaticALSolver{T}) where T
     obj = get_objective(solver.solver_uncon)::StaticALObjective{T}
     conSet = obj.constraints
     max_violation!(conSet)

@@ -212,10 +212,10 @@ function copy_inds(dest, src, inds)
     end
 end
 
-function copy_constraints!(prob::StaticProblem, solver::DirectSolver, d=solver.d)
-    conSet = get_constraints(prob)
-    for i = 1:length(conSet.constraints)
-        copy_inds(d, conSet.constraints[i].vals, solver.con_inds[i])
+function copy_constraints!(solver::DirectSolver, d=solver.d)
+    conSet = get_constraints(solver)
+    for (i,con) in enumerate(conSet.constraints)
+        copy_inds(d, con.vals, solver.con_inds[i])
     end
     return nothing
 end
@@ -255,8 +255,8 @@ function copy_jacobian!(D, con::ConstraintVals{T,Dynamical}, cinds, xinds, uinds
     end
 end
 
-function copy_jacobians!(prob::StaticProblem, solver::DirectSolver, D=solver.D)
-    conSet = get_constraints(prob)
+function copy_jacobians!(solver::DirectSolver, D=solver.D)
+    conSet = get_constraints(solver)
     xinds, uinds = primal_partition(solver)
     cinds = solver.con_inds
 
@@ -273,8 +273,8 @@ function copy_jacobian!(d::AbstractVector{<:Real}, con::ConstraintVals, linds)
 	end
 end
 
-function copy_jacobians!(prob::StaticProblem, solver::DirectSolver, jac::AbstractVector{<:Real})
-    conSet = get_constraints(prob)
+function copy_jacobians!(solver::DirectSolver, jac::AbstractVector{<:Real})
+    conSet = get_constraints(solver)
     xinds, uinds = primal_partition(solver)
     cinds = solver.con_inds
     linds = jacobian_linear_inds(solver)

@@ -171,7 +171,7 @@ end
 function ConstraintSets(N)
 	constraints = Vector{ConstraintVals}()
 	p = zeros(Int,N)
-	c_max = zeros(N)
+	c_max = zeros(0)
 	ConstraintSets(constraints,p,c_max)
 end
 
@@ -199,6 +199,10 @@ function ConstraintSets(constraints, N)
 	ConstraintSets(cons, p, c_max)
 end
 
+function Base.copy(conSet::ConstraintSets)
+	ConstraintSets(copy(conSet.constraints), copy(conSet.p), copy(conSet.c_max))
+end
+
 function num_constraints!(conSet::ConstraintSets)
 	p = conSet.p
 	p .*= 0
@@ -209,11 +213,15 @@ function num_constraints!(conSet::ConstraintSets)
 	end
 end
 
+@inline TrajectoryOptimization.num_constraints(conSet::ConstraintSets) = conSet.p
+
 function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
 	if idx == -1
 		push!(conSet.constraints, conVal)
+		push!(conSet.c_max, 0)
 	else
 		insert!(conSet.constraints, idx, conVal)
+		insert!(conSet.c_max, idx, 0)
 	end
 	num_constraints!(conSet)
 end

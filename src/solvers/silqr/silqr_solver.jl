@@ -107,7 +107,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,I,L,O,n,m,L1,L2,G,E} <: AbstractSolver{T}
+struct StaticiLQRSolver{T,I,L,O,n,m,L1,L2,G,E} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -191,38 +191,11 @@ function reset!(solver::StaticiLQRSolver{T}, reset_stats=true) where T
     return nothing
 end
 
-function copy(r::StaticiLQRSolver{T}) where T
-    StaticiLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.∇F),copy(r.S),copy(r.Q),copy(r.ρ),copy(r.dρ))
-end
-
-Base.size(solver::StaticiLQRSolver{T,L,O,n,m}) where {T,L,O,n,m} = n,m,solver.N
+Base.size(solver::StaticiLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
+@inline get_trajectory(solver::StaticiLQRSolver) = solver.Z
+@inline get_objective(solver::AbstractSolver) = solver.obj
 
 function cost(solver::StaticiLQRSolver, Z=solver.Z)
     cost!(solver.obj, Z)
     return sum(get_J(solver.obj))
 end
-
-
-
-"Get the state trajectory"
-states(solver::StaticiLQRSolver) = [state(z) for z in solver.Z]
-"Get the control trajectory"
-controls(solver::StaticiLQRSolver) = [control(solver.Z[k]) for k = 1:solver.N - 1]
-
-get_trajectory(solver::StaticiLQRSolver) = solver.Z
-
-function initial_state!(solver::AbstractSolver, X0)
-    Z = get_trajectory(solver)
-    for k in eachindex(Z)
-        Z[k].z = [X0[k]; control(Z[k])]
-    end
-end
-
-function initial_controls!(solver::AbstractSolver, U0)
-    Z = get_trajectory(solver)
-    for k in 1:size(solver)[3]-1
-        Z[k].z = [state(Z[k]); U0[k]]
-    end
-end
-
-@inline get_objective(solver::AbstractSolver) = solver.obj
