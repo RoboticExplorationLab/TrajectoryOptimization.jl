@@ -59,3 +59,11 @@ function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int, equal=false)
     end
     return Z
 end
+
+function Traj(X::Vector, U::Vector, dt::Vector)
+    Z = [KnotPoint(X[k], U[k], dt[k]) for k = 1:length(U)]
+    if length(U) == length(X)-1
+        push!(Z, KnotPoint(X[end],length(U[1])))
+    end
+    return Z
+end

@@ -5,6 +5,8 @@ export
     solver_name
 
 abstract type AbstractSolver{T} end
+abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end
+abstract type ConstrainedSolver{T} <: AbstractSolver{T} end
 abstract type AbstractSolverOptions{T<:Real} end
 
 include("solvers/ilqr/ilqr_solver.jl")

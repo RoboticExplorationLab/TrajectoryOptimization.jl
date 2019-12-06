@@ -107,41 +107,58 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,N,M,NM,G,Q} <: AbstractSolver{T}
+struct StaticiLQRSolver{T,I,L,O,n,m,L1,L2,G,E} <: AbstractSolver{T}
+    # Model + Objective
+    model::L
+    obj::O
+
+    # Problem info
+    x0::SVector{n,T}
+    xf::SVector{n,T}
+    tf::T
+    N::Int
+
     opts::StaticiLQRSolverOptions{T}
     stats::iLQRStats{T}
 
+    # Primal Duals
+    Z::Vector{KnotPoint{T,n,m,L1}}
+    Z̄::Vector{KnotPoint{T,n,m,L1}}
+
     # Data variables
-    X̄::Vector{N} # states (n,N)
-    Ū::Vector{M} # controls (m,N-1)
+    K::Vector{SMatrix{m,n,T,L2}}  # State feedback gains (m,n,N-1)
+    d::Vector{SVector{m,T}} # Feedforward gains (m,N-1)
 
-    K::Vector{NM}  # State feedback gains (m,n,N-1)
-    d::Vector{M} # Feedforward gains (m,N-1)
+    ∇F::Vector{G} # discrete dynamics jacobian (block) (n,n+m+1,N)
 
-    ∇F::Vector{G}# discrete dynamics jacobian (block) (n,n+m+1,N)
-
-    S::Q # Optimal cost-to-go expansion trajectory
-    Q::Q # cost-to-go expansion trajectory
+    S::E  # Optimal cost-to-go expansion trajectory
+    Q::E  # cost-to-go expansion trajectory
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
 
     grad::Vector{T} # Gradient
+    function StaticiLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
+            Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n,T,L2}}, d,
+            ∇F::Vector{G}, S::E, Q::E, ρ, dρ, grad) where {T,I,L,O,n,m,L1,L2,G,E}
+        new{T,I,L,O,n,m,L1,L2,G,E}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
+            ∇F, S, Q, ρ, dρ, grad)
+    end
 end
 
-function StaticiLQRSolver(prob::StaticProblem, opts=StaticiLQRSolverOptions())
-     AbstractSolver(prob, opts)
-end
+function StaticiLQRSolver(prob::StaticProblem{I}, opts=StaticiLQRSolverOptions()) where I
 
-function AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
 
     # Init solver results
     n,m,N = size(prob)
 
-    X̄  = [@SVector zeros(T,n)   for k = 1:N]
-    Ū  = [@SVector zeros(T,m)   for k = 1:N-1]
+    x0 = SVector{n}(prob.x0)
+    xf = SVector{n}(prob.xf)
+
+    Z = Traj(prob.X0, prob.U0, prob.dt)
+    Z̄ = Traj(n,m,dt[1],N)
 
     K  = [@SMatrix zeros(T,m,n) for k = 1:N-1]
     d  = [@SVector zeros(T,m)   for k = 1:N-1]
@@ -156,7 +173,8 @@ function AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions{T}) w
 
     grad = zeros(T,N-1)
 
-    solver = StaticiLQRSolver(opts,stats,X̄,Ū,K,d,∇F,S,Q,ρ,dρ,grad)
+    solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+        Z, Z̄, K, d, ∇F, S, Q, ρ, dρ, grad)
 
     reset!(solver)
     return solver
@@ -173,4 +191,33 @@ end
 
 function copy(r::StaticiLQRSolver{T}) where T
     StaticiLQRSolver{T}(copy(r.opts),copy(r.stats),copy(r.X̄),copy(r.Ū),copy(r.K),copy(r.d),copy(r.∇F),copy(r.S),copy(r.Q),copy(r.ρ),copy(r.dρ))
+end
+
+Base.size(solver::StaticiLQRSolver{T,L,O,n,m}) where {T,L,O,n,m} = n,m,solver.N
+
+function cost(solver::StaticiLQRSolver, Z=solver.Z)
+    cost!(solver.obj, Z)
+    return sum(solver.obj.J)
+end
+
+
+"Get the state trajectory"
+states(solver::StaticiLQRSolver) = [state(z) for z in solver.Z]
+"Get the control trajectory"
+controls(solver::StaticiLQRSolver) = [control(solver.Z[k]) for k = 1:solver.N - 1]
+
+get_trajectory(solver::StaticiLQRSolver) = solver.Z
+
+function initial_state!(solver::AbstractSolver, X0)
+    Z = get_trajectory(solver)
+    for k in eachindex(Z)
+        Z[k].z = [X0[k]; control(Z[k])]
+    end
+end
+
+function initial_controls!(solver::AbstractSolver, U0)
+    Z = get_trajectory(solver)
+    for k in 1:solver.N-1
+        Z[k].z = [state(Z[k]); U0[k]]
+    end
 end

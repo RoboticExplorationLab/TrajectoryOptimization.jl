@@ -56,39 +56,34 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat,L<:AbstractModel,O<:AbstractObjective,N,M,NM}
+struct StaticProblem{Q<:QuadratureRule,L<:AbstractModel,O<:AbstractObjective,T<:AbstractFloat}
     model::L
     obj::O
-    constraints::ConstraintSets
-    x0::SVector{N,T}
-    xf::SVector{N,T}
-    Z::Vector{KnotPoint{T,N,M,NM}}
-    Z̄::Vector{KnotPoint{T,N,M,NM}}
+    constraints::ConstraintSets{T}
+    x0::Vector{T}
+    xf::Vector{T}
+    X0::Vector{Vector{T}}
+    U0::Vector{Vector{T}}
+    dt::Vector{T}
     N::Int
     tf::T
     function StaticProblem{Q}(model::L, obj::O, constraints::ConstraintSets,
-            x0::SVector, xf::SVector,
-            Z::Vector{KnotPoint{T,n,m,nm}}, Z̄::Traj, N::Int, tf::T) where {T,Q,L,O,n,m,nm}
-        @assert length(Z) == N
-        @assert length(Z̄) == N
-        @assert length(obj) == N
-        @assert traj_size(Z) == (n,m,N)
-        @assert traj_size(Z̄) == (n,m,N)
-        @assert length(x0) == n
-        @assert length(xf) == n
-        new{Q,T,L,O,n,m,nm}(model, obj, constraints, x0, xf, Z, Z̄, N, tf)
+            x0::Vector, xf::Vector,
+            X0::Vector, U0::Vector, dt::Vector, N::Int, tf::T) where {Q,L,O,T}
+        new{Q,L,O,T}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
     end
 end
 
 "Use RK3 as default integration"
-StaticProblem(model, obj, constraints, x0, xf, Z, Z̄, N, tf) =
-    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, Z̄, N, tf)
+StaticProblem(model, obj, constraints, x0, xf, X0, U0, dt, N, tf) =
+    StaticProblem{RK3}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
 
 function StaticProblem(model::L, obj::O, xf::AbstractVector;
         constraints=ConstraintSets(length(obj)),
         x0=zero(xf), N::Int=length(obj), tf=NaN,
-        Z=NaN,
-        Z̄=NaN,
+        X0=[x0 for k = 1:N],
+        U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
+        dt=fill(tf/(N-1),N),
         integration=RK3) where {L,O}
     n,m = size(model)
     if isnan(tf)
@@ -113,12 +108,8 @@ end
 
 
 "Get number of states, controls, and knot points"
-Base.size(prob::StaticProblem{Q,T,L,O,N,M,NM}) where {T,Q,L,O,N,M,NM} = (N, M, prob.N)
+Base.size(prob::StaticProblem) = size(prob.model)..., prob.N
 
-"Get the state trajectory"
-state(prob::StaticProblem) = [state(z) for z in prob.Z]
-"Get the control trajectory"
-control(prob::StaticProblem) = [control(prob.Z[k]) for k = 1:prob.N - 1]
 
 function initial_trajectory!(prob::StaticProblem, Z::Traj)
     for k = 1:prob.N
@@ -128,13 +119,8 @@ end
 
 function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
     N = prob.N
-    Z = prob.Z
-    if length(U0) == N-1
-        push!(U0,U0[end])
-    end
-    for k in 1:N
-        x = state(Z[k])
-        Z[k].z = [x; U0[k]]
+    for k in 1:N-1
+        prob.U0[k] = U0[k]
     end
 end
 
@@ -150,7 +136,7 @@ end
 
 function copy(prob::StaticProblem)
     StaticProblem(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
-        deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.tf)
+        prob.X0, prob.U0, prob.dt, prob.N, prob.tf)
 end
 
 TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p

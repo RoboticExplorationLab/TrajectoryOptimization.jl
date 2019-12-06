@@ -1,30 +1,29 @@
 
 # Generic solve methods
 "iLQR solve method (non-allocating)"
-function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:AbstractFloat
+function solve!(solver::StaticiLQRSolver{T}) where T<:AbstractFloat
     solver.stats.iterations = 0
     solver.ρ[1] = 0.0
     solver.dρ[1] = 0.0
     # reset!(solver)
     # to = solver.stats[:timer]
-    Z = prob.Z; Z̄ = prob.Z̄;
+    Z = solver.Z; Z̄ = solver.Z̄;
 
 
-    n,m,N = size(prob)
+    n,m,N = size(solver)
     J = Inf
-    _J = get_J(prob.obj)
+    _J = get_J(solver.obj)
 
     # logger = default_logger(solver)
 
     # Initial rollout
-    rollout!(prob)
-    # live_plotting(prob,solver)
+    rollout!(solver)
 
-    cost!(prob.obj, prob.Z)
+    cost!(solver.obj, Z)
     J_prev = sum(_J)
 
     for i = 1:solver.opts.iterations
-        J = step!(prob, solver, J_prev)
+        J = step!(solver, J_prev)
 
         # check for cost blow up
         if J > solver.opts.max_cost_value
@@ -38,7 +37,7 @@ function solve!(prob::StaticProblem, solver::StaticiLQRSolver{T}) where T<:Abstr
 
         dJ = abs(J - J_prev)
         J_prev = copy(J)
-        gradient_todorov!(prob, solver)
+        gradient_todorov!(solver)
 
         record_iteration!(solver, J, dJ)
         evaluate_convergence(solver) ? break : nothing
@@ -49,11 +48,12 @@ end
 """
 Take one step of iLQR algorithm (non-allocating)
 """
-function step!(prob::StaticProblem, solver::StaticiLQRSolver, J)
-    discrete_jacobian!(solver.∇F, prob.model, prob.Z)
-    cost_expansion(solver.Q, prob.obj, prob.Z)
-    ΔV = backwardpass!(prob, solver)
-    forwardpass!(prob, solver, ΔV, J)
+function step!(solver::StaticiLQRSolver, J)
+    Z = solver.Z
+    discrete_jacobian!(solver.∇F, solver.model, Z)
+    cost_expansion(solver.Q, solver.obj, Z)
+    ΔV = backwardpass!(solver)
+    forwardpass!(solver, ΔV, J)
 end
 
 """
@@ -72,9 +72,9 @@ end
 $(SIGNATURES)
     Calculate the problem gradient using heuristic from iLQG (Todorov) solver
 """
-function gradient_todorov!(prob::StaticProblem, solver::StaticiLQRSolver)
+function gradient_todorov!(solver::StaticiLQRSolver)
     for k in eachindex(solver.d)
-        solver.grad[k] = maximum( abs.(solver.d[k]) ./ (abs.(control(prob.Z[k])) .+ 1) )
+        solver.grad[k] = maximum( abs.(solver.d[k]) ./ (abs.(control(solver.Z[k])) .+ 1) )
     end
 end
 
@@ -115,14 +115,14 @@ $(SIGNATURES)
 Calculates the optimal feedback gains K,d as well as the 2nd Order approximation of the
 Cost-to-Go, using a backward Riccati-style recursion. (non-allocating)
 """
-function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
-    n,m,N = size(prob)
+function backwardpass!(solver::StaticiLQRSolver)
+    n,m,N = size(solver)
 
     # Objective
-    obj = prob.obj
+    obj = solver.obj
 
     # Extract variables
-    Z = prob.Z; K = solver.K; d = solver.d;
+    Z = solver.Z; K = solver.K; d = solver.d;
     S = solver.S
     Q = solver.Q
 
@@ -132,6 +132,7 @@ function backwardpass!(prob::StaticProblem, solver::StaticiLQRSolver)
 
     # Initialize expecte change in cost-to-go
     ΔV = @SVector zeros(2)
+
 
     k = N-1
     while k > 0
@@ -184,11 +185,11 @@ Simulate the system forward using the optimal feedback gains from the backward p
 projecting the system on the dynamically feasible subspace. Performs a line search to ensure
 adequate progress on the nonlinear problem.
 """
-function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev)
-    Z = prob.Z; Z̄ = prob.Z̄
-    obj = prob.obj
+function forwardpass!(solver::StaticiLQRSolver, ΔV, J_prev)
+    Z = solver.Z; Z̄ = solver.Z̄
+    obj = solver.obj
 
-    _J = get_J(prob.obj)
+    _J = get_J(obj)
     J::Float64 = Inf
     α = 1.0
     iter = 0
@@ -216,7 +217,7 @@ function forwardpass!(prob::StaticProblem, solver::StaticiLQRSolver, ΔV, J_prev
         end
 
         # Otherwise, rollout a new trajectory for current alpha
-        flag = rollout!(prob, solver, α)
+        flag = rollout!(solver, α)
 
         # Check if rollout completed
         if ~flag
@@ -256,25 +257,23 @@ $(SIGNATURES)
 Simulate forward the system with the optimal feedback gains from the iLQR backward pass.
 (non-allocating)
 """
-function rollout!(prob::StaticProblem{Q}, solver::StaticiLQRSolver, α=1.0) where Q
-    Z = prob.Z; Z̄ = prob.Z̄
+function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
+    Z = solver.Z; Z̄ = solver.Z̄
     K = solver.K; d = solver.d;
 
-    Z̄[1].z = [prob.x0; control(Z[1])]
+    Z̄[1].z = [solver.x0; control(Z[1])]
 
     temp = 0.0
 
-    for k = 1:prob.N-1
+    for k = 1:solver.N-1
         δx = state(Z̄[k]) - state(Z[k])
         ū = control(Z[k]) + K[k]*δx + α*d[k]
         Z̄[k].z = [state(Z̄[k]); ū]
 
         # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
-        Z̄[k+1].z = [discrete_dynamics(Q, prob.model, state(Z̄[k]), ū, Z̄[k].dt);
+        Z̄[k+1].z = [discrete_dynamics(Q, solver.model, state(Z̄[k]), ū, Z̄[k].dt);
             control(Z[k+1])]
 
-
-        # propagate_dynamics(prob.model, Z̄[k+1], Z̄[k])
 
         temp = norm(Z̄[k+1].z)
         if temp > solver.opts.max_state_value
@@ -285,10 +284,11 @@ function rollout!(prob::StaticProblem{Q}, solver::StaticiLQRSolver, α=1.0) wher
 end
 
 "Simulate the forward the dynamics open-loop"
-function rollout!(prob::StaticProblem)
-    prob.Z[1].z = [prob.x0; control(prob.Z[1])]
-    for k = 2:prob.N
-        propagate_dynamics(prob.model, prob.Z[k], prob.Z[k-1])
+function rollout!(solver::StaticiLQRSolver)
+    Z = solver.Z
+    Z[1].z = [solver.x0; control(Z[1])]
+    for k = 2:solver.N
+        propagate_dynamics(solver.model, Z[k], Z[k-1])
     end
 end
 
