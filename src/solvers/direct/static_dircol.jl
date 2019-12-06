@@ -96,7 +96,7 @@ function get_bounds(conSet::ConstraintSets)
 end
 
 function add_dynamics_constraints!(prob::StaticProblem{<:Implicit})
-    conSet = get_constraints(prob)
+    conSet = prob.constraints 
 
     # Implicit dynamics
     dyn_con = ConstraintVals( ImplicitDynamics(prob.model, prob.N), 1:prob.N-1 )

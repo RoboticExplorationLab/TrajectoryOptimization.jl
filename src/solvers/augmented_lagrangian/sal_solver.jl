@@ -96,8 +96,8 @@ struct StaticALSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
     solver_uncon::S
 end
 
-AbstractSolver(prob::StaticProblem{Q,L,O,T},
-    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,L,O,T} =
+AbstractSolver(prob::StaticProblem{Q,T},
+    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,T} =
     StaticALSolver(prob,opts)
 
 """$(TYPEDSIGNATURES)
@@ -109,12 +109,11 @@ function StaticALSolver(prob::StaticProblem, opts::StaticALSolverOptions=StaticA
     stats = ALStats{T}()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
 
-
     # Convert problem to AL problem
     alobj = StaticALObjective(prob.obj, prob.constraints)
     rollout!(prob)
     prob_al = StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
-        prob.x0, prob.xf, prob.X0, prob.U0, prob.dt, prob.N, prob.tf)
+        prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
 
@@ -157,7 +156,7 @@ end
 get_J(obj::StaticALObjective) = obj.obj.J
 Base.length(obj::StaticALObjective) = length(obj.obj)
 
-TrajectoryOptimization.num_constraints(prob::StaticProblem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
+# TrajectoryOptimization.num_constraints(prob::StaticProblem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
 
 function Base.copy(obj::StaticALObjective)
     StaticALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
@@ -190,11 +189,11 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
     end
 end
 
-StaticALProblem{Q,L,T} = StaticProblem{Q,L,<:StaticALObjective,T}
-function get_constraints(prob::StaticProblem)
-    if prob isa StaticALProblem
-        prob.obj.constraints
-    else
-        prob.constraints
-    end
-end
+# StaticALProblem{Q,L,T} = StaticProblem{Q,L,<:StaticALObjective,T}
+# function get_constraints(prob::StaticProblem)
+#     if prob isa StaticALProblem
+#         prob.obj.constraints
+#     else
+#         prob.constraints
+#     end
+# end

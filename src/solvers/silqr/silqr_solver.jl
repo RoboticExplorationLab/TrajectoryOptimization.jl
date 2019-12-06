@@ -146,7 +146,7 @@ struct StaticiLQRSolver{T,I,L,O,n,m,L1,L2,G,E} <: UnconstrainedSolver{T}
     end
 end
 
-function StaticiLQRSolver(prob::StaticProblem{I}, opts=StaticiLQRSolverOptions()) where I
+function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions()) where {I,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
@@ -157,8 +157,9 @@ function StaticiLQRSolver(prob::StaticProblem{I}, opts=StaticiLQRSolverOptions()
     x0 = SVector{n}(prob.x0)
     xf = SVector{n}(prob.xf)
 
-    Z = Traj(prob.X0, prob.U0, prob.dt)
-    Z̄ = Traj(n,m,dt[1],N)
+    Z = prob.Z
+    # Z̄ = Traj(n,m,Z[1].dt,N)
+    Z̄ = copy(prob.Z)
 
     K  = [@SMatrix zeros(T,m,n) for k = 1:N-1]
     d  = [@SVector zeros(T,m)   for k = 1:N-1]

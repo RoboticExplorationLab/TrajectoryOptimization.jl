@@ -74,8 +74,8 @@ function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
 
     # Trajectory
     prob_info = ProblemInfo(prob)
-    Z = Traj(prob)
-    Z̄ = Traj(prob)
+    Z = prob.Z
+    Z̄ = copy(prob.Z) 
 
     # Create concatenated primal vars
     P = StaticPrimals(n,m,N)

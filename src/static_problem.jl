@@ -56,27 +56,29 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{Q<:QuadratureRule,L<:AbstractModel,O<:AbstractObjective,T<:AbstractFloat,n,m}
-    model::L
-    obj::O
+struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat}
+    model::AbstractModel
+    obj::AbstractObjective
     constraints::ConstraintSets{T}
-    x0::SVector{n,T}
-    xf::SVector{n,T}
-    X0::Vector{SVector{n,T}}
-    U0::Vector{SVector{m,T}}
-    dt::Vector{T}
+    x0::SVector
+    xf::SVector
+    Z::Traj
     N::Int
     tf::T
-    function StaticProblem{Q}(model::L, obj::O, constraints::ConstraintSets,
-            x0::SVector{n,T}, xf::SVector{n,T},
-            X0::Vector{SVector{n,T}}, U0::Vector{SVector{m,T}}, dt::Vector, N::Int, tf::T) where {Q,L,O,T,n,m}
-        new{Q,L,O,T,n,m}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
+    function StaticProblem{Q}(model::AbstractModel, obj::AbstractObjective,
+            constraints::ConstraintSets,
+            x0::SVector, xf::SVector,
+            Z::Traj, N::Int, tf::T) where {Q,T}
+        n,m = size(model)
+        @assert length(x0) == length(xf) == n
+        @assert length(Z) == N
+        new{Q,T}(model, obj, constraints, x0, xf, Z, N, tf)
     end
 end
 
 "Use RK3 as default integration"
-StaticProblem(model, obj, constraints, x0, xf, X0, U0, dt, N, tf) =
-    StaticProblem{RK3}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
+StaticProblem(model, obj, constraints, x0, xf, Z, N, tf) =
+    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
 
 function StaticProblem(model::L, obj::O, xf::AbstractVector;
         constraints=ConstraintSets(length(obj)),
@@ -136,7 +138,7 @@ end
 
 function copy(prob::StaticProblem)
     StaticProblem(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
-        prob.X0, prob.U0, prob.dt, prob.N, prob.tf)
+        copy(prob.Z), prob.N, prob.tf)
 end
 
 TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p
@@ -150,18 +152,7 @@ end
 
 function change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule
     StaticProblem{Q}(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
-        prob.Z, prob.Z̄, prob.N, prob.tf)
+        prob.Z, prob.N, prob.tf)
 end
 
-function rollout!(prob::StaticProblem{Q}) where Q
-    N = prob.N
-    X,U,dt = prob.X0, prob.U0, prob.dt
-    if isnan(norm(X))
-        X[1] = prob.x0
-        for k = 1:N-1
-            X[k] = discrete_dynamics(Q, prob.model, X[k], U[k], dt[k])
-        end
-    end
-end
-
-@inline Traj(prob::StaticProblem) = Traj(prob.X0, prob.U0, prob.dt)
+@inline rollout!(prob::StaticProblem) = rollout!(prob.model, prob.Z, prob.x0)

@@ -48,19 +48,9 @@ function controls(solver::AbstractSolver)
 end
 
 
-function initial_states!(solver::AbstractSolver, X0)
-    Z = get_trajectory(solver)
-    for k in eachindex(Z)
-        Z[k].z = [X0[k]; control(Z[k])]
-    end
-end
+@inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
+@inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
 
-function initial_controls!(solver::AbstractSolver, U0)
-    Z = get_trajectory(solver)
-    for k in 1:size(solver)[3]-1
-        Z[k].z = [state(Z[k]); U0[k]]
-    end
-end
 
 # Get name of solver as a string
 solver_name(::iLQRSolverOptions) = "iLQR"

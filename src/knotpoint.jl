@@ -40,8 +40,9 @@ end
 const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
 
-function Base.copy(Z::Traj)
-    Z_new = [KnotPoint(copy(z.z), z._x, z._u, z._inds, z.dt) for z in Z]
+function Base.copy(Z::Vector{KnotPoint{T,N,M,NM}}) where {T,N,M,NM}
+    [KnotPoint((@SVector ones(NM)) .* z.z, z._x, z._u, z._inds, z.dt) for z in Z]
+    # Z_new = [KnotPoint(deepcopy(z.z), z._x, z._u, z._inds, z.dt) for z in Z]
 end
 
 function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
@@ -66,4 +67,16 @@ function Traj(X::Vector, U::Vector, dt::Vector)
         push!(Z, KnotPoint(X[end],length(U[1])))
     end
     return Z
+end
+
+function set_states!(Z::Traj, X)
+    for k in eachindex(Z)
+        Z[k].z = [X[k]; control(Z[k])]
+    end
+end
+
+function set_controls!(Z::Traj, U)
+    for k in 1:length(Z)-1
+        Z[k].z = [state(Z[k]); U[k]]
+    end
 end

@@ -284,11 +284,12 @@ function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
 end
 
 "Simulate the forward the dynamics open-loop"
-function rollout!(solver::StaticiLQRSolver)
-    Z = solver.Z
-    Z[1].z = [solver.x0; control(Z[1])]
-    for k = 2:solver.N
-        propagate_dynamics(solver.model, Z[k], Z[k-1])
+@inline rollout!(solver::StaticiLQRSolver) = rollout!(solver.model, solver.Z, solver.x0)
+
+function rollout!(model::AbstractModel, Z::Traj, x0)
+    Z[1].z = [x0; control(Z[1])]
+    for k = 2:length(Z)
+        propagate_dynamics(model, Z[k], Z[k-1])
     end
 end
 
