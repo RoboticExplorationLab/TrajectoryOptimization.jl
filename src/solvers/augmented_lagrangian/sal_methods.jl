@@ -1,24 +1,32 @@
 
-function solve!(prob::StaticALProblem, solver::StaticALSolver{T,S}) where {T,S}
+function solve!(solver::StaticALSolver{T,S}) where {T,S}
     c_max::T = Inf
-    conSet = prob.obj.constraints
+
+	# Extract stuff from solver
+	Z = get_trajectory(solver)
+	obj = get_objective(solver.solver_uncon)::StaticALObjective{T}
+    conSet = obj.constraints
+    solver_uncon = solver.solver_uncon::S
+
+	# Reset solver
     reset!(conSet, solver.opts)
     solver.stats.iterations = 0
-    solver_uncon = solver.solver_uncon::S
-    cost!(prob.obj, prob.Z)
-    J_ = get_J(prob.obj)
+
+	# Calculate cost
+    cost!(obj, Z)
+    J_ = get_J(obj)
     J = sum(J_)
 
 
     for i = 1:solver.opts.iterations
         set_tolerances!(solver,solver_uncon,i)
 
-        step!(prob, solver)
+        step!(solver)
         J = sum(J_)
         c_max = maximum(conSet.c_max)
 
 
-        record_iteration!(prob, solver, J, c_max)
+        record_iteration!(solver, J, c_max)
 
         converged = evaluate_convergence(solver)
         if converged
@@ -30,21 +38,19 @@ function solve!(prob::StaticALProblem, solver::StaticALSolver{T,S}) where {T,S}
     return solver
 end
 
-function step!(prob::StaticALProblem, solver::StaticALSolver)
+function step!(solver::StaticALSolver)
 
     # Solve the unconstrained problem
-    solve!(prob, solver.solver_uncon)
+    solve!(solver.solver_uncon)
 
     # Outer loop update
-    dual_update!(prob, solver)
-    penalty_update!(prob, solver)
-    max_violation!(prob.obj.constraints)
-    # copyto!(solver.C_prev,solver.C)
+    dual_update!(solver)
+    penalty_update!(solver)
+    max_violation!(get_constraints(solver))
 
 end
 
-function record_iteration!(prob::StaticProblem, solver::StaticALSolver{T,S},
-        J::T, c_max::T) where {T,S}
+function record_iteration!(solver::StaticALSolver{T,S}, J::T, c_max::T) where {T,S}
 
     solver.stats.iterations += 1
     i = solver.stats.iterations
@@ -52,7 +58,7 @@ function record_iteration!(prob::StaticProblem, solver::StaticALSolver{T,S},
     solver.stats.c_max[i] = c_max
 	solver.stats.cost[i] = J
 
-	conSet = get_constraints(prob)
+	conSet = get_constraints(solver)
 	max_penalty!(conSet)
 	solver.stats.penalty_max[i] = maximum(conSet.c_max)
     # solver.stats.
@@ -84,9 +90,8 @@ function evaluate_convergence(solver::StaticALSolver)
 end
 
 "General Dual Update"
-function dual_update!(prob::StaticALProblem,
-        solver::StaticALSolver) where {T,Q,N,M,NM}
-    conSet = prob.obj.constraints
+function dual_update!(solver::StaticALSolver) where {T,Q,N,M,NM}
+    conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
         dual_update!(conSet.constraints[i], solver.opts)
     end
@@ -117,8 +122,8 @@ function dual_update!(con::ConstraintVals{T,W,C},
 end
 
 "General Penalty Update"
-function penalty_update!(prob::StaticALProblem, solver::StaticALSolver)
-    conSet = prob.obj.constraints
+function penalty_update!(solver::StaticALSolver)
+    conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
         penalty_update!(conSet.constraints[i], solver.opts)
     end

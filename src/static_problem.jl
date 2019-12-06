@@ -152,3 +152,14 @@ function change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureR
     StaticProblem{Q}(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
         prob.Z, prob.Z̄, prob.N, prob.tf)
 end
+
+function rollout!(prob::StaticProblem{Q}) where Q
+    N = prob.N
+    X,U,dt = prob.X0, prob.U0, prob.dt
+    if isnan(norm(X))
+        X[1] = prob.x0
+        for k = 1:N-1
+            X[k] = discrete_dynamics(Q, prob.model, X[k], U[k], dt[k])
+        end
+    end
+end

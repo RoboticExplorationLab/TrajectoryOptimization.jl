@@ -96,20 +96,28 @@ struct StaticALSolver{T,S<:AbstractSolver} <: AbstractSolver{T}
     solver_uncon::S
 end
 
-StaticALSolver(prob::StaticProblem{Q,T},
-    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,T} =
-    AbstractSolver(prob,opts)
+AbstractSolver(prob::StaticProblem{Q,L,O,T},
+    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,L,O,T} =
+    StaticALSolver(prob,opts)
 
 """$(TYPEDSIGNATURES)
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AbstractSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions{T}) where {Q,T<:AbstractFloat}
+function StaticALSolver(prob::StaticProblem, opts::StaticALSolverOptions=StaticALSolverOptions())
     # Init solver statistics
     stats = ALStats{T}()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
 
-    solver_uncon = AbstractSolver(prob, opts.opts_uncon)
+
+    # Convert problem to AL problem
+    alobj = StaticALObjective(prob.obj, prob.constraints)
+    rollout!(prob)
+    prob_al = StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
+        prob.x0, prob.xf, prob.X0, prob.U0, prob.dt, prob.N, prob.tf)
+
+    solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
+
     solver = StaticALSolver(opts,stats,stats_uncon,solver_uncon)
     reset!(solver)
     return solver
@@ -120,12 +128,22 @@ function reset!(solver::StaticALSolver)
     reset!(solver.solver_uncon)
 end
 
+Base.size(solver::StaticALSolver) = size(solver.solver_uncon)
+@inline cost(solver::StaticALSolver) = cost(solver.solver_uncon)
+@inline get_trajectory(solver::StaticALSolver) = get_trajectory(solver.solver_uncon)
+@inline get_objective(solver::StaticALSolver) = get_objective(solver.solver_uncon)
 
-function convertProblem(prob::StaticProblem, solver::StaticALSolver)
-    alobj = StaticALObjective(prob.obj, prob.constraints)
-    rollout!(prob)
-    StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
-        prob.x0, prob.xf, deepcopy(prob.Z), deepcopy(prob.Z̄), prob.N, prob.tf)
+function max_violation(solver::StaticALSolver{T})
+    obj = get_objective(solver.solver_uncon)::StaticALObjective{T}
+    conSet = obj.constraints
+    max_violation!(conSet)
+    return maximum(conSet.c_max)
+end
+
+
+function get_constraints(solver::StaticALSolver{T}) where T
+    obj = get_objective(solver)::StaticALObjective{T}
+    obj.constraints
 end
 
 
@@ -172,7 +190,7 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
     end
 end
 
-StaticALProblem{T,Q,L,N,M,NM} = StaticProblem{Q,T,L,<:StaticALObjective,N,M,NM}
+StaticALProblem{Q,L,T} = StaticProblem{Q,L,<:StaticALObjective,T}
 function get_constraints(prob::StaticProblem)
     if prob isa StaticALProblem
         prob.obj.constraints

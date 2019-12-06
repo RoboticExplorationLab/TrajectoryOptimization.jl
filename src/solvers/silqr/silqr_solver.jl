@@ -180,6 +180,8 @@ function StaticiLQRSolver(prob::StaticProblem{I}, opts=StaticiLQRSolverOptions()
     return solver
 end
 
+AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions) = StaticiLQRSolver(prob, opts)
+
 function reset!(solver::StaticiLQRSolver{T}, reset_stats=true) where T
     if reset_stats
         reset!(solver.stats, solver.opts.iterations)
@@ -197,8 +199,9 @@ Base.size(solver::StaticiLQRSolver{T,L,O,n,m}) where {T,L,O,n,m} = n,m,solver.N
 
 function cost(solver::StaticiLQRSolver, Z=solver.Z)
     cost!(solver.obj, Z)
-    return sum(solver.obj.J)
+    return sum(get_J(solver.obj))
 end
+
 
 
 "Get the state trajectory"
@@ -217,7 +220,9 @@ end
 
 function initial_controls!(solver::AbstractSolver, U0)
     Z = get_trajectory(solver)
-    for k in 1:solver.N-1
+    for k in 1:size(solver)[3]-1
         Z[k].z = [state(Z[k]); U0[k]]
     end
 end
+
+@inline get_objective(solver::AbstractSolver) = solver.obj
