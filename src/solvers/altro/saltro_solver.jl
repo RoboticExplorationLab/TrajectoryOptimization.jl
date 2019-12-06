@@ -9,7 +9,7 @@ $(FIELDS)
     verbose::Bool=false
 
     "Augmented Lagrangian solver options."
-    opts_al::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
+    opts_al::StaticALSolverOptions=StaticALSolverOptions{T}()
 
     "constraint tolerance"
     constraint_tolerance::T = 1e-5
@@ -57,10 +57,10 @@ $(FIELDS)
 
     # Projected Newton
     "finish with a projecte newton solve."
-    projected_newton::Bool = false
+    projected_newton::Bool = true
 
     "options for projected newton solver."
-    opts_pn::ProjectedNewtonSolverOptions{T} = ProjectedNewtonSolverOptions{T}()
+    opts_pn::StaticPNSolverOptions{T} = StaticPNSolverOptions{T}()
 
     "constraint satisfaction tolerance that triggers the projected newton solver.
     If set to a non-positive number it will kick out when the maximum penalty is reached."
@@ -83,10 +83,20 @@ struct StaticALTROSolver{T} <: AbstractSolver{T}
     solver_pn::StaticPNSolver{T}
 end
 
-StaticALTROSolver(prob::StaticProblem, opts::StaticALTROSolverOptions) = AbstractSolver(prob, opts)
+AbstractSolver(prob::StaticProblem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
 
-function AbstractSolver(prob::StaticProblem, opts::StaticALTROSolverOptions)
-    solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
-    solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)
+function StaticALTROSolver(prob::StaticProblem, opts::StaticALTROSolverOptions=StaticALTROSolverOptions())
+    solver_al = StaticALSolver(prob, opts.opts_al)
+    solver_pn = StaticPNSolver(prob, opts.opts_pn)
     StaticALTROSolver{T}(opts,solver_al,solver_pn)
+end
+
+@inline Base.size(solver::StaticALTROSolver) = size(solver.solver_pn)
+@inline get_trajectory(solver::StaticALTROSolver) = get_trajectory(solver.solver_al)
+function get_constraints(solver::StaticALTROSolver)
+    if solver.opts.projected_newton
+        get_constraints(solver.solver_pn)
+    else
+        get_constraints(solver.solver_al)
+    end
 end

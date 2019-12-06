@@ -18,7 +18,7 @@ function solve!(prob::Problem{T,Discrete}, opts::ALTROSolverOptions) where T<:Ab
 
     # Create ALTRO solver
     solver = ALTROSolver(prob_altro, opts)
-    to = solver.opts[:timer]
+    to = solver.stats[:timer]
 
     # primary solve (augmented Lagrangian)
     t_al = time()

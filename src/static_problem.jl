@@ -150,6 +150,8 @@ function max_violation(prob::StaticProblem)
     return maximum(conSet.c_max)
 end
 
+@inline get_constraints(prob::StaticProblem) = prob.constraints
+
 function change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule
     StaticProblem{Q}(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
         prob.Z, prob.N, prob.tf)

@@ -80,9 +80,10 @@ struct ALTROSolver{T} <: AbstractSolver{T}
     solver_pn::ProjectedNewtonSolver{T}
 end
 
-ALTROSolver(prob::Problem, opts::ALTROSolverOptions) = AbstractSolver(prob, opts)
+AbstractSolver(prob::Problem, opts::ALTROSolverOptions) = ALTROSolver(prob, opts)
 
-function AbstractSolver(prob::Problem{T,D},opts::ALTROSolverOptions{T}) where {T<:AbstractFloat,D<:DynamicsType}
+function ALTROSolver(prob::Problem{T,D},
+        opts::ALTROSolverOptions{T}=ALTROSolverOptions{T}()) where {T<:AbstractFloat,D<:DynamicsType}
     to = TimerOutput()
     stats = Dict{Symbol,Any}(:timer=>to)
     solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)

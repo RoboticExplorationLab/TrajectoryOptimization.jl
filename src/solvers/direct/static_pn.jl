@@ -61,6 +61,7 @@ struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
 end
 
 function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
+    Z = prob.Z  # grab trajectory before copy to keep associativity
     prob = copy(prob)  # don't modify original problem
 
     n,m,N = size(prob)
@@ -74,8 +75,7 @@ function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
 
     # Trajectory
     prob_info = ProblemInfo(prob)
-    Z = prob.Z
-    Z̄ = copy(prob.Z) 
+    Z̄ = copy(prob.Z)
 
     # Create concatenated primal vars
     P = StaticPrimals(n,m,N)

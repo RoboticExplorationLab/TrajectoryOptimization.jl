@@ -9,7 +9,8 @@ function solve!(solver::StaticPNSolver)
     if solver.opts.verbose
         println("\nProjection:")
     end
-    projection_solve!(solver)
+    viol = projection_solve!(solver)
+    copyto!(solver.Z, solver.P)
 end
 
 

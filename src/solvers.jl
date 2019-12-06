@@ -47,6 +47,11 @@ function controls(solver::AbstractSolver)
     [control(Z[k]) for k = 1:N-1]
 end
 
+function max_violation(solver::AbstractSolver)
+    conSet = get_constraints(solver)
+    max_violation!(conSet)
+    return maximum(conSet.c_max)
+end
 
 @inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
 @inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)

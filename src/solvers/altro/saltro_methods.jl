@@ -1,6 +1,6 @@
 
-function solve!(prob::StaticALProblem, solver::StaticALTROSolver)
-    conSet = get_constraints(prob)
+function solve!(solver::StaticALTROSolver)
+    conSet = get_constraints(solver)
 
     # Set terminal condition if using projected newton
     opts = solver.opts
@@ -15,15 +15,14 @@ function solve!(prob::StaticALProblem, solver::StaticALTROSolver)
     end
 
     # Solve with AL
-    solve!(prob, solver.solver_al)
+    solve!(solver.solver_al)
 
     # Check convergence
     i = solver.solver_al.stats.iterations
     c_max = solver.solver_al.stats.c_max[i]
 
-    if c_max > opts.constraint_tolerance
-        add_dynamics_constraints!(prob)
-        solve!(prob, solver.solver_pn)
+    if opts.projected_newton && c_max > opts.constraint_tolerance
+        solve!(solver.solver_pn)
     end
 
 end
