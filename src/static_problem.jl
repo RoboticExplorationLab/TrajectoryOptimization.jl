@@ -56,21 +56,21 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{Q<:QuadratureRule,L<:AbstractModel,O<:AbstractObjective,T<:AbstractFloat}
+struct StaticProblem{Q<:QuadratureRule,L<:AbstractModel,O<:AbstractObjective,T<:AbstractFloat,n,m}
     model::L
     obj::O
     constraints::ConstraintSets{T}
-    x0::Vector{T}
-    xf::Vector{T}
-    X0::Vector{Vector{T}}
-    U0::Vector{Vector{T}}
+    x0::SVector{n,T}
+    xf::SVector{n,T}
+    X0::Vector{SVector{n,T}}
+    U0::Vector{SVector{m,T}}
     dt::Vector{T}
     N::Int
     tf::T
     function StaticProblem{Q}(model::L, obj::O, constraints::ConstraintSets,
-            x0::Vector, xf::Vector,
-            X0::Vector, U0::Vector, dt::Vector, N::Int, tf::T) where {Q,L,O,T}
-        new{Q,L,O,T}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
+            x0::SVector{n,T}, xf::SVector{n,T},
+            X0::Vector{SVector{n,T}}, U0::Vector{SVector{m,T}}, dt::Vector, N::Int, tf::T) where {Q,L,O,T,n,m}
+        new{Q,L,O,T,n,m}(model, obj, constraints, x0, xf, X0, U0, dt, N, tf)
     end
 end
 
@@ -163,3 +163,5 @@ function rollout!(prob::StaticProblem{Q}) where Q
         end
     end
 end
+
+@inline Traj(prob::StaticProblem) = Traj(prob.X0, prob.U0, prob.dt)
