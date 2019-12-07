@@ -28,6 +28,7 @@ abstract type GeneralControl <: General end
 
 abstract type AbstractStaticConstraint{S<:ConstraintSense,W<:ConstraintType,P} <: GeneralConstraint end
 
+
 "Returns the width of band imposed by the constraint"
 width(con::AbstractStaticConstraint{S,Stage}) where S = sum(size(con)[1:2])
 width(con::AbstractStaticConstraint{S,State}) where S = size(con)[1]
@@ -102,90 +103,95 @@ end
 ############################################################################################
 
 
-abstract type DynamicsConstraint{W<:Coupled,P} <: AbstractStaticConstraint{Equality,W,P} end
+abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractStaticConstraint{Equality,W,P} end
+Base.size(con::AbstractDynamicsConstraint) = begin n,m = size(con.model); return n,m,n end
 
-Base.size(con::DynamicsConstraint) = begin n,m = size(con.model); return n,m,n end
+struct DynamicsVals{T,N,M,L}
+    fVal::Vector{SVector{N,T}}
+    xMid::Vector{SVector{N,T}}
+    ∇f::Vector{SMatrix{N,M,T,L}}
+end
 
-struct ImplicitDynamics{T,L,N,NM,NNM} <: DynamicsConstraint{Dynamical,N}
+struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
 	model::L
-	fVal::Vector{SVector{N,T}}
-	∇f::Vector{SMatrix{N,NM,T,NNM}}
+    fVal::Vector{SVector{N,T}}
+    xMid::Vector{SVector{N,T}}
+    ∇f::Vector{SMatrix{N,M,T,NM}}
 end
 
-function ImplicitDynamics(model::AbstractModel, N::Int)
-	n,m = size(model)
-	fVal = [@SVector zeros(n) for k = 1:N-1]
-	∇f = [@SMatrix zeros(n, n+m) for k = 1:N-1]
-	ImplicitDynamics(model, fVal, ∇f)
-end
-
-function evaluate(con::ImplicitDynamics, Z′::KnotPoint, Z::KnotPoint)
-	discrete_dynamics(con.model, Z) - state(Z′)
-end
-
-function jacobian(con::ImplicitDynamics{T,L,N}, Z′::KnotPoint, Z::KnotPoint) where {T,L,N}
-	AB = discrete_jacobian(con.model, Z)
-	In = Diagonal(@SVector ones(N))
-	inds = [Z._x; Z._u]
-	[AB[:,inds] -In]
-end
-
-
-struct ExplicitDynamics{T,Q<:QuadratureRule,L,N,NM,NNM} <: DynamicsConstraint{Coupled,N}
-	model::L
-	fVal::Vector{SVector{N,T}}
-	xMid::Vector{SVector{N,T}}
-	∇f::Vector{SMatrix{N,NM,T,NNM}}
-end
-
-function ExplicitDynamics{Q}(model::L, N::Int) where {L<:AbstractModel,Q<:QuadratureRule}
+function DynamicsConstraint{Q}(model::L, N) where {Q,L}
+	T = Float64  # TODO: get this from somewhere
 	n,m = size(model)
 	fVal = [@SVector zeros(n) for k = 1:N]
-	xMid = [@SVector zeros(n) for k = 1:N-1]
-	∇f = [@SMatrix zeros(n, n+m) for k = 1:N]
-	ExplicitDynamics{Float64,Q,L,n,n+m,n*(n+m)}(model, fVal, xMid, ∇f)
+	xMid = [@SVector zeros(n) for k = 1:N]
+	∇f = [@SMatrix zeros(n,n+m) for k = 1:N]
+	DynamicsConstraint{Q,L,T,n,n+m,(n+m)n}(model, fVal, xMid, ∇f)
 end
 
-quadrature_rule(::ExplicitDynamics{T,Q}) where {T,Q} = Q
+@inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
+integration(::DynamicsConstraint{Q}) where Q = Q
 
-function evaluate!(vals::Vector{<:AbstractVector}, con::ExplicitDynamics{T,HermiteSimpson},
-		Z::Traj, inds=1:length(Z)-1) where T
+width(con::DynamicsConstraint{<:Implicit,L,T,N,NM}) where {L,T,N,NM} = 2N+NM-N
+width(con::DynamicsConstraint{<:Explicit,L,T,N,NM}) where {L,T,N,NM} = 2NM
+
+# Implicit
+function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
+		Z::Traj, inds=1:length(Z)-1) where Q<:Implicit
+	for k in inds
+		vals[k] = discrete_dynamics(Q, con.model, Z[k])
+	end
+end
+
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{Q,L,T,N},
+		Z::Traj, inds=1:length(Z)-1) where {Q<:Implicit,L,T,N}
+	In = Diagonal(@SVector ones(N))
+	zinds = [Z[1]._x; Z[1]._u]
+	for k in inds
+		AB = discrete_jacobian(Q, con.model, Z[k])
+		∇c[k] = [AB[:,zinds] -In]
+	end
+end
+
+# Hermite Simpson
+function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{HermiteSimpson},
+		Z::Traj, inds=1:length(Z)-1)
 	N = length(Z)
 	model = con.model
 	fVal = con.fVal
 	xMid = con.xMid
 
-	for k = 1:N
+	for k = inds.start:inds.stop+1
 		fVal[k] = dynamics(model, Z[k])
 	end
-	for k = 1:N-1
+	for k in inds
 		xMid[k] = (state(Z[k]) + state(Z[k+1]))/2 + Z[k].dt/8 * (fVal[k] - fVal[k+1])
 	end
-	for k = 1:N-1
+	for k in inds
 		Um = (control(Z[k]) + control(Z[k+1]))*0.5
 		fValm = dynamics(model, xMid[k], Um)
 		vals[k] = state(Z[k]) - state(Z[k+1]) + Z[k].dt*(fVal[k] + 4*fValm + fVal[k+1])/6
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ExplicitDynamics{T,HermiteSimpson,L,n},
-		Z::Traj, inds=1:length(Z)-1) where {T,L,n}
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n},
+		Z::Traj, inds=1:length(Z)-1) where {L,T,n}
 	N = length(Z)
 	model = con.model
 	∇f = con.∇f
+	xMid = con.xMid
 	In = Diagonal(@SVector ones(n))
 
 	xi = Z[1]._x
 	ui = Z[1]._u
 
 	# Compute dynamics Jacobian at each knot point
-	for k = 1:N
+	for k = inds.start:inds.stop+1
 		∇f[k] = jacobian(model, Z[k].z)
 	end
 
-	for k = 1:N-1
+	for k in inds
 		Um = (control(Z[k]) + control(Z[k+1]))*0.5
-		Fm = jacobian(model, [con.xMid[k]; Um])
+		Fm = jacobian(model, [xMid[k]; Um])
 		A1 = ∇f[k][xi,xi]
 		B1 = ∇f[k][xi,ui]
 		Am = Fm[xi,xi]
@@ -199,9 +205,7 @@ function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ExplicitDynamics{T,Hermi
 		D = dt/6*(B2 + 4Am*(-dt/8*B2) + 2Bm)
 		∇c[k] = [A B C D]
 	end
-
 end
-
 
 
 

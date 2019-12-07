@@ -10,6 +10,15 @@ export
     RK3,
     HermiteSimpson
 
+abstract type QuadratureRule end
+abstract type Implicit <: QuadratureRule end
+abstract type Explicit <: QuadratureRule end
+abstract type RK3 <: Implicit end
+abstract type HermiteSimpson <: Explicit end
+
+"Default quadrature rule"
+const DEFAULT_Q = RK3
+
 #=
 Convenient methods for creating state and control vectors directly from the model
 =#
@@ -39,11 +48,9 @@ end
 """Default size method for model (assumes model has fields n and m)"""
 @inline Base.size(model::AbstractModel) = model.n, model.m
 
-abstract type QuadratureRule end
-abstract type Implicit <: QuadratureRule end
-abstract type Explicit <: QuadratureRule end
-abstract type RK3 <: Implicit end
-abstract type HermiteSimpson <: Explicit end
+############################################################################################
+#                               CONTINUOUS TIME METHODS                                    #
+############################################################################################
 
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
@@ -61,11 +68,15 @@ function jacobian(model::AbstractModel, z::SVector)
     ForwardDiff.jacobian(f_aug, z)
 end
 
-"Set default integrator to RK3"
-@inline discrete_dynamics(model::AbstractModel, z::KnotPoint) =
-    discrete_dynamics(RK3, model, z)
+############################################################################################
+#                          IMPLICIT DISCRETE TIME METHODS                                  #
+############################################################################################
 
-@inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:QuadratureRule =
+"Set default integrator"
+@inline discrete_dynamics(model::AbstractModel, z::KnotPoint) =
+    discrete_dynamics(DEFAULT_Q, model, z)
+
+@inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit =
     discrete_dynamics(Q, model, state(z), control(z), z.dt)
 
 function discrete_dynamics(::Type{RK3}, model::AbstractModel, x, u, dt)
@@ -75,11 +86,12 @@ function discrete_dynamics(::Type{RK3}, model::AbstractModel, x, u, dt)
     x + (k1 + 4*k2 + k3)/6
 end
 
-"Set default integrator to RK3"
+"Set default integrator"
 @inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
-    discrete_jacobian(RK3, model, z)
+    discrete_jacobian(DEFAULT_Q, model, z)
 
-function discrete_jacobian(::Type{Q}, model::AbstractModel, z::KnotPoint{T,N,M,NM}) where {Q <: QuadratureRule,T,N,M,NM}
+function discrete_jacobian(::Type{Q}, model::AbstractModel,
+        z::KnotPoint{T,N,M,NM}) where {Q<:Implicit,T,N,M,NM}
     n,m = size(model)
     ix,iu,idt = z._x, z._u, NM+1
     fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
