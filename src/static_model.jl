@@ -48,11 +48,17 @@ abstract type HermiteSimpson <: Explicit end
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
 function jacobian(model::AbstractModel, z::KnotPoint)
+    ix, iu = z._x, z._u
+    f_aug(z) = dynamics(model, z[ix], z[iu])
+    s = z.z
+    ForwardDiff.jacobian(f_aug, s)
+end
+
+function jacobian(model::AbstractModel, z::SVector)
     n,m = size(model)
     ix,iu = 1:n, n .+ (1:m)
     f_aug(z) = dynamics(model, view(z,ix), view(z,iu))
-    s = z.z
-    ForwardDiff.jacobian(f_aug, s)
+    ForwardDiff.jacobian(f_aug, z)
 end
 
 "Set default integrator to RK3"
@@ -73,13 +79,14 @@ end
 @inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
     discrete_jacobian(RK3, model, z)
 
-function discrete_jacobian(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q <: QuadratureRule
+function discrete_jacobian(::Type{Q}, model::AbstractModel, z::KnotPoint{T,N,M,NM}) where {Q <: QuadratureRule,T,N,M,NM}
     n,m = size(model)
-    ix,iu,idt = 1:n, n .+ (1:m), n+m+1
-    fd_aug(z) = discrete_dynamics(Q, model, view(z,ix), view(z,iu), z[idt])
+    ix,iu,idt = z._x, z._u, NM+1
+    fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
     s = [z.z; @SVector [z.dt]]
     ForwardDiff.jacobian(fd_aug, s)
 end
+
 
 
 "Generate discrete dynamics function for a dynamics model using RK3 integration"
