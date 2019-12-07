@@ -266,7 +266,7 @@ end
 function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
         V, S, HinvY)
     to = solver.stats[:timer]
-    
+
     a = solver.a.duals
     y = solver.y[a]
     viol0 = norm(y,Inf)
@@ -295,7 +295,7 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
         if viol < viol0 || count > 10
             break
         else
-            count += a
+            count += 1
             α *= ϕ
         end
     end
