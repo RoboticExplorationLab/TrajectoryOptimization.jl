@@ -133,7 +133,7 @@ width(con::DynamicsConstraint{<:Explicit,L,T,N,NM}) where {L,T,N,NM} = 2NM
 function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
 		Z::Traj, inds=1:length(Z)-1) where Q<:Implicit
 	for k in inds
-		vals[k] = discrete_dynamics(Q, con.model, Z[k])
+		vals[k] = discrete_dynamics(Q, con.model, Z[k]) - state(Z[k+1])
 	end
 end
 
