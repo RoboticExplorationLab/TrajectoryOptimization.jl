@@ -153,3 +153,6 @@ function copy_expansion!(H, g, E, xinds, uinds)
     g[xinds[N]] .= E.x[N]
     return nothing
 end
+
+@inline copy_constraints!(solver::StaticPNSolver) = copy_constraints!(solver.d, solver)
+@inline copy_jacobians!(solver::StaticPNSolver) = copy_jacobians!(solver.D, solver)

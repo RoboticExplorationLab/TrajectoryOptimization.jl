@@ -104,9 +104,9 @@ AbstractSolver(prob::StaticProblem{Q,T},
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function StaticALSolver(prob::StaticProblem, opts::StaticALSolverOptions=StaticALSolverOptions())
+function StaticALSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions=StaticALSolverOptions{T}()) where {Q,T}
     # Init solver statistics
-    stats = ALStats{T}()
+    stats = ALStats()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
 
     # Convert problem to AL problem

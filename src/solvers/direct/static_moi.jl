@@ -202,7 +202,7 @@ function solve!(d::StaticDIRCOLSolver)
     MOI.optimize!(d.optimizer)
 
     # Get result and copy to trajectory
-    V = [MOI.VariableIndex(k) for k = 1:ds.NN]
+    V = [MOI.VariableIndex(k) for k = 1:d.NN]
     res = MOI.get(d.optimizer, MOI.VariablePrimal(), V)
     copyto!(d, res)
 
