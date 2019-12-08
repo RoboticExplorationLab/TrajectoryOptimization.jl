@@ -35,27 +35,27 @@ initial_controls!(cartpole, U0)
 
 
 model = Dynamics.Cartpole()
-# TO.generate_jacobian(model)
-# TO.rk3_gen(model)
-# TO.generate_discrete_jacobian(model)
+n,m = size(model)
+N = 101
+tf = 5.
+dt = tf/(N-1)
 
 Q = 1.0e-2*Diagonal(@SVector ones(n))
 Qf = 100.0*Diagonal(@SVector ones(n))
 R = 1.0e-1*Diagonal(@SVector ones(m))
-x0 = SVector{n}(x0)
-xf = SVector{n}(xf)
+x0 = @SVector zeros(n)
+xf = @SVector [0, pi, 0, 0]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
-xs = NaN*@SVector zeros(n)
-us = SVector{m}(u0)
-Z = [KnotPoint(xs,us,dt) for k = 1:N]
-Z[end] = KnotPoint(xs,m)
-
-bnd = StaticBoundConstraint(n,m, u_min=-u_bnd*(@SVector ones(m)), u_max=u_bnd*(@SVector ones(m)))
-goal = GoalConstraint(SVector{n}(xf))
+u_bnd = 3.0
+bnd = StaticBoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
+goal = GoalConstraint(xf)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_goal = ConstraintVals(goal, N:N)
 conSet = ConstraintSets([con_bnd, con_goal], N)
 
-cartpole_static = StaticProblem(model, obj, conSet, x0, xf,
-    deepcopy(Z), deepcopy(Z), N, dt*(N-1))
+X0 = [@SVector fill(NaN,n) for k = 1:N]
+u0 = @SVector fill(0.01,m)
+U0 = [u0 for k = 1:N-1]
+Z = Traj(X0,U0,dt*ones(N))
+cartpole_static = StaticProblem{RK3}(model, obj, conSet, x0, xf, Z, N, tf)

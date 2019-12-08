@@ -55,5 +55,4 @@ bnd = StaticBoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 conSet = ConstraintSets([con_bnd], N)
 
-doubleintegrator_static = StaticProblem(model, obj, xf, constraints=conSet, x0=x0, N=N, tf=tf)
-initial_controls!(doubleintegrator_static, U0)
+doubleintegrator_static = StaticProblem(model, obj, xf, tf, constraints=conSet, x0=x0, N=N)
