@@ -107,7 +107,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,I,L,O,n,m,L1,L2,G,E} <: UnconstrainedSolver{T}
+struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,L2,G,E} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O

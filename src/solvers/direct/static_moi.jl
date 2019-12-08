@@ -1,26 +1,68 @@
 const MOI = MathOptInterface
 
-struct StaticDIRCOLSolver{T,N,M,NM,NNM,L1,L2,L3} <: DirectSolver{T}
+
+struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
+    opts::DIRCOLSolverOptions
+    stats::Dict{Symbol,Any}
+
     NN::Int
     NP::Int
 
-    Xm::Vector{SVector{N,T}}
-    fVal::Vector{SVector{N,T}}
-    ∇F::Vector{SMatrix{N,NM,T,NNM}}
-    E::CostExpansion{T,N,M,L1,L2,L3}
+    dyn_con::DynamicsConstraint{Q,L,T,N,NM}
+    objective::AbstractObjective
+    constraints::ConstraintSets{T}
+    constraints_all::ConstraintSets{T}
+    Z::Vector{KnotPoint{T,N,M,NM}}
+    x0::SVector{N,T}
+
+    optimizer::MOI.AbstractOptimizer
+
+    E::CostExpansion
 
     xinds::Vector{SVector{N,Int}}
     uinds::Vector{SVector{M,Int}}
 
     linds::Vector{<:Vector{SV} where SV}
     con_inds::Vector{<:Vector{SV} where SV}
+
+    function StaticDIRCOLSolver(opts,stats, NN,NP,dyn_con::DynamicsConstraint{Q,L,T,N},
+            obj,conSet,conSet_all,Z::Vector{KnotPoint{T,N,M,NM}},
+            x0, optimizer, E,
+            xinds,uinds,linds,con_inds) where {Q,L,T,N,M,NM}
+        new{Q,L,T,N,M,NM}(opts,stats, NN,NP,dyn_con,obj,conSet,conSet_all,Z,x0,optimizer,E,
+            xinds,uinds,linds,con_inds)
+    end
+
 end
 
-function StaticDIRCOLSolver(prob::StaticProblem)
+Base.size(solver::StaticDIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
+
+function StaticDIRCOLSolver(prob::StaticProblem{Q}, opts::DIRCOLSolverOptions=DIRCOLSolverOptions()) where Q
     n,m,N = size(prob)
-    Xm = [@SVector zeros(n) for k = 1:N-1]
-    fVal = [@SVector zeros(n) for k = 1:N]
-    ∇F = [@SMatrix zeros(n,n+m) for k = 1:N]
+    Z = prob.Z
+
+    stats = Dict{Symbol,Any}()
+
+    # Add dynamics constraints
+    prob = copy(prob)
+    add_dynamics_constraints!(prob)
+    dyn_con = get_constraints(prob).constraints[2].con::DynamicsConstraint{Q}
+    conSet = get_constraints(prob)
+
+    # Store a copy of the constraint set with all constraints
+    conSet_all = copy(conSet)
+
+    # Add bounds at infinity if the problem doesn't have any bound constraints
+    if !any(is_bound.(conSet))
+        bnd = StaticBoundConstraint(n,m)
+        add_constraint!(conSet, bnd)
+    end
+
+    # Remove bounds
+    zU,zL,gU,gL = get_bounds(conSet)
+
+    # Initialize arrays
+    dyn_vals = DynamicsVals(dyn_con)
     E = CostExpansion(n,m,N)
 
     NN = (n+m)*N
@@ -29,158 +71,144 @@ function StaticDIRCOLSolver(prob::StaticProblem)
     P = StaticPrimals(n,m,N)
     xinds, uinds = P.xinds, P.uinds
 
-    conSet = get_constraints(prob)
     blk_len = map(con->length(con.∇c[1]), conSet.constraints)
     con_len = map(con->length(con.∇c), conSet.constraints)
     linds = [[@SVector zeros(Int,blk) for i = 1:len] for (blk,len) in zip(blk_len, con_len)]
-
     con_inds = gen_con_inds(get_constraints(prob))
-    StaticDIRCOLSolver(NN, NP, Xm, fVal, ∇F, E, xinds, uinds, linds, con_inds)
+
+
+    # Create MOI Optimizer
+    nlp_opts = Dict(Symbol(key)=>value for (key,val) in pairs(opts.nlp.options))
+    optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
+
+    # Create Solver
+    d = StaticDIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
+        Z, prob.x0, optimizer, E, xinds, uinds, linds, con_inds)
+
+    # Set up MOI problem
+    V0 = zeros(NN)
+    copyto!(V0, Z, xinds, uinds)
+
+    has_objective = true
+    nlp_bounds = MOI.NLPBoundsPair.(gL, gU)
+    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
+
+    V = MOI.add_variables(optimizer, NN)
+
+    MOI.add_constraints(optimizer, V, MOI.LessThan.(zU))
+    MOI.add_constraints(optimizer, V, MOI.GreaterThan.(zL))
+
+    MOI.set(optimizer, MOI.VariablePrimalStart(), V, V0)
+
+    # Set up NLP problem
+    MOI.set(optimizer, MOI.NLPBlock(), block_data)
+    MOI.set(optimizer, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    return d
 end
 
-
+get_initial_state(solver::StaticDIRCOLSolver) = solver.x0
+get_model(solver::StaticDIRCOLSolver) = solver.dyn_con.model
+get_constraints(solver::StaticDIRCOLSolver) = solver.constraints
+get_trajectory(solver::StaticDIRCOLSolver) = solver.Z
+get_objective(solver::StaticDIRCOLSolver) = solver.objective
 num_primals(solver::StaticDIRCOLSolver) = solver.NN
 num_duals(solver::StaticDIRCOLSolver) =  solver.NP
+
+"Include bounds when calculating max violation on the solver"
+function max_violation(solver::StaticDIRCOLSolver)
+    conSet = solver.constraints_all
+    max_violation!(conSet)
+    return maximum(conSet.c_max)
+end
 
 primal_partition(prob::StaticDIRCOLSolver) = prob.xinds, prob.uinds
 jacobian_linear_inds(prob::StaticDIRCOLSolver) = prob.linds
 
-struct StaticDIRCOLProblem{T,Q<:QuadratureRule} <: MOI.AbstractNLPEvaluator
-    prob::StaticProblem
-    solver::StaticDIRCOLSolver
-    jac_struct::Vector{NTuple{2,Int}}
-    zL::Vector{T}
-    zU::Vector{T}
-    gL::Vector{T}
-    gU::Vector{T}
-    function StaticDIRCOLProblem(prob0::StaticProblem{Q,T}) where {T,Q}
-        prob = copy(prob0)
-        conSet = get_constraints(prob)
-        @assert has_dynamics(conSet)
+@inline copy_gradient!(grad_f, solver::StaticDIRCOLSolver) = copy_gradient!(grad_f, solver.E, solver.xinds, solver.uinds)
+@inline Base.copyto!(d::StaticDIRCOLSolver, V::Vector{<:Real}) = copyto!(d.Z, V, primal_partition(d)...)
 
-        # Remove bounds
-        zU,zL,gU,gL = get_bounds(conSet)
+function initial_controls!(d::StaticDIRCOLSolver, U0)
+    Z = get_trajectory(d)
+    set_controls!(Z, U0)
+    V = [MOI.VariableIndex(i) for i = 1:d.NN]
+    V0 = zeros(d.NN)
+    copyto!(V0, Z, d.xinds, d.uinds)
+    MOI.set(d.optimizer, MOI.VariablePrimalStart(), V, V0)
+end
 
-        # Create solver
-        solver = StaticDIRCOLSolver(prob)
-        jac_structure = constraint_jacobian_structure(prob, solver)
-        r,c = get_rc(jac_structure)
-        jac_struct = collect(zip(r,c))
+function initial_states!(d::StaticDIRCOLSolver, X0)
+    Z = get_trajectory(d)
+    set_states!(Z, X0)
+    V = [MOI.VariableIndex(i) for i = 1:d.NN]
+    V0 = zeros(d.NN)
+    copyto!(V0, Z, d.xinds, d.uinds)
+    MOI.set(d.optimizer, MOI.VariablePrimalStart(), V, V0)
+end
 
-        new{T,Q}(prob, solver, jac_struct, zL, zU, gL, gU)
-    end
+function get_rc(A::SparseMatrixCSC)
+    row,col,inds = findnz(A)
+    v = sortperm(inds)
+    row[v],col[v]
 end
 
 
+# Define MOI Interface
+MOI.features_available(d::StaticDIRCOLSolver) = [:Grad, :Jac]
+MOI.initialize(d::StaticDIRCOLSolver, features) = nothing
 
-@inline Base.copyto!(d::StaticDIRCOLProblem, V::Vector{<:Real}) = copyto!(d.prob.Z, V, primal_partition(d.solver)...)
-MOI.features_available(d::StaticDIRCOLProblem) = [:Grad, :Jac]
-MOI.initialize(d::StaticDIRCOLProblem, features) = nothing
-
-MOI.jacobian_structure(d::StaticDIRCOLProblem) = d.jac_struct
-MOI.hessian_lagrangian_structure(d::StaticDIRCOLProblem) = []
-
-function MOI.eval_objective(d::StaticDIRCOLProblem, V)
-    copyto!(d, V)
-    cost(d.prob, d.solver)
+function MOI.jacobian_structure(d::StaticDIRCOLSolver)
+    jac_struct = constraint_jacobian_structure(d)
+    r,c = get_rc(jac_struct)
+    jac_struct = collect(zip(r,c))
 end
 
-function MOI.eval_objective_gradient(d::StaticDIRCOLProblem, grad_f, V)
+MOI.hessian_lagrangian_structure(d::StaticDIRCOLSolver) = []
+
+function MOI.eval_objective(d::StaticDIRCOLSolver, V)
     copyto!(d, V)
-    E = d.solver.E
-    xinds, uinds = d.solver.xinds, d.solver.uinds
+    cost(d)
+end
 
-    cost_gradient!(d.prob, d.solver)
-    copy_gradient!(grad_f, E, xinds, uinds)
-
+function MOI.eval_objective_gradient(d::StaticDIRCOLSolver, grad_f, V)
+    copyto!(d, V)
+    cost_gradient!(d)
+    copy_gradient!(grad_f, d)
     return nothing
 end
 
-function copy_gradient!(grad_f, E::CostExpansion, xinds, uinds)
-    for k = 1:length(uinds)
-        grad_f[xinds[k]] = E.x[k]
-        grad_f[uinds[k]] = E.u[k]
-    end
-    if length(xinds) != length(uinds)
-        grad_f[xinds[end]] = E.x[end]
-    end
-end
-
-function MOI.eval_constraint(d::StaticDIRCOLProblem, g, V)
+function MOI.eval_constraint(d::StaticDIRCOLSolver, g, V)
     copyto!(d, V)
-    update_constraints!(d.prob, d.solver)
-    copy_constraints!(d.prob, d.solver, g)
+    update_constraints!(d)
+    copy_constraints!(g, d)
 end
 
-function MOI.eval_constraint_jacobian(d::StaticDIRCOLProblem, jac, V)
+function MOI.eval_constraint_jacobian(d::StaticDIRCOLSolver, jac, V)
     copyto!(d, V)
-    constraint_jacobian!(d.prob, d.solver)
-    copy_jacobians!(d.prob, d.solver, jac)
+    constraint_jacobian!(d)
+    copy_jacobians!(jac, d)
 end
 
-MOI.eval_hessian_lagrangian(::StaticDIRCOLProblem, H, x, σ, μ) = nothing
+MOI.eval_hessian_lagrangian(::StaticDIRCOLSolver, H, x, σ, μ) = nothing
 
-function solve_moi!(prob::StaticProblem, d::StaticDIRCOLProblem)
-    n,m,N = size(prob)
-    NN = num_primals(d.solver)
-    NP = num_duals(d.solver)
+function solve!(d::StaticDIRCOLSolver)
+    # Update options
+    nlp_opts = nlp_options(d.opts)
+    for (key,val) in nlp_opts
+        d.optimizer.options[String(key)] = val
+    end
 
-    V0 = zeros(NN)
-    xinds, uinds = primal_partition(d.solver)
-    copyto!(V0, prob.Z, xinds, uinds)
+    # Solve with MOI
+    MOI.optimize!(d.optimizer)
 
-    v_L, v_U = d.zL, d.zU
-    g_L, g_U = d.gL, d.gU
+    # Get result and copy to trajectory
+    V = [MOI.VariableIndex(k) for k = 1:ds.NN]
+    res = MOI.get(d.optimizer, MOI.VariablePrimal(), V)
+    copyto!(d, res)
 
-    has_objective = true
-    nlp_bounds = MOI.NLPBoundsPair.(g_L, g_U)
-    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
-
-    solver = Ipopt.Optimizer()
-    V = MOI.add_variables(solver, NN)
-
-    # Add bound constraints
-    MOI.add_constraints(solver, V, MOI.LessThan.(v_U))
-    MOI.add_constraints(solver, V, MOI.GreaterThan.(v_L))
-
-    # Initial Condition
-    MOI.set(solver, MOI.VariablePrimalStart(), V, V0)
-
-    # Set up NLP problem
-    MOI.set(solver, MOI.NLPBlock(), block_data)
-    MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-
-    # Solve
-    MOI.optimize!(solver)
-
-    # Get solution
-    res = MOI.get(solver, MOI.VariablePrimal(), Z)
-    copyto!(prob.Z, res, xinds, uinds)
-
-    status = MOI.get(solver, MOI.TerminationStatus())
-end
-
-function build_moi_problem(d::StaticDIRCOLProblem)
-    NN = length(d.zL)
-    V0 = zeros(NN)
-    xinds, uinds = primal_partition(d.solver)
-    copyto!(V0, d.prob.Z, xinds, uinds)
-
-    has_objective = true
-    nlp_bounds = MOI.NLPBoundsPair.(d.gL, d.gU)
-    block_data = MOI.NLPBlockData(nlp_bounds, d, has_objective)
-
-    solver = Ipopt.Optimizer(print_level=0)
-    V = MOI.add_variables(solver, NN)
-
-    MOI.add_constraints(solver, V, MOI.LessThan.(d.zU))
-    MOI.add_constraints(solver, V, MOI.GreaterThan.(d.zL))
-
-    MOI.set(solver, MOI.VariablePrimalStart(), V, V0)
-
-    # Set up NLP problem
-    MOI.set(solver, MOI.NLPBlock(), block_data)
-    MOI.set(solver, MOI.ObjectiveSense(), MOI.MIN_SENSE)
-
-    return solver
+    # Copy stats
+    for (key,val) in parse_ipopt_summary()
+        d.stats[key] = val
+    end
+    return nothing
 end

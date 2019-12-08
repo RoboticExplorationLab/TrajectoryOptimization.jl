@@ -1,7 +1,7 @@
 export
     DIRCOLSolver
 
-abstract type DirectSolver{T} <: AbstractSolver{T} end
+abstract type DirectSolver{T} <: ConstrainedSolver{T} end
 abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
 

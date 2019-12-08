@@ -48,11 +48,6 @@ end
 """ $(SIGNATURES)
 Get the row and column lists of a sparse matrix, with ordered elements
 """
-function get_rc(A::SparseMatrixCSC)
-    row,col,inds = findnz(A)
-    v = sortperm(inds)
-    row[v],col[v]
-end
 
 function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     infs = isinf.(A)

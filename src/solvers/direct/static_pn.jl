@@ -28,10 +28,6 @@ function ProblemInfo(prob::StaticProblem)
     ProblemInfo(prob.model, prob.obj, prob.constraints, SVector{n}(prob.x0), SVector{n}(prob.xf))
 end
 
-struct DynamicsVals{T}
-    fVal::Vector{SVector{N,T}} where N
-    ∇F::Vector{SMatrix{N,M,T,L}} where {N,M,L}
-end
 
 struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
     # Problem Info
@@ -90,8 +86,9 @@ function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
     d = zeros(NP)
 
     fVal = [@SVector zeros(n) for k = 1:N]
+    xMid = [@SVector zeros(n) for k = 1:N-1]
     ∇F = [@SMatrix zeros(n,n+m+1) for k = 1:N]
-    dyn_vals = DynamicsVals(fVal, ∇F)
+    dyn_vals = DynamicsVals(fVal, xMid, ∇F)
     active_set = zeros(Bool,NP)
 
     con_inds = gen_con_inds(conSet)
@@ -107,9 +104,11 @@ Base.size(solver::StaticPNSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
 
 primals(solver::StaticPNSolver) = solver.P.Z
 primal_partition(solver::StaticPNSolver) = solver.P.xinds, solver.P.uinds
+get_model(solver::StaticPNSolver) = solver.prob.model
 get_constraints(solver::StaticPNSolver) = solver.prob.conSet
 get_trajectory(solver::StaticPNSolver) = solver.Z
 get_objective(solver::StaticPNSolver) = solver.prob.obj
+get_active_set(solver::StaticPNSolver) = solver.active_set
 
 function max_violation(solver::StaticPNSolver)
     conSet = get_constraints(solver)

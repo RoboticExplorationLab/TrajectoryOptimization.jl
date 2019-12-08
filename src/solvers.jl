@@ -4,7 +4,7 @@ using Parameters
 export
     solver_name
 
-abstract type AbstractSolver{T} end
+abstract type AbstractSolver{T} <: MOI.AbstractNLPEvaluator end
 abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end
 abstract type ConstrainedSolver{T} <: AbstractSolver{T} end
 abstract type AbstractSolverOptions{T<:Real} end
@@ -37,6 +37,24 @@ include("solvers/direct/direct_solvers_mintime.jl")
 include("solvers/direct/dircol_mintime.jl")
 include("solvers/direct/moi_mintime.jl")
 
+@inline options(solver::AbstractSolver) = solver.opts
+@inline stats(solver::AbstractSolver) = solver.stats
+
+function cost(solver::AbstractSolver)
+    obj = get_objective(solver)
+    Z = get_trajectory(solver)
+    cost!(obj, Z)
+    sum(get_J(obj))
+end
+
+function rollout!(solver::AbstractSolver)
+    Z = get_trajectory(solver)
+    model = get_model(solver)
+    x0 = get_initial_state(solver)
+    rollout!(model, Z, x0)
+end
+
+
 "Get the state trajectory"
 states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
@@ -47,14 +65,37 @@ function controls(solver::AbstractSolver)
     [control(Z[k]) for k = 1:N-1]
 end
 
-function max_violation(solver::AbstractSolver)
+@inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
+@inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
+
+# ConstrainedSolver methods
+function max_violation(solver::ConstrainedSolver)
     conSet = get_constraints(solver)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end
 
-@inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
-@inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
+function update_constraints!(solver::ConstrainedSolver, Z::Traj=get_trajectory(solver))
+    conSet = get_constraints(solver)
+    evaluate!(conSet, Z)
+end
+
+function update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
+    conSet = get_constraints(solver)
+    active_set = get_active_set(solver)
+    update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
+    for i = 1:length(conSet.constraints)
+        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
+    end
+end
+
+function constraint_jacobian!(solver::ConstrainedSolver, Z=get_trajectory(solver))
+    conSet = get_constraints(solver)
+    jacobian!(conSet, Z)
+    return nothing
+end
+
+
 
 
 # Get name of solver as a string

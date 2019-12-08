@@ -121,58 +121,10 @@ function _projection_linesearch!(solver::StaticPNSolver,
     return viol
 end
 
-function update_constraints!(solver::DirectSolver, Z=get_trajectory(solver))
-    conSet = get_constraints(solver)
-    evaluate!(conSet, Z)
-end
-
-function update_active_set!(solver::StaticPNSolver, Z=get_trajectory(solver))
-    conSet = get_constraints(solver)
-    update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
-    for i = 1:length(conSet.constraints)
-        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
-    end
-end
-
-function constraint_jacobian!(solver::DirectSolver, Z=get_trajectory(solver))
-    conSet = get_constraints(solver)
-    jacobian!(conSet, Z)
-    return nothing
-end
-
-function constraint_jacobian_structure(solver::DirectSolver, Z=get_trajectory(solver))
-    n,m,N = size(solver)
-    conSet = get_constraints(solver)
-    idx = 0.0
-    linds = jacobian_linear_inds(solver)
-
-    NN = num_primals(solver)
-    NP = num_duals(solver)
-    D = spzeros(Int,NP,NN)
-
-    # Number of elements in each block
-    blk_len = map(con->length(con.∇c[1]), conSet.constraints)
-
-    # Number of knot points for each constraint
-    con_len = map(con->length(con.∇c), conSet.constraints)
-
-    # Linear indices
-    for (i,con) in enumerate(conSet.constraints)
-        for (j,k) in enumerate(con.inds)
-            inds = idx .+ (1:blk_len[i])
-            linds[i][j] = inds
-            con.∇c[j] = inds
-            idx += blk_len[i]
-        end
-    end
-    copy_jacobians!(solver, D)
-    return D
-end
 
 function active_constraints(solver::StaticPNSolver)
     return solver.D[solver.active_set, :], solver.d[solver.active_set]  # this allocates
 end
-
 
 function cost_expansion!(solver::StaticPNSolver)
     Z = get_trajectory(solver)

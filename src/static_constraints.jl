@@ -106,11 +106,6 @@ end
 abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractStaticConstraint{Equality,W,P} end
 Base.size(con::AbstractDynamicsConstraint) = begin n,m = size(con.model); return n,m,n end
 
-struct DynamicsVals{T,N,M,L}
-    fVal::Vector{SVector{N,T}}
-    xMid::Vector{SVector{N,T}}
-    ∇f::Vector{SMatrix{N,M,T,L}}
-end
 
 struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
 	model::L
@@ -208,6 +203,15 @@ function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{Hermi
 end
 
 
+struct DynamicsVals{T,N,M,L}
+    fVal::Vector{SVector{N,T}}
+    xMid::Vector{SVector{N,T}}
+    ∇f::Vector{SMatrix{N,M,T,L}}
+end
+
+function DynamicsVals(dyn_con::DynamicsConstraint)
+	DynamicsVals(dyn_con.fVal, dyn_con.xMid, dyn_con.∇f)
+end
 
 ############################################################################################
 #                              CUSTOM CONSTRAINTS 										   #

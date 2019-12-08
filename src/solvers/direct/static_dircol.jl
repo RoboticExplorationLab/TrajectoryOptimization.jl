@@ -1,4 +1,22 @@
 
+
+function remove_bounds!(conSet::ConstraintSets)
+    bnds = filter(is_bound, conSet.constraints)
+    n,m = size(bnds[1])
+    filter!(x->!is_bound(x), conSet.constraints)
+    num_constraints!(conSet)  # re-calculate number of constraints after removing bounds
+	return bnds
+end
+
+@inline remove_goals!(conSet::ConstraintSets) = remove_constraint_type!(conSet, GoalConstraint)
+
+function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con <: AbstractStaticConstraint
+	goals = filter(x->x.con isa Con, conSet.constraints)
+	filter!(x->!(x.con isa Con), conSet.constraints)
+    num_constraints!(conSet)  # re-calculate number of constraints after removing goals
+	return goals
+end
+
 function gen_con_inds(conSet::ConstraintSets)
     n,m = size(conSet.constraints[1])
     N = length(conSet.p)
@@ -15,28 +33,14 @@ function gen_con_inds(conSet::ConstraintSets)
 			idx += conLen[i]
         end
     end
-	#
-    # # Terminal constraints
-    # for (i,con) in enumerate(conSet.constraints)
-    #     if N ∈ con.inds
-    #         cons[i][_index(con,N)] = idx .+ (1:conLen[i])
-    #         idx += conLen[i]
-    #     end
-    # end
-
-    # return dyn
     return cons
 end
 
 function get_bounds(conSet::ConstraintSets)
-
     N = length(conSet.p)
 
-    # Remove bound constraints
-    bnds = filter(is_bound, conSet.constraints)
-    n,m = size(bnds[1])
-    filter!(x->!is_bound(x), conSet.constraints)
-    num_constraints!(conSet)  # re-calculate number of constraints after removing bounds
+	bnds = remove_bounds!(conSet)
+	n,m = size(bnds[1])
     inds = [bnd.inds for bnd in bnds]
 
     # Make sure the bounds don't overlap
@@ -59,10 +63,8 @@ function get_bounds(conSet::ConstraintSets)
         end
     end
 
-	# Remove Goal Constraints
-	goals = filter(x->x.con isa GoalConstraint, conSet.constraints)
-	filter!(x->!(x.con isa GoalConstraint), conSet.constraints)
-    num_constraints!(conSet)  # re-calculate number of constraints after removing goals
+	# Set bounds on goal constraints
+	goals = remove_goals!(conSet)
 	for goal in goals
 		for (i,k) in enumerate(goal.inds)
 			zL[k][1:n] = goal.con.xf
@@ -95,11 +97,11 @@ function get_bounds(conSet::ConstraintSets)
     return zU, zL, gU, gL
 end
 
-function add_dynamics_constraints!(prob::StaticProblem{<:Implicit})
-    conSet = prob.constraints 
+function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q
+    conSet = prob.constraints
 
     # Implicit dynamics
-    dyn_con = ConstraintVals( ImplicitDynamics(prob.model, prob.N), 1:prob.N-1 )
+    dyn_con = ConstraintVals( DynamicsConstraint{Q}(prob.model, prob.N), 1:prob.N-1 )
     add_constraint!(conSet, dyn_con, 1)
 
     # Initial condition
@@ -109,29 +111,19 @@ function add_dynamics_constraints!(prob::StaticProblem{<:Implicit})
     return nothing
 end
 
-function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q<:QuadratureRule
-    conSet = get_constraints(prob)
-
-    # Implicit dynamics
-    dyn_con = ConstraintVals( ExplicitDynamics{Q}(prob.model, prob.N), 1:prob.N-1 )
-    add_constraint!(conSet, dyn_con, 1)
-
-    # Initial condition
-    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
-    add_constraint!(conSet, init_con, 1)
-
-    return nothing
+function cost(solver::StaticDIRCOLSolver{Q}) where Q<:QuadratureRule
+	Z = get_trajectory(solver)
+	obj = get_objective(solver)
+	cost(obj, solver.dyn_con, Z)
 end
 
-function cost(prob::StaticProblem, solver::DirectSolver)
-	# TODO: dispatch on the quadrature rule
-	N = prob.N
-	Z = prob.Z
-    xMid = solver.Xm
-	fVal = solver.fVal
-	obj = prob.obj
+function cost(obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
+	N = length(Z)
+	model = dyn_con.model
+    xMid = dyn_con.xMid
+	fVal = dyn_con.fVal
 	for k = 1:N
-		fVal[k] = dynamics(prob.model, Z[k])
+		fVal[k] = dynamics(model, Z[k])
 	end
 	for k = 1:N-1
 		xMid[k] = (state(Z[k]) + state(Z[k+1]))/2 + Z[k].dt/8 * (fVal[k] - fVal[k+1])
@@ -147,28 +139,32 @@ function cost(prob::StaticProblem, solver::DirectSolver)
 	return J
 end
 
-function cost_gradient!(prob::StaticProblem, solver::DirectSolver)
-	n,m,N = size(prob)
-	model = prob.model
-	obj = prob.obj
-
+function cost_gradient!(solver::StaticDIRCOLSolver{Q}) where Q
+	obj = get_objective(solver)
+	Z = get_trajectory(solver)
+	dyn_con = solver.dyn_con
 	E = solver.E
-	fVal = solver.fVal
-	∇f = solver.∇F
-	xMid = solver.Xm
-	Z = prob.Z
+	cost_gradient!(E, obj, dyn_con, Z)
+end
 
+function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
+	N = length(Z)
 	xi = Z[1]._x
 	ui = Z[1]._u
 
+	model = dyn_con.model
+	fVal = dyn_con.fVal
+	xMid = dyn_con.xMid
+	∇f = dyn_con.∇f
+
 	for k = 1:N
-		fVal[k] = dynamics(prob.model, Z[k])
+		fVal[k] = dynamics(model, Z[k])
 	end
 	for k = 1:N-1
 		xMid[k] = (state(Z[k]) + state(Z[k+1]))/2 + Z[k].dt/8 * (fVal[k] - fVal[k+1])
 	end
 	for k = 1:N
-		∇f[k] = jacobian(model, Z[k].z)
+		∇f[k] = jacobian(model, Z[k])
 		E.x[k] *= 0
 		E.u[k] *= 0
 	end
@@ -197,90 +193,15 @@ function cost_gradient!(prob::StaticProblem, solver::DirectSolver)
 	end
 
 	E.x[N] += gradient(obj[N], state(Z[N]), control(Z[N]))[1]
-
+	return nothing
 end
 
-
-#############################################################################################
-#                             COPY TO BLOCK MATRICES                                       #
-#############################################################################################
-
-# Copy Constraints
-function copy_inds(dest, src, inds)
-    for i in eachindex(inds)
-        dest[inds[i]] = src[i]
+function copy_gradient!(grad_f, E::CostExpansion, xinds, uinds)
+    for k = 1:length(uinds)
+        grad_f[xinds[k]] = E.x[k]
+        grad_f[uinds[k]] = E.u[k]
     end
-end
-
-function copy_constraints!(solver::DirectSolver, d=solver.d)
-    conSet = get_constraints(solver)
-    for (i,con) in enumerate(conSet.constraints)
-        copy_inds(d, con.vals, solver.con_inds[i])
+    if length(xinds) != length(uinds)
+        grad_f[xinds[end]] = E.x[end]
     end
-    return nothing
-end
-
-
-# Copy Constraint Jacobian
-function copy_jacobian!(D, con::ConstraintVals{T,Stage}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        zind = [xinds[k]; uinds[k]]
-        D[cinds[i], zind] .= con.∇c[i]
-    end
-end
-
-function copy_jacobian!(D, con::ConstraintVals{T,State}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        D[cinds[i], xinds[k]] .= con.∇c[i]
-    end
-end
-
-function copy_jacobian!(D, con::ConstraintVals{T,Control}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        D[cinds[i], uinds[k]] .= con.∇c[i]
-    end
-end
-
-function copy_jacobian!(D, con::ConstraintVals{T,Coupled}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        zind = [xinds[k]; uinds[k]; xinds[k+1]; uinds[k+1]]
-        D[cinds[i], zind] .= con.∇c[i]
-    end
-end
-
-function copy_jacobian!(D, con::ConstraintVals{T,Dynamical}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        zind = [xinds[k]; uinds[k]; xinds[k+1]]
-        D[cinds[i], zind] .= con.∇c[i]
-    end
-end
-
-function copy_jacobians!(solver::DirectSolver, D=solver.D)
-    conSet = get_constraints(solver)
-    xinds, uinds = primal_partition(solver)
-    cinds = solver.con_inds
-
-    for i = 1:length(conSet.constraints)
-        copy_jacobian!(D, conSet.constraints[i], cinds[i], xinds, uinds)
-    end
-    return nothing
-end
-
-function copy_jacobian!(d::AbstractVector{<:Real}, con::ConstraintVals, linds)
-	for (j,k) in enumerate(con.inds)
-		inds = linds[j]
-		d[inds] = con.∇c[j]
-	end
-end
-
-function copy_jacobians!(solver::DirectSolver, jac::AbstractVector{<:Real})
-    conSet = get_constraints(solver)
-    xinds, uinds = primal_partition(solver)
-    cinds = solver.con_inds
-    linds = jacobian_linear_inds(solver)
-
-    for (i,con) in enumerate(conSet.constraints)
-		copy_jacobian!(jac, con, linds[i])
-    end
-    return nothing
 end

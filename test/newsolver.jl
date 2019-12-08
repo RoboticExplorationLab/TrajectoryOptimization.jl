@@ -128,3 +128,50 @@ saltro.opts.opts_pn.verbose = false
     initial_controls!($saltro, $U0)
     solve!($saltro)  # 70x faster!!
 end
+
+# DIRCOL
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
+rollout!(prob)
+rollout!(sprob)
+
+U0 = deepcopy(prob.U)
+sprob = change_integration(sprob, HermiteSimpson)
+ds = StaticDIRCOLSolver(sprob)
+
+# Test initial state and control setters
+n,m = size(ds)
+u3 = ds.optimizer.variable_info[3(n+m)]
+x4 = ds.optimizer.variable_info[3(n+m)+1]
+@test u3.start == prob.U[3][1]
+@test x4.start == prob.X[4][1]
+
+X1 = [rand(n) for k = 1:prob.N]
+U1 = [ones(m) for k = 1:prob.N-1]
+initial_controls!(ds,U1)
+@test u3.start == U1[3][1]
+initial_states!(ds,X1)
+@test x4.start == X1[4][1]
+
+grad_f = zeros(ds.NN)
+cost(ds)
+cost_gradient!(ds)
+copy_gradient!(grad_f, ds)
+@test (@allocated cost(ds)) == 16
+@test (@allocated cost_gradient!(ds)) == 0
+@test (@allocated copy_gradient!(grad_f, ds)) == 0
+
+jac_struct = MOI.jacobian_structure(ds)
+g = zeros(ds.NP)
+jac = zeros(length(jac_struct))
+
+update_constraints!(ds)
+constraint_jacobian!(ds)
+copy_constraints!(g,ds)
+copy_jacobians!(jac,ds)
+@test (@allocated update_constraints!(ds)) == 0
+@test (@allocated constraint_jacobian!(ds)) == 0
+@test (@allocated copy_constraints!(g, ds)) == 0
+@test (@allocated copy_jacobians!(jac, ds)) == 0
+
+@btime solve!($ds)

@@ -184,7 +184,8 @@ function has_dynamics(conSet::ConstraintSets)
 	end
 	return false
 end
-Base.length(conSet::ConstraintSets, k) = constraints.p[k]
+Base.length(conSet::ConstraintSets, k) = conSet.constraints.p[k]
+Base.length(conSet::ConstraintSets) = length(conSet.constraints)
 
 function ConstraintSets(constraints, N)
 	p = zeros(Int,N)
