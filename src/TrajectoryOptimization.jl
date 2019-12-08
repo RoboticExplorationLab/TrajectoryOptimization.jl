@@ -167,6 +167,7 @@ include("solvers/augmented_lagrangian/sal_methods.jl")
 include("solvers/direct/static_primals.jl")
 include("solvers/direct/static_pn.jl")
 include("solvers/direct/static_pn_methods.jl")
+include("solvers/altro/saltro_solver.jl")
 
 include("solvers/direct/static_moi.jl")
 include("solvers/direct/static_dircol.jl")

@@ -1,4 +1,6 @@
-
+export
+    StaticALTROSolverOptions,
+    StaticALTROSolver
 
 
 """$(TYPEDEF) Solver options for the ALTRO solver.
@@ -77,7 +79,7 @@ ALTRO consists of two "phases":
 1) AL-iLQR: iLQR is used with an Augmented Lagrangian framework to solve the problem quickly to rough constraint satisfaction
 2) Projected Newton: A collocation-flavored active-set solver projects the solution from AL-iLQR onto the feasible subspace to achieve machine-precision constraint satisfaction.
 """
-struct StaticALTROSolver{T} <: AbstractSolver{T}
+struct StaticALTROSolver{T} <: ConstrainedSolver{T}
     opts::StaticALTROSolverOptions{T}
     solver_al::StaticALSolver{T}
     solver_pn::StaticPNSolver{T}
@@ -85,7 +87,7 @@ end
 
 AbstractSolver(prob::StaticProblem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
 
-function StaticALTROSolver(prob::StaticProblem, opts::StaticALTROSolverOptions=StaticALTROSolverOptions())
+function StaticALTROSolver(prob::StaticProblem{Q,T}, opts::StaticALTROSolverOptions=StaticALTROSolverOptions{T}()) where {Q,T}
     solver_al = StaticALSolver(prob, opts.opts_al)
     solver_pn = StaticPNSolver(prob, opts.opts_pn)
     StaticALTROSolver{T}(opts,solver_al,solver_pn)
@@ -99,4 +101,33 @@ function get_constraints(solver::StaticALTROSolver)
     else
         get_constraints(solver.solver_al)
     end
+end
+
+
+function solve!(solver::StaticALTROSolver)
+    conSet = get_constraints(solver)
+
+    # Set terminal condition if using projected newton
+    opts = solver.opts
+    if opts.projected_newton
+        opts_al = opts.opts_al
+        if opts.projected_newton_tolerance >= 0
+            opts_al.constraint_tolerance = opts.projected_newton_tolerance
+        else
+            opts_al.constraint_tolerance = 0
+            opts_al.kickout_max_penalty = true
+        end
+    end
+
+    # Solve with AL
+    solve!(solver.solver_al)
+
+    # Check convergence
+    i = solver.solver_al.stats.iterations
+    c_max = solver.solver_al.stats.c_max[i]
+
+    if opts.projected_newton && c_max > opts.constraint_tolerance
+        solve!(solver.solver_pn)
+    end
+
 end
