@@ -69,6 +69,9 @@ function Traj(X::Vector, U::Vector, dt::Vector)
     return Z
 end
 
+@inline states(Z::Traj) = state.(Z)
+@inline controls(Z::Traj) = control.(Z)
+
 function set_states!(Z::Traj, X)
     for k in eachindex(Z)
         Z[k].z = [X[k]; control(Z[k])]

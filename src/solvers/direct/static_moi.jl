@@ -1,5 +1,5 @@
-const MOI = MathOptInterface
-
+export
+    StaticDIRCOLSolver
 
 struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     opts::DIRCOLSolverOptions

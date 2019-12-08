@@ -198,7 +198,7 @@ end
 function nlp_options(opts::DIRCOLSolverOptions)
     solver_name = optimizer_name(opts.nlp)
     if solver_name == :Ipopt
-        !opts.verbose ? opts.opts[:print_level] = 0 : nothing
+        !opts.verbose ? opts.opts[:print_level] = 0 : opts.opts[:print_level] = 2
         if opts.feasibility_tolerance > 0.
             opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
             opts.opts[:tol] = opts.feasibility_tolerance

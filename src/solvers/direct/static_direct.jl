@@ -78,8 +78,8 @@ function copy_jacobian!(D, con::ConstraintVals{T,Coupled}, cinds, xinds, uinds) 
     end
 end
 
-function copy_jacobian!(D, con::Union{ConstraintVals{T,Dynamical}, ConstraintVals{T,Coupled,<:DynamicsConstraint}},
-		cinds, xinds, uinds) where T
+function copy_jacobian!(D, con::Union{ConstraintVals{T,Dynamical}, ConstraintVals{T,Coupled,<:DynamicsConstraint{Q}}},
+		cinds, xinds, uinds) where {T,Q<:Implicit}
     for (i,k) in enumerate(con.inds)
         zind = [xinds[k]; uinds[k]; xinds[k+1]]
         D[cinds[i], zind] .= con.∇c[i]

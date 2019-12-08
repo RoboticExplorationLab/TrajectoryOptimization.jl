@@ -194,7 +194,9 @@ end
 
 Base.size(solver::StaticiLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
 @inline get_trajectory(solver::StaticiLQRSolver) = solver.Z
-@inline get_objective(solver::AbstractSolver) = solver.obj
+@inline get_objective(solver::StaticiLQRSolver) = solver.obj
+@inline get_model(solver::StaticiLQRSolver) = solver.model
+@inline get_initial_state(solver::StaticiLQRSolver) = solver.x0
 
 function cost(solver::StaticiLQRSolver, Z=solver.Z)
     cost!(solver.obj, Z)

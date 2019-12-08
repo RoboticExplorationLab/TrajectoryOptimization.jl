@@ -2,7 +2,17 @@ import Base.copy
 using Parameters
 
 export
-    solver_name
+    solver_name,
+    cost,
+    max_violation,
+    options,
+    stats,
+    states,
+    controls,
+    initial_controls!,
+    initial_states!,
+    rollout!,
+    get_trajectory
 
 abstract type AbstractSolver{T} <: MOI.AbstractNLPEvaluator end
 abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end

@@ -1,3 +1,6 @@
+export
+    StaticPNSolverOptions,
+    StaticPNSolver
 
 @with_kw mutable struct StaticPNStats{T}
     iterations::Int = 0
@@ -53,7 +56,7 @@ struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
     active_set::Vector{Bool}
 
     dyn_inds::Vector{SVector{N,Int}}
-    con_inds::Vector{Vector{SV} where SV}
+    con_inds::Vector{<:Vector}
 end
 
 function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
