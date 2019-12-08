@@ -80,32 +80,24 @@ end
 StaticProblem(model, obj, constraints, x0, xf, Z, N, tf) =
     StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
 
-function StaticProblem(model::L, obj::O, xf::AbstractVector;
+function StaticProblem(model::L, obj::O, xf::AbstractVector, tf;
         constraints=ConstraintSets(length(obj)),
-        x0=zero(xf), N::Int=length(obj), tf=NaN,
+        x0=zero(xf), N::Int=length(obj),
         X0=[x0 for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
         dt=fill(tf/(N-1),N),
         integration=RK3) where {L,O}
     n,m = size(model)
-    if isnan(tf)
-        if isnan(Z)
-            throw(ArgumentError("final time not specified. Must either specify it directly or pass in a trajectory"))
-        else
-            tf = mapreduce(z->z.dt, +, Z)
-        end
+    if X0 isa AbstractMatrix
+        X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
-    if isnan(Z)
-        dt = tf / (N-1)
-        Z = Traj(n,m,dt,N)
+    if U0 isa AbstractMatrix
+        U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    if isnan(Z̄)
-        dt = tf / (N-1)
-        Z̄ = Traj(n,m,dt,N)
-    end
+    Z = Traj(X0,U0,dt)
 
     StaticProblem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
-        Z, Z̄, N, tf)
+        Z, N, tf)
 end
 
 
@@ -113,6 +105,7 @@ end
 "Get number of states, controls, and knot points"
 Base.size(prob::StaticProblem) = size(prob.model)..., prob.N
 integration(prob::StaticProblem{Q}) where Q = Q
+controls(prob::StaticProblem) = controls(prob.Z)
 
 function initial_trajectory!(prob::StaticProblem, Z::Traj)
     for k = 1:prob.N
@@ -155,7 +148,7 @@ end
 
 
 "Change dynamics integration"
-change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule = 
+change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule =
     StaticProblem{Q}(prob)
 function StaticProblem{Q}(p::StaticProblem) where Q
     StaticProblem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
