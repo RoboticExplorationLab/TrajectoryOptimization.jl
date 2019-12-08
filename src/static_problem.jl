@@ -109,9 +109,10 @@ function StaticProblem(model::L, obj::O, xf::AbstractVector;
 end
 
 
+
 "Get number of states, controls, and knot points"
 Base.size(prob::StaticProblem) = size(prob.model)..., prob.N
-
+integration(prob::StaticProblem{Q}) where Q = Q
 
 function initial_trajectory!(prob::StaticProblem, Z::Traj)
     for k = 1:prob.N
@@ -136,8 +137,8 @@ function cost(prob::StaticProblem)
     return sum( get_J(prob.obj) )
 end
 
-function copy(prob::StaticProblem)
-    StaticProblem(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
+function copy(prob::StaticProblem{Q}) where Q
+    StaticProblem{Q}(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
         copy(prob.Z), prob.N, prob.tf)
 end
 
@@ -152,9 +153,12 @@ end
 
 @inline get_constraints(prob::StaticProblem) = prob.constraints
 
-function change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule
-    StaticProblem{Q}(prob.model, prob.obj, prob.constraints, prob.x0, prob.xf,
-        prob.Z, prob.N, prob.tf)
+
+"Change dynamics integration"
+change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule = 
+    StaticProblem{Q}(prob)
+function StaticProblem{Q}(p::StaticProblem) where Q
+    StaticProblem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
 end
 
 @inline rollout!(prob::StaticProblem) = rollout!(prob.model, prob.Z, prob.x0)
