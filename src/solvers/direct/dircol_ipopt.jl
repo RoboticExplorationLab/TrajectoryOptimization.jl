@@ -4,7 +4,7 @@ using Ipopt
 $(SIGNATURES)
 Extract important information from the Ipopt output file(s)
 """
-function parse_ipopt_summary(file=joinpath(root_dir(),"logs","ipopt.out"))
+function parse_ipopt_summary(file=joinpath(dirname(pathof(TrajectoryOptimization)),"..","logs","ipopt.out"))
     props = Dict()
     obj = Vector{Float64}()
     c_max = Vector{Float64}()
