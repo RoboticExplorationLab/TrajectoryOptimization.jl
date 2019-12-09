@@ -51,7 +51,7 @@ Take one step of iLQR algorithm (non-allocating)
 function step!(solver::StaticiLQRSolver, J)
     Z = solver.Z
     discrete_jacobian!(solver.∇F, solver.model, Z)
-    cost_expansion(solver.Q, solver.obj, Z)
+    cost_expansion(solver.Q, solver.obj, solver.model, solver.Z)
     ΔV = backwardpass!(solver)
     forwardpass!(solver, ΔV, J)
 end
@@ -110,16 +110,18 @@ function evaluate_convergence(solver::StaticiLQRSolver)
     return false
 end
 
+
 """
 $(SIGNATURES)
 Calculates the optimal feedback gains K,d as well as the 2nd Order approximation of the
 Cost-to-Go, using a backward Riccati-style recursion. (non-allocating)
 """
-function backwardpass!(solver::StaticiLQRSolver)
+function backwardpass!(solver::StaticiLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule}
     n,m,N = size(solver)
 
     # Objective
     obj = solver.obj
+    model = solver.model
 
     # Extract variables
     Z = solver.Z; K = solver.K; d = solver.d;
@@ -139,8 +141,9 @@ function backwardpass!(solver::StaticiLQRSolver)
         ix = Z[k]._x
         iu = Z[k]._u
 
-        fdx = solver.∇F[k][ix,ix]
-        fdu = solver.∇F[k][ix,iu]
+        # fdx = solver.∇F[k][ix,ix]
+        # fdu = solver.∇F[k][ix,iu]
+        fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
 
         Q.x[k] += fdx'S.x[k+1]
         Q.u[k] += fdu'S.x[k+1]
@@ -266,7 +269,7 @@ function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
     temp = 0.0
 
     for k = 1:solver.N-1
-        δx = state(Z̄[k]) - state(Z[k])
+        δx = state_diff(solver.model, state(Z̄[k]), state(Z[k]))
         ū = control(Z[k]) + K[k]*δx + α*d[k]
         Z̄[k].z = [state(Z̄[k]); ū]
 

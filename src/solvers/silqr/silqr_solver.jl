@@ -107,7 +107,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,L2,G,E} <: UnconstrainedSolver{T}
+struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,G,E} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -126,7 +126,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,L2,G,E} <: UnconstrainedS
     Z̄::Vector{KnotPoint{T,n,m,L1}}
 
     # Data variables
-    K::Vector{SMatrix{m,n,T,L2}}  # State feedback gains (m,n,N-1)
+    K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
     d::Vector{SVector{m,T}} # Feedforward gains (m,N-1)
 
     ∇F::Vector{G} # discrete dynamics jacobian (block) (n,n+m+1,N)
@@ -139,9 +139,9 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,L2,G,E} <: UnconstrainedS
 
     grad::Vector{T} # Gradient
     function StaticiLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
-            Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n,T,L2}}, d,
-            ∇F::Vector{G}, S::E, Q::E, ρ, dρ, grad) where {T,I,L,O,n,m,L1,L2,G,E}
-        new{T,I,L,O,n,m,L1,L2,G,E}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
+            Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n̄,T,L2}}, d,
+            ∇F::Vector{G}, S::E, Q::E, ρ, dρ, grad) where {T,I,L,O,n,n̄,m,L1,L2,G,E}
+        new{T,I,L,O,n,n̄,m,L1,L2,G,E}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
             ∇F, S, Q, ρ, dρ, grad)
     end
 end
@@ -153,6 +153,7 @@ function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions
 
     # Init solver results
     n,m,N = size(prob)
+    n̄ = state_diff_size(prob.model)
 
     x0 = SVector{n}(prob.x0)
     xf = SVector{n}(prob.xf)
@@ -161,13 +162,13 @@ function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions
     # Z̄ = Traj(n,m,Z[1].dt,N)
     Z̄ = copy(prob.Z)
 
-    K  = [@SMatrix zeros(T,m,n) for k = 1:N-1]
+    K  = [@SMatrix zeros(T,m,n̄) for k = 1:N-1]
     d  = [@SVector zeros(T,m)   for k = 1:N-1]
 
     ∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
 
-    S = CostExpansion(n,m,N)
-    Q = CostExpansion(n,m,N)
+    S = CostExpansion(n̄,m,N)
+    Q = CostExpansion(n̄,m,N)
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)

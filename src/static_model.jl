@@ -9,7 +9,7 @@ export
     QuadratureRule,
     RK3,
     HermiteSimpson
-
+abstract type FreeBodyModel <: AbstractModel end
 abstract type QuadratureRule end
 abstract type Implicit <: QuadratureRule end
 abstract type Explicit <: QuadratureRule end
@@ -47,6 +47,7 @@ end
 
 """Default size method for model (assumes model has fields n and m)"""
 @inline Base.size(model::AbstractModel) = model.n, model.m
+@inline is_euclidean(model::AbstractModel) = true
 
 ############################################################################################
 #                               CONTINUOUS TIME METHODS                                    #
@@ -100,6 +101,64 @@ function discrete_jacobian(::Type{Q}, model::AbstractModel,
 end
 
 
+############################################################################################
+#                               STATE DIFFERENTIALS                                        #
+############################################################################################
+
+@inline state_diff(model::AbstractModel, x, x0) = x - x0
+# @inline state_diff_jacobian(model::AbstractModel, x::SVector{N,T}) where {N,T} = Diagonal(@SVector ones(T,N))
+@inline state_diff_jacobian(model::AbstractModel, x::SVector{N,T}) where {N,T} = I
+@inline state_diff_size(model::AbstractModel) = size(model)[1]
+
+function quat_diff(q2::SVector{4,T1}, q1::SVector{4,T2}) where {T1,T2}
+    # equivalent to q2 - q1
+    # same as inv(q1)*q2
+    vec = @SVector [2,3,4]
+    s1,v1 = q1[1],-q1[vec]
+    s2,v2 = q2[1], q2[vec]  # needs an inverse
+    # this is q1*q2
+    s1*v2 + s2*v1 + v1 × v2
+end
+
+function quat_diff_jacobian(q::SVector{4,T}) where T
+    w,x,y,z = q
+    x,y,z = -x,-y,-z  # invert q
+    @SMatrix [x  w -z  y;
+              y  z  w -x;
+              z -y  x  w];
+end
+
+function dynamics_expansion(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit
+    ix = z._x
+    iu = z._u
+    ∇f = discrete_jacobian(Q, model, z)
+    A = ∇f[ix,ix]
+    B = ∇f[ix,iu]
+    return A,B
+end
+
+function dynamics_expansion(::Type{Q}, model::FreeBodyModel, z::KnotPoint) where Q<:Implicit
+    ix = z._x
+    iu = z._u
+    ∇f = discrete_jacobian(Q, model, z)
+    A = ∇f[ix,ix]
+    B = ∇f[ix,iu]
+    G = state_diff_jacobian(model, state(z))
+    return G*A*G', G*B
+end
+
+@inline dynamics_expansion(model::AbstractModel, z::KnotPoint) =
+    dynamics_expansion(DEFAULT_Q, model, z)
+
+@inline cost_expansion!(E, model::AbstractModel, Z::Traj) = nothing
+function cost_expansion!(E, model::FreeBodyModel, Z::Traj)
+    for k in eachindex(Z)
+        G = state_diff_jacobian(model, state(Z[k]))
+        E.xx[k] = G*E.xx[k]*G'
+        E.ux[k] =   E.ux[k]*G'
+        E.x[k]  = G*E.u[k]
+    end
+end
 
 "Generate discrete dynamics function for a dynamics model using RK3 integration"
 function rk3_gen(model::AbstractModel)

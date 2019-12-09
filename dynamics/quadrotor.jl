@@ -142,7 +142,7 @@ function quadrotor_dynamics(x::AbstractVector,u::AbstractVector,params=quadrotor
       @SVector [v[1], v[2], v[3], qdot[1], qdot[2], qdot[3], qdot[4], vdot[1], vdot[2], vdot[3], omdot[1], omdot[2], omdot[3]]
 end
 
-struct Quadrotor{T} <: AbstractModel
+struct Quadrotor{T} <: FreeBodyModel
       n::Int
       m::Int
       mass::T
@@ -226,43 +226,32 @@ function dynamics(quad::Quadrotor, x::AbstractVector, u::AbstractVector)
       omdot = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
       @SVector [v[1], v[2], v[3], qdot[1], qdot[2], qdot[3], qdot[4], vdot[1], vdot[2], vdot[3], omdot[1], omdot[2], omdot[3]]
 end
-#
-# function dynamics(model::Quadrotor,x,u)
-#       q = normalize(Quaternion(view(x,4:7)))
-#       v = view(x,8:10)
-#       omega = view(x,11:13)
-#
-#       # Parameters
-#       m = model.mass # mass
-#       J = model.J # inertia matrix
-#       Jinv = model.Jinv # inverted inertia matrix
-#       g = model.gravity # gravity
-#       L = model.motor_dist # distance between motors
-#
-#       w1 = u[1]
-#       w2 = u[2]
-#       w3 = u[3]
-#       w4 = u[4]
-#
-#       kf = model.kf; # 6.11*10^-8;
-#       F1 = kf*w1;
-#       F2 = kf*w2;
-#       F3 = kf*w3;
-#       F4 = kf*w4;
-#       F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
-#
-#       km = model.km
-#       M1 = km*w1;
-#       M2 = km*w2;
-#       M3 = km*w3;
-#       M4 = km*w4;
-#       tau = @SVector [L*(F2-F4), L*(F3-F1), (M1-M2+M3-M4)] #total rotor torque in body frame
-#
-#       # ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
-#       qdot = SVector(0.5*q*Quaternion(zero(x[1]), omega...))
-#       vdot = g + (1/m)*(q*F) #acceleration in world frame
-#       omdot = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
-#       @SVector [v[1], v[2], v[3], qdot[1], qdot[2], qdot[3], qdot[4], vdot[1], vdot[2], vdot[3], omdot[1], omdot[2], omdot[3]]
-# end
-#
-#
+
+
+function state_diff(quad::Quadrotor, x, x0)
+      inds = @SVector [4,5,6,7]
+      q = x[inds]
+      q0 = x0[inds]
+      δq = quat_diff(q, q0)
+      δx = @SVector [x[1], x[2], x[3], δq[1], δq[2], δq[3], x[8], x[9], x[10], x[11], x[12], x[13]]
+end
+
+function state_diff_jacobian(quad::Quadrotor, x0::SVector{N,T}) where {N,T}
+      inds = @SVector [4,5,6,7]
+      q0 = x0[inds]
+      G = quat_diff_jacobian(q0)
+      I1 = @SMatrix [1 0 0 0 0 0 0 0 0 0 0 0 0;
+                     0 1 0 0 0 0 0 0 0 0 0 0 0;
+                     0 0 1 0 0 0 0 0 0 0 0 0 0;
+                     0 0 0 G[1] G[4] G[7] G[10] 0 0 0 0 0 0;
+                     0 0 0 G[2] G[5] G[8] G[11] 0 0 0 0 0 0;
+                     0 0 0 G[3] G[6] G[9] G[12] 0 0 0 0 0 0;
+                     0 0 0 0 0 0 0 1 0 0 0 0 0;
+                     0 0 0 0 0 0 0 0 1 0 0 0 0;
+                     0 0 0 0 0 0 0 0 0 1 0 0 0;
+                     0 0 0 0 0 0 0 0 0 0 1 0 0;
+                     0 0 0 0 0 0 0 0 0 0 0 1 0;
+                     0 0 0 0 0 0 0 0 0 0 0 0 1.]
+end
+
+@inline state_diff_size(::Quadrotor) = 12
