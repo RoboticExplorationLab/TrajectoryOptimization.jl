@@ -78,7 +78,7 @@ function quadrotor_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVe
       return tau, omega, J, Jinv
 end
 
-quadrotor = Model(quadrotor_dynamics!, 13, 4, quad_params)
+quadrotor = Model(quadrotor_dynamics!, 13, 4, quad_params, Dict{Symbol,Any}(:quat=>4:7))
 
 
 function quadrotor_dynamics(x::AbstractVector,u::AbstractVector,params=quadrotor_params)
@@ -232,8 +232,9 @@ function state_diff(quad::Quadrotor, x, x0)
       inds = @SVector [4,5,6,7]
       q = x[inds]
       q0 = x0[inds]
+      δx = x - x0
       δq = quat_diff(q, q0)
-      δx = @SVector [x[1], x[2], x[3], δq[1], δq[2], δq[3], x[8], x[9], x[10], x[11], x[12], x[13]]
+      δx = @SVector [δx[1], δx[2], δx[3], δq[1], δq[2], δq[3], δx[8], δx[9], δx[10], δx[11], δx[12], δx[13]]
 end
 
 function state_diff_jacobian(quad::Quadrotor, x0::SVector{N,T}) where {N,T}
