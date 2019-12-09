@@ -83,7 +83,7 @@ StaticProblem(model, obj, constraints, x0, xf, Z, N, tf) =
 function StaticProblem(model::L, obj::O, xf::AbstractVector, tf;
         constraints=ConstraintSets(length(obj)),
         x0=zero(xf), N::Int=length(obj),
-        X0=[x0 for k = 1:N],
+        X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
         dt=fill(tf/(N-1),N),
         integration=RK3) where {L,O}
@@ -106,6 +106,7 @@ end
 Base.size(prob::StaticProblem) = size(prob.model)..., prob.N
 integration(prob::StaticProblem{Q}) where Q = Q
 controls(prob::StaticProblem) = controls(prob.Z)
+states(prob::StaticProblem) = states(prob.Z)
 
 function initial_trajectory!(prob::StaticProblem, Z::Traj)
     for k = 1:prob.N

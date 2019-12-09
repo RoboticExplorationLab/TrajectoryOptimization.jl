@@ -217,14 +217,37 @@ end
 #                              CUSTOM CONSTRAINTS 										   #
 ############################################################################################
 
-struct GoalConstraint{T,N} <: AbstractStaticConstraint{Equality,State,N}
-	xf::SVector{N,T}
-	Ix::Diagonal{T,SVector{N,T}}
-	GoalConstraint(xf::SVector{N,T}) where {N,T} = new{T,N}(xf, Diagonal(@SVector ones(N)))
+struct GoalConstraint{T,P,N,L} <: AbstractStaticConstraint{Equality,State,P}
+	n::Int
+	m::Int
+	xf::SVector{P,T}
+	Ix::SMatrix{P,N,T,L}
+	inds::SVector{P,Int}
 end
-size(con::GoalConstraint{T,N}) where {T,N} = (N,0,N)
-evaluate(con::GoalConstraint, x::SVector) = x - con.xf
+
+function GoalConstraint(n::Int, m::Int, xf::AbstractVector, inds=SVector{n}(1:n))
+	Ix = Diagonal(@SVector ones(n))
+	Ix = SMatrix{n,n}(Matrix(1.0I,n,n))
+	Ix = Ix[inds,:]
+	p = length(inds)
+	GoalConstraint(n, m, SVector{p}(xf[inds]), Ix, inds)
+end
+
+size(con::GoalConstraint{T,N}) where {T,N} = (con.n, con.m,N)
+evaluate(con::GoalConstraint, x::SVector) = x[con.inds] - con.xf
 jacobian(con::GoalConstraint, z::KnotPoint) = con.Ix
+
+struct LinearConstraint{S,W<:Stage,T,P,N,L} <: AbstractStaticConstraint{S,W,P}
+	n::Int
+	m::Int
+	A::SMatrix{P,N,T,L}
+	b::SMatrix{P,T}
+end
+
+size(con::LinearConstraint{S,W,T,P}) where {S,W,T,P} = (con.n, con.m, P)
+evaluate(con::LinearConstraint,x) = con.A*x - con.b
+jacobian(con::LinearConstraint,x) = con.A
+
 
 struct CircleConstraint{T,P} <: AbstractStaticConstraint{Inequality,Stage,P}
 	n::Int

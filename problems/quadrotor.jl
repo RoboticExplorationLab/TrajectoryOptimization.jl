@@ -102,7 +102,8 @@ xf_no_quat_L[4:7] .= -Inf
 xf_no_quat_U[8:10] .= 0.
 xf_no_quat_L[8:10] .= 0.
 bnd_xf = StaticBoundConstraint(n,m, x_min=xf_no_quat_L, x_max=xf_no_quat_U)
-goal = GoalConstraint(xf)
+inds_no_quat = SVector{n-4}(deleteat!(collect(1:n), 4:7))
+goal = GoalConstraint(n,m, xf, inds_no_quat)
 
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_xf = ConstraintVals(bnd_xf, N:N)
