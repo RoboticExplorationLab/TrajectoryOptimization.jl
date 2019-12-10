@@ -107,7 +107,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,G,E} <: UnconstrainedSolver{T}
+struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -129,10 +129,11 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,G,E} <: Unconstrai
     K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
     d::Vector{SVector{m,T}} # Feedforward gains (m,N-1)
 
-    ∇F::Vector{G} # discrete dynamics jacobian (block) (n,n+m+1,N)
+    ∇F::Vector{D} # discrete dynamics jacobian (block) (n,n+m+1,N)
+    G::Vector{F}  # state difference jacobian (n̄, n)
 
-    S::E  # Optimal cost-to-go expansion trajectory
-    Q::E  # cost-to-go expansion trajectory
+    S::E1  # Optimal cost-to-go expansion trajectory
+    Q::E2  # cost-to-go expansion trajectory
 
     ρ::Vector{T} # Regularization
     dρ::Vector{T} # Regularization rate of change
@@ -140,9 +141,9 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,G,E} <: Unconstrai
     grad::Vector{T} # Gradient
     function StaticiLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
             Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n̄,T,L2}}, d,
-            ∇F::Vector{G}, S::E, Q::E, ρ, dρ, grad) where {T,I,L,O,n,n̄,m,L1,L2,G,E}
-        new{T,I,L,O,n,n̄,m,L1,L2,G,E}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
-            ∇F, S, Q, ρ, dρ, grad)
+            ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad) where {T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}
+        new{T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
+            ∇F, G, S, Q, ρ, dρ, grad)
     end
 end
 
@@ -166,9 +167,11 @@ function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions
     d  = [@SVector zeros(T,m)   for k = 1:N-1]
 
     ∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
+    G = [state_diff_jacobian(prob.model, x0) for k = 1:N]
 
     S = CostExpansion(n̄,m,N)
-    Q = CostExpansion(n̄,m,N)
+    Q = CostExpansion(n,m,N)
+
 
     ρ = zeros(T,1)
     dρ = zeros(T,1)
@@ -176,7 +179,7 @@ function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions
     grad = zeros(T,N-1)
 
     solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
-        Z, Z̄, K, d, ∇F, S, Q, ρ, dρ, grad)
+        Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad)
 
     reset!(solver)
     return solver

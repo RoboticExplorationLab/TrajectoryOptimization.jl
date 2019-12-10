@@ -144,8 +144,8 @@ end
 
 
 
-struct StaticALObjective{T} <: AbstractObjective
-    obj::Objective
+struct StaticALObjective{T,O<:Objective} <: AbstractObjective
+    obj::O
     constraints::ConstraintSets{T}
 end
 
@@ -184,6 +184,7 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
         cost_expansion(E, con, Z)
     end
 end
+
 
 # StaticALProblem{Q,L,T} = StaticProblem{Q,L,<:StaticALObjective,T}
 # function get_constraints(prob::StaticProblem)

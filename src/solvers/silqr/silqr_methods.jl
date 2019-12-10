@@ -50,8 +50,9 @@ Take one step of iLQR algorithm (non-allocating)
 """
 function step!(solver::StaticiLQRSolver, J)
     Z = solver.Z
+    state_diff_jacobian!(solver.G, solver.model, Z)
     discrete_jacobian!(solver.∇F, solver.model, Z)
-    cost_expansion(solver.Q, solver.obj, solver.model, solver.Z)
+    cost_expansion(solver.Q, solver.obj, solver.Z)
     ΔV = backwardpass!(solver)
     forwardpass!(solver, ΔV, J)
 end
@@ -125,12 +126,13 @@ function backwardpass!(solver::StaticiLQRSolver{T,QUAD}) where {T,QUAD<:Quadratu
 
     # Extract variables
     Z = solver.Z; K = solver.K; d = solver.d;
+    G = solver.G
     S = solver.S
     Q = solver.Q
 
     # Terminal cost-to-go
-    S.xx[N] = Q.xx[N]
-    S.x[N] = Q.x[N]
+    S.xx[N] = G[N]*Q.xx[N]*G[N]'
+    S.x[N] = G[N]*Q.x[N]
 
     # Initialize expecte change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -141,37 +143,37 @@ function backwardpass!(solver::StaticiLQRSolver{T,QUAD}) where {T,QUAD<:Quadratu
         ix = Z[k]._x
         iu = Z[k]._u
 
-        # fdx = solver.∇F[k][ix,ix]
-        # fdu = solver.∇F[k][ix,iu]
-        fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
+        fdx = G[k]*solver.∇F[k][ix,ix]*G[k]'
+        fdu = G[k]*solver.∇F[k][ix,iu]
+        # fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
 
-        Q.x[k] += fdx'S.x[k+1]
-        Q.u[k] += fdu'S.x[k+1]
-        Q.xx[k] += fdx'S.xx[k+1]*fdx
-        Q.uu[k] += fdu'S.xx[k+1]*fdu
-        Q.ux[k] += fdu'S.xx[k+1]*fdx
+        Qx = G[k]*Q.x[k] + fdx'S.x[k+1]
+        Qu =      Q.u[k] + fdu'S.x[k+1]
+        Qxx = G[k]*Q.xx[k]*G[k]' + fdx'S.xx[k+1]*fdx
+        Quu =      Q.uu[k]       + fdu'S.xx[k+1]*fdu
+        Qux =      Q.ux[k]*G[k]' + fdu'S.xx[k+1]*fdx
 
         if solver.opts.bp_reg_type == :state
-            Quu_reg = Q.uu[k] + solver.ρ[1]*fdu'fdu
-            Qux_reg = Q.ux[k] + solver.ρ[1]*fdu'fdx
+            Quu_reg = Quu + solver.ρ[1]*fdu'fdu
+            Qux_reg = Qux + solver.ρ[1]*fdu'fdx
         elseif solver.opts.bp_reg_type == :control
-            Quu_reg = Q.uu[k] + solver.ρ[1]*I
-            Qux_reg = Q.ux[k]
+            Quu_reg = Quu + solver.ρ[1]*I
+            Qux_reg = Qux
         end
 
         # Regularization
 
         # Compute gains
         K[k] = -(Quu_reg\Qux_reg)
-        d[k] = -(Quu_reg\Q.u[k])
+        d[k] = -(Quu_reg\Qu)
 
         # Calculate cost-to-go (using unregularized Quu and Qux)
-        S.x[k]  =  Q.x[k] + K[k]'*Q.uu[k]*d[k] + K[k]'* Q.u[k] + Q.ux[k]'d[k]
-        S.xx[k] = Q.xx[k] + K[k]'*Q.uu[k]*K[k] + K[k]'*Q.ux[k] + Q.ux[k]'K[k]
+        S.x[k]  =  Qx + K[k]'*Quu*d[k] + K[k]'* Qu + Qux'd[k]
+        S.xx[k] = Qxx + K[k]'*Quu*K[k] + K[k]'*Qux + Qux'K[k]
         S.xx[k] = 0.5*(S.xx[k] + S.xx[k]')
 
         # calculated change is cost-to-go over entire trajectory
-        ΔV += @SVector [d[k]'*Q.u[k], 0.5*d[k]'*Q.uu[k]*d[k]]
+        ΔV += @SVector [d[k]'*Qu, 0.5*d[k]'*Quu*d[k]]
 
         k -= 1
     end

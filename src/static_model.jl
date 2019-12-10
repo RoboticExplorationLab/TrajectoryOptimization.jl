@@ -128,6 +128,14 @@ function quat_diff_jacobian(q::SVector{4,T}) where T
               z -y  x  w];
 end
 
+@inline state_diff_jacobian!(G, model::AbstractModel, Z::Traj) = nothing
+
+function state_diff_jacobian!(G, model::FreeBodyModel, Z::Traj)
+    for k in eachindex(Z)
+        G[k] = state_diff_jacobian(model, state(Z[k]))
+    end
+end
+
 function dynamics_expansion(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit
     ix = z._x
     iu = z._u

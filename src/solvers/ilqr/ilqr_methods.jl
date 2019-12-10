@@ -162,7 +162,6 @@ function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
         # @logmsg InnerLoop "Regularization Increased"
         solver.dρ[1] = max(solver.dρ[1]*solver.opts.bp_reg_increase_factor, solver.opts.bp_reg_increase_factor)
         solver.ρ[1] = max(solver.ρ[1]*solver.dρ[1], solver.opts.bp_reg_min)
-        println("Increase reg")
         if solver.ρ[1] > solver.opts.bp_reg_max
             @warn "Max regularization exceeded"
         end
