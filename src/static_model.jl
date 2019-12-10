@@ -93,13 +93,18 @@ end
 
 function discrete_jacobian(::Type{Q}, model::AbstractModel,
         z::KnotPoint{T,N,M,NM}) where {Q<:Implicit,T,N,M,NM}
-    n,m = size(model)
     ix,iu,idt = z._x, z._u, NM+1
     fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
     s = [z.z; @SVector [z.dt]]
     ForwardDiff.jacobian(fd_aug, s)
 end
 
+function discrete_jacobian(::Type{Q}, model::AbstractModel,
+        s::SVector{NM1,T}, ix::SVector{N,Int}, iu::SVector{M,Int}) where {T,Q,N,M,NM1}
+    idt = NM1
+    fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
+    ForwardDiff.jacobian(fd_aug, s)
+end
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #
@@ -136,37 +141,74 @@ function state_diff_jacobian!(G, model::FreeBodyModel, Z::Traj)
     end
 end
 
-function dynamics_expansion(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit
-    ix = z._x
-    iu = z._u
-    ∇f = discrete_jacobian(Q, model, z)
-    A = ∇f[ix,ix]
-    B = ∇f[ix,iu]
-    return A,B
+############################################################################################
+#                               INFEASIBLE MODELS                                          #
+############################################################################################
+
+struct InfeasibleModel{N,M,D<:AbstractModel} <: AbstractModel
+    model::D
+    _u::SVector{M,Int}  # inds to original controls
+    _ui::SVector{N,Int} # inds to infeasible controls
 end
 
-function dynamics_expansion(::Type{Q}, model::FreeBodyModel, z::KnotPoint) where Q<:Implicit
-    ix = z._x
-    iu = z._u
-    ∇f = discrete_jacobian(Q, model, z)
-    A = ∇f[ix,ix]
-    B = ∇f[ix,iu]
-    G = state_diff_jacobian(model, state(z))
-    return G*A*G', G*B
+function InfeasibleModel(model::AbstractModel)
+    n,m = size(model)
+    _u  = SVector{m}(1:m)
+    _ui = SVector{n}((1:n) .+ m)
+    InfeasibleModel(model, _u, _ui)
 end
 
-@inline dynamics_expansion(model::AbstractModel, z::KnotPoint) =
-    dynamics_expansion(DEFAULT_Q, model, z)
+function Base.size(model::InfeasibleModel)
+    n,m = size(model.model)
+    return n, n+m
+end
 
-@inline cost_expansion!(E, model::AbstractModel, Z::Traj) = nothing
-function cost_expansion!(E, model::FreeBodyModel, Z::Traj)
-    for k in eachindex(Z)
-        G = state_diff_jacobian(model, state(Z[k]))
-        E.xx[k] = G*E.xx[k]*G'
-        E.ux[k] =   E.ux[k]*G'
-        E.x[k]  = G*E.u[k]
+dynamics(::InfeasibleModel, x, u) =
+    throw(ErrorException("Cannot evaluate continuous dynamics on an infeasible model"))
+
+@generated function discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M}, x, u, dt) where {N,M,Q<:Implicit}
+    _u = SVector{M}((1:M) .+ N)
+    _ui = SVector{N}((1:N) .+ (N+M))
+    quote
+        u0 = u[$_u]  # original controls
+        ui = u[$_ui] # infeasible controls
+        discrete_dynamics($Q, model.model, x, u0, dt) + ui
     end
 end
+
+@generated function discrete_jacobian(::Type{Q}, model::InfeasibleModel{N,M},
+        z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Implicit}
+
+    ∇ui = [(@SMatrix zeros(N,N+M)) Diagonal(@SVector ones(N)) @SVector zeros(N)]
+    _x = SVector{N}(1:N)
+    _u = SVector{M}((1:M) .+ N)
+    _z = SVector{N+M}(1:N+M)
+    _ui = SVector{N}((1:N) .+ (N+M))
+    zi = [:(z.z[$i]) for i = 1:N+M]
+    NM1 = N+M+1
+    ∇u0 = @SMatrix zeros(N,N)
+
+    quote
+        # Build KnotPoint for original model
+        s0 = SVector{$NM1}($(zi...), z.dt)
+
+        u0 = z.z[$_u]
+        ui = z.z[$_ui]
+        ∇f = discrete_jacobian($Q, model.model, s0, $_x, $_u)::SMatrix{N,NM+1}
+        ∇dt = ∇f[$_x, N+M+1]
+        [∇f[$_x, $_z] $∇u0 ∇dt] + $∇ui
+    end
+end
+
+
+
+
+
+
+
+
+
+
 
 "Generate discrete dynamics function for a dynamics model using RK3 integration"
 function rk3_gen(model::AbstractModel)
