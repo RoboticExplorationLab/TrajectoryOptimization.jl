@@ -18,7 +18,7 @@ function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con 
 end
 
 function gen_con_inds(conSet::ConstraintSets)
-    n,m = size(conSet.constraints[1])
+	n,m = size(conSet)
     N = length(conSet.p)
     numcon = length(conSet.constraints)
     conLen = length.(conSet.constraints)
@@ -98,6 +98,7 @@ function get_bounds(conSet::ConstraintSets)
 end
 
 function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q
+	n,m = size(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
@@ -105,7 +106,7 @@ function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q
     add_constraint!(conSet, dyn_con, 1)
 
     # Initial condition
-    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
+    init_con = ConstraintVals( GoalConstraint(n,m,prob.x0), 1:1)
     add_constraint!(conSet, init_con, 1)
 
     return nothing

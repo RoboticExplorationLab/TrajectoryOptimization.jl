@@ -37,6 +37,17 @@ xf_no_quat_U[4:7] .= Inf
 xf_no_quat_L[4:7] .= -Inf
 xf_no_quat_U[8:10] .= 0.
 xf_no_quat_L[8:10] .= 0.
+inds_no_quat = deleteat!(collect(1:n), 4:7)
+xf[inds_no_quat]
+goal_xf(v,x,u=zeros(4)) = let x_goal = xf[inds_no_quat], inds=inds_no_quat
+    v .= x[inds_no_quat]-x_goal
+end
+Ix_goal = Matrix(1.0I,n,n)[inds_no_quat,:]
+∇goal_xf(∇c,x,u) = let ∇goal = Ix_goal
+    ∇c .= goal
+end
+
+con_xf = Constraint{Equality}(goal_xf, ∇goal_xf, n, m, 9, :goal_xf)
 bnd_xf = BoundConstraint(n,m,x_min=xf_no_quat_L,x_max=xf_no_quat_U)
 
 N = 101 # number of knot points
@@ -54,7 +65,7 @@ quadrotor.constraints[1] += bnd3
 for k = 2:N-1
     quadrotor.constraints[k] += bnd3
 end
-quadrotor.constraints[N] += bnd_xf
+quadrotor.constraints[N] += con_xf
 
 
 
@@ -108,7 +119,7 @@ goal = GoalConstraint(n,m, xf, inds_no_quat)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_xf = ConstraintVals(bnd_xf, N:N)
 con_goal = ConstraintVals(goal, N:N)
-conSet = ConstraintSets([con_bnd, con_goal], N)
+conSet = ConstraintSets(n,m,[con_bnd, con_goal], N)
 
 
 U_hover = [0.5*9.81/4.0*(@SVector ones(m)) for k = 1:N-1] # initial hovering control trajectory

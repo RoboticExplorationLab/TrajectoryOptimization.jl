@@ -21,14 +21,14 @@ struct ConstraintVals{T,W,C,P,NM,PNM}
 end
 
 function ConstraintVals(con::C, inds::UnitRange) where C
-	n,m,p = size(con)
+	p = length(con)
 	w = width(con)
 	P = length(inds)
 	λ    = [@SVector zeros(p) for k = 1:P]
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	∇c   = [@SMatrix zeros(p,w) for k = 1:P]
+	∇c   = [@SMatrix zeros(Float64,p,w) for k = 1:P]
 	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P))
 end
 
@@ -43,7 +43,9 @@ end
 
 Base.length(::ConstraintVals{T,W,C,P}) where {T,W,C,P} = P
 Base.length(con::ConstraintVals, k::Int) = k ∈ con.inds ? length(con) : 0
-Base.size(con::ConstraintVals) = size(con.con)
+state_dim(con::ConstraintVals) = state_dim(con.con)
+control_dim(con::ConstraintVals) = control_dim(con.con)
+check_dims(con::ConstraintVals,n,m) = check_dims(con.con,n,m)
 constraint_type(con::ConstraintVals{T,W,C}) where {T,W,C} = C
 is_bound(con::ConstraintVals) = is_bound(con.con)
 duals(con::ConstraintVals) = con.λ
@@ -53,6 +55,8 @@ penalty(con::ConstraintVals, k::Int) = con.μ[_index(con,k)]
 penalty_matrix(con::ConstraintVals, i::Int) = Diagonal(con.active[i] .* con.μ[i])
 lower_bound(con::ConstraintVals) = lower_bound(con.con)
 upper_bound(con::ConstraintVals) = upper_bound(con.con)
+contype(con::ConstraintVals) = contype(con.con)
+sense(con::ConstraintVals) = sense(con.con)
 
 evaluate!(con::ConstraintVals, Z::Traj) = evaluate!(con.vals, con.con, Z, con.inds)
 jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z, con.inds)
@@ -163,16 +167,18 @@ end
 ############################################################################################
 
 struct ConstraintSets{T}
+	n::Int
+	m::Int
 	constraints::Vector{ConstraintVals}
 	p::Vector{Int}
 	c_max::Vector{T}
 end
 
-function ConstraintSets(N)
+function ConstraintSets(n,m,N)
 	constraints = Vector{ConstraintVals}()
 	p = zeros(Int,N)
 	c_max = zeros(0)
-	ConstraintSets(constraints,p,c_max)
+	ConstraintSets(n,m,constraints,p,c_max)
 end
 
 
@@ -184,10 +190,15 @@ function has_dynamics(conSet::ConstraintSets)
 	end
 	return false
 end
+
+Base.size(conSet::ConstraintSets) = conSet.n, conSet.m, length(conSet.constraints)
 Base.length(conSet::ConstraintSets, k) = conSet.constraints.p[k]
 Base.length(conSet::ConstraintSets) = length(conSet.constraints)
+Base.copy(conSet::ConstraintSets) = ConstraintSets(conSet.n, conSet.m,
+	copy(conSet.constraints), copy(conSet.p), copy(conSet.c_max))
 
-function ConstraintSets(constraints, N)
+function ConstraintSets(n::Int,m::Int,constraints, N)
+	@assert !isempty(constraints)
 	p = zeros(Int,N)
 	c_max = zeros(length(constraints))
 	for con in constraints
@@ -197,7 +208,7 @@ function ConstraintSets(constraints, N)
 	end
 	cons = ConstraintVals[]
 	append!(cons, constraints)
-	ConstraintSets(cons, p, c_max)
+	ConstraintSets(n,m, cons, p, c_max)
 end
 
 function Base.copy(conSet::ConstraintSets)
@@ -225,6 +236,12 @@ function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
 		insert!(conSet.c_max, idx, 0)
 	end
 	num_constraints!(conSet)
+end
+
+function add_constraint!(conSet::ConstraintSets, con::AbstractStaticConstraint,
+		inds::UnitRange, idx=-1)
+	conVal = ConstraintVals(con, inds)
+	add_constraint!(conSet, conVal, idx)
 end
 
 function max_violation!(conSet::ConstraintSets{T}) where T
@@ -268,4 +285,22 @@ function reset!(conSet::ConstraintSets, opts)
 	for con in conSet.constraints
 		reset!(con, opts)
 	end
+end
+
+function change_dimension(conSet::ConstraintSets, n, m)
+	cons = map(conSet.constraints) do con
+		# original dimension
+		n0, m0 = size(con)
+
+		# If the appropriate dimension didn't change, don't wrap it
+		if contype(con) == State && n == n0
+			return con
+		elseif contype(con) == Control && m == m0
+			return con
+		end
+
+		con_idx = IndexedConstraint(n,m,con.con)
+		con_val = ConstraintVals(con_idx, con.inds)
+	end
+	ConstraintSets(cons, length(conSet.p))
 end

@@ -112,7 +112,7 @@ function StaticALSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions=St
     # Convert problem to AL problem
     alobj = StaticALObjective(prob.obj, prob.constraints)
     rollout!(prob)
-    prob_al = StaticProblem(prob.model, alobj, ConstraintSets(prob.N),
+    prob_al = StaticProblem(prob.model, alobj, ConstraintSets(size(prob)...),
         prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)

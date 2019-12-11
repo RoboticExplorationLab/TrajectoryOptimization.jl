@@ -72,6 +72,6 @@ con_goal = ConstraintVals(goal, N:N)
 U = [@SVector ones(m) for k = 1:N-1]
 obj = LQRObjective(Q,R,Qf,xf,N)
 
-conSet = ConstraintSets([con_bnd, con_goal], N)
+conSet = ConstraintSets(n,m,[con_bnd, con_goal], N)
 
 parallel_park_static = StaticProblem(model, obj, xf, tf, constraints=conSet, x0=x0, U0=U)

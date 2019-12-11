@@ -132,7 +132,7 @@ function cost(prob::StaticProblem)
 end
 
 function copy(prob::StaticProblem{Q}) where Q
-    StaticProblem{Q}(prob.model, copy(prob.obj), ConstraintSets(copy(prob.constraints.constraints), prob.N), prob.x0, prob.xf,
+    StaticProblem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
         copy(prob.Z), prob.N, prob.tf)
 end
 
