@@ -55,7 +55,7 @@ function StaticDIRCOLSolver(prob::StaticProblem{Q}, opts::DIRCOLSolverOptions=DI
     # Add bounds at infinity if the problem doesn't have any bound constraints
     if !any(is_bound.(conSet))
         bnd = StaticBoundConstraint(n,m)
-        add_constraint!(conSet, bnd)
+        add_constraint!(conSet, ConstraintVals(bnd, 1:N))
     end
 
     # Remove bounds

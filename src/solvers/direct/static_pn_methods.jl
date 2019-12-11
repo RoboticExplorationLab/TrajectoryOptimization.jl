@@ -1,4 +1,6 @@
 function solve!(solver::StaticPNSolver)
+    reset!(solver)
+    
     update_constraints!(solver)
     copy_constraints!(solver)
     constraint_jacobian!(solver)
@@ -24,8 +26,23 @@ function projection_solve!(solver::StaticPNSolver)
     while count < max_projection_iters && viol > ϵ_feas
         viol = _projection_solve!(solver)
         count += 1
+        record_iteration!(solver, viol)
     end
     return viol
+end
+
+function record_iteration!(solver::StaticPNSolver, viol)
+    solver.stats.iterations += 1
+    i = solver.stats.iterations
+    solver.stats.cost[i] = cost(solver)
+    solver.stats.c_max[i] = viol
+end
+
+function reset!(solver::StaticPNSolver)
+    solver.stats.iterations = 0
+    solver.stats.cost .*= 0
+    solver.stats.c_max .*= 0
+    return nothing
 end
 
 function _projection_solve!(solver::StaticPNSolver)
