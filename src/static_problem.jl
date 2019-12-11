@@ -115,10 +115,7 @@ function initial_trajectory!(prob::StaticProblem, Z::Traj)
 end
 
 function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
-    N = prob.N
-    for k in 1:N-1
-        prob.U0[k] = U0[k]
-    end
+    set_controls!(prob.Z, U0)
 end
 
 function initial_controls!(prob::StaticProblem, u0::AbstractVector{<:Real})

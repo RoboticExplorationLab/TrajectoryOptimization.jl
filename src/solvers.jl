@@ -77,6 +77,12 @@ end
 
 @inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
 @inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
+function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
+    Z = get_trajectory(solver)
+    for k in eachindex(Z)
+        Z[k].z = copy(Z0[k].z)
+    end
+end
 
 # ConstrainedSolver methods
 function max_violation(solver::ConstrainedSolver)

@@ -69,6 +69,9 @@ end
 @inline states(Z::Traj) = state.(Z)
 @inline controls(Z::Traj) = control.(Z[1:end-1])
 
+set_state!(z::KnotPoint, x) = z.z = [x; control(z)]
+set_control!(z::KnotPoint, u) = z.z = [state(z); u]
+
 function set_states!(Z::Traj, X)
     for k in eachindex(Z)
         Z[k].z = [X[k]; control(Z[k])]
