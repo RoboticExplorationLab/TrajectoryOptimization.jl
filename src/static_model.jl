@@ -166,12 +166,15 @@ end
 dynamics(::InfeasibleModel, x, u) =
     throw(ErrorException("Cannot evaluate continuous dynamics on an infeasible model"))
 
-@generated function discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M}, x, u, dt) where {N,M,Q<:Implicit}
+@generated function discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M},
+        z::KnotPoint{T,N}) where {T,N,M,Q<:Implicit}
     _u = SVector{M}((1:M) .+ N)
     _ui = SVector{N}((1:N) .+ (N+M))
     quote
-        u0 = u[$_u]  # original controls
-        ui = u[$_ui] # infeasible controls
+        x = state(z)
+        dt = z.dt
+        u0 = z.z[$_u]
+        ui = z.z[$_ui]
         discrete_dynamics($Q, model.model, x, u0, dt) + ui
     end
 end
@@ -202,11 +205,23 @@ end
 
 
 
-
-
-
-
-
+"Calculate a dynamically feasible initial trajectory for an infeasible problem, given a
+desired trajectory"
+function infeasible_trajectory(model::InfeasibleModel{n,m}, Z0::Vector{<:KnotPoint{T,n,m}}) where {T,n,m}
+    x,u = zeros(model)
+    ui = @SVector zeros(n)
+    Z = [KnotPoint(state(z), [control(z); ui], z.dt) for z in Z0]
+    N = length(Z0)
+    for k = 1:N-1
+        propagate_dynamics(RK3, model, Z[k+1], Z[k])
+        x′ = state(Z[k+1])
+        u_slack = state(Z0[k+1]) - x′
+        u = [control(Z0[k]); u_slack]
+        set_control!(Z[k], u)
+        set_state!(Z[k+1], x′ + u_slack)
+    end
+    return Z
+end
 
 
 

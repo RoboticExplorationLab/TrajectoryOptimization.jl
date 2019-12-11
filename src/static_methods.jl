@@ -4,9 +4,9 @@
 
 
 "Propagate the dynamics forward, storing the result in the next knot point"
-function propagate_dynamics(model::AbstractModel, z_::KnotPoint, z::KnotPoint)
-    x_next = discrete_dynamics(model, z)
-    z_.z = [x_next; control(z_)]
+function propagate_dynamics(::Type{Q}, model::AbstractModel, z_::KnotPoint, z::KnotPoint) where Q<:Implicit
+    x_next = discrete_dynamics(Q, model, z)
+    set_state!(z_, x_next)
 end
 
 

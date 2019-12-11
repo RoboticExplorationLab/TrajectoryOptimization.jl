@@ -294,7 +294,7 @@ end
 function rollout!(model::AbstractModel, Z::Traj, x0)
     Z[1].z = [x0; control(Z[1])]
     for k = 2:length(Z)
-        propagate_dynamics(model, Z[k], Z[k-1])
+        propagate_dynamics(DEFAULT_Q, model, Z[k], Z[k-1])
     end
 end
 
