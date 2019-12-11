@@ -60,7 +60,7 @@ lower_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector 
 
 @inline check_dims(con::AbstractStaticConstraint{S,State},n,m) where S = state_dim(con) == n
 @inline check_dims(con::AbstractStaticConstraint{S,Control},n,m) where S = control_dim(con) == m
-@inline function check_dims(con::AbstractStaticConstraint,n,m)
+@inline function check_dims(con::AbstractStaticConstraint{S,W},n,m) where {S,W<:ConstraintType}
 	state_dim(con) == n && control_dim(con) == m
 end
 
@@ -485,8 +485,17 @@ function IndexedConstraint(n,m,con::AbstractStaticConstraint{S,W,P},
 	IndexedConstraint{S,W,P,N,M,N+M,Bx,Bu,typeof(con)}(n,m,con,ix,iu,z)
 end
 
-function IndexedConstraint(n,m,con::AbstractStaticConstraint)
-	n0,m0 = size(con)
+function IndexedConstraint(n,m,con::AbstractStaticConstraint{S,W}) where {S,W}
+	if W <: Union{State,CoupledState}
+		m0 = m
+	else
+		m0 = control_dim(con)
+	end
+	if W<: Union{Control,CoupledControl}
+		n0 = n
+	else
+		n0 = state_dim(con)
+	end
 	ix = SVector{n0}(1:n0)
 	iu = SVector{m0}(1:m0)
 	IndexedConstraint(n,m,con, ix, iu)

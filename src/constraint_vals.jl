@@ -211,10 +211,6 @@ function ConstraintSets(n::Int,m::Int,constraints, N)
 	ConstraintSets(n,m, cons, p, c_max)
 end
 
-function Base.copy(conSet::ConstraintSets)
-	ConstraintSets(copy(conSet.constraints), copy(conSet.p), copy(conSet.c_max))
-end
-
 function num_constraints!(conSet::ConstraintSets)
 	p = conSet.p
 	p .*= 0
@@ -289,18 +285,14 @@ end
 
 function change_dimension(conSet::ConstraintSets, n, m)
 	cons = map(conSet.constraints) do con
-		# original dimension
-		n0, m0 = size(con)
 
-		# If the appropriate dimension didn't change, don't wrap it
-		if contype(con) == State && n == n0
-			return con
-		elseif contype(con) == Control && m == m0
+		# Check if the new dimensions match the old ones
+		if check_dims(con,n,m)
 			return con
 		end
 
 		con_idx = IndexedConstraint(n,m,con.con)
 		con_val = ConstraintVals(con_idx, con.inds)
 	end
-	ConstraintSets(cons, length(conSet.p))
+	ConstraintSets(n,m,cons, length(conSet.p))
 end
