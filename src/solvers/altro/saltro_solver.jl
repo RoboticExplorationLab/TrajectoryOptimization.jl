@@ -131,3 +131,37 @@ function solve!(solver::StaticALTROSolver)
     end
 
 end
+
+function InfeasibleProblem(prob0::StaticProblem, Z0::Traj)
+    @assert !isnan(sum(sum.(states(Z0))))
+
+    n,m,N = size(prob)  # original sizes
+
+    # Create model with augmented controls
+    model_inf = InfeasibleModel(prob.model)
+
+    # Get a trajectory that is dynamically feasible for the augmented problem
+    #   and matches the states and controls of the original guess
+    Z = infeasible_trajectory(Z0)
+
+    # Convert constraints so that they accept new dimensions
+    conSet = change_dimension(get_constraints(prob),n, m+n)
+
+    # Constrain additional controls to be zero
+    inf = InfeasibleConstraint(model_inf)
+    add_constraint!(conSet, inf, 1:N-1)
+
+    # Create new problem
+    StaticProblem(model_inf, prob.obj)
+end
+
+function infeasible_objective(obj::Objective, regularizer)
+    n,m = state_dim(obj.cost[1]), control_dim(obj.cost[1])
+    Rd = [@SVector zeros(m); @SVector fill(regularizer,n)]
+    R = Diagonal(Rd)
+    cost_inf = QuadraticCost(Diagonal(@SVector zeros(n)),R)
+    costs = map(obj.cost) do cost
+        cost_idx = change_dimension(cost, n, n+m)
+        cost_idx + cost_inf
+    end
+end

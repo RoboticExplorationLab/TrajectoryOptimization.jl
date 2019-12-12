@@ -122,6 +122,9 @@ mutable struct QuadraticCost{TQ,TR,TH,Tq,Tr,T} <: CostFunction
     c::T                                 # constant term
     function QuadraticCost(Q::TQ, R::TR, H::TH,
             q::Tq, r::Tr, c::T) where {TQ,TR,TH,Tq,Tr,T}
+        @assert size(Q,1) == length(q)
+        @assert size(R,1) == length(r)
+        @assert size(H) == (length(r), length(q))
         if !isposdef(Array(R))
             @warn "R is not positive definite"
         end
@@ -133,7 +136,8 @@ mutable struct QuadraticCost{TQ,TR,TH,Tq,Tr,T} <: CostFunction
     end
 end
 
-get_sizes(cost::QuadraticCost) = (size(cost.Q,1),size(cost.R,1))
+state_dim(cost::QuadraticCost) = length(cost.q)
+control_dim(cost::QuadraticCost) = length(cost.r)
 
 function QuadraticCost(Q,R; H=similar(Q,size(R,1), size(Q,1)), q=zeros(size(Q,1)),
         r=zeros(size(R,1)), c=0.0)
@@ -146,6 +150,13 @@ end
 
 function Base.show(io::IO, cost::QuadraticCost)
     print(io, "QuadraticCost{...}")
+end
+
+function +(c1::QuadraticCost, c2::QuadraticCost)
+    @assert state_dim(c1) == state_dim(c2)
+    @assert control_dim(c1) == control_dim(c2)
+    QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, c1.H + c2.H,
+                  c1.q + c2.q, c1.r + c2.r, c1.c + c2.c)
 end
 
 """
@@ -255,6 +266,7 @@ function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c))
 end
 
+
 """
 $(TYPEDEF)
 Cost function of the form
@@ -282,6 +294,7 @@ Create a Generic Cost, specifying the gradient and hessian of the cost function 
 
 """
 function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
+    @warn "Use GenericCost with caution. It is untested and not likely to work"
     function expansion(x::Vector{T},u::Vector{T}) where T
         Q,R,H = hess(x,u)
         q,r = grad(x,u)
@@ -301,6 +314,7 @@ Create a Generic Cost. Gradient and Hessian information will be determined using
 * ℓf: terminal cost function of the form J = ℓ(xN)
 """
 function GenericCost(ℓ::Function, ℓf::Function, n::Int, m::Int)
+    @warn "Use GenericCost with caution. It is untested and not likely to work"
     linds = LinearIndices(zeros(n+m,n+m))
     xinds = 1:n
     uinds = n .+(1:m)
@@ -369,3 +383,117 @@ function cost_expansion!(S::Expansion{T}, cost::GenericCost, xN::Vector{T}) wher
 end
 
 copy(cost::GenericCost) = GenericCost(cost.ℓ,cost.ℓ,cost.n,cost.m)
+
+
+
+struct IndexedCost{iX,iU,C} <: CostFunction
+    cost::C
+end
+
+function IndexedCost(cost::C, ix::UnitRange, iu::UnitRange) where C<:CostFunction
+    if C isa QuadraticCost
+        if norm(cost.H) != 0
+            throw(ErrorException("IndexedCost of functions with x-u coupling not implemented"))
+        end
+    else
+        @warn "IndexedCost will only work for costs without x-u coupling (Qux = 0)"
+    end
+    IndexedCost{ix,iu,C}(cost)
+end
+
+@generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+    ix = SVector{length(iX)}(iX)
+    iu = SVector{length(iU)}(iU)
+    quote
+        x0 = x[$ix]
+        u0 = u[$iu]
+        stage_cost(costfun.cost, x0, u0)
+    end
+end
+
+@generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}) where {iX,iU,N}
+    ix = SVector{length(iX)}(iX)
+    quote
+        x0 = x[$ix]
+        stage_cost(costfun.cost, x0)
+    end
+end
+
+@generated function gradient(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+    l1x = iX[1] - 1
+    l2x = N-iX[end]
+    l1u = iU[1] - 1
+    l2u = M-iU[end]
+    quote
+        x = x[$iX]
+        u = u[$iU]
+        Qx, Qu = gradient(costfun.cost, x, u)
+        Qx = [@SVector zeros($l1x); Qx; @SVector zeros($l2x)]
+        Qu = [@SVector zeros($l1u); Qu; @SVector zeros($l2u)]
+        return Qx, Qu
+    end
+end
+
+
+@generated function hessian(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+    l1x = iX[1] - 1
+    l2x = N-iX[end]
+    l1u = iU[1] - 1
+    l2u = M-iU[end]
+    quote
+        x = x[$iX]
+        u = u[$iU]
+        Qxx, Quu, Qux  = hessian(costfun.cost, x, u)
+        Qxx1 = Diagonal(@SVector zeros($l1x))
+        Qxx2 = Diagonal(@SVector zeros($l2x))
+        Quu1 = Diagonal(@SVector zeros($l1u))
+        Quu2 = Diagonal(@SVector zeros($l2u))
+
+        Qxx = blockdiag(Qxx1, Qxx, Qxx2)
+        Quu = blockdiag(Quu1, Quu, Quu2)
+        Qux = @SMatrix zeros(M,N)
+        Qxx, Quu, Qux
+    end
+end
+
+function SparseArrays.blockdiag(Qs::Vararg{<:Diagonal})
+    Diagonal(vcat(diag.(Qs)...))
+end
+
+function SparseArrays.blockdiag(Qs::Vararg{<:AbstractMatrix})
+    # WARNING: this is slow and is only included as a fallback
+    cat(Qs...,dims=(1,2))
+end
+
+function change_dimension(cost::CostFunction,n,m)
+    n0,m0 = state_dim(cost), control_dim(cost)
+    ix = 1:n0
+    iu = 1:m0
+    IndexedCost(cost, ix, iu)
+end
+
+function change_dimension(cost::QuadraticCost, n, m)
+    n0,m0 = state_dim(cost), control_dim(cost)
+    @assert n >= n0
+    @assert m >= m0
+
+    ix = 1:n0
+    iu = 1:m0
+
+    Q_ = Diagonal(@SVector zeros(n-n0))
+    R_ = Diagonal(@SVector zeros(m-m0))
+    H1 = @SMatrix zeros(m0, n-n0)
+    H2 = @SMatrix zeros(m-m0, n)
+    q_ = @SVector zeros(n-n0)
+    r_ = @SVector zeros(m-m0)
+    c = cost.c
+
+    # Insert old values
+    Q = blockdiag(cost.Q, Q_)
+    R = blockdiag(cost.R, R_)
+    H = [cost.H H1]
+    H = [H; H2]
+    q = [cost.q; q_]
+    r = [cost.r; r_]
+    QuadraticCost(Q,R,H,q,r,c)
+end
