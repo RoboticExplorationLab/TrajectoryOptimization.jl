@@ -447,7 +447,7 @@ InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
 control_dim(::InfeasibleConstraint{N,M}) where {N,M} = N+M
 Base.length(::InfeasibleConstraint{N,M}) where {N,M} = N
 
-@generated function evaluate(con::InfeasibleConstraint{N,M}, u) where {N,M}
+@generated function evaluate(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
     _u = SVector{M}(1:M)
     _ui = SVector{N}((1:N) .+ M)
 	quote
@@ -455,7 +455,7 @@ Base.length(::InfeasibleConstraint{N,M}) where {N,M} = N
 	end
 end
 
-@generated function jacobian(con::InfeasibleConstraint{N,M}, u) where {N,M}
+@generated function jacobian(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
 	Iu = [(@SMatrix zeros(N,M)) Diagonal(@SVector ones(N))]
 	return :($Iu)
 end

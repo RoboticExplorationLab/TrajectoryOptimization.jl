@@ -273,10 +273,10 @@ function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
     for k = 1:solver.N-1
         δx = state_diff(solver.model, state(Z̄[k]), state(Z[k]))
         ū = control(Z[k]) + K[k]*δx + α*d[k]
-        Z̄[k].z = [state(Z̄[k]); ū]
+        set_control!(Z̄[k], ū)
 
         # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
-        Z̄[k+1].z = [discrete_dynamics(Q, solver.model, state(Z̄[k]), ū, Z̄[k].dt);
+        Z̄[k+1].z = [discrete_dynamics(Q, solver.model, Z̄[k]);
             control(Z[k+1])]
 
 

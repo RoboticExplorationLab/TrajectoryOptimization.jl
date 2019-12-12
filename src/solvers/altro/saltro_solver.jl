@@ -132,7 +132,7 @@ function solve!(solver::StaticALTROSolver)
 
 end
 
-function InfeasibleProblem(prob0::StaticProblem, Z0::Traj)
+function InfeasibleProblem(prob::StaticProblem, Z0::Traj, R_inf::Real)
     @assert !isnan(sum(sum.(states(Z0))))
 
     n,m,N = size(prob)  # original sizes
@@ -142,7 +142,7 @@ function InfeasibleProblem(prob0::StaticProblem, Z0::Traj)
 
     # Get a trajectory that is dynamically feasible for the augmented problem
     #   and matches the states and controls of the original guess
-    Z = infeasible_trajectory(Z0)
+    Z = infeasible_trajectory(model_inf, Z0)
 
     # Convert constraints so that they accept new dimensions
     conSet = change_dimension(get_constraints(prob),n, m+n)
@@ -151,15 +151,18 @@ function InfeasibleProblem(prob0::StaticProblem, Z0::Traj)
     inf = InfeasibleConstraint(model_inf)
     add_constraint!(conSet, inf, 1:N-1)
 
+    # Infeasible Objective
+    obj = infeasible_objective(prob.obj, R_inf)
+
     # Create new problem
-    StaticProblem(model_inf, prob.obj)
+    StaticProblem(model_inf, obj, conSet, prob.x0, prob.xf, Z, N, prob.tf)
 end
 
 function infeasible_objective(obj::Objective, regularizer)
     n,m = state_dim(obj.cost[1]), control_dim(obj.cost[1])
     Rd = [@SVector zeros(m); @SVector fill(regularizer,n)]
     R = Diagonal(Rd)
-    cost_inf = QuadraticCost(Diagonal(@SVector zeros(n)),R)
+    cost_inf = QuadraticCost(Diagonal(@SVector zeros(n)),R,checks=false)
     costs = map(obj.cost) do cost
         cost_idx = change_dimension(cost, n, n+m)
         cost_idx + cost_inf

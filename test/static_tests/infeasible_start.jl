@@ -61,8 +61,6 @@ jacobian!(conSet, Z)
 @test size(conSet0[1].∇c[1]) == (3,5)
 
 
-
-
 # Cost functions
 cost0 = prob.obj[1]
 ix = 1:n
@@ -97,3 +95,126 @@ costs = infeasible_objective(prob.obj, 2.3)
 @test costs[1].q == cost0.q
 @test costs[1].r == [cost0.r; zeros(n)]
 @test sum(costs[1].H) == sum(cost0.H)
+
+prob = copy(Problems.car_3obs)
+sprob = copy(Problems.car_3obs_static)
+
+al = AugmentedLagrangianSolver(prob)
+sal = StaticALSolver(sprob)
+
+solve!(prob, al)
+solve!(sal)
+max_violation(al)
+max_violation(sal)
+
+prob = copy(Problems.car_3obs)
+altro = solve!(prob, ALTROSolverOptions{Float64}())
+max_violation(prob)
+max_violation(altro.solver_al)
+
+
+
+
+# Step through the solve
+prob = copy(Problems.car_3obs)
+sprob = copy(Problems.car_3obs_static)
+initial_states!(prob, X0)
+initial_controls!(prob, U0)
+initial_trajectory!(sprob, Z0)
+states(sprob) == prob.X
+controls(sprob) == prob.U
+
+prob_inf = infeasible_problem(prob, 0.01)
+sprob_inf = InfeasibleProblem(sprob, Z0, 0.01/prob.dt)
+states(sprob_inf) == prob_inf.X
+controls(sprob_inf) == prob_inf.U
+
+al = AugmentedLagrangianSolver(prob_inf)
+sal = StaticALSolver(sprob_inf)
+Z_init = copy(sprob_inf.Z)
+X_init = states(Z_init)
+U_init = controls(Z_init)
+
+solve!(prob_inf, al)
+solve!(sal)
+max_violation(prob_inf)
+max_violation(sal)
+
+@btime begin
+    initial_controls!($prob_inf, $U_init)
+    initial_states!($prob_inf, $X_init)
+    solve!($prob_inf, $al)
+end
+
+@btime begin
+    initial_trajectory!($sal, $Z_init)
+    solve!($sal)
+end
+max_violation(sal)
+
+rollout!(prob_inf)
+rollout!(sprob_inf)
+states(sprob_inf) == prob_inf.X
+
+cost(prob_inf) ≈ cost(sprob_inf)
+cost(prob_inf)
+max_violation(prob_inf) ≈ max_violation(sprob_inf)
+
+al = AugmentedLagrangianSolver(prob_inf)
+sal = StaticALSolver(sprob_inf)
+reset!(get_constraints(sal), sal.opts)
+
+prob_al = AugmentedLagrangianProblem(prob_inf, al)
+cost(sal) ≈ cost(prob_al)
+silqr = sal.solver_uncon
+ilqr = al.solver_uncon
+
+# Check Dynamics Jacobians
+discrete_jacobian!(silqr.∇F, silqr.model, silqr.Z)
+jacobian!(prob_al, ilqr)
+ilqr.∇F ≈ silqr.∇F
+
+# Check Cost Expansion
+cost_expansion(silqr.Q, silqr.obj, silqr.Z)
+cost_expansion!(prob_al, ilqr)
+silqr.Q.xx ≈ [Q.xx for Q in ilqr.Q]
+silqr.Q.uu[1:end-1] ≈ [Q.uu for Q in ilqr.Q[1:end-1]]
+silqr.Q.ux[1:end-1] ≈ [Q.ux for Q in ilqr.Q[1:end-1]]
+silqr.Q.x[1:end] ≈ [Q.x for Q in ilqr.Q[1:end]]
+silqr.Q.u[1:end-1] ≈ [Q.u for Q in ilqr.Q[1:end-1]]
+
+conSet = get_constraints(sal)
+prob_al.obj.constraints
+conSet[3].vals ≈ [c.infeasible for c in prob_al.obj.C[1:end-1]]
+conSet[3].∇c ≈ [c.infeasible[:,4:end] for c in prob_al.obj.∇C[1:end-1]]
+conSet[1].vals ≈ [c.obs for c in prob_al.obj.C[2:end-1]]
+conSet[1].∇c ≈ [c.obs[:,1:3] for c in prob_al.obj.∇C[2:end-1]]
+
+Q = CostExpansion(size(prob)...)
+Q.xx[1]
+cost_expansion(Q,conSet[3],silqr.Z)
+cost_expansion(silqr.Q, silqr.obj.obj, silqr.Z)
+cost_expansion(silqr.Q, silqr.obj, silqr.Z)
+cost_expansion!(prob_al, ilqr)
+ilqr.Q[1].xx
+
+silqr.Q.xx
+[Q.xx for Q in ilqr.Q]
+[Q.uu for Q in ilqr.Q[1:end-1]]
+silqr.Q.uu[1:end-1]
+
+
+solve!(prob_al, ilqr)
+solve!(silqr)
+cost(silqr)
+cost(prob_al)
+
+
+solve!(prob_inf, al)
+max_violation(al)
+al.stats[:iterations]
+
+solve!(sal)
+max_violation(sal)
+sal.stats.iterations
+al.stats.cost
