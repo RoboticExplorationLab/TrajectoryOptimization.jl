@@ -121,16 +121,18 @@ mutable struct QuadraticCost{TQ,TR,TH,Tq,Tr,T} <: CostFunction
     r::Tr                 # Linear term on controls (m,)
     c::T                                 # constant term
     function QuadraticCost(Q::TQ, R::TR, H::TH,
-            q::Tq, r::Tr, c::T) where {TQ,TR,TH,Tq,Tr,T}
+            q::Tq, r::Tr, c::T; checks=true) where {TQ,TR,TH,Tq,Tr,T}
         @assert size(Q,1) == length(q)
         @assert size(R,1) == length(r)
         @assert size(H) == (length(r), length(q))
-        if !isposdef(Array(R))
-            @warn "R is not positive definite"
-        end
-        if !ispossemidef(Array(Q))
-            err = ArgumentError("Q must be positive semi-definite")
-            throw(err)
+        if checks
+            if !isposdef(Array(R))
+                @warn "R is not positive definite"
+            end
+            if !ispossemidef(Array(Q))
+                err = ArgumentError("Q must be positive semi-definite")
+                throw(err)
+            end
         end
         new{TQ,TR,TH,Tq,Tr,T}(Q,R,H,q,r,c)
     end
@@ -140,8 +142,8 @@ state_dim(cost::QuadraticCost) = length(cost.q)
 control_dim(cost::QuadraticCost) = length(cost.r)
 
 function QuadraticCost(Q,R; H=similar(Q,size(R,1), size(Q,1)), q=zeros(size(Q,1)),
-        r=zeros(size(R,1)), c=0.0)
-    QuadraticCost(Q,R,H,q,r,c)
+        r=zeros(size(R,1)), c=0.0, checks=true)
+    QuadraticCost(Q,R,H,q,r,c, checks=checks)
 end
 
 function QuadraticCost(Q,q,c)
@@ -391,7 +393,7 @@ struct IndexedCost{iX,iU,C} <: CostFunction
 end
 
 function IndexedCost(cost::C, ix::UnitRange, iu::UnitRange) where C<:CostFunction
-    if C isa QuadraticCost
+    if C <: QuadraticCost
         if norm(cost.H) != 0
             throw(ErrorException("IndexedCost of functions with x-u coupling not implemented"))
         end
@@ -495,5 +497,5 @@ function change_dimension(cost::QuadraticCost, n, m)
     H = [H; H2]
     q = [cost.q; q_]
     r = [cost.r; r_]
-    QuadraticCost(Q,R,H,q,r,c)
+    QuadraticCost(Q,R,H,q,r,c,checks=false)
 end
