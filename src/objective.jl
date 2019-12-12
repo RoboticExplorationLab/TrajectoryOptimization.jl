@@ -26,7 +26,13 @@ function Objective(cost::CostFunction,cost_terminal::CostFunction,N::Int)
 end
 
 function Objective(cost::CostTrajectory,cost_terminal::CostFunction)
+    N = length(cost) + 1
     Objective([cost...,cost_terminal], zeros(N))
+end
+
+function Objective(cost::CostTrajectory)
+    N = length(cost)
+    Objective(cost, zeros(N))
 end
 
 get_J(obj::Objective) = obj.J
