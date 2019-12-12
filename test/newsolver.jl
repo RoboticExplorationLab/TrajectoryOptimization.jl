@@ -1,10 +1,10 @@
 const TO = TrajectoryOptimization
-using StaticArrays
+using BenchmarkTools
+using StaticArrays, LinearAlgebra
 
-include("../problems/cartpole.jl")
 
-prob = copy(cartpole)
-sprob = copy(cartpole_static)
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
 U0 = deepcopy(prob.U)
 
 ilqr = iLQRSolver(prob)
@@ -19,13 +19,16 @@ solve!(silqr)
 silqr.stats.iterations
 norm(prob.X - states(silqr))
 
+m = size(silqr)[2]
+U0 = [SVector{m}(u) for u in U0]
+initial_controls!(silqr, U0)
+@test (@allocated solve!(silqr)) == 0
+
 @btime begin
     initial_controls!($prob, $U0)
     solve!($prob, $ilqr)
 end
 
-m = size(silqr)[2]
-U0 = [SVector{m}(u) for u in U0]
 @btime begin
     initial_controls!($silqr, $U0)
     solve!($silqr)
@@ -33,8 +36,8 @@ end
 
 
 # Augmented Lagrangian
-prob = copy(cartpole)
-sprob = copy(cartpole_static)
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
 
 sal = StaticALSolver(sprob)
 al = AugmentedLagrangianSolver(prob)
@@ -47,6 +50,9 @@ initial_controls!(prob,U0)
 solve!(prob,al)
 max_violation(al)
 max_violation(al) ≈ max_violation(sal)
+
+initial_controls!(sal, U0)
+@test (@allocated solve!(sal)) == 0
 
 @btime begin
     initial_controls!($prob,$U0)
@@ -70,6 +76,7 @@ pn = ProjectedNewtonSolver(prob)
 initial_controls!(prob, Usol)
 initial_states!(prob, Xsol)
 copyto!(pn.V, Xsol, Usol)
+max_violation(pn)
 solve!(prob, pn)
 max_violation_direct(prob)
 
@@ -77,6 +84,7 @@ max_violation_direct(prob)
 spn = StaticPNSolver(sprob)
 initial_controls!(spn, Usol)
 initial_states!(spn, Xsol)
+max_violation(spn)
 solve!(spn)
 max_violation(spn)
 
@@ -96,13 +104,13 @@ end
 
 
 # ALTRO
-prob = copy(cartpole)
-sprob = copy(cartpole_static)
+prob = copy(Problems.cartpole)
+sprob = copy(Problems.cartpole_static)
+U0 = deepcopy(controls(sprob))
 
-altro = ALTROSolver(prob)
 saltro = StaticALTROSolver(sprob)
 
-opts_altro = ALTROSolverOptions(projected_newton=true)
+opts_altro = ALTROSolverOptions{Float64}(projected_newton=true)
 initial_controls!(prob, U0)
 solve!(prob, opts_altro)
 max_violation_direct(prob)
@@ -114,8 +122,9 @@ get_trajectory(saltro)
 norm(states(saltro.solver_pn) - prob.X)
 max_violation(saltro)
 max_violation(sprob)
+TO.max_violation_direct(prob)
 
-X0 = [@SVector fill(NaN,n) for k = 1:N]
+X0 = [@SVector fill(NaN,size(prob)[1]) for k = 1:prob.N]
 opts_altro.opts_pn.verbose = false
 @btime begin
     initial_controls!($prob, $U0)
@@ -137,6 +146,7 @@ rollout!(sprob)
 
 U0 = deepcopy(prob.U)
 sprob = change_integration(sprob, HermiteSimpson)
+
 ds = StaticDIRCOLSolver(sprob)
 
 # Test initial state and control setters
