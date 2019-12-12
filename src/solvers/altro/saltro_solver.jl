@@ -164,4 +164,5 @@ function infeasible_objective(obj::Objective, regularizer)
         cost_idx = change_dimension(cost, n, n+m)
         cost_idx + cost_inf
     end
+    Objective(costs, copy(obj.J))
 end

@@ -1,5 +1,7 @@
+using Ipopt, BenchmarkTools
 
 # options
+T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
@@ -44,12 +46,12 @@ ilqr.stats.iterations
     initial_controls!($ilqr, $U0)
     solve!($ilqr)
 end
-
+# 1.25 ms/iteration
 
 # AL-iLQR
 prob = copy(Problems.quadrotor_static)
 U0 = deepcopy(controls(prob))
-alilqr = StaticALSolver(prob, opts_al)
+alilqr = StaticALSolver(prob)
 initial_controls!(alilqr, U0)
 solve!(alilqr)
 alilqr.stats.cost

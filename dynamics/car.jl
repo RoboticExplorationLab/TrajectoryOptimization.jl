@@ -19,3 +19,10 @@ function dynamics(::DubinsCar,x,u)
                   u[1]*sin(x[3]),
                   u[2]]
 end
+
+using Plots
+function Plots.plot(model::DubinsCar, Z::Traj)
+    x = [z.z[1] for z in Z]
+    y = [z.z[2] for z in Z]
+    Plots.plot(x, y, xlabel="x position", ylabel="y position", markershape=:circle)
+end
