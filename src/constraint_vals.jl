@@ -138,27 +138,49 @@ end
 """
 Assumes constraints, active set, and constrint jacobian have all been calculated
 """
-function cost_expansion(E, con::ConstraintVals{T,<:Stage}, Z) where T
-	ix,iu = Z[1]._x, Z[1]._u
-	@inbounds for i in eachindex(con.inds)
-		k = con.inds[i]
-		c = con.vals[i]
-		λ = con.λ[i]
-		μ = con.μ[i]
-		a = con.active[i]
-		Iμ = Diagonal( a .* μ )
-		cx = con.∇c[i][:,ix]
-		cu = con.∇c[i][:,iu]
+@generated function cost_expansion(E, con::ConstraintVals{T,W},
+		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
+	if W <: State
+		expansion = quote
+			cx = con.∇c[i]
+			E.xx[k] += cx'Iμ*cx
+			E.x[k] += cx'g
+		end
+	elseif W <: Control
+		expansion = quote
+			cu = con.∇c[i]
+			E.uu[k] += cu'Iμ*cu
+			E.u[k] += cu'g
+		end
+	else
+		expansion = quote
+			cx = con.∇c[i][:,ix]
+			cu = con.∇c[i][:,iu]
 
-		E.xx[k] += cx'Iμ*cx
-		E.uu[k] += cu'Iμ*cu
-		E.ux[k] += cu'Iμ*cx
+			E.xx[k] += cx'Iμ*cx
+			E.uu[k] += cu'Iμ*cu
+			E.ux[k] += cu'Iμ*cx
 
-		g = Iμ*c + λ
-		E.x[k] += cx'g
-		E.u[k] += cu'g
+			E.x[k] += cx'g
+			E.u[k] += cu'g
+		end
+	end
+	quote
+		ix,iu = Z[1]._x, Z[1]._u
+		@inbounds for i in eachindex(con.inds)
+			k = con.inds[i]
+			c = con.vals[i]
+			λ = con.λ[i]
+			μ = con.μ[i]
+			a = con.active[i]
+			Iμ = Diagonal( a .* μ )
+			g = Iμ*c + λ
+
+			$expansion
+		end
 	end
 end
+
 
 
 
