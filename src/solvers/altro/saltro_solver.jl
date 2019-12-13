@@ -17,8 +17,8 @@ $(FIELDS)
     constraint_tolerance::T = 1e-5
 
     # Infeasible Start
-    "infeasible control constraint tolerance."
-    constraint_tolerance_infeasible::T = 1.0e-5
+    "Use infeasible model (augment controls to make it fully actuated)"
+    infeasible::Bool = false
 
     "regularization term for infeasible controls."
     R_inf::T = 1.0
@@ -35,34 +35,12 @@ $(FIELDS)
     "penalty update rate for infeasible controls."
     penalty_scaling_infeasible::T = 10.0
 
-    # Minimum Time
-    "regularization term for dt."
-    R_minimum_time::T = 1.0
-
-    "maximum allowable dt."
-    dt_max::T = 1.0
-
-    "minimum allowable dt."
-    dt_min::T = 1.0e-3
-
-    "initial penalty term for minimum time bounds constraints."
-    penalty_initial_minimum_time_inequality::T = 1.0
-
-    "initial penalty term for minimum time equality constraints."
-    penalty_initial_minimum_time_equality::T = 1.0
-
-    "penalty update rate for minimum time bounds constraints."
-    penalty_scaling_minimum_time_inequality::T = 1.0
-
-    "penalty update rate for minimum time equality constraints."
-    penalty_scaling_minimum_time_equality::T = 1.0
-
     # Projected Newton
     "finish with a projecte newton solve."
     projected_newton::Bool = true
 
     "options for projected newton solver."
-    opts_pn::StaticPNSolverOptions{T} = StaticPNSolverOptions{T}()
+    opts_pn::StaticPNSolverOptions{T} = StaticPNSolverOptions{Float64}()
 
     "constraint satisfaction tolerance that triggers the projected newton solver.
     If set to a non-positive number it will kick out when the maximum penalty is reached."
@@ -87,7 +65,19 @@ end
 
 AbstractSolver(prob::StaticProblem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
 
-function StaticALTROSolver(prob::StaticProblem{Q,T}, opts::StaticALTROSolverOptions=StaticALTROSolverOptions{T}()) where {Q,T}
+function StaticALTROSolver(prob::StaticProblem{Q,T},
+        opts::StaticALTROSolverOptions=StaticALTROSolverOptions{T}();
+        infeasible=false) where {Q,T}
+    if infeasible
+        # Convert to an infeasible problem
+        prob = InfeasibleProblem(prob, prob.Z, opts.R_inf/prob.Z[1].dt)
+
+        # Set infeasible constraint parameters
+        # con_inf = get_constraints(prob).constraints[end]
+        # con_inf::ConstraintVals{T,Control,<:InfeasibleConstraint}
+        # con_inf.params.μ0 = opts.penalty_initial_infeasible
+        # con_inf.params.ϕ = opts.penalty_scaling_infeasible
+    end
     solver_al = StaticALSolver(prob, opts.opts_al)
     solver_pn = StaticPNSolver(prob, opts.opts_pn)
     StaticALTROSolver{T}(opts,solver_al,solver_pn)
@@ -95,6 +85,7 @@ end
 
 @inline Base.size(solver::StaticALTROSolver) = size(solver.solver_pn)
 @inline get_trajectory(solver::StaticALTROSolver) = get_trajectory(solver.solver_al)
+@inline get_objective(solver::StaticALTROSolver) = get_objective(solver.solver_al)
 function get_constraints(solver::StaticALTROSolver)
     if solver.opts.projected_newton
         get_constraints(solver.solver_pn)
