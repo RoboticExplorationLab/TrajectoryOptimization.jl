@@ -27,12 +27,21 @@ function gen_con_inds(conSet::ConstraintSets)
 
     # Dynamics and general constraints
     idx = 0
-    for (i,con) in enumerate(conSet.constraints)
-		for (j,k) in enumerate(con.inds)
-			cons[i][_index(con,k)] = idx .+ (1:conLen[i])
-			idx += conLen[i]
-        end
-    end
+    # for (i,con) in enumerate(conSet.constraints)
+	# 	for (j,k) in enumerate(con.inds)
+	# 		cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+	# 		idx += conLen[i]
+    #     end
+    # end
+	for k = 1:N
+		for (i,con) in enumerate(conSet.constraints)
+			if k in con.inds
+				j = _index(con,k)
+				cons[i][j] = idx .+ (1:conLen[i])
+				idx += conLen[i]
+			end
+		end
+	end
     return cons
 end
 

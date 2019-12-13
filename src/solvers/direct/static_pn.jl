@@ -15,6 +15,8 @@ end
     solve_type::Symbol = :feasible
     active_set_tolerance::T = 1e-3
     feasibility_tolerance::T = 1e-6
+    ρ::T = 1e-2
+    r_threshold::T = 1.1
 end
 
 

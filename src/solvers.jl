@@ -85,6 +85,11 @@ function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
 end
 
 # ConstrainedSolver methods
+function max_violation(solver::ConstrainedSolver, Z::Traj)
+    update_constraints!(solver, Z)
+    max_violation(solver)
+end
+
 function max_violation(solver::ConstrainedSolver)
     conSet = get_constraints(solver)
     max_violation!(conSet)
@@ -98,11 +103,7 @@ end
 
 function update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
     conSet = get_constraints(solver)
-    active_set = get_active_set(solver)
     update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
-    for i = 1:length(conSet.constraints)
-        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
-    end
 end
 
 function constraint_jacobian!(solver::ConstrainedSolver, Z=get_trajectory(solver))

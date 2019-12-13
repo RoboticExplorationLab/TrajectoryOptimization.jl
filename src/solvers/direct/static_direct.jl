@@ -49,6 +49,13 @@ function copy_constraints!(d, solver::DirectSolver)
     return nothing
 end
 
+function copy_active_set!(a, solver::DirectSolver)
+    conSet = get_constraints(solver)
+    for i = 1:length(conSet.constraints)
+        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
+    end
+end
+
 
 """Copy constraint Jacobians to given indices in a sparse array
 Dispatches on bandedness of the constraint"""

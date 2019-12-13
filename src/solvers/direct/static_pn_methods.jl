@@ -1,17 +1,19 @@
 function solve!(solver::StaticPNSolver)
     reset!(solver)
-    
+
     update_constraints!(solver)
     copy_constraints!(solver)
     constraint_jacobian!(solver)
     copy_jacobians!(solver)
     cost_expansion!(solver)
     update_active_set!(solver)
+    copy_active_set!(solver)
 
     if solver.opts.verbose
         println("\nProjection:")
     end
     viol = projection_solve!(solver)
+    @show viol
     copyto!(solver.Z, solver.P)
 end
 
@@ -49,8 +51,8 @@ function _projection_solve!(solver::StaticPNSolver)
     Z = primals(solver)
     a = solver.active_set
     max_refinements = 10
-    convergence_rate_threshold = 1.1
-    ρ = 1e-2
+    convergence_rate_threshold = solver.opts.r_threshold
+    ρ = solver.opts.ρ
 
     # Assume constant, diagonal cost Hessian (for now)
     H = Diagonal(solver.H)
@@ -65,6 +67,7 @@ function _projection_solve!(solver::StaticPNSolver)
     copyto!(solver.P, solver.Z)
     copy_constraints!(solver)
     copy_jacobians!(solver)
+    copy_active_set!(solver)
 
     # Get active constraints
     D,d = active_constraints(solver)
@@ -99,33 +102,37 @@ end
 
 function _projection_linesearch!(solver::StaticPNSolver,
         S, HinvD)
+    conSet = get_constraints(solver)
     a = solver.active_set
     d = solver.d[a]
     viol0 = norm(d,Inf)
     viol = Inf
-    ρ = 1e-4
 
     P = solver.P
     Z = solver.Z
-    P̄ = copy(solver.P)
+    P̄ = solver.P̄
     Z̄ = solver.Z̄
 
+    solve_tol = 1e-8
+    refinement_iters = 25
     α = 1.0
     ϕ = 0.5
     count = 1
     while true
-        δλ = reg_solve(S[1], d, S[2], 1e-8, 25)
+        δλ = reg_solve(S[1], d, S[2], solve_tol, refinement_iters)
         δZ = -HinvD*δλ
         P̄.Z .= P.Z + α*δZ
 
         copyto!(Z̄, P̄)
         update_constraints!(solver, Z̄)
+        max_violation!(conSet)
+        viol_ = maximum(conSet.c_max)
         copy_constraints!(solver)
         d = solver.d[a]
         viol = norm(d,Inf)
 
         if solver.opts.verbose
-            println("feas: ", viol)
+            println("feas: ", viol, " (", viol_, ")")
         end
         if viol < viol0 || count > 10
             break
@@ -135,6 +142,7 @@ function _projection_linesearch!(solver::StaticPNSolver,
         end
     end
     copyto!(P.Z, P̄.Z)
+    # copyto!(solver.Z, P.Z)
     return viol
 end
 
@@ -173,3 +181,4 @@ end
 
 @inline copy_constraints!(solver::StaticPNSolver) = copy_constraints!(solver.d, solver)
 @inline copy_jacobians!(solver::StaticPNSolver) = copy_jacobians!(solver.D, solver)
+@inline copy_active_set!(solver::StaticPNSolver) = copy_active_set!(solver.active_set, solver)
