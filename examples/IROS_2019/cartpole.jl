@@ -1,4 +1,3 @@
-using BenchmarkTools, Plots, SNOPT7
 
 T = Float64
 
@@ -29,14 +28,19 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=Ipopt.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=SNOPT7.Optimizer(),
-    feasibility_tolerance=max_con_viol)
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+#     nlp=SNOPT7.Optimizer(),
+#     feasibility_tolerance=max_con_viol)
+
+prob_altro = copy(Problems.cartpole)
+@time p0, s0 = solve(prob_altro, opts_al)
+max_violation(p0)
+@btime solve($prob_altro, $opts_al)
 
 # ALTRO w/ Newton
 prob_altro = copy(Problems.cartpole)
 @time p1, s1 = solve(prob_altro, opts_altro)
-@benchmark p1, s1 = solve($prob_altro, $opts_altro)
+@btime p1, s1 = solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 plot(p1.X,title="Cartpole state (ALTRO)")
 plot(p1.U,title="Cartpole control (ALTRO)")
@@ -46,7 +50,7 @@ prob_ipopt = copy(Problems.cartpole)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.cartpole) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
-@benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
+@btime p2, s2 = solve($prob_ipopt, $opts_ipopt)
 push!(s2.stats[:iter_time],s2.stats[:time])
 push!(s2.stats[:c_max], max_violation_direct(p2))
 max_violation_direct(p2)

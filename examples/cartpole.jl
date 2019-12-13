@@ -34,6 +34,7 @@ prob = copy(Problems.cartpole_static)
 U0 = deepcopy(controls(prob))
 alilqr = StaticALSolver(prob, opts_al)
 solve!(alilqr)
+max_violation(alilqr)
 
 @btime begin
     initial_controls!($alilqr, $U0)
@@ -44,6 +45,7 @@ end
 altro = StaticALTROSolver(prob, opts_altro)
 initial_controls!(altro, U0)
 solve!(altro)
+max_violation(altro)
 
 @btime begin
     initial_controls!($altro, $U0)
@@ -57,5 +59,6 @@ rollout!(prob_ipopt)
 ipopt = StaticDIRCOLSolver(prob_ipopt, opts_ipopt)
 ipopt.opts.verbose = false
 solve!(ipopt)
+max_violation(ipopt)
 
 @btime solve!($ipopt)

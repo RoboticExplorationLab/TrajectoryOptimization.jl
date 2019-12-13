@@ -37,10 +37,8 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
 prob = copy(Problems.car_3obs_static)
 U0 = deepcopy(controls(prob))
 al = StaticALSolver(prob, opts_al)
-
 initial_controls!(al, U0)
 solve!(al)
-al.stats.iterations
 max_violation(al)
 
 @btime begin
@@ -76,6 +74,7 @@ ipopt.opts.verbose = true
 solve!(ipopt)
 max_violation(ipopt)
 
+ipopt.opts.verbose = false
 @btime solve!($ipopt)
 
 p = plot(prob.model, get_trajectory(ipopt))

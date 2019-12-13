@@ -15,6 +15,7 @@ opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     constraint_tolerance=max_con_viol)
 
 opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
+    active_set_tolerance=1e-4,
     feasibility_tolerance=max_con_viol)
 
 opts_altro = ALTROSolverOptions{T}(verbose=verbose,
@@ -26,16 +27,21 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=Ipopt.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=SNOPT7.Optimizer(),
-    feasibility_tolerance=max_con_viol)
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+#     nlp=SNOPT7.Optimizer(),
+#     feasibility_tolerance=max_con_viol)
 
+prob_altro = copy(Problems.parallel_park)
+@time p0, s0 = solve(prob_altro, opts_al)
+@btime solve($prob_altro, $opts_al)
+max_violation(s0)
 
 # ALTRO w/ Newton
 prob_altro = copy(Problems.parallel_park)
 @time p1, s1 = solve(prob_altro, opts_altro)
-@benchmark p1, s1 = solve($prob_altro, $opts_altro)
+@btime solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
+
 X1 = to_array(p1.X)
 plot(X1[1,:],X1[2,:],title="Parallel Park - (ALTRO)")
 plot(p1.U,title="Parallel Park - (ALTRO)")
@@ -45,7 +51,7 @@ prob_ipopt = copy(Problems.parallel_park)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
-@benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
+@btime solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 X2 = to_array(p2.X)
 plot(X2[1,:],X2[2,:],title="Parallel Park - (Ipopt)")

@@ -43,8 +43,8 @@ goal_xf(v,x,u=zeros(4)) = let x_goal = xf[inds_no_quat], inds=inds_no_quat
     v .= x[inds_no_quat]-x_goal
 end
 Ix_goal = Matrix(1.0I,n,n)[inds_no_quat,:]
-∇goal_xf(∇c,x,u) = let ∇goal = Ix_goal
-    ∇c .= goal
+∇goal_xf(∇c,x,u=zeros(4)) = let ∇goal = Ix_goal
+    ∇c .= ∇goal
 end
 
 con_xf = Constraint{Equality}(goal_xf, ∇goal_xf, n, m, 9, :goal_xf)

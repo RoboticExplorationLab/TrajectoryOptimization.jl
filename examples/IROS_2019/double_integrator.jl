@@ -1,4 +1,4 @@
-using BenchmarkTools, Plots, SNOPT7
+using BenchmarkTools, Ipopt
 
 T = Float64
 
@@ -24,15 +24,20 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=Ipopt.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=SNOPT7.Optimizer(),
-    feasibility_tolerance=max_con_viol)
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+#     nlp=SNOPT7.Optimizer(),
+#     feasibility_tolerance=max_con_viol)
 
+# AL-iLQR
+prob_altro = copy(Problems.doubleintegrator)
+p0, s0 = solve(prob_altro, opts_al)
+@btime solve($prob_altro, $opts_al)
+max_violation(p0)
 
 # ALTRO w/o Newton
 prob_altro = copy(Problems.doubleintegrator)
 @time p1, s1 = solve(prob_altro, opts_altro)
-@benchmark p1, s1 = solve($prob_altro, $opts_altro)
+@btime p1, s1 = solve($prob_altro, $opts_altro)
 max_violation(p1)
 plot(p1.X,title="Double Integrator state (ALTRO)")
 plot(p1.U,title="Double Integrator control (ALTRO)")
@@ -42,7 +47,7 @@ prob_ipopt = copy(Problems.doubleintegrator)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.doubleintegrator) # get continuous time model
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
-@benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
+@btime p2, s2 = solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 plot(p2.X,title="Double Integrator state (Ipopt)")
 plot(p2.U,title="Double Integrator control (Ipopt)")

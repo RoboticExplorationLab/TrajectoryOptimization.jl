@@ -30,18 +30,24 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
     nlp=Ipopt.Optimizer(),
     feasibility_tolerance=max_con_viol)
 
-opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
-    nlp=SNOPT7.Optimizer(),
-    feasibility_tolerance=max_con_viol)
+# opts_snopt = DIRCOLSolverOptions{T}(verbose=verbose,
+#     nlp=SNOPT7.Optimizer(),
+#     feasibility_tolerance=max_con_viol)
 
 
 x0 = Problems.car_3obs.x0
 xf = Problems.car_3obs.xf
 
+# AL-iLQR
+prob_al= copy(Problems.car_3obs)
+@time p0, s0 = solve(prob_al, opts_al)
+@btime solve($prob_al, $opts_al)
+max_violation_direct(p0)
+
 # ALTRO w/ Newton
 prob_altro = copy(Problems.car_3obs)
 @time p1, s1 = solve(prob_altro, opts_altro)
-@benchmark p1, s1 = solve($prob_altro, $opts_altro)
+@btime solve($prob_altro, $opts_altro)
 max_violation_direct(p1)
 Problems.plot_car_3obj(p1.X,x0,xf)
 
@@ -50,7 +56,7 @@ prob_ipopt = copy(Problems.car_3obs)
 rollout!(prob_ipopt)
 prob_ipopt = update_problem(prob_ipopt,model=Dynamics.car) # get continuous time model)
 @time p2, s2 = solve(prob_ipopt, opts_ipopt)
-@benchmark p2, s2 = solve($prob_ipopt, $opts_ipopt)
+@btime solve($prob_ipopt, $opts_ipopt)
 max_violation_direct(p2)
 Problems.plot_car_3obj(p2.X,x0,xf)
 
