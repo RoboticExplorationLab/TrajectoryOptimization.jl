@@ -4,7 +4,7 @@ Primary module for setting up and solving trajectory optimization problems.
 """
 module TrajectoryOptimization
 
-using RigidBodyDynamics
+# using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 using Interpolations
@@ -13,18 +13,18 @@ using LinearAlgebra
 using Statistics
 using Random
 using SparseArrays
-using SuiteSparse
+# using SuiteSparse
 using StaticArrays
 using Logging
-using Formatting
-using Plots
+# using Formatting
+# using Plots
 using BenchmarkTools
-using PartedArrays
+# using PartedArrays
 using Parameters
-using Rotations
-using BlockArrays
+# using Rotations
+# using BlockArrays
 using MathOptInterface
-using TimerOutputs
+# using TimerOutputs
 
 const MOI = MathOptInterface
 
@@ -133,13 +133,13 @@ export
     convertProblem
 
 # Trajectory Types
-Trajectory{T} = Vector{T} where T <: AbstractArray
-VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
-MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
-AbstractVectorTrajectory{T} = Vector{V} where {V <: AbstractVector{T}, T <: Real}
-DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
-PartedVecTrajectory{T} = Vector{PartedVector{T,Vector{T}}}
-PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
+# Trajectory{T} = Vector{T} where T <: AbstractArray
+# VectorTrajectory{T} = Vector{Vector{T}} where T <: Real
+# MatrixTrajectory{T} = Vector{Matrix{T}} where T <: Real
+# AbstractVectorTrajectory{T} = Vector{V} where {V <: AbstractVector{T}, T <: Real}
+# DiagonalTrajectory{T} = Vector{Diagonal{T,Vector{T}}} where T <: Real
+# PartedVecTrajectory{T} = Vector{PartedVector{T,Vector{T}}}
+# PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("utils.jl")
 # include("constraints.jl")
