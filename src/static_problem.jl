@@ -1,5 +1,6 @@
 export
-    StaticProblem
+    StaticProblem,
+    change_integration
 
 
 """

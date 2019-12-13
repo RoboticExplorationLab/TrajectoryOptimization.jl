@@ -19,3 +19,9 @@ function ispossemidef(A)
 		return true
 	end
 end
+
+function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
+    infs = isinf.(A)
+    A[infs] = sign.(A[infs])*infbnd
+    return nothing
+end

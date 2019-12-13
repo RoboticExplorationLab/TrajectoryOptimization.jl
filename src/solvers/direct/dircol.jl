@@ -49,11 +49,6 @@ end
 Get the row and column lists of a sparse matrix, with ordered elements
 """
 
-function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
-    infs = isinf.(A)
-    A[infs] = sign.(A[infs])*infbnd
-    return nothing
-end
 
 """Number of collocation constraints"""
 num_colloc(prob::Problem)::Int = (prob.N-1)*prob.model.n

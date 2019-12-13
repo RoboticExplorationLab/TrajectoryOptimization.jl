@@ -194,8 +194,3 @@ function solve(prob::Problem{T,Discrete}, opts::DIRCOLSolverOptions) where T<:Ab
     solver = solve!(prob_c, opts)
     return prob_c, solver
 end
-
-
-function optimizer_name(optimizer::MathOptInterface.AbstractOptimizer)
-    nameof(parentmodule(typeof(optimizer)))
-end

@@ -258,3 +258,7 @@ function nlp_options(opts::DIRCOLSolverOptions)
 
     return opts.opts
 end
+
+function optimizer_name(optimizer::MathOptInterface.AbstractOptimizer)
+    nameof(parentmodule(typeof(optimizer)))
+end

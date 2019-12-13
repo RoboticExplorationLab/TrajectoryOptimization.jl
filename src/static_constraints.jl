@@ -15,7 +15,7 @@ export
 	Control,
 	Coupled,
 	Dynamical
-	
+
 "Sense of a constraint (inequality / equality / null)"
 abstract type ConstraintSense end
 "Inequality constraints"
@@ -310,12 +310,12 @@ function evaluate(con::CircleConstraint{T,P}, x::SVector) where {T,P}
 	-(x[1] .- xc).^2 - (x[2] .- yc).^2 + r.^2
 end
 
-function Plots.plot!(con::CircleConstraint{T,P}; color=:red, kwargs...) where {T,P}
-	for i = 1:P
-		x,y,r = con.x[i], con.y[i], con.radius[i]
-		plot_circle!((x,y),r; kwargs..., label="", color=color, linecolor=color)
-	end
-end
+# function Plots.plot!(con::CircleConstraint{T,P}; color=:red, kwargs...) where {T,P}
+# 	for i = 1:P
+# 		x,y,r = con.x[i], con.y[i], con.radius[i]
+# 		plot_circle!((x,y),r; kwargs..., label="", color=color, linecolor=color)
+# 	end
+# end
 
 
 struct SphereConstraint{T,P} <: AbstractStaticConstraint{Inequality,Stage,P}
