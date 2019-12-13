@@ -114,6 +114,15 @@ function initial_trajectory!(prob::StaticProblem, Z::Traj)
     end
 end
 
+function initial_states!(prob::StaticProblem, X0::Vector{<:AbstractVector})
+    set_states!(prob.Z, X0)
+end
+
+function initial_states!(prob::StaticProblem, X0::AbstractMatrix)
+    X0 = [X0[:,k] for k = 1:size(X0,2)]
+    set_states!(prob.Z, X0)
+end
+
 function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
     set_controls!(prob.Z, U0)
 end
