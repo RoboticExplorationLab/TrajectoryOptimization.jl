@@ -527,8 +527,8 @@ end
 		u0 = control(z)[con.iu]
 		con.z.z = [x0; u0]
 		∇c = jacobian(con.con, con.z)
-		A = ∇c[$ix,$ix]
-		B = ∇c[$ix,$iu]
+		A = ∇c[:,$ix]
+		B = ∇c[:,$iu]
 		[$∇c1 A $∇c2 $∇c3 B $∇c4]
 	end
 end
