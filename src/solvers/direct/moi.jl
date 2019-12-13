@@ -195,30 +195,6 @@ function solve(prob::Problem{T,Discrete}, opts::DIRCOLSolverOptions) where T<:Ab
     return prob_c, solver
 end
 
-function nlp_options(opts::DIRCOLSolverOptions)
-    solver_name = optimizer_name(opts.nlp)
-    if solver_name == :Ipopt
-        !opts.verbose ? opts.opts[:print_level] = 0 : opts.opts[:print_level] = 2
-        if opts.feasibility_tolerance > 0.
-            opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
-            opts.opts[:tol] = opts.feasibility_tolerance
-        end
-    elseif solver_name == :SNOPT7
-        if !opts.verbose
-            opts.opts[:Major_print_level] = 0
-            opts.opts[:Minor_print_level] = 0
-        end
-        if opts.feasibility_tolerance > 0.
-            opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance
-            opts.opts[:Minor_feasibility_tolerance] = opts.feasibility_tolerance
-            opts.opts[:Major_optimality_tolerance] = opts.feasibility_tolerance
-        end
-    else
-        error("Nonlinear solver not implemented")
-    end
-
-    return opts.opts
-end
 
 function optimizer_name(optimizer::MathOptInterface.AbstractOptimizer)
     nameof(parentmodule(typeof(optimizer)))

@@ -25,19 +25,24 @@ struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     linds::Vector{<:Vector{SV} where SV}
     con_inds::Vector{<:Vector{SV} where SV}
 
+    jacobian_structure::Symbol
+
     function StaticDIRCOLSolver(opts,stats, NN,NP,dyn_con::DynamicsConstraint{Q,L,T,N},
             obj,conSet,conSet_all,Z::Vector{KnotPoint{T,N,M,NM}},
             x0, optimizer, E,
-            xinds,uinds,linds,con_inds) where {Q,L,T,N,M,NM}
+            xinds,uinds,linds,con_inds,jac_structure) where {Q,L,T,N,M,NM}
         new{Q,L,T,N,M,NM}(opts,stats, NN,NP,dyn_con,obj,conSet,conSet_all,Z,x0,optimizer,E,
-            xinds,uinds,linds,con_inds)
+            xinds,uinds,linds,con_inds,jac_structure)
     end
 
 end
 
 Base.size(solver::StaticDIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
 
-function StaticDIRCOLSolver(prob::StaticProblem{Q}, opts::DIRCOLSolverOptions=DIRCOLSolverOptions()) where Q
+function StaticDIRCOLSolver(prob::StaticProblem{Q},
+        opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
+        jacobian_structure=:by_knotpoint) where Q
+
     n,m,N = size(prob)
     Z = prob.Z
 
@@ -73,17 +78,19 @@ function StaticDIRCOLSolver(prob::StaticProblem{Q}, opts::DIRCOLSolverOptions=DI
 
     blk_len = map(con->length(con.∇c[1]), conSet.constraints)
     con_len = map(con->length(con.∇c), conSet.constraints)
-    linds = [[@SVector zeros(Int,blk) for i = 1:len] for (blk,len) in zip(blk_len, con_len)]
-    con_inds = gen_con_inds(get_constraints(prob))
+    con_inds = gen_con_inds(get_constraints(prob), jacobian_structure)
 
+    # These get filled in with call to constraint_jacobian_structure
+    linds = [[@SVector zeros(Int,blk) for i = 1:len] for (blk,len) in zip(blk_len, con_len)]
 
     # Create MOI Optimizer
     nlp_opts = Dict(Symbol(key)=>value for (key,val) in pairs(opts.nlp.options))
-    optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
+    # optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
+    optimizer = typeof(opts.nlp)(print_level=5)
 
     # Create Solver
     d = StaticDIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
-        Z, prob.x0, optimizer, E, xinds, uinds, linds, con_inds)
+        Z, prob.x0, optimizer, E, xinds, uinds, linds, con_inds, jacobian_structure)
 
     # Set up MOI problem
     V0 = zeros(NN)
@@ -158,7 +165,7 @@ MOI.features_available(d::StaticDIRCOLSolver) = [:Grad, :Jac]
 MOI.initialize(d::StaticDIRCOLSolver, features) = nothing
 
 function MOI.jacobian_structure(d::StaticDIRCOLSolver)
-    jac_struct = constraint_jacobian_structure(d)
+    jac_struct = constraint_jacobian_structure(d, d.jacobian_structure)
     r,c = get_rc(jac_struct)
     jac_struct = collect(zip(r,c))
 end
@@ -193,10 +200,10 @@ MOI.eval_hessian_lagrangian(::StaticDIRCOLSolver, H, x, σ, μ) = nothing
 
 function solve!(d::StaticDIRCOLSolver)
     # Update options
-    nlp_opts = nlp_options(d.opts)
-    for (key,val) in nlp_opts
-        d.optimizer.options[String(key)] = val
-    end
+    # nlp_opts = nlp_options(d.opts)
+    # for (key,val) in nlp_opts
+    #     d.optimizer.options[String(key)] = val
+    # end
 
     # Solve with MOI
     MOI.optimize!(d.optimizer)
@@ -211,4 +218,29 @@ function solve!(d::StaticDIRCOLSolver)
         d.stats[key] = val
     end
     return nothing
+end
+
+function nlp_options(opts::DIRCOLSolverOptions)
+    solver_name = optimizer_name(opts.nlp)
+    if solver_name == :Ipopt
+        !opts.verbose ? opts.opts[:print_level] = 0 : opts.opts[:print_level] = 5
+        if opts.feasibility_tolerance > 0.
+            opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
+            opts.opts[:tol] = opts.feasibility_tolerance
+        end
+    elseif solver_name == :SNOPT7
+        if !opts.verbose
+            opts.opts[:Major_print_level] = 0
+            opts.opts[:Minor_print_level] = 0
+        end
+        if opts.feasibility_tolerance > 0.
+            opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance
+            opts.opts[:Minor_feasibility_tolerance] = opts.feasibility_tolerance
+            opts.opts[:Major_optimality_tolerance] = opts.feasibility_tolerance
+        end
+    else
+        error("Nonlinear solver not implemented")
+    end
+
+    return opts.opts
 end

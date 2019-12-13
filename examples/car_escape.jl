@@ -57,4 +57,5 @@ solve!(ipopt)
 max_violation(ipopt)
 Problems.plot_escape(states(ipopt))
 
+ipopt.opts.verbose = false
 @btime solve!($ipopt)

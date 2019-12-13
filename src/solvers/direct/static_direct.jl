@@ -1,6 +1,37 @@
 
+function gen_con_inds(conSet::ConstraintSets, structure=:by_knotpoint)
+	n,m = size(conSet)
+    N = length(conSet.p)
+    numcon = length(conSet.constraints)
+    conLen = length.(conSet.constraints)
 
-function constraint_jacobian_structure(solver::DirectSolver, Z=get_trajectory(solver))
+    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
+
+    # Dynamics and general constraints
+    idx = 0
+	if structure == :by_constraint
+	    for (i,con) in enumerate(conSet.constraints)
+			for (j,k) in enumerate(con.inds)
+				cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+				idx += conLen[i]
+	        end
+	    end
+	elseif structure == :by_knotpoint
+		for k = 1:N
+			for (i,con) in enumerate(conSet.constraints)
+				if k in con.inds
+					j = _index(con,k)
+					cons[i][j] = idx .+ (1:conLen[i])
+					idx += conLen[i]
+				end
+			end
+		end
+	end
+    return cons
+end
+
+function constraint_jacobian_structure(solver::DirectSolver,
+		structure=:by_knopoint)
     n,m,N = size(solver)
     conSet = get_constraints(solver)
     idx = 0.0
@@ -17,14 +48,29 @@ function constraint_jacobian_structure(solver::DirectSolver, Z=get_trajectory(so
     con_len = map(con->length(con.∇c), conSet.constraints)
 
     # Linear indices
-    for (i,con) in enumerate(conSet.constraints)
-        for (j,k) in enumerate(con.inds)
-            inds = idx .+ (1:blk_len[i])
-            linds[i][j] = inds
-            con.∇c[j] = inds
-            idx += blk_len[i]
-        end
-    end
+	if structure == :by_constraint
+	    for (i,con) in enumerate(conSet.constraints)
+	        for (j,k) in enumerate(con.inds)
+	            inds = idx .+ (1:blk_len[i])
+	            linds[i][j] = inds
+	            con.∇c[j] = inds
+	            idx += blk_len[i]
+	        end
+	    end
+	elseif structure == :by_knotpoint
+		for k = 1:N
+			for (i,con) in enumerate(conSet.constraints)
+				if k in con.inds
+					inds = idx .+ (1:blk_len[i])
+					j = _index(con,k)
+					linds[i][j] = inds
+					con.∇c[j] = inds
+					idx += blk_len[i]
+				end
+			end
+		end
+	end
+
     copy_jacobians!(D, solver)
     return D
 end

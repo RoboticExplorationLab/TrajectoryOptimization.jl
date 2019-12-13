@@ -17,33 +17,6 @@ function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con 
 	return goals
 end
 
-function gen_con_inds(conSet::ConstraintSets)
-	n,m = size(conSet)
-    N = length(conSet.p)
-    numcon = length(conSet.constraints)
-    conLen = length.(conSet.constraints)
-
-    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
-
-    # Dynamics and general constraints
-    idx = 0
-    # for (i,con) in enumerate(conSet.constraints)
-	# 	for (j,k) in enumerate(con.inds)
-	# 		cons[i][_index(con,k)] = idx .+ (1:conLen[i])
-	# 		idx += conLen[i]
-    #     end
-    # end
-	for k = 1:N
-		for (i,con) in enumerate(conSet.constraints)
-			if k in con.inds
-				j = _index(con,k)
-				cons[i][j] = idx .+ (1:conLen[i])
-				idx += conLen[i]
-			end
-		end
-	end
-    return cons
-end
 
 function get_bounds(conSet::ConstraintSets)
     N = length(conSet.p)
