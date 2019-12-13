@@ -2,7 +2,7 @@
 
 function remove_bounds!(conSet::ConstraintSets)
     bnds = filter(is_bound, conSet.constraints)
-    n,m = size(bnds[1])
+    n,m = conSet.n, conSet.m
     filter!(x->!is_bound(x), conSet.constraints)
     num_constraints!(conSet)  # re-calculate number of constraints after removing bounds
 	return bnds
@@ -49,7 +49,7 @@ function get_bounds(conSet::ConstraintSets)
     N = length(conSet.p)
 
 	bnds = remove_bounds!(conSet)
-	n,m = size(bnds[1])
+	n,m = size(conSet)
     inds = [bnd.inds for bnd in bnds]
 
     # Make sure the bounds don't overlap

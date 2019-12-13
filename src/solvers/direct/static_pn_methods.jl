@@ -13,7 +13,6 @@ function solve!(solver::StaticPNSolver)
         println("\nProjection:")
     end
     viol = projection_solve!(solver)
-    @show viol
     copyto!(solver.Z, solver.P)
 end
 
