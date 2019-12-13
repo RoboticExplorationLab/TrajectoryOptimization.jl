@@ -515,10 +515,24 @@ function get_bounds(prob::Problem, bounds::Vector{<:BoundConstraint})
 
     # Constraints
     p = num_constraints(prob)
-    g_U = [PartedVector(prob.constraints[k]) for k = 1:N-1]
-    g_L = [PartedVector(prob.constraints[k]) for k = 1:N-1]
-    push!(g_U, PartedVector(prob.constraints[N], :terminal))
-    push!(g_L, PartedVector(prob.constraints[N], :terminal))
+    # g_U = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    # g_L = [PartedVector(prob.constraints[k]) for k = 1:N-1]
+    # push!(g_U, PartedVector(prob.constraints[N], :terminal))
+    # push!(g_L, PartedVector(prob.constraints[N], :terminal))
+    g_U = map(1:N) do k
+        if k == N
+            PartedVector(prob.constraints[k], :terminal)
+        else
+            PartedVector(prob.constraints[k])
+        end
+    end
+    g_L = map(1:N) do k
+        if k == N
+            PartedVector(prob.constraints[k], :terminal)
+        else
+            PartedVector(prob.constraints[k])
+        end
+    end
     for k = 1:N
         if p[k] > 0
             g_L[k].inequality .= -Inf

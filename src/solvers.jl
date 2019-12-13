@@ -11,6 +11,7 @@ export
     controls,
     initial_controls!,
     initial_states!,
+    initial_trajectory!,
     rollout!,
     get_trajectory
 

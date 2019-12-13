@@ -123,9 +123,9 @@ num_duals(solver::StaticDIRCOLSolver) =  solver.NP
 
 "Include bounds when calculating max violation on the solver"
 function max_violation(solver::StaticDIRCOLSolver)
+    Z = get_trajectory(solver)
     conSet = solver.constraints_all
-    max_violation!(conSet)
-    return maximum(conSet.c_max)
+    max_violation(conSet, Z)
 end
 
 primal_partition(prob::StaticDIRCOLSolver) = prob.xinds, prob.uinds

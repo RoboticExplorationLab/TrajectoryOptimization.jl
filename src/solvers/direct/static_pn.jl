@@ -4,8 +4,8 @@ export
 
 @with_kw mutable struct StaticPNStats{T}
     iterations::Int = 0
-    c_max::Vector{T} = zeros(1)
-    cost::Vector{T} = zeros(1)
+    c_max::Vector{T} = zeros(5)
+    cost::Vector{T} = zeros(5)
 end
 
 
