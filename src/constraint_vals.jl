@@ -269,7 +269,7 @@ function num_constraints!(conSet::ConstraintSets)
 	end
 end
 
-@inline TrajectoryOptimization.num_constraints(conSet::ConstraintSets) = conSet.p
+@inline num_constraints(conSet::ConstraintSets) = conSet.p
 
 function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
 	if idx == -1
