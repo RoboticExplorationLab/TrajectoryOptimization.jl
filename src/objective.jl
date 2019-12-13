@@ -48,36 +48,6 @@ Base.iterate(obj::Objective, start=1) = Base.iterate(obj.cost, start)
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
-# """```julia
-# cost(obj::Objective, X::Vector, U::Vector, dt::Vector)
-# ```
-# Calculate cost over entire state and control trajectories
-# """
-# function cost(obj::Objective, X::Vector{<:AbstractVector}, U::Vector{<:AbstractVector}, dt::Vector)
-#     N = length(X)
-#     J = 0.0
-#     for k = 1:N-1
-#         J += stage_cost(obj[k],X[k],U[k],dt[k])
-#     end
-#     J += stage_cost(obj[N],X[N])
-#     return J
-# end
-
-# "$(SIGNATURES) Compute the second order Taylor expansion of the cost for the entire trajectory"
-# function cost_expansion!(Q::ExpansionTrajectory{T}, obj::Objective,
-#         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}, dt::Vector{T}) where T
-#     cost_expansion!(Q,obj.cost,X,U,dt)
-# end
-#
-# function cost_expansion!(Q::ExpansionTrajectory{T}, c::CostTrajectory,
-#         X::AbstractVectorTrajectory{T}, U::AbstractVectorTrajectory{T}, dt::Vector{T}) where T
-#     N = length(X)
-#     for k = 1:N-1
-#         cost_expansion!(Q[k],c[k],X[k],U[k],dt[k])
-#     end
-#     cost_expansion!(Q[N],c[N],X[N])
-# end
-
 @doc raw"""```julia
 LQRObjective(Q, R, Qf, xf, N)
 ```
