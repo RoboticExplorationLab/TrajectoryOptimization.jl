@@ -1,6 +1,21 @@
 export
     StaticDIRCOLSolver
 
+"$(TYPEDEF) Solver options for the Direct Collocation solver. Most options are passed to the NLP through the `opts` dictionary"
+@with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
+    "NLP Solver to use. See MathOptInterface for available NLP solvers"
+    nlp::MathOptInterface.AbstractOptimizer = Ipopt.Optimizer()
+
+    "Options dictionary for the nlp solver"
+    opts::Dict{Symbol,Any} = Dict{Symbol,Any}()
+
+    "Print output to console"
+    verbose::Bool = true
+
+    "Feasibility tolerance"
+    feasibility_tolerance::T = -1.0
+end
+
 struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     opts::DIRCOLSolverOptions
     stats::Dict{Symbol,Any}

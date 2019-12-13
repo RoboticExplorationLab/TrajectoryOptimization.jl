@@ -1,3 +1,4 @@
+using Test
 prob = copy(Problems.car_3obs_static)
 Z0 = copy(prob.Z)
 X0 = deepcopy(states(Z0))

@@ -9,6 +9,9 @@ export
     QuadratureRule,
     RK3,
     HermiteSimpson
+
+abstract type AbstractModel end
+
 abstract type FreeBodyModel <: AbstractModel end
 abstract type QuadratureRule end
 abstract type Implicit <: QuadratureRule end

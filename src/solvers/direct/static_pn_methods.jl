@@ -145,6 +145,26 @@ function _projection_linesearch!(solver::StaticPNSolver,
     return viol
 end
 
+reg_solve(A, b, reg::Real, tol=1e-10, max_iters=10) = reg_solve(A, b, A + reg*I, tol, max_iters)
+function reg_solve(A, b, B, tol=1e-10, max_iters=10)
+    x = B\b
+    count = 0
+    while count < max_iters
+        r = b - A*x
+        # println("r_norm = $(norm(r))")
+
+        if norm(r) < tol
+            break
+        else
+            x += B\r
+            count += 1
+        end
+    end
+    # println("iters = $count")
+
+    return x
+end
+
 
 function active_constraints(solver::StaticPNSolver)
     return solver.D[solver.active_set, :], solver.d[solver.active_set]  # this allocates

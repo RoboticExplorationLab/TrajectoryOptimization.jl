@@ -1,8 +1,6 @@
 export
     DIRCOLSolver
 
-abstract type DirectSolver{T} <: ConstrainedSolver{T} end
-abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
 
 include("primals.jl")
@@ -124,20 +122,6 @@ function num_active_constraints(solver::ProjectedNewtonSolver)
 end
 
 
-"$(TYPEDEF) Solver options for the Direct Collocation solver. Most options are passed to the NLP through the `opts` dictionary"
-@with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
-    "NLP Solver to use. See MathOptInterface for available NLP solvers"
-    nlp::MathOptInterface.AbstractOptimizer = Ipopt.Optimizer()
-
-    "Options dictionary for the nlp solver"
-    opts::Dict{Symbol,Any} = Dict{Symbol,Any}()
-
-    "Print output to console"
-    verbose::Bool = true
-
-    "Feasibility tolerance"
-    feasibility_tolerance::T = -1.0
-end
 
 
 

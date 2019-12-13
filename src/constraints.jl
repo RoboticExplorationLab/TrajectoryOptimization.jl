@@ -2,17 +2,6 @@ using PartedArrays, Test, ForwardDiff
 using BenchmarkTools
 using DocStringExtensions
 
-"Sense of a constraint (inequality / equality / null)"
-abstract type ConstraintSense end
-"Inequality constraints"
-abstract type Equality <: ConstraintSense end
-"Equality constraints"
-abstract type Inequality <: ConstraintSense end
-"An empty constraint"
-abstract type Null <: ConstraintSense end
-
-abstract type GeneralConstraint end
-abstract type AbstractConstraint{S<:ConstraintSense} <: GeneralConstraint end
 
 import Base.+
 function +(C::Vector{<:GeneralConstraint}, con::GeneralConstraint)

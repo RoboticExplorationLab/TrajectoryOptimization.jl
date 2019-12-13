@@ -8,7 +8,6 @@ abstract type ModelType end
 abstract type Nominal <: ModelType end
 abstract type Uncertain <: ModelType end
 
-abstract type AbstractModel end
 abstract type Model{M<:ModelType,D<:DynamicsType} <: AbstractModel end
 
 export

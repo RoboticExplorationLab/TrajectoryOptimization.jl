@@ -266,7 +266,7 @@ end
 function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
         V, S, HinvY)
     to = solver.stats[:timer]
-    
+
     a = solver.a.duals
     y = solver.y[a]
     viol0 = norm(y,Inf)
@@ -301,26 +301,6 @@ function _projection_linesearch!(prob::Problem, solver::ProjectedNewtonSolver,
     end
     copyto!(Z,Z_)
     return viol
-end
-
-reg_solve(A, b, reg::Real, tol=1e-10, max_iters=10) = reg_solve(A, b, A + reg*I, tol, max_iters)
-function reg_solve(A, b, B, tol=1e-10, max_iters=10)
-    x = B\b
-    count = 0
-    while count < max_iters
-        r = b - A*x
-        # println("r_norm = $(norm(r))")
-
-        if norm(r) < tol
-            break
-        else
-            x += B\r
-            count += 1
-        end
-    end
-    # println("iters = $count")
-
-    return x
 end
 
 

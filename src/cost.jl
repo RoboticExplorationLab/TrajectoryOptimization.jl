@@ -98,7 +98,6 @@ end
 # "$(SIGNATURES) Evaluate the second order expansion at the terminal state `xN`"
 # cost_expansion!(Q::Expansion, cost::CostFunction, xN) = nothing
 
-
 """
 $(TYPEDEF)
 Cost function of the form
@@ -154,6 +153,7 @@ function Base.show(io::IO, cost::QuadraticCost)
     print(io, "QuadraticCost{...}")
 end
 
+import Base: +
 function +(c1::QuadraticCost, c2::QuadraticCost)
     @assert state_dim(c1) == state_dim(c2)
     @assert control_dim(c1) == control_dim(c2)
