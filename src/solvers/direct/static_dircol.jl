@@ -49,8 +49,8 @@ function get_bounds(conSet::ConstraintSets)
 	goals = remove_goals!(conSet)
 	for goal in goals
 		for (i,k) in enumerate(goal.inds)
-			zL[k][1:n] = goal.con.xf
-			zU[k][1:n] = goal.con.xf
+			zL[k][goal.con.inds] = goal.con.xf
+			zU[k][goal.con.inds] = goal.con.xf
 		end
 	end
 	zU = vcat(zU...)

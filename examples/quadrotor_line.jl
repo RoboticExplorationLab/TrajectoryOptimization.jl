@@ -46,7 +46,8 @@ ilqr.stats.iterations
     initial_controls!($ilqr, $U0)
     solve!($ilqr)
 end
-# 1.25 ms/iteration
+# 1.25 ms/iteration @ jarvis
+# 0.76 ms/iteration @ bellman
 
 # AL-iLQR
 prob = copy(Problems.quadrotor_static)
