@@ -1,6 +1,7 @@
 module Dynamics
 
-using TrajectoryOptimization: Model, UncertainModel, Trajectory, Constraint, Equality, Inequality, Problem
+# using TrajectoryOptimization: Model, UncertainModel, Trajectory, Constraint, Equality, Inequality, Problem
+using TrajectoryOptimization: Equality, Inequality
 using TrajectoryOptimization
 using RigidBodyDynamics
 using LinearAlgebra
@@ -24,13 +25,13 @@ export
     car
 
 include("../dynamics/pendulum.jl")
-include("../dynamics/doublependulum.jl")
-include("../dynamics/acrobot.jl")
-include("../dynamics/ballonbeam.jl")
+# include("../dynamics/doublependulum.jl")
+# include("../dynamics/acrobot.jl")
+# include("../dynamics/ballonbeam.jl")
 include("../dynamics/cartpole.jl")
 include("../dynamics/quadrotor.jl")
-include("../dynamics/quadrotor_euler.jl")
-include("../dynamics/kuka.jl")
+# include("../dynamics/quadrotor_euler.jl")
+# include("../dynamics/kuka.jl")
 include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")
 
