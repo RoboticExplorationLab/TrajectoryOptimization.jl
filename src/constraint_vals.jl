@@ -2,6 +2,13 @@ export
 	ConstraintVals,
 	ConstraintSets
 
+@with_kw mutable struct ConstraintParams{T}
+	ϕ::T = 10.0  	  # penalty scaling parameter
+	μ0::T = 1.0 	  # initial penalty parameter
+	μ_max::T = 1e8    # max penalty parameter
+	λ_max::T = 1e8    # max Lagrange multiplier
+end
+
 struct ConstraintVals{T,W,C,P,NM,PNM}
 	con::C
 	inds::UnitRange{Int}
@@ -12,15 +19,19 @@ struct ConstraintVals{T,W,C,P,NM,PNM}
 	μ::Vector{SVector{P,T}}
 	active::Vector{SVector{P,Bool}}
 	c_max::Vector{T}
+	params::ConstraintParams{T}
+
 	function ConstraintVals(con::AbstractStaticConstraint{S, W},
 			inds::UnitRange{Int}, vals::V, vals_prev,
-			∇c::Vector{SMatrix{P,NM,T,PNM}}, λ::V, μ::V, active::Vector{SVector{P,Bool}},
-			c_max::Vector{T}) where {S,W,T,P,NM,PNM, V}
-		new{T,W,typeof(con),P,NM,PNM}(con,inds,vals,vals_prev,∇c,λ,μ,active,c_max)
+			∇c::Vector{SMatrix{P,NM,T,PNM}}, λ::V, μ::V,
+			active::Vector{SVector{P,Bool}}, c_max::Vector{T},
+			params::ConstraintParams) where {S,W,T,P,NM,PNM,V}
+		new{T,W,typeof(con),P,NM,PNM}(con,inds,vals,vals_prev,∇c,λ,μ,
+			active,c_max, params)
 	end
 end
 
-function ConstraintVals(con::C, inds::UnitRange) where C
+function ConstraintVals(con::C, inds::UnitRange; kwargs...) where C
 	p = length(con)
 	w = width(con)
 	P = length(inds)
@@ -29,8 +40,12 @@ function ConstraintVals(con::C, inds::UnitRange) where C
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
 	∇c   = [@SMatrix zeros(Float64,p,w) for k = 1:P]
-	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P))
+	params = ConstraintParams(;kwargs...)
+	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P),
+		params)
 end
+
+get_params(con::ConstraintVals)::ConstraintParams = con.params
 
 function _index(con::ConstraintVals, k::Int)
 	if k ∈ con.inds
@@ -66,7 +81,7 @@ jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z, con.in
 function update_active_set!(con::ConstraintVals{T,W,C}, tol=0.0) where
 		{T,W,C<:AbstractConstraint{Inequality}}
 	for i in eachindex(con.vals)
-		con.active[i] = @. (con.vals[i] >= tol) | (con.λ[i] > 0)
+		con.active[i] = @. (con.vals[i] >= -tol) | (con.λ[i] > 0)
 	end
 	return nothing
 end
@@ -77,7 +92,7 @@ update_active_set!(con::ConstraintVals{T,W,C}, tol=0.0) where
 function update_active_set!(con::ConstraintVals{T,W,C}, ::Val{tol}) where
 		{T,W,C<:AbstractStaticConstraint{Inequality},tol}
 	for i in eachindex(con.vals)
-		con.active[i] = @. (con.vals[i] >= tol) | (con.λ[i] > 0)
+		con.active[i] = @. (con.vals[i] >= -tol) | (con.λ[i] > 0)
 	end
 	return nothing
 end
@@ -131,6 +146,17 @@ function cost!(J, con::ConstraintVals, Z)
 		λ = con.λ[i]
 		Iμ = penalty_matrix(con, i)
 		J[k] += λ'c + 0.5*c'Iμ*c
+	end
+end
+
+function reset!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
+	λ = con.λ
+	c = con.vals
+	μ = con.μ
+	for i in eachindex(con.inds)
+		μ[i] = con.params.μ0 * @SVector ones(T,P)
+		c[i] *= 0.0
+		λ[i] *= 0.0
 	end
 end
 
@@ -270,6 +296,16 @@ function max_violation!(conSet::ConstraintSets{T}) where T
 	end
 end
 
+function max_violation(conSet::ConstraintSets)
+	max_violation!(conSet)
+	maximum(conSet.c_max)
+end
+
+function max_violation(conSet::ConstraintSets, Z::Traj)
+	evaluate!(conSet, Z)
+	max_violation(conSet)
+end
+
 function max_penalty!(conSet::ConstraintSets{T}) where T
 	for (i,con) in enumerate(conSet.constraints)
 		max_penalty!(con)
@@ -299,9 +335,9 @@ Base.iterate(conSet::ConstraintSets) = @inbounds (conSet.constraints[1], 1)
 Base.iterate(conSet::ConstraintSets, i) = @inbounds i >= length(conSet.constraints) ? nothing : (conSet.constraints[i+1], i+1)
 @inline Base.getindex(conSet::ConstraintSets, i) = conSet.constraints[i]
 
-function reset!(conSet::ConstraintSets, opts)
+function reset!(conSet::ConstraintSets)
 	for con in conSet.constraints
-		reset!(con, opts)
+		reset!(con)
 	end
 end
 

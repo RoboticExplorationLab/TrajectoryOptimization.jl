@@ -55,20 +55,17 @@ $(FIELDS)
     "maximum outerloop updates."
     iterations::Int = 30
 
-    "minimum Lagrange multiplier."
-    dual_min::T = -1.0e8
+    "global maximum Lagrange multiplier. If NaN, use value from constraint"
+    dual_max::T = NaN
 
-    "maximum Lagrange multiplier."
-    dual_max::T = 1.0e8
+    "global maximum penalty term. If NaN, use value from constraint"
+    penalty_max::T = NaN
 
-    "maximum penalty term."
-    penalty_max::T = 1.0e8
+    "global initial penalty term. If NaN, use value from constraint"
+    penalty_initial::T = NaN
 
-    "initial penalty term."
-    penalty_initial::T = 1.0
-
-    "penalty update multiplier; penalty_scaling > 0."
-    penalty_scaling::T = 10.0
+    "global penalty update multiplier; penalty_scaling > 1. If NaN, use value from constraint"
+    penalty_scaling::T = NaN
 
     "penalty update multiplier when μ should not be update, typically 1.0 (or 1.0 + ϵ)."
     penalty_scaling_no::T = 1.0
@@ -87,6 +84,33 @@ $(FIELDS)
 
 end
 
+function reset!(conSet::ConstraintSets{T}, opts::StaticALSolverOptions{T}) where T
+    reset!(conSet)
+    if !isnan(opts.dual_max)
+        for con in conSet.constraints
+            params = get_params(con)::ConstraintParams{T}
+            params.λ_max = opts.dual_max
+        end
+    end
+    if !isnan(opts.penalty_max)
+        for con in conSet.constraints
+            params = get_params(con)::ConstraintParams{T}
+            params.μ_max = opts.penalty_max
+        end
+    end
+    if !isnan(opts.penalty_initial)
+        for con in conSet.constraints
+            params = get_params(con)::ConstraintParams{T}
+            params.μ0 = opts.penalty_initial
+        end
+    end
+    if !isnan(opts.penalty_scaling)
+        for con in conSet.constraints
+            params = get_params(con)::ConstraintParams{T}
+            params.ϕ = opts.penalty_scaling
+        end
+    end
+end
 
 
 struct StaticALSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
@@ -122,10 +146,12 @@ function StaticALSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions=St
     return solver
 end
 
-function reset!(solver::StaticALSolver)
+function reset!(solver::StaticALSolver{T}) where T
     reset!(solver.stats, solver.opts.iterations)
     reset!(solver.solver_uncon)
+    reset!(get_constraints(solver), solver.opts)
 end
+
 
 Base.size(solver::StaticALSolver) = size(solver.solver_uncon)
 @inline cost(solver::StaticALSolver) = cost(solver.solver_uncon)

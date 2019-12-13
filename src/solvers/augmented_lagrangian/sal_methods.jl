@@ -9,7 +9,7 @@ function solve!(solver::StaticALSolver{T,S}) where {T,S}
     solver_uncon = solver.solver_uncon::S
 
 	# Reset solver
-    reset!(conSet, solver.opts)
+    reset!(conSet)
     solver.stats.iterations = 0
 
 	# Calculate cost
@@ -93,31 +93,30 @@ end
 function dual_update!(solver::StaticALSolver) where {T,Q,N,M,NM}
     conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
-        dual_update!(conSet.constraints[i], solver.opts)
+        dual_update!(conSet.constraints[i])
     end
 end
 
 "Dual Update for Equality Constraints"
-function dual_update!(con::ConstraintVals{T,W,C},
-		opts::StaticALSolverOptions{T}) where
+function dual_update!(con::ConstraintVals{T,W,C}) where
 		{T,W,C<:AbstractStaticConstraint{Equality}}
 	λ = con.λ
 	c = con.vals
 	μ = con.μ
+	λ_max = con.params.λ_max
 	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], -opts.dual_max, opts.dual_max)
+		λ[i] = clamp.(λ[i] + μ[i] .* c[i], -λ_max, λ_max)
 	end
 end
 
 "Dual Update for Inequality Constraints"
-function dual_update!(con::ConstraintVals{T,W,C},
-		opts::StaticALSolverOptions{T}) where
+function dual_update!(con::ConstraintVals{T,W,C}) where
 		{T,W,C<:AbstractStaticConstraint{Inequality}}
 	λ = con.λ
 	c = con.vals
 	μ = con.μ
 	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], 0.0, opts.dual_max)
+		λ[i] = clamp.(λ[i] + μ[i] .* c[i], 0.0, con.params.λ_max)
 	end
 end
 
@@ -125,27 +124,15 @@ end
 function penalty_update!(solver::StaticALSolver)
     conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
-        penalty_update!(conSet.constraints[i], solver.opts)
+        penalty_update!(conSet.constraints[i])
     end
 end
 
 "Penalty Update for ConstraintVals"
-function penalty_update!(con::ConstraintVals{T}, opts::StaticALSolverOptions{T}) where T
-	ϕ = opts.penalty_scaling
+function penalty_update!(con::ConstraintVals{T}) where T
+	ϕ = con.params.ϕ
 	μ = con.μ
 	for i in eachindex(con.inds)
-		μ[i] = clamp.(ϕ * μ[i], 0.0, opts.penalty_max)
-	end
-end
-
-
-function reset!(con::ConstraintVals{T,W,C,P}, opts::StaticALSolverOptions{T}) where {T,W,C,P}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	for i in eachindex(con.inds)
-		μ[i] = opts.penalty_initial * @SVector ones(T,P)
-		c[i] *= 0.0
-		λ[i] *= 0.0
+		μ[i] = clamp.(ϕ * μ[i], 0.0, con.params.μ_max)
 	end
 end
