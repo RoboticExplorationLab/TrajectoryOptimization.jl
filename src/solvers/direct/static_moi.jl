@@ -85,8 +85,7 @@ function StaticDIRCOLSolver(prob::StaticProblem{Q},
 
     # Create MOI Optimizer
     nlp_opts = Dict(Symbol(key)=>value for (key,val) in pairs(opts.nlp.options))
-    # optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
-    optimizer = typeof(opts.nlp)(print_level=5)
+    optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
 
     # Create Solver
     d = StaticDIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
@@ -200,10 +199,10 @@ MOI.eval_hessian_lagrangian(::StaticDIRCOLSolver, H, x, σ, μ) = nothing
 
 function solve!(d::StaticDIRCOLSolver)
     # Update options
-    # nlp_opts = nlp_options(d.opts)
-    # for (key,val) in nlp_opts
-    #     d.optimizer.options[String(key)] = val
-    # end
+    nlp_opts = nlp_options(d.opts)
+    for (key,val) in nlp_opts
+        d.optimizer.options[String(key)] = val
+    end
 
     # Solve with MOI
     MOI.optimize!(d.optimizer)
