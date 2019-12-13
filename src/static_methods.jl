@@ -33,7 +33,7 @@ function stage_cost(cost::CostFunction, z::KnotPoint)
     if is_terminal(z)
         stage_cost(cost, state(z))
     else
-        stage_cost(cost, state(z), control(z), z.dt)
+        stage_cost(cost, state(z), control(z))*z.dt
     end
 end
 
