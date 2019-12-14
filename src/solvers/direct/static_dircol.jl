@@ -88,7 +88,7 @@ function add_dynamics_constraints!(prob::Problem{Q}) where Q
     add_constraint!(conSet, dyn_con, 1)
 
     # Initial condition
-    init_con = ConstraintVals( GoalConstraint(n,m,prob.x0), 1:1)
+    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
     add_constraint!(conSet, init_con, 1)
 
     return nothing

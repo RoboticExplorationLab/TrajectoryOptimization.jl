@@ -13,7 +13,7 @@ obj = LQRObjective(Q,R,Qf,xf,N)
 
 u_bnd = 3.0
 bnd = BoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
-goal = GoalConstraint(n,m,xf)
+goal = GoalConstraint(xf)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_goal = ConstraintVals(goal, N:N)
 conSet = ConstraintSets(n,m,[con_bnd, con_goal], N)

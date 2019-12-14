@@ -49,13 +49,13 @@ x = SVector{n_circles_escape}(x)
 y = SVector{n_circles_escape}(y)
 r = SVector{n_circles_escape}(r)
 
-obs = CircleConstraint(n,m,x,y,r)
+obs = CircleConstraint(n,x,y,r)
 con_obs = ConstraintVals(obs, 2:N-1)
 
 bnd = BoundConstraint(n,m,u_min=-5.,u_max=5.)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 
-goal = GoalConstraint(n,m,xf)
+goal = GoalConstraint(xf)
 con_xf = ConstraintVals(goal, N:N)
 
 conSet = ConstraintSets(n,m,[con_obs, con_bnd, con_xf], N)

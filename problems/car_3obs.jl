@@ -24,13 +24,13 @@ circle_x = @SVector [0.25, 0.5, 0.75]
 circle_y = @SVector [0.25, 0.5, 0.75]
 circle_r = @SVector fill(r_circle_3obs, 3)
 
-circle_con = CircleConstraint(n,m, circle_x, circle_y, circle_r)
+circle_con = CircleConstraint(n, circle_x, circle_y, circle_r)
 con_obs = ConstraintVals(circle_con, 2:N-1)
 
 bnd = BoundConstraint(n,m, u_min=[-1,-3],u_max=[2,3])
 con_bnd = ConstraintVals(bnd, 1:N-1)
 
-goal_con = GoalConstraint(n,m,xf)
+goal_con = GoalConstraint(xf)
 con_xf = ConstraintVals(goal_con, N:N)
 
 conSet = ConstraintSets(n,m,[con_obs, con_xf], N)

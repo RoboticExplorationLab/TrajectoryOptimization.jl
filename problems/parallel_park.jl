@@ -18,7 +18,7 @@ u_bnd = 2.
 x_min = @SVector [-0.25, -0.001, -Inf]
 x_max = @SVector [0.25, 1.001, Inf]
 bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd)
-goal = GoalConstraint(n,m,xf)
+goal = GoalConstraint(xf)
 
 # Constraint vals
 con_bnd = ConstraintVals(bnd, 1:N-1)
