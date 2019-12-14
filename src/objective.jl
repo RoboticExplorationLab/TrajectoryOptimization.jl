@@ -37,6 +37,7 @@ Base.length(obj::AbstractObjective) = length(obj.cost)
 
 """$(TYPEDEF)
 Objective: stores stage cost(s) and terminal cost functions
+
 Constructors:
 ```julia
 Objective(cost, N)

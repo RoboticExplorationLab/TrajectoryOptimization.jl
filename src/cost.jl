@@ -14,10 +14,14 @@ function stage_cost(cost::CostFunction, z::KnotPoint)
     end
 end
 
-"```
+"""```
 cost(obj::Objective, Z::Traj)::Float64
+cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
 ```
-Evaluate the cost for a trajectory"
+Evaluate the cost for a trajectory.
+Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
+    use the appropriate integration rule, if defined.
+"""
 function cost(obj::Objective, Z::Traj)::Float64
     J::Float64 = 0.0
     for k in eachindex(Z)
@@ -25,6 +29,9 @@ function cost(obj::Objective, Z::Traj)::Float64
     end
     return J
 end
+
+# Default to no integration
+cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj, Z)
 
 "Evaluate the cost for a trajectory (non-allocating)"
 @inline function cost!(obj::Objective, Z::Traj)
@@ -70,15 +77,22 @@ end
 #     cost_gradient(cost, z)..., cost_hessian(cost, z)...
 
 
-"```
+"""```
 cost_gradient!(E::CostExpansion, obj::Objective, Z::Traj)
-``` Calculate the cost gradient for an entire trajectory"
+cost_gradient!(E::CostExpansion, obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
+```
+Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
+    use the appropriate integration rule, if defined.
+"""
 function cost_gradient!(E, obj::Objective, Z::Traj)
     N = length(Z)
     for k in eachindex(Z)
         E.x[k], E.u[k] = cost_gradient(obj[k], Z[k])
     end
 end
+
+# Default to no integration
+cost_gradient!(E, obj, dyn_con::DynamicsConstraint{Q}, Z) where Q = cost_gradient!(E, obj, Z)
 
 "```
 cost_hessian!(E::CostExpansion, obj::Objective, Z::Traj)

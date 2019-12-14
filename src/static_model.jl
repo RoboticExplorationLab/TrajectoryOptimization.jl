@@ -1,5 +1,6 @@
 export
     AbstractModel,
+    InfeasibleModel,
     dynamics,
     discrete_dyanmics,
     jacobian,
@@ -10,13 +11,26 @@ export
     RK3,
     HermiteSimpson
 
+""" $(TYPEDEF)
+Abstraction of a model of a dynamical system of the form ẋ = f(x,u), where x is the n-dimensional state vector
+and u is the m-dimensional control vector.
+
+Any inherited type must define the following interface:
+ẋ = dynamics(model, x, u)
+n,m = size(model)
+"""
 abstract type AbstractModel end
 
 abstract type FreeBodyModel <: AbstractModel end
+"Integration rule for approximating the continuous integrals for the equations of motion"
 abstract type QuadratureRule end
+"Integration rules of the form x′ = f(x,u), where x′ is the next state"
 abstract type Implicit <: QuadratureRule end
+"Integration rules of the form x′ = f(x,u,x′,u′), where x′,u′ are the states and controls at the next time step."
 abstract type Explicit <: QuadratureRule end
+"Third-order Runge-Kutta method with zero-order-old on the controls"
 abstract type RK3 <: Implicit end
+"Third-order Runge-Kutta method with first-order-hold on the controls"
 abstract type HermiteSimpson <: Explicit end
 
 "Default quadrature rule"
@@ -50,14 +64,24 @@ end
 
 """Default size method for model (assumes model has fields n and m)"""
 @inline Base.size(model::AbstractModel) = model.n, model.m
-@inline is_euclidean(model::AbstractModel) = true
 
 ############################################################################################
 #                               CONTINUOUS TIME METHODS                                    #
 ############################################################################################
-
+"""```
+ẋ = dynamics(model, z::KnotPoint)
+```
+Compute the continuous dynamics of a dynamical system given a KnotPoint"""
 @inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
 
+"""```
+∇f = jacobian(model, z::KnotPoint)
+∇f = jacobian(model, z::SVector)
+```
+Compute the Jacobian of the continuous-time dynamics using ForwardDiff. The input can be either
+a static vector of the concatenated state and control, or a KnotPoint. They must be concatenated
+to avoid unnecessary memory allocations.
+"""
 function jacobian(model::AbstractModel, z::KnotPoint)
     ix, iu = z._x, z._u
     f_aug(z) = dynamics(model, z[ix], z[iu])
@@ -76,21 +100,31 @@ end
 #                          IMPLICIT DISCRETE TIME METHODS                                  #
 ############################################################################################
 
-"Set default integrator"
+# Set default integrator
 @inline discrete_dynamics(model::AbstractModel, z::KnotPoint) =
     discrete_dynamics(DEFAULT_Q, model, z)
 
+""" Compute the discretized dynamics of `model` using implicit integration scheme `Q<:QuadratureRule`.
+
+Methods:
+```
+x′ = discrete_dynamics(Q, model, x, u, dt)
+x′ = discrete_dynamics(Q, model, z::KnotPoint)
+```
+"""
 @inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit =
     discrete_dynamics(Q, model, state(z), control(z), z.dt)
 
-function discrete_dynamics(::Type{RK3}, model::AbstractModel, x, u, dt)
-    k1 = dynamics(model, x, u)*dt;
-    k2 = dynamics(model, x + k1/2, u)*dt;
-    k3 = dynamics(model, x - k1 + 2*k2, u)*dt;
-    x + (k1 + 4*k2 + k3)/6
-end
 
-"Set default integrator"
+""" Compute the discrete dynamics Jacobian of `model` using implicit integration scheme `Q<:QuadratureRule`
+
+Methods:
+```
+∇f = discrete_jacobian(model, z::KnotPoint)
+∇f = discrete_jacobian(model, s::SVector{NM1}, ix::SVector{N}, iu::SVector{M})
+```
+where `s = [x; u; dt]` and `ix` and `iu` are the indices to extract the state and controls.
+"""
 @inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
     discrete_jacobian(DEFAULT_Q, model, z)
 
