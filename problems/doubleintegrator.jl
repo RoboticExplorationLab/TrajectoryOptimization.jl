@@ -19,7 +19,7 @@ obj = LQRObjective(Q,R,Qf,xf,N)
 
 # Constraints
 u_bnd = 1.5
-bnd = StaticBoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
+bnd = BoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 conSet = ConstraintSets(n,m,[con_bnd], N)
 

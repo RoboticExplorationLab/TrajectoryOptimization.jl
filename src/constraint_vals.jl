@@ -21,7 +21,7 @@ struct ConstraintVals{T,W,C,P,NM,PNM}
 	c_max::Vector{T}
 	params::ConstraintParams{T}
 
-	function ConstraintVals(con::AbstractStaticConstraint{S, W},
+	function ConstraintVals(con::AbstractConstraint{S, W},
 			inds::UnitRange{Int}, vals::V, vals_prev,
 			∇c::Vector{SMatrix{P,NM,T,PNM}}, λ::V, μ::V,
 			active::Vector{SVector{P,Bool}}, c_max::Vector{T},
@@ -78,19 +78,8 @@ jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z, con.in
 
 
 
-function update_active_set!(con::ConstraintVals{T,W,C}, tol=0.0) where
-		{T,W,C<:AbstractConstraint{Inequality}}
-	for i in eachindex(con.vals)
-		con.active[i] = @. (con.vals[i] >= -tol) | (con.λ[i] > 0)
-	end
-	return nothing
-end
-
-update_active_set!(con::ConstraintVals{T,W,C}, tol=0.0) where
-	{T,W,C<:AbstractConstraint{Equality}} = nothing
-
 function update_active_set!(con::ConstraintVals{T,W,C}, ::Val{tol}) where
-		{T,W,C<:AbstractStaticConstraint{Inequality},tol}
+		{T,W,C<:AbstractConstraint{Inequality},tol}
 	for i in eachindex(con.vals)
 		con.active[i] = @. (con.vals[i] >= -tol) | (con.λ[i] > 0)
 	end
@@ -98,7 +87,7 @@ function update_active_set!(con::ConstraintVals{T,W,C}, ::Val{tol}) where
 end
 
 update_active_set!(con::ConstraintVals{T,W,C}, ::Val{tol}) where
-	{T,W,C<:AbstractStaticConstraint{Equality},tol} = nothing
+	{T,W,C<:AbstractConstraint{Equality},tol} = nothing
 
 function viol_ineq(v::T, a)::T where T
 	for i in eachindex(a)
@@ -115,7 +104,7 @@ function viol_eq(v::T, a)::T where T
 end
 
 function max_violation!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractStaticConstraint{Inequality}}
+		{T,W,C<:AbstractConstraint{Inequality}}
 	for i in eachindex(con.c_max)
 		con.c_max[i] = viol_ineq(0.0, con.vals[i])
 	end
@@ -123,7 +112,7 @@ function max_violation!(con::ConstraintVals{T,W,C}) where
 end
 
 function max_violation!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractStaticConstraint{Equality}}
+		{T,W,C<:AbstractConstraint{Equality}}
 	for i in eachindex(con.c_max)
 		# con.c_max[i] = norm(con.vals[i],Inf)
 		con.c_max[i] = viol_eq(0.0, con.vals[i])
@@ -282,7 +271,7 @@ function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
 	num_constraints!(conSet)
 end
 
-function add_constraint!(conSet::ConstraintSets, con::AbstractStaticConstraint,
+function add_constraint!(conSet::ConstraintSets, con::AbstractConstraint,
 		inds::UnitRange, idx=-1)
 	conVal = ConstraintVals(con, inds)
 	add_constraint!(conSet, conVal, idx)

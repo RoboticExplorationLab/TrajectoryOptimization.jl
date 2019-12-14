@@ -2,7 +2,7 @@ export
 	ImplicitDynamics,
 	ExplicitDynamics,
 	GoalConstraint,
-	StaticBoundConstraint,
+	BoundConstraint,
 	CircleConstraint,
 	NormConstraint
 
@@ -26,15 +26,11 @@ abstract type Inequality <: ConstraintSense end
 abstract type Null <: ConstraintSense end
 
 abstract type GeneralConstraint end
-abstract type AbstractConstraint{S<:ConstraintSense} <: GeneralConstraint end
 
 abstract type ConstraintSense end
 abstract type Equality <: ConstraintSense end
 abstract type Inequality <: ConstraintSense end
 abstract type Null <: ConstraintSense end
-
-abstract type GeneralConstraint end
-abstract type AbstractConstraint{S<:ConstraintSense} <: GeneralConstraint end
 
 abstract type ConstraintType end
 abstract type Stage <: ConstraintType end
@@ -48,38 +44,38 @@ abstract type General <: ConstraintType end
 abstract type GeneralState <: General end
 abstract type GeneralControl <: General end
 
-abstract type AbstractStaticConstraint{S<:ConstraintSense,W<:ConstraintType,P} <: GeneralConstraint end
+abstract type AbstractConstraint{S<:ConstraintSense,W<:ConstraintType,P} <: GeneralConstraint end
 
 # Getters
-contype(::AbstractStaticConstraint{S,W}) where {S,W} = W
-sense(::AbstractStaticConstraint{S}) where S = S
+contype(::AbstractConstraint{S,W}) where {S,W} = W
+sense(::AbstractConstraint{S}) where S = S
 
 "Returns the width of band imposed by the constraint"
-width(con::AbstractStaticConstraint{S,Stage}) where S = state_dim(con) + control_dim(con)
-width(con::AbstractStaticConstraint{S,State}) where S = state_dim(con)
-width(con::AbstractStaticConstraint{S,Control}) where S = control_dim(con)
-width(con::AbstractStaticConstraint{S,Coupled}) where S = 2*(state_dim(con) + control_dim(con))
-width(con::AbstractStaticConstraint{S,Dynamical}) where S = 2*state_dim(con) + control_dim(con)
-width(con::AbstractStaticConstraint{S,CoupledState}) where S = 2*state_dim(con)
-width(con::AbstractStaticConstraint{S,CoupledControl}) where S = 2*control_dim(con)
-width(con::AbstractStaticConstraint{S,<:General}) where S = Inf
+width(con::AbstractConstraint{S,Stage}) where S = state_dim(con) + control_dim(con)
+width(con::AbstractConstraint{S,State}) where S = state_dim(con)
+width(con::AbstractConstraint{S,Control}) where S = control_dim(con)
+width(con::AbstractConstraint{S,Coupled}) where S = 2*(state_dim(con) + control_dim(con))
+width(con::AbstractConstraint{S,Dynamical}) where S = 2*state_dim(con) + control_dim(con)
+width(con::AbstractConstraint{S,CoupledState}) where S = 2*state_dim(con)
+width(con::AbstractConstraint{S,CoupledControl}) where S = 2*control_dim(con)
+width(con::AbstractConstraint{S,<:General}) where S = Inf
 
-upper_bound(con::AbstractStaticConstraint{Inequality,W,P}) where {P,W} = @SVector zeros(P)
-lower_bound(con::AbstractStaticConstraint{Inequality,W,P}) where {P,W} = -Inf*@SVector ones(P)
-upper_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
-lower_bound(con::AbstractStaticConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
-@inline is_bound(con::AbstractStaticConstraint) = false
+upper_bound(con::AbstractConstraint{Inequality,W,P}) where {P,W} = @SVector zeros(P)
+lower_bound(con::AbstractConstraint{Inequality,W,P}) where {P,W} = -Inf*@SVector ones(P)
+upper_bound(con::AbstractConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
+lower_bound(con::AbstractConstraint{Equality,W,P}) where {P,W} = @SVector zeros(P)
+@inline is_bound(con::AbstractConstraint) = false
 
-@inline check_dims(con::AbstractStaticConstraint{S,State},n,m) where S = state_dim(con) == n
-@inline check_dims(con::AbstractStaticConstraint{S,Control},n,m) where S = control_dim(con) == m
-@inline function check_dims(con::AbstractStaticConstraint{S,W},n,m) where {S,W<:ConstraintType}
+@inline check_dims(con::AbstractConstraint{S,State},n,m) where S = state_dim(con) == n
+@inline check_dims(con::AbstractConstraint{S,Control},n,m) where S = control_dim(con) == m
+@inline function check_dims(con::AbstractConstraint{S,W},n,m) where {S,W<:ConstraintType}
 	state_dim(con) == n && control_dim(con) == m
 end
 
-control_dims(::AbstractStaticConstraint{S,State}) where S =
+control_dims(::AbstractConstraint{S,State}) where S =
 	throw(ErrorException("Cannot get control dimension from a state-only constraint"))
 
-state_dims(::AbstractStaticConstraint{S,Control}) where S =
+state_dims(::AbstractConstraint{S,Control}) where S =
 	throw(ErrorException("Cannot get state dimension from a control-only constraint"))
 
 """
@@ -87,28 +83,28 @@ Default evaluation of a constraint over and entire trajectory.
 This should be the method used to evaluate constraints.
 Some constraints may choose to replace this generic method (e.g. dynamics constraints)
 """
-function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Stage},
+function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractConstraint{P,<:Stage},
 		Z::Traj, inds=1:length(Z)) where P
 	for (i,k) in enumerate(inds)
 		vals[i] = evaluate(con, Z[k])
 	end
 end
 
-function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractStaticConstraint{P,<:Coupled},
+function evaluate!(vals::Vector{<:AbstractVector}, con::AbstractConstraint{P,<:Coupled},
 		Z::Traj, inds=1:length(Z)-1) where P
 	for (i,k) in enumerate(inds)
 		vals[i] = evaluate(con, Z[k+1], Z[k])
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Stage},
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractConstraint{P,<:Stage},
 		Z::Traj, inds=1:length(Z)) where P
 	for (i,k) in enumerate(inds)
 		∇c[i] = jacobian(con, Z[k])
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractStaticConstraint{P,<:Coupled},
+function jacobian!(∇c::Vector{<:AbstractMatrix}, con::AbstractConstraint{P,<:Coupled},
 	Z::Traj, inds=1:length(Z)-1) where P
 	for (i,k) in enumerate(inds)
 		∇c[i] = jacobian(con, Z[k+1], Z[k])
@@ -117,19 +113,19 @@ end
 
 for method in [:evaluate, :jacobian]
 	@eval begin
-			@inline $(method)(con::AbstractStaticConstraint{S,Stage},   Z::KnotPoint) where S = $(method)(con, state(Z), control(Z))
-			@inline $(method)(con::AbstractStaticConstraint{S,State},   Z::KnotPoint) where S = $(method)(con, state(Z))
-			@inline $(method)(con::AbstractStaticConstraint{S,Control}, Z::KnotPoint) where S = $(method)(con, control(Z))
+			@inline $(method)(con::AbstractConstraint{S,Stage},   Z::KnotPoint) where S = $(method)(con, state(Z), control(Z))
+			@inline $(method)(con::AbstractConstraint{S,State},   Z::KnotPoint) where S = $(method)(con, state(Z))
+			@inline $(method)(con::AbstractConstraint{S,Control}, Z::KnotPoint) where S = $(method)(con, control(Z))
 
-			@inline $(method)(con::AbstractStaticConstraint{S,Coupled}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,Coupled}, Z′::KnotPoint, Z::KnotPoint) where S =
 				$(method)(con, state(Z′), control(Z′), state(Z), control(Z))
-			@inline $(method)(con::AbstractStaticConstraint{S,Dynamical}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,Dynamical}, Z′::KnotPoint, Z::KnotPoint) where S =
 				$(method)(con, state(Z′), state(Z), control(Z))
 	end
 end
 
 
-function jacobian(con::AbstractStaticConstraint{P,W}, x::SVector{N}) where {P,N,W<:Union{State,Control}}
+function jacobian(con::AbstractConstraint{P,W}, x::SVector{N}) where {P,N,W<:Union{State,Control}}
 	eval_c(x) = evaluate(con, x)
 	ForwardDiff.jacobian(eval_c, x)
 end
@@ -140,7 +136,7 @@ end
 ############################################################################################
 
 
-abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractStaticConstraint{Equality,W,P} end
+abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractConstraint{Equality,W,P} end
 state_dim(con::AbstractDynamicsConstraint) = size(con.model)[1]
 control_dim(con::AbstractDynamicsConstraint) = size(con.model)[2]
 Base.length(con::AbstractDynamicsConstraint) = size(con.model)[1]
@@ -256,7 +252,7 @@ end
 #                              CUSTOM CONSTRAINTS 										   #
 ############################################################################################
 
-struct GoalConstraint{T,P,N,L} <: AbstractStaticConstraint{Equality,State,P}
+struct GoalConstraint{T,P,N,L} <: AbstractConstraint{Equality,State,P}
 	n::Int
 	m::Int
 	xf::SVector{P,T}
@@ -277,7 +273,7 @@ Base.length(::GoalConstraint{T,P}) where {T,P} = P
 evaluate(con::GoalConstraint, x::SVector) = x[con.inds] - con.xf
 jacobian(con::GoalConstraint, z::KnotPoint) = con.Ix
 
-struct LinearConstraint{S,W<:Union{State,Control},P,N,L,T} <: AbstractStaticConstraint{S,W,P}
+struct LinearConstraint{S,W<:Union{State,Control},P,N,L,T} <: AbstractConstraint{S,W,P}
 	n::Int
 	m::Int
 	A::SMatrix{P,N,T,L}
@@ -291,7 +287,7 @@ evaluate(con::LinearConstraint,x) = con.A*x - con.b
 jacobian(con::LinearConstraint,x) = con.A
 
 
-struct CircleConstraint{T,P} <: AbstractStaticConstraint{Inequality,State,P}
+struct CircleConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
 	n::Int
 	m::Int
 	x::SVector{P,T}
@@ -318,7 +314,7 @@ end
 # end
 
 
-struct SphereConstraint{T,P} <: AbstractStaticConstraint{Inequality,Stage,P}
+struct SphereConstraint{T,P} <: AbstractConstraint{Inequality,Stage,P}
 	n::Int
 	m::Int
 	x::SVector{P,T}
@@ -342,7 +338,7 @@ function evaluate(con::SphereConstraint{T,P}, x, u) where {T,P}
 	# -(x[1] - xc).^2 .- (x[2] - yc).^2 .- (x[3] - zc).^2 .+ r.^2
 end
 
-struct ControlNorm{S,T} <: AbstractStaticConstraint{S,Control,1}
+struct ControlNorm{S,T} <: AbstractConstraint{S,Control,1}
 	n::Int
 	m::Int
 	val::T
@@ -358,7 +354,7 @@ end
 
 
 
-struct NormConstraint{S,W<:Union{State,Control},T} <: AbstractStaticConstraint{S,W,1}
+struct NormConstraint{S,W<:Union{State,Control},T} <: AbstractConstraint{S,W,1}
 	dim::Int
 	val::T
 end
@@ -371,7 +367,7 @@ function evaluate(con::NormConstraint, x)
 end
 
 
-struct StaticBoundConstraint{T,P,PN,NM,PNM} <: AbstractStaticConstraint{Inequality,Stage,P}
+struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
 	n::Int
 	m::Int
 	z_max::SVector{NM,T}
@@ -381,7 +377,7 @@ struct StaticBoundConstraint{T,P,PN,NM,PNM} <: AbstractStaticConstraint{Inequali
 	active_N::SVector{PN,Int}
 end
 
-function StaticBoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
+function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
 	# Check and convert bounds
 	x_max, x_min = checkBounds(Val(n), x_max, x_min)
@@ -403,7 +399,7 @@ function StaticBoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@
 
 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
 
-	StaticBoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
+	BoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
 end
 
 function checkBounds(::Val{N}, u::AbstractVector, l::AbstractVector) where N
@@ -422,37 +418,37 @@ checkBounds(sze::Val{N}, u::Real, l::AbstractVector) where N =
 	checkBounds(sze, (@SVector fill(u,N)), l)
 
 
-state_dim(con::StaticBoundConstraint) = con.n
-control_dim(con::StaticBoundConstraint) = con.m
-Base.length(bnd::StaticBoundConstraint{T,P}) where {T,P} = P
-Base.size(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
-is_bound(::StaticBoundConstraint) = true
-lower_bound(bnd::StaticBoundConstraint) = bnd.z_min
-upper_bound(bnd::StaticBoundConstraint) = bnd.z_max
+state_dim(con::BoundConstraint) = con.n
+control_dim(con::BoundConstraint) = con.m
+Base.length(bnd::BoundConstraint{T,P}) where {T,P} = P
+Base.size(bnd::BoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
+is_bound(::BoundConstraint) = true
+lower_bound(bnd::BoundConstraint) = bnd.z_min
+upper_bound(bnd::BoundConstraint) = bnd.z_max
 
 
-function evaluate(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PNM}
+function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PNM}
 	bnd.B*SVector{NM}([x; u]) + bnd.b
 end
 
-function evaluate(bnd::StaticBoundConstraint{T,P,PN,NM,PNM}, x::SVector{n,T}) where {T,P,PN,NM,PNM,n}
+function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x::SVector{n,T}) where {T,P,PN,NM,PNM,n}
 	ix = SVector{n}(1:n)
 	B_N = bnd.B[bnd.active_N, ix]
 	b_N = bnd.b[bnd.active_N]
 	B_N*x + b_N
 end
 
-function jacobian(bnd::StaticBoundConstraint, z::KnotPoint)
+function jacobian(bnd::BoundConstraint, z::KnotPoint)
 	bnd.B
 end
 
-# function jacobian(bnd::StaticBoundConstraint, x::SVector{n,T}) where{n,T}
+# function jacobian(bnd::BoundConstraint, x::SVector{n,T}) where{n,T}
 # 	ix = SVector{n}(1:n)
 # 	bnd.B[bnd.active_N, ix]
 # end
 
 
-struct InfeasibleConstraint{N,M} <: AbstractStaticConstraint{Equality, Control, M} end
+struct InfeasibleConstraint{N,M} <: AbstractConstraint{Equality, Control, M} end
 
 InfeasibleConstraint(model::InfeasibleModel{N,M}) where {N,M} = InfeasibleConstraint{N,M}()
 InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
@@ -474,7 +470,7 @@ end
 
 
 
-struct IndexedConstraint{S,W,P,N,M,NM,Bx,Bu,C} <: AbstractStaticConstraint{S,W,P}
+struct IndexedConstraint{S,W,P,N,M,NM,Bx,Bu,C} <: AbstractConstraint{S,W,P}
 	n::Int  # new dimension
 	m::Int  # new dimension
 	con::C
@@ -487,7 +483,7 @@ state_dim(con::IndexedConstraint{S,Union{Stage,State}}) where S = con.n
 control_dim(con::IndexedConstraint{S,Union{Stage,Control}}) where S = con.m
 Base.length(::IndexedConstraint{S,W,P}) where {S,W,P} = P
 
-function IndexedConstraint(n,m,con::AbstractStaticConstraint{S,W,P},
+function IndexedConstraint(n,m,con::AbstractConstraint{S,W,P},
 		ix::SVector{N}, iu::SVector{M}) where {S,W,P,N,M}
 	x = @SVector rand(N)
 	u = @SVector rand(M)
@@ -497,7 +493,7 @@ function IndexedConstraint(n,m,con::AbstractStaticConstraint{S,W,P},
 	IndexedConstraint{S,W,P,N,M,N+M,Bx,Bu,typeof(con)}(n,m,con,ix,iu,z)
 end
 
-function IndexedConstraint(n,m,con::AbstractStaticConstraint{S,W}) where {S,W}
+function IndexedConstraint(n,m,con::AbstractConstraint{S,W}) where {S,W}
 	if W <: Union{State,CoupledState}
 		m0 = m
 	else

@@ -31,7 +31,7 @@ x_min = -Inf*ones(model.n)
 
 x_max[1:3] = [25.0; Inf; 20]
 x_min[1:3] = [-25.0; -Inf; 0.]
-bnd = StaticBoundConstraint(n,m,u_min=u_min)
+bnd = BoundConstraint(n,m,u_min=u_min)
 
 xf_no_quat_U = Vector(xf)
 xf_no_quat_L = Vector(xf)
@@ -39,7 +39,7 @@ xf_no_quat_U[4:7] .= Inf
 xf_no_quat_L[4:7] .= -Inf
 xf_no_quat_U[8:10] .= 0.
 xf_no_quat_L[8:10] .= 0.
-bnd_xf = StaticBoundConstraint(n,m, x_min=xf_no_quat_L, x_max=xf_no_quat_U)
+bnd_xf = BoundConstraint(n,m, x_min=xf_no_quat_L, x_max=xf_no_quat_U)
 inds_no_quat = SVector{n-4}(deleteat!(collect(1:n), 4:7))
 goal = GoalConstraint(n,m, xf, inds_no_quat)
 

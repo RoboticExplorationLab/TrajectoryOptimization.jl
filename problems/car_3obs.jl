@@ -27,7 +27,7 @@ circle_r = @SVector fill(r_circle_3obs, 3)
 circle_con = CircleConstraint(n,m, circle_x, circle_y, circle_r)
 con_obs = ConstraintVals(circle_con, 2:N-1)
 
-bnd = StaticBoundConstraint(n,m, u_min=[-1,-3],u_max=[2,3])
+bnd = BoundConstraint(n,m, u_min=[-1,-3],u_max=[2,3])
 con_bnd = ConstraintVals(bnd, 1:N-1)
 
 goal_con = GoalConstraint(n,m,xf)

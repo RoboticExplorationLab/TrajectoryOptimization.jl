@@ -74,7 +74,7 @@ function DIRCOLSolver(prob::Problem{Q},
 
     # Add bounds at infinity if the problem doesn't have any bound constraints
     if !any(is_bound.(conSet))
-        bnd = StaticBoundConstraint(n,m)
+        bnd = BoundConstraint(n,m)
         add_constraint!(conSet, ConstraintVals(bnd, 1:N))
     end
 

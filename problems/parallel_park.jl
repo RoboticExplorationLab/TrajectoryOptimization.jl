@@ -17,7 +17,7 @@ R = (1e-2)*Diagonal(@SVector ones(m))
 u_bnd = 2.
 x_min = @SVector [-0.25, -0.001, -Inf]
 x_max = @SVector [0.25, 1.001, Inf]
-bnd = StaticBoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd)
+bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd)
 goal = GoalConstraint(n,m,xf)
 
 # Constraint vals

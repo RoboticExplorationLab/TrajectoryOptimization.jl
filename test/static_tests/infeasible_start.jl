@@ -42,7 +42,7 @@ idx_con = IndexedConstraint(n,n+m,con)
 @test jacobian(idx_con, z) == jacobian(con, z0)
 @test test_con_allocs(idx_con, z) == 0
 
-bnd = StaticBoundConstraint(n,m, u_min=[0,-2], u_max=[Inf,2])
+bnd = BoundConstraint(n,m, u_min=[0,-2], u_max=[Inf,2])
 idx_bnd = IndexedConstraint(n,n+m,bnd)
 
 @test test_con_allocs(idx_bnd, z) == 0

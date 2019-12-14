@@ -52,7 +52,7 @@ r = SVector{n_circles_escape}(r)
 obs = CircleConstraint(n,m,x,y,r)
 con_obs = ConstraintVals(obs, 2:N-1)
 
-bnd = StaticBoundConstraint(n,m,u_min=-5.,u_max=5.)
+bnd = BoundConstraint(n,m,u_min=-5.,u_max=5.)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 
 goal = GoalConstraint(n,m,xf)
