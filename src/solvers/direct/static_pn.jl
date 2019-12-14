@@ -1,6 +1,6 @@
 export
-    StaticPNSolverOptions,
-    StaticPNSolver
+    ProjectedNewtonSolverOptions,
+    ProjectedNewtonSolver
 
 @with_kw mutable struct StaticPNStats{T}
     iterations::Int = 0
@@ -9,7 +9,7 @@ export
 end
 
 
-@with_kw mutable struct StaticPNSolverOptions{T} <: DirectSolverOptions{T}
+@with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     verbose::Bool = true
     n_steps::Int = 1
     solve_type::Symbol = :feasible
@@ -34,13 +34,13 @@ function ProblemInfo(prob::Problem)
 end
 
 
-struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
+struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
     # Problem Info
     prob::ProblemInfo{T,N}
     Z::Vector{KnotPoint{T,N,M,NM}}
     Z̄::Vector{KnotPoint{T,N,M,NM}}
 
-    opts::StaticPNSolverOptions{T}
+    opts::ProjectedNewtonSolverOptions{T}
     stats::StaticPNStats{T}
     P::StaticPrimals{T,N,M}
     P̄::StaticPrimals{T,N,M}
@@ -61,7 +61,7 @@ struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
     con_inds::Vector{<:Vector}
 end
 
-function StaticPNSolver(prob::Problem, opts=StaticPNSolverOptions())
+function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions())
     Z = prob.Z  # grab trajectory before copy to keep associativity
     prob = copy(prob)  # don't modify original problem
 
@@ -102,20 +102,20 @@ function StaticPNSolver(prob::Problem, opts=StaticPNSolverOptions())
     xinds,uinds = P.xinds, P.uinds
 
     dyn_inds = SVector{n,Int}[]
-    StaticPNSolver(prob_info, Z, Z̄, opts, stats, P, P̄, H, g, E, D, d, dyn_vals, active_set, dyn_inds, con_inds)
+    ProjectedNewtonSolver(prob_info, Z, Z̄, opts, stats, P, P̄, H, g, E, D, d, dyn_vals, active_set, dyn_inds, con_inds)
 end
 
-Base.size(solver::StaticPNSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
+Base.size(solver::ProjectedNewtonSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
 
-primals(solver::StaticPNSolver) = solver.P.Z
-primal_partition(solver::StaticPNSolver) = solver.P.xinds, solver.P.uinds
-get_model(solver::StaticPNSolver) = solver.prob.model
-get_constraints(solver::StaticPNSolver) = solver.prob.conSet
-get_trajectory(solver::StaticPNSolver) = solver.Z
-get_objective(solver::StaticPNSolver) = solver.prob.obj
-get_active_set(solver::StaticPNSolver) = solver.active_set
+primals(solver::ProjectedNewtonSolver) = solver.P.Z
+primal_partition(solver::ProjectedNewtonSolver) = solver.P.xinds, solver.P.uinds
+get_model(solver::ProjectedNewtonSolver) = solver.prob.model
+get_constraints(solver::ProjectedNewtonSolver) = solver.prob.conSet
+get_trajectory(solver::ProjectedNewtonSolver) = solver.Z
+get_objective(solver::ProjectedNewtonSolver) = solver.prob.obj
+get_active_set(solver::ProjectedNewtonSolver) = solver.active_set
 
-function max_violation(solver::StaticPNSolver)
+function max_violation(solver::ProjectedNewtonSolver)
     conSet = get_constraints(solver)
     max_violation!(conSet)
     return maximum(conSet.c_max)

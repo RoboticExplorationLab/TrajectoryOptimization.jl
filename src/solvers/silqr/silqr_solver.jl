@@ -1,6 +1,6 @@
 export
-    StaticiLQRSolverOptions,
-    StaticiLQRSolver
+    iLQRSolverOptions,
+    iLQRSolver
 
 
 @with_kw mutable struct iLQRStats{T}
@@ -24,7 +24,7 @@ end
 Solver options for the iterative LQR (iLQR) solver.
 $(FIELDS)
 """
-@with_kw mutable struct StaticiLQRSolverOptions{T} <: AbstractSolverOptions{T}
+@with_kw mutable struct iLQRSolverOptions{T} <: AbstractSolverOptions{T}
     # Options
 
     "Print summary at each iteration."
@@ -107,7 +107,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: UnconstrainedSolver{T}
+struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -118,7 +118,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unco
     tf::T
     N::Int
 
-    opts::StaticiLQRSolverOptions{T}
+    opts::iLQRSolverOptions{T}
     stats::iLQRStats{T}
 
     # Primal Duals
@@ -139,7 +139,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unco
     dρ::Vector{T} # Regularization rate of change
 
     grad::Vector{T} # Gradient
-    function StaticiLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
+    function iLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
             Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n̄,T,L2}}, d,
             ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad) where {T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}
         new{T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
@@ -147,7 +147,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unco
     end
 end
 
-function StaticiLQRSolver(prob::Problem{I,T}, opts=StaticiLQRSolverOptions()) where {I,T}
+function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
@@ -178,16 +178,16 @@ function StaticiLQRSolver(prob::Problem{I,T}, opts=StaticiLQRSolverOptions()) wh
 
     grad = zeros(T,N-1)
 
-    solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+    solver = iLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
         Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad)
 
     reset!(solver)
     return solver
 end
 
-AbstractSolver(prob::Problem, opts::StaticiLQRSolverOptions) = StaticiLQRSolver(prob, opts)
+AbstractSolver(prob::Problem, opts::iLQRSolverOptions) = iLQRSolver(prob, opts)
 
-function reset!(solver::StaticiLQRSolver{T}, reset_stats=true) where T
+function reset!(solver::iLQRSolver{T}, reset_stats=true) where T
     if reset_stats
         reset!(solver.stats, solver.opts.iterations)
     end
@@ -196,13 +196,13 @@ function reset!(solver::StaticiLQRSolver{T}, reset_stats=true) where T
     return nothing
 end
 
-Base.size(solver::StaticiLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
-@inline get_trajectory(solver::StaticiLQRSolver) = solver.Z
-@inline get_objective(solver::StaticiLQRSolver) = solver.obj
-@inline get_model(solver::StaticiLQRSolver) = solver.model
-@inline get_initial_state(solver::StaticiLQRSolver) = solver.x0
+Base.size(solver::iLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
+@inline get_trajectory(solver::iLQRSolver) = solver.Z
+@inline get_objective(solver::iLQRSolver) = solver.obj
+@inline get_model(solver::iLQRSolver) = solver.model
+@inline get_initial_state(solver::iLQRSolver) = solver.x0
 
-function cost(solver::StaticiLQRSolver, Z=solver.Z)
+function cost(solver::iLQRSolver, Z=solver.Z)
     cost!(solver.obj, Z)
     return sum(get_J(solver.obj))
 end

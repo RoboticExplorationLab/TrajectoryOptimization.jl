@@ -1,17 +1,17 @@
 export
-    StaticALTROSolverOptions,
-    StaticALTROSolver
+    ALTROSolverOptions,
+    ALTROSolver
 
 
 """$(TYPEDEF) Solver options for the ALTRO solver.
 $(FIELDS)
 """
-@with_kw mutable struct StaticALTROSolverOptions{T} <: AbstractSolverOptions{T}
+@with_kw mutable struct ALTROSolverOptions{T} <: AbstractSolverOptions{T}
 
     verbose::Bool=false
 
     "Augmented Lagrangian solver options."
-    opts_al::StaticALSolverOptions=StaticALSolverOptions{T}()
+    opts_al::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
 
     "constraint tolerance"
     constraint_tolerance::T = 1e-5
@@ -40,7 +40,7 @@ $(FIELDS)
     projected_newton::Bool = true
 
     "options for projected newton solver."
-    opts_pn::StaticPNSolverOptions{T} = StaticPNSolverOptions{Float64}()
+    opts_pn::ProjectedNewtonSolverOptions{T} = ProjectedNewtonSolverOptions{Float64}()
 
     "constraint satisfaction tolerance that triggers the projected newton solver.
     If set to a non-positive number it will kick out when the maximum penalty is reached."
@@ -57,16 +57,16 @@ ALTRO consists of two "phases":
 1) AL-iLQR: iLQR is used with an Augmented Lagrangian framework to solve the problem quickly to rough constraint satisfaction
 2) Projected Newton: A collocation-flavored active-set solver projects the solution from AL-iLQR onto the feasible subspace to achieve machine-precision constraint satisfaction.
 """
-struct StaticALTROSolver{T} <: ConstrainedSolver{T}
-    opts::StaticALTROSolverOptions{T}
-    solver_al::StaticALSolver{T}
-    solver_pn::StaticPNSolver{T}
+struct ALTROSolver{T} <: ConstrainedSolver{T}
+    opts::ALTROSolverOptions{T}
+    solver_al::AugmentedLagrangianSolver{T}
+    solver_pn::ProjectedNewtonSolver{T}
 end
 
-AbstractSolver(prob::Problem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
+AbstractSolver(prob::Problem, opts::ALTROSolverOptions) = ALTROSolver(prob, opts)
 
-function StaticALTROSolver(prob::Problem{Q,T},
-        opts::StaticALTROSolverOptions=StaticALTROSolverOptions{T}();
+function ALTROSolver(prob::Problem{Q,T},
+        opts::ALTROSolverOptions=ALTROSolverOptions{T}();
         infeasible=false) where {Q,T}
     if infeasible
         # Convert to an infeasible problem
@@ -78,15 +78,15 @@ function StaticALTROSolver(prob::Problem{Q,T},
         # con_inf.params.μ0 = opts.penalty_initial_infeasible
         # con_inf.params.ϕ = opts.penalty_scaling_infeasible
     end
-    solver_al = StaticALSolver(prob, opts.opts_al)
-    solver_pn = StaticPNSolver(prob, opts.opts_pn)
-    StaticALTROSolver{T}(opts,solver_al,solver_pn)
+    solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
+    solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)
+    ALTROSolver{T}(opts,solver_al,solver_pn)
 end
 
-@inline Base.size(solver::StaticALTROSolver) = size(solver.solver_pn)
-@inline get_trajectory(solver::StaticALTROSolver) = get_trajectory(solver.solver_al)
-@inline get_objective(solver::StaticALTROSolver) = get_objective(solver.solver_al)
-function get_constraints(solver::StaticALTROSolver)
+@inline Base.size(solver::ALTROSolver) = size(solver.solver_pn)
+@inline get_trajectory(solver::ALTROSolver) = get_trajectory(solver.solver_al)
+@inline get_objective(solver::ALTROSolver) = get_objective(solver.solver_al)
+function get_constraints(solver::ALTROSolver)
     if solver.opts.projected_newton
         get_constraints(solver.solver_pn)
     else
@@ -95,7 +95,7 @@ function get_constraints(solver::StaticALTROSolver)
 end
 
 
-function solve!(solver::StaticALTROSolver)
+function solve!(solver::ALTROSolver)
     conSet = get_constraints(solver)
 
     # Set terminal condition if using projected newton

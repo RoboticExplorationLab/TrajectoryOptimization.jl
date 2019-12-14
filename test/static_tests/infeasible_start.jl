@@ -99,7 +99,7 @@ costs = infeasible_objective(prob.obj, 2.3)
 
 # Test the solve
 sprob = copy(Problems.car_3obs_static)
-sal = StaticALSolver(sprob)
+sal = AugmentedLagrangianSolver(sprob)
 solve!(sal)
 max_violation(sal)
 
@@ -108,7 +108,7 @@ max_violation(sal)
 sprob = copy(Problems.car_3obs_static)
 initial_trajectory!(sprob, Z0)
 sprob_inf = InfeasibleProblem(sprob, Z0, 0.01/sprob.Z[1].dt)
-sal = StaticALSolver(sprob_inf)
+sal = AugmentedLagrangianSolver(sprob_inf)
 Z_init = copy(sprob_inf.Z)
 
 initial_trajectory!(sal, Z_init)

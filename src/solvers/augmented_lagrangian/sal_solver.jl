@@ -1,6 +1,6 @@
 export
-    StaticALSolver,
-    StaticALSolverOptions,
+    AugmentedLagrangianSolver,
+    AugmentedLagrangianSolverOptions,
     get_constraints
 
 
@@ -27,12 +27,12 @@ end
 Solver options for the augmented Lagrangian solver.
 $(FIELDS)
 """
-@with_kw mutable struct StaticALSolverOptions{T} <: AbstractSolverOptions{T}
+@with_kw mutable struct AugmentedLagrangianSolverOptions{T} <: AbstractSolverOptions{T}
     "Print summary at each iteration."
     verbose::Bool=false
 
     "unconstrained solver options."
-    opts_uncon::AbstractSolverOptions{T} = StaticiLQRSolverOptions{T}()
+    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
 
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve."
     cost_tolerance::T = 1.0e-4
@@ -84,7 +84,7 @@ $(FIELDS)
 
 end
 
-function reset!(conSet::ConstraintSets{T}, opts::StaticALSolverOptions{T}) where T
+function reset!(conSet::ConstraintSets{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     reset!(conSet)
     if !isnan(opts.dual_max)
         for con in conSet.constraints
@@ -113,25 +113,25 @@ function reset!(conSet::ConstraintSets{T}, opts::StaticALSolverOptions{T}) where
 end
 
 
-struct StaticALSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
-    opts::StaticALSolverOptions{T}
+struct AugmentedLagrangianSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
+    opts::AugmentedLagrangianSolverOptions{T}
     stats::ALStats{T}
     stats_uncon::Vector{STATS} where STATS
     solver_uncon::S
 end
 
 AbstractSolver(prob::Problem{Q,T},
-    opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,T} =
-    StaticALSolver(prob,opts)
+    opts::AugmentedLagrangianSolverOptions{T}=AugmentedLagrangianSolverOptions{T}()) where {Q,T} =
+    AugmentedLagrangianSolver(prob,opts)
 
 """$(TYPEDSIGNATURES)
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function StaticALSolver(prob::Problem{Q,T}, opts::StaticALSolverOptions=StaticALSolverOptions{T}()) where {Q,T}
+function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()) where {Q,T}
     # Init solver statistics
     stats = ALStats()
-    stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
+    stats_uncon = Vector{iLQRSolverOptions{T}}()
 
     # Convert problem to AL problem
     alobj = StaticALObjective(prob.obj, prob.constraints)
@@ -141,28 +141,28 @@ function StaticALSolver(prob::Problem{Q,T}, opts::StaticALSolverOptions=StaticAL
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
 
-    solver = StaticALSolver(opts,stats,stats_uncon,solver_uncon)
+    solver = AugmentedLagrangianSolver(opts,stats,stats_uncon,solver_uncon)
     reset!(solver)
     return solver
 end
 
-function reset!(solver::StaticALSolver{T}) where T
+function reset!(solver::AugmentedLagrangianSolver{T}) where T
     reset!(solver.stats, solver.opts.iterations)
     reset!(solver.solver_uncon)
     reset!(get_constraints(solver), solver.opts)
 end
 
 
-Base.size(solver::StaticALSolver) = size(solver.solver_uncon)
-@inline cost(solver::StaticALSolver) = cost(solver.solver_uncon)
-@inline get_trajectory(solver::StaticALSolver) = get_trajectory(solver.solver_uncon)
-@inline get_objective(solver::StaticALSolver) = get_objective(solver.solver_uncon)
-@inline get_model(solver::StaticALSolver) = get_model(solver.solver_uncon)
-@inline get_initial_state(solver::StaticALSolver) = get_initial_state(solver.solver_uncon)
+Base.size(solver::AugmentedLagrangianSolver) = size(solver.solver_uncon)
+@inline cost(solver::AugmentedLagrangianSolver) = cost(solver.solver_uncon)
+@inline get_trajectory(solver::AugmentedLagrangianSolver) = get_trajectory(solver.solver_uncon)
+@inline get_objective(solver::AugmentedLagrangianSolver) = get_objective(solver.solver_uncon)
+@inline get_model(solver::AugmentedLagrangianSolver) = get_model(solver.solver_uncon)
+@inline get_initial_state(solver::AugmentedLagrangianSolver) = get_initial_state(solver.solver_uncon)
 
 
 
-function get_constraints(solver::StaticALSolver{T}) where T
+function get_constraints(solver::AugmentedLagrangianSolver{T}) where T
     obj = get_objective(solver)::StaticALObjective{T}
     obj.constraints
 end

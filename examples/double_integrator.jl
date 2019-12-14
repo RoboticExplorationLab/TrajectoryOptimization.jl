@@ -9,9 +9,9 @@ T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
-opts_ilqr = StaticiLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,live_plotting=:off)
 
-opts_al = StaticALSolverOptions{T}(verbose=verbose,
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     opts_uncon=opts_ilqr,
     cost_tolerance=1.0e-4,
     cost_tolerance_intermediate=1.0e-2,
@@ -19,7 +19,7 @@ opts_al = StaticALSolverOptions{T}(verbose=verbose,
     penalty_scaling=1000.,
     penalty_initial=1.)
 
-opts_altro = StaticALTROSolverOptions{T}(verbose=verbose,
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
     projected_newton=false)
 
@@ -30,7 +30,7 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
 # AL-iLQR
 prob = copy(Problems.doubleintegrator_static)
 U0 = deepcopy(controls(prob))
-alilqr = StaticALSolver(prob, opts_al)
+alilqr = AugmentedLagrangianSolver(prob, opts_al)
 solve!(alilqr)
 max_violation(alilqr)
 
@@ -41,7 +41,7 @@ end
 
 
 # ALTRO
-altro = StaticALTROSolver(prob, opts_altro)
+altro = ALTROSolver(prob, opts_altro)
 solve!(altro)
 max_violation(altro)
 
@@ -54,7 +54,7 @@ end
 prob_ipopt = copy(Problems.doubleintegrator_static)
 prob_ipopt = TO.change_integration(prob_ipopt, HermiteSimpson)
 rollout!(prob_ipopt)
-ipopt = StaticDIRCOLSolver(prob_ipopt)
+ipopt = DIRCOLSolver(prob_ipopt)
 ipopt.opts.verbose = false
 solve!(ipopt)
 max_violation(ipopt)

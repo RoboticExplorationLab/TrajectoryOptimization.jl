@@ -1,4 +1,4 @@
-function solve!(solver::StaticPNSolver)
+function solve!(solver::ProjectedNewtonSolver)
     reset!(solver)
 
     update_constraints!(solver)
@@ -18,7 +18,7 @@ end
 
 
 
-function projection_solve!(solver::StaticPNSolver)
+function projection_solve!(solver::ProjectedNewtonSolver)
     ϵ_feas = solver.opts.feasibility_tolerance
     viol = norm(solver.d[solver.active_set], Inf)
     max_projection_iters = 10
@@ -32,21 +32,21 @@ function projection_solve!(solver::StaticPNSolver)
     return viol
 end
 
-function record_iteration!(solver::StaticPNSolver, viol)
+function record_iteration!(solver::ProjectedNewtonSolver, viol)
     solver.stats.iterations += 1
     i = solver.stats.iterations
     solver.stats.cost[i] = cost(solver)
     solver.stats.c_max[i] = viol
 end
 
-function reset!(solver::StaticPNSolver)
+function reset!(solver::ProjectedNewtonSolver)
     solver.stats.iterations = 0
     solver.stats.cost .*= 0
     solver.stats.c_max .*= 0
     return nothing
 end
 
-function _projection_solve!(solver::StaticPNSolver)
+function _projection_solve!(solver::ProjectedNewtonSolver)
     Z = primals(solver)
     a = solver.active_set
     max_refinements = 10
@@ -99,7 +99,7 @@ function _projection_solve!(solver::StaticPNSolver)
     return viol_prev
 end
 
-function _projection_linesearch!(solver::StaticPNSolver,
+function _projection_linesearch!(solver::ProjectedNewtonSolver,
         S, HinvD)
     conSet = get_constraints(solver)
     a = solver.active_set
@@ -166,11 +166,11 @@ function reg_solve(A, b, B, tol=1e-10, max_iters=10)
 end
 
 
-function active_constraints(solver::StaticPNSolver)
+function active_constraints(solver::ProjectedNewtonSolver)
     return solver.D[solver.active_set, :], solver.d[solver.active_set]  # this allocates
 end
 
-function cost_expansion!(solver::StaticPNSolver)
+function cost_expansion!(solver::ProjectedNewtonSolver)
     Z = get_trajectory(solver)
     E = solver.E
     obj = get_objective(solver)
@@ -198,6 +198,6 @@ function copy_expansion!(H, g, E, xinds, uinds)
     return nothing
 end
 
-@inline copy_constraints!(solver::StaticPNSolver) = copy_constraints!(solver.d, solver)
-@inline copy_jacobians!(solver::StaticPNSolver) = copy_jacobians!(solver.D, solver)
-@inline copy_active_set!(solver::StaticPNSolver) = copy_active_set!(solver.active_set, solver)
+@inline copy_constraints!(solver::ProjectedNewtonSolver) = copy_constraints!(solver.d, solver)
+@inline copy_jacobians!(solver::ProjectedNewtonSolver) = copy_jacobians!(solver.D, solver)
+@inline copy_active_set!(solver::ProjectedNewtonSolver) = copy_active_set!(solver.active_set, solver)

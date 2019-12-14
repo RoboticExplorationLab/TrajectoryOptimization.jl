@@ -1,5 +1,5 @@
 export
-    StaticDIRCOLSolver
+    DIRCOLSolver
 
 "$(TYPEDEF) Solver options for the Direct Collocation solver. Most options are passed to the NLP through the `opts` dictionary"
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
@@ -16,7 +16,7 @@ export
     feasibility_tolerance::T = -1.0
 end
 
-struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
+struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     opts::DIRCOLSolverOptions
     stats::Dict{Symbol,Any}
 
@@ -42,7 +42,7 @@ struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
 
     jacobian_structure::Symbol
 
-    function StaticDIRCOLSolver(opts,stats, NN,NP,dyn_con::DynamicsConstraint{Q,L,T,N},
+    function DIRCOLSolver(opts,stats, NN,NP,dyn_con::DynamicsConstraint{Q,L,T,N},
             obj,conSet,conSet_all,Z::Vector{KnotPoint{T,N,M,NM}},
             x0, optimizer, E,
             xinds,uinds,linds,con_inds,jac_structure) where {Q,L,T,N,M,NM}
@@ -52,9 +52,9 @@ struct StaticDIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
 
 end
 
-Base.size(solver::StaticDIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
+Base.size(solver::DIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
 
-function StaticDIRCOLSolver(prob::Problem{Q},
+function DIRCOLSolver(prob::Problem{Q},
         opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
         jacobian_structure=:by_knotpoint) where Q
 
@@ -103,7 +103,7 @@ function StaticDIRCOLSolver(prob::Problem{Q},
     optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
 
     # Create Solver
-    d = StaticDIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
+    d = DIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
         Z, prob.x0, optimizer, E, xinds, uinds, linds, con_inds, jacobian_structure)
 
     # Set up MOI problem
@@ -128,28 +128,28 @@ function StaticDIRCOLSolver(prob::Problem{Q},
     return d
 end
 
-get_initial_state(solver::StaticDIRCOLSolver) = solver.x0
-get_model(solver::StaticDIRCOLSolver) = solver.dyn_con.model
-get_constraints(solver::StaticDIRCOLSolver) = solver.constraints
-get_trajectory(solver::StaticDIRCOLSolver) = solver.Z
-get_objective(solver::StaticDIRCOLSolver) = solver.objective
-num_primals(solver::StaticDIRCOLSolver) = solver.NN
-num_duals(solver::StaticDIRCOLSolver) =  solver.NP
+get_initial_state(solver::DIRCOLSolver) = solver.x0
+get_model(solver::DIRCOLSolver) = solver.dyn_con.model
+get_constraints(solver::DIRCOLSolver) = solver.constraints
+get_trajectory(solver::DIRCOLSolver) = solver.Z
+get_objective(solver::DIRCOLSolver) = solver.objective
+num_primals(solver::DIRCOLSolver) = solver.NN
+num_duals(solver::DIRCOLSolver) =  solver.NP
 
 "Include bounds when calculating max violation on the solver"
-function max_violation(solver::StaticDIRCOLSolver)
+function max_violation(solver::DIRCOLSolver)
     Z = get_trajectory(solver)
     conSet = solver.constraints_all
     max_violation(conSet, Z)
 end
 
-primal_partition(prob::StaticDIRCOLSolver) = prob.xinds, prob.uinds
-jacobian_linear_inds(prob::StaticDIRCOLSolver) = prob.linds
+primal_partition(prob::DIRCOLSolver) = prob.xinds, prob.uinds
+jacobian_linear_inds(prob::DIRCOLSolver) = prob.linds
 
-@inline copy_gradient!(grad_f, solver::StaticDIRCOLSolver) = copy_gradient!(grad_f, solver.E, solver.xinds, solver.uinds)
-@inline Base.copyto!(d::StaticDIRCOLSolver, V::Vector{<:Real}) = copyto!(d.Z, V, primal_partition(d)...)
+@inline copy_gradient!(grad_f, solver::DIRCOLSolver) = copy_gradient!(grad_f, solver.E, solver.xinds, solver.uinds)
+@inline Base.copyto!(d::DIRCOLSolver, V::Vector{<:Real}) = copyto!(d.Z, V, primal_partition(d)...)
 
-function initial_controls!(d::StaticDIRCOLSolver, U0)
+function initial_controls!(d::DIRCOLSolver, U0)
     Z = get_trajectory(d)
     set_controls!(Z, U0)
     V = [MOI.VariableIndex(i) for i = 1:d.NN]
@@ -158,7 +158,7 @@ function initial_controls!(d::StaticDIRCOLSolver, U0)
     MOI.set(d.optimizer, MOI.VariablePrimalStart(), V, V0)
 end
 
-function initial_states!(d::StaticDIRCOLSolver, X0)
+function initial_states!(d::DIRCOLSolver, X0)
     Z = get_trajectory(d)
     set_states!(Z, X0)
     V = [MOI.VariableIndex(i) for i = 1:d.NN]
@@ -175,44 +175,44 @@ end
 
 
 # Define MOI Interface
-MOI.features_available(d::StaticDIRCOLSolver) = [:Grad, :Jac]
-MOI.initialize(d::StaticDIRCOLSolver, features) = nothing
+MOI.features_available(d::DIRCOLSolver) = [:Grad, :Jac]
+MOI.initialize(d::DIRCOLSolver, features) = nothing
 
-function MOI.jacobian_structure(d::StaticDIRCOLSolver)
+function MOI.jacobian_structure(d::DIRCOLSolver)
     jac_struct = constraint_jacobian_structure(d, d.jacobian_structure)
     r,c = get_rc(jac_struct)
     jac_struct = collect(zip(r,c))
 end
 
-MOI.hessian_lagrangian_structure(d::StaticDIRCOLSolver) = []
+MOI.hessian_lagrangian_structure(d::DIRCOLSolver) = []
 
-function MOI.eval_objective(d::StaticDIRCOLSolver, V)
+function MOI.eval_objective(d::DIRCOLSolver, V)
     copyto!(d, V)
     cost(d)
 end
 
-function MOI.eval_objective_gradient(d::StaticDIRCOLSolver, grad_f, V)
+function MOI.eval_objective_gradient(d::DIRCOLSolver, grad_f, V)
     copyto!(d, V)
     cost_gradient!(d)
     copy_gradient!(grad_f, d)
     return nothing
 end
 
-function MOI.eval_constraint(d::StaticDIRCOLSolver, g, V)
+function MOI.eval_constraint(d::DIRCOLSolver, g, V)
     copyto!(d, V)
     update_constraints!(d)
     copy_constraints!(g, d)
 end
 
-function MOI.eval_constraint_jacobian(d::StaticDIRCOLSolver, jac, V)
+function MOI.eval_constraint_jacobian(d::DIRCOLSolver, jac, V)
     copyto!(d, V)
     constraint_jacobian!(d)
     copy_jacobians!(jac, d)
 end
 
-MOI.eval_hessian_lagrangian(::StaticDIRCOLSolver, H, x, σ, μ) = nothing
+MOI.eval_hessian_lagrangian(::DIRCOLSolver, H, x, σ, μ) = nothing
 
-function solve!(d::StaticDIRCOLSolver)
+function solve!(d::DIRCOLSolver)
     # Update options
     nlp_opts = nlp_options(d.opts)
     for (key,val) in nlp_opts

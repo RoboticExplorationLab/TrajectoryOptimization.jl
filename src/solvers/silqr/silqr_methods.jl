@@ -1,7 +1,7 @@
 
 # Generic solve methods
 "iLQR solve method (non-allocating)"
-function solve!(solver::StaticiLQRSolver{T}) where T<:AbstractFloat
+function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
     solver.stats.iterations = 0
     solver.ρ[1] = 0.0
     solver.dρ[1] = 0.0
@@ -48,7 +48,7 @@ end
 """
 Take one step of iLQR algorithm (non-allocating)
 """
-function step!(solver::StaticiLQRSolver, J)
+function step!(solver::iLQRSolver, J)
     Z = solver.Z
     state_diff_jacobian!(solver.G, solver.model, Z)
     discrete_jacobian!(solver.∇F, solver.model, Z)
@@ -60,7 +60,7 @@ end
 """
 Stash iteration statistics
 """
-function record_iteration!(solver::StaticiLQRSolver, J, dJ)
+function record_iteration!(solver::iLQRSolver, J, dJ)
     solver.stats.iterations += 1
     i = solver.stats.iterations::Int
     solver.stats.cost[i] = J
@@ -73,7 +73,7 @@ end
 $(SIGNATURES)
     Calculate the problem gradient using heuristic from iLQG (Todorov) solver
 """
-function gradient_todorov!(solver::StaticiLQRSolver)
+function gradient_todorov!(solver::iLQRSolver)
     for k in eachindex(solver.d)
         solver.grad[k] = maximum( abs.(solver.d[k]) ./ (abs.(control(solver.Z[k])) .+ 1) )
     end
@@ -83,7 +83,7 @@ end
 $(SIGNATURES)
 Check convergence conditions for iLQR
 """
-function evaluate_convergence(solver::StaticiLQRSolver)
+function evaluate_convergence(solver::iLQRSolver)
     # Get current iterations
     i = solver.stats.iterations
 
@@ -117,7 +117,7 @@ $(SIGNATURES)
 Calculates the optimal feedback gains K,d as well as the 2nd Order approximation of the
 Cost-to-Go, using a backward Riccati-style recursion. (non-allocating)
 """
-function backwardpass!(solver::StaticiLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule}
+function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule}
     n,m,N = size(solver)
 
     # Objective
@@ -190,7 +190,7 @@ Simulate the system forward using the optimal feedback gains from the backward p
 projecting the system on the dynamically feasible subspace. Performs a line search to ensure
 adequate progress on the nonlinear problem.
 """
-function forwardpass!(solver::StaticiLQRSolver, ΔV, J_prev)
+function forwardpass!(solver::iLQRSolver, ΔV, J_prev)
     Z = solver.Z; Z̄ = solver.Z̄
     obj = solver.obj
 
@@ -262,7 +262,7 @@ $(SIGNATURES)
 Simulate forward the system with the optimal feedback gains from the iLQR backward pass.
 (non-allocating)
 """
-function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
+function rollout!(solver::iLQRSolver{T,Q}, α) where {T,Q}
     Z = solver.Z; Z̄ = solver.Z̄
     K = solver.K; d = solver.d;
 
@@ -289,7 +289,7 @@ function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
 end
 
 "Simulate the forward the dynamics open-loop"
-@inline rollout!(solver::StaticiLQRSolver) = rollout!(solver.model, solver.Z, solver.x0)
+@inline rollout!(solver::iLQRSolver) = rollout!(solver.model, solver.Z, solver.x0)
 
 function rollout!(model::AbstractModel, Z::Traj, x0)
     Z[1].z = [x0; control(Z[1])]
@@ -302,7 +302,7 @@ end
 $(SIGNATURES)
 Update the regularzation for the iLQR backward pass
 """
-function regularization_update!(solver::StaticiLQRSolver,status::Symbol=:increase)
+function regularization_update!(solver::iLQRSolver,status::Symbol=:increase)
     # println("reg $(status)")
     if status == :increase # increase regularization
         # @logmsg InnerLoop "Regularization Increased"

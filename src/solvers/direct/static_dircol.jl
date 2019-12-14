@@ -10,7 +10,7 @@ end
 
 @inline remove_goals!(conSet::ConstraintSets) = remove_constraint_type!(conSet, GoalConstraint)
 
-function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con <: AbstractStaticConstraint
+function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con <: AbstractConstraint
 	goals = filter(x->x.con isa Con, conSet.constraints)
 	filter!(x->!(x.con isa Con), conSet.constraints)
     num_constraints!(conSet)  # re-calculate number of constraints after removing goals
@@ -94,7 +94,7 @@ function add_dynamics_constraints!(prob::Problem{Q}) where Q
     return nothing
 end
 
-function cost(solver::StaticDIRCOLSolver{Q}) where Q<:QuadratureRule
+function cost(solver::DIRCOLSolver{Q}) where Q<:QuadratureRule
 	Z = get_trajectory(solver)
 	obj = get_objective(solver)
 	cost(obj, solver.dyn_con, Z)
@@ -122,7 +122,7 @@ function cost(obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 	return J
 end
 
-function cost_gradient!(solver::StaticDIRCOLSolver{Q}) where Q
+function cost_gradient!(solver::DIRCOLSolver{Q}) where Q
 	obj = get_objective(solver)
 	Z = get_trajectory(solver)
 	dyn_con = solver.dyn_con

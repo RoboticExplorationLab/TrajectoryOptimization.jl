@@ -8,18 +8,18 @@ max_con_viol = 1.0e-8
 verbose=false
 
 
-opts_al = StaticALSolverOptions{T}(verbose=verbose,
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     cost_tolerance=1.0e-6,
     cost_tolerance_intermediate=1.0e-2,
     constraint_tolerance=max_con_viol,
     penalty_scaling=50.,
     penalty_initial=10.)
 
-opts_pn = StaticPNSolverOptions{T}(verbose=verbose,
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
     feasibility_tolerance=max_con_viol,
     solve_type=:feasible)
 
-opts_altro = StaticALTROSolverOptions{T}(verbose=verbose,
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
     R_inf=1.0e-1,
     resolve_feasible_problem=false,
@@ -35,7 +35,7 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
 prob = copy(Problems.car_escape_static)
 
 # ALTRO
-altro = StaticALTROSolver(prob, opts_altro, infeasible=true)
+altro = ALTROSolver(prob, opts_altro, infeasible=true)
 Z0 = copy(get_trajectory(altro))
 initial_trajectory!(altro, Z0)
 solve!(altro)
@@ -51,7 +51,7 @@ max_violation(altro)
 # Ipopt
 prob_ipopt = copy(Problems.car_escape_static)
 prob_ipopt = TO.change_integration(prob_ipopt, HermiteSimpson)
-ipopt = StaticDIRCOLSolver(prob_ipopt, opts_ipopt)
+ipopt = DIRCOLSolver(prob_ipopt, opts_ipopt)
 ipopt.opts.verbose = true
 solve!(ipopt)
 max_violation(ipopt)

@@ -1,5 +1,5 @@
 
-function solve!(solver::StaticALSolver{T,S}) where {T,S}
+function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
     c_max::T = Inf
 
 	# Extract stuff from solver
@@ -38,7 +38,7 @@ function solve!(solver::StaticALSolver{T,S}) where {T,S}
     return solver
 end
 
-function step!(solver::StaticALSolver)
+function step!(solver::AugmentedLagrangianSolver)
 
     # Solve the unconstrained problem
     solve!(solver.solver_uncon)
@@ -50,7 +50,7 @@ function step!(solver::StaticALSolver)
 
 end
 
-function record_iteration!(solver::StaticALSolver{T,S}, J::T, c_max::T) where {T,S}
+function record_iteration!(solver::AugmentedLagrangianSolver{T,S}, J::T, c_max::T) where {T,S}
 
     solver.stats.iterations += 1
     i = solver.stats.iterations
@@ -70,7 +70,7 @@ function record_iteration!(solver::StaticALSolver{T,S}, J::T, c_max::T) where {T
     #
 end
 
-function set_tolerances!(solver::StaticALSolver{T},
+function set_tolerances!(solver::AugmentedLagrangianSolver{T},
         solver_uncon::AbstractSolver{T},i::Int) where T
     if i != solver.opts.iterations
         solver_uncon.opts.cost_tolerance = solver.opts.cost_tolerance_intermediate
@@ -83,14 +83,14 @@ function set_tolerances!(solver::StaticALSolver{T},
     return nothing
 end
 
-function evaluate_convergence(solver::StaticALSolver)
+function evaluate_convergence(solver::AugmentedLagrangianSolver)
 	i = solver.stats.iterations
     solver.stats.c_max[i] < solver.opts.constraint_tolerance ||
 		solver.stats.penalty_max[i] >= solver.opts.penalty_max
 end
 
 "General Dual Update"
-function dual_update!(solver::StaticALSolver) where {T,Q,N,M,NM}
+function dual_update!(solver::AugmentedLagrangianSolver) where {T,Q,N,M,NM}
     conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
         dual_update!(conSet.constraints[i])
@@ -99,7 +99,7 @@ end
 
 "Dual Update for Equality Constraints"
 function dual_update!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractStaticConstraint{Equality}}
+		{T,W,C<:AbstractConstraint{Equality}}
 	λ = con.λ
 	c = con.vals
 	μ = con.μ
@@ -111,7 +111,7 @@ end
 
 "Dual Update for Inequality Constraints"
 function dual_update!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractStaticConstraint{Inequality}}
+		{T,W,C<:AbstractConstraint{Inequality}}
 	λ = con.λ
 	c = con.vals
 	μ = con.μ
@@ -121,7 +121,7 @@ function dual_update!(con::ConstraintVals{T,W,C}) where
 end
 
 "General Penalty Update"
-function penalty_update!(solver::StaticALSolver)
+function penalty_update!(solver::AugmentedLagrangianSolver)
     conSet = get_constraints(solver)
     for i in eachindex(conSet.constraints)
         penalty_update!(conSet.constraints[i])

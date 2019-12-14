@@ -5,10 +5,10 @@ T = Float64
 max_con_viol = 1.0e-8
 verbose=false
 
-opts_ilqr = StaticiLQRSolverOptions{T}(verbose=verbose,
+opts_ilqr = iLQRSolverOptions{T}(verbose=verbose,
     iterations=300)
 
-opts_al = StaticALSolverOptions{T}(verbose=verbose,
+opts_al = AugmentedLagrangianSolverOptions{T}(verbose=verbose,
     opts_uncon=opts_ilqr,
     iterations=40,
     cost_tolerance=1.0e-5,
@@ -17,11 +17,11 @@ opts_al = StaticALSolverOptions{T}(verbose=verbose,
     penalty_scaling=10.,
     penalty_initial=1.)
 
-opts_pn = StaticPNSolverOptions{T}(verbose=verbose,
+opts_pn = ProjectedNewtonSolverOptions{T}(verbose=verbose,
     feasibility_tolerance=max_con_viol,
     solve_type=:feasible)
 
-opts_altro = StaticALTROSolverOptions{T}(verbose=verbose,
+opts_altro = ALTROSolverOptions{T}(verbose=verbose,
     opts_al=opts_al,
     R_inf=1.0e-8,
     resolve_feasible_problem=false,
@@ -37,7 +37,7 @@ opts_ipopt = DIRCOLSolverOptions{T}(verbose=verbose,
 # iLQR
 prob = copy(Problems.quadrotor_static)
 U0 = deepcopy(controls(prob))
-ilqr = StaticiLQRSolver(prob, opts_ilqr)
+ilqr = iLQRSolver(prob, opts_ilqr)
 initial_controls!(ilqr, U0)
 solve!(ilqr)
 ilqr.stats.iterations
@@ -52,7 +52,7 @@ end
 # AL-iLQR
 prob = copy(Problems.quadrotor_static)
 U0 = deepcopy(controls(prob))
-alilqr = StaticALSolver(prob)
+alilqr = AugmentedLagrangianSolver(prob)
 initial_controls!(alilqr, U0)
 solve!(alilqr)
 alilqr.stats.cost
@@ -66,7 +66,7 @@ end
 
 # ALTRO
 prob = copy(Problems.quadrotor_static)
-altro = StaticALTROSolver(prob, opts_altro)
+altro = ALTROSolver(prob, opts_altro)
 initial_controls!(altro, U0)
 solve!(altro)
 max_violation(altro)
@@ -81,7 +81,7 @@ prob_ipopt = copy(Problems.cartpole_static)
 prob_ipopt = TO.change_integration(prob_ipopt, HermiteSimpson)
 rollout!(prob_ipopt)
 opts_ipopt.verbose = true
-ipopt = StaticDIRCOLSolver(prob_ipopt, opts_ipopt)
+ipopt = DIRCOLSolver(prob_ipopt, opts_ipopt)
 ipopt.optimizer.options
 MOI.optimize!(ipopt.optimizer)
 solve!(ipopt)
