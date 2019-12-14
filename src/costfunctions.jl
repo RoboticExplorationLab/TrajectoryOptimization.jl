@@ -1,5 +1,7 @@
 import Base.copy
 
+
+
 #*********************************#
 #       COST FUNCTION CLASS       #
 #*********************************#
@@ -10,8 +12,6 @@ abstract type CostFunction end
 #######################################################
 #              COST FUNCTION INTERFACE                #
 #######################################################
-
-#TODO this documentation breaks functionality by create ambiguous methods...
 
 """
 $(TYPEDEF)
@@ -55,6 +55,7 @@ end
 state_dim(cost::QuadraticCost) = length(cost.q)
 control_dim(cost::QuadraticCost) = length(cost.r)
 
+# Constructors
 function QuadraticCost(Q,R; H=similar(Q,size(R,1), size(Q,1)), q=zeros(size(Q,1)),
         r=zeros(size(R,1)), c=0.0, checks=true)
     QuadraticCost(Q,R,H,q,r,c, checks=checks)
@@ -62,18 +63,6 @@ end
 
 function QuadraticCost(Q,q,c)
     QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c)
-end
-
-function Base.show(io::IO, cost::QuadraticCost)
-    print(io, "QuadraticCost{...}")
-end
-
-import Base: +
-function +(c1::QuadraticCost, c2::QuadraticCost)
-    @assert state_dim(c1) == state_dim(c2)
-    @assert control_dim(c1) == control_dim(c2)
-    QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, c1.H + c2.H,
-                  c1.q + c2.q, c1.r + c2.r, c1.c + c2.c)
 end
 
 """
@@ -102,6 +91,7 @@ function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     return QuadraticCost(Qf,zeros(0,0),zeros(0,size(Qf,1)),qf,zeros(0),cf)
 end
 
+# Cost function methods
 function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
     0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + u'*cost.H*x
 end
@@ -123,9 +113,25 @@ function hessian(cost::QuadraticCost, x, u)
     return Qxx, Quu, Qux
 end
 
+
+# Additional Methods
+function Base.show(io::IO, cost::QuadraticCost)
+    print(io, "QuadraticCost{...}")
+end
+
+import Base: +
+"Add two Quadratic costs of the same size"
+function +(c1::QuadraticCost, c2::QuadraticCost)
+    @assert state_dim(c1) == state_dim(c2)
+    @assert control_dim(c1) == control_dim(c2)
+    QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, c1.H + c2.H,
+                  c1.q + c2.q, c1.r + c2.r, c1.c + c2.c)
+end
+
 function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c))
 end
+
 
 
 """
