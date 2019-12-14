@@ -52,7 +52,7 @@ function step!(solver::iLQRSolver, J)
     Z = solver.Z
     state_diff_jacobian!(solver.G, solver.model, Z)
     discrete_jacobian!(solver.∇F, solver.model, Z)
-    cost_expansion(solver.Q, solver.obj, solver.Z)
+    cost_expansion!(solver.Q, solver.obj, solver.Z)
     ΔV = backwardpass!(solver)
     forwardpass!(solver, ΔV, J)
 end

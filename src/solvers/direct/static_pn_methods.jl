@@ -174,7 +174,7 @@ function cost_expansion!(solver::ProjectedNewtonSolver)
     Z = get_trajectory(solver)
     E = solver.E
     obj = get_objective(solver)
-    cost_expansion(E, obj, Z)
+    cost_expansion!(E, obj, Z)
 
     xinds, uinds = solver.P.xinds, solver.P.uinds
     H = solver.H

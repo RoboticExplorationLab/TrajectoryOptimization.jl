@@ -196,14 +196,14 @@ function cost!(obj::ALObjective, Z::Traj)
     end
 end
 
-function cost_expansion(E, obj::ALObjective, Z::Traj)
+function cost_expansion!(E, obj::ALObjective, Z::Traj)
     # Update constraint jacobians
     jacobian!(obj.constraints, Z)
 
     ix, iu = Z[1]._x, Z[1]._u
 
     # Calculate expansion of original objective
-    cost_expansion(E, obj.obj, Z)
+    cost_expansion!(E, obj.obj, Z)
 
     # Add in expansion of constraints
     for con in obj.constraints.constraints
