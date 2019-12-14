@@ -75,7 +75,7 @@ R = Diagonal(@SVector ones(m))
 Qf = Diagonal(@SVector ones(n))
 obj = LQRObjective(Q,R,Qf,xf,N)
 
-alobj = StaticALObjective3(obj, conSet)
+alobj = ALObjective3(obj, conSet)
 E = CostExpansion(n,m,N)
 @btime cost_expansion($E, $obj, $Z)
 cost_expansion(E,alobj,Z)

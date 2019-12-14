@@ -88,7 +88,7 @@ function DIRCOLSolver(prob::Problem{Q},
     NN = (n+m)*N
     NP = sum(num_constraints(prob))
 
-    P = StaticPrimals(n,m,N)
+    P = Primals(n,m,N)
     xinds, uinds = P.xinds, P.uinds
 
     blk_len = map(con->length(con.∇c[1]), conSet.constraints)

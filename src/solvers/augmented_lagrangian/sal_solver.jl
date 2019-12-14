@@ -134,7 +134,7 @@ function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts::AugmentedLagrangian
     stats_uncon = Vector{iLQRSolverOptions{T}}()
 
     # Convert problem to AL problem
-    alobj = StaticALObjective(prob.obj, prob.constraints)
+    alobj = ALObjective(prob.obj, prob.constraints)
     rollout!(prob)
     prob_al = Problem(prob.model, alobj, ConstraintSets(size(prob)...),
         prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
@@ -163,28 +163,28 @@ Base.size(solver::AugmentedLagrangianSolver) = size(solver.solver_uncon)
 
 
 function get_constraints(solver::AugmentedLagrangianSolver{T}) where T
-    obj = get_objective(solver)::StaticALObjective{T}
+    obj = get_objective(solver)::ALObjective{T}
     obj.constraints
 end
 
 
 
 
-struct StaticALObjective{T,O<:Objective} <: AbstractObjective
+struct ALObjective{T,O<:Objective} <: AbstractObjective
     obj::O
     constraints::ConstraintSets{T}
 end
 
-get_J(obj::StaticALObjective) = obj.obj.J
-Base.length(obj::StaticALObjective) = length(obj.obj)
+get_J(obj::ALObjective) = obj.obj.J
+Base.length(obj::ALObjective) = length(obj.obj)
 
-# TrajectoryOptimization.num_constraints(prob::Problem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
+# TrajectoryOptimization.num_constraints(prob::Problem{Q,T,<:ALObjective}) where {T,Q} = prob.obj.constraints.p
 
-function Base.copy(obj::StaticALObjective)
-    StaticALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
+function Base.copy(obj::ALObjective)
+    ALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
 end
 
-function cost!(obj::StaticALObjective, Z::Traj)
+function cost!(obj::ALObjective, Z::Traj)
     # Calculate unconstrained cost
     cost!(obj.obj, Z)
 
@@ -196,7 +196,7 @@ function cost!(obj::StaticALObjective, Z::Traj)
     end
 end
 
-function cost_expansion(E, obj::StaticALObjective, Z::Traj)
+function cost_expansion(E, obj::ALObjective, Z::Traj)
     # Update constraint jacobians
     jacobian!(obj.constraints, Z)
 
@@ -210,13 +210,3 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
         cost_expansion(E, con, Z)
     end
 end
-
-
-# StaticALProblem{Q,L,T} = Problem{Q,L,<:StaticALObjective,T}
-# function get_constraints(prob::Problem)
-#     if prob isa StaticALProblem
-#         prob.obj.constraints
-#     else
-#         prob.constraints
-#     end
-# end

@@ -1,26 +1,26 @@
 
-struct StaticPrimals{T<:Real,N,M}
+struct Primals{T<:Real,N,M}
     Z::Vector{T}
     xinds::Vector{SVector{N,Int}}
     uinds::Vector{SVector{M,Int}}
     equal::Bool
 end
 
-function StaticPrimals(n::Int, m::Int, N::Int, equal=false)
+function Primals(n::Int, m::Int, N::Int, equal=false)
     NN = n*N + m*(N-1) + equal*m
     Z = zeros(NN)
     uN = N-1 + equal
 
     xinds = [SVector{n}((n+m)*(k-1) .+ (1:n)) for k = 1:N]
     uinds = [SVector{m}(n + (n+m)*(k-1) .+ (1:m)) for k = 1:N]
-    StaticPrimals(Z,xinds,uinds,equal)
+    Primals(Z,xinds,uinds,equal)
 end
 
-function Base.copy(P::StaticPrimals)
-    StaticPrimals(copy(P.Z),P.xinds,P.uinds,P.equal)
+function Base.copy(P::Primals)
+    Primals(copy(P.Z),P.xinds,P.uinds,P.equal)
 end
 
-function Base.copyto!(P::StaticPrimals, Z::Traj)
+function Base.copyto!(P::Primals, Z::Traj)
     uN = P.equal ? length(Z) : length(Z)-1
     for k in 1:uN
         inds = [P.xinds[k]; P.uinds[k]]
@@ -48,7 +48,7 @@ function Base.copyto!(V::AbstractVector{<:Real}, Z::Traj,
     return nothing
 end
 
-function Base.copyto!(Z::Traj, P::StaticPrimals)
+function Base.copyto!(Z::Traj, P::Primals)
     uN = P.equal ? length(Z) : length(Z)-1
     for k in 1:uN
         inds = [P.xinds[k]; P.uinds[k]]

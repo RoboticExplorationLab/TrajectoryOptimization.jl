@@ -2,7 +2,7 @@ export
     ProjectedNewtonSolverOptions,
     ProjectedNewtonSolver
 
-@with_kw mutable struct StaticPNStats{T}
+@with_kw mutable struct ProjectedNewtonStats{T}
     iterations::Int = 0
     c_max::Vector{T} = zeros(5)
     cost::Vector{T} = zeros(5)
@@ -41,9 +41,9 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
     Z̄::Vector{KnotPoint{T,N,M,NM}}
 
     opts::ProjectedNewtonSolverOptions{T}
-    stats::StaticPNStats{T}
-    P::StaticPrimals{T,N,M}
-    P̄::StaticPrimals{T,N,M}
+    stats::ProjectedNewtonStats{T}
+    P::Primals{T,N,M}
+    P̄::Primals{T,N,M}
 
     H::SparseMatrixCSC{T,Int}
     g::Vector{T}
@@ -67,7 +67,7 @@ function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions(
 
     n,m,N = size(prob)
     NN = n*N + m*(N-1)
-    stats = StaticPNStats()
+    stats = ProjectedNewtonStats()
 
     # Add dynamics constraints
     add_dynamics_constraints!(prob)
@@ -79,8 +79,8 @@ function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions(
     Z̄ = copy(prob.Z)
 
     # Create concatenated primal vars
-    P = StaticPrimals(n,m,N)
-    P̄ = StaticPrimals(n,m,N)
+    P = Primals(n,m,N)
+    P̄ = Primals(n,m,N)
 
     # Allocate Cost Hessian & Gradient
     H = spzeros(NN,NN)

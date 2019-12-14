@@ -4,7 +4,7 @@ function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
 
 	# Extract stuff from solver
 	Z = get_trajectory(solver)
-	obj = get_objective(solver.solver_uncon)::StaticALObjective{T}
+	obj = get_objective(solver.solver_uncon)::ALObjective{T}
     conSet = obj.constraints
     solver_uncon = solver.solver_uncon::S
 
