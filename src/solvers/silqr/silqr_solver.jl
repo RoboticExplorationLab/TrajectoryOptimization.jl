@@ -147,7 +147,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unco
     end
 end
 
-function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions()) where {I,T}
+function StaticiLQRSolver(prob::Problem{I,T}, opts=StaticiLQRSolverOptions()) where {I,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
@@ -185,7 +185,7 @@ function StaticiLQRSolver(prob::StaticProblem{I,T}, opts=StaticiLQRSolverOptions
     return solver
 end
 
-AbstractSolver(prob::StaticProblem, opts::StaticiLQRSolverOptions) = StaticiLQRSolver(prob, opts)
+AbstractSolver(prob::Problem, opts::StaticiLQRSolverOptions) = StaticiLQRSolver(prob, opts)
 
 function reset!(solver::StaticiLQRSolver{T}, reset_stats=true) where T
     if reset_stats

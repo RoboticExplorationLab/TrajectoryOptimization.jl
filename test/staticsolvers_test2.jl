@@ -48,7 +48,7 @@ Z[end] = KnotPoint(xs,m)
 
 
 # Build Problem
-sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 
 # Build Solver
 silqr = StaticiLQRSolver(prob)
@@ -99,7 +99,7 @@ Z[N] = KnotPoint(x,m)
 
 prob = copy(Problems.quad_obs)
 initial_controls!(prob, [u for k = 1:N-1])
-sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 rollout!(sprob)
 rollout!(prob)
 all([state(sprob.Z[k]) ≈ prob.X[k] for k = 1:N])
@@ -156,7 +156,7 @@ Z[N] = KnotPoint(x,m)
 
 prob = copy(Problems.quad_obs)
 initial_controls!(prob, [u for k = 1:N-1])
-sprob = StaticProblem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, x0, xf, Z, deepcopy(Z), N, dt, prob.tf)
 
 rollout!(sprob)
 rollout!(prob)
@@ -185,7 +185,7 @@ Z[N] = KnotPoint(x,m)
 
 prob = copy(Problems.quad_obs)
 initial_controls!(prob, U0)
-sprob = StaticProblem(quad_, obj, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
 silqr = StaticiLQRSolver(sprob)
 ilqr = iLQRSolver(prob)

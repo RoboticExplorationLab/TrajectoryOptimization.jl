@@ -107,7 +107,7 @@ SVector{n}(xf)
 
 # Solve the problem using the old method
 prob = copy(Problems.quad_obs)
-sprob = StaticProblem(quad_d, obj, SVector{n}(x0), SVector{n}(xf), Z0, N, dt, prob.tf)
+sprob = Problem(quad_d, obj, SVector{n}(x0), SVector{n}(xf), Z0, N, dt, prob.tf)
 quad_d
 dt = prob.dt
 opts_ilqr = iLQRSolverOptions()

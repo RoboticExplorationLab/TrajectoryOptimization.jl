@@ -142,7 +142,7 @@ Z[end] = KnotPoint(xs,m)
 X = state.(Z)
 U = control.(Z)
 
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
 prob = copy(quad_obs)
 initial_states!(prob, X)
@@ -184,7 +184,7 @@ all([state(sprob_al.Z̄[k]) ≈ ilqr.X̄[k] for k = 1:N])
 
 
 reset!(silqr)
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
 prob = copy(quad_obs)
 initial_states!(prob, X)
@@ -228,7 +228,7 @@ cost(sprob_al)
 
 
 reset!(silqr)
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
+sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z), N, dt, prob.tf)
 
 prob = copy(quad_obs)
 initial_states!(prob, X)
@@ -262,7 +262,7 @@ Z[end] = KnotPoint(xs,m)
 X = state.(Z)
 U = control.(Z)
 
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
     N, dt, prob.tf)
 
 prob = copy(quad_obs)
@@ -295,7 +295,7 @@ maximum.(alsolver.C)
 alsolver.C[end]
 alsolver.stats
 
-sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
     N, dt, prob.tf)
 salsolver = StaticALSolver(sprob, sopts)
 sprob_al = convertProblem(sprob, salsolver)
@@ -333,7 +333,7 @@ function reset_sproblem(opts)
     X = state.(Z)
     U = control.(Z)
 
-    sprob = StaticProblem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
+    sprob = Problem(quad_, obj, conSet, x0, xf, deepcopy(Z), deepcopy(Z),
         N, dt, prob.tf)
 
     # Augmented Lagrangian Solver
@@ -344,7 +344,7 @@ function reset_sproblem(opts)
     return sprob_al, salsolver
 end
 
-function copy_traj(prob::StaticProblem, solver)
+function copy_traj(prob::Problem, solver)
     for k = 1:N
         sprob_al.Z[k].z = sprob_al.Z̄[k].z
     end

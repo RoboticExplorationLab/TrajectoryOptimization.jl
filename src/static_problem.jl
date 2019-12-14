@@ -1,5 +1,5 @@
 export
-    StaticProblem,
+    Problem,
     change_integration
 
 
@@ -57,7 +57,7 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat}
+struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     model::AbstractModel
     obj::AbstractObjective
     constraints::ConstraintSets{T}
@@ -66,7 +66,7 @@ struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat}
     Z::Traj
     N::Int
     tf::T
-    function StaticProblem{Q}(model::AbstractModel, obj::AbstractObjective,
+    function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
             constraints::ConstraintSets,
             x0::SVector, xf::SVector,
             Z::Traj, N::Int, tf::T) where {Q,T}
@@ -78,10 +78,10 @@ struct StaticProblem{Q<:QuadratureRule,T<:AbstractFloat}
 end
 
 "Use RK3 as default integration"
-StaticProblem(model, obj, constraints, x0, xf, Z, N, tf) =
-    StaticProblem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
+Problem(model, obj, constraints, x0, xf, Z, N, tf) =
+    Problem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
 
-function StaticProblem(model::L, obj::O, xf::AbstractVector, tf;
+function Problem(model::L, obj::O, xf::AbstractVector, tf;
         constraints=ConstraintSets(length(obj)),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
@@ -97,69 +97,69 @@ function StaticProblem(model::L, obj::O, xf::AbstractVector, tf;
     end
     Z = Traj(X0,U0,dt)
 
-    StaticProblem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
+    Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, tf)
 end
 
 
 
 "Get number of states, controls, and knot points"
-Base.size(prob::StaticProblem) = size(prob.model)..., prob.N
-integration(prob::StaticProblem{Q}) where Q = Q
-controls(prob::StaticProblem) = controls(prob.Z)
-states(prob::StaticProblem) = states(prob.Z)
+Base.size(prob::Problem) = size(prob.model)..., prob.N
+integration(prob::Problem{Q}) where Q = Q
+controls(prob::Problem) = controls(prob.Z)
+states(prob::Problem) = states(prob.Z)
 
-function initial_trajectory!(prob::StaticProblem, Z::Traj)
+function initial_trajectory!(prob::Problem, Z::Traj)
     for k = 1:prob.N
         prob.Z[k].z = Z[k].z
     end
 end
 
-function initial_states!(prob::StaticProblem, X0::Vector{<:AbstractVector})
+function initial_states!(prob::Problem, X0::Vector{<:AbstractVector})
     set_states!(prob.Z, X0)
 end
 
-function initial_states!(prob::StaticProblem, X0::AbstractMatrix)
+function initial_states!(prob::Problem, X0::AbstractMatrix)
     X0 = [X0[:,k] for k = 1:size(X0,2)]
     set_states!(prob.Z, X0)
 end
 
-function initial_controls!(prob::StaticProblem, U0::Vector{<:AbstractVector})
+function initial_controls!(prob::Problem, U0::Vector{<:AbstractVector})
     set_controls!(prob.Z, U0)
 end
 
-function initial_controls!(prob::StaticProblem, u0::AbstractVector{<:Real})
+function initial_controls!(prob::Problem, u0::AbstractVector{<:Real})
     U0 = [copy(u0) for k = 1:prob.N]
     initial_controls!(prob, U0)
 end
 
-function cost(prob::StaticProblem)
+function cost(prob::Problem)
     cost!(prob.obj, prob.Z)
     return sum( get_J(prob.obj) )
 end
 
-function copy(prob::StaticProblem{Q}) where Q
-    StaticProblem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
+function copy(prob::Problem{Q}) where Q
+    Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
         copy(prob.Z), prob.N, prob.tf)
 end
 
-TrajectoryOptimization.num_constraints(prob::StaticProblem) = get_constraints(prob).p
+TrajectoryOptimization.num_constraints(prob::Problem) = get_constraints(prob).p
 
-function max_violation(prob::StaticProblem)
+function max_violation(prob::Problem)
     conSet = get_constraints(prob)
     evaluate!(conSet, prob.Z)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end
 
-@inline get_constraints(prob::StaticProblem) = prob.constraints
+@inline get_constraints(prob::Problem) = prob.constraints
 
 
 "Change dynamics integration"
-change_integration(prob::StaticProblem, ::Type{Q}) where Q<:QuadratureRule =
-    StaticProblem{Q}(prob)
-function StaticProblem{Q}(p::StaticProblem) where Q
-    StaticProblem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
+change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
+    Problem{Q}(prob)
+function Problem{Q}(p::Problem) where Q
+    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
 end
 
-@inline rollout!(prob::StaticProblem) = rollout!(prob.model, prob.Z, prob.x0)
+@inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)

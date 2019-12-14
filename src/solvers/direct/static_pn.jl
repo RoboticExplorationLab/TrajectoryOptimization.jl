@@ -28,7 +28,7 @@ struct ProblemInfo{T,N}
     xf::SVector{N,T}
 end
 
-function ProblemInfo(prob::StaticProblem)
+function ProblemInfo(prob::Problem)
     n = size(prob)[1]
     ProblemInfo(prob.model, prob.obj, prob.constraints, SVector{n}(prob.x0), SVector{n}(prob.xf))
 end
@@ -61,7 +61,7 @@ struct StaticPNSolver{T,N,M,NM} <: DirectSolver{T}
     con_inds::Vector{<:Vector}
 end
 
-function StaticPNSolver(prob::StaticProblem, opts=StaticPNSolverOptions())
+function StaticPNSolver(prob::Problem, opts=StaticPNSolverOptions())
     Z = prob.Z  # grab trajectory before copy to keep associativity
     prob = copy(prob)  # don't modify original problem
 

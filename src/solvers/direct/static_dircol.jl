@@ -79,7 +79,7 @@ function get_bounds(conSet::ConstraintSets)
     return zU, zL, gU, gL
 end
 
-function add_dynamics_constraints!(prob::StaticProblem{Q}) where Q
+function add_dynamics_constraints!(prob::Problem{Q}) where Q
 	n,m = size(prob)
     conSet = prob.constraints
 

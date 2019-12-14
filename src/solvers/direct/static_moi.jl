@@ -54,7 +54,7 @@ end
 
 Base.size(solver::StaticDIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
 
-function StaticDIRCOLSolver(prob::StaticProblem{Q},
+function StaticDIRCOLSolver(prob::Problem{Q},
         opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
         jacobian_structure=:by_knotpoint) where Q
 

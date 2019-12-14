@@ -120,7 +120,7 @@ struct StaticALSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
     solver_uncon::S
 end
 
-AbstractSolver(prob::StaticProblem{Q,T},
+AbstractSolver(prob::Problem{Q,T},
     opts::StaticALSolverOptions{T}=StaticALSolverOptions{T}()) where {Q,T} =
     StaticALSolver(prob,opts)
 
@@ -128,7 +128,7 @@ AbstractSolver(prob::StaticProblem{Q,T},
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function StaticALSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions=StaticALSolverOptions{T}()) where {Q,T}
+function StaticALSolver(prob::Problem{Q,T}, opts::StaticALSolverOptions=StaticALSolverOptions{T}()) where {Q,T}
     # Init solver statistics
     stats = ALStats()
     stats_uncon = Vector{StaticiLQRSolverOptions{T}}()
@@ -136,7 +136,7 @@ function StaticALSolver(prob::StaticProblem{Q,T}, opts::StaticALSolverOptions=St
     # Convert problem to AL problem
     alobj = StaticALObjective(prob.obj, prob.constraints)
     rollout!(prob)
-    prob_al = StaticProblem(prob.model, alobj, ConstraintSets(size(prob)...),
+    prob_al = Problem(prob.model, alobj, ConstraintSets(size(prob)...),
         prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
@@ -178,7 +178,7 @@ end
 get_J(obj::StaticALObjective) = obj.obj.J
 Base.length(obj::StaticALObjective) = length(obj.obj)
 
-# TrajectoryOptimization.num_constraints(prob::StaticProblem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
+# TrajectoryOptimization.num_constraints(prob::Problem{Q,T,<:StaticALObjective}) where {T,Q} = prob.obj.constraints.p
 
 function Base.copy(obj::StaticALObjective)
     StaticALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
@@ -212,8 +212,8 @@ function cost_expansion(E, obj::StaticALObjective, Z::Traj)
 end
 
 
-# StaticALProblem{Q,L,T} = StaticProblem{Q,L,<:StaticALObjective,T}
-# function get_constraints(prob::StaticProblem)
+# StaticALProblem{Q,L,T} = Problem{Q,L,<:StaticALObjective,T}
+# function get_constraints(prob::Problem)
 #     if prob isa StaticALProblem
 #         prob.obj.constraints
 #     else

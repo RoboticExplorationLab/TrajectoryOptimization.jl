@@ -63,9 +63,9 @@ struct StaticALTROSolver{T} <: ConstrainedSolver{T}
     solver_pn::StaticPNSolver{T}
 end
 
-AbstractSolver(prob::StaticProblem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
+AbstractSolver(prob::Problem, opts::StaticALTROSolverOptions) = StaticALTROSolver(prob, opts)
 
-function StaticALTROSolver(prob::StaticProblem{Q,T},
+function StaticALTROSolver(prob::Problem{Q,T},
         opts::StaticALTROSolverOptions=StaticALTROSolverOptions{T}();
         infeasible=false) where {Q,T}
     if infeasible
@@ -123,7 +123,7 @@ function solve!(solver::StaticALTROSolver)
 
 end
 
-function InfeasibleProblem(prob::StaticProblem, Z0::Traj, R_inf::Real)
+function InfeasibleProblem(prob::Problem, Z0::Traj, R_inf::Real)
     @assert !isnan(sum(sum.(states(Z0))))
 
     n,m,N = size(prob)  # original sizes
@@ -146,7 +146,7 @@ function InfeasibleProblem(prob::StaticProblem, Z0::Traj, R_inf::Real)
     obj = infeasible_objective(prob.obj, R_inf)
 
     # Create new problem
-    StaticProblem(model_inf, obj, conSet, prob.x0, prob.xf, Z, N, prob.tf)
+    Problem(model_inf, obj, conSet, prob.x0, prob.xf, Z, N, prob.tf)
 end
 
 function infeasible_objective(obj::Objective, regularizer)
