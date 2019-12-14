@@ -11,7 +11,7 @@ Pages = ["costfunctions.md"]
 ## Overview
 All trajectory optimization problems require a cost function at each stage of the trajectory. Cost functions must be scalar-valued. We assume general cost functions of the form,
 ```math
-\ell_f(x_N) + \sum_{k=1}^{N-1} \ell_k(x_k,u_k)
+\ell_f(x_N) + \sum_{k=1}^{N-1} \ell_k(x_k,u_k) dt
 ```
 It is very important to note that ``\ell_k(x_k,u_k)`` is ONLY a function of ``x_k`` and ``u_k``, i.e. no coupling across time-steps is permitted. This is a requirement for Differential Dynamic Programming methods such as iLQR, but could be relaxed for methods that parameterize both states and controls, such as DIRCOL. In general, any coupling between adjacent time-steps can be resolved by augmenting the state and defining the appropriate dynamics (this is the method we use to solve minimum time problems).
 
@@ -72,7 +72,7 @@ There's also a convenient constructor that builds an [`LQRObjective`](@ref)
 ```julia
 obj = LQRObjective(Q, R, Qf, xf, N)
 ```
-
+#### QuadraticCost API
 ```@docs
 QuadraticCost
 LQRCost
@@ -80,95 +80,22 @@ LQRCostTerminal
 LQRObjective
 ```
 
-### Generic Costs (Experimental)
-For general, non-linear cost functions use [`GenericCost`](@ref). Generic cost functions must define their second-order Taylor series expansion, either automatically using `ForwardDiff` or analytically.
-
-Let's say we wanted to use a nonlinear objective for the pendulum
-```math
-cos(\theta_N) + \omega_N^2 \sum_{k=1}^{N-1} cos(\theta_k) + u_k^T R u_k + Q ω^2
-```
-which is small when θ = π, encouraging swing-up.
-
-We define the cost function by defining ℓ(x,u) and ℓ(x)
-```julia
-# Define the stage and terminal cost functions
-function mycost(x,u)
-    R = Diagonal(0.1I,1)
-    Q = 0.1
-    return cos(x[1] + u'R*u + Q*x[2]^2)
-end
-function mycost(xN)
-    return cos(xN[1]) + xN[2]^2
-end
-
-# Create the nonlinear cost function
-nlcost = GenericCost(mycost,mycost,n,m)
-```
-This will use `ForwardDiff` to generate the gradient and Hessian needed for the 2nd order expansion.
-
-Performance-wise, it will be faster to specify the Jacobian analytically (which could also use `ForwardDiff` for part of it). We just need to define the following functions
-* `hess`: multiple-dispatch function of the form,
-    `Q,R,H = hess(x,u)` with sizes (n,n), (m,m), (m,n)
-    `Qf = hess(xN)` with size (n,n)
-* `grad`: multiple-dispatch function of the form,
-    `q,r = grad(x,u)` with sizes (n,), (m,)
-    `qf = grad(x,u)` with size (n,)
-
-Here's an example for the nonlinear cost function we used before
-```julia
-# Define the gradient and Hessian functions
-R = Diagonal(0.1I,m)
-Q = 0.1
-function hess(x,u)
-    n,m = length(x),length(u)
-    Qexp = Diagonal([-cos(x[1]), 2Q])
-    Rexp = 2R
-    H = zeros(m,n)
-    return Qexp,Rexp,Hexp
-end
-function hess(x)
-    return Diagonal([-cos(x[1]), 2])
-end
-function grad(x,u)
-    q = [-sin(x[1]), 2Q*x[2]]
-    r = 2R*u
-    return q,r
-end
-function grad(x)
-    return [-sin(x[1]), 2*x[2]]
-end
-
-# Create the cost function
-nlcost = GenericCost(mycost, mycost, grad, hess, n, m)
-```
-
-Since our cost function is defined at both stage and terminal steps, we can simply copy it over all time steps to create an objective:
-```julia
-# Create objective
-N = 51
-nlobj = Objective(nlcost, N)
-```
-
-```@docs
-GenericCost
-```
-
 ### Cost Function Interface
 All cost functions are required to define the following methods
 ```julia
-stage_cost(cost, x, u)
-stage_cost(cost, xN)
-cost_expansion!(Q::Expansion, cost, x, u)
-cost_expansion(Q::Expansion, cost, xN)
+n = state_dim(cost)
+m = control_dim(cost)
+J = stage_cost(cost, x, u)
+J = stage_cost(cost, xN)
+Qx,Qu = gradient(cost, x, u)
+Qxx,Quu,Qux = hessian(cost, x, u)
 ```
 and inherit from `CostFunction`.
 
-The `Expansion` type is defined in the next section. This common interface allows the `Objective` to efficiently dispatch over cost functions to compute the overall cost and Taylor series expansion (i.e. gradient and Hessian).
 
-### Expansion Type
-The expansion type stores the pieces of the second order Taylor expansion of the cost.
+### CostExpansion Type
+The `CostExpansion` type stores the pieces of the second order Taylor expansion of the cost for the entire trajectory, stored as vectors of Static Vectors or Static Matrices. e.g. to get the Hessian with respect to `x` at knotpoint 5 you would use `E.xx[5]`.
 
-If we store the expansion as `Q`, then `Q.x` is the partial with respect to the control, `Q.xu` is the partial with respect to x and u, etc.
 
 ## Objectives
 ### Constructors
@@ -190,15 +117,19 @@ Objective(costfuns::Vector{<:CostFunction})
 ### Methods
 `Constraints` extends the methods on `CostFunction` to the whole trajectory
 ```julia
-cost(obj, X, U)
-cost_expansion!(Q::Vector{Expansion}, obj, X, U)
+cost(obj, Z)
+cost_expansion!(E::CostExpansion, obj, Z)
 ```
-where `X` and `U` are the state and control trajectories.
+where `Z` is a Trajectory (e.g. Vector of `KnotPoint`s)
 
 
 ## API
 ```@docs
 cost
 stage_cost
-cost_expansion!
+get_J
+cost_gradient
+cost_gradient!
+cost_hessian
+cost_hessian!
 ```

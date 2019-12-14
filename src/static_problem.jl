@@ -3,30 +3,6 @@ export
     change_integration
 
 
-"""
-$(TYPEDEF)
-Store the terms of the 2nd order expansion for the entire trajectory
-"""
-struct CostExpansion{T,N,M,L1,L2,L3}
-    x::Vector{SVector{N,T}}
-    u::Vector{SVector{M,T}}
-    xx::Vector{SMatrix{N,N,T,L1}}
-    uu::Vector{SMatrix{M,M,T,L2}}
-    ux::Vector{SMatrix{M,N,T,L3}}
-end
-
-function CostExpansion(n,m,N)
-    CostExpansion(
-        [@SVector zeros(n) for k = 1:N],
-        [@SVector zeros(m) for k = 1:N],
-        [@SMatrix zeros(n,n) for k = 1:N],
-        [@SMatrix zeros(m,m) for k = 1:N],
-        [@SMatrix zeros(m,n) for k = 1:N] )
-end
-
-function Base.getindex(Q::CostExpansion, k::Int)
-    return (x=Q.x[k], u=Q.u[k], xx=Q.xx[k], uu=Q.uu[k], ux=Q.ux[k])
-end
 
 """$(TYPEDEF) Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:

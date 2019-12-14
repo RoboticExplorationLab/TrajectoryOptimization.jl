@@ -1,5 +1,8 @@
 import Base.copy
 
+export
+    CostFunction
+
 
 
 #*********************************#
