@@ -1,7 +1,9 @@
 export
     DIRCOLSolver
 
-"$(TYPEDEF) Solver options for the Direct Collocation solver. Most options are passed to the NLP through the `opts` dictionary"
+"$(TYPEDEF) Solver options for the Direct Collocation solver.
+Most options are passed to the NLP through the `opts` dictionary
+$(FIELDS)"
 @with_kw mutable struct DIRCOLSolverOptions{T} <: DirectSolverOptions{T}
     "NLP Solver to use. See MathOptInterface for available NLP solvers"
     nlp::MathOptInterface.AbstractOptimizer = Ipopt.Optimizer()
@@ -16,6 +18,12 @@ export
     feasibility_tolerance::T = -1.0
 end
 
+"""
+$(TYPEDEF)
+Direct Collocation Solver.
+Uses a commerical NLP solver to solve the Trajectory Optimization problem.
+Uses the MathOptInterface to interface with the NLP.
+"""
 struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     opts::DIRCOLSolverOptions
     stats::Dict{Symbol,Any}
@@ -128,11 +136,13 @@ function DIRCOLSolver(prob::Problem{Q},
     return d
 end
 
+# AbstractSolver Interface
 get_initial_state(solver::DIRCOLSolver) = solver.x0
 get_model(solver::DIRCOLSolver) = solver.dyn_con.model
 get_constraints(solver::DIRCOLSolver) = solver.constraints
 get_trajectory(solver::DIRCOLSolver) = solver.Z
 get_objective(solver::DIRCOLSolver) = solver.objective
+
 num_primals(solver::DIRCOLSolver) = solver.NN
 num_duals(solver::DIRCOLSolver) =  solver.NP
 
@@ -170,6 +180,20 @@ function get_rc(A::SparseMatrixCSC)
     row,col,inds = findnz(A)
     v = sortperm(inds)
     row[v],col[v]
+end
+
+function cost(solver::DIRCOLSolver{Q}) where Q<:QuadratureRule
+	Z = get_trajectory(solver)
+	obj = get_objective(solver)
+	cost(obj, solver.dyn_con, Z)
+end
+
+function cost_gradient!(solver::DIRCOLSolver{Q}) where Q
+	obj = get_objective(solver)
+	Z = get_trajectory(solver)
+	dyn_con = solver.dyn_con
+	E = solver.E
+	cost_gradient!(E, obj, dyn_con, Z)
 end
 
 

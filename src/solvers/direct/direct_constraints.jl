@@ -1,5 +1,5 @@
 
-
+"$(SIGNATURES) Remove bounds constraints from constraint set"
 function remove_bounds!(conSet::ConstraintSet)
     bnds = filter(is_bound, conSet.constraints)
     n,m = conSet.n, conSet.m
@@ -10,6 +10,7 @@ end
 
 @inline remove_goals!(conSet::ConstraintSet) = remove_constraint_type!(conSet, GoalConstraint)
 
+"$(SIGNATURES) Remove a type of constraint from constraint set"
 function remove_constraint_type!(conSet::ConstraintSet, ::Type{Con}) where Con <: AbstractConstraint
 	goals = filter(x->x.con isa Con, conSet.constraints)
 	filter!(x->!(x.con isa Con), conSet.constraints)
@@ -17,7 +18,7 @@ function remove_constraint_type!(conSet::ConstraintSet, ::Type{Con}) where Con <
 	return goals
 end
 
-
+"$(SIGNATURES) Remove bounds from constraint set and return them as vectors"
 function get_bounds(conSet::ConstraintSet)
     N = length(conSet.p)
 
@@ -79,6 +80,10 @@ function get_bounds(conSet::ConstraintSet)
     return zU, zL, gU, gL
 end
 
+"```julia
+add_dynamics_constraints!(prob::Problem)
+```
+Add dynamics constraints to the constraint set"
 function add_dynamics_constraints!(prob::Problem{Q}) where Q
 	n,m = size(prob)
     conSet = prob.constraints
@@ -94,29 +99,83 @@ function add_dynamics_constraints!(prob::Problem{Q}) where Q
     return nothing
 end
 
-function cost(solver::DIRCOLSolver{Q}) where Q<:QuadratureRule
-	Z = get_trajectory(solver)
-	obj = get_objective(solver)
-	cost(obj, solver.dyn_con, Z)
+"$(SIGNATURES) Generate the indices into the concatenated constraint vector for each constraint.
+Determines the bandedness of the Jacobian"
+function gen_con_inds(conSet::ConstraintSet, structure=:by_knotpoint)
+	n,m = size(conSet)
+    N = length(conSet.p)
+    numcon = length(conSet.constraints)
+    conLen = length.(conSet.constraints)
+
+    cons = [[@SVector ones(Int,length(con)) for i in eachindex(con.inds)] for con in conSet.constraints]
+
+    # Dynamics and general constraints
+    idx = 0
+	if structure == :by_constraint
+	    for (i,con) in enumerate(conSet.constraints)
+			for (j,k) in enumerate(con.inds)
+				cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+				idx += conLen[i]
+	        end
+	    end
+	elseif structure == :by_knotpoint
+		for k = 1:N
+			for (i,con) in enumerate(conSet.constraints)
+				if k in con.inds
+					j = _index(con,k)
+					cons[i][j] = idx .+ (1:conLen[i])
+					idx += conLen[i]
+				end
+			end
+		end
+	end
+    return cons
 end
 
+"$(SIGNATURES)
+Get the constraint Jacobian structure as a sparse array, and fill in the linear indices
+used for filling a vector of the non-zero elements of the Jacobian"
+function constraint_jacobian_structure(solver::DirectSolver,
+		structure=:by_knopoint)
+    n,m,N = size(solver)
+    conSet = get_constraints(solver)
+    idx = 0.0
+    linds = jacobian_linear_inds(solver)
 
+    NN = num_primals(solver)
+    NP = num_duals(solver)
+    D = spzeros(Int,NP,NN)
 
-function cost_gradient!(solver::DIRCOLSolver{Q}) where Q
-	obj = get_objective(solver)
-	Z = get_trajectory(solver)
-	dyn_con = solver.dyn_con
-	E = solver.E
-	cost_gradient!(E, obj, dyn_con, Z)
-end
+    # Number of elements in each block
+    blk_len = map(con->length(con.∇c[1]), conSet.constraints)
 
+    # Number of knot points for each constraint
+    con_len = map(con->length(con.∇c), conSet.constraints)
 
-function copy_gradient!(grad_f, E::CostExpansion, xinds, uinds)
-    for k = 1:length(uinds)
-        grad_f[xinds[k]] = E.x[k]
-        grad_f[uinds[k]] = E.u[k]
-    end
-    if length(xinds) != length(uinds)
-        grad_f[xinds[end]] = E.x[end]
-    end
+    # Linear indices
+	if structure == :by_constraint
+	    for (i,con) in enumerate(conSet.constraints)
+	        for (j,k) in enumerate(con.inds)
+	            inds = idx .+ (1:blk_len[i])
+	            linds[i][j] = inds
+	            con.∇c[j] = inds
+	            idx += blk_len[i]
+	        end
+	    end
+	elseif structure == :by_knotpoint
+		for k = 1:N
+			for (i,con) in enumerate(conSet.constraints)
+				if k in con.inds
+					inds = idx .+ (1:blk_len[i])
+					j = _index(con,k)
+					linds[i][j] = inds
+					con.∇c[j] = inds
+					idx += blk_len[i]
+				end
+			end
+		end
+	end
+
+    copy_jacobians!(D, solver)
+    return D
 end

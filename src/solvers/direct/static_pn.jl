@@ -9,6 +9,10 @@ export
 end
 
 
+"""$(TYPEDEF)
+Solver options for the Projected Newton solver.
+$(FIELDS)
+"""
 @with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     verbose::Bool = true
     n_steps::Int = 1
@@ -34,6 +38,15 @@ function ProblemInfo(prob::Problem)
 end
 
 
+"""
+$(TYPEDEF)
+Projected Newton Solver
+Direct method developed by the REx Lab at Stanford University
+Achieves machine-level constraint satisfaction by projecting onto the feasible subspace.
+    It can also take a full Newton step by solving the KKT system.
+This solver is to be used exlusively for solutions that are close to the optimal solution.
+    It is intended to be used as a "solution polishing" method for augmented Lagrangian methods.
+"""
 struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
     # Problem Info
     prob::ProblemInfo{T,N}
@@ -52,8 +65,6 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
     D::SparseMatrixCSC{T,Int}
     d::Vector{T}
 
-    # fVal::Vector{SVector{N,T}}
-    # ∇F::Vector{SMatrix{N,NM,T,NNM}}
     dyn_vals::DynamicsVals{T}
     active_set::Vector{Bool}
 
@@ -105,10 +116,12 @@ function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions(
     ProjectedNewtonSolver(prob_info, Z, Z̄, opts, stats, P, P̄, H, g, E, D, d, dyn_vals, active_set, dyn_inds, con_inds)
 end
 
-Base.size(solver::ProjectedNewtonSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
 
 primals(solver::ProjectedNewtonSolver) = solver.P.Z
 primal_partition(solver::ProjectedNewtonSolver) = solver.P.xinds, solver.P.uinds
+
+# AbstractSolver interface
+Base.size(solver::ProjectedNewtonSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
 get_model(solver::ProjectedNewtonSolver) = solver.prob.model
 get_constraints(solver::ProjectedNewtonSolver) = solver.prob.conSet
 get_trajectory(solver::ProjectedNewtonSolver) = solver.Z

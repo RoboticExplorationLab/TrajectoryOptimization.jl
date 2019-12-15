@@ -176,8 +176,8 @@ include("solvers/direct/static_pn_methods.jl")
 include("solvers/altro/saltro_solver.jl")
 
 include("solvers/direct/static_moi.jl")
-include("solvers/direct/static_dircol.jl")
-include("solvers/direct/static_direct.jl")
+include("solvers/direct/copy_blocks.jl")
+include("solvers/direct/direct_constraints.jl")
 
 include("problems.jl")
 

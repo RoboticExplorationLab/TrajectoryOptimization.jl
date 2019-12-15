@@ -15,12 +15,42 @@ export
     rollout!,
     get_trajectory
 
-abstract type AbstractSolver{T} <: MOI.AbstractNLPEvaluator end
-abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end
-abstract type ConstrainedSolver{T} <: AbstractSolver{T} end
-abstract type AbstractSolverOptions{T<:Real} end
+""" $(TYPEDEF)
+Abstract solver for trajectory optimization problems
 
+Any type that inherits from `AbstractSolver` must define the following methods:
+```julia
+model = get_model(::AbstractSolver)::AbstractModel
+obj = get_objective(::AbstractSolver)::AbstractObjective
+Z = get_trajectory(::AbstractSolver)::Traj
+n,m,N = Base.size(::AbstractSolver)
+x0 = get_initial_state(::AbstractSolver)::SVector
+solve!(::AbstractSolver)
+```
+"""
+abstract type AbstractSolver{T} <: MOI.AbstractNLPEvaluator end
+
+"$(TYPEDEF) Unconstrained optimization solver. Will ignore
+any constraints in the problem"
+abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end
+"""$(TYPEDEF)
+Abstract solver for constrained trajectory optimization problems
+
+In addition to the methods required for `AbstractSolver`, all `ConstrainedSolver`s
+    must define the following method
+```julia
+get_constraints(::ConstrainedSolver)::ConstrainSet
+```
+"""
+abstract type ConstrainedSolver{T} <: AbstractSolver{T} end
+
+""" $(TYPEDEF)
+Solve the trajectory optimization problem by computing search directions using the joint
+state vector, often solving the KKT system directly.
+"""
 abstract type DirectSolver{T} <: ConstrainedSolver{T} end
+
+abstract type AbstractSolverOptions{T<:Real} end
 abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
 
 include("solvers/direct/dircol_ipopt.jl")
@@ -44,10 +74,8 @@ function rollout!(solver::AbstractSolver)
 end
 
 
-"Get the state trajectory"
 states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
-"Get the control trajectory"
 function controls(solver::AbstractSolver)
     N = size(solver)[3]
     Z = get_trajectory(solver)

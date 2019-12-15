@@ -6,19 +6,22 @@ export
 
 """$(TYPEDEF) Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:
-* dynamics model (`Model`). Can be either continuous or discrete.
+* dynamics model (`Model`)
 * objective (`Objective`)
-* constraints (`Constraints`)
+* constraints (`ConstraintSet`)
 * initial and final states
 * Primal variables (state and control trajectories)
 * Discretization information: knot points (`N`), time step (`dt`), and total time (`tf`)
 
 # Constructors:
 ```julia
-Problem(model, obj X0, U0; integration, constraints, x0, xf, dt, tf, N)
-Problem(model, obj, U0; integration, constraints, x0, xf, dt, tf, N)
-Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
+Problem(model, obj, constraints, x0, xf, Z, N, tf) # defaults to RK3 integration
+Problem{Q}(model, obj, constraints, x0, xf, Z, N, tf) where Q<:QuadratureRule
+Problem(model, obj, xf, tf; x0, constraints, N, X0, U0, dt, integration)
+Problem{Q}(prob::Problem)  # change integration
 ```
+where `Z` is a trajectory (Vector of `KnotPoint`s)
+
 # Arguments
 * `model`: Dynamics model. Can be either `Discrete` or `Continuous`
 * `obj`: Objective
@@ -29,7 +32,7 @@ Problem(model, obj; integration, constraints, x0, xf, dt, tf, N)
 * `dt`: Time step
 * `tf`: Final time. Set to zero to specify a time penalized problem.
 * `N`: Number of knot points. Defaults to 51, unless specified by `dt` and `tf`.
-* `integration`: One of the defined integration types to discretize the continuous dynamics model. Defaults to `:none`, which will pass in the continuous dynamics (eg. for DIRCOL)
+* `integration`: One of the defined integration types to discretize the continuous dynamics model. 
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
@@ -65,6 +68,9 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
         dt=fill(tf/(N-1),N),
         integration=RK3) where {L,O}
     n,m = size(model)
+    if dt isa Real
+        dt = fill(dt,N)
+    end
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
@@ -81,16 +87,46 @@ end
 
 "Get number of states, controls, and knot points"
 Base.size(prob::Problem) = size(prob.model)..., prob.N
+
+"""```julia
+integration(::Problem)
+integration(::DynamicsConstraint)
+```
+Get the integration rule"""
 integration(prob::Problem{Q}) where Q = Q
+
+"```julia
+controls(::Problem)
+controls(::AbstractSolver)
+controls(::Traj)
+Get the control trajectory
+```"
 controls(prob::Problem) = controls(prob.Z)
+
+"```julia
+states(::Problem)
+states(::AbstractSolver)
+states(::Traj)
+Get the state trajectory
+```"
 states(prob::Problem) = states(prob.Z)
 
+"```julia
+initial_trajectory!(::Problem, Z)
+initial_trajectory!(::AbstractSolver, Z)
+```
+Copy the trajectory "
 function initial_trajectory!(prob::Problem, Z::Traj)
     for k = 1:prob.N
         prob.Z[k].z = Z[k].z
     end
 end
 
+"```julia
+initial_states!(::Union{Problem,AbstractSolver}, X0::Vector{<:AbstractVector})
+initial_states!(::Union{Problem,AbstractSolver}, X0::AbstractMatrix)
+```
+Copy the state trajectory "
 function initial_states!(prob::Problem, X0::Vector{<:AbstractVector})
     set_states!(prob.Z, X0)
 end
@@ -100,6 +136,11 @@ function initial_states!(prob::Problem, X0::AbstractMatrix)
     set_states!(prob.Z, X0)
 end
 
+"```julia
+initial_controls!(::Union{Problem,AbstractSolver}, U0::Vector{<:AbstractVector})
+initial_controls!(::Union{Problem,AbstractSolver}, U0::AbstractMatrx)
+```
+Copy the control trajectory "
 function initial_controls!(prob::Problem, U0::Vector{<:AbstractVector})
     set_controls!(prob.Z, U0)
 end
@@ -109,17 +150,22 @@ function initial_controls!(prob::Problem, u0::AbstractVector{<:Real})
     initial_controls!(prob, U0)
 end
 
+"```julia
+cost(::Problem)
+cost(::AbstractSolver)
+```
+Compute the cost for the current trajectory"
 function cost(prob::Problem)
     cost!(prob.obj, prob.Z)
     return sum( get_J(prob.obj) )
 end
 
+"Copy the problem"
 function copy(prob::Problem{Q}) where Q
     Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
         copy(prob.Z), prob.N, prob.tf)
 end
 
-TrajectoryOptimization.num_constraints(prob::Problem) = get_constraints(prob).p
 
 function max_violation(prob::Problem, Z::Traj=prob.Z)
     conSet = get_constraints(prob)
@@ -128,12 +174,18 @@ function max_violation(prob::Problem, Z::Traj=prob.Z)
     return maximum(conSet.c_max)
 end
 
+num_constraints(prob::Problem) = get_constraints(prob).p
+
 @inline get_constraints(prob::Problem) = prob.constraints
 
 
-"Change dynamics integration"
+"```julia
+change_integration(prob::Problem, Q<:QuadratureRule)
+```
+Change dynamics integration for the problem"
 change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
     Problem{Q}(prob)
+
 function Problem{Q}(p::Problem) where Q
     Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
 end

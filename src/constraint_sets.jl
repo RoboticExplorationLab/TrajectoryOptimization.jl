@@ -107,8 +107,8 @@ end
 max_violation(conSet::ConstraintSet)
 max_violation(conSet::ConstraintSet, Z::Traj)
 max_violation(prob::Problem, Z=prob.Z)
-max_violation(solver::Problem)
-max_violation(solver::Problem, Z)
+max_violation(solver::AbstractSolver)
+max_violation(solver::AbstractSolver, Z)
 ```
 Calculate the maximum constraint violation for the entire constraint set.
 	If the a trajectory is not passed in, the violation is computed from the currently

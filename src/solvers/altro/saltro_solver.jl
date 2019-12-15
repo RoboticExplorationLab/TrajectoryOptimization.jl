@@ -11,7 +11,7 @@ $(FIELDS)
     verbose::Bool=false
 
     "Augmented Lagrangian solver options."
-    opts_al::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()
+    opts_al::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{Float64}()
 
     "constraint tolerance"
     constraint_tolerance::T = 1e-5

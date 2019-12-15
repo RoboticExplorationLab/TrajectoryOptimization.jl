@@ -32,7 +32,7 @@ $(FIELDS)
     verbose::Bool=false
 
     "unconstrained solver options."
-    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{T}()
+    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{Float64}()
 
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve."
     cost_tolerance::T = 1.0e-4
@@ -113,6 +113,31 @@ function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions
 end
 
 
+@doc raw""" ```julia
+struct AugmentedLagrangianSolver <: TrajectoryOptimization.AbstractSolver{T}
+```
+Augmented Lagrangian (AL) is a standard tool for constrained optimization. For a trajectory optimization problem of the form:
+```math
+\begin{equation*}
+\begin{aligned}
+  \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
+  \textrm{s.t.}            \quad & x_{k+1} = f(x_k, u_k), \\
+                                 & g_k(x_k,u_k) \leq 0, \\
+                                 & h_k(x_k,u_k) = 0.
+\end{aligned}
+\end{equation*}
+```
+AL methods form the following augmented Lagrangian function:
+```math
+\begin{align*}
+    \ell_f(x_N) + &λ_N^T c_N(x_N) + c_N(x_N)^T I_{\mu_N} c_N(x_N) \\
+           & + \sum_{k=0}^{N-1} \ell_k(x_k,u_k,dt) + λ_k^T c_k(x_k,u_k) + c_k(x_k,u_k)^T I_{\mu_k} c_k(x_k,u_k)
+\end{align*}
+```
+This function is then minimized with respect to the primal variables using any unconstrained minimization solver (e.g. iLQR).
+    After a local minima is found, the AL method updates the Lagrange multipliers λ and the penalty terms μ and repeats the unconstrained minimization.
+    AL methods have superlinear convergence as long as the penalty term μ is updated each iteration.
+"""
 struct AugmentedLagrangianSolver{T,S<:AbstractSolver} <: ConstrainedSolver{T}
     opts::AugmentedLagrangianSolverOptions{T}
     stats::ALStats{T}
