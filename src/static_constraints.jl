@@ -15,7 +15,7 @@ $(TYPEDEF)
 Constraint of the form ``x_g = a``, where ``x_g`` can be only part of the state
 vector.
 
-Constructors:
+# Constructors:
 ```julia
 GoalConstraint(xf::AbstractVector)
 GoalConstraint(xf::AbstractVector, inds)
@@ -56,8 +56,7 @@ $(TYPEDEF)
 Linear constraint of the form ``Ay - b \\{\\leq,=\\} 0`` where ``y`` may be either the
 state or controls (but not a combination of both).
 
-Constructor:
-```
+# Constructor: ```julia
 LinearConstraint{S,W}(n,m,A,b)
 ```
 where `W <: Union{State,Control}`.
@@ -100,8 +99,7 @@ Constraint of the form
 where ``x``, ``y`` are given by `x[xi]`,`x[yi]`, ``(x_c,y_c)`` is the center
 of the circle, and ``r`` is the radius.
 
-Constructor:
-```
+# Constructor: ```julia
 CircleConstraint(n, xc::SVector{P}, yc::SVector{P}, radius::SVector{P}, xi=1, yi=2)
 ```
 """
@@ -133,7 +131,7 @@ Constraint of the form
 where ``x``, ``y``, ``z`` are given by `x[xi]`,`x[yi]`,`x[zi]`, ``(x_c,y_c,z_c)`` is the center
 of the sphere, and ``r`` is the radius.
 
-Constructor:
+# Constructor:
 ```
 SphereConstraint(n, xc::SVector{P}, yc::SVector{P}, zc::SVector{P},
 	radius::SVector{P}, xi=1, yi=2, zi=3)
@@ -173,7 +171,7 @@ Constraint of the form
 ``\\norm(y)^2 \\leq val``
 where ``y`` is either a state or a vector (but not both)
 
-Constructors:
+# Constructors:
 ```
 NormConstraint{S,State}(n,val)
 NormConstraint{S,Control}(m,val)

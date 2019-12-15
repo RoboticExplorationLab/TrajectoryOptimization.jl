@@ -64,6 +64,8 @@ function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
 end
 
 # ConstrainedSolver methods
+num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
+
 function max_violation(solver::ConstrainedSolver, Z::Traj)
     update_constraints!(solver, Z)
     max_violation(solver)

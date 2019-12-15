@@ -121,9 +121,9 @@ end
 
 TrajectoryOptimization.num_constraints(prob::Problem) = get_constraints(prob).p
 
-function max_violation(prob::Problem)
+function max_violation(prob::Problem, Z::Traj=prob.Z)
     conSet = get_constraints(prob)
-    evaluate!(conSet, prob.Z)
+    evaluate!(conSet, Z)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end
