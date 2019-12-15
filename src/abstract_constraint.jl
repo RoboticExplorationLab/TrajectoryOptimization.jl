@@ -8,6 +8,10 @@ export
 	Coupled,
 	Dynamical
 
+export
+	evaluate,
+	jacobian
+
 
 abstract type GeneralConstraint end
 

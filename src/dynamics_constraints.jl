@@ -1,5 +1,6 @@
 export
-	DynamicsConstraint
+	DynamicsConstraint,
+	integration
 
 ############################################################################################
 #                              DYNAMICS CONSTRAINTS										   #

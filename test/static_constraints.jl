@@ -50,7 +50,7 @@ jacobian!(con2.∇c, normcon, Z)
 @btime max_violation!($con2)
 
 constraints = [con1, con2]
-conSet = ConstraintSets(constraints, N)
+conSet = ConstraintSet(constraints, N)
 jacobian!(con1, Z)
 jacobian!(con2, Z)
 for con in conSet.constraints

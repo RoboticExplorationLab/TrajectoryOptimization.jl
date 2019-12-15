@@ -35,6 +35,5 @@ con = LinearConstraint{Inequality,State}(n,m,A,Vector(b))
 @test_throws AssertionError LinearConstraint{Inequality,State}(m,m,A,b)
 @test_throws AssertionError LinearConstraint{Inequality,Control}(n,m,A,b)
 con = LinearConstraint{Inequality,Control}(n,n,A,b)
-@test evaluate(con, z) == A*x - b
+@test evaluate(con, x) == A*x - b
 @test jacobian(con, z) == A
-@test alloc_con(con,z) == 0

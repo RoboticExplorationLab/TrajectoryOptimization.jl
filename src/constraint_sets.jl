@@ -177,7 +177,7 @@ Compute the active set for the current constraint values, with tolerance tol.
 """
 function update_active_set!(conSet::ConstraintSet, Z::Traj, val::Val{tol}=Val(0.0)) where tol
 	for con in conSet.constraints
-		update_active_set!(con, tol)
+		update_active_set!(con, val)
 	end
 end
 

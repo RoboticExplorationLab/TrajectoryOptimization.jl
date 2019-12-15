@@ -147,7 +147,8 @@ num_primals(solver::DIRCOLSolver) = solver.NN
 num_duals(solver::DIRCOLSolver) =  solver.NP
 
 # Include bounds when calculating max violation on the solver
-function max_violation(solver::DIRCOLSolver, Z=get_trajectory(solver))
+function max_violation(solver::DIRCOLSolver)
+	Z = get_trajectory(solver)
     conSet = solver.constraints_all
     max_violation(conSet, Z)
 end

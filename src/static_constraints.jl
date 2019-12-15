@@ -2,7 +2,8 @@ export
 	GoalConstraint,
 	BoundConstraint,
 	CircleConstraint,
-	NormConstraint
+	NormConstraint,
+	LinearConstraint
 
 
 
@@ -112,7 +113,7 @@ struct CircleConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
 	yi::Int  # index of y-state
 	CircleConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, radius::SVector{P,T},
 			xi=1, yi=2) where {T,P} =
-		 new{T,P}(n,xc,yc,radius)
+		 new{T,P}(n,xc,yc,radius,xi,yi)
 end
 state_dim(con::CircleConstraint) = con.n
 
@@ -147,7 +148,8 @@ struct SphereConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
 	zi::Int
 	radius::SVector{P,T}
 	SphereConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, zc::SVector{P,T},
-			radius::SVector{P,T}, xi=1, yi=2, zi=3) where {T,P} = new{T,P}(n,xc,yc,zc,radius)
+			radius::SVector{P,T}, xi=1, yi=2, zi=3) where {T,P} =
+			new{T,P}(n,xc,yc,zc,radius,xi,yi,zi)
 end
 
 state_dim(con::SphereConstraint) = con.n

@@ -56,17 +56,12 @@ export
     ProjectedNewtonSolver,
     ProjectedNewtonSolverOptions,
     SequentialNewtonSolver,
-    DIRTRELSolver,
     Discrete,
     Continuous,
     Constraint,
     BoundConstraint,
     Equality,
     Inequality,
-    ConstraintSet,
-    StageConstraintSet,
-    TerminalConstraintSet,
-    ConstraintSet,
     Objective,
     Constraints
 
