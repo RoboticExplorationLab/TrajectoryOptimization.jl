@@ -1,6 +1,5 @@
 export
-	ConstraintVals,
-	ConstraintSets
+	ConstraintVals
 
 @with_kw mutable struct ConstraintParams{T}
 	ϕ::T = 10.0  	  # penalty scaling parameter
@@ -9,6 +8,13 @@ export
 	λ_max::T = 1e8    # max Lagrange multiplier
 end
 
+""" $(TYPEDEF)
+Struct that stores all of the values associated with a particular constraint.
+Importantly, `ConstraintVals` stores the list of knotpoints to which the constraint
+is applied. This type should be fairly transparent to the user, and only needs to be
+directly dealt with when writing solvers or setting fine-tuned updates per constraint
+(via the `.params` field).
+"""
 struct ConstraintVals{T,W,C,P,NM,PNM}
 	con::C
 	inds::UnitRange{Int}
@@ -55,7 +61,6 @@ function _index(con::ConstraintVals, k::Int)
 	end
 end
 
-
 Base.length(::ConstraintVals{T,W,C,P}) where {T,W,C,P} = P
 Base.length(con::ConstraintVals, k::Int) = k ∈ con.inds ? length(con) : 0
 state_dim(con::ConstraintVals) = state_dim(con.con)
@@ -75,7 +80,6 @@ sense(con::ConstraintVals) = sense(con.con)
 
 evaluate!(con::ConstraintVals, Z::Traj) = evaluate!(con.vals, con.con, Z, con.inds)
 jacobian!(con::ConstraintVals, Z::Traj) = jacobian!(con.∇c, con.con, Z, con.inds)
-
 
 
 function update_active_set!(con::ConstraintVals{T,W,C}, ::Val{tol}) where
@@ -129,14 +133,6 @@ end
 
 get_c_max(con::ConstraintVals) = maximum(con.c_max)
 
-function cost!(J, con::ConstraintVals, Z)
-	for (i,k) in enumerate(con.inds)
-		c = con.vals[i]
-		λ = con.λ[i]
-		Iμ = penalty_matrix(con, i)
-		J[k] += λ'c + 0.5*c'Iμ*c
-	end
-end
 
 function reset!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
 	λ = con.λ
@@ -149,10 +145,16 @@ function reset!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
 	end
 end
 
+function cost!(J, con::ConstraintVals, Z)
+	for (i,k) in enumerate(con.inds)
+		c = con.vals[i]
+		λ = con.λ[i]
+		Iμ = penalty_matrix(con, i)
+		J[k] += λ'c + 0.5*c'Iμ*c
+	end
+end
 
-"""
-Assumes constraints, active set, and constrint jacobian have all been calculated
-"""
+# Assumes constraints, active set, and constraint jacobian have all been calculated
 @generated function cost_expansion(E, con::ConstraintVals{T,W},
 		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
 	if W <: State
@@ -194,152 +196,4 @@ Assumes constraints, active set, and constrint jacobian have all been calculated
 			$expansion
 		end
 	end
-end
-
-
-
-
-############################################################################################
-#  								CONSTRAINT SETS 										   #
-############################################################################################
-
-struct ConstraintSets{T}
-	n::Int
-	m::Int
-	constraints::Vector{ConstraintVals}
-	p::Vector{Int}
-	c_max::Vector{T}
-end
-
-function ConstraintSets(n,m,N)
-	constraints = Vector{ConstraintVals}()
-	p = zeros(Int,N)
-	c_max = zeros(0)
-	ConstraintSets(n,m,constraints,p,c_max)
-end
-
-
-function has_dynamics(conSet::ConstraintSets)
-	for con in conSet.constraints
-		if con.con isa DynamicsConstraint
-			return true
-		end
-	end
-	return false
-end
-
-Base.size(conSet::ConstraintSets) = conSet.n, conSet.m, length(conSet.constraints)
-Base.length(conSet::ConstraintSets, k) = conSet.constraints.p[k]
-Base.length(conSet::ConstraintSets) = length(conSet.constraints)
-Base.copy(conSet::ConstraintSets) = ConstraintSets(conSet.n, conSet.m,
-	copy(conSet.constraints), copy(conSet.p), copy(conSet.c_max))
-
-function ConstraintSets(n::Int,m::Int,constraints, N)
-	@assert !isempty(constraints)
-	p = zeros(Int,N)
-	c_max = zeros(length(constraints))
-	for con in constraints
-		for k = 1:N
-			p[k] += length(con, k)
-		end
-	end
-	cons = ConstraintVals[]
-	append!(cons, constraints)
-	ConstraintSets(n,m, cons, p, c_max)
-end
-
-function num_constraints!(conSet::ConstraintSets)
-	p = conSet.p
-	p .*= 0
-	for con in conSet.constraints
-		for k = 1:length(p)
-			p[k] += length(con, k)
-		end
-	end
-end
-
-@inline num_constraints(conSet::ConstraintSets) = conSet.p
-
-function add_constraint!(conSet::ConstraintSets, conVal::ConstraintVals, idx=-1)
-	if idx == -1
-		push!(conSet.constraints, conVal)
-		push!(conSet.c_max, 0)
-	else
-		insert!(conSet.constraints, idx, conVal)
-		insert!(conSet.c_max, idx, 0)
-	end
-	num_constraints!(conSet)
-end
-
-function add_constraint!(conSet::ConstraintSets, con::AbstractConstraint,
-		inds::UnitRange, idx=-1)
-	conVal = ConstraintVals(con, inds)
-	add_constraint!(conSet, conVal, idx)
-end
-
-function max_violation!(conSet::ConstraintSets{T}) where T
-	for i in eachindex(conSet.constraints)
-		con = conSet.constraints[i]
-		max_violation!(con)
-		conSet.c_max[i] = maximum(con.c_max::Vector{T})
-	end
-end
-
-function max_violation(conSet::ConstraintSets)
-	max_violation!(conSet)
-	maximum(conSet.c_max)
-end
-
-function max_violation(conSet::ConstraintSets, Z::Traj)
-	evaluate!(conSet, Z)
-	max_violation(conSet)
-end
-
-function max_penalty!(conSet::ConstraintSets{T}) where T
-	for (i,con) in enumerate(conSet.constraints)
-		max_penalty!(con)
-		conSet.c_max[i] = maximum(con.c_max::Vector{T})
-	end
-end
-
-function evaluate!(conSet::ConstraintSets, Z::Traj)
-	for con in conSet.constraints
-		evaluate!(con, Z)
-	end
-end
-
-function jacobian!(conSet::ConstraintSets, Z::Traj)
-	for con in conSet.constraints
-		jacobian!(con, Z)
-	end
-end
-
-function update_active_set!(conSet::ConstraintSets, Z::Traj, tol=0.0)
-	for con in conSet.constraints
-		update_active_set!(con, tol)
-	end
-end
-
-Base.iterate(conSet::ConstraintSets) = @inbounds (conSet.constraints[1], 1)
-Base.iterate(conSet::ConstraintSets, i) = @inbounds i >= length(conSet.constraints) ? nothing : (conSet.constraints[i+1], i+1)
-@inline Base.getindex(conSet::ConstraintSets, i) = conSet.constraints[i]
-
-function reset!(conSet::ConstraintSets)
-	for con in conSet.constraints
-		reset!(con)
-	end
-end
-
-function change_dimension(conSet::ConstraintSets, n, m)
-	cons = map(conSet.constraints) do con
-
-		# Check if the new dimensions match the old ones
-		if check_dims(con,n,m)
-			return con
-		end
-
-		con_idx = IndexedConstraint(n,m,con.con)
-		con_val = ConstraintVals(con_idx, con.inds)
-	end
-	ConstraintSets(n,m,cons, length(conSet.p))
 end

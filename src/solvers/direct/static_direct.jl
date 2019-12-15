@@ -1,5 +1,5 @@
 
-function gen_con_inds(conSet::ConstraintSets, structure=:by_knotpoint)
+function gen_con_inds(conSet::ConstraintSet, structure=:by_knotpoint)
 	n,m = size(conSet)
     N = length(conSet.p)
     numcon = length(conSet.constraints)

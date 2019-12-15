@@ -46,7 +46,7 @@ goal = GoalConstraint(xf, inds_no_quat)
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_xf = ConstraintVals(bnd_xf, N:N)
 con_goal = ConstraintVals(goal, N:N)
-conSet = ConstraintSets(n,m,[con_bnd, con_goal], N)
+conSet = ConstraintSet(n,m,[con_bnd, con_goal], N)
 
 
 U_hover = [0.5*9.81/4.0*(@SVector ones(m)) for k = 1:N-1] # initial hovering control trajectory

@@ -36,14 +36,14 @@ At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `t
 struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     model::AbstractModel
     obj::AbstractObjective
-    constraints::ConstraintSets{T}
+    constraints::ConstraintSet{T}
     x0::SVector
     xf::SVector
     Z::Traj
     N::Int
     tf::T
     function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
-            constraints::ConstraintSets,
+            constraints::ConstraintSet,
             x0::SVector, xf::SVector,
             Z::Traj, N::Int, tf::T) where {Q,T}
         n,m = size(model)
@@ -58,7 +58,7 @@ Problem(model, obj, constraints, x0, xf, Z, N, tf) =
     Problem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintSets(length(obj)),
+        constraints=ConstraintSet(length(obj)),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],

@@ -84,7 +84,7 @@ $(FIELDS)
 
 end
 
-function reset!(conSet::ConstraintSets{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
+function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     reset!(conSet)
     if !isnan(opts.dual_max)
         for con in conSet.constraints
@@ -136,7 +136,7 @@ function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts::AugmentedLagrangian
     # Convert problem to AL problem
     alobj = ALObjective(prob.obj, prob.constraints)
     rollout!(prob)
-    prob_al = Problem(prob.model, alobj, ConstraintSets(size(prob)...),
+    prob_al = Problem(prob.model, alobj, ConstraintSet(size(prob)...),
         prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
@@ -172,7 +172,7 @@ end
 
 struct ALObjective{T,O<:Objective} <: AbstractObjective
     obj::O
-    constraints::ConstraintSets{T}
+    constraints::ConstraintSet{T}
 end
 
 get_J(obj::ALObjective) = obj.obj.J
@@ -181,7 +181,7 @@ Base.length(obj::ALObjective) = length(obj.obj)
 # TrajectoryOptimization.num_constraints(prob::Problem{Q,T,<:ALObjective}) where {T,Q} = prob.obj.constraints.p
 
 function Base.copy(obj::ALObjective)
-    ALObjective(obj.obj, ConstraintSets(copy(obj.constraints.constraints), length(obj.obj)))
+    ALObjective(obj.obj, ConstraintSet(copy(obj.constraints.constraints), length(obj.obj)))
 end
 
 function cost!(obj::ALObjective, Z::Traj)

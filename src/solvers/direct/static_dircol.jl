@@ -1,6 +1,6 @@
 
 
-function remove_bounds!(conSet::ConstraintSets)
+function remove_bounds!(conSet::ConstraintSet)
     bnds = filter(is_bound, conSet.constraints)
     n,m = conSet.n, conSet.m
     filter!(x->!is_bound(x), conSet.constraints)
@@ -8,9 +8,9 @@ function remove_bounds!(conSet::ConstraintSets)
 	return bnds
 end
 
-@inline remove_goals!(conSet::ConstraintSets) = remove_constraint_type!(conSet, GoalConstraint)
+@inline remove_goals!(conSet::ConstraintSet) = remove_constraint_type!(conSet, GoalConstraint)
 
-function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con <: AbstractConstraint
+function remove_constraint_type!(conSet::ConstraintSet, ::Type{Con}) where Con <: AbstractConstraint
 	goals = filter(x->x.con isa Con, conSet.constraints)
 	filter!(x->!(x.con isa Con), conSet.constraints)
     num_constraints!(conSet)  # re-calculate number of constraints after removing goals
@@ -18,7 +18,7 @@ function remove_constraint_type!(conSet::ConstraintSets, ::Type{Con}) where Con 
 end
 
 
-function get_bounds(conSet::ConstraintSets)
+function get_bounds(conSet::ConstraintSet)
     N = length(conSet.p)
 
 	bnds = remove_bounds!(conSet)

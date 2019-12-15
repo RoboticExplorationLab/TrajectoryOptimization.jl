@@ -33,7 +33,7 @@ con_bnd = ConstraintVals(bnd, 1:N-1)
 goal_con = GoalConstraint(xf)
 con_xf = ConstraintVals(goal_con, N:N)
 
-conSet = ConstraintSets(n,m,[con_obs, con_xf], N)
+conSet = ConstraintSet(n,m,[con_obs, con_xf], N)
 
 # Create problem
 U = [@SVector fill(0.01,m) for k = 1:N-1]

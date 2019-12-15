@@ -23,7 +23,7 @@ end
 struct ProblemInfo{T,N}
     model::AbstractModel
     obj::Objective
-    conSet::ConstraintSets{T}
+    conSet::ConstraintSet{T}
     x0::SVector{N,T}
     xf::SVector{N,T}
 end
@@ -114,9 +114,3 @@ get_constraints(solver::ProjectedNewtonSolver) = solver.prob.conSet
 get_trajectory(solver::ProjectedNewtonSolver) = solver.Z
 get_objective(solver::ProjectedNewtonSolver) = solver.prob.obj
 get_active_set(solver::ProjectedNewtonSolver) = solver.active_set
-
-function max_violation(solver::ProjectedNewtonSolver)
-    conSet = get_constraints(solver)
-    max_violation!(conSet)
-    return maximum(conSet.c_max)
-end

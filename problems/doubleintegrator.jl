@@ -21,6 +21,6 @@ obj = LQRObjective(Q,R,Qf,xf,N)
 u_bnd = 1.5
 bnd = BoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
 con_bnd = ConstraintVals(bnd, 1:N-1)
-conSet = ConstraintSets(n,m,[con_bnd], N)
+conSet = ConstraintSet(n,m,[con_bnd], N)
 
 doubleintegrator_static = Problem(model, obj, xf, tf, constraints=conSet, x0=x0, N=N)

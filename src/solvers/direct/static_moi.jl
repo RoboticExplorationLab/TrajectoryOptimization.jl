@@ -25,8 +25,8 @@ struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
 
     dyn_con::DynamicsConstraint{Q,L,T,N,NM}
     objective::AbstractObjective
-    constraints::ConstraintSets{T}
-    constraints_all::ConstraintSets{T}
+    constraints::ConstraintSet{T}
+    constraints_all::ConstraintSet{T}
     Z::Vector{KnotPoint{T,N,M,NM}}
     x0::SVector{N,T}
 
@@ -136,9 +136,8 @@ get_objective(solver::DIRCOLSolver) = solver.objective
 num_primals(solver::DIRCOLSolver) = solver.NN
 num_duals(solver::DIRCOLSolver) =  solver.NP
 
-"Include bounds when calculating max violation on the solver"
-function max_violation(solver::DIRCOLSolver)
-    Z = get_trajectory(solver)
+# Include bounds when calculating max violation on the solver
+function max_violation(solver::DIRCOLSolver, Z=get_trajectory(solver))
     conSet = solver.constraints_all
     max_violation(conSet, Z)
 end

@@ -16,7 +16,7 @@ goal_con = GoalConstraint(xf)
 
 con_bnd = ConstraintVals(bnd, 1:N-1)
 con_xf = ConstraintVals(goal_con, N:N)
-conSet = ConstraintSets(n,m,[con_bnd, con_xf],N)
+conSet = ConstraintSet(n,m,[con_bnd, con_xf],N)
 
 # problem
 U = [@SVector ones(m) for k = 1:N-1]
