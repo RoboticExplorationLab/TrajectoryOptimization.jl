@@ -6,10 +6,44 @@ CurrentModule = TrajectoryOptimization
 ```@contents
 Pages = ["constraints.md"]
 ```
-# Creating Constraint Sets
+## Creating Constraint Sets
+The easiest way to set up the constraints for your problem is through the [`ConstraintSet`](@ref). This structure simply holds a vector of all the constraints in the trajectory optimization problem. The easiest way to start is to create an empty `ConstraintSet`:
+```julia
+conSet = ConstraintSet(n,m,N)
+```
 
+### Adding Constraints
+You can add any constraint (the list of currently implemented constraints is given in the following section) to the constraint set using the following method:
+```@docs
+add_constraint!
+```
 
-# Defined Constraints
+### Other Methods
+There are a variety of methods defined on constraint sets, since they are the general interface that solvers work with when dealing with constraints.
+
+#### Information Methods
+These methods provide or calculate information about the constraint set
+```@docs
+Base.size(::ConstraintSet)
+Base.length(::ConstraintSet)
+num_constraints!
+num_constraints
+```
+
+#### Calculation Methods
+These methods perform calculations on the constraint set
+```@docs
+max_violation
+max_penalty
+evaluate!(::ConstraintSet, ::Traj)
+jacobian!(::ConstraintSet, ::Traj)
+reset!(::ConstraintSet)
+```
+`ConstraintSet` supports indexing and iteration, which returns the `ConstraintVals` at that index. However, to avoid allocations, iteration directly on the `.constraints` field.
+
+Additionally, to avoid allocations when computing `max_violation`, you can call `max_violation!(conSet)` and then `maximum(conSet.c_max)` to perform the reduction in the scope where the result is stored (thereby avoiding an allocation).
+
+## Defined Constraints
 The following constraints are currently defined. See later sections on the constraint interface and how to add custom constraints.
 
 ```@docs
@@ -21,7 +55,7 @@ NormConstraint
 IndexedConstraint
 ```
 
-# Constraint Type
+## Constraint Type
 All constraints inherit from `AbstractConstraint{S<:ConstraintSense,W<:ConstraintType,P}`,
 where `ConstraintSense` specifies `Inequality` or `Equality`, `ConstraintType` specifies the
 "bandedness" of the constraint (will be discussed more later), and `P` is the dimension of
@@ -39,7 +73,7 @@ ConstraintSense
 ConstraintType
 ```
 
-## Methods
+### Methods
 The following methods are defined for all `AbstractConstraint`s
 ```@docs
 state_dims
@@ -97,8 +131,9 @@ function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ControlNorm,
 end
 ```
 
-# API
+## API
 ```@docs
+ConstraintVals
 Stage
 State
 Control

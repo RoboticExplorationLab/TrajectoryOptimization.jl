@@ -14,13 +14,9 @@ Problem
 
 ## Methods
 ```@docs
-update_problem
+change_integration
 initial_controls!
 initial_states!
-set_x0!
 Base.size(::Problem)
 Base.copy(::Problem)
-is_constrained
-max_violation(::Problem{T}) where T
-final_time
 ```

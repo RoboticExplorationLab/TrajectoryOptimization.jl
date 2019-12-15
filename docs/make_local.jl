@@ -1,7 +1,7 @@
 
 using Documenter
 using TrajectoryOptimization
-using RigidBodyDynamics
+# using RigidBodyDynamics
 
 makedocs(
     sitename = "TrajectoryOptimization",
@@ -12,9 +12,9 @@ makedocs(
         "costfunctions.md",
         "constraints.md",
         "problem.md",
-        "solvers.md",
-        "solving.md",
-        "advanced.md",
+        # "solvers.md",
+        # "solving.md",
+        # "advanced.md",
     ]
 )
 
