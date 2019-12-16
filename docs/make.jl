@@ -1,6 +1,5 @@
 using Documenter
 using TrajectoryOptimization
-using RigidBodyDynamics
 
 makedocs(
     sitename = "TrajectoryOptimization",
@@ -11,9 +10,9 @@ makedocs(
         "costfunctions.md",
         "constraints.md",
         "problem.md",
-        "solvers.md",
-        "solving.md",
-        "advanced.md",
+        # "solvers.md",
+        # "solving.md",
+        # "advanced.md",
     ]
 )
 
@@ -22,5 +21,5 @@ makedocs(
 # for more information.
 deploydocs(
     repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git",
-    devbranch = "master",
+    devbranch = "v1.3",
 )

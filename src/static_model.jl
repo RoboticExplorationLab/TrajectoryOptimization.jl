@@ -2,7 +2,7 @@ export
     AbstractModel,
     InfeasibleModel,
     dynamics,
-    discrete_dynamics
+    discrete_dynamics,
     jacobian,
     discrete_jacobian
 
