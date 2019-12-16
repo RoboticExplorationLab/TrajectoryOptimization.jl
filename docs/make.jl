@@ -22,5 +22,5 @@ makedocs(
 # for more information.
 deploydocs(
     repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git",
-    devbranch = "master",
+    devbranch = "v1.3",
 )
