@@ -72,7 +72,10 @@ end
 ẋ = dynamics(model, z::KnotPoint)
 ```
 Compute the continuous dynamics of a dynamical system given a KnotPoint"""
-@inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z))
+@inline dynamics(model::AbstractModel, z::KnotPoint) = dynamics(model, state(z), control(z), z.t)
+
+# Default to not passing in t
+@inline dynamics(model::AbstractModel, x, u, t) = dynamics(model, x, u)
 
 """```
 ∇f = jacobian(model, z::KnotPoint)
@@ -113,8 +116,7 @@ x′ = discrete_dynamics(Q, model, z::KnotPoint)
 ```
 """
 @inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit =
-    discrete_dynamics(Q, model, state(z), control(z), z.dt)
-
+    discrete_dynamics(Q, model, state(z), control(z), z.t, z.dt)
 
 """ Compute the discrete dynamics Jacobian of `model` using implicit integration scheme `Q<:QuadratureRule`
 
@@ -131,17 +133,12 @@ where `s = [x; u; dt]` and `ix` and `iu` are the indices to extract the state an
 function discrete_jacobian(::Type{Q}, model::AbstractModel,
         z::KnotPoint{T,N,M,NM}) where {Q<:Implicit,T,N,M,NM}
     ix,iu,idt = z._x, z._u, NM+1
-    fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
+    t = z.t
+    fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
     s = [z.z; @SVector [z.dt]]
     ForwardDiff.jacobian(fd_aug, s)
 end
 
-function discrete_jacobian(::Type{Q}, model::AbstractModel,
-        s::SVector{NM1,T}, ix::SVector{N,Int}, iu::SVector{M,Int}) where {T,Q,N,M,NM1}
-    idt = NM1
-    fd_aug(z) = discrete_dynamics(Q, model, z[ix], z[iu], z[idt])
-    ForwardDiff.jacobian(fd_aug, s)
-end
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #

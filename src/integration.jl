@@ -2,10 +2,11 @@
 #                                  IMPLICIT METHODS 								       #
 ############################################################################################
 
-function discrete_dynamics(::Type{RK3}, model::AbstractModel, x::SVector{N,T}, u::SVector{M,T}, dt::T) where {N,M,T}
-    k1 = dynamics(model, x, u)*dt;
-    k2 = dynamics(model, x + k1/2, u)*dt;
-    k3 = dynamics(model, x - k1 + 2*k2, u)*dt;
+function discrete_dynamics(::Type{RK3}, model::AbstractModel, x::SVector{N,T}, u::SVector{M,T},
+		t, dt::T) where {N,M,T}
+    k1 = dynamics(model, x, u, t)*dt;
+    k2 = dynamics(model, x + k1/2, u, t)*dt;
+    k3 = dynamics(model, x - k1 + 2*k2, u, t)*dt;
     x + (k1 + 4*k2 + k3)/6
 end
 

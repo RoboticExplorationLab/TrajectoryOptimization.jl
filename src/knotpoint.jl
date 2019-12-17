@@ -11,10 +11,11 @@ mutable struct KnotPoint{T,N,M,NM}
     z::SVector{NM,T}
     _x::SVector{N,Int}
     _u::SVector{M,Int}
-    dt::T
+    dt::T # time step
+    t::T  # total time
 end
 
-function KnotPoint(x::AbstractVector, u::AbstractVector, dt::Float64)
+function KnotPoint(x::AbstractVector, u::AbstractVector, dt::Float64, t=0.0)
     n = length(x)
     m = length(u)
     xinds = ones(Bool, n+m)
@@ -22,13 +23,13 @@ function KnotPoint(x::AbstractVector, u::AbstractVector, dt::Float64)
     _x = SVector{n}(1:n)
     _u = SVector{m}(n .+ (1:m))
     z = SVector{n+m}([x;u])
-    KnotPoint(z, _x, _u, dt)
+    KnotPoint(z, _x, _u, dt, t)
 end
 
 # Constructor for terminal time step
-function KnotPoint(x::AbstractVector, m::Int)
+function KnotPoint(x::AbstractVector, m::Int, t=0.0)
     u = zeros(m)
-    KnotPoint(x, u, 0.)
+    KnotPoint(x, u, 0., t)
 end
 
 @inline state(z::KnotPoint) = z.z[z._x]
@@ -39,7 +40,7 @@ const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
 
 function Base.copy(Z::Vector{KnotPoint{T,N,M,NM}}) where {T,N,M,NM}
-    [KnotPoint((@SVector ones(NM)) .* z.z, z._x, z._u, z.dt) for z in Z]
+    [KnotPoint((@SVector ones(NM)) .* z.z, z._x, z._u, z.dt, z.t) for z in Z]
 end
 
 function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
@@ -50,18 +51,18 @@ end
 
 function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int, equal=false)
     equal ? uN = N : uN = N-1
-    Z = [KnotPoint(x,u,dt) for k = 1:uN]
+    Z = [KnotPoint(x,u,dt,(k-1)*dt) for k = 1:uN]
     if !equal
         m = length(u)
-        push!(Z, KnotPoint(x,m))
+        push!(Z, KnotPoint(x,m,(N-1)*dt))
     end
     return Z
 end
 
-function Traj(X::Vector, U::Vector, dt::Vector)
-    Z = [KnotPoint(X[k], U[k], dt[k]) for k = 1:length(U)]
+function Traj(X::Vector, U::Vector, dt::Vector, t=cumsum(dt) .- dt[1])
+    Z = [KnotPoint(X[k], U[k], dt[k], t[k]) for k = 1:length(U)]
     if length(U) == length(X)-1
-        push!(Z, KnotPoint(X[end],length(U[1])))
+        push!(Z, KnotPoint(X[end],length(U[1]),t[end]))
     end
     return Z
 end
