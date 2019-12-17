@@ -34,6 +34,10 @@ export
     Dynamics,
     Problems
 
+export
+    state_dim,
+    control_dim
+
 # Primary types
 export
     Model,
