@@ -98,6 +98,8 @@ $(FIELDS)
 
     "maximum control value, evaluated during rollout, if exceded solve will error."
     max_control_value::T = 1.0e8
+
+    log_level::Base.CoreLogging.LogLevel = InnerLoop
 end
 
 
@@ -139,11 +141,15 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unconstrai
     dρ::Vector{T} # Regularization rate of change
 
     grad::Vector{T} # Gradient
+
+    logger::SolverLogger
+
     function iLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
             Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n̄,T,L2}}, d,
-            ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad) where {T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}
+            ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad,
+            logger) where {T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}
         new{T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
-            ∇F, G, S, Q, ρ, dρ, grad)
+            ∇F, G, S, Q, ρ, dρ, grad, logger)
     end
 end
 
@@ -178,8 +184,10 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
 
     grad = zeros(T,N-1)
 
+    logger = default_logger(opts.verbose)
+
     solver = iLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
-        Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad)
+        Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad, logger)
 
     reset!(solver)
     return solver

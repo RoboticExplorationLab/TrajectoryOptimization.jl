@@ -1,5 +1,7 @@
 
 function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
+	set_verbosity!(solver.opts)
+	clear_cache!(solver.opts)
     c_max::T = Inf
 
 	# Extract stuff from solver
@@ -11,12 +13,12 @@ function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
 	# Reset solver
     reset!(conSet)
     solver.stats.iterations = 0
+	solver.stats.iterations_total = 0
 
 	# Calculate cost
     cost!(obj, Z)
     J_ = get_J(obj)
     J = sum(J_)
-
 
     for i = 1:solver.opts.iterations
         set_tolerances!(solver,solver_uncon,i)
@@ -48,6 +50,8 @@ function step!(solver::AugmentedLagrangianSolver)
     penalty_update!(solver)
     max_violation!(get_constraints(solver))
 
+	# Reset verbosity level after it's modified
+	set_verbosity!(solver.opts)
 end
 
 function record_iteration!(solver::AugmentedLagrangianSolver{T,S}, J::T, c_max::T) where {T,S}
@@ -61,13 +65,14 @@ function record_iteration!(solver::AugmentedLagrangianSolver{T,S}, J::T, c_max::
 	conSet = get_constraints(solver)
 	max_penalty!(conSet)
 	solver.stats.penalty_max[i] = maximum(conSet.c_max)
-    # solver.stats.
-    # push!(solver.stats[:iterations_inner], unconstrained_solver.stats[:iterations])
-    # push!(solver.stats[:cost],J)
-    # push!(solver.stats[:c_max],c_max)
-    # push!(solver.stats[:penalty_max],max_penalty(solver))
-    # push!(solver.stats_uncon, copy(unconstrained_solver.stats))
-    #
+
+	@logmsg OuterLoop :iter value=i
+	@logmsg OuterLoop :total value=solver.stats.iterations_total
+	@logmsg OuterLoop :cost value=J
+    @logmsg OuterLoop :c_max value=c_max
+	if solver.opts.verbose
+		print_level(OuterLoop)
+	end
 end
 
 function set_tolerances!(solver::AugmentedLagrangianSolver{T},

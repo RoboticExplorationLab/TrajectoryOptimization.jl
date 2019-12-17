@@ -82,6 +82,7 @@ $(FIELDS)
     "terminal solve when maximum penalty is reached."
     kickout_max_penalty::Bool = false
 
+    log_level::Base.CoreLogging.LogLevel = OuterLoop
 end
 
 function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
@@ -109,6 +110,22 @@ function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions
             params = get_params(con)::ConstraintParams{T}
             params.ϕ = opts.penalty_scaling
         end
+    end
+end
+
+function set_verbosity!(opts::AugmentedLagrangianSolverOptions)
+    log_level = opts.log_level
+    if opts.verbose
+        Logging.disable_logging(LogLevel(log_level.level-1))
+        logger = global_logger()
+        if opts.opts_uncon.verbose
+            freq = 1
+        else
+            freq = 5
+        end
+        logger.leveldata[log_level].freq = freq
+    else
+        Logging.disable_logging(log_level)
     end
 end
 

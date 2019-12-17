@@ -2,6 +2,9 @@
 # Generic solve methods
 "iLQR solve method (non-allocating)"
 function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
+    set_verbosity!(solver.opts)
+    clear_cache!(solver.opts)
+
     solver.stats.iterations = 0
     solver.ρ[1] = 0.0
     solver.dρ[1] = 0.0
@@ -9,12 +12,9 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
     # to = solver.stats[:timer]
     Z = solver.Z; Z̄ = solver.Z̄;
 
-
     n,m,N = size(solver)
     J = Inf
     _J = get_J(solver.obj)
-
-    # logger = default_logger(solver)
 
     # Initial rollout
     rollout!(solver)
@@ -66,6 +66,15 @@ function record_iteration!(solver::iLQRSolver, J, dJ)
     solver.stats.cost[i] = J
     solver.stats.dJ[i] = dJ
     solver.stats.gradient[i] = mean(solver.grad)
+
+    @logmsg InnerLoop :iter value=i
+    @logmsg InnerLoop :cost value=J
+    @logmsg InnerLoop :dJ   value=dJ
+    @logmsg InnerLoop :grad value=solver.stats.gradient[i]
+    # @logmsg InnerLoop :zero_count value=solver.stats[:dJ_zero_counter][end]
+    if solver.opts.verbose
+        print_level(InnerLoop)
+    end
     return nothing
 end
 
@@ -251,6 +260,11 @@ function forwardpass!(solver::iLQRSolver, ΔV, J_prev)
     if J > J_prev
         error("Error: Cost increased during Forward Pass")
     end
+
+    @logmsg InnerLoop :expected value=expected
+    @logmsg InnerLoop :z value=z
+    @logmsg InnerLoop :α value=2*α
+    @logmsg InnerLoop :ρ value=solver.ρ[1]
 
     return J
 

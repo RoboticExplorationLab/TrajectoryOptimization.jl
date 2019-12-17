@@ -16,7 +16,7 @@ using SparseArrays
 # using SuiteSparse
 using StaticArrays
 using Logging
-# using Formatting
+using Formatting
 # using Plots
 using BenchmarkTools
 # using PartedArrays
@@ -141,6 +141,7 @@ export
 # PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("utils.jl")
+include("logger.jl")
 # include("constraints.jl")
 # include("constraint_sets.jl")
 include("knotpoint.jl")
@@ -181,4 +182,5 @@ include("solvers/direct/direct_constraints.jl")
 include("problems.jl")
 
 write_ipopt_options()
+Logging.global_logger(default_logger(true))
 end

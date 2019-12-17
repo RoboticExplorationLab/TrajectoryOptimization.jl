@@ -120,3 +120,21 @@ function constraint_jacobian!(solver::ConstrainedSolver, Z=get_trajectory(solver
     jacobian!(conSet, Z)
     return nothing
 end
+
+
+# Logging
+function set_verbosity!(opts)
+    log_level = opts.log_level
+    if opts.verbose
+        Logging.disable_logging(LogLevel(log_level.level-1))
+    else
+        Logging.disable_logging(log_level)
+    end
+end
+
+function clear_cache!(opts)
+    if opts.verbose
+        log_level = opts.log_level
+        clear_cache!(global_logger().leveldata[log_level])
+    end
+end
