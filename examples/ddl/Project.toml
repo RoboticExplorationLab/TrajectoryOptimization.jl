@@ -1,0 +1,6 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
+Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
