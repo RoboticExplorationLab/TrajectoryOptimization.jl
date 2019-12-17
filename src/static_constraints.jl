@@ -3,7 +3,8 @@ export
 	BoundConstraint,
 	CircleConstraint,
 	NormConstraint,
-	LinearConstraint
+	LinearConstraint,
+	VariableBoundConstraint
 
 
 
@@ -191,15 +192,6 @@ function evaluate(con::NormConstraint, x)
 end
 
 
-struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
-	n::Int
-	m::Int
-	z_max::SVector{NM,T}
-	z_min::SVector{NM,T}
-	b::SVector{P,T}
-	B::SMatrix{P,NM,T,PNM}
-	active_N::SVector{PN,Int}
-end
 
 ############################################################################################
 # 								BOUND CONSTRAINTS 										   #
@@ -211,6 +203,16 @@ BoundConstraint(n, m; x_min, x_max, u_min, u_max)
 ```
 Any of the bounds can be ±∞. The bound can also be specifed as a single scalar, which applies the bound to all state/controls.
 """
+struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
+	n::Int
+	m::Int
+	z_max::SVector{NM,T}
+	z_min::SVector{NM,T}
+	b::SVector{P,T}
+	B::SMatrix{P,NM,T,PNM}
+	active_N::SVector{PN,Int}
+end
+
 function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
 	# Check and convert bounds
@@ -264,15 +266,78 @@ function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PN
 	bnd.B*SVector{NM}([x; u]) + bnd.b
 end
 
-function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x::SVector{n,T}) where {T,P,PN,NM,PNM,n}
-	ix = SVector{n}(1:n)
-	B_N = bnd.B[bnd.active_N, ix]
-	b_N = bnd.b[bnd.active_N]
-	B_N*x + b_N
-end
-
 function jacobian(bnd::BoundConstraint, z::KnotPoint)
 	bnd.B
+end
+
+
+############################################################################################
+#  							VARIABLE BOUND CONSTRAINT 									   #
+############################################################################################
+
+struct VariableBoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
+	n::Int
+	m::Int
+	z_max::Vector{SVector{NM,T}}
+	z_min::Vector{SVector{NM,T}}
+	b::Vector{SVector{P,T}}
+	B::SMatrix{P,NM,T,PNM}
+	function VariableBoundConstraint(n::Int,m::Int,
+			z_max::Vector{<:SVector{NM,T}}, z_min::Vector{<:SVector{NM,T}},
+			b::Vector{<:SVector{P}}, B::SMatrix{P,NM,T,PNM}) where {T,P,PN,NM,PNM}
+		new{T,P,NM,PNM}(n,m,z_max,z_min,b,B)
+	end
+end
+
+state_dim(con::VariableBoundConstraint) = con.n
+control_dim(con::VariableBoundConstraint) = con.m
+is_bound(::VariableBoundConstraint) = true
+
+function evaluate!(vals, con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
+	for (i,k) in enumerate(inds)
+		vals[i] = con.B*Z[k].z + con.b[k]
+	end
+end
+
+function jacobian(con::VariableBoundConstraint, z::KnotPoint)
+	return con.B
+end
+
+function VariableBoundConstraint(n, m, N;
+		x_max=[Inf*(@SVector ones(n)) for k = 1:N], x_min=[-Inf*(@SVector ones(n)) for k = 1:N],
+		u_max=[Inf*(@SVector ones(m)) for k = 1:N], u_min=[-Inf*(@SVector ones(m)) for k = 1:N])
+	@assert length(x_max) == N
+	@assert length(u_max) == N
+	@assert length(x_min) == N
+	@assert length(u_min) == N
+
+	# Check and convert bounds
+	for k = 1:N
+		x_max[k], x_min[k] = checkBounds(Val(n), x_max[k], x_min[k])
+		u_max[k], u_min[k] = checkBounds(Val(m), u_max[k], u_min[k])
+	end
+
+	# Concatenate bounds
+	z_max = [SVector{n+m}([x_max[k]; u_max[k]]) for k = 1:N]
+	z_min = [SVector{n+m}([x_min[k]; u_min[k]]) for k = 1:N]
+	b = [[-z_max[k]; z_min[k]] for k = 1:N]
+
+	active = map(x->isfinite.(x), b)
+	equal_active = all(1:N-2) do k
+		active[k] == active[k+1]
+	end
+	if !equal_active
+		throw(ArgumentError("All bounds must have the same active constraints"))
+	end
+	active = active[1]
+	p = sum(active)
+
+	inds = SVector{p}(findall(active))
+
+	b = [bi[inds] for bi in b]
+	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
+
+	VariableBoundConstraint(n, m, z_max, z_min, b, B[inds,:])
 end
 
 
