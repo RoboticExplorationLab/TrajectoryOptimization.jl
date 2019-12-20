@@ -8,7 +8,7 @@ using LinearAlgebra
 using DocStringExtensions
 using StaticArrays
 using Parameters
-import TrajectoryOptimization: dynamics, AbstractModel, FreeBodyModel, state_diff, state_diff_jacobian,
+import TrajectoryOptimization: dynamics, AbstractModel, RigidBody, state_diff, state_diff_jacobian,
     state_diff_size, quat_diff, quat_diff_jacobian
 
 export

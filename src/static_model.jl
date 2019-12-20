@@ -9,7 +9,20 @@ export
 export
     QuadratureRule,
     RK3,
-    HermiteSimpson
+    HermiteSimpson,
+    VectorPart,
+    ExponentialMap,
+    ModifiedRodriguesParam
+
+abstract type DifferentialRotation end
+abstract type VectorPart <: DifferentialRotation end
+abstract type ExponentialMap <: DifferentialRotation end
+abstract type ModifiedRodriguesParam <: DifferentialRotation end
+
+abstract type RotationType end
+abstract type Quat{P<:DifferentialRotation} <: RotationType end
+abstract type MRP <: RotationType end
+abstract type EulerAngle <: RotationType end
 
 """ $(TYPEDEF)
 Abstraction of a model of a dynamical system of the form ẋ = f(x,u), where x is the n-dimensional state vector
@@ -21,7 +34,8 @@ n,m = size(model)
 """
 abstract type AbstractModel end
 
-abstract type FreeBodyModel <: AbstractModel end
+abstract type RigidBody{R<:RotationType} <: AbstractModel end
+
 "Integration rule for approximating the continuous integrals for the equations of motion"
 abstract type QuadratureRule end
 "Integration rules of the form x′ = f(x,u), where x′ is the next state"
@@ -149,27 +163,9 @@ end
 @inline state_diff_jacobian(model::AbstractModel, x::SVector{N,T}) where {N,T} = I
 @inline state_diff_size(model::AbstractModel) = size(model)[1]
 
-function quat_diff(q2::SVector{4,T1}, q1::SVector{4,T2}) where {T1,T2}
-    # equivalent to q2 - q1
-    # same as inv(q1)*q2
-    vec = @SVector [2,3,4]
-    s1,v1 = q1[1],-q1[vec]
-    s2,v2 = q2[1], q2[vec]  # needs an inverse
-    # this is q1*q2
-    s1*v2 + s2*v1 + v1 × v2
-end
-
-function quat_diff_jacobian(q::SVector{4,T}) where T
-    w,x,y,z = q
-    x,y,z = -x,-y,-z  # invert q
-    @SMatrix [x  w -z  y;
-              y  z  w -x;
-              z -y  x  w];
-end
-
 @inline state_diff_jacobian!(G, model::AbstractModel, Z::Traj) = nothing
 
-function state_diff_jacobian!(G, model::FreeBodyModel, Z::Traj)
+function state_diff_jacobian!(G, model::RigidBody, Z::Traj)
     for k in eachindex(Z)
         G[k] = state_diff_jacobian(model, state(Z[k]))
     end
