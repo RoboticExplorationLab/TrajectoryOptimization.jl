@@ -1,7 +1,8 @@
-using Parameters, StaticArrays, BenchmarkTools, LinearAlgebra
+using Parameters, StaticArrays, BenchmarkTools, LinearAlgebra, Interpolations
 using MAT
 using TrajectoryOptimization
-import TrajectoryOptimization: dynamics
+import TrajectoryOptimization: dynamics, AbstractConstraint, evaluate, state_dim
+const TO = TrajectoryOptimization
 
 
 
@@ -21,7 +22,7 @@ import TrajectoryOptimization: dynamics
     g::T = 9.81  # gravity (m/s²)
 end
 
-labels(::BicycleCar) = ["delta","fx","r","Uy","Ux","dpsi","e","t"]
+labels(::BicycleCar) = ["delta" "fx" "r" "Uy" "Ux" "dpsi" "e" "t"]
 
 Base.size(::BicycleCar) = 8,2
 
@@ -52,7 +53,7 @@ function dynamics(car::BicycleCar, x, u, s)
     # State Derivatives
     r_dot  = (car.a * (Fxf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
     Ux_dot =  r * Uy + (Fxf * cos(δ) - Fyf * sin(δ) + Fxr - Fx_drag) / car.mass
-    Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ)) / car.mass
+    Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ) + Fyr) / car.mass
     Δψ_dot = r - k * s_dot
     e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
     t_dot = 1 / s_dot
@@ -74,22 +75,69 @@ function logit_lateral_force_model(car::BicycleCar, x)
     r  = x[3]
     Uy = x[4]
     Ux = x[5]
-    Cα = 1.0
 
     α_f = atan(Uy + car.a * r, Ux)
     α_r = atan(Uy - car.b * r, Ux)
 
     Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)
-    Fyf = lateral_tire_model(car.μ, Cα, α_f, Fxf, Fzf)
-    Fyr = lateral_tire_model(car.μ, Cα, α_r, Fxr, Fzr)
+    # Fyf = logit_tire_model(car.μ, car.Cαf, α_f, Fxf, Fzf)
+    # Fyr = logit_tire_model(car.μ, car.Cαr, α_r, Fxr, Fzr)
+    Fyf = fiala_tire_model(car.μ, car.Cαf, α_f, Fxf, Fzf)
+    Fyr = fiala_tire_model(car.μ, car.Cαr, α_r, Fxr, Fzr)
     return Fxf, Fxr, Fyf, Fyr
 end
 
-function lateral_tire_model(μ, Cα, α, Fx, Fz)
+function logit_tire_model(μ, Cα, α, Fx, Fz)
     Fy_max = sqrt((μ*Fz)^2 - Fx^2)
     slope = 2*Cα / Fy_max
-    Fy = Fy_max * (1-2*exp(slope*α)) / (1 + exp(slope*α))
+    Fy = Fy_max * (1-1*exp(slope*α)) / (1 + exp(slope*α))
     return Fy
+end
+
+function fiala_tire_model(μ, Cα, α, Fx, Fz)
+    Fx = min( 0.99*μ*Fz, Fx)
+    Fx = max(-0.99*μ*Fz, Fx)
+    Fy_max = sqrt((μ*Fz)^2 - Fx^2)
+    a_slide = atan(3*Fy_max, Cα)
+    tan_a = tan(α)
+    Fy_unsat = ( -Cα * tan_a + Cα^2/(3*Fy_max)*tan_a*abs(tan_a))
+    Fy_sat = -Fy_max*sign(α)
+    if abs(α) < a_slide
+        return Fy_unsat
+    else
+        return Fy_sat
+    end
+end
+
+function load_scenario!(car::BicycleCar, s, k, s_interp)
+    itp = CubicSplineInterpolation(s,k)
+    k_interp = itp.(s_interp)
+    car.k_c = Dict(s_interp .=> k_interp)
+    return nothing
+end
+
+struct BrakeForceConstraint{T} <: AbstractConstraint{Inequality,State,1}
+    car::BicycleCar{T}
+end
+
+state_dim(con::BrakeForceConstraint) = size(car)[1]
+
+function evaluate(con::BrakeForceConstraint, x::SVector)
+    car = con.car
+    l = car.a + car.b
+
+    Fx = x[2]
+    r  = x[3]
+    Uy = x[4]
+    Ux = x[5]
+
+    # Down force on front
+    αf = atan(Uy + car.a*r, Ux)
+    Fzf = car.mass*car.g*car.b/l
+
+    # Long. force on front
+    Fxf = Fx*car.b/l
+    SVector{1}(-cos(αf)*car.μ*Fzf - Fxf)
 end
 
 
@@ -98,6 +146,7 @@ struct ContingencyCar{T} <: AbstractModel
     ix::Vector{SVector{8,Int}}
     iu::Vector{SVector{2,Int}}
 end
+
 
 function ContingencyCar(num_cars=2)
     cars = [BicycleCar() for i = 1:num_cars]
