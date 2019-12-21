@@ -293,7 +293,8 @@ state_dim(con::VariableBoundConstraint) = con.n
 control_dim(con::VariableBoundConstraint) = con.m
 is_bound(::VariableBoundConstraint) = true
 
-function evaluate!(vals, con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
+function evaluate!(vals::Vector{<:AbstractVector},
+		con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
 	for (i,k) in enumerate(inds)
 		vals[i] = con.B*Z[k].z + con.b[k]
 	end

@@ -85,3 +85,49 @@ function skew(v::AbstractVector)
               v[3] 0    -v[1];
              -v[2] v[1]  0]
 end
+
+function MRP_rotate_jacobian(p,r)
+    4( (1-p'p)*skew(r)*(4p*p'/(1+p'p) - I) - (4/(1+p'p)*skew(p) + I)*2*skew(p)*r*p'
+      - 2*(skew(p)*skew(r) + skew(skew(p)*r)))/(1+p'p)^2
+end
+
+function MRP_composition(p2,p1)
+    ((1-p2'p2)*p1 + (1-p1'p1)*p2 - cross(2p1, p2) ) / (1+p1'p1*p2'p2 - 2p1'p2)
+end
+
+
+function MRP_composition_jacobian_p2(p2,p1)
+    # this is slower than ForwardDiff
+    n1 = p1'p1
+    n2 = p2'p2
+    N = (1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2)
+    D = 1+n1*n2 - 2p1'p2
+    (((1-n1)*I - 2p1*p2' - skew(2p1))*D - N*(2n1*p2' - 2p1'))/D^2
+end
+
+function MRP_composition_jacobian_p1(p2,p1)
+    # this is slower than ForwardDiff
+    n1 = p1'p1
+    n2 = p2'p2
+    N = (1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2)
+    D = 1+n1*n2 - 2p1'p2
+    (((1-n2)*I - 2p2*p1' + skew(2p2))*D - N*(2n2*p1' - 2p2'))/D^2
+end
+
+function RPY_to_DCM(e)
+    # Equivalent to RotX(e[1])*RotY(e[2])*RotZ(e[3])
+    sϕ,cϕ = sin(e[1]), cos(e[1])
+    sθ,cθ = sin(e[2]), cos(e[2])
+    sψ,cψ = sin(e[3]), cos(e[3])
+    A = @SMatrix [
+        cθ*cψ          -cθ*sψ              sθ;
+        sϕ*sθ*cψ+cϕ*sψ -sϕ*sθ*sψ + cϕ*cψ  -cθ*sϕ;
+       -cϕ*sθ*cψ+sϕ*sψ  cϕ*sθ*sψ + sϕ*cψ   cθ*cϕ
+    ]
+end
+
+function RPY_rotate_jacobian(e,r)
+    return @SMatrix [
+        
+    ]
+end

@@ -84,3 +84,9 @@ function set_controls!(Z::Traj, U)
         Z[k].z = [state(Z[k]); U[k]]
     end
 end
+
+function set_times!(Z::Traj, ts)
+    for k in eachindex(ts)
+        Z[k].t = ts[k] 
+    end
+end
