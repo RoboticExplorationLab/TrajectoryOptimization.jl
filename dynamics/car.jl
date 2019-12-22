@@ -20,16 +20,16 @@ function dynamics(::DubinsCar,x,u)
                   u[2]]
 end
 
-using Plots
-function Plots.plot(model::DubinsCar, Z::Traj; kwargs...)
-    x = [z.z[1] for z in Z]
-    y = [z.z[2] for z in Z]
-    Plots.plot(x, y, xlabel="x position", ylabel="y position", markershape=:circle;
-        kwargs...)
-end
-function Plots.plot!(model::DubinsCar, Z::Traj; kwargs...)
-    x = [z.z[1] for z in Z]
-    y = [z.z[2] for z in Z]
-    Plots.plot!(x, y, xlabel="x position", ylabel="y position", markershape=:circle;
-        kwargs...)
-end
+# using Plots
+# function Plots.plot(model::DubinsCar, Z::Traj; kwargs...)
+#     x = [z.z[1] for z in Z]
+#     y = [z.z[2] for z in Z]
+#     Plots.plot(x, y, xlabel="x position", ylabel="y position", markershape=:circle;
+#         kwargs...)
+# end
+# function Plots.plot!(model::DubinsCar, Z::Traj; kwargs...)
+#     x = [z.z[1] for z in Z]
+#     y = [z.z[2] for z in Z]
+#     Plots.plot!(x, y, xlabel="x position", ylabel="y position", markershape=:circle;
+#         kwargs...)
+# end

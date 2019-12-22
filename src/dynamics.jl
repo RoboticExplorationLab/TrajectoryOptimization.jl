@@ -3,13 +3,13 @@ module Dynamics
 # using TrajectoryOptimization: Model, UncertainModel, Trajectory, Constraint, Equality, Inequality, Problem
 using TrajectoryOptimization: Equality, Inequality
 using TrajectoryOptimization
-using RigidBodyDynamics
+# using RigidBodyDynamics
 using LinearAlgebra
 using DocStringExtensions
 using StaticArrays
 using Parameters
 import TrajectoryOptimization: dynamics, AbstractModel, RigidBody, state_diff, state_diff_jacobian,
-    state_diff_size, quat_diff, quat_diff_jacobian
+    state_diff_size
 
 export
     pendulum,

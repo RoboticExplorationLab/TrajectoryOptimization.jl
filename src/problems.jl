@@ -5,10 +5,8 @@
 module Problems
 
 using TrajectoryOptimization
-using RigidBodyDynamics
 using LinearAlgebra
 using ForwardDiff
-using Plots
 using Random
 using StaticArrays
 

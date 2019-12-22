@@ -4,7 +4,6 @@ Primary module for setting up and solving trajectory optimization problems.
 """
 module TrajectoryOptimization
 
-# using RigidBodyDynamics
 using ForwardDiff
 using DocStringExtensions
 using Interpolations
@@ -13,18 +12,14 @@ using LinearAlgebra
 using Statistics
 using Random
 using SparseArrays
-# using SuiteSparse
 using StaticArrays
 using Logging
 using Formatting
-# using Plots
 using BenchmarkTools
-# using PartedArrays
 using Parameters
-# using Rotations
-# using BlockArrays
+using Rotations
 using MathOptInterface
-# using TimerOutputs
+using Quaternions
 
 const MOI = MathOptInterface
 
@@ -141,6 +136,7 @@ export
 # PartedMatTrajectory{T} = Vector{PartedMatrix{T,Matrix{T}}}
 
 include("utils.jl")
+include("rotations.jl")
 include("logger.jl")
 # include("constraints.jl")
 # include("constraint_sets.jl")
