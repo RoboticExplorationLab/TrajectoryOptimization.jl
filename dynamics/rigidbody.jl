@@ -1,23 +1,56 @@
 import TrajectoryOptimization.Dynamics: forces, moments, inertia, inertia_inv, mass_matrix
 
-function dynamics(model::RigidBody{<:Quat}, x, u)
-    q = normalize(Quaternion(x[4],x[5],x[6],x[7]))
-    v = SVector{3}(x[8],x[9],x[10])
-    ω = SVector{3}(x[11],x[12],x[13])
-    F = forces(model, x, u)
-    τ = moments(model, x, u)
-    M = mass_matrix(model, x, u)
-    J = inertia(model, x, u)
-    Jinv = inertia_inv(model, x, u)
+@inline Base.position(model::RigidBody, x) = SVector{3}(x[1],x[2],x[3])
+@inline orientation(model::RigidBody, x) = SVector{3}(x[4],x[5],x[6])
+@inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
+@inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
-    xdot = v
-    qdot = 0.5*q*Quaternion(0,ω[1],ω[2],ω[3])
-    vdot = M\F
-    ωdot = Jinv*(τ - ω × (J*ω))
-    @SVector [xdot[1], xdot[2], xdot[3],
-              qdot.s,  qdot.v1, qdot.v2, qdot.v3,
-              vdot[1], vdot[2], vdot[3],
-              ωdot[1], ωdot[2], ωdot[3]]
+@inline orientation(model::RigidBody{D}, x) where D<:UnitQuaternion = normalize(D(x[4],x[5],x[6],x[7]))
+@inline linear_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[8],x[9],x[10])
+@inline angular_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[11],x[12],x[13])
+
+function parse_state(model::RigidBody, x)
+    r = position(model, x)
+    p = orientation(model, x)
+    v = linear_velocity(model, x)
+    ω = angular_velocity(model, x)
+    return r, p, v, ω
+end
+
+@generated function dynamics(model::RigidBody{D}, x, u) where D
+
+    if D <: UnitQuaternion
+        build_state = quote
+            @SVector [xdot[1], xdot[2], xdot[3],
+                      qdot[1], qdot[2], qdot[3], qdot[4],
+                      vdot[1], vdot[2], vdot[3],
+                      ωdot[1], ωdot[2], ωdot[3]]
+        end
+    else
+        build_state = quote
+            @SVector [xdot[1], xdot[2], xdot[3],
+                      qdot[1], qdot[2], qdot[3],
+                      vdot[1], vdot[2], vdot[3],
+                      ωdot[1], ωdot[2], ωdot[3]]
+        end
+    end
+
+    quote
+        r,q,v,ω = parse_state(model, x)
+
+        F = forces(model, x, u)
+        τ = moments(model, x, u)
+        M = mass_matrix(model, x, u)
+        J = inertia(model, x, u)
+        Jinv = inertia_inv(model, x, u)
+
+        xdot = v
+        qdot = kinematics(q,ω)
+        vdot = M\F
+        ωdot = Jinv*(τ - ω × (J*ω))
+
+        $(build_state)
+    end
 end
 
 function dynamics(model::RigidBody{MRP}, x, u)
@@ -30,7 +63,7 @@ function dynamics(model::RigidBody{MRP}, x, u)
     Jinv = inertia_inv(model, x, u)
 
     xdot = v
-    pdot = 0.25*MRP_kinematics(p)*ω
+    pdot = kinematics(p,ω)
     vdot = MRP_rotate_vec(p,F)
     ωdot = Jinv*(M - ω × J*ω)
     @SVector [xdot[1], xdot[2], xdot[3],

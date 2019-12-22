@@ -79,12 +79,6 @@ function MRP_to_quat(p::SVector{3,T}) where T
     Quaternion(s, v[1], v[2], v[3])
 end
 
-function skew(v::AbstractVector)
-    @assert length(v) == 3
-    @SMatrix [0   -v[3]  v[2];
-              v[3] 0    -v[1];
-             -v[2] v[1]  0]
-end
 
 function MRP_rotate_jacobian(p,r)
     4( (1-p'p)*skew(r)*(4p*p'/(1+p'p) - I) - (4/(1+p'p)*skew(p) + I)*2*skew(p)*r*p'
@@ -123,11 +117,5 @@ function RPY_to_DCM(e)
         cθ*cψ          -cθ*sψ              sθ;
         sϕ*sθ*cψ+cϕ*sψ -sϕ*sθ*sψ + cϕ*cψ  -cθ*sϕ;
        -cϕ*sθ*cψ+sϕ*sψ  cϕ*sθ*sψ + sϕ*cψ   cθ*cϕ
-    ]
-end
-
-function RPY_rotate_jacobian(e,r)
-    return @SMatrix [
-        
     ]
 end

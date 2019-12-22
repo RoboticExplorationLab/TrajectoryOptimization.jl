@@ -14,15 +14,6 @@ export
     ExponentialMap,
     ModifiedRodriguesParam
 
-abstract type DifferentialRotation end
-abstract type VectorPart <: DifferentialRotation end
-abstract type ExponentialMap <: DifferentialRotation end
-abstract type ModifiedRodriguesParam <: DifferentialRotation end
-
-abstract type RotationType end
-abstract type Quat{P<:DifferentialRotation} <: RotationType end
-abstract type MRP <: RotationType end
-abstract type EulerAngle <: RotationType end
 
 """ $(TYPEDEF)
 Abstraction of a model of a dynamical system of the form ẋ = f(x,u), where x is the n-dimensional state vector
@@ -34,7 +25,7 @@ n,m = size(model)
 """
 abstract type AbstractModel end
 
-abstract type RigidBody{R<:RotationType} <: AbstractModel end
+abstract type RigidBody{R<:Rotation} <: AbstractModel end
 
 "Integration rule for approximating the continuous integrals for the equations of motion"
 abstract type QuadratureRule end

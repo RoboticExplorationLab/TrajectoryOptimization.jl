@@ -1,4 +1,5 @@
 include("quaternions.jl")
+using Quaternions
 
 struct Quadrotor{T} <: AbstractModel #RigidBody{Quat{VectorPart}}
       n::Int
@@ -46,7 +47,11 @@ function dynamics(quad::Quadrotor, x::AbstractVector, u::AbstractVector)
       # omega3
 
       # x = X[1:3]
-      q = normalize(Quaternion(view(x,4:7)))
+      q = normalize(Quaternion(x[4],x[5],x[6],x[7]))
+      # q = Rotations.Quat(x[4],x[5],x[6],x[7])
+      # q = Quaternions.Quaternion(x[4],x[5],x[6],x[7])
+      # q = normalize(q)
+      # q = normalize(Quaternion(view(x,4:7)))
       # q = view(x,4:7)
       # normalize!(q)
       v = view(x,8:10)
@@ -80,6 +85,8 @@ function dynamics(quad::Quadrotor, x::AbstractVector, u::AbstractVector)
 
       # ẋ[4:7] = 0.5*qmult(q,[0;omega]) #quaternion derivative
       qdot = SVector(0.5*q*Quaternion(zero(x[1]), omega))
+      ωhat = Quaternion(0.0, omega[1], omega[2], omega[3])
+      qdot = SVector(0.5*q*ωhat)
       vdot = g + (1/m)*(q*F) #acceleration in world frame
       omdot = Jinv*(tau - cross(omega,J*omega)) #Euler's equation: I*ω + ω x I*ω = constraint_decrease_ratio
       @SVector [v[1], v[2], v[3], qdot[1], qdot[2], qdot[3], qdot[4], vdot[1], vdot[2], vdot[3], omdot[1], omdot[2], omdot[3]]
