@@ -1,4 +1,4 @@
-import Base: +, -, *, /, exp, log, ≈, normalize
+import Base: +, -, *, /, exp, log, ≈
 
 export
     UnitQuaternion,
