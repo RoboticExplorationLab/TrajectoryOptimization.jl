@@ -21,5 +21,6 @@ makedocs(
 # for more information.
 deploydocs(
     repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git",
+    deploy_config=Documenter.Travis(),
     devbranch = "v1.3",
 )
