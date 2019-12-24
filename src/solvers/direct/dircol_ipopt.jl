@@ -10,6 +10,11 @@ function parse_ipopt_summary(file=joinpath(dirname(pathof(TrajectoryOptimization
     c_max = Vector{Float64}()
     iter_lines = false  # Flag true if it's parsing the iteration summary lines
 
+    if !isfile(file)
+        println("Can't find Ipopt output file.\n Solve statistics will be unavailable.")
+        return props
+    end
+
 
     function stash_prop(ln::String,prop::String,prop_name::Symbol=prop,vartype::Type=Float64)
         if occursin(prop,ln)
@@ -58,7 +63,7 @@ function write_ipopt_options()
     optfile=joinpath(root_dir,"ipopt.opt")
 
     if !isfile(optfile)
-        println("Writing Ipopt options file...")
+        println("Writing Ipopt options file to $optfile...")
         f = open(optfile,"w")
         println(f,"# IPOPT Options for TrajectoryOptimization.jl\n")
         println(f,"# Use Quasi-Newton methods to avoid the need for the Hessian")
