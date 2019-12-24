@@ -8,13 +8,15 @@ makedocs(
     format = Documenter.HTML(prettyurls = false),
     pages = [
         "Introduction" => "index.md",
-        "models.md",
-        "costfunctions.md",
-        "constraints.md",
-        "problem.md",
-        # "solvers.md",
-        # "solving.md",
-        # "advanced.md",
+        "Getting Started" => [
+            "models.md",
+            "costfunctions.md",
+            "constraints.md",
+            "problem.md",
+        ],
+        "Documentation" => [
+            "discretization.md"
+        ]
     ]
 )
 

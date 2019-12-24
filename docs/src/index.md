@@ -14,14 +14,12 @@ Pages = ["index.md"]
 ## Overview
 This package is a testbed for state-of-the-art trajectory optimization algorithms. Trajectory optimization problems are of the form,
 ```math
-\begin{equation}
 \begin{aligned}
   \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
   \textrm{s.t.}            \quad & x_{k+1} = f(x_k, u_k), \\
                                  & g_k(x_k,u_k) \leq 0, \\
                                  & h_k(x_k,u_k) = 0.
 \end{aligned}
-\end{equation}
 ```
 
 This package currently implements the following methods for solving trajectory optimization problems:

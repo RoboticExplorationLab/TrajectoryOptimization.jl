@@ -116,9 +116,12 @@ end
 
 Methods:
 ```
-x′ = discrete_dynamics(Q, model, x, u, dt)
+x′ = discrete_dynamics(model, model, z)  # uses $(DEFAULT_Q) as the default integration scheme
+x′ = discrete_dynamics(Q, model, x, u, t, dt)
 x′ = discrete_dynamics(Q, model, z::KnotPoint)
 ```
+
+The default integration scheme is stored in `TrajectoryOptimization.DEFAULT_Q`
 """
 @inline discrete_dynamics(::Type{Q}, model::AbstractModel, z::KnotPoint) where Q<:Implicit =
     discrete_dynamics(Q, model, state(z), control(z), z.t, z.dt)
@@ -127,10 +130,11 @@ x′ = discrete_dynamics(Q, model, z::KnotPoint)
 
 Methods:
 ```
-∇f = discrete_jacobian(model, z::KnotPoint)
-∇f = discrete_jacobian(model, s::SVector{NM1}, ix::SVector{N}, iu::SVector{M})
+∇f = discrete_dynamics(model, z::KnotPoint)  # uses $(DEFAULT_Q) as the default integration scheme
+∇f = discrete_jacobian(Q, model, z::KnotPoint)
+∇f = discrete_jacobian(Q, model, s::SVector{NM1}, t, ix::SVector{N}, iu::SVector{M})
 ```
-where `s = [x; u; dt]` and `ix` and `iu` are the indices to extract the state and controls.
+where `s = [x; u; dt]`, `t` is the time, and `ix` and `iu` are the indices to extract the state and controls.
 """
 @inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
     discrete_jacobian(DEFAULT_Q, model, z)
