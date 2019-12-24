@@ -1,5 +1,13 @@
-using StaticArrays, LinearAlgebra, ForwardDiff
-import Base: +, -, *, /, exp, log, ≈
+import Base: +, -, *, /, exp, log, ≈, normalize
+
+export
+    UnitQuaternion,
+    MRP,
+    RPY,
+    ExponentialMap,
+    VectorPart,
+    ModifiedRodriguesParam
+
 
 function skew(v::AbstractVector)
     @assert length(v) == 3
@@ -21,7 +29,9 @@ struct UnitQuaternion{T,D<:DifferentialRotation} <: Rotation
     y::T
     z::T
 end
+
 UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,VectorPart}(s,x,y,z)
+UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z)
 
 UnitQuaternion(q::SVector{4}) = UnitQuaternion(q[1],q[2],q[3],q[4])
 UnitQuaternion(r::SVector{3}) = UnitQuaternion(0.0, r[1],r[2],r[3])
@@ -40,7 +50,7 @@ LinearAlgebra.norm(q::UnitQuaternion) = sqrt(q.s^2 + q.x^2 + q.y^2 + q.z^2)
 
 (≈)(q::UnitQuaternion, u::UnitQuaternion) = q.s ≈ u.s && q.x ≈ u.x && q.y ≈ u.y && q.z ≈ u.z
 
-function normalize(q::UnitQuaternion{T,D}) where {T,D}
+function LinearAlgebra.normalize(q::UnitQuaternion{T,D}) where {T,D}
     n = norm(q)
     UnitQuaternion{T,D}(q.s/n, q.x/n, q.y/n, q.z/n)
 end

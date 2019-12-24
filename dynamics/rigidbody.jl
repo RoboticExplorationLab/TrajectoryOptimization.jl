@@ -5,7 +5,8 @@ import TrajectoryOptimization.Dynamics: forces, moments, inertia, inertia_inv, m
 @inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
 @inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
-@inline orientation(model::RigidBody{D}, x) where D<:UnitQuaternion = normalize(D(x[4],x[5],x[6],x[7]))
+@inline orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2}) where {T,D,N,T2} =
+    normalize(UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7]))
 @inline linear_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[8],x[9],x[10])
 @inline angular_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[11],x[12],x[13])
 
