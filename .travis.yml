@@ -36,12 +36,13 @@ addons:
 #   - julia -e 'cd(Pkg.dir("TrajectoryOptimization")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
 
 
-# jobs:
-#   include:
-#     - stage: "Documentation"
-#       julia: 1.1
-#       os: linux
-#       script:
-#           - julia --project=docs -e 'using Pkg; Pkg.instantiate()'
-#           - julia --project=docs --color=yes -e 'timer = Timer(timer -> @info("Still running"), 60; interval=60); include("docs/make.jl"); close(timer);'
-#       after_success: skip
+jobs:
+  include:
+    - stage: "Documentation"
+      julia: 1.0
+      os: linux
+      script:
+        - julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd()));
+                                               Pkg.instantiate()'
+        - julia --project=docs/ docs/make.jl
+      after_success: skip
