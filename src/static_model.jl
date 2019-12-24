@@ -144,6 +144,13 @@ function discrete_jacobian(::Type{Q}, model::AbstractModel,
     ForwardDiff.jacobian(fd_aug, s)
 end
 
+function discrete_jacobian(::Type{Q}, model::AbstractModel,
+       s::SVector{NM1}, t::T, ix::SVector{N}, iu::SVector{M}) where {Q<:Implicit,T,N,M,NM1}
+    idt = NM1
+    fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
+    ForwardDiff.jacobian(fd_aug, s)
+end
+
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #
@@ -196,7 +203,7 @@ dynamics(::InfeasibleModel, x, u) =
         dt = z.dt
         u0 = z.z[$_u]
         ui = z.z[$_ui]
-        discrete_dynamics($Q, model.model, x, u0, dt) + ui
+        discrete_dynamics($Q, model.model, x, u0, z.t, dt) + ui
     end
 end
 
@@ -218,7 +225,7 @@ end
 
         u0 = z.z[$_u]
         ui = z.z[$_ui]
-        ∇f = discrete_jacobian($Q, model.model, s0, $_x, $_u)::SMatrix{N,NM+1}
+        ∇f = discrete_jacobian($Q, model.model, s0, z.t, $_x, $_u)::SMatrix{N,NM+1}
         ∇dt = ∇f[$_x, N+M+1]
         [∇f[$_x, $_z] $∇u0 ∇dt] + $∇ui
     end
