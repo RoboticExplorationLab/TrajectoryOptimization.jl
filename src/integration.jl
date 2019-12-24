@@ -11,6 +11,10 @@ function discrete_dynamics(::Type{RK3}, model::AbstractModel, x::SVector{N,T}, u
 end
 
 
+############################################################################################
+#                                  EXPLICIT METHODS 								       #
+############################################################################################
+
 # Hermite Simpson
 function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{HermiteSimpson},
 		Z::Traj, inds=1:length(Z)-1)
