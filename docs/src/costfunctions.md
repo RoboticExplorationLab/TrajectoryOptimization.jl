@@ -33,12 +33,12 @@ There are several different cost function types that all inherit from `CostFunct
 ```
 for the simple pendulum with the goal of doing a swing-up. To do this we have very convenient constructors [`LQRCost`](@ref) and [`LQRCostTerminal`](@ref):
 ```julia
-using LinearAlgebra
+using LinearAlgebra, StaticArrays
 n,m = 2,1
-Q = Diagonal(0.1I,n)
-R = Diagonal(0.1I,m)
-Qf = Diagonal(1000I,n)
-xf = [π,0]
+Q = Diagonal(@SVector fill(0.1,n))
+R = Diagonal(@SVector fill(0.1,m))
+Qf = Diagonal(@SVector fill(1000,n))
+xf = @SVector [π,0]
 costfun = LQRCost(Q,R,Qf)
 costfun_term = LQRCostTerminal(Qf,xf)
 ```
@@ -46,9 +46,9 @@ It is HIGHLY recommended to specify any special structure, such as `Diagonal`, e
 
 This constructor actually does a simple conversion to turn our cost function into a generic quadratic cost function. We could do this ourselves:
 ```julia
-H = zeros(m,n)
+H = @SMatrix zeros(m,n)
 q = -Q*xf
-r = zeros(m)
+r = @SVector zeros(m)
 c = xf'Q*xf/2
 qf = -Qf*xf
 cf = xf'Qf*xf/2
@@ -72,34 +72,11 @@ There's also a convenient constructor that builds an [`LQRObjective`](@ref)
 ```julia
 obj = LQRObjective(Q, R, Qf, xf, N)
 ```
-#### QuadraticCost API
-```@docs
-QuadraticCost
-LQRCost
-LQRCostTerminal
-LQRObjective
-```
-
-### Cost Function Interface
-All cost functions are required to define the following methods
-```julia
-n = state_dim(cost)
-m = control_dim(cost)
-J = stage_cost(cost, x, u)
-J = stage_cost(cost, xN)
-Qx,Qu = gradient(cost, x, u)
-Qxx,Quu,Qux = hessian(cost, x, u)
-```
-and inherit from `CostFunction`.
-
-
-### CostExpansion Type
-The `CostExpansion` type stores the pieces of the second order Taylor expansion of the cost for the entire trajectory, stored as vectors of Static Vectors or Static Matrices. e.g. to get the Hessian with respect to `x` at knotpoint 5 you would use `E.xx[5]`.
-
 
 ## Objectives
-### Constructors
-Objectives can be created by copying a single cost function over all time steps
+Objectives can be created by copying a single cost function over all time steps. See
+[Objective](@ref) API for more information.
+
 ```julia
 Objective(cost::CostFunction, N::Int)
 ```
@@ -112,24 +89,4 @@ Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
 or by explicitly specifying a list of cost functions
 ```julia
 Objective(costfuns::Vector{<:CostFunction})
-```
-
-### Methods
-`Constraints` extends the methods on `CostFunction` to the whole trajectory
-```julia
-cost(obj, Z)
-cost_expansion!(E::CostExpansion, obj, Z)
-```
-where `Z` is a Trajectory (e.g. Vector of `KnotPoint`s)
-
-
-## API
-```@docs
-cost
-stage_cost
-get_J
-cost_gradient
-cost_gradient!
-cost_hessian
-cost_hessian!
 ```

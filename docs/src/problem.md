@@ -1,7 +1,8 @@
-# [4. Setting up a Problem](@id problem_section)
 ```@meta
 CurrentModule = TrajectoryOptimization
 ```
+
+# Problem 
 
 ```@contents
 Pages = ["problem.md"]

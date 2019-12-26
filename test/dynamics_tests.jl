@@ -1,8 +1,9 @@
 using StaticArrays, LinearAlgebra, BenchmarkTools
 import TrajectoryOptimization: dynamics, jacobian, discrete_dynamics, discrete_jacobian
+import TrajectoryOptimization: RigidBody
 
 # Get Quadrotor Model
-model = Dynamics.Cartpole()
+model = Dynamics.Quadrotor2{UnitQuaternion{Float64,VectorPart}}()
 n,m = size(model)
 N = 101  # knot points
 
@@ -19,7 +20,7 @@ fVal = [@SVector zeros(n) for k = 1:N-1]
 
 
 # Continuous Dynamics
-function dynamics(fVal, model, Z)
+function dynamics(fVal, model::AbstractModel, Z::Traj)
     @inbounds for k in eachindex(fVal)
         # Most straightforward, passes through 2 "conversion functions":
         #  dynamics(model, z::KnotPoint) = dynamics(model, state(z), control(z), z.t)
@@ -36,7 +37,7 @@ function dynamics(fVal, model, Z)
 end
 
 # Continuous Jacobian
-function jacobian(∇f, model, Z)
+function jacobian(∇f, model::AbstractModel, Z::Traj)
     @inbounds for k in eachindex(∇f)
         # This function is defined in static_model.jl::93
         #   It's best to pass in the KnotPoint directly, since having the state and control
@@ -46,7 +47,7 @@ function jacobian(∇f, model, Z)
 end
 
 # Discrete Dynamics
-function discrete_dynamics(fVal, model, Z)
+function discrete_dynamics(fVal, model::AbstractModel, Z::Traj)
     @inbounds for k in eachindex(fVal)
         # Most straightforward, passes through 1 "conversion function":
         #   discrete_dynamics(::Type{Q}, model, z::KnotPoint) = discrete_dynamics(Q, model, state(z), control(z), z.t, z.dt)
@@ -60,7 +61,7 @@ function discrete_dynamics(fVal, model, Z)
 end
 
 # Discrete Dynamics jacobian
-function discrete_jacobian(∇fd, model, Z)
+function discrete_jacobian(∇fd, model::AbstractModel, Z::Traj)
     @inbounds for k in eachindex(∇fd)
         # This function is defined in static_model.jl::138
         ∇fd[k] = discrete_jacobian(RK3, model, Z[k])
@@ -69,6 +70,11 @@ end
 
 # Test functions
 dynamics(fVal, model, Z)
+model
+get_orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2}) where {T,D,N,T2} =
+    UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7])
+x,u = rand(model)
+normalize(get_orientation(model,x))
 jacobian(∇f, model, Z)
 discrete_dynamics(fVal, model, Z)
 discrete_jacobian(∇fd, model, Z)

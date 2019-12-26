@@ -9,7 +9,7 @@ Pages = ["models.md"]
 ## Overview
 The Model type holds information about the dynamics of the system. All dynamics are assumed to be state-space models of the system of the form ``\dot{x} = f(x,u)`` where ``\dot{x}`` is the state derivative, ``x`` an ``n``-dimensional state vector, and ``u`` in an ``m``-dimensional control input vector. The function ``f`` can be any nonlinear function.
 
-TrajectoryOptimization.jl solves the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, i.e., turning the continuous time differential equation into a discrete time difference equation of the form ``x[k+1] = f(x[k],u[k])``, where ``k`` is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods. See [Model Discretization](@ref) section for more information on
+TrajectoryOptimization.jl solves the trajectory optimization problem by discretizing the state and control trajectories, which requires discretizing the dynamics, i.e., turning the continuous time differential equation into a discrete time difference equation of the form ``x_{k+1} = f(x_k, u_k)``, where ``k`` is the time step. There many methods of performing this discretization, and TrajectoryOptimization.jl offers several of the most common methods. See [Model Discretization](@ref) section for more information on
 discretizing dynamics, as well as how to define custom integration methods.
 
 
@@ -61,7 +61,7 @@ dynamics
 jacobian
 ```
 
-### Time-varying systems (experimental)
+## Time-varying systems (experimental)
 TrajectoryOptimization.jl also offers experimental support for time-varying systems. Let's say
 for some reason the mass of our cartpole is decreasing linearly with time. We can model this
 with a slight modification to the dynamics function signature:
@@ -102,3 +102,8 @@ end
 
 Base.size(::CartpoleTimeVarying) = 4,1
 ```
+
+## Models with 3D Rotations (experimental)
+TrajectoryOptimization.jl offers experimental support for models with non-Euclidean state
+vectors, such as 3D rotations, which live in ``SO(3)`` instead of ``\mathbb^4``. See [RigidBody](@ref)
+section for more details.

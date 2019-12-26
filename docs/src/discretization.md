@@ -1,5 +1,8 @@
+```@meta
+CurrentModule = TrajectoryOptimization
+```
 
-# Discretizaation
+# Discretization
 This page gives details on the methods for evaluating discretized dynamics, as well as instructions
 on how to define a custom integration method.
 

@@ -182,7 +182,7 @@ function forces(model::Quadrotor2, x, u)
       F4 = kf*w4;
       F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
 
-      m*g + q*F #acceleration in world frame
+      m*g + q*F # forces in world frame
 end
 
 function moments(model::Quadrotor2, x, u)

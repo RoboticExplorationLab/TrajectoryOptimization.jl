@@ -25,6 +25,31 @@ n,m = size(model)
 """
 abstract type AbstractModel end
 
+
+""" $(TYPEDEF)
+Abstraction of a dynamical system with free-body dynamics, with a 12 or 13-dimensional state
+vector: `[p; q; v; ω]`
+where `p` is the 3D position, `q` is the 3 or 4-dimension attitude representation, `v` is the
+3D linear velocity, and `ω` is the 3D angular velocity.
+
+# Interface
+Any single-body system can leverage the `RigidBody` type by inheriting from it and defining the
+following interface:
+```julia
+forces(::MyRigidBody, x, u)  # return the forces in the world frame
+moments(::MyRigidBody, x, u) # return the moments in the body frame
+inertia(::MyRigidBody, x, u) # return the 3x3 inertia matrix
+inertia_inv(::MyRigidBody, x, u)  # return the 3x3 inverse of the inertia matrix
+mass_matrix(::MyRigidBody, x, u)  # return the 3x3 mass matrix
+```
+
+# Rotation Parameterization
+A `RigidBody` model must specify the rotational representation being used. Any of the following
+can be used:
+* [`UnitQuaternion`](@ref): Unit Quaternion. Note that this representation needs to be further parameterized.
+* [`MRP`](@ref): Modified Rodrigues Parameters
+* [`RPY`](@ref): Roll-Pitch-Yaw Euler angles
+"""
 abstract type RigidBody{R<:Rotation} <: AbstractModel end
 
 "Integration rule for approximating the continuous integrals for the equations of motion"
@@ -176,7 +201,21 @@ end
 ############################################################################################
 #                               INFEASIBLE MODELS                                          #
 ############################################################################################
+""" $(TYPEDEF)
+An infeasible model is an augmented dynamics model that makes the system artifically fully
+actuated by augmenting the control vector with `n` additional controls. The dynamics are
+handled explicitly in discrete time:
 
+``x_{k+1} = f(x_k,u_k,dt) + w_k``
+
+where ``w_k`` are the additional `n`-dimensional controls. In practice, these are constrained
+to be zero by the end of the solve.
+
+# Constructors
+```julia
+InfeasibleModel(model::AbstractModel)
+```
+"""
 struct InfeasibleModel{N,M,D<:AbstractModel} <: AbstractModel
     model::D
     _u::SVector{M,Int}  # inds to original controls

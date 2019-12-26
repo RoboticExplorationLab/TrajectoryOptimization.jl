@@ -12,10 +12,17 @@ makedocs(
             "models.md",
             "costfunctions.md",
             "constraints.md",
-            "problem.md",
+            "creating_problems.md"
         ],
         "Documentation" => [
-            "discretization.md"
+            "model_types.md",
+            "discretization.md",
+            "cost_api.md",
+            "constraint_api.md",
+            "problem.md"
+        ],
+        "Interfaces" => [
+            "costfunction_interface.md"
         ]
     ]
 )

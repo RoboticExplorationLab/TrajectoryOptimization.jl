@@ -101,7 +101,8 @@ Constraint of the form
 where ``x``, ``y`` are given by `x[xi]`,`x[yi]`, ``(x_c,y_c)`` is the center
 of the circle, and ``r`` is the radius.
 
-# Constructor: ```julia
+# Constructor:
+```julia
 CircleConstraint(n, xc::SVector{P}, yc::SVector{P}, radius::SVector{P}, xi=1, yi=2)
 ```
 """
@@ -171,14 +172,28 @@ end
 """
 $(TYPEDEF)
 Constraint of the form
-``\\norm(y)^2 \\leq val``
-where ``y`` is either a state or a vector (but not both)
+``\\|y\\|^2 \\{\\leq,=\\} a``
+where ``y`` is either a state or a control vector (but not both)
 
 # Constructors:
 ```
-NormConstraint{S,State}(n,val)
-NormConstraint{S,Control}(m,val)
+NormConstraint{S,State}(n,a)
+NormConstraint{S,Control}(m,a)
 ```
+where `a` is the constant on the right-hand side of the equation.
+
+# Examples:
+```julia
+NormConstraint{Equality,Control}(2,4.0)
+```
+creates a constraint equivalent to
+``\\|u\\|^2 = 4.0`` for a problem with 2 controls.
+
+```julia
+NormConstraint{Inequality,State}(3, 2.3)
+```
+creates a constraint equivalent to
+``\\|x\\|^2 \\leq 2.3`` for a problem with 3 states.
 """
 struct NormConstraint{S,W<:Union{State,Control},T} <: AbstractConstraint{S,W,1}
 	dim::Int

@@ -12,10 +12,12 @@ export
 Holds a vector of [`ConstraintVals`](@ref) that specify where in the trajectory each constraint
 is applied. The `ConstraintSet` efficiently dispatches functions to all of the constraints.
 
-# Constructors:```julia
+# Constructors:
+```julia
 ConstraintSet(n,m,N)
 ConstraintSet(n,m,Vector{<:ConstraintVals},N)
 ```
+
 """
 struct ConstraintSet{T}
 	n::Int
