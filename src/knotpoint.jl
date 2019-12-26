@@ -4,8 +4,36 @@ export
     state,
     control
 
-"""
-Stores the states and controls for a single knot point
+""" $(TYPEDEF)
+Stores critical information corresponding to each knot point in the trajectory optimization
+problem, including the state and control values, as well as the time and time step length.
+
+# Getters
+Use the following methods to access values from a `KnotPoint`:
+```julia
+x  = state(z::KnotPoint)    # returns the n-dimensional state as a SVector
+u  = control(z::KnotPoint)  # returns the m-dimensional control vector as a SVector
+t  = z.t                    # current time
+dt = z.dt                   # time step length
+```
+
+# Setters
+Use the following methods to set values in a `KnotPoint`:
+```julia
+set_state!(z::KnotPoint, x)
+set_control!(z::KnotPoint, u)
+z.t = t
+z.dt = dt
+```
+
+# Constructors
+```julia
+KnotPoint(x, u, dt, t=0.0)
+KnotPoint(x, m, t=0.0)  # for terminal knot point
+```
+
+Use `is_terminal(z::KnotPoint)` to determine if a `KnotPoint` is a terminal knot point (e.g.
+has no time step length and z.t == tf).
 """
 mutable struct KnotPoint{T,N,M,NM}
     z::SVector{NM,T}
@@ -44,7 +72,7 @@ function Base.copy(Z::Vector{KnotPoint{T,N,M,NM}}) where {T,N,M,NM}
 end
 
 function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
-    x = Inf*@SVector ones(n)
+    x = NaN*@SVector ones(n)
     u = @SVector zeros(m)
     Traj(x,u,dt,N,equal)
 end
@@ -87,6 +115,6 @@ end
 
 function set_times!(Z::Traj, ts)
     for k in eachindex(ts)
-        Z[k].t = ts[k] 
+        Z[k].t = ts[k]
     end
 end

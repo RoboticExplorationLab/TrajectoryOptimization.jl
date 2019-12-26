@@ -2,7 +2,7 @@
 CurrentModule = TrajectoryOptimization
 ```
 
-# Problem 
+# Problem
 
 ```@contents
 Pages = ["problem.md"]
@@ -16,8 +16,11 @@ Problem
 ## Methods
 ```@docs
 change_integration
-initial_controls!
-initial_states!
+initial_controls!(::Problem, X0::Vector{<:AbstractVector})
+initial_states!(::Problem, U0::Vector{<:AbstractVector})
 Base.size(::Problem)
 Base.copy(::Problem)
+integration(::Problem)
+states(::Problem)
+controls(::Problem)
 ```

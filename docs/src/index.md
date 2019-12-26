@@ -31,7 +31,6 @@ This package currently implements the following methods for solving trajectory o
 Key features include:
 * Support for general, per-timestep constraints
 * ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints
-* URDF parsing via [RigidBodyDynamics]
 
 
 ## Getting Started
