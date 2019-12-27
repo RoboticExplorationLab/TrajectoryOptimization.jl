@@ -5,29 +5,14 @@ export
 #                              COST METHODS                                                #
 ############################################################################################
 
-"$(TYPEDSIGNATURES) Evaluate the cost at a knot point"
+"$(TYPEDSIGNATURES) Evaluate the cost at a knot point, and automatically handle terminal
+knot point, multiplying by dt as necessary."
 function stage_cost(cost::CostFunction, z::KnotPoint)
     if is_terminal(z)
         stage_cost(cost, state(z))
     else
         stage_cost(cost, state(z), control(z))*z.dt
     end
-end
-
-"""```
-cost(obj::Objective, Z::Traj)::Float64
-cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
-```
-Evaluate the cost for a trajectory.
-Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
-    use the appropriate integration rule, if defined.
-"""
-function cost(obj::Objective, Z::Traj)::Float64
-    J::Float64 = 0.0
-    for k in eachindex(Z)
-        J += stage_cost(obj[k], Z[k])::Float64
-    end
-    return J
 end
 
 # Default to no integration

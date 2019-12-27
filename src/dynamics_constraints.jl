@@ -12,7 +12,19 @@ state_dim(con::AbstractDynamicsConstraint) = size(con.model)[1]
 control_dim(con::AbstractDynamicsConstraint) = size(con.model)[2]
 Base.length(con::AbstractDynamicsConstraint) = size(con.model)[1]
 
+""" $(TYPEDEF)
+An equality constraint imposed by the discretized system dynamics. Links adjacent time steps.
+Supports both implicit and explicit integration methods. Can store values internally for
+more efficient computation of dynamics and dynamics Jacobians over the entire trajectory,
+particularly for explicit methods. These constraints are used in Direct solvers, where
+the dynamics are explicit stated as constraints in a more general optimization method.
 
+# Constructors
+```julia
+DynamicsConstraint{Q}(model::AbstractModel, N)
+```
+where `N` is the number of knot points and `Q<:QuadratureRule` is the integration method.
+"""
 struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
 	model::L
     fVal::Vector{SVector{N,T}}

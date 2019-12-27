@@ -8,7 +8,7 @@ CurrentModule = TrajectoryOptimization
 Pages = ["problem.md"]
 ```
 
-## Creating a Problem
+## Definition 
 ```@docs
 Problem
 ```

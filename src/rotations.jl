@@ -23,6 +23,27 @@ abstract type VectorPart <: DifferentialRotation end
 abstract type ExponentialMap <: DifferentialRotation end
 abstract type ModifiedRodriguesParam <: DifferentialRotation end
 
+""" $(TYPEDEF)
+4-parameter attitute representation that is singularity-free. Quaternions with unit norm
+represent a double-cover of SO(3). The `UnitQuaternion` does NOT strictly enforce the unit
+norm constraint, but certain methods will assume you have a unit quaternion. The
+`UnitQuaternion` type is parameterized by the linearization method, which maps quaternions
+to the 3D plane tangent to the 4D unit sphere. Follows the Hamilton convention for quaternions.
+
+There are currently 3 methods supported:
+* `VectorPart` - uses the vector (or imaginary) part of the quaternion
+* `ExponentialMap` - the most common approach, uses the exponential and logarithmic maps
+* `ModifiedRodriguesParam` - or Modified Rodrigues Parameter, is a sterographic projection of the 4D unit sphere
+onto the plane tangent to either the positive or negative real poles.
+
+# Constructors
+```julia
+UnitQuaternion(s,x,y,z)  # defaults to `VectorPart`
+UnitQuaternion{D}(s,x,y,z)
+UnitQuaternion{D}(q::SVector{4})
+UnitQuaternion{D}(r::SVector{3})  # quaternion with 0 real part
+```
+"""
 struct UnitQuaternion{T,D<:DifferentialRotation} <: Rotation
     s::T
     x::T
@@ -33,8 +54,8 @@ end
 UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,VectorPart}(s,x,y,z)
 UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z)
 
-UnitQuaternion(q::SVector{4}) = UnitQuaternion(q[1],q[2],q[3],q[4])
-UnitQuaternion(r::SVector{3}) = UnitQuaternion(0.0, r[1],r[2],r[3])
+UnitQuaternion{D}(q::SVector{4}) = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
+UnitQuaternion{D}(r::SVector{3}) = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
 
 SVector(q::UnitQuaternion{T}) where T = SVector{4,T}(q.s, q.x, q.y, q.z)
 
@@ -196,11 +217,22 @@ end
 #                             MODIFIED RODRIGUES PARAMETERS                                #
 ############################################################################################
 
+""" $(TYPEDEF)
+Modified Rodrigues Parameter. Is a 3D parameterization of attitude, and is a sterographic
+projection of the 4D unit sphere onto the plane tangent to the negative real pole. They
+have a singularity at θ = ±180°.
+
+# Constructors
+MRP(x, y, z)
+MRP(r::SVector{3})
+"""
 struct MRP{T} <: Rotation
     x::T
     y::T
     z::T
 end
+
+MRP(r::SVector{3}) = MRP(r[1], r[2], r[3])
 
 SVector(p::MRP{T}) where T = SVector{3,T}(p.x, p.y, p.z)
 LinearAlgebra.norm(p::MRP) = sqrt(p.x^2 + p.y^2 + p.z^2)
@@ -269,6 +301,9 @@ end
 #                             Roll, Pitch, Yaw Euler Angles
 ############################################################################################
 
+""" $(TYPEDEF)
+Roll-pitch-yaw Euler angles.
+"""
 struct RPY{T} <: Rotation
     ϕ::T  # roll
     θ::T  # pitch

@@ -19,7 +19,7 @@ abstract type CostFunction end
 """
 $(TYPEDEF)
 Cost function of the form
-    1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx  rᵀu ) dt from 0 to tf
+    1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx + rᵀu ) dt from 0 to tf
 R must be positive definite, Q and Qf must be positive semidefinite
 
 Constructor use any of the following constructors:
@@ -85,7 +85,7 @@ end
 """
 $(SIGNATURES)
 Cost function of the form
-``(x-x_f)^T Q (x_x_f)``
+``(x-x_f)^T Q (x-x_f)``
 Q must be positive semidefinite
 """
 function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
@@ -174,7 +174,19 @@ function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Functi
     GenericCost(ℓ,ℓf, expansion, n,m)
 end
 
+""" $(TYPEDEF)
+This is an experimental cost function type that allows a cost function to be evaluated
+    on only a portion of the state and control. Right now, the implementation assumes
+    there is no coupling between the state and control.
 
+It should be noted that for `QuadraticCost`s it is likely more efficient to simply make a new
+    `QuadraticCost` that has zeros in the right places, and then add the cost functions together.
+
+# Constructor
+```julia
+IndexedCost(cost, ix::UnitRange, iu::UnitRange)
+```
+"""
 struct IndexedCost{iX,iU,C} <: CostFunction
     cost::C
 end

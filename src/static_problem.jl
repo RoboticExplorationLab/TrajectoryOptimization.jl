@@ -158,10 +158,7 @@ cost(::Problem)
 cost(::AbstractSolver)
 ```
 Compute the cost for the current trajectory"
-function cost(prob::Problem)
-    cost!(prob.obj, prob.Z)
-    return sum( get_J(prob.obj) )
-end
+@inline cost(prob::Problem) = cost(prob.obj, prob.Z)
 
 "Copy the problem"
 function copy(prob::Problem{Q}) where Q

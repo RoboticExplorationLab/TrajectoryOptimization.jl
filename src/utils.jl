@@ -25,3 +25,9 @@ function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     A[infs] = sign.(A[infs])*infbnd
     return nothing
 end
+
+function set_logger()
+    if !(global_logger() isa SolverLogger)
+        global_logger(default_logger(true))
+    end
+end

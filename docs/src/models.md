@@ -105,5 +105,6 @@ Base.size(::CartpoleTimeVarying) = 4,1
 
 ## Models with 3D Rotations (experimental)
 TrajectoryOptimization.jl offers experimental support for models with non-Euclidean state
-vectors, such as 3D rotations, which live in ``SO(3)`` instead of ``\mathbb^4``. See [RigidBody](@ref)
+vectors, such as 3D rotations, which live in ``SO(3)`` instead of ``\mathbb{R}^4`` (quaternions)
+or ``\mathbb{R}^3`` (Euler angles, or Modified Rodrigues Parameters). See [`RigidBody`](@ref)
 section for more details.
