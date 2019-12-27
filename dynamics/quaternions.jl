@@ -13,7 +13,7 @@ end
 Quaternion(v::AbstractVector) = Quaternion(v[1],v[2],v[3],v[4])
 Quaternion(w::Real, v::AbstractVector) = Quaternion(w,v[1],v[2],v[3])
 Quaternion(q::Quat) = Quaternion(q.w, q.x, q.y, q.z)
-Quaternion(r::Rotation{3,T}) where T = Quaternion(Quat(r))
+Quaternion(r::Rotations.Rotation{3,T}) where T = Quaternion(Quat(r))
 CoordinateTransformations.Quat(q::Quaternion) = Quat(SVector(q)...)
 Base.vec(q::Quaternion) = SVector(q.x, q.y, q.z)
 StaticArrays.SVector(q::Quaternion) = SVector(q.w, q.x, q.y, q.z)

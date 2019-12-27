@@ -1,12 +1,21 @@
 import Base: +, -, *, /, exp, log, ≈
+import LinearAlgebra.norm2
 
 export
+    Rotation,
     UnitQuaternion,
     MRP,
     RPY,
     ExponentialMap,
     VectorPart,
     ModifiedRodriguesParam
+
+export
+    kinematics,
+    rotmat,
+    Lmult,
+    Rmult,
+    Vmat
 
 
 function skew(v::AbstractVector)
@@ -22,6 +31,8 @@ abstract type DifferentialRotation end
 abstract type VectorPart <: DifferentialRotation end
 abstract type ExponentialMap <: DifferentialRotation end
 abstract type ModifiedRodriguesParam <: DifferentialRotation end
+
+const DEFAULT_QUATDIFF = VectorPart
 
 """ $(TYPEDEF)
 4-parameter attitute representation that is singularity-free. Quaternions with unit norm
@@ -51,11 +62,16 @@ struct UnitQuaternion{T,D<:DifferentialRotation} <: Rotation
     z::T
 end
 
-UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,VectorPart}(s,x,y,z)
+UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,DEFAULT_QUATDIFF}(s,x,y,z)
 UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z)
 
 UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
 UnitQuaternion{D}(r::SVector{3}) where D = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
+
+UnitQuaternion(r::SVector{3}) where D = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
+
+Base.rand(::Type{<:UnitQuaternion{T}}) where T =
+    normalize(UnitQuaternion(randn(T), randn(T), randn(T), randn(T)))
 
 SVector(q::UnitQuaternion{T}) where T = SVector{4,T}(q.s, q.x, q.y, q.z)
 
@@ -68,6 +84,7 @@ inv(q::UnitQuaternion) = conj(q)
 
 LinearAlgebra.norm2(q::UnitQuaternion) = q.s^2 + q.x^2 + q.y^2 + q.z^2
 LinearAlgebra.norm(q::UnitQuaternion) = sqrt(q.s^2 + q.x^2 + q.y^2 + q.z^2)
+LinearAlgebra.I(::Type{UnitQuaternion}) = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
 
 (≈)(q::UnitQuaternion, u::UnitQuaternion) = q.s ≈ u.s && q.x ≈ u.x && q.y ≈ u.y && q.z ≈ u.z
 
@@ -125,6 +142,12 @@ end
 function logm(q::UnitQuaternion{T}) where T
     q = log(q)
     SVector{3,T}(2*q.x, 2*q.y, 2*q.z)
+end
+
+function rotmat(q::UnitQuaternion)
+    s = q.s
+    v = vector(q)
+    (s^2 - v'v)*I + 2*v*v' + 2*s*skew(v)
 end
 
 function kinematics(q::UnitQuaternion{T,D}, ω::SVector{3}) where {T,D}
@@ -197,8 +220,8 @@ function Vmat()
 end
 
 "Jacobian of q*r with respect to the quaternion"
-function ∇rotate(q::UnitQuaternion, r::SVector{3})
-    rhat = UnitQuaternion(r)
+function ∇rotate(q::UnitQuaternion{T,D}, r::SVector{3}) where {T,D}
+    rhat = UnitQuaternion{D}(r)
     R = Rmult(q)
     2Vmat()*Rmult(q)'Rmult(rhat)
 end
@@ -233,12 +256,13 @@ struct MRP{T} <: Rotation
 end
 
 MRP(r::SVector{3}) = MRP(r[1], r[2], r[3])
-
-SVector(p::MRP{T}) where T = SVector{3,T}(p.x, p.y, p.z)
-LinearAlgebra.norm(p::MRP) = sqrt(p.x^2 + p.y^2 + p.z^2)
+function MRP(q::UnitQuaternion)
+    M = 1/(1+q.s)
+    MRP(q.x*M, q.y*M, q.z*M)
+end
 
 function UnitQuaternion(p::MRP)
-    n = norm(p)
+    n = norm2(p)
     s = (1-n)/(1+n)
     M = 2/(1+n)
     UnitQuaternion(s, p.x*M, p.y*M, p.z*M)
@@ -250,9 +274,16 @@ function rotmat(p::MRP)
     R2 = I + 4( (1-p'p)I + 2*P )*P/(1+p'p)^2
 end
 
+SVector(p::MRP{T}) where T = SVector{3,T}(p.x, p.y, p.z)
+
+Base.rand(::Type{MRP{T}}) where T = MRP(rand(UnitQuaternion{T}))
+
+LinearAlgebra.norm(p::MRP) = sqrt(p.x^2 + p.y^2 + p.z^2)
+LinearAlgebra.norm2(p::MRP) = p.x^2 + p.y^2 + p.z^2
+
 function (*)(p2::MRP, p1::MRP)
     p2, p1 = SVector(p2), SVector(p1)
-    ((1-p2'p2)*p1 + (1-p1'p1)*p2 - cross(2p1, p2) ) / (1+p1'p1*p2'p2 - 2p1'p2)
+    MRP(((1-p2'p2)*p1 + (1-p1'p1)*p2 - cross(2p1, p2) ) / (1+p1'p1*p2'p2 - 2p1'p2))
 end
 
 (*)(p::MRP, r::SVector) = UnitQuaternion(p)*r
@@ -310,7 +341,15 @@ struct RPY{T} <: Rotation
     ψ::T  # yaw
 end
 
+RPY(e::SVector{3,T}) where T = RPY{T}(e[1], e[2], e[3])
+RPY(R::SMatrix{3,3,T}) where T =  RPY(rotmat_to_rpy(R))
+RPY(q::UnitQuaternion) = RPY(rotmat(q))
+RPY(p::MRP) = RPY(rotmat(p))
+
 SVector(e::RPY{T}) where T = SVector{3,T}(e.ϕ, e.θ, e.ψ)
+
+Base.rand(::Type{RPY{T}}) where T = RPY(rand(UnitQuaternion{T}))
+Base.rand(::Type{RPY}) = RPY(rand(UnitQuaternion))
 
 roll(e::RPY) = e.ϕ
 pitch(e::RPY) = e.θ
@@ -342,11 +381,17 @@ function rotmat_to_rpy(R::SMatrix{3,3,T}) where T
 end
 
 function from_rotmat(R::SMatrix{3,3,T}) where T
-    return RPY(rotmat_to_rpy(R)...)
+    ϕ,θ,ψ = rotmat_to_rpy(R)
+    return RPY(ϕ, θ, ψ)
 end
 
 function (*)(e2::RPY, e1::RPY)
     from_rotmat(rotmat(e2)*rotmat(e1))
+end
+
+function ∇rotate(e::RPY, r::SVector{3})
+    rotate(e) = RPY(e)*r
+    ForwardDiff.jacobian(rotate, SVector(e))
 end
 
 function ∇composition1(e2::RPY, e1::RPY)

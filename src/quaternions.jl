@@ -50,7 +50,6 @@ function quat_diff_jacobian(q::Quaternion)
               z -y  x  w];
 end
 
-
 function MRP_kinematics(p::SVector{3,T}) where T
     @SMatrix [
         1 + p[1]^2 - p[2]^2 - p[3]^2  2(p[1]*p[2] - p[3])      2(p[1]*p[3] + p[2]);
