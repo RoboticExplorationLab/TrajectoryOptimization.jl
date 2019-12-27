@@ -221,7 +221,3 @@ p3 = MRP_composition(p2,p1)
 
 ForwardDiff.jacobian(x->MRP_composition(x,p1), p2) ≈ MRP_composition_jacobian_p2(p2,p1)
 ForwardDiff.jacobian(x->MRP_composition(p2,x), p1) ≈ MRP_composition_jacobian_p1(p2,p1)
-
-using Rotations
-RPY(e) = RotX(e[1])*RotY(e[2])*RotZ(e[3])
-RPY(e) .≈ RPY_to_DCM(e)
