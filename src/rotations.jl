@@ -54,8 +54,8 @@ end
 UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,VectorPart}(s,x,y,z)
 UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z)
 
-UnitQuaternion{D}(q::SVector{4}) = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
-UnitQuaternion{D}(r::SVector{3}) = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
+UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
+UnitQuaternion{D}(r::SVector{3}) where D = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
 
 SVector(q::UnitQuaternion{T}) where T = SVector{4,T}(q.s, q.x, q.y, q.z)
 
