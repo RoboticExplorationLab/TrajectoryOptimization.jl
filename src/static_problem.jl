@@ -32,7 +32,7 @@ where `Z` is a trajectory (Vector of `KnotPoint`s)
 * `dt`: Time step
 * `tf`: Final time. Set to zero to specify a time penalized problem.
 * `N`: Number of knot points. Defaults to 51, unless specified by `dt` and `tf`.
-* `integration`: One of the defined integration types to discretize the continuous dynamics model. 
+* `integration`: One of the defined integration types to discretize the continuous dynamics model.
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
@@ -66,7 +66,7 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
         dt=fill(tf/(N-1),N),
-        integration=RK3) where {L,O}
+        integration=DEFAULT_Q) where {L,O}
     n,m = size(model)
     if dt isa Real
         dt = fill(dt,N)
@@ -85,7 +85,8 @@ end
 
 
 
-"Get number of states, controls, and knot points"
+"$(TYPEDSIGNATURES)
+Get number of states, controls, and knot points"
 Base.size(prob::Problem) = size(prob.model)..., prob.N
 
 """```julia
@@ -99,16 +100,18 @@ integration(prob::Problem{Q}) where Q = Q
 controls(::Problem)
 controls(::AbstractSolver)
 controls(::Traj)
+```
 Get the control trajectory
-```"
+"
 controls(prob::Problem) = controls(prob.Z)
 
 "```julia
 states(::Problem)
 states(::AbstractSolver)
 states(::Traj)
+```
 Get the state trajectory
-```"
+"
 states(prob::Problem) = states(prob.Z)
 
 "```julia
@@ -155,10 +158,7 @@ cost(::Problem)
 cost(::AbstractSolver)
 ```
 Compute the cost for the current trajectory"
-function cost(prob::Problem)
-    cost!(prob.obj, prob.Z)
-    return sum( get_J(prob.obj) )
-end
+@inline cost(prob::Problem) = cost(prob.obj, prob.Z)
 
 "Copy the problem"
 function copy(prob::Problem{Q}) where Q

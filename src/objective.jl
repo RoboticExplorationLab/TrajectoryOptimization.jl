@@ -34,6 +34,20 @@ end
 abstract type AbstractObjective end
 Base.length(obj::AbstractObjective) = length(obj.cost)
 
+"""```
+cost(obj::Objective, Z::Traj)::Float64
+cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
+```
+Evaluate the cost for a trajectory.
+Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
+    use the appropriate integration rule, if defined.
+"""
+function cost(obj::AbstractObjective, Z)
+    cost!(obj, Z)
+    J = get_J(obj)
+    return sum(J)
+end
+
 
 """$(TYPEDEF)
 Objective: stores stage cost(s) and terminal cost functions

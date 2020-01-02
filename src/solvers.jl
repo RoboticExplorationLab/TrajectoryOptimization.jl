@@ -2,6 +2,11 @@ import Base.copy
 using Parameters
 
 export
+    UnconstrainedSolver,
+    ConstrainedSolver,
+    DirectSolver
+
+export
     solver_name,
     cost,
     max_violation,
@@ -33,6 +38,8 @@ abstract type AbstractSolver{T} <: MOI.AbstractNLPEvaluator end
 "$(TYPEDEF) Unconstrained optimization solver. Will ignore
 any constraints in the problem"
 abstract type UnconstrainedSolver{T} <: AbstractSolver{T} end
+
+
 """$(TYPEDEF)
 Abstract solver for constrained trajectory optimization problems
 
@@ -43,6 +50,7 @@ get_constraints(::ConstrainedSolver)::ConstrainSet
 ```
 """
 abstract type ConstrainedSolver{T} <: AbstractSolver{T} end
+
 
 """ $(TYPEDEF)
 Solve the trajectory optimization problem by computing search directions using the joint
@@ -62,8 +70,7 @@ include("solvers/direct/dircol_snopt.jl")
 function cost(solver::AbstractSolver)
     obj = get_objective(solver)
     Z = get_trajectory(solver)
-    cost!(obj, Z)
-    sum(get_J(obj))
+    cost(obj, Z)
 end
 
 function rollout!(solver::AbstractSolver)
@@ -105,6 +112,9 @@ function max_violation(solver::ConstrainedSolver)
     return maximum(conSet.c_max)
 end
 
+""" $(SIGNATURES)
+Calculate all the constraint values given the trajectory `Z`
+"""
 function update_constraints!(solver::ConstrainedSolver, Z::Traj=get_trajectory(solver))
     conSet = get_constraints(solver)
     evaluate!(conSet, Z)
@@ -115,6 +125,9 @@ function update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
     update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
 end
 
+""" $(SIGNATURES)
+Calculate all the constraint Jacobians given the trajectory `Z`
+"""
 function constraint_jacobian!(solver::ConstrainedSolver, Z=get_trajectory(solver))
     conSet = get_constraints(solver)
     jacobian!(conSet, Z)
@@ -126,6 +139,7 @@ end
 function set_verbosity!(opts)
     log_level = opts.log_level
     if opts.verbose
+        set_logger()
         Logging.disable_logging(LogLevel(log_level.level-1))
     else
         Logging.disable_logging(log_level)

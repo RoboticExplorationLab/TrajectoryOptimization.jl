@@ -31,7 +31,6 @@ This package currently implements the following methods for solving trajectory o
 Key features include:
 * Support for general, per-timestep constraints
 * ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints
-* URDF parsing via [RigidBodyDynamics]
 
 
 ## Getting Started
@@ -41,5 +40,4 @@ To set up and solve a trajectory optimization problem with `TrajectoryOptimizati
 2) Create an [Objective](@ref objective_section)
 3) (Optionally) Add [constraints](@ref constraint_section)
 4) Instantiate a [Problem](@ref problem_section)
-5) Select a [solver](@ref solver_section)
-6) Solve the problem
+5) [Solve](@ref solving_section) the problem

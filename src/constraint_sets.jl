@@ -197,6 +197,16 @@ function reset!(conSet::ConstraintSet)
 	end
 end
 
+""" ```julia
+change_dimension(conSet::ConstraintSet, n, m)
+```
+Change the dimensionality of the constraint set to one that is strictly larger
+than the current dimensions. Useful for state and control augmentation. If the dimension
+change affects a particular constraint, it will be wrapped in an [`IndexedConstraint`](@ref)
+that simply passes the original sizes to the original constraints. Right now, this assumes
+that the original state and controls are first (i.e. the new states or controls are appended
+to the end of the state and control vectors).
+"""
 function change_dimension(conSet::ConstraintSet, n, m)
 	cons = map(conSet.constraints) do con
 

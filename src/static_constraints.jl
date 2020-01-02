@@ -408,7 +408,8 @@ Type params:
 * Bu - location of the first element in the control index
 * C - type of original constraint
 
-Constructors:```julia
+Constructors:
+```julia
 IndexedConstraint(n, m, con)
 IndexedConstraint(n, m, con, ix::SVector, iu::SVector)
 ```

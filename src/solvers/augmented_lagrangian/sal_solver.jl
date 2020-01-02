@@ -116,6 +116,7 @@ end
 function set_verbosity!(opts::AugmentedLagrangianSolverOptions)
     log_level = opts.log_level
     if opts.verbose
+        set_logger()
         Logging.disable_logging(LogLevel(log_level.level-1))
         logger = global_logger()
         if opts.opts_uncon.verbose
@@ -135,21 +136,19 @@ struct AugmentedLagrangianSolver <: TrajectoryOptimization.AbstractSolver{T}
 ```
 Augmented Lagrangian (AL) is a standard tool for constrained optimization. For a trajectory optimization problem of the form:
 ```math
-\begin{equation*}
 \begin{aligned}
   \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
   \textrm{s.t.}            \quad & x_{k+1} = f(x_k, u_k), \\
                                  & g_k(x_k,u_k) \leq 0, \\
                                  & h_k(x_k,u_k) = 0.
 \end{aligned}
-\end{equation*}
 ```
 AL methods form the following augmented Lagrangian function:
 ```math
-\begin{align*}
+\begin{aligned}
     \ell_f(x_N) + &λ_N^T c_N(x_N) + c_N(x_N)^T I_{\mu_N} c_N(x_N) \\
            & + \sum_{k=0}^{N-1} \ell_k(x_k,u_k,dt) + λ_k^T c_k(x_k,u_k) + c_k(x_k,u_k)^T I_{\mu_k} c_k(x_k,u_k)
-\end{align*}
+\end{aligned}
 ```
 This function is then minimized with respect to the primal variables using any unconstrained minimization solver (e.g. iLQR).
     After a local minima is found, the AL method updates the Lagrange multipliers λ and the penalty terms μ and repeats the unconstrained minimization.
