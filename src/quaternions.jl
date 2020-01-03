@@ -1,6 +1,4 @@
 
-@inline SVector(q::Quaternion) = SVector{4}(q.s, q.v1, q.v2, q.v3)
-@inline vector(q::Quaternion) = SVector{3}(q.v1, q.v2, q.v3)
 
 function logm(q::Quaternion)
     if q.norm
@@ -13,32 +11,7 @@ function logm(q::Quaternion)
     end
 end
 
-function Base.:*(q::Quaternion{Tq}, r::SVector{3}) where Tq
-    qo = (-q.v1 * r[1] - q.v2 * r[2] - q.v3 * r[3],
-           q.s  * r[1] + q.v2 * r[3] - q.v3 * r[2],
-           q.s  * r[2] - q.v1 * r[3] + q.v3 * r[1],
-           q.s  * r[3] + q.v1 * r[2] - q.v2 * r[1])
 
-   T = promote_type(Tq, eltype(r))
-
-   return similar_type(r, T)(-qo[1] * q.v1 + qo[2] * q.s  - qo[3] * q.v3 + qo[4] * q.v2,
-                             -qo[1] * q.v2 + qo[2] * q.v3 + qo[3] * q.s  - qo[4] * q.v1,
-                             -qo[1] * q.v3 - qo[2] * q.v2 + qo[3] * q.v1 + qo[4] * q.s)
-end
-
-function differential_rotation(::Type{VectorPart}, δq::Quaternion)
-    SVector{3}(δq.v1, δq.v2, δq.v3)
-end
-
-function differential_rotation(::Type{ExponentialMap}, δq::Quaternion)
-    logm(δq)
-end
-
-function differential_rotation(::Type{ModifiedRodriguesParam}, δq::Quaternion)
-    # vector(δq)/(1+real(δq))
-    s = 1+real(δq)
-    SVector{3}(δq.v1/s, δq.v2/s, δq.v3/s)
-end
 
 function quat_diff_jacobian(q::Quaternion)
     w = real(q)

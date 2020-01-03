@@ -6,7 +6,12 @@ using Random
 using StaticArrays
 using SparseArrays
 using Ipopt
+using Logging
 const TO = TrajectoryOptimization
+
+@testset "Logging" begin
+    include("logger_tests.jl")
+end
 
 @testset "Dynamics" begin
     include("models_test.jl")
@@ -23,4 +28,8 @@ end
 
 @testset "Constraints" begin
     include("constraint_tests.jl")
+end
+
+@testset "Rotations" begin
+    include("rotations_tests.jl")
 end

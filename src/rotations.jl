@@ -1,5 +1,5 @@
-import Base: +, -, *, /, exp, log, ≈
-import LinearAlgebra.norm2
+import Base: +, -, *, /, exp, log, ≈, inv, conj
+import LinearAlgebra: norm2
 
 export
     Rotation,
@@ -11,11 +11,19 @@ export
     ModifiedRodriguesParam
 
 export
+    differential_rotation,
+    scalar,
+    vector,
+    logm,
+    expm,
     kinematics,
     rotmat,
     Lmult,
     Rmult,
-    Vmat
+    Vmat,
+    Tmat,
+    ⊕,
+    ⊖
 
 
 function skew(v::AbstractVector)
@@ -67,6 +75,7 @@ UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z
 
 UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
 UnitQuaternion{D}(r::SVector{3}) where D = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
+UnitQuaternion{D}(q::UnitQuaternion) where D = UnitQuaternion{D}(q.s, q.x, q.y, q.z)
 
 UnitQuaternion(r::SVector{3}) where D = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
 
@@ -93,11 +102,13 @@ function LinearAlgebra.normalize(q::UnitQuaternion{T,D}) where {T,D}
     UnitQuaternion{T,D}(q.s/n, q.x/n, q.y/n, q.z/n)
 end
 
-(*)(q::UnitQuaternion{T,D}, w::UnitQuaternion{T,D}) where {T,D} =
+function (*)(q::UnitQuaternion{T1,D}, w::UnitQuaternion{T2,D}) where {T1,T2,D}
+    T = promote_type(T1, T2)
     UnitQuaternion{T,D}(q.s * w.s - q.x * w.x - q.y * w.y - q.z * w.z,
                         q.s * w.x + q.x * w.s + q.y * w.z - q.z * w.y,
                         q.s * w.y - q.x * w.z + q.y * w.s + q.z * w.x,
                         q.s * w.z + q.x * w.y - q.y * w.x + q.z * w.s)
+end
 
 function Base.:*(q::UnitQuaternion{Tq}, r::SVector{3}) where Tq
     qo = (-q.x  * r[1] - q.y * r[2] - q.z * r[3],
@@ -158,8 +169,17 @@ function (⊕)(q::UnitQuaternion{T,ExponentialMap}, δq::SVector{3}) where T
     q*expm(δq)
 end
 
+function (⊕)(q::UnitQuaternion{T,VectorPart}, δq::SVector{3}) where T
+    q*UnitQuaternion{VectorPart}(sqrt(1 - δq[1]^2 - δq[2]^2 - δq[3]^2),
+        δq[1], δq[2], δq[3])
+end
+
 function (⊖)(q::UnitQuaternion{T,ExponentialMap}, q0::UnitQuaternion) where T
     logm(inv(q0)*q)
+end
+
+function (⊖)(q::UnitQuaternion{T,VectorPart}, q0::UnitQuaternion) where T
+    vector(inv(q0)*q)
 end
 
 """
@@ -265,7 +285,7 @@ function UnitQuaternion(p::MRP)
     n = norm2(p)
     s = (1-n)/(1+n)
     M = 2/(1+n)
-    UnitQuaternion(s, p.x*M, p.y*M, p.z*M)
+    UnitQuaternion{ModifiedRodriguesParam}(s, p.x*M, p.y*M, p.z*M)
 end
 
 function rotmat(p::MRP)
@@ -404,4 +424,21 @@ function ∇composition2(e2::RPY, e1::RPY)
     R1 = rotmat(e1)
     rotate(e) = rotmat_to_rpy(rotmat(e[1],e[2],e[3])*R1)
     ForwardDiff.jacobian(rotate,SVector(e2))
+end
+
+
+
+# Differential Rotations
+function differential_rotation(δq::UnitQuaternion{T,VectorPart}) where T
+    SVector{3}(δq.x, δq.y, δq.z)
+end
+
+function differential_rotation(δq::UnitQuaternion{T,ExponentialMap}) where T
+    logm(δq)
+end
+
+function differential_rotation(δq::UnitQuaternion{T,ModifiedRodriguesParam}) where T
+    # vector(δq)/(1+real(δq))
+    s = 1+scalar(δq)
+    SVector{3}(δq.x/s, δq.y/s, δq.z/s)
 end
