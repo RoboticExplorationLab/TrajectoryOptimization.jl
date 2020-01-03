@@ -10,7 +10,7 @@ import Base: ==, ≈
 import TrajectoryOptimization: kinematics, ∇rotate, ∇composition1, ∇composition2
 const TO = TrajectoryOptimization
 
-@inline SVector(q::Quaternion) = SVector{4}(q.s, q.v1, q.v2, q.v3)
+@inline StaticArrays.SVector(q::Quaternion) = SVector{4}(q.s, q.v1, q.v2, q.v3)
 @inline vector(q::Quaternion) = SVector{3}(q.v1, q.v2, q.v3)
 Rotations.Quat(q::Quaternion) = Rotations.Quat(q.s, q.v1, q.v2, q.v3)
 TrajectoryOptimization.UnitQuaternion(q::Quaternion) = UnitQuaternion(q.s, q.v1, q.v2, q.v3)

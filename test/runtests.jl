@@ -33,3 +33,7 @@ end
 @testset "Rotations" begin
     include("rotations_tests.jl")
 end
+
+@testset "Costs" begin
+    include("cost_tests.jl")
+end

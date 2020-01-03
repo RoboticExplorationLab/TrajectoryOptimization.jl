@@ -136,165 +136,165 @@ function copy(cost::QuadraticCost)
 end
 
 
-
-"""
-$(TYPEDEF)
-Cost function of the form
-    ℓf(xₙ) + ∫ ℓ(x,u) dt from 0 to tf
-"""
-struct GenericCost <: CostFunction
-    ℓ::Function             # Stage cost
-    ℓf::Function            # Terminal cost
-    expansion::Function     # 2nd order Taylor Series Expansion of the form,  Q,R,H,q,r = expansion(x,u)
-    n::Int                  #                                                     Qf,qf = expansion(xN)
-    m::Int
-end
-
-"""
-$(SIGNATURES)
-Create a Generic Cost, specifying the gradient and hessian of the cost function analytically
-
-# Arguments
-* hess: multiple-dispatch function of the form,
-    Q,R,H = hess(x,u) with sizes (n,n), (m,m), (m,n)
-    Qf = hess(xN) with size (n,n)
-* grad: multiple-dispatch function of the form,
-    q,r = grad(x,u) with sizes (n,), (m,)
-    qf = grad(x,u) with size (n,)
-
-"""
-function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
-    @warn "Use GenericCost with caution. It is untested and not likely to work"
-    function expansion(x::Vector{T},u::Vector{T}) where T
-        Q,R,H = hess(x,u)
-        q,r = grad(x,u)
-        return Q,R,H,q,r
-    end
-    expansion(xN) = hess(xN), grad(xN)
-    GenericCost(ℓ,ℓf, expansion, n,m)
-end
-
-""" $(TYPEDEF)
-This is an experimental cost function type that allows a cost function to be evaluated
-    on only a portion of the state and control. Right now, the implementation assumes
-    there is no coupling between the state and control.
-
-It should be noted that for `QuadraticCost`s it is likely more efficient to simply make a new
-    `QuadraticCost` that has zeros in the right places, and then add the cost functions together.
-
-# Constructor
-```julia
-IndexedCost(cost, ix::UnitRange, iu::UnitRange)
-```
-"""
-struct IndexedCost{iX,iU,C} <: CostFunction
-    cost::C
-end
-
-function IndexedCost(cost::C, ix::UnitRange, iu::UnitRange) where C<:CostFunction
-    if C <: QuadraticCost
-        if norm(cost.H) != 0
-            throw(ErrorException("IndexedCost of functions with x-u coupling not implemented"))
-        end
-    else
-        @warn "IndexedCost will only work for costs without x-u coupling (Qux = 0)"
-    end
-    IndexedCost{ix,iu,C}(cost)
-end
-
-@generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
-    ix = SVector{length(iX)}(iX)
-    iu = SVector{length(iU)}(iU)
-    quote
-        x0 = x[$ix]
-        u0 = u[$iu]
-        stage_cost(costfun.cost, x0, u0)
-    end
-end
-
-@generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}) where {iX,iU,N}
-    ix = SVector{length(iX)}(iX)
-    quote
-        x0 = x[$ix]
-        stage_cost(costfun.cost, x0)
-    end
-end
-
-@generated function gradient(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
-    l1x = iX[1] - 1
-    l2x = N-iX[end]
-    l1u = iU[1] - 1
-    l2u = M-iU[end]
-    quote
-        x = x[$iX]
-        u = u[$iU]
-        Qx, Qu = gradient(costfun.cost, x, u)
-        Qx = [@SVector zeros($l1x); Qx; @SVector zeros($l2x)]
-        Qu = [@SVector zeros($l1u); Qu; @SVector zeros($l2u)]
-        return Qx, Qu
-    end
-end
-
-
-@generated function hessian(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
-    l1x = iX[1] - 1
-    l2x = N-iX[end]
-    l1u = iU[1] - 1
-    l2u = M-iU[end]
-    quote
-        x = x[$iX]
-        u = u[$iU]
-        Qxx, Quu, Qux  = hessian(costfun.cost, x, u)
-        Qxx1 = Diagonal(@SVector zeros($l1x))
-        Qxx2 = Diagonal(@SVector zeros($l2x))
-        Quu1 = Diagonal(@SVector zeros($l1u))
-        Quu2 = Diagonal(@SVector zeros($l2u))
-
-        Qxx = blockdiag(Qxx1, Qxx, Qxx2)
-        Quu = blockdiag(Quu1, Quu, Quu2)
-        Qux = @SMatrix zeros(M,N)
-        Qxx, Quu, Qux
-    end
-end
-
-function SparseArrays.blockdiag(Qs::Vararg{<:Diagonal})
-    Diagonal(vcat(diag.(Qs)...))
-end
-
-function SparseArrays.blockdiag(Qs::Vararg{<:AbstractMatrix})
-    # WARNING: this is slow and is only included as a fallback
-    cat(Qs...,dims=(1,2))
-end
-
-function change_dimension(cost::CostFunction,n,m)
-    n0,m0 = state_dim(cost), control_dim(cost)
-    ix = 1:n0
-    iu = 1:m0
-    IndexedCost(cost, ix, iu)
-end
-
-function change_dimension(cost::QuadraticCost, n, m)
-    n0,m0 = state_dim(cost), control_dim(cost)
-    @assert n >= n0
-    @assert m >= m0
-
-    ix = 1:n0
-    iu = 1:m0
-
-    Q_ = Diagonal(@SVector zeros(n-n0))
-    R_ = Diagonal(@SVector zeros(m-m0))
-    H1 = @SMatrix zeros(m0, n-n0)
-    H2 = @SMatrix zeros(m-m0, n)
-    q_ = @SVector zeros(n-n0)
-    r_ = @SVector zeros(m-m0)
-    c = cost.c
-
-    # Insert old values
-    Q = blockdiag(cost.Q, Q_)
-    R = blockdiag(cost.R, R_)
-    H = [cost.H H1]
-    H = [H; H2]
-    q = [cost.q; q_]
-    r = [cost.r; r_]
-    QuadraticCost(Q,R,H,q,r,c,checks=false)
-end
+#
+# """
+# $(TYPEDEF)
+# Cost function of the form
+#     ℓf(xₙ) + ∫ ℓ(x,u) dt from 0 to tf
+# """
+# struct GenericCost <: CostFunction
+#     ℓ::Function             # Stage cost
+#     ℓf::Function            # Terminal cost
+#     expansion::Function     # 2nd order Taylor Series Expansion of the form,  Q,R,H,q,r = expansion(x,u)
+#     n::Int                  #                                                     Qf,qf = expansion(xN)
+#     m::Int
+# end
+#
+# """
+# $(SIGNATURES)
+# Create a Generic Cost, specifying the gradient and hessian of the cost function analytically
+#
+# # Arguments
+# * hess: multiple-dispatch function of the form,
+#     Q,R,H = hess(x,u) with sizes (n,n), (m,m), (m,n)
+#     Qf = hess(xN) with size (n,n)
+# * grad: multiple-dispatch function of the form,
+#     q,r = grad(x,u) with sizes (n,), (m,)
+#     qf = grad(x,u) with size (n,)
+#
+# """
+# function GenericCost(ℓ::Function, ℓf::Function, grad::Function, hess::Function, n::Int, m::Int)
+#     @warn "Use GenericCost with caution. It is untested and not likely to work"
+#     function expansion(x::Vector{T},u::Vector{T}) where T
+#         Q,R,H = hess(x,u)
+#         q,r = grad(x,u)
+#         return Q,R,H,q,r
+#     end
+#     expansion(xN) = hess(xN), grad(xN)
+#     GenericCost(ℓ,ℓf, expansion, n,m)
+# end
+#
+# """ $(TYPEDEF)
+# This is an experimental cost function type that allows a cost function to be evaluated
+#     on only a portion of the state and control. Right now, the implementation assumes
+#     there is no coupling between the state and control.
+#
+# It should be noted that for `QuadraticCost`s it is likely more efficient to simply make a new
+#     `QuadraticCost` that has zeros in the right places, and then add the cost functions together.
+#
+# # Constructor
+# ```julia
+# IndexedCost(cost, ix::UnitRange, iu::UnitRange)
+# ```
+# """
+# struct IndexedCost{iX,iU,C} <: CostFunction
+#     cost::C
+# end
+#
+# function IndexedCost(cost::C, ix::UnitRange, iu::UnitRange) where C<:CostFunction
+#     if C <: QuadraticCost
+#         if norm(cost.H) != 0
+#             throw(ErrorException("IndexedCost of functions with x-u coupling not implemented"))
+#         end
+#     else
+#         @warn "IndexedCost will only work for costs without x-u coupling (Qux = 0)"
+#     end
+#     IndexedCost{ix,iu,C}(cost)
+# end
+#
+# @generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+#     ix = SVector{length(iX)}(iX)
+#     iu = SVector{length(iU)}(iU)
+#     quote
+#         x0 = x[$ix]
+#         u0 = u[$iu]
+#         stage_cost(costfun.cost, x0, u0)
+#     end
+# end
+#
+# @generated function stage_cost(costfun::IndexedCost{iX,iU}, x::SVector{N}) where {iX,iU,N}
+#     ix = SVector{length(iX)}(iX)
+#     quote
+#         x0 = x[$ix]
+#         stage_cost(costfun.cost, x0)
+#     end
+# end
+#
+# @generated function gradient(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+#     l1x = iX[1] - 1
+#     l2x = N-iX[end]
+#     l1u = iU[1] - 1
+#     l2u = M-iU[end]
+#     quote
+#         x = x[$iX]
+#         u = u[$iU]
+#         Qx, Qu = gradient(costfun.cost, x, u)
+#         Qx = [@SVector zeros($l1x); Qx; @SVector zeros($l2x)]
+#         Qu = [@SVector zeros($l1u); Qu; @SVector zeros($l2u)]
+#         return Qx, Qu
+#     end
+# end
+#
+#
+# @generated function hessian(costfun::IndexedCost{iX,iU}, x::SVector{N}, u::SVector{M}) where {iX,iU,N,M}
+#     l1x = iX[1] - 1
+#     l2x = N-iX[end]
+#     l1u = iU[1] - 1
+#     l2u = M-iU[end]
+#     quote
+#         x = x[$iX]
+#         u = u[$iU]
+#         Qxx, Quu, Qux  = hessian(costfun.cost, x, u)
+#         Qxx1 = Diagonal(@SVector zeros($l1x))
+#         Qxx2 = Diagonal(@SVector zeros($l2x))
+#         Quu1 = Diagonal(@SVector zeros($l1u))
+#         Quu2 = Diagonal(@SVector zeros($l2u))
+#
+#         Qxx = blockdiag(Qxx1, Qxx, Qxx2)
+#         Quu = blockdiag(Quu1, Quu, Quu2)
+#         Qux = @SMatrix zeros(M,N)
+#         Qxx, Quu, Qux
+#     end
+# end
+#
+# function SparseArrays.blockdiag(Qs::Vararg{<:Diagonal})
+#     Diagonal(vcat(diag.(Qs)...))
+# end
+#
+# function SparseArrays.blockdiag(Qs::Vararg{<:AbstractMatrix})
+#     # WARNING: this is slow and is only included as a fallback
+#     cat(Qs...,dims=(1,2))
+# end
+#
+# function change_dimension(cost::CostFunction,n,m)
+#     n0,m0 = state_dim(cost), control_dim(cost)
+#     ix = 1:n0
+#     iu = 1:m0
+#     IndexedCost(cost, ix, iu)
+# end
+#
+# function change_dimension(cost::QuadraticCost, n, m)
+#     n0,m0 = state_dim(cost), control_dim(cost)
+#     @assert n >= n0
+#     @assert m >= m0
+#
+#     ix = 1:n0
+#     iu = 1:m0
+#
+#     Q_ = Diagonal(@SVector zeros(n-n0))
+#     R_ = Diagonal(@SVector zeros(m-m0))
+#     H1 = @SMatrix zeros(m0, n-n0)
+#     H2 = @SMatrix zeros(m-m0, n)
+#     q_ = @SVector zeros(n-n0)
+#     r_ = @SVector zeros(m-m0)
+#     c = cost.c
+#
+#     # Insert old values
+#     Q = blockdiag(cost.Q, Q_)
+#     R = blockdiag(cost.R, R_)
+#     H = [cost.H H1]
+#     H = [H; H2]
+#     q = [cost.q; q_]
+#     r = [cost.r; r_]
+#     QuadraticCost(Q,R,H,q,r,c,checks=false)
+# end
