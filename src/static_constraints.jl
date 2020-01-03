@@ -2,6 +2,7 @@ export
 	GoalConstraint,
 	BoundConstraint,
 	CircleConstraint,
+	SphereConstraint,
 	NormConstraint,
 	LinearConstraint,
 	VariableBoundConstraint
@@ -151,7 +152,7 @@ struct SphereConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
 	radius::SVector{P,T}
 	SphereConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, zc::SVector{P,T},
 			radius::SVector{P,T}, xi=1, yi=2, zi=3) where {T,P} =
-			new{T,P}(n,xc,yc,zc,radius,xi,yi,zi)
+			new{T,P}(n,xc,yc,zc,xi,yi,zi,radius)
 end
 
 state_dim(con::SphereConstraint) = con.n
@@ -162,7 +163,7 @@ function evaluate(con::SphereConstraint{T,P}, x::SVector) where {T,P}
 	zc = con.z; zi = con.zi
 	r = con.radius
 
-	-((x[xi] - xc).^2 + (x[yi] - yc).^2 + (x[zi] - zc).^2 - r.^2)
+	-((x[xi] .- xc).^2 + (x[yi] .- yc).^2 + (x[zi] .- zc).^2 - r.^2)
 end
 
 ############################################################################################
@@ -198,11 +199,17 @@ creates a constraint equivalent to
 struct NormConstraint{S,W<:Union{State,Control},T} <: AbstractConstraint{S,W,1}
 	dim::Int
 	val::T
+	function NormConstraint{S,W,T}(dim::Int, val::T) where {S,W<:Union{State,Control},T}
+		@assert val ≥ 0 "Value must be greater than or equal to zero"
+		new{S,W,T}(dim, val)
+	end
 end
+NormConstraint{S,W}(n::Int, val::T) where {S,W,T} = NormConstraint{S,W,T}(n, val)
+
 state_dim(con::NormConstraint{S,State}) where S = con.dim
 control_dim(con::NormConstraint{S,Control}) where S = con.dim
 
-function evaluate(con::NormConstraint, x)
+function evaluate(con::NormConstraint, x::SVector)
 	return @SVector [norm(x)^2 - con.val]
 end
 
@@ -271,7 +278,6 @@ checkBounds(sze::Val{N}, u::Real, l::AbstractVector) where N =
 
 state_dim(con::BoundConstraint) = con.n
 control_dim(con::BoundConstraint) = con.m
-Base.size(bnd::BoundConstraint{T,P,PN,NM,PNM}) where {T,P,PN,NM,PNM} = (bnd.n, bnd.m, P)
 is_bound(::BoundConstraint) = true
 lower_bound(bnd::BoundConstraint) = bnd.z_min
 upper_bound(bnd::BoundConstraint) = bnd.z_max
@@ -458,6 +464,7 @@ function IndexedConstraint(n,m,con::AbstractConstraint{S,W}) where {S,W}
 	IndexedConstraint(n,m,con, ix, iu)
 end
 
+# TODO: define higher-level evaluate! function instead
 function evaluate(con::IndexedConstraint{S,<:Stage}, z::KnotPoint) where {S}
 	x0 = state(z)[con.ix]
 	u0 = control(z)[con.iu]
@@ -465,6 +472,7 @@ function evaluate(con::IndexedConstraint{S,<:Stage}, z::KnotPoint) where {S}
 	evaluate(con.con, con.z)
 end
 
+# TODO: define higher-leel jacobian! function instead
 @generated function jacobian(con::IndexedConstraint{S,Stage,P,N0,M0,NM0,Bx,Bu},
 		z::KnotPoint{T,N,M,NM}) where {S,P,N0,M0,NM0,Bx,Bu,T,N,M,NM}
     l1 = Bx-1
