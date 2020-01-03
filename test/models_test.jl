@@ -68,3 +68,17 @@ function inf_allocs(inf)
     allocs += @allocated discrete_jacobian(RK3, inf, z)
 end
 @test inf_allocs(inf) == 0
+
+
+# Test other functions
+car = Dynamics.DubinsCar()
+n,m = size(car)
+@test zeros(car) == (zeros(n), zeros(m))
+@test zeros(Int,car)[1] isa SVector{n,Int}
+@test fill(car,0.1) == (fill(0.1,n), fill(0.1,m))
+@test ones(Float32,car)[2] isa SVector{m,Float32}
+
+# Test default integrator
+x,u = rand(car)
+z = KnotPoint(x,u,dt)
+@test discrete_dynamics(car, z) == discrete_dynamics(RK3, car, z)

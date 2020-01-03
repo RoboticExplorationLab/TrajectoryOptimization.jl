@@ -7,7 +7,7 @@ using Random
 using StaticArrays
 using LinearAlgebra
 import Base: ==, ≈
-import TrajectoryOptimization: kinematics, ∇rotate, ∇composition1, ∇composition2
+import TrajectoryOptimization: kinematics, ∇rotate, ∇composition1, ∇composition2, vector
 const TO = TrajectoryOptimization
 
 @inline StaticArrays.SVector(q::Quaternion) = SVector{4}(q.s, q.v1, q.v2, q.v3)
