@@ -47,6 +47,8 @@ RigidBodyDynamics = "2.1"
 Rotations = "0.11"
 StaticArrays = "≥0.11"
 Plots = "0.28"
+FFMPEG = "0.2"
+Formatting = "0.3"
 
 [extras]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
