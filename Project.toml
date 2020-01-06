@@ -34,21 +34,8 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-julia = "≥ 1.1.0"
 BlockArrays = "0.9"
-Combinatorics = "0.7"
-CoordinateTransformations = "0.5"
-ForwardDiff = "0.10"
-Interpolations = "0.12"
-Ipopt = "0.5"
-MathOptInterface = "0.8"
-MeshCatMechanisms = "0.5"
-RigidBodyDynamics = "2.1"
-Rotations = "0.11"
-StaticArrays = "≥0.11"
-Plots = "0.28"
-FFMPEG = "0.2"
-Formatting = "0.3"
+julia = "≥ 1.1.0"
 
 [extras]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
