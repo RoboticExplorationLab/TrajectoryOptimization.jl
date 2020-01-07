@@ -35,6 +35,16 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
 BlockArrays = "0.9"
+CoordinateTransformations = "0.5"
+FFMPEG = "0.2"
+Formatting = "0.4"
+ForwardDiff = "0.10"
+Interpolations = "0.12"
+Ipopt = "0.6"
+MathOptInterface = "0.9"
+MeshCatMechanisms = "0.5"
+Rotations = "0.13"
+StaticArrays = "≥0.12"
 julia = "≥ 1.1.0"
 
 [extras]
