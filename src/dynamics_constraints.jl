@@ -25,11 +25,11 @@ DynamicsConstraint{Q}(model::AbstractModel, N)
 ```
 where `N` is the number of knot points and `Q<:QuadratureRule` is the integration method.
 """
-struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
+struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,W,A} <: AbstractDynamicsConstraint{Coupled,N}
 	model::L
     fVal::Vector{SVector{N,T}}
     xMid::Vector{SVector{N,T}}
-    ∇f::Vector{SMatrix{N,M,T,NM}}
+    ∇f::Vector{A}
 end
 
 function DynamicsConstraint{Q}(model::L, N) where {Q,L}
@@ -37,16 +37,21 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 	n,m = size(model)
 	fVal = [@SVector zeros(n) for k = 1:N]
 	xMid = [@SVector zeros(n) for k = 1:N]
-	∇f = [@SMatrix zeros(n,n+m) for k = 1:N]
-	DynamicsConstraint{Q,L,T,n,n+m,(n+m)n}(model, fVal, xMid, ∇f)
+	if n*(n+m) > MAX_DIM
+		∇f = [zeros(n,n+m) for k = 1:N]
+	else
+		∇f = [@SMatrix zeros(n,n+m) for k = 1:N]
+	end
+	NM = n+m
+	DynamicsConstraint{Q,L,T,n,NM,eltype(∇f)}(model, fVal, xMid, ∇f)
 end
 
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 integration(::DynamicsConstraint{Q}) where Q = Q
 
-width(con::DynamicsConstraint{<:Implicit,L,T,N,NM}) where {L,T,N,NM} = 2N+NM-N
-width(con::DynamicsConstraint{<:Explicit,L,T,N,NM}) where {L,T,N,NM} = 2NM
-
+width(con::DynamicsConstraint{<:Implicit,L,T,N,W}) where {L,T,N,NM} = 2N+NM-N
+width(con::DynamicsConstraint{<:Explicit,L,T,N,W}) where {L,T,N,NM} = 2NM
+####!
 
 # Implicit
 function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
@@ -68,10 +73,10 @@ end
 
 
 
-struct DynamicsVals{T,N,M,L}
+struct DynamicsVals{T,N,A}
     fVal::Vector{SVector{N,T}}
     xMid::Vector{SVector{N,T}}
-    ∇f::Vector{SMatrix{N,M,T,L}}
+    ∇f::Vector{A}
 end
 
 function DynamicsVals(dyn_con::DynamicsConstraint)

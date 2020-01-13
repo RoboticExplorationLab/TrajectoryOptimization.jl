@@ -5,21 +5,29 @@
 $(TYPEDEF)
 Store the terms of the 2nd order expansion for the entire trajectory
 """
-struct CostExpansion{T,N,M,L1,L2,L3}
+struct CostExpansion{T,N,M,A1,A2,A3}
     x::Vector{SVector{N,T}}
     u::Vector{SVector{M,T}}
-    xx::Vector{SMatrix{N,N,T,L1}}
-    uu::Vector{SMatrix{M,M,T,L2}}
-    ux::Vector{SMatrix{M,N,T,L3}}
+    xx::Vector{A1}
+    uu::Vector{A2}
+    ux::Vector{A3}
 end
 
 function CostExpansion(n,m,N)
+    if p*w > MAX_ELEM
+		∇c = [zeros(Float64,p,w) for k = 1:P]
+	else
+		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
+	end
+    Cxx = n^2 > MAX_ELEM ? [zeros(n,n) for k = 1:N] : [@SMatrix zeros(n,n) for k = 1:N],
+    Cuu = m^2 > MAX_ELEM ? [zeros(m,m) for k = 1:N] : [@SMatrix zeros(m,m) for k = 1:N],
+    Cux = n*m > MAX_ELEM ? [zeros(m,n) for k = 1:N] : [@SMatrix zeros(m,n) for k = 1:N],
     CostExpansion(
         [@SVector zeros(n) for k = 1:N],
         [@SVector zeros(m) for k = 1:N],
-        [@SMatrix zeros(n,n) for k = 1:N],
-        [@SMatrix zeros(m,m) for k = 1:N],
-        [@SMatrix zeros(m,n) for k = 1:N] )
+        Cxx,
+        Cuu,
+        Cux )
 end
 
 function Base.getindex(Q::CostExpansion, k::Int)

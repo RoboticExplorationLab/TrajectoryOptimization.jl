@@ -15,12 +15,12 @@ is applied. This type should be fairly transparent to the user, and only needs t
 directly dealt with when writing solvers or setting fine-tuned updates per constraint
 (via the `.params` field).
 """
-struct ConstraintVals{T,W,C,P,NM,PNM}
+struct ConstraintVals{T,W,C,P,A}
 	con::C
 	inds::UnitRange{Int}
 	vals::Vector{SVector{P,T}}
 	vals_prev::Vector{SVector{P,T}}
-	∇c::Vector{SMatrix{P,NM,T,PNM}}
+	∇c::Vector{A}
 	λ::Vector{SVector{P,T}}
 	μ::Vector{SVector{P,T}}
 	active::Vector{SVector{P,Bool}}
@@ -29,10 +29,10 @@ struct ConstraintVals{T,W,C,P,NM,PNM}
 
 	function ConstraintVals(con::AbstractConstraint{S, W},
 			inds::UnitRange{Int}, vals::V, vals_prev,
-			∇c::Vector{SMatrix{P,NM,T,PNM}}, λ::V, μ::V,
+			∇c::Vector{A}, λ::V, μ::V,
 			active::Vector{SVector{P,Bool}}, c_max::Vector{T},
-			params::ConstraintParams) where {S,W,T,P,NM,PNM,V}
-		new{T,W,typeof(con),P,NM,PNM}(con,inds,vals,vals_prev,∇c,λ,μ,
+			params::ConstraintParams) where {S,W,T,P,A,V}
+		new{T,W,typeof(con),P,eltype(∇c)}(con,inds,vals,vals_prev,∇c,λ,μ,
 			active,c_max, params)
 	end
 end
@@ -45,7 +45,11 @@ function ConstraintVals(con::C, inds::UnitRange; kwargs...) where C
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	∇c   = [@SMatrix zeros(Float64,p,w) for k = 1:P]
+	if p*w > MAX_ELEM
+		∇c = [zeros(Float64,p,w) for k = 1:P]
+	else
+		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
+	end
 	params = ConstraintParams(;kwargs...)
 	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P),
 		params)

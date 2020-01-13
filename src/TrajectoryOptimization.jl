@@ -22,6 +22,7 @@ using MathOptInterface
 using Quaternions
 
 const MOI = MathOptInterface
+const MAX_ELEM = 300
 
 import Base.copy
 
