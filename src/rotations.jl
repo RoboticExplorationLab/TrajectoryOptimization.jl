@@ -39,6 +39,62 @@ abstract type DifferentialRotation end
 abstract type VectorPart <: DifferentialRotation end
 abstract type ExponentialMap <: DifferentialRotation end
 abstract type ModifiedRodriguesParam <: DifferentialRotation end
+abstract type CayleyMap <: DifferentialRotation end
+
+# Retraction Maps
+(::Type{ExponentialMap})(ϕ) = expm(2*ϕ)
+
+(::Type{VectorPart})(v) = UnitQuaternion(sqrt(1-v'v),v[1],v[2],v[3])
+
+function (::Type{CayleyMap})(g)
+    M = 1/sqrt(1+g'g)
+    UnitQuaternion(M, M*g[1], M*g[2], M*g[3])
+end
+
+function (::Type{ModifiedRodriguesParam})(p)
+    p *= 0.5
+    n2 = p'p
+    M = 2/(1+n2)
+    UnitQuaternion((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
+end
+
+
+# Retraction Map Jacobians
+function jacobian(::Type{ExponentialMap},ϕ)
+    ϕ *= 2
+    θ = norm(ϕ)
+    if θ > 1e-4
+        sθ,cθ = sincos(θ/2)
+        sincθ = sinc(θ/2π)
+        2*[-sincθ*ϕ'/4; sincθ*I/2 + (cθ/θ - 2sθ/θ^2)*ϕ*ϕ'/2θ]
+    else
+        sincθ = sinc(θ/2π)
+        coscθ = cosc(θ/2π)
+        [-0.5*sincθ*ϕ'; I*sincθ - ϕ*ϕ'/(π)]
+        # cosc(x) ≈ -pi*x near 0
+    end
+end
+
+function jacobian(::Type{VectorPart}, v)
+    M = -1/sqrt(1-v'v)
+    @SMatrix [v[1]*M v[2]*M v[3]*M;
+              1 0 0;
+              0 1 0;
+              0 0 1]
+end
+
+function jacobian(::Type{CayleyMap}, g)
+    n = 1+g'g
+    ni = 1/n
+    [-g'; -g*g' + I*n]*ni*sqrt(ni)
+end
+
+function jacobian(::Type{ModifiedRodriguesParam}, p)
+    p *= 0.5
+    n = 1+p'p
+    [-2p'; I*n - 2p*p']/n^2
+end
+
 
 const DEFAULT_QUATDIFF = VectorPart
 
@@ -134,7 +190,7 @@ end
 function expm(ϕ::SVector{3,T}) where T
     θ = norm(ϕ)
     sθ,cθ = sincos(θ/2)
-    M = sθ/θ
+    M = 0.5*sinc(θ/2π)
     UnitQuaternion{T,ExponentialMap}(cθ, ϕ[1]*M, ϕ[2]*M, ϕ[3]*M)
 end
 
