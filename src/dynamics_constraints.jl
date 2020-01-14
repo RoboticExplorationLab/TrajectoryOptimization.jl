@@ -37,7 +37,7 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 	n,m = size(model)
 	fVal = [@SVector zeros(n) for k = 1:N]
 	xMid = [@SVector zeros(n) for k = 1:N]
-	if n*(n+m) > MAX_DIM
+	if n*(n+m) > MAX_ELEM
 		∇f = [zeros(n,n+m) for k = 1:N]
 	else
 		∇f = [@SMatrix zeros(n,n+m) for k = 1:N]
