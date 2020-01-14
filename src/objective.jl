@@ -14,9 +14,9 @@ struct CostExpansion{T,N,M,A1,A2,A3}
 end
 
 function CostExpansion(n,m,N)
-    Cxx = n^2 > MAX_ELEM ? [zeros(n,n) for k = 1:N] : [@SMatrix zeros(n,n) for k = 1:N],
-    Cuu = m^2 > MAX_ELEM ? [zeros(m,m) for k = 1:N] : [@SMatrix zeros(m,m) for k = 1:N],
-    Cux = n*m > MAX_ELEM ? [zeros(m,n) for k = 1:N] : [@SMatrix zeros(m,n) for k = 1:N],
+    Cxx = n^2 > MAX_ELEM ? [zeros(n,n) for k = 1:N] : [@SMatrix zeros(n,n) for k = 1:N]
+    Cuu = m^2 > MAX_ELEM ? [zeros(m,m) for k = 1:N] : [@SMatrix zeros(m,m) for k = 1:N]
+    Cux = n*m > MAX_ELEM ? [zeros(m,n) for k = 1:N] : [@SMatrix zeros(m,n) for k = 1:N]
     CostExpansion(
         [@SVector zeros(n) for k = 1:N],
         [@SVector zeros(m) for k = 1:N],

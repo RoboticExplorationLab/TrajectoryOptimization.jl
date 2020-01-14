@@ -49,8 +49,8 @@ end
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 integration(::DynamicsConstraint{Q}) where Q = Q
 
-width(con::DynamicsConstraint{<:Implicit,L,T,N,W}) where {L,T,N,NM} = 2N+NM-N
-width(con::DynamicsConstraint{<:Explicit,L,T,N,W}) where {L,T,N,NM} = 2NM
+width(con::DynamicsConstraint{<:Implicit,L,T,N,NM}) where {L,T,N,NM} = 2N+NM-N
+width(con::DynamicsConstraint{<:Explicit,L,T,N,NM}) where {L,T,N,NM} = 2NM
 ####!
 
 # Implicit
