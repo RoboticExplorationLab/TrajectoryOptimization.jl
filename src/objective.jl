@@ -14,11 +14,6 @@ struct CostExpansion{T,N,M,A1,A2,A3}
 end
 
 function CostExpansion(n,m,N)
-    if p*w > MAX_ELEM
-		∇c = [zeros(Float64,p,w) for k = 1:P]
-	else
-		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
-	end
     Cxx = n^2 > MAX_ELEM ? [zeros(n,n) for k = 1:N] : [@SMatrix zeros(n,n) for k = 1:N],
     Cuu = m^2 > MAX_ELEM ? [zeros(m,m) for k = 1:N] : [@SMatrix zeros(m,m) for k = 1:N],
     Cux = n*m > MAX_ELEM ? [zeros(m,n) for k = 1:N] : [@SMatrix zeros(m,n) for k = 1:N],
