@@ -109,7 +109,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: UnconstrainedSolver{T}
+struct iLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: UnconstrainedSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -128,7 +128,8 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unconstrai
     Z̄::Vector{KnotPoint{T,n,m,L1}}
 
     # Data variables
-    K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
+    # K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
+    K::Vector{A}  # State feedback gains (m,n,N-1)
     d::Vector{SVector{m,T}} # Feedforward gains (m,N-1)
 
     ∇F::Vector{D} # discrete dynamics jacobian (block) (n,n+m+1,N)
@@ -145,10 +146,10 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,n̄,m,L1,L2,D,F,E1,E2} <: Unconstrai
     logger::SolverLogger
 
     function iLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
-            Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{SMatrix{m,n̄,T,L2}}, d,
+            Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{A}, d,
             ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad,
-            logger) where {T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}
-        new{T,I,L,O,n,n̄,m,L1,L2,D,F,E1,E2}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
+            logger) where {T,I,L,O,n,m,L1,D,F,E1,E2,A}
+        new{T,I,L,O,n,m,L1,D,F,E1,E2,A}(model, obj, x0, xf, tf, N, opts, stats, Z, Z̄, K, d,
             ∇F, G, S, Q, ρ, dρ, grad, logger)
     end
 end
@@ -169,9 +170,18 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
     # Z̄ = Traj(n,m,Z[1].dt,N)
     Z̄ = copy(prob.Z)
 
-    K  = [@SMatrix zeros(T,m,n̄) for k = 1:N-1]
+    if m*n̄ > MAX_ELEM
+		K  = [zeros(T,m,n̄) for k = 1:N-1]
+	else
+		K  = [@SMatrix zeros(T,m,n̄) for k = 1:N-1]
+	end
     d  = [@SVector zeros(T,m)   for k = 1:N-1]
 
+	if n*(n+m+1) > MAX_ELEM
+		∇F = [zeros(T,n,n+m+1) for k = 1:N-1]
+	else
+		∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
+	end
     ∇F = [@SMatrix zeros(T,n,n+m+1) for k = 1:N-1]
     G = [state_diff_jacobian(prob.model, x0) for k = 1:N]
 
