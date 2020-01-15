@@ -105,16 +105,21 @@ end
 
 (::Type{MRPMap})(q::UnitQuaternion) = 4*vector(q)/(1+q.s)
 
-function jacobian(::Type{ExponentialMap}, q::UnitQuaternion)
+function jacobian(::Type{ExponentialMap}, q::UnitQuaternion, eps=1e-5)
     s = scalar(q)
     v = vector(q)
     θ2 = v'v
     θ = sqrt(θ2)
     datan = 1/(θ2 + s^2)
     ds = -datan*v
-    atanθ = atan(θ,s)
-    dv = ((s*datan - atanθ/θ)v*v'/θ + atanθ*I )/θ
-    return 2*[ds dv]
+
+    if θ < eps
+        return 2*[ds (v*v' + I)/s]
+    else
+        atanθ = atan(θ,s)
+        dv = ((s*datan - atanθ/θ)v*v'/θ + atanθ*I )/θ
+        return 2*[ds dv]
+    end
 end
 
 function jacobian(::Type{VectorPart}, q::UnitQuaternion)

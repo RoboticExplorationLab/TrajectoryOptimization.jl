@@ -61,7 +61,9 @@ function invmap(q)
 end
 invmap(qval) ≈ logm(q)
 
+qI = VectorPart(v*1e-5)
 ForwardDiff.jacobian(invmap, qval) ≈ jacobian(ExponentialMap, q)
+ForwardDiff.jacobian(invmap, SVector(qI)) ≈ jacobian(ExponentialMap, qI)
 
 # Vector Part
 VectorPart(q) == 2*qval[2:4]
@@ -82,3 +84,11 @@ MRPMap(q) ≈ invmap(qval)
 ForwardDiff.jacobian(invmap, qval) ≈ jacobian(MRPMap, q)
 MRPMap(MRPMap(q)) ≈ q
 MRPMap(MRPMap(p)) ≈ p
+
+
+# Test near origin
+jacT_eye = [@SMatrix zeros(1,3); 2*Diagonal(@SVector ones(3))]';
+isapprox(jacobian(ExponentialMap,qI), jacT_eye, atol=1e-5)
+isapprox(jacobian(VectorPart,qI), jacT_eye, atol=1e-5)
+isapprox(jacobian(CayleyMap,qI), jacT_eye, atol=1e-5)
+isapprox(jacobian(MRPMap,qI), jacT_eye, atol=1e-5)
