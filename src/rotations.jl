@@ -8,7 +8,7 @@ export
     RPY,
     ExponentialMap,
     VectorPart,
-    ModifiedRodriguesParam
+    MRPMap
 
 export
     differential_rotation,
@@ -38,21 +38,22 @@ abstract type Rotation end
 abstract type DifferentialRotation end
 abstract type VectorPart <: DifferentialRotation end
 abstract type ExponentialMap <: DifferentialRotation end
-abstract type ModifiedRodriguesParam <: DifferentialRotation end
+abstract type MRPMap <: DifferentialRotation end
 abstract type CayleyMap <: DifferentialRotation end
 
 # Retraction Maps
-(::Type{ExponentialMap})(ϕ) = expm(2*ϕ)
+(::Type{ExponentialMap})(ϕ) = expm(ϕ)
 
-(::Type{VectorPart})(v) = UnitQuaternion(sqrt(1-v'v),v[1],v[2],v[3])
+(::Type{VectorPart})(v) = UnitQuaternion(sqrt(1-0.25v'v),0.5v[1],0.5v[2],0.5v[3])
 
 function (::Type{CayleyMap})(g)
+    g *= 0.5
     M = 1/sqrt(1+g'g)
     UnitQuaternion(M, M*g[1], M*g[2], M*g[3])
 end
 
-function (::Type{ModifiedRodriguesParam})(p)
-    p *= 0.5
+function (::Type{MRPMap})(p)
+    p *= 0.25
     n2 = p'p
     M = 2/(1+n2)
     UnitQuaternion((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
@@ -61,38 +62,79 @@ end
 
 # Retraction Map Jacobians
 function jacobian(::Type{ExponentialMap},ϕ)
-    ϕ *= 2
     θ = norm(ϕ)
     if θ > 1e-4
         sθ,cθ = sincos(θ/2)
         sincθ = sinc(θ/2π)
-        2*[-sincθ*ϕ'/4; sincθ*I/2 + (cθ/θ - 2sθ/θ^2)*ϕ*ϕ'/2θ]
+        0.5*[-0.5*sincθ*ϕ'; sincθ*I + (cθ/θ - 2sθ/θ^2)*ϕ*ϕ'/θ]
     else
         sincθ = sinc(θ/2π)
         coscθ = cosc(θ/2π)
-        [-0.5*sincθ*ϕ'; I*sincθ - ϕ*ϕ'/(π)]
+        0.5*[-0.5*sincθ*ϕ'; I*sincθ - ϕ*ϕ'/(π)]
         # cosc(x) ≈ -pi*x near 0
     end
 end
 
 function jacobian(::Type{VectorPart}, v)
-    M = -1/sqrt(1-v'v)
+    M = -0.25/sqrt(1-0.25v'v)
     @SMatrix [v[1]*M v[2]*M v[3]*M;
-              1 0 0;
-              0 1 0;
-              0 0 1]
+              0.5 0 0;
+              0 0.5 0;
+              0 0 0.5]
 end
 
 function jacobian(::Type{CayleyMap}, g)
-    n = 1+g'g
+    n = 1+0.25g'g
     ni = 1/n
-    [-g'; -g*g' + I*n]*ni*sqrt(ni)
+    [-0.25*g'; -0.125*g*g' + 0.5*I*n]*ni*sqrt(ni)
 end
 
-function jacobian(::Type{ModifiedRodriguesParam}, p)
-    p *= 0.5
-    n = 1+p'p
-    [-2p'; I*n - 2p*p']/n^2
+function jacobian(::Type{MRPMap}, p)
+    μ = 0.25
+    μ2 = 0.0625
+    n = 1+μ2*p'p
+    2*[-2*μ2*p'; I*μ*n - 2*μ*μ2*p*p']/n^2
+end
+
+# Inverse retraction maps
+(::Type{ExponentialMap})(q::UnitQuaternion) = logm(q)
+
+(::Type{VectorPart})(q::UnitQuaternion) = 2*vector(q)
+
+(::Type{CayleyMap})(q::UnitQuaternion) = 2*vector(q)/q.s
+
+(::Type{MRPMap})(q::UnitQuaternion) = 4*vector(q)/(1+q.s)
+
+function jacobian(::Type{ExponentialMap}, q::UnitQuaternion)
+    s = scalar(q)
+    v = vector(q)
+    θ2 = v'v
+    θ = sqrt(θ2)
+    datan = 1/(θ2 + s^2)
+    ds = -datan*v
+    atanθ = atan(θ,s)
+    dv = ((s*datan - atanθ/θ)v*v'/θ + atanθ*I )/θ
+    return 2*[ds dv]
+end
+
+function jacobian(::Type{VectorPart}, q::UnitQuaternion)
+    return @SMatrix [0. 2 0 0;
+                     0. 0 2 0;
+                     0. 0 0 2]
+end
+
+function jacobian(::Type{CayleyMap}, q::UnitQuaternion)
+    si = 1/q.s
+    return 2*@SMatrix [-si^2*q.x si 0 0;
+                       -si^2*q.y 0 si 0;
+                       -si^2*q.z 0 0 si]
+end
+
+function jacobian(::Type{MRPMap}, q::UnitQuaternion)
+    si = 1/(1+q.s)
+    return 4*@SMatrix [-si^2*q.x si 0 0;
+                       -si^2*q.y 0 si 0;
+                       -si^2*q.z 0 0 si]
 end
 
 
@@ -108,7 +150,7 @@ to the 3D plane tangent to the 4D unit sphere. Follows the Hamilton convention f
 There are currently 3 methods supported:
 * `VectorPart` - uses the vector (or imaginary) part of the quaternion
 * `ExponentialMap` - the most common approach, uses the exponential and logarithmic maps
-* `ModifiedRodriguesParam` - or Modified Rodrigues Parameter, is a sterographic projection of the 4D unit sphere
+* `MRPMap` - or Modified Rodrigues Parameter, is a sterographic projection of the 4D unit sphere
 onto the plane tangent to either the positive or negative real poles.
 
 # Constructors
@@ -133,10 +175,10 @@ UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4]
 UnitQuaternion{D}(r::SVector{3}) where D = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
 UnitQuaternion{D}(q::UnitQuaternion) where D = UnitQuaternion{D}(q.s, q.x, q.y, q.z)
 
-UnitQuaternion(r::SVector{3}) where D = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
+UnitQuaternion(r::SVector{3}) = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
 
-Base.rand(::Type{<:UnitQuaternion{T}}) where T =
-    normalize(UnitQuaternion(randn(T), randn(T), randn(T), randn(T)))
+Base.rand(::Type{<:UnitQuaternion{T,D}}) where {T,D} =
+    normalize(UnitQuaternion{T,D}(randn(T), randn(T), randn(T), randn(T)))
 
 SVector(q::UnitQuaternion{T}) where T = SVector{4,T}(q.s, q.x, q.y, q.z)
 
@@ -254,7 +296,7 @@ end
 
 @inline ∇differential(::Type{ExponentialMap}) = 2.0
 @inline ∇differential(::Type{VectorPart}) = 1.0
-@inline ∇differential(::Type{ModifiedRodriguesParam}) = 0.5
+@inline ∇differential(::Type{MRPMap}) = 0.5
 
 "Lmult(q2)q1 returns a vector equivalent to q2*q1 (quaternion multiplication)"
 function Lmult(q::UnitQuaternion)
@@ -341,7 +383,7 @@ function UnitQuaternion(p::MRP)
     n = norm2(p)
     s = (1-n)/(1+n)
     M = 2/(1+n)
-    UnitQuaternion{ModifiedRodriguesParam}(s, p.x*M, p.y*M, p.z*M)
+    UnitQuaternion{MRPMap}(s, p.x*M, p.y*M, p.z*M)
 end
 
 function rotmat(p::MRP)
@@ -493,7 +535,7 @@ function differential_rotation(δq::UnitQuaternion{T,ExponentialMap}) where T
     logm(δq)
 end
 
-function differential_rotation(δq::UnitQuaternion{T,ModifiedRodriguesParam}) where T
+function differential_rotation(δq::UnitQuaternion{T,MRPMap}) where T
     # vector(δq)/(1+real(δq))
     s = 1+scalar(δq)
     SVector{3}(δq.x/s, δq.y/s, δq.z/s)

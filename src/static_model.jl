@@ -12,7 +12,7 @@ export
     HermiteSimpson,
     VectorPart,
     ExponentialMap,
-    ModifiedRodriguesParam
+    MRPMap
 
 
 """ $(TYPEDEF)

@@ -186,12 +186,12 @@ dq = inv(u1)*u2
 @test differential_rotation(dq) ≈ vector(dq)
 @test differential_rotation(UnitQuaternion{ExponentialMap}(dq)) ≈ logm(dq)
 @test logm(dq) ≈ 2*vector(log(dq))
-@test differential_rotation(UnitQuaternion{ModifiedRodriguesParam}(dq)) ≈ vector(dq)/(1+scalar(dq))
+@test differential_rotation(UnitQuaternion{MRPMap}(dq)) ≈ vector(dq)/(1+scalar(dq))
 
 function diff_allocs(dq)
     allocs  = @allocated differential_rotation(UnitQuaternion{VectorPart}(dq))
     allocs += @allocated differential_rotation(UnitQuaternion{ExponentialMap}(dq))
-    allocs += @allocated differential_rotation(UnitQuaternion{ModifiedRodriguesParam}(dq))
+    allocs += @allocated differential_rotation(UnitQuaternion{MRPMap}(dq))
 end
 @test diff_allocs(dq) == 0
 
@@ -199,7 +199,7 @@ r = @SVector rand(3)
 R = rotationmatrix(q1)
 @test R*r ≈ q1*r
 
-p = differential_rotation(UnitQuaternion{ModifiedRodriguesParam}(u1))
+p = differential_rotation(UnitQuaternion{MRPMap}(u1))
 p = MRP(p)
 R1 = rotmat(p)
 @test R1*r ≈ R*r
