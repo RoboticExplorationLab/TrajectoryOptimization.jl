@@ -1,43 +1,32 @@
 # Exponential
 ϕ = @SVector rand(3)
-ExponentialMap(ϕ)
-ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
-@btime jacobian(ExponentialMap,$ϕ)
+@test ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
 
 ϕ = 1e-6*@SVector rand(3)
-ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
-@btime jacobian(ExponentialMap,$(ϕ*1e-6))
-
+@test ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
 
 
 # MRPs
-p = SVector(rand(MRP{Float64}))
+p = SVector(rand(MRP))
 
-ForwardDiff.jacobian(x->SVector(MRPMap(x)),p) ≈
+@test ForwardDiff.jacobian(x->SVector(MRPMap(x)),p) ≈
     jacobian(MRPMap, p)
-
-@btime jacobian(MRPMap, $p)
-
 
 # Gibbs Vectors
 g = @SVector rand(3)
-ForwardDiff.jacobian(x->SVector(CayleyMap(x)),g) ≈ jacobian(CayleyMap, g)
-@btime jacobian(CayleyMap, $p)
-
+@test ForwardDiff.jacobian(x->SVector(CayleyMap(x)),g) ≈ jacobian(CayleyMap, g)
 
 # Vector Part
 v = 0.1*@SVector rand(3)
-ForwardDiff.jacobian(x->SVector(VectorPart(x)),v) ≈
+@test ForwardDiff.jacobian(x->SVector(VectorPart(x)),v) ≈
     jacobian(VectorPart, v)
-@btime jacobian(VectorPart, $v)
-
 
 
 jac_eye = [@SMatrix zeros(1,3); 0.5*Diagonal(@SVector ones(3))];
-jacobian(ExponentialMap, p*1e-10) ≈ jac_eye
-jacobian(MRPMap, p*1e-10) ≈ jac_eye
-jacobian(CayleyMap, p*1e-10) ≈ jac_eye
-jacobian(VectorPart, p*1e-10) ≈ jac_eye
+@test jacobian(ExponentialMap, p*1e-10) ≈ jac_eye
+@test jacobian(MRPMap, p*1e-10) ≈ jac_eye
+@test jacobian(CayleyMap, p*1e-10) ≈ jac_eye
+@test jacobian(VectorPart, p*1e-10) ≈ jac_eye
 
 
 ############################################################################################
@@ -45,12 +34,13 @@ jacobian(VectorPart, p*1e-10) ≈ jac_eye
 ############################################################################################
 
 # Exponential Map
-q = rand(UnitQuaternion{Float64})
+Random.seed!(1);
+q = rand(UnitQuaternion)
 q = UnitQuaternion{ExponentialMap}(q)
 qval = SVector(q)
-ExponentialMap(q) == logm(q)
-ExponentialMap(ExponentialMap(q)) ≈ q
-ExponentialMap(ExponentialMap(ϕ)) ≈ ϕ
+@test ExponentialMap(q) == logm(q)
+@test ExponentialMap(ExponentialMap(q)) ≈ q
+@test ExponentialMap(ExponentialMap(ϕ)) ≈ ϕ
 
 function invmap(q)
     v = @SVector [q[2], q[3], q[4]]
@@ -59,36 +49,35 @@ function invmap(q)
     M = 2atan(θ, s)/θ
     return M*v
 end
-invmap(qval) ≈ logm(q)
+@test invmap(qval) ≈ logm(q)
 
 qI = VectorPart(v*1e-5)
-ForwardDiff.jacobian(invmap, qval) ≈ jacobian(ExponentialMap, q)
-ForwardDiff.jacobian(invmap, SVector(qI)) ≈ jacobian(ExponentialMap, qI)
+@test ForwardDiff.jacobian(invmap, qval) ≈ jacobian(ExponentialMap, q)
+@test ForwardDiff.jacobian(invmap, SVector(qI)) ≈ jacobian(ExponentialMap, qI)
 
 # Vector Part
-VectorPart(q) == 2*qval[2:4]
-jacobian(VectorPart, q)
-VectorPart(VectorPart(q)) ≈ q
-VectorPart(VectorPart(v)) ≈ v
+@test VectorPart(q) == 2*qval[2:4]
+@test VectorPart(VectorPart(q)) ≈ q
+@test VectorPart(VectorPart(v)) ≈ v
 
 # Cayley
 invmap(q) = 1/q[1] * 2*@SVector [q[2], q[3], q[4]]
-CayleyMap(q) ≈ invmap(qval)
-ForwardDiff.jacobian(invmap, qval) ≈ jacobian(CayleyMap, q)
-CayleyMap(CayleyMap(q)) ≈ q
-CayleyMap(CayleyMap(g)) ≈ g
+@test CayleyMap(q) ≈ invmap(qval)
+@test ForwardDiff.jacobian(invmap, qval) ≈ jacobian(CayleyMap, q)
+@test CayleyMap(CayleyMap(q)) ≈ q
+@test CayleyMap(CayleyMap(g)) ≈ g
 
 # MRP
 invmap(q) = 4/(1+q[1]) * @SVector [q[2], q[3], q[4]]
 MRPMap(q) ≈ invmap(qval)
-ForwardDiff.jacobian(invmap, qval) ≈ jacobian(MRPMap, q)
-MRPMap(MRPMap(q)) ≈ q
-MRPMap(MRPMap(p)) ≈ p
+@test ForwardDiff.jacobian(invmap, qval) ≈ jacobian(MRPMap, q)
+@test MRPMap(MRPMap(q)) ≈ q
+@test MRPMap(MRPMap(p)) ≈ p
 
 
 # Test near origin
 jacT_eye = [@SMatrix zeros(1,3); 2*Diagonal(@SVector ones(3))]';
-isapprox(jacobian(ExponentialMap,qI), jacT_eye, atol=1e-5)
-isapprox(jacobian(VectorPart,qI), jacT_eye, atol=1e-5)
-isapprox(jacobian(CayleyMap,qI), jacT_eye, atol=1e-5)
-isapprox(jacobian(MRPMap,qI), jacT_eye, atol=1e-5)
+@test isapprox(jacobian(ExponentialMap,qI), jacT_eye, atol=1e-5)
+@test isapprox(jacobian(VectorPart,qI), jacT_eye, atol=1e-5)
+@test isapprox(jacobian(CayleyMap,qI), jacT_eye, atol=1e-5)
+@test isapprox(jacobian(MRPMap,qI), jacT_eye, atol=1e-5)

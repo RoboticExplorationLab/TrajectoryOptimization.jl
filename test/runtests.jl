@@ -7,6 +7,7 @@ using StaticArrays
 using SparseArrays
 using Ipopt
 using Logging
+using ForwardDiff
 const TO = TrajectoryOptimization
 
 @testset "Logging" begin
@@ -32,6 +33,7 @@ end
 
 @testset "Rotations" begin
     include("rotations_tests.jl")
+    include("retraction_maps.jl")
 end
 
 @testset "Costs" begin
