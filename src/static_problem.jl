@@ -61,7 +61,7 @@ Problem(model, obj, constraints, x0, xf, Z, N, tf) =
     Problem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintSet(length(obj)),
+        constraints=ConstraintSet(size(model)...,length(obj)),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],

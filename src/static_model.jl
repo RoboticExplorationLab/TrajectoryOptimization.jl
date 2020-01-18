@@ -1,6 +1,7 @@
 export
     AbstractModel,
     InfeasibleModel,
+    RigidBody,
     dynamics,
     discrete_dynamics,
     jacobian,
@@ -9,10 +10,7 @@ export
 export
     QuadratureRule,
     RK3,
-    HermiteSimpson,
-    VectorPart,
-    ExponentialMap,
-    MRPMap
+    HermiteSimpson
 
 
 """ $(TYPEDEF)
