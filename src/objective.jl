@@ -106,7 +106,8 @@ LQRObjective(Q, R, Qf, xf, N)
 Create an objective of the form
 `` (x_N - x_f)^T Q_f (x_N - x_f) + \sum_{k=0}^{N-1} (x_k-x_f)^T Q (x_k-x_f) + u_k^T R u_k``
 """
-function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int)
+function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
+        xf::AbstractVector, N::Int; checks=true)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = zeros(size(R,1))
@@ -114,13 +115,14 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray, xf:
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
 
-    ℓ = QuadraticCost(Q, R, H, q, r, c)
-    ℓN = QuadraticCost(Qf, qf, cf)
+    ℓ = QuadraticCost(Q, R, H, q, r, c, checks=checks)
+    ℓN = QuadraticCost(Qf, qf, cf, check=checks)
 
     Objective(ℓ, ℓN, N)
 end
 
-function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray, Qf::AbstractArray, xf::AbstractVector,N::Int) where {T,S<:SVector}
+function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray,
+        Qf::AbstractArray, xf::AbstractVector, N::Int; checks=true) where {T,S<:SVector}
     n,m = size(Q,1), size(R,1)
     H = @SMatrix zeros(m,n)
     q = -Q*xf
@@ -129,9 +131,9 @@ function LQRObjective(Q::Union{Diagonal{T,S},SMatrix}, R::AbstractArray, Qf::Abs
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
 
-    ℓ = QuadraticCost(Q, R, H, q, r, c)
+    ℓ = QuadraticCost(Q, R, H, q, r, c, checks=checks)
 
-    ℓN = QuadraticCost(Qf, R, H, qf, r, cf)
+    ℓN = QuadraticCost(Qf, R, H, qf, r, cf, checks=checks)
 
     Objective(ℓ, ℓN, N)
 end
