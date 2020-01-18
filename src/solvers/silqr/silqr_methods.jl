@@ -140,8 +140,8 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
     Q = solver.Q
 
     # Terminal cost-to-go
-    S.xx[N] = G[N]*Q.xx[N]*G[N]'
-    S.x[N] = G[N]*Q.x[N]
+    S.xx[N] = G[N]'Q.xx[N]*G[N]
+    S.x[N] = G[N]'Q.x[N]
 
     # Initialize expecte change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -152,15 +152,15 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
         ix = Z[k]._x
         iu = Z[k]._u
 
-        fdx = G[k]*solver.∇F[k][ix,ix]*G[k]'
-        fdu = G[k]*solver.∇F[k][ix,iu]
+        fdx = G[k]'solver.∇F[k][ix,ix]*G[k]
+        fdu = G[k]'solver.∇F[k][ix,iu]
         # fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
 
-        Qx = G[k]*Q.x[k] + fdx'S.x[k+1]
+        Qx = G[k]'Q.x[k] + fdx'S.x[k+1]
         Qu =      Q.u[k] + fdu'S.x[k+1]
-        Qxx = G[k]*Q.xx[k]*G[k]' + fdx'S.xx[k+1]*fdx
-        Quu =      Q.uu[k]       + fdu'S.xx[k+1]*fdu
-        Qux =      Q.ux[k]*G[k]' + fdu'S.xx[k+1]*fdx
+        Qxx = G[k]'Q.xx[k]*G[k] + fdx'S.xx[k+1]*fdx
+        Quu =      Q.uu[k]      + fdu'S.xx[k+1]*fdu
+        Qux =      Q.ux[k]*G[k] + fdu'S.xx[k+1]*fdx
 
         if solver.opts.bp_reg_type == :state
             Quu_reg = Quu + solver.ρ[1]*fdu'fdu

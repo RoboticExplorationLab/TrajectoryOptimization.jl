@@ -108,8 +108,8 @@ rhat = UnitQuaternion(r)
 # @btime ForwardDiff.jacobian(q->UnitQuaternion(q)*$r,SVector($q))
 # @btime ∇rotate($q,$r)
 
-ForwardDiff.jacobian(q->SVector(u2*UnitQuaternion{VectorPart}(q)),SVector(u1)) ≈ ∇composition1(u2,u1)
-ForwardDiff.jacobian(q->SVector(UnitQuaternion{VectorPart}(q)*u1),SVector(u2)) ≈ ∇composition2(u2,u1)
+@test ForwardDiff.jacobian(q->SVector(u2*UnitQuaternion{VectorPart}(q)),SVector(u1)) ≈ ∇composition1(u2,u1)
+@test ForwardDiff.jacobian(q->SVector(UnitQuaternion{VectorPart}(q)*u1),SVector(u2)) ≈ ∇composition2(u2,u1)
 # @btime ForwardDiff.jacobian(q->SVector($u2*UnitQuaternion(q)),SVector($u1))
 # @btime ∇composition1($u2,$u1)
 # @btime ForwardDiff.jacobian(q->SVector(UnitQuaternion(q)*$u1),SVector($u2))
@@ -207,6 +207,24 @@ R1 = rotmat(p)
 
 @test UnitQuaternion(p) ≈ q1
 
+
+# Conversions
+import TrajectoryOptimization: rotmat_to_quat
+Random.seed!(1) # i = 3
+q = rand(UnitQuaternion)
+@test rotmat_to_quat(rotmat(q)) ≈ q
+
+Random.seed!(2) # i = 4
+q = rand(UnitQuaternion)
+@test rotmat_to_quat(rotmat(q)) ≈ q
+
+Random.seed!(3) # i = 2
+q = rand(UnitQuaternion)
+@test rotmat_to_quat(rotmat(q)) ≈ q
+
+Random.seed!(5) # i = 1
+q = rand(UnitQuaternion)
+@test rotmat_to_quat(rotmat(q)) ≈ q
 
 #
 # # Quadrotors

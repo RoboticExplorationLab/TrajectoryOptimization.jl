@@ -136,13 +136,19 @@ UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z
 UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
 UnitQuaternion{D}(r::SVector{3}) where D = UnitQuaternion{D}(0.0, r[1],r[2],r[3])
 UnitQuaternion{D}(q::UnitQuaternion) where D = UnitQuaternion{D}(q.s, q.x, q.y, q.z)
+UnitQuaternion{T,D}(q::R) where {T,D,R <: UnitQuaternion} =
+    UnitQuaternion{T,D}(q.s, q.x, q.y, q.z)
 
 UnitQuaternion(r::SVector{3}) = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
+UnitQuaternion(q::UnitQuaternion) = q
 
 Base.rand(::Type{<:UnitQuaternion{T,D}}) where {T,D} =
     normalize(UnitQuaternion{T,D}(randn(T), randn(T), randn(T), randn(T)))
 
+Base.rand(::Type{UnitQuaternion{T}}) where T = Base.rand(UnitQuaternion{T,VectorPart})
 Base.rand(::Type{UnitQuaternion}) = Base.rand(UnitQuaternion{Float64,VectorPart})
+Base.zero(::Type{Q}) where Q<:UnitQuaternion = I(Q)
+Base.zero(q::Q) where Q<:UnitQuaternion = I(Q)
 
 SVector(q::UnitQuaternion{T}) where T = SVector{4,T}(q.s, q.x, q.y, q.z)
 
@@ -156,6 +162,7 @@ inv(q::UnitQuaternion) = conj(q)
 LinearAlgebra.norm2(q::UnitQuaternion) = q.s^2 + q.x^2 + q.y^2 + q.z^2
 LinearAlgebra.norm(q::UnitQuaternion) = sqrt(q.s^2 + q.x^2 + q.y^2 + q.z^2)
 LinearAlgebra.I(::Type{UnitQuaternion}) = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
+LinearAlgebra.I(::Type{Q}) where Q <: UnitQuaternion = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
 
 (≈)(q::UnitQuaternion, u::UnitQuaternion) = q.s ≈ u.s && q.x ≈ u.x && q.y ≈ u.y && q.z ≈ u.z
 
@@ -334,6 +341,8 @@ struct MRP{T} <: Rotation
 end
 
 MRP(r::SVector{3}) = MRP(r[1], r[2], r[3])
+MRP{T}(r::SVector{3}) where T = MRP(T(r[1]), T(r[2]), T(r[3]))
+MRP{T}(p::MRP) where T = MRP(T(p.x), T(p.y), T(p.z))
 function MRP(q::UnitQuaternion)
     M = 1/(1+q.s)
     MRP(q.x*M, q.y*M, q.z*M)
@@ -356,6 +365,8 @@ SVector(p::MRP{T}) where T = SVector{3,T}(p.x, p.y, p.z)
 
 Base.rand(::Type{MRP{T}}) where T = MRP(rand(UnitQuaternion{T}))
 Base.rand(::Type{MRP}) = MRP(rand(UnitQuaternion))
+Base.zero(::Type{MRP{T}}) where T = MRP(zero(T), zero(T), zero(T))
+Base.zero(::Type{MRP}) = MRP(0.0, 0.0, 0.0)
 
 LinearAlgebra.norm(p::MRP) = sqrt(p.x^2 + p.y^2 + p.z^2)
 LinearAlgebra.norm2(p::MRP) = p.x^2 + p.y^2 + p.z^2
@@ -424,11 +435,18 @@ RPY(e::SVector{3,T}) where T = RPY{T}(e[1], e[2], e[3])
 RPY(R::SMatrix{3,3,T}) where T =  RPY(rotmat_to_rpy(R))
 RPY(q::UnitQuaternion) = RPY(rotmat(q))
 RPY(p::MRP) = RPY(rotmat(p))
+function RPY(ϕ::T1,θ::T2,ψ::T3) where {T1,T2,T3}
+    T = promote_type(T1,T2)
+    T = promote_type(T,T3)
+    RPY(T(ϕ), T(θ), T(ψ))
+end
 
 SVector(e::RPY{T}) where T = SVector{3,T}(e.ϕ, e.θ, e.ψ)
 
 Base.rand(::Type{RPY{T}}) where T = RPY(rand(UnitQuaternion{T}))
 Base.rand(::Type{RPY}) = RPY(rand(UnitQuaternion))
+Base.zero(::Type{RPY{T}}) where T = RPY(zero(T), zero(T), zero(T))
+Base.zero(::Type{RPY}) = RPY(0.0, 0.0, 0.0)
 
 roll(e::RPY) = e.ϕ
 pitch(e::RPY) = e.θ
@@ -485,7 +503,32 @@ function ∇composition2(e2::RPY, e1::RPY)
     ForwardDiff.jacobian(rotate,SVector(e2))
 end
 
+# Conversions
+""" Convert from a rotation matrix to a unit quaternion
+Uses formula from Markely and Crassidis's book
+    "Fundamentals of Spacecraft Attitude Determination and Control" (2014), section 2.9.3
+"""
+function rotmat_to_quat(A::SMatrix{3,3,T}) where T
+    trA = tr(A)
+    v,i = findmax(diag(A))
+    if trA > v
+        i = 1
+    else
+        i += 1
+    end
+    if i == 1
+        q = UnitQuaternion(1+trA, A[2,3]-A[3,2], A[3,1]-A[1,3], A[1,2]-A[2,1])
+    elseif i == 2
+        q = UnitQuaternion(A[2,3]-A[3,2], 1 + 2A[1,1] - trA, A[1,2]+A[2,1], A[1,3]+A[3,1])
+    elseif i == 3
+        q = UnitQuaternion(A[3,1]-A[1,3], A[2,1]+A[1,2], 1+2A[2,2]-trA, A[2,3]+A[3,2])
+    elseif i == 4
+        q = UnitQuaternion(A[1,2]-A[2,1], A[3,1]+A[1,3], A[3,2]+A[2,3], 1 + 2A[3,3] - trA)
+    end
+    return normalize(inv(q))
+end
 
+UnitQuaternion(e::RPY) = rotmat_to_quat(rotmat(e))
 
 # Differential Rotations
 function differential_rotation(δq::UnitQuaternion{T,VectorPart}) where T

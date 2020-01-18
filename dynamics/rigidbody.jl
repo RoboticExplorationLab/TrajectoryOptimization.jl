@@ -7,7 +7,18 @@ function Base.rand(model::RigidBody{D}) where {D}
     q = rand(D)
     v = @SVector rand(3)
     ω = @SVector rand(3)
-    x = build_state(model, r, SVector(q), v, ω)
+    x = build_state(model, r, q, v, ω)
+    u = @SVector rand(m)  # NOTE: this is type unstable
+    return x,u
+end
+
+function Base.zeros(model::RigidBody{D}) where D
+    n,m = size(model)
+    r = @SVector zeros(3)
+    q = zero(D)
+    v = @SVector zeros(3)
+    ω = @SVector zeros(3)
+    x = build_state(model, r, q, v, ω)
     u = @SVector rand(m)  # NOTE: this is type unstable
     return x,u
 end
@@ -15,7 +26,7 @@ end
 @inline rotation_type(::RigidBody{D}) where D = D
 
 @inline Base.position(model::RigidBody, x) = SVector{3}(x[1],x[2],x[3])
-@inline orientation(model::RigidBody, x) = SVector{3}(x[4],x[5],x[6])
+@inline orientation(model::RigidBody{R}, x) where R = R(x[4],x[5],x[6])
 @inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
 @inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
@@ -32,19 +43,25 @@ function parse_state(model::RigidBody, x)
     return r, p, v, ω
 end
 
-function build_state(model::RigidBody{<:UnitQuaternion}, x, q, v, ω)
+function build_state(model::RigidBody{R}, x, q::Rotation, v, ω) where R <: Rotation
+    q = SVector(R(q))
+    build_state(model, x, q, v, ω)
+end
+
+function build_state(model::RigidBody{R}, x, q::SVector{4}, v, ω) where R <: Rotation
     @SVector [x[1], x[2], x[3],
               q[1], q[2], q[3], q[4],
               v[1], v[2], v[3],
               ω[1], ω[2], ω[3]]
 end
 
-function build_state(model::RigidBody{<:Rotation}, x, q, v, ω)
+function build_state(model::RigidBody{R}, x, q::SVector{3}, v, ω) where R <: Rotation
     @SVector [x[1], x[2], x[3],
               q[1], q[2], q[3],
               v[1], v[2], v[3],
               ω[1], ω[2], ω[3]]
 end
+
 
 function dynamics(model::RigidBody{D}, x, u) where D
 
@@ -70,7 +87,7 @@ end
 @inline inertia(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 @inline inertia_inv(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 
-function state_diff(::RigidBody{<:Quat{D}}, x::SVector{N,T}, x0::SVector{N,T}) where {N,T,D}
+function state_diff(model::RigidBody{<:UnitQuaternion}, x::SVector{N,T}, x0::SVector{N,T}) where {N,T}
     r,q,v,ω = parse_state(model, x)
     r0,q0,v0,ω0 = parse_state(model, x0)
     δr = r - r0
@@ -80,21 +97,22 @@ function state_diff(::RigidBody{<:Quat{D}}, x::SVector{N,T}, x0::SVector{N,T}) w
     build_state(model, δr, δq, δv, δω)
 end
 
-function state_diff_jacobian(::RigidBody{<:UnitQuaternion}, x0::SVector{N,T}) where {N,T}
+function state_diff_jacobian(model::RigidBody{<:UnitQuaternion}, x0::SVector{N,T}) where {N,T}
     q0 = orientation(model, x0)
-    G = ∇differential(q0)
-    I1 = @SMatrix [1 0 0 0 0 0 0 0 0 0 0 0 0;
-                   0 1 0 0 0 0 0 0 0 0 0 0 0;
-                   0 0 1 0 0 0 0 0 0 0 0 0 0;
-                   0 0 0 G[1] G[4] G[7] G[10] 0 0 0 0 0 0;
-                   0 0 0 G[2] G[5] G[8] G[11] 0 0 0 0 0 0;
-                   0 0 0 G[3] G[6] G[9] G[12] 0 0 0 0 0 0;
-                   0 0 0 0 0 0 0 1 0 0 0 0 0;
-                   0 0 0 0 0 0 0 0 1 0 0 0 0;
-                   0 0 0 0 0 0 0 0 0 1 0 0 0;
-                   0 0 0 0 0 0 0 0 0 0 1 0 0;
-                   0 0 0 0 0 0 0 0 0 0 0 1 0;
-                   0 0 0 0 0 0 0 0 0 0 0 0 1.]
+    G = TrajectoryOptimization.∇differential(q0)
+    I1 = @SMatrix [1 0 0 0 0 0 0 0 0 0 0 0;
+                   0 1 0 0 0 0 0 0 0 0 0 0;
+                   0 0 1 0 0 0 0 0 0 0 0 0;
+                   0 0 0 G[1] G[5] G[ 9] 0 0 0 0 0 0;
+                   0 0 0 G[2] G[6] G[10] 0 0 0 0 0 0;
+                   0 0 0 G[3] G[7] G[11] 0 0 0 0 0 0;
+                   0 0 0 G[4] G[8] G[12] 0 0 0 0 0 0;
+                   0 0 0 0 0 0 1 0 0 0 0 0;
+                   0 0 0 0 0 0 0 1 0 0 0 0;
+                   0 0 0 0 0 0 0 0 1 0 0 0;
+                   0 0 0 0 0 0 0 0 0 1 0 0;
+                   0 0 0 0 0 0 0 0 0 0 1 0;
+                   0 0 0 0 0 0 0 0 0 0 0 1.]
 end
 
 function state_diff_jacobian(::RigidBody{<:Rotation}, x0::SVector{N,T}) where {N,T}
