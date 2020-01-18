@@ -1,8 +1,0 @@
-  Updating registry at `~/.julia/registries/General`
-  Updating git-repo `https://github.com/JuliaRegistries/General.git`
-[?25l[2K[?25h  Updating git-repo `https://github.com/RoboticExplorationLab/MatrixCalculus.jl.git`
-[?25l[2K[?25h Resolving package versions...
-  Updating `/tmp/tmp9Umz9E/Project.toml`
-  [fafa779c] + MatrixCalculus v0.1.0 #master (https://github.com/RoboticExplorationLab/MatrixCalculus.jl.git)
-  Updating `/tmp/tmp9Umz9E/Manifest.toml`
-  [fafa779c] + MatrixCalculus v0.1.0 #master (https://github.com/RoboticExplorationLab/MatrixCalculus.jl.git)
