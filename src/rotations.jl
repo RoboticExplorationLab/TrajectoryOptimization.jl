@@ -13,6 +13,7 @@ export
 
 export
     differential_rotation,
+    retraction_map,
     scalar,
     vector,
     logm,
@@ -41,6 +42,7 @@ abstract type VectorPart <: DifferentialRotation end
 abstract type ExponentialMap <: DifferentialRotation end
 abstract type MRPMap <: DifferentialRotation end
 abstract type CayleyMap <: DifferentialRotation end
+abstract type IdentityMap <: DifferentialRotation end
 
 # Scalings
 @inline scaling(::Type{ExponentialMap}) = 0.5
@@ -53,22 +55,23 @@ abstract type CayleyMap <: DifferentialRotation end
 
 function (::Type{VectorPart})(v)
     μ = 1/scaling(VectorPart)
-    UnitQuaternion(sqrt(1-μ^2*v'v), μ*v[1], μ*v[2], μ*v[3])
+    UnitQuaternion{VectorPart}(sqrt(1-μ^2*v'v), μ*v[1], μ*v[2], μ*v[3])
 end
 
 function (::Type{CayleyMap})(g)
     g /= scaling(CayleyMap)
     M = 1/sqrt(1+g'g)
-    UnitQuaternion(M, M*g[1], M*g[2], M*g[3])
+    UnitQuaternion{CayleyMap}(M, M*g[1], M*g[2], M*g[3])
 end
 
 function (::Type{MRPMap})(p)
     p /= scaling(MRPMap)
     n2 = p'p
     M = 2/(1+n2)
-    UnitQuaternion((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
+    UnitQuaternion{MRPMap}((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
 end
 
+(::Type{IdentityMap})(q) = UnitQuaternion{IdentityMap}(q[1], q[2], q[3], q[4])
 
 # Retraction Map Jacobians
 function jacobian(::Type{ExponentialMap},ϕ)
@@ -104,6 +107,7 @@ function jacobian(::Type{MRPMap}, p)
     2*[-2*μ2*p'; I*μ*n - 2*μ*μ2*p*p']/n^2
 end
 
+jacobian(::Type{IdentityMap}, q) = I
 
 
 const DEFAULT_QUATDIFF = VectorPart
@@ -148,6 +152,9 @@ UnitQuaternion{T,D}(q::R) where {T,D,R <: UnitQuaternion} =
 
 UnitQuaternion(r::SVector{3}) = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
 UnitQuaternion(q::UnitQuaternion) = q
+
+retraction_map(::UnitQuaternion{T,D}) where {T,D} = D
+retraction_map(::Type{UnitQuaternion{T,D}}) where {T,D} = D
 
 Base.rand(::Type{<:UnitQuaternion{T,D}}) where {T,D} =
     normalize(UnitQuaternion{T,D}(randn(T), randn(T), randn(T), randn(T)))
@@ -564,6 +571,8 @@ end
 
 (::Type{MRPMap})(q::UnitQuaternion) = scaling(MRPMap)*vector(q)/(1+q.s)
 
+(::Type{IdentityMap})(q::UnitQuaternion) = SVector(q)
+
 function jacobian(::Type{ExponentialMap}, q::UnitQuaternion, eps=1e-5)
     μ = scaling(ExponentialMap)
     s = scalar(q)
@@ -604,3 +613,5 @@ function jacobian(::Type{MRPMap}, q::UnitQuaternion)
                        -si^2*q.y 0 si 0;
                        -si^2*q.z 0 0 si]
 end
+
+jacobian(::Type{IdentityMap}, q::UnitQuaternion) = I

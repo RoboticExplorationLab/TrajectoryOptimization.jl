@@ -1,24 +1,28 @@
 # Exponential
 ϕ = @SVector rand(3)
 @test ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
+@test retraction_map(ExponentialMap(ϕ)) == ExponentialMap
 
 ϕ = 1e-6*@SVector rand(3)
 @test ForwardDiff.jacobian(x->SVector(ExponentialMap(x)),ϕ) ≈ jacobian(ExponentialMap,ϕ)
+@test retraction_map(ExponentialMap(ϕ)) == ExponentialMap
 
 # Vector Part
 v = 0.1*@SVector rand(3)
 @test ForwardDiff.jacobian(x->SVector(VectorPart(x)),v) ≈
     jacobian(VectorPart, v)
+@test retraction_map(VectorPart(v)) == VectorPart
 
 # Gibbs Vectors
 g = @SVector rand(3)
 @test ForwardDiff.jacobian(x->SVector(CayleyMap(x)),g) ≈ jacobian(CayleyMap, g)
+@test retraction_map(CayleyMap(g)) == CayleyMap
 
 # MRPs
 p = SVector(rand(MRP))
-
 @test ForwardDiff.jacobian(x->SVector(MRPMap(x)),p) ≈
     jacobian(MRPMap, p)
+@test retraction_map(MRPMap(p)) == MRPMap
 
 
 μ0 = 1/TO.scaling(VectorPart)
