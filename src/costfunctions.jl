@@ -64,8 +64,17 @@ function QuadraticCost(Q,R; H=similar(Q,size(R,1), size(Q,1)), q=zeros(size(Q,1)
     QuadraticCost(Q,R,H,q,r,c, checks=checks)
 end
 
-function QuadraticCost(Q,q,c)
-    QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c)
+function QuadraticCost(Q::Union{Diagonal{T,SVector{N,T}}, SMatrix{N,N,T}},
+            R::Union{Diagonal{T,SVector{M,T}}, SMatrix{M,M,T}};
+            H=(@SMatrix zeros(T,M,N)),
+            q=(@SVector zeros(T,N)),
+            r=(@SVector zeros(T,M)),
+            c=0.0, checks=true) where {T,N,M}
+    QuadraticCost(Q,R,H,q,r,c, checks=checks)
+end
+
+function QuadraticCost(Q,q,c; checks=true)
+    QuadraticCost(Q,zeros(0,0),zeros(0,size(Q,1)),q,zeros(0),c,checks=checks)
 end
 
 """
