@@ -42,19 +42,28 @@ abstract type ExponentialMap <: DifferentialRotation end
 abstract type MRPMap <: DifferentialRotation end
 abstract type CayleyMap <: DifferentialRotation end
 
-# Retraction Maps
-(::Type{ExponentialMap})(ϕ) = expm(ϕ)
+# Scalings
+@inline scaling(::Type{ExponentialMap}) = 0.5
+@inline scaling(::Type{VectorPart}) = 1.0
+@inline scaling(::Type{CayleyMap}) = 1.0
+@inline scaling(::Type{MRPMap}) = 2.0
 
-(::Type{VectorPart})(v) = UnitQuaternion(sqrt(1-0.25v'v),0.5v[1],0.5v[2],0.5v[3])
+# Retraction Maps
+(::Type{ExponentialMap})(ϕ) = expm(ϕ/scaling(ExponentialMap))
+
+function (::Type{VectorPart})(v)
+    μ = 1/scaling(VectorPart)
+    UnitQuaternion(sqrt(1-μ^2*v'v), μ*v[1], μ*v[2], μ*v[3])
+end
 
 function (::Type{CayleyMap})(g)
-    g *= 0.5
+    g /= scaling(CayleyMap)
     M = 1/sqrt(1+g'g)
     UnitQuaternion(M, M*g[1], M*g[2], M*g[3])
 end
 
 function (::Type{MRPMap})(p)
-    p *= 0.25
+    p /= scaling(MRPMap)
     n2 = p'p
     M = 2/(1+n2)
     UnitQuaternion((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
@@ -63,36 +72,34 @@ end
 
 # Retraction Map Jacobians
 function jacobian(::Type{ExponentialMap},ϕ)
+    μ = 1/scaling(ExponentialMap)
     θ = norm(ϕ)
-    if θ > 1e-4
-        sθ,cθ = sincos(θ/2)
-        sincθ = sinc(θ/2π)
-        0.5*[-0.5*sincθ*ϕ'; sincθ*I + (cθ/θ - 2sθ/θ^2)*ϕ*ϕ'/θ]
-    else
-        sincθ = sinc(θ/2π)
-        coscθ = cosc(θ/2π)
-        0.5*[-0.5*sincθ*ϕ'; I*sincθ - ϕ*ϕ'/(π)]
-        # cosc(x) ≈ -pi*x near 0
-    end
+    cθ = cos(μ*θ/2)
+    sincθ = sinc(μ*θ/2π)
+    0.5*μ*[-0.5*μ*sincθ*ϕ'; sincθ*I + (cθ - sincθ)*ϕ*ϕ'/(ϕ'ϕ)]
 end
 
 function jacobian(::Type{VectorPart}, v)
-    M = -0.25/sqrt(1-0.25v'v)
+    μ = 1/scaling(VectorPart)
+    μ2 = μ*μ
+    M = -μ2/sqrt(1-μ2*v'v)
     @SMatrix [v[1]*M v[2]*M v[3]*M;
-              0.5 0 0;
-              0 0.5 0;
-              0 0 0.5]
+              μ 0 0;
+              0 μ 0;
+              0 0 μ]
 end
 
 function jacobian(::Type{CayleyMap}, g)
-    n = 1+0.25g'g
+    μ = 1/scaling(CayleyMap)
+    μ2 = μ*μ
+    n = 1+μ2*g'g
     ni = 1/n
-    [-0.25*g'; -0.125*g*g' + 0.5*I*n]*ni*sqrt(ni)
+    μ*[-μ*g'; -μ2*g*g' + I*n]*ni*sqrt(ni)
 end
 
 function jacobian(::Type{MRPMap}, p)
-    μ = 0.25
-    μ2 = 0.0625
+    μ = 1/scaling(MRPMap)
+    μ2 = μ*μ
     n = 1+μ2*p'p
     2*[-2*μ2*p'; I*μ*n - 2*μ*μ2*p*p']/n^2
 end
@@ -257,7 +264,7 @@ Jacobian of q ⊕ ϕ, when ϕ is near zero. Useful for converting Jacobians from
     differential quaternion parameterization are the same up to a constant.
 """
 function ∇differential(q::UnitQuaternion)
-    0.5 * @SMatrix [
+    1.0 * @SMatrix [
         -q.x -q.y -q.z;
          q.s -q.z  q.y;
          q.z  q.s -q.x;
@@ -549,15 +556,16 @@ end
 ############################################################################################
 #                             INVERSE RETRACTION MAPS
 ############################################################################################
-(::Type{ExponentialMap})(q::UnitQuaternion) = logm(q)
+(::Type{ExponentialMap})(q::UnitQuaternion) = scaling(ExponentialMap)*logm(q)
 
-(::Type{VectorPart})(q::UnitQuaternion) = 2*vector(q)
+(::Type{VectorPart})(q::UnitQuaternion) = scaling(VectorPart)*vector(q)
 
-(::Type{CayleyMap})(q::UnitQuaternion) = 2*vector(q)/q.s
+(::Type{CayleyMap})(q::UnitQuaternion) = scaling(CayleyMap) * vector(q)/q.s
 
-(::Type{MRPMap})(q::UnitQuaternion) = 4*vector(q)/(1+q.s)
+(::Type{MRPMap})(q::UnitQuaternion) = scaling(MRPMap)*vector(q)/(1+q.s)
 
 function jacobian(::Type{ExponentialMap}, q::UnitQuaternion, eps=1e-5)
+    μ = scaling(ExponentialMap)
     s = scalar(q)
     v = vector(q)
     θ2 = v'v
@@ -566,30 +574,33 @@ function jacobian(::Type{ExponentialMap}, q::UnitQuaternion, eps=1e-5)
     ds = -datan*v
 
     if θ < eps
-        return 2*[ds (v*v' + I)/s]
+        return 2*μ*[ds (v*v' + I)/s]
     else
         atanθ = atan(θ,s)
         dv = ((s*datan - atanθ/θ)v*v'/θ + atanθ*I )/θ
-        return 2*[ds dv]
+        return 2*μ*[ds dv]
     end
 end
 
 function jacobian(::Type{VectorPart}, q::UnitQuaternion)
-    return @SMatrix [0. 2 0 0;
-                     0. 0 2 0;
-                     0. 0 0 2]
+    μ = scaling(VectorPart)
+    return @SMatrix [0. μ 0 0;
+                     0. 0 μ 0;
+                     0. 0 0 μ]
 end
 
 function jacobian(::Type{CayleyMap}, q::UnitQuaternion)
+    μ = scaling(CayleyMap)
     si = 1/q.s
-    return 2*@SMatrix [-si^2*q.x si 0 0;
+    return μ*@SMatrix [-si^2*q.x si 0 0;
                        -si^2*q.y 0 si 0;
                        -si^2*q.z 0 0 si]
 end
 
 function jacobian(::Type{MRPMap}, q::UnitQuaternion)
+    μ = scaling(MRPMap)
     si = 1/(1+q.s)
-    return 4*@SMatrix [-si^2*q.x si 0 0;
+    return μ*@SMatrix [-si^2*q.x si 0 0;
                        -si^2*q.y 0 si 0;
                        -si^2*q.z 0 0 si]
 end
