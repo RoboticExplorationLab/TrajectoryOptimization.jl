@@ -644,6 +644,14 @@ function (*)(e2::RPY, e1::RPY)
     from_rotmat(rotmat(e2)*rotmat(e1))
 end
 
+function (\)(e1::RPY, e2::RPY)
+    from_rotmat(rotmat(e1)'rotmat(e2))
+end
+
+function (/)(e1::RPY, e2::RPY)
+    from_rotmat(rotmat(e1)*rotmat(e2)')
+end
+
 function ∇rotate(e::RPY, r::SVector{3})
     rotate(e) = RPY(e)*r
     ForwardDiff.jacobian(rotate, SVector(e))

@@ -155,6 +155,12 @@ e1 = RPY(rand(3)...)
 e2 = RPY(rand(3)...)
 R = rotmat(e2*e1)
 
+# Test inverses
+e1,e2 = rand(RPY), rand(RPY)
+e3 = e2*e1
+@test e2\e3 ≈ e1
+@test e3/e1 ≈ e2
+
 @test ∇rotate(e1,r) isa SMatrix{3,3}
 @test ∇composition1(e2,e1) isa SMatrix{3,3}
 @test ∇composition2(e2,e1) isa SMatrix{3,3}
