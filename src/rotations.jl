@@ -6,6 +6,7 @@ export
     UnitQuaternion,
     MRP,
     RPY,
+    RodriguesParam,
     ExponentialMap,
     VectorPart,
     MRPMap,
@@ -24,6 +25,7 @@ export
     Rmult,
     Vmat,
     Tmat,
+    skew,
     ⊕,
     ⊖
 
@@ -74,12 +76,16 @@ end
 (::Type{IdentityMap})(q) = UnitQuaternion{IdentityMap}(q[1], q[2], q[3], q[4])
 
 # Retraction Map Jacobians
-function jacobian(::Type{ExponentialMap},ϕ)
+function jacobian(::Type{ExponentialMap},ϕ, eps=1e-5)
     μ = 1/scaling(ExponentialMap)
     θ = norm(ϕ)
     cθ = cos(μ*θ/2)
     sincθ = sinc(μ*θ/2π)
-    0.5*μ*[-0.5*μ*sincθ*ϕ'; sincθ*I + (cθ - sincθ)*ϕ*ϕ'/(ϕ'ϕ)]
+    if θ < eps
+        0.5*μ*[-0.5*μ*sincθ*ϕ'; sincθ*I + (cθ - sincθ)*ϕ*ϕ']
+    else
+        0.5*μ*[-0.5*μ*sincθ*ϕ'; sincθ*I + (cθ - sincθ)*ϕ*ϕ'/(ϕ'ϕ)]
+    end
 end
 
 function jacobian(::Type{VectorPart}, v)
@@ -179,6 +185,7 @@ LinearAlgebra.I(::Type{UnitQuaternion}) = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
 LinearAlgebra.I(::Type{Q}) where Q <: UnitQuaternion = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
 
 (≈)(q::UnitQuaternion, u::UnitQuaternion) = q.s ≈ u.s && q.x ≈ u.x && q.y ≈ u.y && q.z ≈ u.z
+(-)(q::UnitQuaternion{T,D}) where {T,D} = UnitQuaternion{T,D}(-q.s, -q.x, -q.y, -q.z)
 
 function LinearAlgebra.normalize(q::UnitQuaternion{T,D}) where {T,D}
     n = norm(q)
@@ -430,6 +437,90 @@ function ∇composition1(p2::MRP, p1::MRP)
     (((1-n2)*I - 2p2*p1' + skew(2p2))*D - N*(2n2*p1' - 2p2'))/D^2
 end
 
+function ∇differential(p::MRP)
+    n = 1-norm(p)
+    # p = SVector(p)
+    # (1-n)I + 2(skew(p) + p*p')
+    @SMatrix [n + 2p.x^2      2(p.x*p.y-p.z)  2(p.x*p.z+p.y);
+              2(p.y*p.x+p.z)  n + 2p.y^2      2(p.y*p.z-p.x);
+              2(p.z*p.x-p.y)  2(p.z*p.y+p.x)  n + 2p.z^2]
+end
+
+
+############################################################################################
+#                                 Rodrigues Parameters
+############################################################################################
+
+struct RodriguesParam{T} <: Rotation
+    x::T
+    y::T
+    z::T
+end
+
+RodriguesParam(g::SVector{3,T}) where T = RodriguesParam{T}(g[1], g[2], g[3])
+SVector(g::RodriguesParam{T}) where T = SVector{3,T}(g.x, g.y, g.z)
+
+RodriguesParam(q::UnitQuaternion{T}) where T = RodriguesParam(q.x/q.s, q.y/q.s, q.z/q.s)
+function UnitQuaternion(g::RodriguesParam{T}) where T
+    M = 1/sqrt(1+norm2(g))
+    UnitQuaternion{T,CayleyMap}(M, M*g.x, M*g.y, M*g.z)
+end
+
+
+LinearAlgebra.norm(g::RodriguesParam) = sqrt(g.x^2 + g.y^2 + q.z^2)
+LinearAlgebra.norm2(g::RodriguesParam) = g.x^2 + g.y^2 + g.z^2
+
+function (≈)(g2::RodriguesParam, g1::RodriguesParam)
+    g2.x ≈ g1.x && g2.y ≈ g1.y && g2.z ≈ g1.z
+end
+
+function (*)(g2::RodriguesParam, g1::RodriguesParam)
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+    RodriguesParam((g2+g1 + g2 × g1)/(1-g2'g1))
+end
+
+function (*)(g::RodriguesParam, r::SVector{3})
+    UnitQuaternion(g)*r
+end
+
+function rotmat(g::RodriguesParam)
+    ghat = skew(SVector(g))
+    I + 2*ghat*(ghat + I)/(1+norm2(g))
+end
+
+function ∇rotate(g0::RodriguesParam, r)
+    g = SVector(g0)
+    ghat = skew(g)
+    n1 = 1/(1 + g'g)
+    gxr = cross(g,r) + r
+    d1 = ghat*gxr * -2*n1^2 * g'
+    d2 = -(ghat*skew(r) + skew(gxr))*n1
+    return 2d1 + 2d2
+end
+
+function ∇composition1(g2::RodriguesParam, g1::RodriguesParam)
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+
+    N = g2 + g1 + g2 × g1
+    D = 1/(1 - g2'g1)
+    (I + skew(g2) + D*N*g2')*D
+end
+
+function ∇composition2(g2::RodriguesParam, g1::RodriguesParam)
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+
+    N = g2 + g1 + g2 × g1
+    D = 1/(1 - g2'g1)
+    (I - skew(g1) + D*N*g1')*D
+end
+
+function ∇differential(g::RodriguesParam)
+    g = SVector(g)
+    (I + skew(g) + g*g')
+end
 
 
 ############################################################################################
@@ -517,7 +608,9 @@ function ∇composition2(e2::RPY, e1::RPY)
     ForwardDiff.jacobian(rotate,SVector(e2))
 end
 
-# Conversions
+############################################################################################
+#                                 CONVERSIONS
+############################################################################################
 """ Convert from a rotation matrix to a unit quaternion
 Uses formula from Markely and Crassidis's book
     "Fundamentals of Spacecraft Attitude Determination and Control" (2014), section 2.9.3

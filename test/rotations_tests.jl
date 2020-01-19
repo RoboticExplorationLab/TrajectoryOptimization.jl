@@ -115,8 +115,19 @@ rhat = UnitQuaternion(r)
 # @btime ForwardDiff.jacobian(q->SVector(UnitQuaternion(q)*$u1),SVector($u2))
 # @btime ∇composition2($u2,$u1)
 
+@test Lmult(q) ≈ ∇composition1(q,u2)
 
-# RPY
+ϕ = @SVector zeros(3)
+@test TO.∇differential(q) ≈ Lmult(q)*jacobian(VectorPart,ϕ)
+@test TO.∇differential(q) ≈ Lmult(q)*jacobian(ExponentialMap,ϕ)
+@test TO.∇differential(q) ≈ Lmult(q)*jacobian(CayleyMap,ϕ)
+@test TO.∇differential(q) ≈ Lmult(q)*jacobian(MRPMap,ϕ)
+
+
+############################################################################################
+#                          ROLL, PITCH, YAW EULER ANGLES
+############################################################################################
+
 e0 = @SVector [deg2rad(45), deg2rad(60), deg2rad(20)]
 e1 = RPY(e0...)
 e2 = RotXYZ(e0...)
@@ -174,13 +185,16 @@ R = rotmat(e2*e1)
 # @btime ∇rotation1($e2, $e1)
 # @btime ∇rotation2($e2, $e1)
 
-# MRPs
+
+############################################################################################
+#                              MODIFIED RODRIGUES PARAMETERS
+############################################################################################
+
 p1 = MRP(rand(3)...)
 p2 = MRP(rand(3)...)
 # @btime $p2*$p1
 # @btime $p2*$r
 q = UnitQuaternion(p2)
-
 
 dq = inv(u1)*u2
 @test differential_rotation(dq) ≈ vector(dq)
@@ -206,6 +220,40 @@ R1 = rotmat(p)
 @test p*r ≈ R*r
 
 @test UnitQuaternion(p) ≈ q1
+
+p0 = MRP(0,0,0)
+@test ∇composition1(p2, p0) ≈ TO.∇differential(p2)
+
+
+############################################################################################
+#                              RODRIGUES PARAMETERS
+############################################################################################
+
+g1 = RodriguesParam(u1)
+g2 = RodriguesParam(u2)
+u2 ≈ -UnitQuaternion(g2)
+g2 ≈ RodriguesParam(UnitQuaternion(g2))
+
+# Test compostion and rotation
+@test g1*r ≈ u1*r
+@test g2*r ≈ u2*r
+@test g2*g1*r ≈ u2*u1*r
+@test rotmat(g2)*r ≈ g2*r
+
+
+# Test Jacobians
+ForwardDiff.jacobian(g->RodriguesParam(g)*r, SVector(g1)) ≈ ∇rotate(g1, r)
+
+function compose(g2,g1)
+    N = (g2+g1 + g2 × g1)
+    D = 1/(1-g2'g1)
+    return D*N
+end
+@test ForwardDiff.jacobian(g->compose(SVector(g2),g), SVector(g1)) ≈ ∇composition1(g2,g1)
+@test ForwardDiff.jacobian(g->compose(g,SVector(g1)), SVector(g2)) ≈ ∇composition2(g2,g1)
+
+g0 = RodriguesParam{Float64}(0,0,0)
+@test ∇composition1(g2, g0) ≈ TO.∇differential(g2)
 
 
 # Conversions
