@@ -22,6 +22,7 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
     cost!(solver.obj, Z)
     J_prev = sum(_J)
 
+
     for i = 1:solver.opts.iterations
         J = step!(solver, J_prev)
 
@@ -152,8 +153,8 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
         ix = Z[k]._x
         iu = Z[k]._u
 
-        fdx = G[k]'solver.∇F[k][ix,ix]*G[k]
-        fdu = G[k]'solver.∇F[k][ix,iu]
+        fdx = G[k+1]'solver.∇F[k][ix,ix]*G[k]
+        fdu = G[k+1]'solver.∇F[k][ix,iu]
         # fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
 
         Qx = G[k]'Q.x[k] + fdx'S.x[k+1]
@@ -229,6 +230,7 @@ function forwardpass!(solver::iLQRSolver, ΔV, J_prev)
             solver.ρ[1] += solver.opts.bp_reg_fp
             break
         end
+
 
         # Otherwise, rollout a new trajectory for current alpha
         flag = rollout!(solver, α)
