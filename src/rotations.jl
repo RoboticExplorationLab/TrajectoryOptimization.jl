@@ -1,4 +1,4 @@
-import Base: +, -, *, /, exp, log, ≈, inv, conj
+import Base: +, -, *, /, \, exp, log, ≈, inv, conj
 import LinearAlgebra: norm2
 
 export
@@ -10,7 +10,8 @@ export
     ExponentialMap,
     VectorPart,
     MRPMap,
-    CayleyMap
+    CayleyMap,
+    IdentityMap
 
 export
     differential_rotation,
@@ -176,7 +177,7 @@ scalar(q::UnitQuaternion) = q.s
 vector(q::UnitQuaternion{T}) where T = SVector{3,T}(q.x, q.y, q.z)
 vecnorm(q::UnitQuaternion) = sqrt(q.x^2 + q.y^2 + q.z^2)
 
-conj(q::UnitQuaternion) = UnitQuaternion(q.s, -q.x, -q.y, -q.z)
+conj(q::UnitQuaternion{T,D}) where {T,D} = UnitQuaternion{T,D}(q.s, -q.x, -q.y, -q.z)
 inv(q::UnitQuaternion) = conj(q)
 
 LinearAlgebra.norm2(q::UnitQuaternion) = q.s^2 + q.x^2 + q.y^2 + q.z^2
@@ -192,8 +193,9 @@ function LinearAlgebra.normalize(q::UnitQuaternion{T,D}) where {T,D}
     UnitQuaternion{T,D}(q.s/n, q.x/n, q.y/n, q.z/n)
 end
 
-function (*)(q::UnitQuaternion{T1,D}, w::UnitQuaternion{T2,D}) where {T1,T2,D}
+function (*)(q::UnitQuaternion{T1,D1}, w::UnitQuaternion{T2,D2}) where {T1,T2,D1,D2}
     T = promote_type(T1, T2)
+    D = D2
     UnitQuaternion{T,D}(q.s * w.s - q.x * w.x - q.y * w.y - q.z * w.z,
                         q.s * w.x + q.x * w.s + q.y * w.z - q.z * w.y,
                         q.s * w.y - q.x * w.z + q.y * w.s + q.z * w.x,
@@ -212,6 +214,9 @@ function Base.:*(q::UnitQuaternion{Tq}, r::SVector{3}) where Tq
                              -qo[1] * q.y + qo[2] * q.z + qo[3] * q.s - qo[4] * q.x,
                              -qo[1] * q.z - qo[2] * q.y + qo[3] * q.x + qo[4] * q.s)
 end
+
+(\)(q1::UnitQuaternion, q2::UnitQuaternion) = inv(q1)*q2
+(/)(q1::UnitQuaternion, q2::UnitQuaternion) = q1*inv(q2)
 
 function exp(q::UnitQuaternion{T,D}) where {T,D}
     θ = vecnorm(q)
@@ -392,12 +397,43 @@ Base.zero(::Type{MRP}) = MRP(0.0, 0.0, 0.0)
 LinearAlgebra.norm(p::MRP) = sqrt(p.x^2 + p.y^2 + p.z^2)
 LinearAlgebra.norm2(p::MRP) = p.x^2 + p.y^2 + p.z^2
 
+(≈)(p2::MRP, p1::MRP) = p2.x ≈ p1.x && p2.y ≈ p1.y && p2.z ≈ p1.z
+
 function (*)(p2::MRP, p1::MRP)
     p2, p1 = SVector(p2), SVector(p1)
     MRP(((1-p2'p2)*p1 + (1-p1'p1)*p2 - cross(2p1, p2) ) / (1+p1'p1*p2'p2 - 2p1'p2))
 end
 
 (*)(p::MRP, r::SVector) = UnitQuaternion(p)*r
+
+function (\)(p1::MRP, p2::MRP)
+    n1,n2 = norm2(p1),   norm2(p2)
+    θ = 1/((1+n1)*(1+n2))
+    s1,s2 = (1-n1), (1-n2)
+    p1,p2 = SVector(p1), SVector(p2)
+    v1 = -2p1
+    v2 =  2p2
+    s = s1*s2 - v1'v2
+    v = s1*v2 + s2*v1 + v1 × v2
+
+    M = θ/(1+θ*s)
+    MRP(v[1]*M, v[2]*M, v[3]*M)
+end
+
+function (/)(p1::MRP, p2::MRP)
+    n1,n2 = norm2(p1),   norm2(p2)
+    θ = 1/((1+n1)*(1+n2))
+    s1,s2 = (1-n1), (1-n2)
+    p1,p2 = SVector(p1), SVector(p2)
+    v1 =  2p1
+    v2 = -2p2
+    s = s1*s2 - v1'v2
+    v = s1*v2 + s2*v1 + v1 × v2
+
+    M = θ/(1+θ*s)
+    MRP(v[1]*M, v[2]*M, v[3]*M)
+end
+
 
 function kinematics(p::MRP, ω)
     p = SVector(p)
@@ -484,6 +520,22 @@ function (*)(g::RodriguesParam, r::SVector{3})
     UnitQuaternion(g)*r
 end
 
+"Same as inv(g1)*g2"
+function (\)(g1::RodriguesParam, g2::RodriguesParam)
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+    RodriguesParam((g2-g1 + g2 × g1)/(1+g1'g2))
+end
+
+"Same as g2*inv(g1)"
+function (/)(g1::RodriguesParam, g2::RodriguesParam)
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+    RodriguesParam((g1-g2 + g2 × g1)/(1+g1'g2))
+end
+
+
+
 function rotmat(g::RodriguesParam)
     ghat = skew(SVector(g))
     I + 2*ghat*(ghat + I)/(1+norm2(g))
@@ -521,6 +573,7 @@ function ∇differential(g::RodriguesParam)
     g = SVector(g)
     (I + skew(g) + g*g')
 end
+
 
 
 ############################################################################################

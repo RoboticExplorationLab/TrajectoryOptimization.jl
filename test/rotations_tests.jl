@@ -97,6 +97,10 @@ kinematics(q::Quaternion, ω) = SVector(0.5*q*Quaternion(0, ω[1], ω[2], ω[3])
 @test u1 ⊖ u2 isa SVector{3}
 @test (u1 ⊕ ϕ) ⊖ u1 ≈ ϕ
 
+# Test inverses
+u3 = u2*u1
+@test u2\u3 ≈ u1
+@test u3/u1 ≈ u2
 
 q = u1
 rhat = UnitQuaternion(r)
@@ -189,12 +193,20 @@ R = rotmat(e2*e1)
 ############################################################################################
 #                              MODIFIED RODRIGUES PARAMETERS
 ############################################################################################
-
-p1 = MRP(rand(3)...)
-p2 = MRP(rand(3)...)
+u1
+p1 = MRP(u1)
+p2 = MRP(u2)
 # @btime $p2*$p1
 # @btime $p2*$r
-q = UnitQuaternion(p2)
+
+# Test rotations and composition
+@test p2*r ≈ u2*r
+@test p2*p1*r ≈ u2*u1*r
+@test rotmat(p2)*r ≈ p2*r
+p3 = p2*p1
+@test p2\p3 ≈ p1
+@test p3/p1 ≈ p2
+
 
 dq = inv(u1)*u2
 @test differential_rotation(dq) ≈ vector(dq)
@@ -240,9 +252,13 @@ g2 ≈ RodriguesParam(UnitQuaternion(g2))
 @test g2*g1*r ≈ u2*u1*r
 @test rotmat(g2)*r ≈ g2*r
 
+g3 = g2*g1
+@test g2\g3 ≈ g1
+@test g3/g1 ≈ g2
+
 
 # Test Jacobians
-ForwardDiff.jacobian(g->RodriguesParam(g)*r, SVector(g1)) ≈ ∇rotate(g1, r)
+@test ForwardDiff.jacobian(g->RodriguesParam(g)*r, SVector(g1)) ≈ ∇rotate(g1, r)
 
 function compose(g2,g1)
     N = (g2+g1 + g2 × g1)
