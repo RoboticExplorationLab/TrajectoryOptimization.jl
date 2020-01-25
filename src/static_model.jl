@@ -178,6 +178,13 @@ function discrete_jacobian(::Type{Q}, model::AbstractModel,
     ForwardDiff.jacobian(fd_aug, s)
 end
 
+function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
+	ix,iu = z._x, z._u
+	A = G2'∇f[ix,ix]*G1
+	B = G2'∇f[ix,iu]
+	return A,B
+end
+
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #
@@ -195,6 +202,8 @@ function state_diff_jacobian!(G, model::RigidBody, Z::Traj)
         G[k] = state_diff_jacobian(model, state(Z[k]))
     end
 end
+
+is_quat(model::AbstractModel, z::KnotPoint{T,N}) where {T,N} = @SVector zeros(N)
 
 ############################################################################################
 #                               INFEASIBLE MODELS                                          #
