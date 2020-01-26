@@ -4,7 +4,8 @@ export
     CostFunction,
     QuadraticQuatCost,
     RBCost,
-    QuatLQRCost
+    QuatLQRCost,
+    SatDiffCost
 
 
 
@@ -242,45 +243,65 @@ end
 
 
 
-struct RBCost{T,M,Rot<:UnitQuaternion} <: CostFunction
-    model::RigidBody
-    Q::Diagonal{T,SVector{12,T}}
-    R::Diagonal{T,SVector{M,T}}
-    x_ref::SVector{13,T}
+
+struct SatDiffCost{Rot} <: CostFunction
+    model::RigidBody{Rot}
+    Q1::Diagonal{Float64,SVector{3,Float64}}
+    Q2::Diagonal{Float64,SVector{3,Float64}}
+    R::Diagonal{Float64,SVector{3,Float64}}
+    q_ref::SVector{4,Float64}
+    ω_ref::SVector{3,Float64}
 end
 
-function RBCost(model, Q::Diagonal{T,SVector{12,T}}, R::Diagonal{T,SVector{M,T}},
-        x_ref) where {T,M}
-    RBCost{T,M,Dynamics.rotation_type(model)}(model,Q,R,x_ref)
+function stage_cost(cost::SatDiffCost{Rot}, x::SVector) where Rot
+    ω = @SVector [x[1],x[2],x[3]]
+    q = Dynamics.orientation(cost.model, x)
+    q0 = Rot(UnitQuaternion(cost.q_ref))
+
+    dω = ω - cost.ω_ref
+    dq = q ⊖ q0
+    return 0.5*(dq'cost.Q2*dq + dω'cost.Q1*dω)
 end
 
-function stage_cost(cost::RBCost, x::SVector)
-    dx = state_diff(cost.model, x, cost.x_ref)
-    return 0.5*dx'cost.Q*dx
+function stage_cost(cost::SatDiffCost, x::SVector, u::SVector)
+    J = stage_cost(cost, x) + 0.5*u'cost.R*u
 end
 
-function stage_cost(cost::RBCost, x::SVector, u::SVector)
-     stage_cost(cost, x) + 0.5*u'cost.R*u
-end
+function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
+        z::KnotPoint{T,N,M}, G) where {T,N,M,Rot}
+    x,u = state(z), control(z)
+    Q = cost.Q2  # cost for quaternion
+    ω = @SVector [x[1],x[2],x[3]]
+    q = @SVector [x[1],x[2],x[3],x[4]]
+    q = Dynamics.orientation(cost.model, x)
+    q0 = Rot(UnitQuaternion(cost.q_ref))
 
-function gradient(cost::RBCost, x::SVector, u::SVector)
-    # dx = state_diff(cost.model, x, cost.x_ref)
-    # G = state_diff_jacobian(cost.model, x)
-    # Qx = G*cost.Q*dx
-    # Qu = cost.R*u
-    Qx = ForwardDiff.gradient(x->stage_cost(cost,x,u), x)
-    Qu = ForwardDiff.gradient(u->stage_cost(cost,x,u), u)
-    return Qx, Qu
-end
+    dω = ω - cost.ω_ref
+    dq = q0\q
+    err = CayleyMap(dq)
+    G = Lmult(dq)*Vmat()'
 
-function hessian(cost::RBCost, x::SVector{N}, u::SVector{M}) where {N,M}
-    # G = state_diff_jacobian(cost.model, x)
-    # Qxx = G*cost.Q*G'
-    # Quu = cost.R
-    Qxx = ForwardDiff.hessian(x->stage_cost(cost,x,u), x)
-    Quu = ForwardDiff.hessian(u->stage_cost(cost,x,u), u)
-    Qux = @SMatrix zeros(M,N)
-    return Qxx, Quu, Qux
+    # Gradient
+    Qω = cost.Q1*ω
+    dmap = jacobian(CayleyMap,dq)
+    Qq = G'dmap'Q*err
+    Qx = [Qω; Qq]
+    Qu = cost.R*u
+
+    # Hessian
+    Qωω = cost.Q1
+    Qqq = G'dmap'Q*dmap*G + G'∇jacobian(CayleyMap, dq, Q*err)*G
+    Qxx = @SMatrix [
+        Qωω[1,1] 0 0 0 0 0;
+        0 Qωω[2,2] 0 0 0 0;
+        0 0 Qωω[3,3] 0 0 0;
+        0 0 0 Qqq[1,1] Qqq[1,2] Qqq[1,3];
+        0 0 0 Qqq[2,1] Qqq[2,2] Qqq[2,3];
+        0 0 0 Qqq[3,1] Qqq[3,2] Qqq[3,3];
+    ]
+    Quu = cost.R
+    Qux = @SMatrix zeros(M,N-1)
+    return Qxx, Quu, Qux, Qx, Qu
 end
 
 #

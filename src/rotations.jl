@@ -161,7 +161,7 @@ UnitQuaternion{T,D}(q::R) where {T,D,R <: UnitQuaternion} =
 UnitQuaternion(r::SVector{3}) = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
 UnitQuaternion(q::UnitQuaternion) = q
 
-(::Type{UnitQuaternion{T,D}})(x::SVector{4,T2}) where {T,T2,D} = 
+(::Type{UnitQuaternion{T,D}})(x::SVector{4,T2}) where {T,T2,D} =
     UnitQuaternion{promote_type(T,T2),D}(x[1], x[2], x[3], x[4])
 
 retraction_map(::UnitQuaternion{T,D}) where {T,D} = D
@@ -765,6 +765,17 @@ function jacobian(::Type{CayleyMap}, q::UnitQuaternion)
     return μ*@SMatrix [-si^2*q.x si 0 0;
                        -si^2*q.y 0 si 0;
                        -si^2*q.z 0 0 si]
+end
+
+function ∇jacobian(::Type{CayleyMap}, q::UnitQuaternion, b::SVector{3})
+    si = 1/q.s
+    v = vector(q)
+    @SMatrix [
+        2*si^3*(v'b) -si^2*b[1] -si^2*b[2] -si^2*b[3];
+       -si^2*b[1] 0 0 0;
+       -si^2*b[2] 0 0 0;
+       -si^2*b[3] 0 0 0;
+    ]
 end
 
 function jacobian(::Type{MRPMap}, q::UnitQuaternion)
