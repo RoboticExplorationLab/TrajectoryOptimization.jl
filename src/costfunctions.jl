@@ -1,7 +1,10 @@
 import Base.copy
 
 export
-    CostFunction
+    CostFunction,
+    QuadraticQuatCost,
+    RBCost,
+    QuatLQRCost
 
 
 
@@ -68,7 +71,7 @@ function QuadraticCost(Q::Union{Diagonal{T,SVector{N,T}}, SMatrix{N,N,T}},
             R::Union{Diagonal{T,SVector{M,T}}, SMatrix{M,M,T}};
             H=(@SMatrix zeros(T,M,N)),
             q=(@SVector zeros(T,N)),
-            r=(@SVector zeros(T,M)),
+            r=(@SVector zeros(M)),
             c=0.0, checks=true) where {T,N,M}
     QuadraticCost(Q,R,H,q,r,c, checks=checks)
 end
@@ -83,12 +86,13 @@ Cost function of the form
 ``(x-x_f)^T Q (x_x_f) + u^T R u``
 R must be positive definite, Q must be positive semidefinite
 """
-function LQRCost(Q::AbstractArray, R::AbstractArray, xf::AbstractVector)
+function LQRCost(Q::AbstractArray, R::AbstractArray,
+        xf::AbstractVector, uf=zeros(size(R,1)); checks=true)
     H = zeros(size(R,1),size(Q,1))
     q = -Q*xf
-    r = zeros(size(R,1))
-    c = 0.5*xf'*Q*xf
-    return QuadraticCost(Q, R, H, q, r, c)
+    r = -R*uf
+    c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
+    return QuadraticCost(Q, R, H, q, r, c, checks=checks)
 end
 
 """
@@ -144,6 +148,140 @@ function copy(cost::QuadraticCost)
     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c))
 end
 
+
+
+############################################################################################
+#                                 QUADRATIC QUATERNION COST FUNCTION
+############################################################################################
+
+struct QuadraticQuatCost{T,N,M,N4} <: CostFunction
+    Q::Diagonal{T,SVector{N,T}}
+    R::Diagonal{T,SVector{M,T}}
+    q::SVector{N,T}
+    r::SVector{M,T}
+    c::T
+    q_ref::SVector{4,T}
+    q_ind::SVector{4,Int}
+    Iq::SMatrix{N,4,T,N4}
+    function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
+            q::SVector{N,T}, r::SVector{M,T}, c::T,
+            q_ref::SVector{4,T}, q_ind::SVector{4,Int}) where {T,N,M}
+        Iq = @MMatrix zeros(N,4)
+        for i = 1:4
+            Iq[q_ind[i],i] = 1
+        end
+        Iq = SMatrix{N,4}(Iq)
+        return new{T,N,M,N*4}(Q, R, q, r, c, q_ref, q_ind, Iq)
+    end
+end
+
+function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}};
+        q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T),
+        q_ref=(@SVector [1.0,0,0,0]), q_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    QuadraticQuatCost(Q, R, q, r, c, q_ref, q_ind)
+end
+
+function stage_cost(cost::QuadraticQuatCost, x::SVector, u::SVector)
+    stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
+end
+
+function stage_cost(cost::QuadraticQuatCost, x::SVector)
+    J = 0.5*x'cost.Q*x + cost.q'x + cost.c
+    q = x[cost.q_ind]
+    dq = cost.q_ref'q
+    J += min(1+dq, 1-dq)
+end
+
+# function cost_expansion(cost::QuadraticQuatCost, z::KnotPoint, G)
+#     # Gradient
+#     Qx = cost.Q*x + cost.q
+#     q = x[cost.q_ind]
+#     quat = UnitQuaternion(q)
+#     dq = cost.q_ref'q
+#     if dq < 0
+#         Qx += cost.Iq*cost.q_ref*G
+#     else
+#         Qx -= cost.Iq*cost.q_ref*G
+#     end
+#     Qu = cost.R*u + cost.r
+#
+#     # Hessian
+#     Q = cost.Q
+#     Qxx = G'Q*G
+#
+#     return Qx, Qu
+# end
+
+function gradient(cost::QuadraticQuatCost{T,N,M}, x::SVector, u::SVector) where {T,N,M}
+    Qx = cost.Q*x + cost.q
+    q = x[cost.q_ind]
+    dq = cost.q_ref'q
+    if dq < 0
+        Qx += cost.Iq*cost.q_ref
+    else
+        Qx -= cost.Iq*cost.q_ref
+    end
+    Qu = cost.R*u + cost.r
+    return Qx, Qu
+end
+
+function hessian(cost::QuadraticQuatCost, x::SVector{N}, u::SVector{M}) where {N,M}
+    Qxx = cost.Q
+    Quu = cost.R
+    Qux = @SMatrix zeros(M,N)
+    return Qxx, Quu, Qux
+end
+function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
+        xf; quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    r = @SVector zeros(M)
+    q = -Q*xf
+    c = 0.5*xf'Q*xf
+    q_ref = xf[quat_ind]
+    return QuadraticQuatCost(Q, R, q, r, c, q_ref, quat_ind)
+end
+
+
+
+struct RBCost{T,M,Rot<:UnitQuaternion} <: CostFunction
+    model::RigidBody
+    Q::Diagonal{T,SVector{12,T}}
+    R::Diagonal{T,SVector{M,T}}
+    x_ref::SVector{13,T}
+end
+
+function RBCost(model, Q::Diagonal{T,SVector{12,T}}, R::Diagonal{T,SVector{M,T}},
+        x_ref) where {T,M}
+    RBCost{T,M,Dynamics.rotation_type(model)}(model,Q,R,x_ref)
+end
+
+function stage_cost(cost::RBCost, x::SVector)
+    dx = state_diff(cost.model, x, cost.x_ref)
+    return 0.5*dx'cost.Q*dx
+end
+
+function stage_cost(cost::RBCost, x::SVector, u::SVector)
+     stage_cost(cost, x) + 0.5*u'cost.R*u
+end
+
+function gradient(cost::RBCost, x::SVector, u::SVector)
+    # dx = state_diff(cost.model, x, cost.x_ref)
+    # G = state_diff_jacobian(cost.model, x)
+    # Qx = G*cost.Q*dx
+    # Qu = cost.R*u
+    Qx = ForwardDiff.gradient(x->stage_cost(cost,x,u), x)
+    Qu = ForwardDiff.gradient(u->stage_cost(cost,x,u), u)
+    return Qx, Qu
+end
+
+function hessian(cost::RBCost, x::SVector{N}, u::SVector{M}) where {N,M}
+    # G = state_diff_jacobian(cost.model, x)
+    # Qxx = G*cost.Q*G'
+    # Quu = cost.R
+    Qxx = ForwardDiff.hessian(x->stage_cost(cost,x,u), x)
+    Quu = ForwardDiff.hessian(u->stage_cost(cost,x,u), u)
+    Qux = @SMatrix zeros(M,N)
+    return Qxx, Quu, Qux
+end
 
 #
 # """

@@ -149,6 +149,7 @@ struct UnitQuaternion{T,D<:DifferentialRotation} <: Rotation
 end
 
 UnitQuaternion(s::T,x::T,y::T,z::T) where T = UnitQuaternion{T,DEFAULT_QUATDIFF}(s,x,y,z)
+UnitQuaternion(q::SVector{4}) = UnitQuaternion{DEFAULT_QUATDIFF}(q[1],q[2],q[3],q[4])
 UnitQuaternion{D}(s::T,x::T,y::T,z::T) where {T,D} = UnitQuaternion{T,D}(s,x,y,z)
 
 UnitQuaternion{D}(q::SVector{4}) where D = UnitQuaternion{D}(q[1],q[2],q[3],q[4])
@@ -159,6 +160,9 @@ UnitQuaternion{T,D}(q::R) where {T,D,R <: UnitQuaternion} =
 
 UnitQuaternion(r::SVector{3}) = UnitQuaternion{DEFAULT_QUATDIFF}(0.0, r[1],r[2],r[3])
 UnitQuaternion(q::UnitQuaternion) = q
+
+(::Type{UnitQuaternion{T,D}})(x::SVector{4,T2}) where {T,T2,D} = 
+    UnitQuaternion{promote_type(T,T2),D}(x[1], x[2], x[3], x[4])
 
 retraction_map(::UnitQuaternion{T,D}) where {T,D} = D
 retraction_map(::Type{UnitQuaternion{T,D}}) where {T,D} = D
@@ -269,12 +273,13 @@ function (⊕)(q::UnitQuaternion{T,VectorPart}, δq::SVector{3}) where T
         δq[1], δq[2], δq[3])
 end
 
-function (⊖)(q::UnitQuaternion{T,ExponentialMap}, q0::UnitQuaternion) where T
-    logm(inv(q0)*q)
+function (⊖)(q::UnitQuaternion{T,D}, q0::UnitQuaternion) where {T,D}
+    D(q0\q)
 end
 
-function (⊖)(q::UnitQuaternion{T,VectorPart}, q0::UnitQuaternion) where T
-    vector(inv(q0)*q)
+function (⊖)(q::UnitQuaternion{T,IdentityMap}, q0::UnitQuaternion) where {T}
+    SVector(q) - SVector(q0)
+    # return SVector(q0\q)
 end
 
 """
@@ -300,6 +305,7 @@ function Lmult(q::UnitQuaternion)
         q.z -q.y  q.x  q.s;
     ]
 end
+Lmult(q::SVector{4}) = Lmult(UnitQuaternion(q))
 
 "Rmult(q1)q2 return a vector equivalent to q2*q1 (quaternion multiplication)"
 function Rmult(q::UnitQuaternion)
@@ -310,6 +316,7 @@ function Rmult(q::UnitQuaternion)
         q.z  q.y -q.x  q.s;
     ]
 end
+Rmult(q::SVector{4}) = Rmult(UnitQuaternion(q))
 
 "Tmat()q return a vector equivalent to inv(q)"
 function Tmat()

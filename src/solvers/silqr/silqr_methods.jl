@@ -6,7 +6,7 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
     clear_cache!(solver.opts)
 
     solver.stats.iterations = 0
-    solver.ρ[1] = 0.0
+    solver.ρ[1] = solver.opts.bp_reg_initial
     solver.dρ[1] = 0.0
     # reset!(solver)
     # to = solver.stats[:timer]
@@ -53,7 +53,7 @@ function step!(solver::iLQRSolver, J)
     Z = solver.Z
     state_diff_jacobian!(solver.G, solver.model, Z)
     discrete_jacobian!(solver.∇F, solver.model, Z)
-    cost_expansion!(solver.Q, solver.obj, solver.Z)
+    cost_expansion!(solver.Q, solver.G, solver.obj, solver.model, solver.Z)
     ΔV = backwardpass!(solver)
     forwardpass!(solver, ΔV, J)
 end
@@ -141,8 +141,8 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
     Q = solver.Q
 
     # Terminal cost-to-go
-    S.xx[N] = G[N]'Q.xx[N]*G[N]
-    S.x[N] = G[N]'Q.x[N]
+    S.xx[N] = Q.xx[N]
+    S.x[N] = Q.x[N]
 
     # Initialize expecte change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -153,15 +153,16 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
         ix = Z[k]._x
         iu = Z[k]._u
 
-        fdx = G[k+1]'solver.∇F[k][ix,ix]*G[k]
-        fdu = G[k+1]'solver.∇F[k][ix,iu]
+        # fdx = G[k+1]'solver.∇F[k][ix,ix]*G[k]
+        # fdu = G[k+1]'solver.∇F[k][ix,iu]
+        fdx,fdu = dynamics_expansion(solver.∇F[k], G[k], G[k+1], model, Z[k])
         # fdx, fdu = dynamics_expansion(QUAD, model, Z[k])
 
-        Qx = G[k]'Q.x[k] + fdx'S.x[k+1]
-        Qu =      Q.u[k] + fdu'S.x[k+1]
-        Qxx = G[k]'Q.xx[k]*G[k] + fdx'S.xx[k+1]*fdx
-        Quu =      Q.uu[k]      + fdu'S.xx[k+1]*fdu
-        Qux =      Q.ux[k]*G[k] + fdu'S.xx[k+1]*fdx
+        Qx =  Q.x[k] + fdx'S.x[k+1]
+        Qu =  Q.u[k] + fdu'S.x[k+1]
+        Qxx = Q.xx[k] + fdx'S.xx[k+1]*fdx
+        Quu = Q.uu[k] + fdu'S.xx[k+1]*fdu
+        Qux = Q.ux[k] + fdu'S.xx[k+1]*fdx
 
         if solver.opts.bp_reg_type == :state
             Quu_reg = Quu + solver.ρ[1]*fdu'fdu

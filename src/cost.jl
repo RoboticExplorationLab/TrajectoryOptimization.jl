@@ -24,6 +24,41 @@ cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj,
 end
 
 
+function cost_gradient(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+    Qx,Qu = gradient(cost, state(z), control(z))
+    return G'Qx, Qu
+end
+
+function cost_hessian(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+    Qxx,Quu,Qux = hessian(cost, state(z), control(z))
+    return G'Qxx*G
+end
+
+function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+    Qx,Qu = gradient(cost, state(z), control(z))
+    Qxx,Quu,Qux = hessian(cost, state(z), control(z))
+    iq,idq = is_quat(model,z)
+    Qxx = G'Qxx*G - Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
+    Qux = Qux*G
+    Qx = G'Qx
+    return Qxx, Quu, Qux, Qx, Qu
+end
+
+function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
+    for k in eachindex(Z)
+        z = Z[k]
+        Qxx, Quu, Qux, Qx, Qu = cost_expansion(obj.cost[k], model, z, G[k])
+        if is_terminal(z)
+            dt_x = 1.0
+            dt_u = 0.0
+        else
+            dt_x = z.dt
+            dt_u = z.dt
+        end
+        E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
+            Qxx*dt_x, Quu*dt_u, Qux*dt_u, Qx*dt_x, Qu*dt_u
+    end
+end
 
 "```
 Qx,Qu = cost_gradient(cost::CostFunction, z::KnotPoint)

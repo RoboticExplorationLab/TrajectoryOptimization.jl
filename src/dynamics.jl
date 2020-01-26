@@ -35,5 +35,6 @@ include("../dynamics/quadrotor.jl")
 include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")
 include("../dynamics/rigidbody.jl")
+include("../dynamics/satellite.jl")
 
 end

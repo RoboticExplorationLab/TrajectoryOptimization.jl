@@ -186,7 +186,7 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
     G = [state_diff_jacobian(prob.model, x0) for k = 1:N]
 
     S = CostExpansion(n̄,m,N)
-    Q = CostExpansion(n,m,N)
+    Q = CostExpansion(n̄,m,N)
 
 
     ρ = zeros(T,1)
