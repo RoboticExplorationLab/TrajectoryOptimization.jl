@@ -199,7 +199,6 @@ e3 = e2*e1
 ############################################################################################
 #                              MODIFIED RODRIGUES PARAMETERS
 ############################################################################################
-u1
 p1 = MRP(u1)
 p2 = MRP(u2)
 # @btime $p2*$p1
@@ -239,9 +238,12 @@ R1 = rotmat(p)
 
 @test UnitQuaternion(p) ≈ q1
 
-p0 = MRP(0,0,0)
-@test ∇composition1(p2, p0) ≈ TO.∇differential(p2)
 
+# Test composition jacobians
+@test ForwardDiff.jacobian(x->SVector(p2*MRP(x)),SVector(p1)) ≈ ∇composition1(p2,p1)
+@test ForwardDiff.jacobian(x->SVector(MRP(x)*p1),SVector(p2)) ≈ ∇composition2(p2,p1)
+p0 = MRP(0,0,0)
+@test TO.∇differential(p2) ≈ ∇composition1(p2,p0)
 
 ############################################################################################
 #                              RODRIGUES PARAMETERS

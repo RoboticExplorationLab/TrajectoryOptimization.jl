@@ -38,7 +38,7 @@ function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, 
     Qx,Qu = gradient(cost, state(z), control(z))
     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
     iq,idq = is_quat(model,z)
-    Qxx = G'Qxx*G - Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
+    Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
     Qux = Qux*G
     Qx = G'Qx
     return Qxx, Quu, Qux, Qx, Qu

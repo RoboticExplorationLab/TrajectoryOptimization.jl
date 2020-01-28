@@ -264,6 +264,10 @@ function kinematics(q::UnitQuaternion{T,D}, ω::SVector{3}) where {T,D}
     SVector(q*UnitQuaternion{T,D}(0.0, 0.5*ω[1], 0.5*ω[2], 0.5*ω[3]))
 end
 
+function Base.angle(q::UnitQuaternion)
+    2*atan(vecnorm(q), q.s)
+end
+
 function (⊕)(q::UnitQuaternion{T,ExponentialMap}, δq::SVector{3}) where T
     q*expm(δq)
 end
@@ -354,6 +358,12 @@ function ∇composition2(q2::UnitQuaternion, q1::UnitQuaternion)
     Rmult(q1)
 end
 
+function ∇²differential(p2::UnitQuaternion, b::SVector{4})
+    b1 = -SVector(p2)'b
+    Diagonal(@SVector fill(b1,3))
+end
+
+
 ############################################################################################
 #                             MODIFIED RODRIGUES PARAMETERS                                #
 ############################################################################################
@@ -374,9 +384,10 @@ struct MRP{T} <: Rotation
 end
 
 MRP(r::SVector{3}) = MRP(r[1], r[2], r[3])
+(::Type{<:MRP})(::Type{T},x,y,z) where T = MRP{T}(T(x),T(y),T(z))
 MRP{T}(r::SVector{3}) where T = MRP(T(r[1]), T(r[2]), T(r[3]))
 MRP{T}(p::MRP) where T = MRP(T(p.x), T(p.y), T(p.z))
-function MRP(q::UnitQuaternion)
+function (::Type{<:MRP})(q::UnitQuaternion)
     M = 1/(1+q.s)
     MRP(q.x*M, q.y*M, q.z*M)
 end
@@ -451,8 +462,9 @@ function kinematics(p::MRP, ω)
     0.25*A*ω
 end
 
-(⊕)(p::MRP, δp::SVector{3}) = MRP(p.x+δp[1], p.y+δp[2], p.z+δp[3])
-(⊖)(p::MRP, p0::SVector{3}) = MRP(p.x-p0.x, p.y-p0.y, p.z-p0.z)
+(⊕)(p::MRP, δp::SVector{3}) = p*MRP(δph)
+(⊖)(p::MRP, p0::MRP) = SVector(p0\p)
+
 
 function ∇rotate(p::MRP, r)
     p = SVector(p)
@@ -461,33 +473,77 @@ function ∇rotate(p::MRP, r)
 end
 
 function ∇composition2(p2::MRP, p1::MRP)
-    # this is slower than ForwardDiff
-    n1 = norm(p1)
-    n2 = norm(p2)
-    p1, p2 = SVector(p1), SVector(p2)
-    N = (1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2)
-    D = 1+n1*n2 - 2p1'p2
-    (((1-n1)*I - 2p1*p2' - skew(2p1))*D - N*(2n1*p2' - 2p1'))/D^2
+    p2,p1 = SVector(p2), SVector(p1)
+    n1 = p1'p1
+    n2 = p2'p2
+    D = 1 / (1+n1*n2 - 2p1'p2)
+    d1 = (-2p1*p2' + (1-n1)*I - skew(2p1) ) * D
+    d2 = -((1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2) ) * D^2 *
+        (2p2*n1 - 2p1)'
+    return d1 + d2
 end
 
 function ∇composition1(p2::MRP, p1::MRP)
-    # this is slower than ForwardDiff
-    n1 = norm(p1)
-    n2 = norm(p2)
-    p1, p2 = SVector(p1), SVector(p2)
-    N = (1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2)
-    D = 1+n1*n2 - 2p1'p2
-    (((1-n2)*I - 2p2*p1' + skew(2p2))*D - N*(2n2*p1' - 2p2'))/D^2
+    p2,p1 = SVector(p2), SVector(p1)
+    n1 = p1'p1
+    n2 = p2'p2
+    D = 1 / (1+n1*n2 - 2p1'p2)
+    d1 = ((1-n2)*I + -2p2*p1' + 2skew(p2) ) * D
+    d2 = -((1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2) ) * D^2 *
+        (2p1*n2 - 2p2)'
+    d1 + d2
 end
 
 function ∇differential(p::MRP)
+    p = SVector(p)
     n = 1-norm(p)
     # p = SVector(p)
     # (1-n)I + 2(skew(p) + p*p')
-    @SMatrix [n + 2p.x^2      2(p.x*p.y-p.z)  2(p.x*p.z+p.y);
-              2(p.y*p.x+p.z)  n + 2p.y^2      2(p.y*p.z-p.x);
-              2(p.z*p.x-p.y)  2(p.z*p.y+p.x)  n + 2p.z^2]
+    # @SMatrix [n + 2p.x^2      2(p.x*p.y-p.z)  2(p.x*p.z+p.y);
+    #           2(p.y*p.x+p.z)  n + 2p.y^2      2(p.y*p.z-p.x);
+    #           2(p.z*p.x-p.y)  2(p.z*p.y+p.x)  n + 2p.z^2]
+    #
+    # p2 = SVector(p)
+    # n2 = p2'p2
+    (1-n)*I + 2(skew(p) + p*p')
 end
+
+function ∇²composition1(p2::MRP, p1::MRP, b::SVector{3})
+    p2,p1 = SVector(p2), SVector(p1)
+    n1 = p1'p1
+    n2 = p2'p2
+    D = 1 / (1+n1*n2 - 2p1'p2)  # scalar
+    dD = -D^2 * (n2*2p1 - 2p2)  # 3x1
+    A = -((1-n2)*p1 + (1-n1)*p2 - cross(2p1, p2) )  # 3x1
+    dA = -I*(1-n2) + 2p2*p1' - 2skew(p2)  # 3x3
+    B = 2(p1*n2 -  p2)'b  # scalar
+    dB = 2n2*b  # 3x1
+    d1 = -2p2*b' * D + ((1-n2)*b + -2p2*p1'b + 2skew(p2)*b )*dD'
+    d2 = dA * D^2 * B +
+         A * 2D * dD' * B +
+         A * D^2 * dB'
+    return d1 + d2
+end
+
+function ∇²differential(p2::MRP, b::SVector{3})
+    p2 = SVector(p2)
+    n2 = p2'p2
+    A = -p2  # 3x1
+    B = -2p2  # 3x1
+    D = 1
+    dD = 2p2
+
+    dA = -I*(1-n2) - 2skew(p2)  # 3x3
+    dB = 2n2*I  # 3x3
+
+    d1 = (-2p2'b*I*D) - (dA'b * dD')
+    d2 = dB * A'b * D^2 +
+        (-(1-n2)*b + (skew(2p2))*b)*B' * D^2 +
+        B*A'b * 2D * dD'
+    d1 + d2'
+end
+
+
 
 
 ############################################################################################
@@ -541,6 +597,8 @@ function (/)(g1::RodriguesParam, g2::RodriguesParam)
     RodriguesParam((g1-g2 + g2 × g1)/(1+g1'g2))
 end
 
+(⊕)(g::RodriguesParam, δg::SVector{3}) = g*RodriguesParam(δg)
+(⊖)(g::RodriguesParam, g0::RodriguesParam{3}) = SVector(g0\g)
 
 
 function rotmat(g::RodriguesParam)
@@ -748,7 +806,53 @@ function jacobian(::Type{ExponentialMap}, q::UnitQuaternion, eps=1e-5)
     else
         atanθ = atan(θ,s)
         dv = ((s*datan - atanθ/θ)v*v'/θ + atanθ*I )/θ
+        d0 = ((s*datan - atanθ/θ)v*v'/θ^2 + atanθ/θ*I )
+        d1 = (s*datan - atanθ/θ)
+        d2 = v*v'/θ2
+        d3 = atanθ/θ * I
         return 2*μ*[ds dv]
+    end
+end
+
+function ∇jacobian(::Type{ExponentialMap}, q::UnitQuaternion, b::SVector{3}, eps=1e-5)
+    μ = scaling(ExponentialMap)
+    s = scalar(q)
+    v = vector(q)
+    θ2 = v'v
+    θ = sqrt(θ2)
+    datan = 1/(θ2 + s^2)
+    ds = -datan*v
+
+    if θ < eps
+        # return 2*μ*[b'ds; (v*v'b + b)/s]
+        return 2*μ*[b'*(datan^2*2s*v) -b'datan*I;
+                    -(v*v'b +b)/s^2 (I*(v'b) + v*b')/s]
+    else
+        dsds = 2b's*datan^2*v
+        dsdv = b'*(-datan*I + 2datan^2*v*v')
+
+        atanθ = atan(θ,s)
+        d1 = (s*datan - atanθ/θ)
+        d2 = v*v'b/θ2
+        d3 = atanθ/θ*b
+        d1ds = (datan - 2s^2*datan^2 + datan)
+        dvds = d1ds*d2 - datan*b
+
+        d1dv =  (-2s*datan^2*v' - s*datan*v'/θ^2 + atanθ/θ^3*v')
+        d2dv = (I*(v'b) + v*b')/θ2 - 2(v*v'b)/θ^4 * v'
+        d3dv = b*(s*datan*v'/θ^2 - atanθ/θ^3*v')
+        dvdv = d2*d1dv + d1*d2dv + d3dv
+
+        # return 2*μ*[ds'b; dv'b]
+        ds = [dsds dsdv]
+        dv = [dvds dvdv]
+        return dv
+        # return 2*μ*@SMatrix[
+        #     dsds    dsdv[1] dsdv[2] dsdv[3];
+        #     dvds[1] dvdv[1] dvdv[4] dvdv[7];
+        #     dvds[2] dvdv[2] dvdv[5] dvdv[8];
+        #     dvds[3] dvdv[3] dvdv[6] dvdv[9];
+        # ]
     end
 end
 
@@ -757,6 +861,11 @@ function jacobian(::Type{VectorPart}, q::UnitQuaternion)
     return @SMatrix [0. μ 0 0;
                      0. 0 μ 0;
                      0. 0 0 μ]
+end
+
+function ∇jacobian(::Type{VectorPart}, q::UnitQuaternion, b::SVector{3})
+    μ = scaling(VectorPart)
+    @SMatrix zeros(4,4)
 end
 
 function jacobian(::Type{CayleyMap}, q::UnitQuaternion)
@@ -768,9 +877,10 @@ function jacobian(::Type{CayleyMap}, q::UnitQuaternion)
 end
 
 function ∇jacobian(::Type{CayleyMap}, q::UnitQuaternion, b::SVector{3})
+    μ = scaling(CayleyMap)
     si = 1/q.s
     v = vector(q)
-    @SMatrix [
+    μ*@SMatrix [
         2*si^3*(v'b) -si^2*b[1] -si^2*b[2] -si^2*b[3];
        -si^2*b[1] 0 0 0;
        -si^2*b[2] 0 0 0;
@@ -786,4 +896,25 @@ function jacobian(::Type{MRPMap}, q::UnitQuaternion)
                        -si^2*q.z 0 0 si]
 end
 
+"""
+Jacobian of G(q)'b, where G(q) = jacobian(MRPMap,q)
+"""
+function ∇jacobian(::Type{MRPMap}, q::UnitQuaternion, b::SVector{3})
+    μ = scaling(MRPMap)
+    si = 1/(1+q.s)
+    v = vector(q)
+    μ * @SMatrix [
+        2*si^3*(v'b) -si^2*b[1] -si^2*b[2] -si^2*b[3];
+       -si^2*b[1] 0 0 0;
+       -si^2*b[2] 0 0 0;
+       -si^2*b[3] 0 0 0;
+    ]
+end
+
 jacobian(::Type{IdentityMap}, q::UnitQuaternion) = I
+
+inverse_map_jacobian(q::R) where R<:Rotation = I
+inverse_map_jacobian(q::UnitQuaternion{T,D}) where {T,D} = jacobian(D,q)
+
+inverse_map_∇jacobian(q::R, b::SVector{3}) where R<:Rotation = I
+inverse_map_∇jacobian(q::UnitQuaternion{T,D}, b::SVector{3}) where {T,D} = ∇jacobian(D, q, b)

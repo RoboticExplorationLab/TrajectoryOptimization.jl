@@ -268,7 +268,7 @@ function stage_cost(cost::SatDiffCost, x::SVector, u::SVector)
 end
 
 function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
-        z::KnotPoint{T,N,M}, G) where {T,N,M,Rot}
+        z::KnotPoint{T,N,M}, G) where {T,N,M,Rot<:UnitQuaternion}
     x,u = state(z), control(z)
     Q = cost.Q2  # cost for quaternion
     ω = @SVector [x[1],x[2],x[3]]
@@ -278,19 +278,20 @@ function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
 
     dω = ω - cost.ω_ref
     dq = q0\q
-    err = CayleyMap(dq)
-    G = Lmult(dq)*Vmat()'
+    err = q ⊖ q0
+    G = ∇differential(dq) #Lmult(dq)*Vmat()'
 
     # Gradient
     Qω = cost.Q1*ω
-    dmap = jacobian(CayleyMap,dq)
+    dmap = inverse_map_jacobian(dq) #jacobian(CayleyMap,dq)
     Qq = G'dmap'Q*err
     Qx = [Qω; Qq]
     Qu = cost.R*u
 
     # Hessian
     Qωω = cost.Q1
-    Qqq = G'dmap'Q*dmap*G + G'∇jacobian(CayleyMap, dq, Q*err)*G
+    ∇jac = inverse_map_∇jacobian(dq, Q*err)
+    Qqq = G'dmap'Q*dmap*G + G'∇jac*G
     Qxx = @SMatrix [
         Qωω[1,1] 0 0 0 0 0;
         0 Qωω[2,2] 0 0 0 0;
@@ -301,6 +302,43 @@ function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
     ]
     Quu = cost.R
     Qux = @SMatrix zeros(M,N-1)
+    return Qxx, Quu, Qux, Qx, Qu
+end
+
+function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
+        z::KnotPoint{T,N,M}, G) where {T,N,M,Rot}
+    x,u = state(z), control(z)
+    Q = cost.Q2  # cost for quaternion
+    ω = @SVector [x[1],x[2],x[3]]
+    q = @SVector [x[1],x[2],x[3],x[4]]
+    q = Dynamics.orientation(cost.model, x)
+    q0 = Rot(UnitQuaternion(cost.q_ref))
+
+    dω = ω - cost.ω_ref
+    dq = q0\q
+    err = q ⊖ q0
+    G = ∇differential(dq) #Lmult(dq)*Vmat()'
+
+    # Gradient
+    Qω = cost.Q1*ω
+    Qq = G'Q*err
+    Qx = [Qω; Qq]
+    Qu = cost.R*u
+
+    # Hessian
+    Qωω = cost.Q1
+    ∇jac = I
+    Qqq = G'Q*G + G'∇jac*G
+    Qxx = @SMatrix [
+        Qωω[1,1] 0 0 0 0 0;
+        0 Qωω[2,2] 0 0 0 0;
+        0 0 Qωω[3,3] 0 0 0;
+        0 0 0 Qqq[1,1] Qqq[1,2] Qqq[1,3];
+        0 0 0 Qqq[2,1] Qqq[2,2] Qqq[2,3];
+        0 0 0 Qqq[3,1] Qqq[3,2] Qqq[3,3];
+    ]
+    Quu = cost.R
+    Qux = @SMatrix zeros(M,N)
     return Qxx, Quu, Qux, Qx, Qu
 end
 
