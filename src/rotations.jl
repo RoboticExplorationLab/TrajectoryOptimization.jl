@@ -425,6 +425,38 @@ end
 (*)(p::MRP, r::SVector) = UnitQuaternion(p)*r
 
 function (\)(p1::MRP, p2::MRP)
+    p1,p2 = SVector(p1), SVector(p2)
+    n1,n2 = p1'p1, p2'p2
+    θ = 1/((1+n1)*(1+n2))
+    s1,s2 = (1-n1), (1-n2)
+    v1 = -2p1
+    v2 =  2p2
+    s = s1*s2 - v1'v2
+    v = s1*v2 + s2*v1 + v1 × v2
+
+    M = θ/(1+θ*s)
+    return MRP(v*M)
+end
+
+function ∇err(p1::MRP, p2::MRP)
+    n1,n2 = norm2(p1),   norm2(p2)
+    θ = 1/((1+n1)*(1+n2))
+    s1,s2 = (1-n1), (1-n2)
+    p1,p2 = SVector(p1), SVector(p2)
+    v1 = -2p1
+    v2 =  2p2
+    s = s1*s2 - v1'v2
+    v = s1*v2 + s2*v1 + v1 × v2
+    dsdp = -2s1*p2 - 2v1
+    dvdp = 2s1*I + -2v1*p2' + 2skew(v1)
+    dθdp = -θ^2*(1+n1)*2p2
+
+    M = θ/(1+θ*s)
+    dMdp = 1/(1+θ*s)*dθdp - θ/(1+θ*s)^2*(dθdp*s + θ*dsdp)
+    return dvdp*M + v*dMdp'
+end
+
+function ∇²err(p1::MRP, p2::MRP, b::SVector{3})
     n1,n2 = norm2(p1),   norm2(p2)
     θ = 1/((1+n1)*(1+n2))
     s1,s2 = (1-n1), (1-n2)
@@ -434,8 +466,32 @@ function (\)(p1::MRP, p2::MRP)
     s = s1*s2 - v1'v2
     v = s1*v2 + s2*v1 + v1 × v2
 
-    M = θ/(1+θ*s)
-    MRP(v[1]*M, v[2]*M, v[3]*M)
+    dsdp = -2s1*p2 - 2v1  # 3x1
+    dsdp2 = -2s1*I  # 3x3
+
+    dvdp = 2s1*b + -2p2*v1'b - 2skew(v1)*b
+    dvdp2 = -I*2v1'b
+
+    dθdp = -θ^2*(1+n1)*2p2  # 3x1
+    dθdp2 = -2θ*(1+n1)*2p2*dθdp' - θ^2*(1+n1)*2I # 3x3
+
+    M = θ/(1+θ*s)  # scalar
+    dMdp = 1/(1+θ*s)*dθdp - θ/(1+θ*s)^2*(dθdp*s + θ*dsdp) # 3x1
+    dM2 = θ/(1+θ*s)^2  # scalar
+    dM3 = dθdp*s + θ*dsdp  # 3x1
+    dM2dp = dθdp'/(1+θ*s)^2 - 2θ/(1+θ*s)^3 * (dθdp*s + θ*dsdp)'
+    dM3dp = dθdp2*s + dθdp*dsdp' + dsdp*dθdp' + θ*dsdp2
+
+    dMdp2 = -1/(1+θ*s)^2*dθdp*(dθdp*s + dsdp*θ)' + 1/(1+θ*s)*dθdp2  # good
+    dMdp2 -= dM3*dM2dp + dM2*dM3dp
+
+    vb = s1*v2'b + s2*v1'b + b'skew(v1)*v2  # scalar
+    vpdp = s1*2b' - 2p2' * (v1'b)  + b'skew(v1)*2 # good
+    # vpdp = s1*2b' - 2p2 * (v1'b)
+
+    d1 = M*dvdp2 + dvdp*dMdp'
+    d2 = dMdp2*vb + dMdp*vpdp
+    return d1 + d2
 end
 
 function (/)(p1::MRP, p2::MRP)
@@ -450,8 +506,10 @@ function (/)(p1::MRP, p2::MRP)
 
     M = θ/(1+θ*s)
     MRP(v[1]*M, v[2]*M, v[3]*M)
+
 end
 
+Base.angle(p::MRP) = angle(UnitQuaternion(p))
 
 function kinematics(p::MRP, ω)
     p = SVector(p)
@@ -496,7 +554,7 @@ end
 
 function ∇differential(p::MRP)
     p = SVector(p)
-    n = 1-norm(p)
+    n = p'p
     # p = SVector(p)
     # (1-n)I + 2(skew(p) + p*p')
     # @SMatrix [n + 2p.x^2      2(p.x*p.y-p.z)  2(p.x*p.z+p.y);
@@ -505,7 +563,7 @@ function ∇differential(p::MRP)
     #
     # p2 = SVector(p)
     # n2 = p2'p2
-    (1-n)*I + 2(skew(p) + p*p')
+    return (1-n)*I + 2(skew(p) + p*p')
 end
 
 function ∇²composition1(p2::MRP, p1::MRP, b::SVector{3})
@@ -844,15 +902,12 @@ function ∇jacobian(::Type{ExponentialMap}, q::UnitQuaternion, b::SVector{3}, e
         dvdv = d2*d1dv + d1*d2dv + d3dv
 
         # return 2*μ*[ds'b; dv'b]
-        ds = [dsds dsdv]
-        dv = [dvds dvdv]
-        return dv
-        # return 2*μ*@SMatrix[
-        #     dsds    dsdv[1] dsdv[2] dsdv[3];
-        #     dvds[1] dvdv[1] dvdv[4] dvdv[7];
-        #     dvds[2] dvdv[2] dvdv[5] dvdv[8];
-        #     dvds[3] dvdv[3] dvdv[6] dvdv[9];
-        # ]
+        return 2*μ*@SMatrix [
+            dsds    dsdv[1] dsdv[2] dsdv[3];
+            dvds[1] dvdv[1] dvdv[4] dvdv[7];
+            dvds[2] dvdv[2] dvdv[5] dvdv[8];
+            dvds[3] dvdv[3] dvdv[6] dvdv[9];
+        ]
     end
 end
 

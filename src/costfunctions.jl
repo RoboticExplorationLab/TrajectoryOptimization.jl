@@ -327,8 +327,8 @@ function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
 
     # Hessian
     Qωω = cost.Q1
-    ∇jac = I
-    Qqq = G'Q*G + G'∇jac*G
+    ∇jac = ∇²differential(dq, Q*err)
+    Qqq = G'Q*G + ∇jac
     Qxx = @SMatrix [
         Qωω[1,1] 0 0 0 0 0;
         0 Qωω[2,2] 0 0 0 0;
