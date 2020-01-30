@@ -29,15 +29,17 @@ function Base.zeros(model::RigidBody{D}) where D
 end
 
 @inline rotation_type(::RigidBody{D}) where D = D
+@inline rotation_type(model::InfeasibleModel) where D = rotation_type(model.model)
 
-@inline Base.position(model::RigidBody, x, renorm=true) = SVector{3}(x[1],x[2],x[3])
-@inline orientation(model::RigidBody{R}, x::SVector{N,T}, renorm=false) where {R,N,T} =
+
+@inline Base.position(model::RigidBody, x) = SVector{3}(x[1],x[2],x[3])
+orientation(model::RigidBody{R}, x::SVector{N,T}, renorm=false) where {R,N,T} =
     R(T,x[4],x[5],x[6])
 @inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
 @inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
 function orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2},
-        renorm=true) where {T,D,N,T2}
+        renorm=false) where {T,D,N,T2}
     q = UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7])
     if renorm
         q = normalize(q)
@@ -52,9 +54,9 @@ function flipquat(model::RigidBody{<:UnitQuaternion}, x)
         x[8], x[9], x[10], x[11], x[12], x[13]]
 end
 
-function parse_state(model::RigidBody, x)
+function parse_state(model::RigidBody, x, renorm=false)
     r = position(model, x)
-    p = orientation(model, x)
+    p = orientation(model, x, renorm)
     v = linear_velocity(model, x)
     ω = angular_velocity(model, x)
     return r, p, v, ω
@@ -129,7 +131,7 @@ end
 @inline inertia(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 @inline inertia_inv(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 
-function state_diff(model::RigidBody{<:UnitQuaternion}, x::SVector{N}, x0::SVector{N}) where {N}
+function state_diff(model::RigidBody, x::SVector{N}, x0::SVector{N}) where {N}
     r,q,v,ω = parse_state(model, x)
     r0,q0,v0,ω0 = parse_state(model, x0)
     δr = r - r0
@@ -164,12 +166,29 @@ end
     end
 end
 
-function state_diff_jacobian(::RigidBody{<:Rotation}, x0::SVector)
-    return I # I1 = Diagonal(@SVector ones(N))
+function state_diff_jacobian(model::RigidBody{<:Rotation}, x0::SVector)
+    q0 = orientation(model, x0)
+    G = TrajectoryOptimization.∇differential(q0)
+    return @SMatrix [
+        1 0 0 0 0 0 0 0 0 0 0 0;
+        0 1 0 0 0 0 0 0 0 0 0 0;
+        0 0 1 0 0 0 0 0 0 0 0 0;
+        0 0 0 G[1] G[4] G[7] 0 0 0 0 0 0;
+        0 0 0 G[2] G[5] G[8] 0 0 0 0 0 0;
+        0 0 0 G[3] G[6] G[9] 0 0 0 0 0 0;
+        0 0 0 0 0 0 1 0 0 0 0 0;
+        0 0 0 0 0 0 0 1 0 0 0 0;
+        0 0 0 0 0 0 0 0 1 0 0 0;
+        0 0 0 0 0 0 0 0 0 1 0 0;
+        0 0 0 0 0 0 0 0 0 0 1 0;
+        0 0 0 0 0 0 0 0 0 0 0 1;
+    ]
+    # return I # I1 = Diagonal(@SVector ones(N))
 end
 
 state_diff_size(::RigidBody) = 12
-state_diff_size(::RigidBody{UnitQuaternion{T,IdentityMap}}) where T = 13
+state_diff_size(::RigidBody{UnitQuaternion{T,Union{IdentityMap}}}) where T = 13
+state_diff_size(::RigidBody{UnitQuaternion{T,Union{ReNorm}}}) where T = 13
 
 function TrajectoryOptimization.∇²differential(model::RigidBody, x::SVector, dx::SVector)
       q = orientation(model, x)
@@ -189,4 +208,65 @@ function TrajectoryOptimization.∇²differential(model::RigidBody, x::SVector, 
             0 0 0 0 0 0 0 0 0 0 0 0;
             0 0 0 0 0 0 0 0 0 0 0 0;
       ]
+end
+
+function TrajectoryOptimization.inverse_map_jacobian(model::RigidBody{<:UnitQuaternion},
+        x::SVector)
+    q = orientation(model, x)
+    G = TrajectoryOptimization.inverse_map_jacobian(q)
+    return @SMatrix [
+            1 0 0 0 0 0 0 0 0 0 0 0 0;
+            0 1 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 1 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 G[1] G[4] G[7] G[10] 0 0 0 0 0 0;
+            0 0 0 G[2] G[5] G[8] G[11] 0 0 0 0 0 0;
+            0 0 0 G[3] G[6] G[9] G[12] 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 1 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 1 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 1 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 1 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 1 0;
+            0 0 0 0 0 0 0 0 0 0 0 0 1;
+    ]
+end
+
+function TrajectoryOptimization.inverse_map_jacobian(model::RigidBody, x::SVector)
+    return I
+end
+
+function TrajectoryOptimization.inverse_map_∇jacobian(model::RigidBody{<:UnitQuaternion},
+        x::SVector, b::SVector)
+    q = orientation(model, x)
+    bq = @SVector [b[4], b[5], b[6]]
+    ∇G = TrajectoryOptimization.inverse_map_∇jacobian(q, bq)
+    return @SMatrix [
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 ∇G[1] ∇G[5] ∇G[ 9] ∇G[13] 0 0 0 0 0 0;
+        0 0 0 ∇G[2] ∇G[6] ∇G[10] ∇G[14] 0 0 0 0 0 0;
+        0 0 0 ∇G[3] ∇G[7] ∇G[11] ∇G[15] 0 0 0 0 0 0;
+        0 0 0 ∇G[4] ∇G[8] ∇G[12] ∇G[16] 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+        0 0 0 0 0 0 0 0 0 0 0 0 0;
+    ]
+
+end
+
+function TrajectoryOptimization.inverse_map_∇jacobian(model::RigidBody,
+        x::SVector, b::SVector)
+    return I*0
+end
+
+function TrajectoryOptimization.discrete_dynamics(::Type{RK3},
+        model::RigidBody{UnitQuaternion{T,ReNorm}},
+        z::KnotPoint) where T
+    x = discrete_dynamics(RK3, model, state(z), control(z), z.t, z.dt)
+    r,q,v,ω = parse_state(model, x)
+    q = normalize(q)
+    build_state(model, r,q,v,ω)
 end

@@ -36,5 +36,6 @@ include("../dynamics/double_integrator.jl")
 include("../dynamics/car.jl")
 include("../dynamics/rigidbody.jl")
 include("../dynamics/satellite.jl")
+include("../dynamics/yak_plane.jl")
 
 end
