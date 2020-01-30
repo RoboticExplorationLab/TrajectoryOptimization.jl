@@ -11,7 +11,8 @@ export
     VectorPart,
     MRPMap,
     CayleyMap,
-    IdentityMap
+    IdentityMap,
+    ReNorm
 
 export
     differential_rotation,
@@ -46,6 +47,7 @@ abstract type ExponentialMap <: DifferentialRotation end
 abstract type MRPMap <: DifferentialRotation end
 abstract type CayleyMap <: DifferentialRotation end
 abstract type IdentityMap <: DifferentialRotation end
+abstract type ReNorm <: DifferentialRotation end
 
 # Scalings
 @inline scaling(::Type{ExponentialMap}) = 0.5
@@ -217,6 +219,10 @@ function Base.:*(q::UnitQuaternion{Tq}, r::SVector{3}) where Tq
    return similar_type(r, T)(-qo[1] * q.x + qo[2] * q.s - qo[3] * q.z + qo[4] * q.y,
                              -qo[1] * q.y + qo[2] * q.z + qo[3] * q.s - qo[4] * q.x,
                              -qo[1] * q.z - qo[2] * q.y + qo[3] * q.x + qo[4] * q.s)
+end
+
+function (*)(q::Q, s::Real) where Q<:UnitQuaternion
+    return Q(q.s*s, q.x*s, q.y*s, q.z*s)
 end
 
 (\)(q1::UnitQuaternion, q2::UnitQuaternion) = inv(q1)*q2
@@ -1020,5 +1026,5 @@ jacobian(::Type{IdentityMap}, q::UnitQuaternion) = I
 inverse_map_jacobian(q::R) where R<:Rotation = I
 inverse_map_jacobian(q::UnitQuaternion{T,D}) where {T,D} = jacobian(D,q)
 
-inverse_map_∇jacobian(q::R, b::SVector{3}) where R<:Rotation = I
+inverse_map_∇jacobian(q::R, b::SVector{3}) where R<:Rotation = I*0
 inverse_map_∇jacobian(q::UnitQuaternion{T,D}, b::SVector{3}) where {T,D} = ∇jacobian(D, q, b)

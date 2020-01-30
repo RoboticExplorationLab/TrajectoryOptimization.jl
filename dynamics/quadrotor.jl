@@ -182,6 +182,7 @@ end
 Base.size(::Quadrotor2{<:UnitQuaternion}) = 13,4
 Base.size(::Quadrotor2) = 12,4
 
+
 function forces(model::Quadrotor2, x, u)
       q = orientation(model, x)
       kf = model.kf
@@ -239,6 +240,55 @@ function state_diff_jacobian(::Quadrotor2{R,false}, x0::SVector) where R
 end
 
 function TrajectoryOptimization.∇²differential(model::Quadrotor2{R,false}, x::SVector,
+            dx::SVector) where R
+      return I*0
+end
+
+
+# Quaternion slack
+Base.size(::Quadrotor2{<:UnitQuaternion,:slack}) = 13,5
+
+function dynamics(model::Quadrotor2{<:UnitQuaternion,:slack}, x, u) where D
+
+    r,q,v,ω = parse_state(model, x, false)
+    q = q*u[5]
+
+    F = forces(model, x, u)
+    τ = moments(model, x, u)
+    M = mass_matrix(model, x, u)
+    J = inertia(model, x, u)
+    Jinv = inertia_inv(model, x, u)
+
+    xdot = v
+    qdot = kinematics(q,ω)
+    vdot = M\F
+    ωdot = Jinv*(τ - ω × (J*ω))
+
+    build_state(model, xdot, qdot, vdot, ωdot)
+end
+
+function forces(model::Quadrotor2{<:UnitQuaternion,:slack}, x, u)
+      q = orientation(model, x, false)
+      q = q*u[5]
+      kf = model.kf
+      g = model.gravity
+      m = model.mass
+
+      w1 = u[1]
+      w2 = u[2]
+      w3 = u[3]
+      w4 = u[4]
+
+      F1 = max(0,kf*w1);
+      F2 = max(0,kf*w2);
+      F3 = max(0,kf*w3);
+      F4 = max(0,kf*w4);
+      F = @SVector [0., 0., F1+F2+F3+F4] #total rotor force in body frame
+
+      m*g + q*F # forces in world frame
+end
+
+function TrajectoryOptimization.∇²differential(model::Quadrotor2{R,:slack}, x::SVector,
             dx::SVector) where R
       return I*0
 end

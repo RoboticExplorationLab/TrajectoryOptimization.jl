@@ -5,7 +5,9 @@ export
 	SphereConstraint,
 	NormConstraint,
 	LinearConstraint,
-	VariableBoundConstraint
+	VariableBoundConstraint,
+	QuatNormConstraint,
+	QuatSlackConstraint
 
 
 
@@ -211,6 +213,42 @@ control_dim(con::NormConstraint{S,Control}) where S = con.dim
 
 function evaluate(con::NormConstraint, x::SVector)
 	return @SVector [norm(x)^2 - con.val]
+end
+
+struct QuatNormConstraint <: AbstractConstraint{Equality,State,1}
+	n::Int
+	qinds::SVector{4,Int}
+end
+
+QuatNormConstraint(n::Int=13, qinds=(@SVector [4,5,6,7])) = QuatNormConstraint(n, qinds)
+
+state_dim(con::QuatNormConstraint) = con.n
+
+function evaluate(con::QuatNormConstraint, x::SVector)
+	q = x[con.qinds]
+	return @SVector [norm(q) - 1.0]
+end
+
+struct QuatSlackConstraint <: AbstractConstraint{Equality,Stage,1}
+	qinds::SVector{4,Int}
+end
+QuatSlackConstraint(qinds=(@SVector [4,5,6,7])) = QuatSlackConstraint(qinds)
+
+state_dim(::QuatSlackConstraint) = 13
+control_dim(::QuatSlackConstraint) = 5  # special cased for quadrotor
+
+function evaluate(con::QuatSlackConstraint, x::SVector, u::SVector)
+	s = u[end]
+	q = x[con.qinds]
+	return @SVector [norm(q)*s - 1.0]
+end
+
+function jacobian(con::QuatSlackConstraint, x::SVector, u::SVector)
+	s = u[end]
+	q = x[con.qinds]
+	nq = norm(q)
+	M = s/nq
+	return @SMatrix [0 0 0 q[1]*M  q[2]*M  q[3]*M  q[4]*M  0 0 0  0 0 0  0 0 0 0 nq]
 end
 
 

@@ -1,6 +1,7 @@
 # Quadrotor in Maze
 
-function QuadrotorMaze(::Type{Rot}; use_rot=true, costfun=:Quadratic) where Rot<:Rotation
+function QuadrotorMaze(::Type{Rot}; use_rot=true, costfun=:Quadratic,
+        normcon=false) where Rot<:Rotation
 
 # model
 model = Dynamics.Quadrotor2{Rot}(use_rot=use_rot)
@@ -10,41 +11,53 @@ N = 101 # number of knot points
 tf = 5.0
 dt = tf/(N-1) # total time
 
-x0 = Dynamics.build_state(model, [0,0,10], I(UnitQuaternion), zeros(3), zeros(3))
-xf = Dynamics.build_state(model, [0,60,10], I(UnitQuaternion), zeros(3), zeros(3))
+x0 = Dynamics.build_state(model, [0,-15,1], I(UnitQuaternion), zeros(3), zeros(3))
+xf = Dynamics.build_state(model, [0, 15,1], I(UnitQuaternion), zeros(3), zeros(3))
 
 # cost
+if n == 13
+    rm_quat = @SVector [1,2,3,4,5,6,8,9,10,11,12,13]
+else
+    rm_quat = @SVector [1,2,3,4,5,6,7,8,9,10,11,12]
+end
 costfun == :QuatLQR ? sq = 0 : sq = 1
 Q_diag = Dynamics.fill_state(model, 1e-3, 1e-2*sq, 1e-3, 1e-3)
 R_diag = @SVector fill(1e-4,m)
 Q = Diagonal(Q_diag)
 R = Diagonal(R_diag)
-Qf = Diagonal(@SVector fill(1e3,n))
+Qf = Diagonal(@SVector fill(1e2,n))
 
 if costfun == :Quadratic
-    obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
-else
-    cost = QuatLQRCost(Q, R, xf, w=1e-3)
+    cost = LQRCost(Q, R, xf)
     obj = Objective(cost, N)
+    # obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
+elseif costfun == :QuatLQR
+    cost = QuatLQRCost(Q, R, xf, w=1e-3)
+    cost_term = QuatLQRCost(Qf, R, xf, w=1e-3)
+    obj = Objective(cost, cost_term, N)
+elseif costfun == :ErrorQuad
+    cost = ErrorQuadratic(model, Diagonal(Q_diag[rm_quat]), R, xf)
+    cost_term = ErrorQuadratic(model, Diagonal(diag(Qf)[rm_quat]), R, xf)
+    obj = Objective(cost, cost_term, N)
 end
 
 # constraints
-r_quad_maze = 2.0
-r_cylinder_maze = 2.0
+r_quad_maze = 1.0
+r_cylinder_maze = 1.2
 maze_cylinders = []
 zh = 3
 l1 = 5
 l2 = 4
-l3 = 4
+l3 = 7
 l4 = 10
 
-d = 10
-w = 25
-mid=5
+d = 3.5  # 0.5 door width
+w = 10  # y location of wall
+mid = 3  # 0.5 middle width
 
-x_enter=10
-x_mid=30
-x_exit=50
+x_enter=-10
+x_mid=0
+x_exit=10
 
 for i = range(-w,stop=-d,length=l1) # enter wall
     push!(maze_cylinders,(i, x_enter,r_cylinder_maze))
@@ -77,11 +90,12 @@ end
 
 n_maze_cylinders = length(maze_cylinders)
 maze_xyr = collect(zip(maze_cylinders...))
-cx = SVector{44}(maze_xyr[1])
-cy = SVector{44}(maze_xyr[2])
-cr = SVector{44}(maze_xyr[3])
 
-obs = CircleConstraint(n, cx, cy, cr)
+cx = SVector{n_maze_cylinders}(maze_xyr[1])
+cy = SVector{n_maze_cylinders}(maze_xyr[2])
+cr = SVector{n_maze_cylinders}(maze_xyr[3])
+
+obs = CircleConstraint(n, cx, cy, cr .+ r_quad_maze)
 
 u_min = 0.
 u_max = 50.
@@ -104,13 +118,23 @@ bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
 bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
 goal = GoalConstraint(xf, noquat)
 
-
-U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
+u0 = @SVector fill(0.5*9.81/4.0, m)
+U_hover = [copy(u0) for k = 1:N-1] # initial hovering control trajectory
 
 conSet = ConstraintSet(n,m,N)
 add_constraint!(conSet, obs, 1:N-1)
 add_constraint!(conSet, bnd2, 2:N-1)
 add_constraint!(conSet, goal, N:N)
+
+# Quaternion norm constraint
+if normcon
+    if use_rot == :slack
+        add_constraint!(conSet, QuatSlackConstraint(), 1:N-1)
+    else
+        add_constraint!(conSet, QuatNormConstraint(), 1:N-1)
+        u0 = [u0; (@SVector [1.])]
+    end
+end
 
 quadrotor_maze = Problem(model, obj, xf, tf, x0=x0, constraints=conSet)
 initial_controls!(quadrotor_maze,U_hover); # initialize problem with controls
@@ -118,9 +142,12 @@ initial_controls!(quadrotor_maze,U_hover); # initialize problem with controls
 X_guess = zeros(n,7)
 X_guess[:,1] = x0
 X_guess[:,7] = xf
-X_guess[1:3,2:6] .= [0   -12.5 -15 -12.5  0 ;
-                     15   20    30  40   45 ;
-                     10   10    10  10   10]
+wpts = [2 -7 1;
+        5 -5 1;
+        7  0 1;
+        5  5 1;
+        2  7 1;]
+X_guess[1:3,2:6] .= wpts'
 
 if n == 13
     X_guess[4:7,:] .= q0
