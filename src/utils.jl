@@ -35,10 +35,10 @@ function set_logger()
 end
 
 function benchmark_solve!(solver; samples=10, evals=10)
-    U0 = deepcopy(controls(solver))
+    Z0 = deepcopy(get_trajectory(solver))
     solver.opts.verbose = false
     b = @benchmark begin
-        initial_controls!($solver,$U0)
+        initial_trajectory!($solver,$Z0)
         solve!($solver)
     end samples=samples evals=evals
     return b
@@ -49,7 +49,7 @@ function benchmark_solve!(solver, data::Dict; samples=10, evals=10)
 
    # Run stats
    push!(data[:time], time(median(b))*1e-6)  # ms
-   push!(data[:iterations], solver.stats.iterations)
-   push!(data[:cost], solver.stats.cost[end])
+   push!(data[:iterations], iterations(solver))
+   push!(data[:cost], cost(solver)) 
    return b
 end
