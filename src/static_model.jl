@@ -5,7 +5,8 @@ export
     dynamics,
     discrete_dynamics,
     jacobian,
-    discrete_jacobian
+    discrete_jacobian,
+	orientation
 
 export
     QuadratureRule,
@@ -281,14 +282,34 @@ end
     end
 end
 
+function state_diff(model::InfeasibleModel, x::SVector, x0::SVector)
+	state_diff(model.model, x, x0)
+end
 
+function state_diff_jacobian(model::InfeasibleModel, x::SVector)
+	state_diff_jacobian(model.model, x)
+end
+
+function TrajectoryOptimization.state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
+	state_diff_jacobian!(G, model.model, Z)
+end
+
+function ∇²differential(model::InfeasibleModel, x::SVector, dx::SVector)
+	return ∇²differential(model.model, x, dx)
+end
+
+state_diff_size(model::InfeasibleModel) = state_diff_size(model.model)
+
+Base.position(model::InfeasibleModel, x::SVector) = position(model.model, x)
+
+orientation(model::InfeasibleModel, x::SVector) = orientation(model.model, x)
 
 "Calculate a dynamically feasible initial trajectory for an infeasible problem, given a
 desired trajectory"
 function infeasible_trajectory(model::InfeasibleModel{n,m}, Z0::Vector{<:KnotPoint{T,n,m}}) where {T,n,m}
     x,u = zeros(model)
     ui = @SVector zeros(n)
-    Z = [KnotPoint(state(z), [control(z); ui], z.dt) for z in Z0]
+    Z = [KnotPoint(state(z), [control(z); ui], z.dt, z.t) for z in Z0]
     N = length(Z0)
     for k = 1:N-1
         propagate_dynamics(RK3, model, Z[k+1], Z[k])

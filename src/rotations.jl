@@ -265,7 +265,7 @@ function kinematics(q::UnitQuaternion{T,D}, ω::SVector{3}) where {T,D}
 end
 
 function Base.angle(q::UnitQuaternion)
-    2*atan(vecnorm(q), q.s)
+    min(2*atan(vecnorm(q), q.s), 2*atan(vecnorm(q), -q.s))
 end
 
 function (⊕)(q::UnitQuaternion{T,ExponentialMap}, δq::SVector{3}) where T
@@ -358,8 +358,8 @@ function ∇composition2(q2::UnitQuaternion, q1::UnitQuaternion)
     Rmult(q1)
 end
 
-function ∇²differential(p2::UnitQuaternion, b::SVector{4})
-    b1 = -SVector(p2)'b
+function ∇²differential(q::UnitQuaternion, b::SVector{4})
+    b1 = -SVector(q)'b
     Diagonal(@SVector fill(b1,3))
 end
 
@@ -615,14 +615,17 @@ struct RodriguesParam{T} <: Rotation
 end
 
 RodriguesParam(g::SVector{3,T}) where T = RodriguesParam{T}(g[1], g[2], g[3])
+(::Type{<:RodriguesParam})(::Type{T},x,y,z) where T = RodriguesParam{T}(T(x),T(y),T(z))
 SVector(g::RodriguesParam{T}) where T = SVector{3,T}(g.x, g.y, g.z)
 
-RodriguesParam(q::UnitQuaternion{T}) where T = RodriguesParam(q.x/q.s, q.y/q.s, q.z/q.s)
+(::Type{<:RodriguesParam})(q::UnitQuaternion{T}) where T = RodriguesParam(q.x/q.s, q.y/q.s, q.z/q.s)
+
 function UnitQuaternion(g::RodriguesParam{T}) where T
     M = 1/sqrt(1+norm2(g))
     UnitQuaternion{T,CayleyMap}(M, M*g.x, M*g.y, M*g.z)
 end
 
+Base.rand(::Type{<:RodriguesParam}) = RodriguesParam(rand(UnitQuaternion))
 
 LinearAlgebra.norm(g::RodriguesParam) = sqrt(g.x^2 + g.y^2 + q.z^2)
 LinearAlgebra.norm2(g::RodriguesParam) = g.x^2 + g.y^2 + g.z^2
@@ -655,8 +658,15 @@ function (/)(g1::RodriguesParam, g2::RodriguesParam)
     RodriguesParam((g1-g2 + g2 × g1)/(1+g1'g2))
 end
 
+function kinematics(g::RodriguesParam, ω::SVector{3})
+    g = SVector(g)
+    0.5*(I + skew(g) + g*g')*ω
+end
+
 (⊕)(g::RodriguesParam, δg::SVector{3}) = g*RodriguesParam(δg)
-(⊖)(g::RodriguesParam, g0::RodriguesParam{3}) = SVector(g0\g)
+(⊖)(g::RodriguesParam, g0::RodriguesParam) = SVector(g0\g)
+
+Base.angle(g::RodriguesParam) = angle(UnitQuaternion(g))
 
 
 function rotmat(g::RodriguesParam)
@@ -683,6 +693,17 @@ function ∇composition1(g2::RodriguesParam, g1::RodriguesParam)
     (I + skew(g2) + D*N*g2')*D
 end
 
+function ∇²composition1(g2::RodriguesParam, g1::RodriguesParam, b::SVector{3})
+    g2 = SVector(g2)
+    g1 = SVector(g1)
+
+    N = g2 + g1 + g2 × g1  # 3x1
+    D = 1/(1 - g2'g1)  # scalar
+    dN = I + skew(g2)
+    dD = D^2*g2'
+    return g2*b'*(N*(2*D*dD) + D^2*dN) + (I - skew(g2))*b*dD
+end
+
 function ∇composition2(g2::RodriguesParam, g1::RodriguesParam)
     g2 = SVector(g2)
     g1 = SVector(g1)
@@ -695,6 +716,11 @@ end
 function ∇differential(g::RodriguesParam)
     g = SVector(g)
     (I + skew(g) + g*g')
+end
+
+function ∇²differential(g::RodriguesParam, b::SVector{3})
+    g = SVector(g)
+    return g*b'*(2g*g' + I + skew(g)) + (I - skew(g))*b*g'
 end
 
 
@@ -716,6 +742,7 @@ RPY(e::SVector{3,T}) where T = RPY{T}(e[1], e[2], e[3])
 RPY(R::SMatrix{3,3,T}) where T =  RPY(rotmat_to_rpy(R))
 RPY(q::UnitQuaternion) = RPY(rotmat(q))
 RPY(p::MRP) = RPY(rotmat(p))
+(::Type{<:RPY})(::Type{T},x,y,z) where T = RPY{T}(T(x),T(y),T(z))
 function RPY(ϕ::T1,θ::T2,ψ::T3) where {T1,T2,T3}
     T = promote_type(T1,T2)
     T = promote_type(T,T3)
@@ -733,6 +760,8 @@ roll(e::RPY) = e.ϕ
 pitch(e::RPY) = e.θ
 yaw(e::RPY) = e.ψ
 
+Base.angle(e::RPY) = angle(UnitQuaternion(e))
+
 (≈)(e1::RPY, e2::RPY) = rotmat(e1) ≈ rotmat(e2)
 
 @inline rotmat(e::RPY) = rotmat(e.ϕ, e.θ, e.ψ)
@@ -742,19 +771,27 @@ function rotmat(ϕ, θ, ψ)
     sϕ,cϕ = sincos(ϕ)
     sθ,cθ = sincos(θ)
     sψ,cψ = sincos(ψ)
+    # A = @SMatrix [
+    #     cθ*cψ          -cθ*sψ              sθ;
+    #     sϕ*sθ*cψ+cϕ*sψ -sϕ*sθ*sψ + cϕ*cψ  -cθ*sϕ;
+    #    -cϕ*sθ*cψ+sϕ*sψ  cϕ*sθ*sψ + sϕ*cψ   cθ*cϕ
+    # ]
     A = @SMatrix [
-        cθ*cψ          -cθ*sψ              sθ;
-        sϕ*sθ*cψ+cϕ*sψ -sϕ*sθ*sψ + cϕ*cψ  -cθ*sϕ;
-       -cϕ*sθ*cψ+sϕ*sψ  cϕ*sθ*sψ + sϕ*cψ   cθ*cϕ
+        cψ*cθ - sϕ*sψ*sθ   -cϕ*sψ  cψ*sθ + cθ*sϕ*sψ;
+        cθ*sψ + cψ*sϕ*sθ    cϕ*cψ  sψ*sθ - cψ*cθ*sϕ;
+        -cϕ*sθ              sϕ          cϕ*cθ;
     ]
 end
 
 (*)(e::RPY, r::SVector{3}) = rotmat(e)*r
 
 function rotmat_to_rpy(R::SMatrix{3,3,T}) where T
-    ψ = atan(-R[1,2], R[1,1])
-    ϕ = atan(-R[2,3], R[3,3])
-    θ = asin(R[1,3])
+    # ψ = atan(-R[1,2], R[1,1])
+    # ϕ = atan(-R[2,3], R[3,3])
+    # θ = asin(R[1,3])
+    θ = atan(-R[3,1], R[3,3])
+    ψ = atan(-R[1,2], R[2,2])
+    ϕ = asin(R[3,2])
     return SVector{3,T}(ϕ, θ, ψ)
 end
 
@@ -773,6 +810,17 @@ end
 
 function (/)(e1::RPY, e2::RPY)
     from_rotmat(rotmat(e1)*rotmat(e2)')
+end
+
+function kinematics(e::RPY, ω::SVector{3})
+    sθ,cθ = sincos(e.θ)
+    sϕ,cϕ = sincos(e.ϕ)
+    A = @SMatrix [
+        cθ 0 -cϕ*sθ;
+        0  1  sϕ;
+        sθ 0  cϕ*cθ
+    ]
+    A\ω
 end
 
 function ∇rotate(e::RPY, r::SVector{3})
@@ -820,6 +868,7 @@ function rotmat_to_quat(A::SMatrix{3,3,T}) where T
 end
 
 UnitQuaternion(e::RPY) = rotmat_to_quat(rotmat(e))
+(::Type{<:RPY})(q::UnitQuaternion) = from_rotmat(rotmat(q))
 
 # Differential Rotations
 function differential_rotation(δq::UnitQuaternion{T,VectorPart}) where T

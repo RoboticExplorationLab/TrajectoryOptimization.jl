@@ -159,11 +159,11 @@ function cost!(J, con::ConstraintVals, Z)
 end
 
 # Assumes constraints, active set, and constraint jacobian have all been calculated
-@generated function cost_expansion(E, con::ConstraintVals{T,W},
+@generated function cost_expansion(E, G, con::ConstraintVals{T,W},
 		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
 	if W <: State
 		expansion = quote
-			cx = con.∇c[i]
+			cx = con.∇c[i]*G[k]
 			E.xx[k] += cx'Iμ*cx
 			E.x[k] += cx'g
 		end
@@ -175,7 +175,7 @@ end
 		end
 	else
 		expansion = quote
-			cx = con.∇c[i][:,ix]
+			cx = con.∇c[i][:,ix]*G[k]
 			cu = con.∇c[i][:,iu]
 
 			E.xx[k] += cx'Iμ*cx

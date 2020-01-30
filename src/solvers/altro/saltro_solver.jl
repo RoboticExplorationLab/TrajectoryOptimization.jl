@@ -160,3 +160,5 @@ function infeasible_objective(obj::Objective, regularizer)
     end
     Objective(costs, copy(obj.J))
 end
+
+get_model(solver::ALTROSolver) = get_model(solver.solver_al)
