@@ -1,25 +1,20 @@
 # Quadrotor in Maze
-T = Float64
+
+function QuadrotorMaze(::Type{Rot}; use_rot) where Rot<:Rotation
 
 # model
-model = Dynamics.quadrotor
-model_d = rk3(model)
-n = model.n; m = model.m
-q0 = [1.;0.;0.;0.] # unit quaternion
+model = Dynamics.Quadrotor2{Rot}(use_rot=use_rot)
+n,m = size(model)
 
-x0 = zeros(T,n)
-x0[1:3] = [0.; 0.; 10.]
-x0[4:7] = q0
-
-xf = zero(x0)
-xf[1:3] = [0.;60.; 10.]
-xf[4:7] = q0;
+x0 = Dynamics.build_state(model, [0,0,10], I(UnitQuaternion), zeros(3), zeros(3))
+xf = Dynamics.build_state(model, [0,60,10], I(UnitQuaternion), zeros(3), zeros(3))
 
 # cost
-Q = (1.0e-3)*Diagonal(I,n)
-Q[4:7,4:7] = (1.0e-2)*Diagonal(I,4)
-R = (1.0e-4)*Diagonal(I,m)
-Qf = 1000.0*Diagonal(I,n)
+Q_diag = Dynamics.fill_state(model, 1e-3, 1e-2, 1e-3, 1e-3)
+R_diag = @SVector fill(1e-4,m)
+Q = Diagonal(Q_diag)
+R = Diagonal(R_diag)
+Qf = Diagonal(@SVector fill(1e3,n))
 
 # constraints
 r_quad_maze = 2.0
@@ -60,32 +55,33 @@ for i = range(10+2*r_cylinder_maze,stop=50-2*r_cylinder_maze,length=l4)
 end
 
 n_maze_cylinders = length(maze_cylinders)
+maze_xyr = collect(zip(maze_cylinders...))
+cx = SVector{44}(maze_xyr[1])
+cy = SVector{44}(maze_xyr[2])
+cr = SVector{44}(maze_xyr[3])
 
-function cI_maze(c,x,u)
-    for i = 1:n_maze_cylinders
-        c[i] = circle_constraint(x,maze_cylinders[i][1],maze_cylinders[i][2],maze_cylinders[i][3]+r_quad_maze)
-    end
-end
-
-maze = Constraint{Inequality}(cI_maze,n,m,n_maze_cylinders,:maze)
+obs = CircleConstraint(n, cx, cy, cr)
 
 u_min = 0.
 u_max = 50.
-x_max = Inf*ones(model.n)
-x_min = -Inf*ones(model.n)
+x_max = Inf*ones(n)
+x_min = -Inf*ones(n)
+
 
 x_max[1:3] = [25.0; Inf; 20]
 x_min[1:3] = [-25.0; -Inf; 0.]
+
+if n == 13
+    noquat = @SVector [1,2,3,8,9,10,11,12,13]
+    x_max[8:10] .= 30.
+else
+    noquat = @SVector [1,2,3,7,8,9,10,11,12]
+    x_max[7:9] .= 30.
+end
+
 bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
 bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
-
-xf_no_quat_U = copy(xf)
-xf_no_quat_L = copy(xf)
-xf_no_quat_U[4:7] .= Inf
-xf_no_quat_L[4:7] .= -Inf
-xf_no_quat_U[8:10] .= 0.
-xf_no_quat_L[8:10] .= 0.
-bnd_xf = BoundConstraint(n,m,x_min=xf_no_quat_L,x_max=xf_no_quat_U)
+goal = GoalConstraint(xf, noquat)
 
 N = 101 # number of knot points
 tf = 5.0
@@ -94,23 +90,28 @@ dt = tf/(N-1) # total time
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
 obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
 
-constraints = Constraints(N) # constraint trajectory
-constraints[1] += bnd1
-for k = 2:N-1
-    constraints[k] += bnd2 + maze
-end
-constraints[N] += bnd_xf
+conSet = ConstraintSet(n,m,N)
+add_constraint!(conSet, obs, 1:N-1)
+add_constraint!(conSet, bnd2, 2:N-1)
+add_constraint!(conSet, goal, N:N)
 
-quadrotor_maze = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt)
+quadrotor_maze = Problem(model, obj, xf, tf, x0=x0, constraints=conSet)
 initial_controls!(quadrotor_maze,U_hover); # initialize problem with controls
 
 X_guess = zeros(n,7)
 X_guess[:,1] = x0
 X_guess[:,7] = xf
-X_guess[1:3,2:6] .= [0 -12.5 -20 -12.5 0 ;15 20 30 40 45 ;10 10 10 10 10]
+X_guess[1:3,2:6] .= [0   -12.5 -15 -12.5  0 ;
+                     15   20    30  40   45 ;
+                     10   10    10  10   10]
 
-X_guess[4:7,:] .= q0
+if n == 13
+    X_guess[4:7,:] .= q0
+end
 X0 = interp_rows(N,tf,X_guess);
-copyto!(quadrotor_maze.X,X0)
+initial_states!(quadrotor_maze, X0)
 
-quadrotor_maze_objects = maze_cylinders
+quadrotor_maze_objects = (cx,cy,cr)
+
+return quadrotor_maze
+end

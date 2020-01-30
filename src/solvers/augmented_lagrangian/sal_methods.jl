@@ -1,29 +1,20 @@
 
 function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
-	set_verbosity!(solver.opts)
-	clear_cache!(solver.opts)
+	initialize!(solver)
     c_max::T = Inf
 
-	# Extract stuff from solver
-	Z = get_trajectory(solver)
-	obj = get_objective(solver.solver_uncon)::ALObjective{T}
-    conSet = obj.constraints
-    solver_uncon = solver.solver_uncon::S
-
-	# Reset solver
-    reset!(conSet)
-    solver.stats.iterations = 0
-	solver.stats.iterations_total = 0
+	conSet = get_constraints(solver)
+	solver_uncon = solver.solver_uncon::S
 
 	# Calculate cost
-    cost!(obj, Z)
-    J_ = get_J(obj)
+    J_ = get_J(get_objective(solver))
     J = sum(J_)
 
     for i = 1:solver.opts.iterations
-        set_tolerances!(solver,solver_uncon,i)
+		set_tolerances!(solver, solver_uncon, i)
 
         step!(solver)
+		return solver
         J = sum(J_)
         c_max = maximum(conSet.c_max)
 
@@ -40,10 +31,24 @@ function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
     return solver
 end
 
+function initialize!(solver::AugmentedLagrangianSolver)
+	set_verbosity!(solver.opts)
+	clear_cache!(solver.opts)
+
+	# Reset solver
+    reset!(get_constraints(solver))
+    solver.stats.iterations = 0
+	solver.stats.iterations_total = 0
+
+	# Calculate cost
+    cost!(get_objective(solver), get_trajectory(solver))
+end
+
 function step!(solver::AugmentedLagrangianSolver)
 
     # Solve the unconstrained problem
     solve!(solver.solver_uncon)
+	return
 
     # Outer loop update
     dual_update!(solver)

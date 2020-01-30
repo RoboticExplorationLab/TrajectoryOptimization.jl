@@ -161,23 +161,24 @@ struct QuadraticQuatCost{T,N,M,N4} <: CostFunction
     q::SVector{N,T}
     r::SVector{M,T}
     c::T
+    w::T
     q_ref::SVector{4,T}
     q_ind::SVector{4,Int}
     Iq::SMatrix{N,4,T,N4}
     function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
-            q::SVector{N,T}, r::SVector{M,T}, c::T,
+            q::SVector{N,T}, r::SVector{M,T}, c::T, w::T,
             q_ref::SVector{4,T}, q_ind::SVector{4,Int}) where {T,N,M}
         Iq = @MMatrix zeros(N,4)
         for i = 1:4
             Iq[q_ind[i],i] = 1
         end
         Iq = SMatrix{N,4}(Iq)
-        return new{T,N,M,N*4}(Q, R, q, r, c, q_ref, q_ind, Iq)
+        return new{T,N,M,N*4}(Q, R, q, r, c, w, q_ref, q_ind, Iq)
     end
 end
 
 function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}};
-        q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T),
+        q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T), w=one(T),
         q_ref=(@SVector [1.0,0,0,0]), q_ind=(@SVector [4,5,6,7])) where {T,N,M}
     QuadraticQuatCost(Q, R, q, r, c, q_ref, q_ind)
 end
@@ -190,7 +191,7 @@ function stage_cost(cost::QuadraticQuatCost, x::SVector)
     J = 0.5*x'cost.Q*x + cost.q'x + cost.c
     q = x[cost.q_ind]
     dq = cost.q_ref'q
-    J += min(1+dq, 1-dq)
+    J += cost.w*min(1+dq, 1-dq)
 end
 
 # function cost_expansion(cost::QuadraticQuatCost, z::KnotPoint, G)
@@ -218,9 +219,9 @@ function gradient(cost::QuadraticQuatCost{T,N,M}, x::SVector, u::SVector) where 
     q = x[cost.q_ind]
     dq = cost.q_ref'q
     if dq < 0
-        Qx += cost.Iq*cost.q_ref
+        Qx += cost.w*cost.Iq*cost.q_ref
     else
-        Qx -= cost.Iq*cost.q_ref
+        Qx -= cost.w*cost.Iq*cost.q_ref
     end
     Qu = cost.R*u + cost.r
     return Qx, Qu
@@ -233,12 +234,12 @@ function hessian(cost::QuadraticQuatCost, x::SVector{N}, u::SVector{M}) where {N
     return Qxx, Quu, Qux
 end
 function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
-        xf; quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+        xf; w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
     r = @SVector zeros(M)
     q = -Q*xf
     c = 0.5*xf'Q*xf
     q_ref = xf[quat_ind]
-    return QuadraticQuatCost(Q, R, q, r, c, q_ref, quat_ind)
+    return QuadraticQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
 end
 
 
@@ -463,14 +464,14 @@ end
 #     end
 # end
 #
-# function SparseArrays.blockdiag(Qs::Vararg{<:Diagonal})
-#     Diagonal(vcat(diag.(Qs)...))
-# end
-#
-# function SparseArrays.blockdiag(Qs::Vararg{<:AbstractMatrix})
-#     # WARNING: this is slow and is only included as a fallback
-#     cat(Qs...,dims=(1,2))
-# end
+function SparseArrays.blockdiag(Qs::Vararg{<:Diagonal})
+    Diagonal(vcat(diag.(Qs)...))
+end
+
+function SparseArrays.blockdiag(Qs::Vararg{<:AbstractMatrix})
+    # WARNING: this is slow and is only included as a fallback
+    cat(Qs...,dims=(1,2))
+end
 #
 # function change_dimension(cost::CostFunction,n,m)
 #     n0,m0 = state_dim(cost), control_dim(cost)
@@ -479,28 +480,28 @@ end
 #     IndexedCost(cost, ix, iu)
 # end
 #
-# function change_dimension(cost::QuadraticCost, n, m)
-#     n0,m0 = state_dim(cost), control_dim(cost)
-#     @assert n >= n0
-#     @assert m >= m0
-#
-#     ix = 1:n0
-#     iu = 1:m0
-#
-#     Q_ = Diagonal(@SVector zeros(n-n0))
-#     R_ = Diagonal(@SVector zeros(m-m0))
-#     H1 = @SMatrix zeros(m0, n-n0)
-#     H2 = @SMatrix zeros(m-m0, n)
-#     q_ = @SVector zeros(n-n0)
-#     r_ = @SVector zeros(m-m0)
-#     c = cost.c
-#
-#     # Insert old values
-#     Q = blockdiag(cost.Q, Q_)
-#     R = blockdiag(cost.R, R_)
-#     H = [cost.H H1]
-#     H = [H; H2]
-#     q = [cost.q; q_]
-#     r = [cost.r; r_]
-#     QuadraticCost(Q,R,H,q,r,c,checks=false)
-# end
+function change_dimension(cost::QuadraticCost, n, m)
+    n0,m0 = state_dim(cost), control_dim(cost)
+    @assert n >= n0
+    @assert m >= m0
+
+    ix = 1:n0
+    iu = 1:m0
+
+    Q_ = Diagonal(@SVector zeros(n-n0))
+    R_ = Diagonal(@SVector zeros(m-m0))
+    H1 = @SMatrix zeros(m0, n-n0)
+    H2 = @SMatrix zeros(m-m0, n)
+    q_ = @SVector zeros(n-n0)
+    r_ = @SVector zeros(m-m0)
+    c = cost.c
+
+    # Insert old values
+    Q = blockdiag(cost.Q, Q_)
+    R = blockdiag(cost.R, R_)
+    H = [cost.H H1]
+    H = [H; H2]
+    q = [cost.q; q_]
+    r = [cost.r; r_]
+    QuadraticCost(Q,R,H,q,r,c,checks=false)
+end

@@ -18,7 +18,9 @@ export
     initial_states!,
     initial_trajectory!,
     rollout!,
-    get_trajectory
+    get_trajectory,
+    get_model,
+    initialize!
 
 """ $(TYPEDEF)
 Abstract solver for trajectory optimization problems
