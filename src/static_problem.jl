@@ -191,3 +191,8 @@ function Problem{Q}(p::Problem) where Q
 end
 
 @inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
+
+function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
+    x0=p.x0, xf=p.xf)
+    Problem(model, obj, constraints, x0, xf, p.Z, p.N, p.tf)
+end
