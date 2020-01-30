@@ -5,7 +5,8 @@ export
     QuadraticQuatCost,
     RBCost,
     QuatLQRCost,
-    SatDiffCost
+    SatDiffCost,
+    ErrorQuadratic
 
 
 
@@ -281,6 +282,125 @@ end
 
 (+)(cost1::QuadraticCost, cost2::QuadraticQuatCost) = cost2 + cost1
 
+struct ErrorQuadratic{Rot,N,M} <: CostFunction
+    model::RigidBody{Rot}
+    Q::Diagonal{Float64,SVector{12,Float64}}
+    R::Diagonal{Float64,SVector{M,Float64}}
+    r::SVector{M,Float64}
+    c::Float64
+    x_ref::SVector{N,Float64}
+    q_ind::SVector{4,Int}
+end
+
+
+state_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = N
+control_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = M
+
+function ErrorQuadratic(model::RigidBody{Rot}, Q::Diagonal{T,<:SVector{12}},
+        R::Diagonal{T,<:SVector{M}},
+        x_ref::SVector{N}; r=(@SVector zeros(T,M)), c=zero(T),
+        q_ind=(@SVector [4,5,6,7])) where {T,N,M,Rot}
+    return ErrorQuadratic{Rot,N,M}(model, Q, R, r, c, x_ref, q_ind)
+end
+
+function stage_cost(cost::ErrorQuadratic, x::SVector)
+    dx = state_diff(cost.model, x, cost.x_ref)
+    return 0.5*dx'cost.Q*dx + cost.c
+end
+
+function stage_cost(cost::ErrorQuadratic, x::SVector, u::SVector)
+    stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
+end
+
+function cost_expansion(cost::ErrorQuadratic{Rot}, model::AbstractModel,
+        z::KnotPoint{T,N,M}, G) where {T,N,M,Rot<:UnitQuaternion}
+    x,u = state(z), control(z)
+    model = cost.model
+    Q = cost.Q
+    q = orientation(model, x)
+    q_ref = orientation(model, cost.x_ref)
+    dq = SVector(q_ref\q)
+    err = state_diff(model, x, cost.x_ref)
+    dx = @SVector [err[1],  err[2],  err[3],
+                    dq[1],   dq[2],   dq[3],   dq[4],
+                   err[7],  err[8],  err[9],
+                   err[10], err[11], err[12]]
+    G = state_diff_jacobian(model, dx) # n × dn
+
+    # Gradient
+    dmap = inverse_map_jacobian(model, dx) # dn × n
+    Qx = G'dmap'Q*err
+    Qu = cost.R*u
+
+    # Hessian
+    ∇jac = inverse_map_∇jacobian(model, dx, Q*err)
+    Qxx = G'dmap'Q*dmap*G + G'∇jac*G
+    Quu = cost.R
+    Qux = @SMatrix zeros(M,N-1)
+    return Qxx, Quu, Qux, Qx, Qu
+end
+
+function cost_expansion(cost::ErrorQuadratic, model::AbstractModel,
+        z::KnotPoint{T,N,M}, G) where {T,N,M}
+    x,u = state(z), control(z)
+    model = cost.model
+    q = orientation(model, x)
+    q_ref = orientation(model, cost.x_ref)
+    err = state_diff(model, x, cost.x_ref)
+    dx = err
+    G = state_diff_jacobian(model, dx) # n × n
+
+    # Gradient
+    dmap = inverse_map_jacobian(model, dx) # n × n
+    Qx = G'dmap'cost.Q*err
+    Qu = cost.R*u + cost.r
+
+    # Hessian
+    Qxx = G'dmap'cost.Q*dmap*G
+    Quu = cost.R
+    Qux = @SMatrix zeros(M,N)
+    return Qxx, Quu, Qux, Qx, Qu
+end
+
+function change_dimension(cost::ErrorQuadratic, n, m)
+    n0,m0 = state_dim(cost), control_dim(cost)
+    Q_diag = diag(cost.Q)
+    R_diag = diag(cost.R)
+    r = cost.r
+    if n0 != n
+        dn = n - n0  # assumes n > n0
+        pad = @SVector zeros(dn) # assume the new states don't have quaternions
+        Q_diag = [Q_diag; pad]
+    end
+    if m0 != m
+        dm = m - m0  # assumes m > m0
+        pad = @SVector zeros(dm)
+        R_diag = [R_diag; pad]
+        r = [r; pad]
+    end
+    ErrorQuadratic(cost.model, Diagonal(Q_diag), Diagonal(R_diag), r, cost.c,
+        cost.x_ref, cost.q_ind)
+end
+
+function (+)(cost1::ErrorQuadratic, cost2::QuadraticCost)
+    @assert control_dim(cost1) == control_dim(cost2)
+    @assert norm(cost2.H) ≈ 0
+    @assert norm(cost2.q) ≈ 0
+    if state_dim(cost2) == 13
+        rm_quat = @SVector [1,2,3,4,5,6,8,9,10,11,12,13]
+        Q2 = Diagonal(diag(cost2.Q)[rm_quat])
+    else
+        Q2 = cost2.Q
+    end
+    ErrorQuadratic(cost1.model, cost1.Q + Q2, cost1.R + cost2.R,
+        cost1.r + cost2.r, cost1.c + cost2.c,
+        cost1.x_ref, cost1.q_ind)
+end
+
+(+)(cost1::QuadraticCost, cost2::ErrorQuadratic) = cost2 + cost1
+
+
+
 
 struct SatDiffCost{Rot} <: CostFunction
     model::RigidBody{Rot}
@@ -304,6 +424,7 @@ end
 function stage_cost(cost::SatDiffCost, x::SVector, u::SVector)
     J = stage_cost(cost, x) + 0.5*u'cost.R*u
 end
+
 
 function cost_expansion(cost::SatDiffCost{Rot}, model::AbstractModel,
         z::KnotPoint{T,N,M}, G) where {T,N,M,Rot<:UnitQuaternion}
