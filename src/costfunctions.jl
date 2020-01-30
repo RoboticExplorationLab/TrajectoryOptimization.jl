@@ -151,6 +151,7 @@ end
 
 
 
+
 ############################################################################################
 #                                 QUADRATIC QUATERNION COST FUNCTION
 ############################################################################################
@@ -176,6 +177,10 @@ struct QuadraticQuatCost{T,N,M,N4} <: CostFunction
         return new{T,N,M,N*4}(Q, R, q, r, c, w, q_ref, q_ind, Iq)
     end
 end
+
+
+state_dim(::QuadraticQuatCost{T,N,M}) where {T,N,M} = N
+control_dim(::QuadraticQuatCost{T,N,M}) where {T,N,M} = M
 
 function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}};
         q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T), w=one(T),
@@ -233,6 +238,7 @@ function hessian(cost::QuadraticQuatCost, x::SVector{N}, u::SVector{M}) where {N
     Qux = @SMatrix zeros(M,N)
     return Qxx, Quu, Qux
 end
+
 function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
         xf; w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
     r = @SVector zeros(M)
@@ -242,7 +248,38 @@ function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
     return QuadraticQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
 end
 
+function change_dimension(cost::QuadraticQuatCost, n, m)
+    n0,m0 = state_dim(cost), control_dim(cost)
+    Q_diag = diag(cost.Q)
+    R_diag = diag(cost.R)
+    q = cost.q
+    r = cost.r
+    if n0 != n
+        dn = n - n0  # assumes n > n0
+        pad = @SVector zeros(dn)
+        Q_diag = [Q_diag; pad]
+        q = [q; pad]
+    end
+    if m0 != m
+        dm = m - m0  # assumes m > m0
+        pad = @SVector zeros(dm)
+        R_diag = [R_diag; pad]
+        r = [r; pad]
+    end
+    QuadraticQuatCost(Diagonal(Q_diag), Diagonal(R_diag), q, r, cost.c, cost.w,
+        cost.q_ref, cost.q_ind)
+end
 
+function (+)(cost1::QuadraticQuatCost, cost2::QuadraticCost)
+    @assert state_dim(cost1) == state_dim(cost2)
+    @assert control_dim(cost1) == control_dim(cost2)
+    @assert norm(cost2.H) ≈ 0
+    QuadraticQuatCost(cost1.Q + cost2.Q, cost1.R + cost2.R,
+        cost1.q + cost2.q, cost1.r + cost2.r, cost1.c + cost2.c,
+        cost1.w, cost1.q_ref, cost1.q_ind)
+end
+
+(+)(cost1::QuadraticCost, cost2::QuadraticQuatCost) = cost2 + cost1
 
 
 struct SatDiffCost{Rot} <: CostFunction
