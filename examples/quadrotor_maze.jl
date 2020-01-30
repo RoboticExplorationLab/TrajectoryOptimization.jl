@@ -49,8 +49,8 @@ end
 
 
 
-Rot = MRP{Float64}
-prob = Problems.QuadrotorMaze(Rot,use_rot=false)
+Rot = UnitQuaternion{Float64,CayleyMap}
+prob = Problems.QuadrotorMaze(Rot,use_rot=true, costfun=:QuatLQR)
 opts_ilqr.verbose = false
 opts_altro.projected_newton = false
 solver = ALTROSolver(prob, opts_altro, infeasible=true)
@@ -58,7 +58,9 @@ Z0 = deepcopy(get_trajectory(solver))
 visualize!(vis, solver)
 
 initial_trajectory!(solver, Z0)
-solve!(solver)
+@time solve!(solver)
+benchmark_solve!(solver)
+
 max_violation(solver)
 visualize!(vis, solver)
 plot(states(solver), 7:9)
@@ -77,10 +79,17 @@ al = solver.solver_al
     solve!($al)
 end
 
+
+# Step through solve
+prob = Problems.QuadrotorMaze(Rot,use_rot=true, costfun=:QuatLQR)
+opts_ilqr.verbose = false
+opts_altro.projected_newton = false
+solver = ALTROSolver(prob, opts_altro, infeasible=true)
 initial_trajectory!(solver,Z0)
 al = solver.solver_al
 initialize!(al)
 TO.set_tolerances!(al, al.solver_uncon, 1)
+visualize!(vis, al)
 
 TO.step!(al)
 max_violation(al)

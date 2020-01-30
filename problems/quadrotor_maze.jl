@@ -1,20 +1,32 @@
 # Quadrotor in Maze
 
-function QuadrotorMaze(::Type{Rot}; use_rot) where Rot<:Rotation
+function QuadrotorMaze(::Type{Rot}; use_rot=true, costfun=:Quadratic) where Rot<:Rotation
 
 # model
 model = Dynamics.Quadrotor2{Rot}(use_rot=use_rot)
 n,m = size(model)
 
+N = 101 # number of knot points
+tf = 5.0
+dt = tf/(N-1) # total time
+
 x0 = Dynamics.build_state(model, [0,0,10], I(UnitQuaternion), zeros(3), zeros(3))
 xf = Dynamics.build_state(model, [0,60,10], I(UnitQuaternion), zeros(3), zeros(3))
 
 # cost
-Q_diag = Dynamics.fill_state(model, 1e-3, 1e-2, 1e-3, 1e-3)
+costfun == :QuatLQR ? sq = 0 : sq = 1
+Q_diag = Dynamics.fill_state(model, 1e-3, 1e-2*sq, 1e-3, 1e-3)
 R_diag = @SVector fill(1e-4,m)
 Q = Diagonal(Q_diag)
 R = Diagonal(R_diag)
 Qf = Diagonal(@SVector fill(1e3,n))
+
+if costfun == :Quadratic
+    obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
+else
+    cost = QuatLQRCost(Q, R, xf, w=1e-3)
+    obj = Objective(cost, N)
+end
 
 # constraints
 r_quad_maze = 2.0
@@ -83,12 +95,8 @@ bnd1 = BoundConstraint(n,m,u_min=u_min,u_max=u_max)
 bnd2 = BoundConstraint(n,m,u_min=u_min,u_max=u_max,x_min=x_min,x_max=x_max)
 goal = GoalConstraint(xf, noquat)
 
-N = 101 # number of knot points
-tf = 5.0
-dt = tf/(N-1) # total time
 
 U_hover = [0.5*9.81/4.0*ones(m) for k = 1:N-1] # initial hovering control trajectory
-obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
 
 conSet = ConstraintSet(n,m,N)
 add_constraint!(conSet, obs, 1:N-1)
