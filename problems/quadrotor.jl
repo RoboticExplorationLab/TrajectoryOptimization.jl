@@ -1,5 +1,5 @@
 # model
-model = Dynamics.Quadrotor()
+model = Dynamics.Quadrotor2{UnitQuaternion{Float64,VectorPart}}()
 # model = Dynamics.quadrotor_euler
 n,m = size(model)
 

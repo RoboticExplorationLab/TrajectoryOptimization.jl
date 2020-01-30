@@ -1,6 +1,11 @@
 import TrajectoryOptimization.Dynamics: forces, moments, inertia, inertia_inv, mass_matrix
 import TrajectoryOptimization.Rotation
 
+export
+    orientation,
+    linear_velocity,
+    angular_velocity
+
 function Base.rand(model::RigidBody{D}) where {D}
     n,m = size(model)
     r = @SVector rand(3)
@@ -25,15 +30,27 @@ end
 
 @inline rotation_type(::RigidBody{D}) where D = D
 
-@inline Base.position(model::RigidBody, x) = SVector{3}(x[1],x[2],x[3])
-@inline orientation(model::RigidBody{R}, x) where R = R(x[4],x[5],x[6])
+@inline Base.position(model::RigidBody, x, renorm=true) = SVector{3}(x[1],x[2],x[3])
+@inline orientation(model::RigidBody{R}, x::SVector{N,T}, renorm=false) where {R,N,T} =
+    R(T,x[4],x[5],x[6])
 @inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
 @inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
-@inline orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2}) where {T,D,N,T2} =
-    normalize(UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7]))
+function orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2},
+        renorm=true) where {T,D,N,T2}
+    q = UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7])
+    if renorm
+        q = normalize(q)
+    end
+    return q
+end
 @inline linear_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[8],x[9],x[10])
 @inline angular_velocity(model::RigidBody{<:UnitQuaternion}, x) = SVector{3}(x[11],x[12],x[13])
+
+function flipquat(model::RigidBody{<:UnitQuaternion}, x)
+    return @SVector [x[1], x[2], x[3], -x[4], -x[5], -x[6], -x[7],
+        x[8], x[9], x[10], x[11], x[12], x[13]]
+end
 
 function parse_state(model::RigidBody, x)
     r = position(model, x)
@@ -62,6 +79,31 @@ function build_state(model::RigidBody{R}, x, q::SVector{3}, v, ω) where R <: Ro
               ω[1], ω[2], ω[3]]
 end
 
+function build_state(model::RigidBody{R}, x, q::Vector, v, ω) where R <: Rotation
+    @SVector [x[1], x[2], x[3],
+              q[1], q[2], q[3],
+              v[1], v[2], v[3],
+              ω[1], ω[2], ω[3]]
+end
+
+function build_state(model::RigidBody{<:UnitQuaternion}, x, q::Vector, v, ω) where R <: Rotation
+    if length(q) == 3
+        push!(q,q[1])
+    end
+    @SVector [x[1], x[2], x[3],
+              q[1], q[2], q[3], q[4],
+              v[1], v[2], v[3],
+              ω[1], ω[2], ω[3]]
+end
+
+function fill_state(model::RigidBody{<:UnitQuaternion}, x::Real, q::Real, v::Real, ω::Real)
+    @SVector [x,x,x, q,q,q,q, v,v,v, ω,ω,ω]
+end
+
+function fill_state(model::RigidBody, x::Real, q::Real, v::Real, ω::Real)
+    @SVector [x,x,x, q,q,q, v,v,v, ω,ω,ω]
+end
+
 
 function dynamics(model::RigidBody{D}, x, u) where D
 
@@ -87,7 +129,7 @@ end
 @inline inertia(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 @inline inertia_inv(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 
-function state_diff(model::RigidBody{<:UnitQuaternion}, x::SVector{N,T}, x0::SVector{N,T}) where {N,T}
+function state_diff(model::RigidBody{<:UnitQuaternion}, x::SVector{N}, x0::SVector{N}) where {N}
     r,q,v,ω = parse_state(model, x)
     r0,q0,v0,ω0 = parse_state(model, x0)
     δr = r - r0
@@ -97,26 +139,54 @@ function state_diff(model::RigidBody{<:UnitQuaternion}, x::SVector{N,T}, x0::SVe
     build_state(model, δr, δq, δv, δω)
 end
 
-function state_diff_jacobian(model::RigidBody{<:UnitQuaternion}, x0::SVector{N,T}) where {N,T}
-    q0 = orientation(model, x0)
-    G = TrajectoryOptimization.∇differential(q0)
-    I1 = @SMatrix [1 0 0 0 0 0 0 0 0 0 0 0;
-                   0 1 0 0 0 0 0 0 0 0 0 0;
-                   0 0 1 0 0 0 0 0 0 0 0 0;
-                   0 0 0 G[1] G[5] G[ 9] 0 0 0 0 0 0;
-                   0 0 0 G[2] G[6] G[10] 0 0 0 0 0 0;
-                   0 0 0 G[3] G[7] G[11] 0 0 0 0 0 0;
-                   0 0 0 G[4] G[8] G[12] 0 0 0 0 0 0;
-                   0 0 0 0 0 0 1 0 0 0 0 0;
-                   0 0 0 0 0 0 0 1 0 0 0 0;
-                   0 0 0 0 0 0 0 0 1 0 0 0;
-                   0 0 0 0 0 0 0 0 0 1 0 0;
-                   0 0 0 0 0 0 0 0 0 0 1 0;
-                   0 0 0 0 0 0 0 0 0 0 0 1.]
+@generated function state_diff_jacobian(model::RigidBody{UnitQuaternion{T,D}},
+        x0::SVector{N,T}) where {N,T,D}
+    if D == IdentityMap
+        :(I)
+    else
+        quote
+            q0 = orientation(model, x0)
+            G = TrajectoryOptimization.∇differential(q0)
+            I1 = @SMatrix [1 0 0 0 0 0 0 0 0 0 0 0;
+                           0 1 0 0 0 0 0 0 0 0 0 0;
+                           0 0 1 0 0 0 0 0 0 0 0 0;
+                           0 0 0 G[1] G[5] G[ 9] 0 0 0 0 0 0;
+                           0 0 0 G[2] G[6] G[10] 0 0 0 0 0 0;
+                           0 0 0 G[3] G[7] G[11] 0 0 0 0 0 0;
+                           0 0 0 G[4] G[8] G[12] 0 0 0 0 0 0;
+                           0 0 0 0 0 0 1 0 0 0 0 0;
+                           0 0 0 0 0 0 0 1 0 0 0 0;
+                           0 0 0 0 0 0 0 0 1 0 0 0;
+                           0 0 0 0 0 0 0 0 0 1 0 0;
+                           0 0 0 0 0 0 0 0 0 0 1 0;
+                           0 0 0 0 0 0 0 0 0 0 0 1.]
+        end
+    end
 end
 
-function state_diff_jacobian(::RigidBody{<:Rotation}, x0::SVector{N,T}) where {N,T}
-    I1 = Diagonal(@SVector ones(N))
+function state_diff_jacobian(::RigidBody{<:Rotation}, x0::SVector)
+    return I # I1 = Diagonal(@SVector ones(N))
 end
 
-@inline state_diff_size(::RigidBody) = 12
+state_diff_size(::RigidBody) = 12
+state_diff_size(::RigidBody{UnitQuaternion{T,IdentityMap}}) where T = 13
+
+function TrajectoryOptimization.∇²differential(model::RigidBody, x::SVector, dx::SVector)
+      q = orientation(model, x)
+      dq = SVector(orientation(model, dx, false))
+      G2 = TrajectoryOptimization.∇²differential(q, dq)
+      return @SMatrix [
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 G2[1] G2[4] G2[7] 0 0 0 0 0 0;
+            0 0 0 G2[2] G2[5] G2[8] 0 0 0 0 0 0;
+            0 0 0 G2[3] G2[6] G2[9] 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;
+      ]
+end

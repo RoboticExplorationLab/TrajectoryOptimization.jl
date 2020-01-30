@@ -9,7 +9,7 @@ using DocStringExtensions
 using StaticArrays
 using Parameters
 import TrajectoryOptimization: dynamics, AbstractModel, RigidBody, state_diff, state_diff_jacobian,
-    state_diff_size
+    state_diff_size, orientation
 
 export
     pendulum,
