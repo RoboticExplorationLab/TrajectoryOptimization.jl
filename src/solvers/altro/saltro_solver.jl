@@ -86,6 +86,14 @@ end
 @inline Base.size(solver::ALTROSolver) = size(solver.solver_pn)
 @inline get_trajectory(solver::ALTROSolver) = get_trajectory(solver.solver_al)
 @inline get_objective(solver::ALTROSolver) = get_objective(solver.solver_al)
+function iterations(solver::ALTROSolver)
+    if !solver.opts.projected_newton
+        iterations(solver.solver_al)
+    else
+        iterations(solver.solver_al) + iterations(solver.solver_pn)
+    end
+end
+
 function get_constraints(solver::ALTROSolver)
     if solver.opts.projected_newton
         get_constraints(solver.solver_pn)

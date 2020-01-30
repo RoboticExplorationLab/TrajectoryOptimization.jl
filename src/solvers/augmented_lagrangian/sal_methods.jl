@@ -14,7 +14,6 @@ function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
 		set_tolerances!(solver, solver_uncon, i)
 
         step!(solver)
-		return solver
         J = sum(J_)
         c_max = maximum(conSet.c_max)
 
@@ -48,7 +47,6 @@ function step!(solver::AugmentedLagrangianSolver)
 
     # Solve the unconstrained problem
     solve!(solver.solver_uncon)
-	return
 
     # Outer loop update
     dual_update!(solver)

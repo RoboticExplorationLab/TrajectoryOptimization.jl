@@ -12,6 +12,7 @@ export
     max_violation,
     options,
     stats,
+    iterations,
     states,
     controls,
     initial_controls!,
@@ -68,6 +69,7 @@ include("solvers/direct/dircol_snopt.jl")
 
 @inline options(solver::AbstractSolver) = solver.opts
 @inline stats(solver::AbstractSolver) = solver.stats
+iterations(solver::AbstractSolver) = stats(solver).iterations
 
 function cost(solver::AbstractSolver)
     obj = get_objective(solver)

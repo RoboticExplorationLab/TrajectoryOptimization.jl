@@ -200,7 +200,7 @@ Base.size(solver::AugmentedLagrangianSolver) = size(solver.solver_uncon)
 @inline get_objective(solver::AugmentedLagrangianSolver) = get_objective(solver.solver_uncon)
 @inline get_model(solver::AugmentedLagrangianSolver) = get_model(solver.solver_uncon)
 @inline get_initial_state(solver::AugmentedLagrangianSolver) = get_initial_state(solver.solver_uncon)
-
+@inline iterations(solver::AugmentedLagrangianSolver) = solver.stats.iterations_total
 
 
 function get_constraints(solver::AugmentedLagrangianSolver{T}) where T
