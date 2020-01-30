@@ -1,3 +1,5 @@
+export
+	benchmark_solve!
 
 function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
     n,N1 = size(X)
@@ -30,4 +32,24 @@ function set_logger()
     if !(global_logger() isa SolverLogger)
         global_logger(default_logger(true))
     end
+end
+
+function benchmark_solve!(solver; samples=10, evals=10)
+    U0 = deepcopy(controls(solver))
+    solver.opts.verbose = false
+    b = @benchmark begin
+        initial_controls!($solver,$U0)
+        solve!($solver)
+    end samples=samples evals=evals
+    return b
+end
+
+function benchmark_solve!(solver, data::Dict; samples=10, evals=10)
+	b = benchmark_solve!(solver, samples=samples, evals=evals)
+
+   # Run stats
+   push!(data[:time], time(median(b))*1e-6)  # ms
+   push!(data[:iterations], solver.stats.iterations)
+   push!(data[:cost], solver.stats.cost[end])
+   return b
 end
