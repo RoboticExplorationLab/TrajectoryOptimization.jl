@@ -134,12 +134,12 @@ rhat = UnitQuaternion(r)
 
 e0 = @SVector [deg2rad(45), deg2rad(60), deg2rad(20)]
 e1 = RPY(e0...)
-e2 = RotXYZ(e0...)
+# e2 = RotXYZ(e0...)
 
-@test rotmat(e1) == RotX(e0[1])*RotY(e0[2])*RotZ(e0[3])
-@test rotmat(e1) ≈ e2
+# @test rotmat(e1) == RotX(e0[1])*RotY(e0[2])*RotZ(e0[3])
+# @test rotmat(e1) ≈ e2
 
-@test e1*r ≈ e2*r
+# @test e1*r ≈ e2*r
 # @btime $e2*$r
 # @btime $e1*$r
 
@@ -149,7 +149,7 @@ e1_ = TO.from_rotmat(rotmat(e1))
 @test e1_.ψ ≈ e1.ψ
 @test e1_.ϕ ≈ e1.ϕ
 
-@test rotmat(e1*e1) ≈ RotXYZ(e2*e2)
+# @test rotmat(e1*e1) ≈ RotXYZ(e2*e2)
 
 e1 = RPY(rand(3)...)
 e2 = RPY(rand(3)...)

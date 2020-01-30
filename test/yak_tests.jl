@@ -37,13 +37,17 @@ U0 = [copy(utrim) for k = 1:N-1]
 
 # Build problem
 prob = Problem(model, obj, xf, tf, x0=x0)
+
+# Solve
 solver = iLQRSolver(prob)
 
 initial_controls!(solver, U0)
 rollout!(solver)
+visualize!(vis, solver)
 
 solver.opts.verbose = true
 cost(solver)
 solve!(solver)
 iterations(solver)
 cost(solver)
+visualize!(vis, solver)
