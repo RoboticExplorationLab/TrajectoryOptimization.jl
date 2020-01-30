@@ -38,32 +38,41 @@ l2 = 4
 l3 = 4
 l4 = 10
 
-for i = range(-25,stop=-10,length=l1)
-    push!(maze_cylinders,(i, 10,r_cylinder_maze))
+d = 10
+w = 25
+mid=5
+
+x_enter=10
+x_mid=30
+x_exit=50
+
+for i = range(-w,stop=-d,length=l1) # enter wall
+    push!(maze_cylinders,(i, x_enter,r_cylinder_maze))
 end
 
-for i = range(10,stop=25,length=l1)
-    push!(maze_cylinders,(i, 10, r_cylinder_maze))
+for i = range(d,stop=w,length=l1) # enter wall
+    push!(maze_cylinders,(i, x_enter, r_cylinder_maze))
 end
 
-for i = range(-5,stop=5,length=l3)
-    push!(maze_cylinders,(i, 30, r_cylinder_maze))
+for i = range(-mid,stop=mid,length=l3) # middle obstacle
+    push!(maze_cylinders,(i, x_mid, r_cylinder_maze))
 end
 
-for i = range(-25,stop=-10,length=l1)
-    push!(maze_cylinders,(i, 50, r_cylinder_maze))
+for i = range(-w,stop=-d,length=l1) # exit wall
+    push!(maze_cylinders,(i, x_exit, r_cylinder_maze))
 end
 
-for i = range(10,stop=25,length=l1)
-    push!(maze_cylinders,(i, 50, r_cylinder_maze))
+for i = range(d,stop=w,length=l1) # exit wall
+    push!(maze_cylinders,(i, x_exit, r_cylinder_maze))
 end
 
-for i = range(10+2*r_cylinder_maze,stop=50-2*r_cylinder_maze,length=l4)
-    push!(maze_cylinders,(-25, i, r_cylinder_maze))
+# Top and bottom walls
+for i = range(x_enter+2*r_cylinder_maze,stop=x_exit-2*r_cylinder_maze,length=l4)
+    push!(maze_cylinders,(-w, i, r_cylinder_maze))
 end
 
-for i = range(10+2*r_cylinder_maze,stop=50-2*r_cylinder_maze,length=l4)
-    push!(maze_cylinders,(25, i, r_cylinder_maze))
+for i = range(x_enter+2*r_cylinder_maze,stop=x_exit-2*r_cylinder_maze,length=l4)
+    push!(maze_cylinders,(w, i, r_cylinder_maze))
 end
 
 n_maze_cylinders = length(maze_cylinders)

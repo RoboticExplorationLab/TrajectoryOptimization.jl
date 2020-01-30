@@ -17,6 +17,7 @@ include("../problems/cartpole.jl")
 include("../problems/car_escape.jl")
 include("../problems/car_3obs.jl")
 include("../problems/quadrotor.jl")
+include("../problems/quadrotor_maze.jl")
 
 export
     doubleintegrator,
