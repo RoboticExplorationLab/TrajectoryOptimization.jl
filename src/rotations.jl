@@ -26,8 +26,10 @@ export
     Lmult,
     Rmult,
     Vmat,
+    Hmat,
     Tmat,
     skew,
+    vee,
     ⊕,
     ⊖
 
@@ -37,6 +39,10 @@ function skew(v::AbstractVector)
     @SMatrix [0   -v[3]  v[2];
               v[3] 0    -v[1];
              -v[2] v[1]  0]
+end
+
+function vee(S::AbstractMatrix)
+    return @SVector [S[3,2], S[1,3], S[2,1]]
 end
 
 abstract type Rotation end
@@ -190,7 +196,7 @@ LinearAlgebra.norm2(q::UnitQuaternion) = q.s^2 + q.x^2 + q.y^2 + q.z^2
 LinearAlgebra.norm(q::UnitQuaternion) = sqrt(q.s^2 + q.x^2 + q.y^2 + q.z^2)
 LinearAlgebra.I(::Type{UnitQuaternion}) = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
 LinearAlgebra.I(::Type{Q}) where Q <: UnitQuaternion = UnitQuaternion(1.0, 0.0, 0.0, 0.0)
-
+(::Type{Q})(I::UniformScaling) where Q<:UnitQuaternion = Q(1.0, 0.0, 0.0, 0.0)
 (≈)(q::UnitQuaternion, u::UnitQuaternion) = q.s ≈ u.s && q.x ≈ u.x && q.y ≈ u.y && q.z ≈ u.z
 (-)(q::UnitQuaternion{T,D}) where {T,D} = UnitQuaternion{T,D}(-q.s, -q.x, -q.y, -q.z)
 
@@ -227,6 +233,8 @@ end
 
 (\)(q1::UnitQuaternion, q2::UnitQuaternion) = inv(q1)*q2
 (/)(q1::UnitQuaternion, q2::UnitQuaternion) = q1*inv(q2)
+
+(\)(q::UnitQuaternion, r::SVector{3}) = inv(q)*r
 
 function exp(q::UnitQuaternion{T,D}) where {T,D}
     θ = vecnorm(q)
@@ -347,6 +355,20 @@ function Vmat()
     ]
 end
 
+function Hmat()
+    @SMatrix [
+        0 0 0;
+        1 0 0;
+        0 1 0;
+        0 0 1.;
+    ]
+end
+
+function Hmat(r)
+    @assert length(r) == 3
+    @SVector [0,r[1],r[2],r[3]]
+end
+
 "Jacobian of q*r with respect to the quaternion"
 function ∇rotate(q::UnitQuaternion{T,D}, r::SVector{3}) where {T,D}
     rhat = UnitQuaternion{D}(r)
@@ -429,8 +451,10 @@ function (*)(p2::MRP, p1::MRP)
 end
 
 (*)(p::MRP, r::SVector) = UnitQuaternion(p)*r
+(\)(p::MRP, r::SVector) = UnitQuaternion(p)\r
 
 function (\)(p1::MRP, p2::MRP)
+    # fun fact: equivalent to p2 - p1 when either is 0
     p1,p2 = SVector(p1), SVector(p2)
     n1,n2 = p1'p1, p2'p2
     θ = 1/((1+n1)*(1+n2))
@@ -622,6 +646,7 @@ end
 
 RodriguesParam(g::SVector{3,T}) where T = RodriguesParam{T}(g[1], g[2], g[3])
 (::Type{<:RodriguesParam})(::Type{T},x,y,z) where T = RodriguesParam{T}(T(x),T(y),T(z))
+(::Type{<:RodriguesParam})(p::RodriguesParam) = p
 SVector(g::RodriguesParam{T}) where T = SVector{3,T}(g.x, g.y, g.z)
 
 (::Type{<:RodriguesParam})(q::UnitQuaternion{T}) where T = RodriguesParam(q.x/q.s, q.y/q.s, q.z/q.s)
@@ -632,6 +657,7 @@ function UnitQuaternion(g::RodriguesParam{T}) where T
 end
 
 Base.rand(::Type{<:RodriguesParam}) = RodriguesParam(rand(UnitQuaternion))
+Base.zero(::Type{<:RodriguesParam}) = RodriguesParam(0.0, 0.0, 0.0)
 
 LinearAlgebra.norm(g::RodriguesParam) = sqrt(g.x^2 + g.y^2 + q.z^2)
 LinearAlgebra.norm2(g::RodriguesParam) = g.x^2 + g.y^2 + g.z^2
@@ -646,9 +672,8 @@ function (*)(g2::RodriguesParam, g1::RodriguesParam)
     RodriguesParam((g2+g1 + g2 × g1)/(1-g2'g1))
 end
 
-function (*)(g::RodriguesParam, r::SVector{3})
-    UnitQuaternion(g)*r
-end
+(*)(g::RodriguesParam, r::SVector{3}) = UnitQuaternion(g)*r
+(\)(g::RodriguesParam, r::SVector{3}) = inv(UnitQuaternion(g))*r
 
 "Same as inv(g1)*g2"
 function (\)(g1::RodriguesParam, g2::RodriguesParam)
@@ -748,6 +773,7 @@ RPY(e::SVector{3,T}) where T = RPY{T}(e[1], e[2], e[3])
 RPY(R::SMatrix{3,3,T}) where T =  RPY(rotmat_to_rpy(R))
 RPY(q::UnitQuaternion) = RPY(rotmat(q))
 RPY(p::MRP) = RPY(rotmat(p))
+(::Type{<:RPY})(e::RPY) = e
 (::Type{<:RPY})(::Type{T},x,y,z) where T = RPY{T}(T(x),T(y),T(z))
 function RPY(ϕ::T1,θ::T2,ψ::T3) where {T1,T2,T3}
     T = promote_type(T1,T2)
@@ -790,6 +816,7 @@ function rotmat(ϕ, θ, ψ)
 end
 
 (*)(e::RPY, r::SVector{3}) = rotmat(e)*r
+(\)(e::RPY, r::SVector{3}) = rotmat(e)'r
 
 function rotmat_to_rpy(R::SMatrix{3,3,T}) where T
     # ψ = atan(-R[1,2], R[1,1])
@@ -816,6 +843,10 @@ end
 
 function (/)(e1::RPY, e2::RPY)
     from_rotmat(rotmat(e1)*rotmat(e2)')
+end
+
+function (⊖)(e1::RPY, e2::RPY)
+    SVector(e1\e1)
 end
 
 function kinematics(e::RPY, ω::SVector{3})
@@ -876,21 +907,16 @@ end
 UnitQuaternion(e::RPY) = rotmat_to_quat(rotmat(e))
 (::Type{<:RPY})(q::UnitQuaternion) = from_rotmat(rotmat(q))
 
-# Differential Rotations
-function differential_rotation(δq::UnitQuaternion{T,VectorPart}) where T
-    SVector{3}(δq.x, δq.y, δq.z)
+function (::Type{<:UnitQuaternion})(p::MRP)
+    p = SVector(p)
+    n2 = p'p
+    M = 2/(1+n2)
+    UnitQuaternion{MRPMap}((1-n2)/(1+n2), M*p[1], M*p[2], M*p[3])
 end
 
-function differential_rotation(δq::UnitQuaternion{T,ExponentialMap}) where T
-    logm(δq)
-end
+(::Type{<:RodriguesParam})(p::MRP) = RodriguesParam(UnitQuaternion(p))
 
-function differential_rotation(δq::UnitQuaternion{T,MRPMap}) where T
-    # vector(δq)/(1+real(δq))
-    s = 1+scalar(δq)
-    SVector{3}(δq.x/s, δq.y/s, δq.z/s)
-end
-
+(::Type{<:RPY})(p::MRP) = RPY(UnitQuaternion(p))
 
 ############################################################################################
 #                             INVERSE RETRACTION MAPS
