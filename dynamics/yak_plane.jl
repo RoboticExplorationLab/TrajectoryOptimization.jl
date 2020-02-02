@@ -1,7 +1,7 @@
 using Parameters
 using StaticArrays
 
-@with_kw mutable struct YakPlane{R,T} <: RigidBody{R}
+@with_kw mutable struct YakPlane{B,R,T} <: TestRigidBody{B,R}
     g::T = 9.81; #Gravitational acceleration (m/s^2)
     rho::T = 1.2; #Air density at 20C (kg/m^3)
     m::T = .075; #Mass of plane (kg)
@@ -63,9 +63,12 @@ using StaticArrays
 end
 
 Base.size(::YakPlane) = 12,4
+Base.size(::YakPlane{B,<:UnitQuaternion}) where B = 13,4
 
-YakPlane() = YakPlane{MRP{Float64},Float64}()
+(::Type{<:YakPlane})(::Type{Rot}=MRP{Float64}; use_rot=true) where Rot =
+    YakPlane{use_rot,Rot,Float64}()
 
+trim_controls(model::YakPlane) = @SVector [41.6666, 106, 74.6519, 106]
 
 function TrajectoryOptimization.dynamics(p::YakPlane, x::SVector, u::SVector)
     r,q,v,w = parse_state(p, x)
@@ -127,11 +130,13 @@ function TrajectoryOptimization.dynamics(p::YakPlane, x::SVector, u::SVector)
     F_rin = arotate(a_rin,F_rin); #rotate to body frame
     F_lin = arotate(a_lin,F_lin); #rotate to body frame
 
+    # println("AoA: right: $(rad2deg(a_rout)), left: $(rad2deg(a_lout))")
+
     # --- Elevator --- #
     a_elev = alpha(v_elev);
     a_eff_elev = a_elev + p.ep_elev*delta_elev; #effective angle of attack
 
-    F_elev = -p_dyn(p, v_elev)*p.S_elev*[Cd_elev(p, a_eff_elev), 0, Cl_plate(a_eff_elev)];
+    F_elev = -p_dyn(p, v_elev)*p.S_elev*@SVector [Cd_elev(p, a_eff_elev), 0, Cl_plate(a_eff_elev)];
 
     F_elev = arotate(a_elev,F_elev); #rotate to body frame
 
@@ -139,7 +144,7 @@ function TrajectoryOptimization.dynamics(p::YakPlane, x::SVector, u::SVector)
     a_rud = beta(v_rud);
     a_eff_rud = a_rud - p.ep_rud*delta_rud; #effective angle of attack
 
-    F_rud = -p_dyn(p, v_rud)*p.S_rud*[Cd_rud(p,a_eff_rud), Cl_plate(a_eff_rud), 0];
+    F_rud = -p_dyn(p, v_rud)*p.S_rud*@SVector [Cd_rud(p,a_eff_rud), Cl_plate(a_eff_rud), 0];
 
     F_rud = brotate(a_rud,F_rud); #rotate to body frame
 
@@ -153,15 +158,15 @@ function TrajectoryOptimization.dynamics(p::YakPlane, x::SVector, u::SVector)
     end
 
     # ---------- Aerodynamic Torques (body frame) ---------- #
-    T_rout = cross([0; p.r_ail; 0],F_rout);
-    T_lout = cross([0; -p.r_ail; 0],F_lout);
+    T_rout = cross((@SVector [0, p.r_ail, 0]),F_rout);
+    T_lout = cross((@SVector [0, -p.r_ail, 0]),F_lout);
 
-    T_rin = cross([0; p.l_in; 0],F_rin);
-    T_lin = cross([0; -p.l_in; 0],F_lin);
+    T_rin = cross((@SVector [0, p.l_in, 0]),F_rin);
+    T_lin = cross((@SVector [0, -p.l_in, 0]),F_lin);
 
-    T_elev = cross([-p.r_elev; 0; 0],F_elev);
+    T_elev = cross((@SVector [-p.r_elev, 0, 0]),F_elev);
 
-    T_rud = cross([-p.r_rud; 0; -p.z_rud],F_rud);
+    T_rud = cross((@SVector [-p.r_rud, 0, -p.z_rud]),F_rud);
 
     # ---------- Add Everything Together ---------- #
     # problems: F_lout, F_rin

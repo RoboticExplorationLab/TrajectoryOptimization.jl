@@ -240,11 +240,11 @@ function hessian(cost::QuadraticQuatCost, x::SVector{N}, u::SVector{M}) where {N
     return Qxx, Quu, Qux
 end
 
-function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
-        xf; w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
-    r = @SVector zeros(M)
+function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
+        uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    r = -R*uf
     q = -Q*xf
-    c = 0.5*xf'Q*xf
+    c = 0.5*xf'Q*xf + 0.5*uf'R*uf
     q_ref = xf[quat_ind]
     return QuadraticQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
 end
@@ -282,6 +282,9 @@ end
 
 (+)(cost1::QuadraticCost, cost2::QuadraticQuatCost) = cost2 + cost1
 
+
+
+
 struct ErrorQuadratic{Rot,N,M} <: CostFunction
     model::RigidBody{Rot}
     Q::Diagonal{Float64,SVector{12,Float64}}
@@ -298,8 +301,10 @@ control_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = M
 
 function ErrorQuadratic(model::RigidBody{Rot}, Q::Diagonal{T,<:SVector{12}},
         R::Diagonal{T,<:SVector{M}},
-        x_ref::SVector{N}; r=(@SVector zeros(T,M)), c=zero(T),
+        x_ref::SVector{N}, u_ref=(@SVector zeros(T,M)); r=(@SVector zeros(T,M)), c=zero(T),
         q_ind=(@SVector [4,5,6,7])) where {T,N,M,Rot}
+    r += -R*u_ref
+    c += 0.5*u_ref'R*u_ref
     return ErrorQuadratic{Rot,N,M}(model, Q, R, r, c, x_ref, q_ind)
 end
 

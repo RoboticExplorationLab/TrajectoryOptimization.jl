@@ -232,7 +232,7 @@ end
 struct QuatSlackConstraint <: AbstractConstraint{Equality,Stage,1}
 	qinds::SVector{4,Int}
 end
-QuatSlackConstraint(qinds=(@SVector [4,5,6,7])) = QuatSlackConstraint(qinds)
+(::Type{<:QuatSlackConstraint})(qinds=(@SVector [4,5,6,7])) = QuatSlackConstraint(qinds)
 
 state_dim(::QuatSlackConstraint) = 13
 control_dim(::QuatSlackConstraint) = 5  # special cased for quadrotor

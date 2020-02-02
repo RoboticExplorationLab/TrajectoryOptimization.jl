@@ -24,6 +24,7 @@ export
     doubleintegrator,
     car
 
+include("../dynamics/testrigidbody.jl")
 include("../dynamics/pendulum.jl")
 # include("../dynamics/doublependulum.jl")
 # include("../dynamics/acrobot.jl")
