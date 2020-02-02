@@ -106,13 +106,23 @@ function fill_state(model::RigidBody, x::Real, q::Real, v::Real, ω::Real)
     @SVector [x,x,x, q,q,q, v,v,v, ω,ω,ω]
 end
 
+function fill_error_state(model::RigidBody, x::Real, q::Real, v::Real, ω::Real)
+    @SVector [x,x,x, q,q,q, v,v,v, ω,ω,ω]
+end
 
+function fill_error_state(model::RigidBody{UnitQuaternion{T,IdentityMap}},
+        x::Real, q::Real, v::Real, ω::Real) where T
+    @SVector [x,x,x, q,q,q,q, v,v,v, ω,ω,ω]
+end
+
+############################################################################################
+#                                DYNAMICS
+############################################################################################
 function dynamics(model::RigidBody{D}, x, u) where D
 
     r,q,v,ω = parse_state(model, x)
 
-    F = forces(model, x, u)
-    τ = moments(model, x, u)
+    F,τ = wrenches(model, x, u)
     M = mass_matrix(model, x, u)
     J = inertia(model, x, u)
     Jinv = inertia_inv(model, x, u)
@@ -125,12 +135,22 @@ function dynamics(model::RigidBody{D}, x, u) where D
     build_state(model, xdot, qdot, vdot, ωdot)
 end
 
+function wrenches(model::RigidBody, x::SVector, u::SVector)
+    F = forces(model, x, u)
+    M = moments(model, x, u)
+    return F,M
+end
+
 @inline mass_matrix(::RigidBody, x, u) = throw(ErrorException("Not Implemented"))
 @inline forces(::RigidBody, x, u)::SVector{3} = throw(ErrorException("Not implemented"))
 @inline moments(::RigidBody, x, u)::SVector{3} = throw(ErrorException("Not implemented"))
 @inline inertia(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 @inline inertia_inv(::RigidBody, x, u)::SMatrix{3,3} = throw(ErrorException("Not implemented"))
 
+
+############################################################################################
+#                          STATE DIFFERENTIAL METHODS
+############################################################################################
 function state_diff(model::RigidBody, x::SVector{N}, x0::SVector{N}) where {N}
     r,q,v,ω = parse_state(model, x)
     r0,q0,v0,ω0 = parse_state(model, x0)
@@ -228,6 +248,11 @@ function TrajectoryOptimization.inverse_map_jacobian(model::RigidBody{<:UnitQuat
             0 0 0 0 0 0 0 0 0 0 0 1 0;
             0 0 0 0 0 0 0 0 0 0 0 0 1;
     ]
+end
+
+function TrajectoryOptimization.∇²differential(model::RigidBody{UnitQuaternion{T,IdentityMap}},
+        x::SVector, dx::SVector) where T
+    return I*0
 end
 
 function TrajectoryOptimization.inverse_map_jacobian(model::RigidBody, x::SVector)

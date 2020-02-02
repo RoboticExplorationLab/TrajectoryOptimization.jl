@@ -173,16 +173,21 @@ end
 Base.size(::Quadrotor2{B,<:UnitQuaternion}) where B = 13,4
 Base.size(::Quadrotor2) = 12,4
 
-function Quadrotor2{R}(;use_rot=true,
-    mass=0.5,
-    J=Diagonal(@SVector [0.0023, 0.0023, 0.004]),
-    gravity=SVector(0,0,-9.81),
-    motor_dist=0.1750,
-    kf=1.0,
-    km=0.0245,
-    info=Dict{Symbol,Any}()) where R
+function Quadrotor2{R}(;use_rot=R<:UnitQuaternion,
+        mass=0.5,
+        J=Diagonal(@SVector [0.0023, 0.0023, 0.004]),
+        gravity=SVector(0,0,-9.81),
+        motor_dist=0.1750,
+        kf=1.0,
+        km=0.0245,
+        info=Dict{Symbol,Any}()) where R
+    if R <: UnitQuaternion{T,IdentityMap} where T
+        use_rot = false
+    end
     Quadrotor2{use_rot,R}(13,4,mass,J,inv(J),gravity,motor_dist,kf,km,info)
 end
+
+(::Type{Quadrotor2})(;kwargs...) = Quadrotor2{UnitQuaternion{Float64,CayleyMap}}(;kwargs...)
 
 function trim_controls(model::Quadrotor2)
     @SVector fill(-model.gravity[3]*model.mass/4.0, size(model)[2])
@@ -209,6 +214,7 @@ function forces(model::Quadrotor2, x, u)
 end
 
 function moments(model::Quadrotor2, x, u)
+
     kf, km = model.kf, model.km
     L = model.motor_dist
 
@@ -227,6 +233,36 @@ function moments(model::Quadrotor2, x, u)
     M3 = km*w3;
     M4 = km*w4;
     tau = @SVector [L*(F2-F4), L*(F3-F1), (M1-M2+M3-M4)] #total rotor torque in body frame
+end
+
+function wrenches(model::Quadrotor2, x::SVector, u::SVector)
+    F = forces(model, x, u)
+    M = moments(model, x, u)
+    return F,M
+
+    q = orientation(model, x)
+    C = forceMatrix(model)
+    mass, g = model.mass, model.gravity
+
+    # Calculate force and moments
+    w = max.(u, 0)  # keep forces positive
+    fM = forceMatrix(model)*w
+    f = fM[1]
+    M = @SVector [fM[2], fM[3], fM[4]]
+    e3 = @SVector [0,0,1]
+    F = mass*g - q*(f*e3)
+    return F,M
+end
+
+function forceMatrix(model::Quadrotor2)
+    kf, km = model.kf, model.km
+    L = model.motor_dist
+    @SMatrix [
+       -kf  -kf  -kf  -kf;
+        0    L*kf 0   -L*kf;
+       -L*kf 0    L*kf 0;
+        km  -km   km  -km;
+    ]
 end
 
 
@@ -334,7 +370,7 @@ end
 Base.size(::LeeQuad{B,<:UnitQuaternion}) where B = 13,4
 Base.size(::LeeQuad) = 12,4
 
-(::Type{<:LeeQuad})(Rot; use_rot=true) = LeeQuad{use_rot,Rot,Float64}()
+(::Type{<:LeeQuad})(Rot; use_rot=true, kwargs...) = LeeQuad{use_rot,Rot,Float64}(;kwargs...)
 
 inertia(model::LeeQuad, x, u) = model.J
 inertia_inv(model::LeeQuad, x, u) = inv(model.J)
@@ -388,7 +424,8 @@ end
 Base.size(::BodyFrameLeeQuad{B,<:UnitQuaternion}) where B = 13,4
 Base.size(::BodyFrameLeeQuad) = 12,4
 
-(::Type{<:BodyFrameLeeQuad})(Rot; use_rot=true) = BodyFrameLeeQuad{use_rot,Rot,Float64}()
+(::Type{<:BodyFrameLeeQuad})(Rot; use_rot=true, kwargs...) =
+    BodyFrameLeeQuad{use_rot,Rot,Float64}(;kwargs...)
 
 inertia(model::BodyFrameLeeQuad, x, u) = model.J
 inertia_inv(model::BodyFrameLeeQuad, x, u) = inv(model.J)
