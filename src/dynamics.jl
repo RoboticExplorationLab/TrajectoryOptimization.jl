@@ -38,5 +38,6 @@ include("../dynamics/car.jl")
 include("../dynamics/rigidbody.jl")
 include("../dynamics/satellite.jl")
 include("../dynamics/yak_plane.jl")
+include("../dynamics/noisy_rigidbody.jl")
 
 end
