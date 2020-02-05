@@ -5,6 +5,8 @@ struct NoisyRB{L,D,W} <: RigidBody{D}
     noise::W
 end
 
+@inline Base.size(model::NoisyRB) = size(model.model)
+
 function NoisyRB(model::L, noise::W) where {L<:RigidBody{D}, W<:Distribution{Multivariate,Continuous}} where D
     NoisyRB{L,D,W}(model, noise)
 end
