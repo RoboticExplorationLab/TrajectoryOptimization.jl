@@ -824,7 +824,7 @@ function rotmat_to_rpy(R::SMatrix{3,3,T}) where T
     # θ = asin(R[1,3])
     θ = atan(-R[3,1], R[3,3])
     ψ = atan(-R[1,2], R[2,2])
-    ϕ = asin(R[3,2])
+    ϕ = asin(clamp(R[3,2],-1,1))
     return SVector{3,T}(ϕ, θ, ψ)
 end
 

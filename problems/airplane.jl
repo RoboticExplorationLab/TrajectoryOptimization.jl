@@ -30,7 +30,7 @@ function YakProblems(Rot=MRP{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQ
         # Objective
         Qf_diag = Dynamics.fill_state(model, 100, 500*sq, 100, 100.)
         Q_diag = Dynamics.build_state(model, [0.1,0.1,0.1],
-            (@SVector fill(0.5*sq,rsize)), fill(0.1,3), fill(0.1,3))
+            (@SVector fill(0.1*sq,rsize)), fill(0.1,3), fill(0.1,3))
         Qf = Diagonal(Qf_diag)
         Q = Diagonal(Q_diag)
         R = Diagonal(@SVector fill(1e-3,4))
@@ -38,8 +38,8 @@ function YakProblems(Rot=MRP{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQ
             costfun = LQRCost(Q, R, xf, utrim)
             costterm = LQRCost(Qf, R, xf, utrim)
         elseif costfun == :QuatLQR
-            costfun = QuatLQRCost(Q, R, xf, utrim; w=0.01)
-            costterm = QuatLQRCost(Qf, R, xf, utrim; w=20.0)
+            costfun = QuatLQRCost(Q, R, xf, utrim; w=0.1)
+            costterm = QuatLQRCost(Qf, R, xf, utrim; w=200.0)
         elseif costfun == :ErrorQuad
             Q = Diagonal(Q_diag[rm_quat])
             Qf = Diagonal(Qf_diag[rm_quat])
