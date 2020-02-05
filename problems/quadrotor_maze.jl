@@ -13,6 +13,7 @@ dt = tf/(N-1) # total time
 
 x0 = Dynamics.build_state(model, [0,-15,1], I(UnitQuaternion), zeros(3), zeros(3))
 xf = Dynamics.build_state(model, [0, 15,1], I(UnitQuaternion), zeros(3), zeros(3))
+utrim = Dynamics.trim_controls(model)
 
 # cost
 if n == 13
@@ -25,15 +26,15 @@ Q_diag = Dynamics.fill_state(model, 1e-3, 1e-2*sq, 1e-3, 1e-3)
 R_diag = @SVector fill(1e-4,m)
 Q = Diagonal(Q_diag)
 R = Diagonal(R_diag)
-Qf = Diagonal(@SVector fill(1e2,n))
+Qf = Diagonal(@SVector fill(1e3,n))
 
 if costfun == :Quadratic
     cost = LQRCost(Q, R, xf)
     obj = Objective(cost, N)
     # obj = LQRObjective(Q, R, Qf, xf, N) # objective with same stagewise costs
 elseif costfun == :QuatLQR
-    cost = QuatLQRCost(Q, R, xf, w=1e-3)
-    cost_term = QuatLQRCost(Qf, R, xf, w=1e-3)
+    cost = QuatLQRCost(Q, R, xf, w=1e-1)
+    cost_term = QuatLQRCost(Qf, R, xf, w=1.0)
     obj = Objective(cost, cost_term, N)
 elseif costfun == :ErrorQuad
     cost = ErrorQuadratic(model, Diagonal(Q_diag[rm_quat]), R, xf)
@@ -51,7 +52,7 @@ l2 = 4
 l3 = 7
 l4 = 10
 
-d = 3.5  # 0.5 door width
+d = 3  # 0.5 door width
 w = 10  # y location of wall
 mid = 3  # 0.5 middle width
 

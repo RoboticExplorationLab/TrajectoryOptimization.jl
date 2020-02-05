@@ -182,7 +182,9 @@ function Quadrotor2{R}(;use_rot=R<:UnitQuaternion,
         km=0.0245,
         info=Dict{Symbol,Any}()) where R
     if R <: UnitQuaternion{T,IdentityMap} where T
-        use_rot = false
+        if use_rot == true
+            use_rot = false
+        end
     end
     Quadrotor2{use_rot,R}(13,4,mass,J,inv(J),gravity,motor_dist,kf,km,info)
 end

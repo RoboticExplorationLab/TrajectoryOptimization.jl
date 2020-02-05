@@ -1,3 +1,9 @@
+using StaticArrays
+using LinearAlgebra
+using Test
+using Random
+using ForwardDiff
+const TO = TrajectoryOptimization
 
 # Unit Quaternions
 q = rand(UnitQuaternion)
@@ -18,8 +24,11 @@ G = TO.∇differential(q)
 
 @test ForwardDiff.gradient(mycostdiff, ϕ) ≈ G'grad_q
 @test ForwardDiff.hessian(mycostdiff, ϕ) ≈ G'hess_q*G + TO.∇²differential(q, grad_q)
-
-
+dq = SVector(q0)'SVector(q)
+@test ForwardDiff.gradient(mycostdiff, ϕ) ≈ -G'SVector(q0)
+@test ForwardDiff.gradient(mycostdiff, ϕ) ≈ -G'SVector(q0)
+G'SVector(q0) ≈ Vmat()*Lmult(q)'SVector(q0)
+@test ForwardDiff.hessian(mycostdiff, ϕ) ≈ I(3)*dq
 
 # MRPs
 g = rand(MRP)
@@ -67,6 +76,7 @@ err = CayleyMap(dq)
 G = TO.∇differential(dq)
 dmap = jacobian(CayleyMap,dq)
 ∇jac = TO.∇jacobian(CayleyMap, dq, err)
+TO.∇²differential(q, grad_q)
 
 @test grad_q ≈ Lmult(q0)*dmap'err
 @test ForwardDiff.gradient(mycostdiff,ϕ) ≈ (dmap*G)'err
