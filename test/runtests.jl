@@ -39,3 +39,7 @@ end
 @testset "Costs" begin
     include("cost_tests.jl")
 end
+
+@testset "Controllers" begin
+    include("controllers_test.jl")
+end
