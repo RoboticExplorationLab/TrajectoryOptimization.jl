@@ -206,6 +206,8 @@ end
 
 is_quat(model::AbstractModel, z::KnotPoint{T,N}) where {T,N} = @SVector zeros(N)
 
+∇²differential(model::AbstractModel, x::SVector, b::SVector) = I*0
+
 ############################################################################################
 #                               INFEASIBLE MODELS                                          #
 ############################################################################################

@@ -42,14 +42,14 @@ rhat = UnitQuaternion(r)
 # @btime ForwardDiff.jacobian(q->UnitQuaternion(q)*$r,SVector($q))
 # @btime ∇rotate($q,$r)
 
-@test ForwardDiff.jacobian(q->SVector(u2*UnitQuaternion{VectorPart}(q)),SVector(u1)) ≈ ∇composition1(u2,u1)
-@test ForwardDiff.jacobian(q->SVector(UnitQuaternion{VectorPart}(q)*u1),SVector(u2)) ≈ ∇composition2(u2,u1)
+@test ForwardDiff.jacobian(q->SVector(q2*UnitQuaternion{VectorPart}(q)),SVector(q1)) ≈ ∇composition1(q2,q1)
+@test ForwardDiff.jacobian(q->SVector(UnitQuaternion{VectorPart}(q)*q1),SVector(q2)) ≈ ∇composition2(q2,q1)
 # @btime ForwardDiff.jacobian(q->SVector($u2*UnitQuaternion(q)),SVector($u1))
 # @btime ∇composition1($u2,$u1)
 # @btime ForwardDiff.jacobian(q->SVector(UnitQuaternion(q)*$u1),SVector($u2))
 # @btime ∇composition2($u2,$u1)
 
-@test Lmult(q) ≈ ∇composition1(q,u2)
+@test Lmult(q) ≈ ∇composition1(q,q2)
 
 ϕ = @SVector zeros(3)
 @test TO.∇differential(q) ≈ Lmult(q)*jacobian(VectorPart,ϕ)
@@ -146,11 +146,10 @@ p3 = p2*p1
 @test r ≈ p3\(p2*p1*r)
 
 r = @SVector rand(3)
-R = rotationmatrix(q1)
+R = rotmat(q1)
 @test R*r ≈ q1*r
 
-p = differential_rotation(UnitQuaternion{MRPMap}(u1))
-p = MRP(p)
+p = MRP(p1)
 R1 = rotmat(p)
 @test R1*r ≈ R*r
 @test p*r ≈ R*r

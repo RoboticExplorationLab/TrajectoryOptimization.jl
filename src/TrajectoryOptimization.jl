@@ -28,7 +28,8 @@ import Base.copy
 
 export
     Dynamics,
-    Problems
+    Problems,
+    Controllers
 
 export
     state_dim,
@@ -177,6 +178,7 @@ include("solvers/direct/copy_blocks.jl")
 include("solvers/direct/direct_constraints.jl")
 
 include("problems.jl")
+include("controllers.jl")
 
 write_ipopt_options()
 Logging.global_logger(default_logger(true))

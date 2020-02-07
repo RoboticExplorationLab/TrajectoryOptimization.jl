@@ -800,6 +800,9 @@ Base.angle(e::RPY) = angle(UnitQuaternion(e))
 
 function rotmat(ϕ, θ, ψ)
     # Equivalent to RotX(e[1])*RotY(e[2])*RotZ(e[3])
+    if !isfinite(ϕ) || !isfinite(θ) || !isfinite(ψ)
+        return @SMatrix zeros(3,3)
+    end
     sϕ,cϕ = sincos(ϕ)
     sθ,cθ = sincos(θ)
     sψ,cψ = sincos(ψ)

@@ -38,7 +38,7 @@ cartpole = Dynamics.Cartpole()
 @test num_allocs(cartpole) == 0
 
 # Quadrotor
-quad = Dynamics.Quadrotor()
+quad = Dynamics.Quadrotor2()
 @test size(quad) == (13,4)
 @test num_allocs(cartpole) == 0
 

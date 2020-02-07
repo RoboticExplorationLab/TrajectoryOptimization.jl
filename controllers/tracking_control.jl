@@ -8,13 +8,15 @@ export
     HFCA,
     test_ICs
 
-# import TrajectoryOptimization.Dynamics: trim_controls, build_state
+
+
+import TrajectoryOptimization.Dynamics: trim_controls, build_state
+import TrajectoryOptimization: state_diff, state_diff_jacobian
 abstract type AbstractController end
 abstract type LQRController <: AbstractController end
 abstract type TimeVaryingController <: AbstractController end
 abstract type TrackingController <: TimeVaryingController end
 
-# import TrajectoryOptimization: state_diff, state_diff_jacobian
 
 function get_k(cntrl::TimeVaryingController, t)
     times = get_times(cntrl)
@@ -67,7 +69,7 @@ function tvlqr!(K, A, B, Q, R)
     N = length(A)
 
     # Solve infinite-horizon at goal state
-    # Qf = dare(A[N], B[N], Q, R)
+    Qf = dare(A[N], B[N], Q, R)
 
     P_ = similar_type(A[N])
     P = copy(Qf)
@@ -331,7 +333,8 @@ function calc_LQR_gain(A::AbstractMatrix, B::AbstractMatrix, Q::AbstractMatrix, 
     K = -(R + B'P*B)\(B'P*A)
 end
 
-function dare(A,B,Q,R)
+function dare(A,B,Q,R,
+        max_iters=100, tol=1e-4)
     P_ = similar_type(A)
     P = P_(A)
     for k = 1:max_iters

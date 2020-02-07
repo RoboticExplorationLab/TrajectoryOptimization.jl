@@ -31,10 +31,10 @@ end
     include("constraint_tests.jl")
 end
 
-@testset "Rotations" begin
-    include("rotations_tests.jl")
-    include("retraction_maps.jl")
-end
+# @testset "Rotations" begin
+#     include("rotations_tests.jl")
+#     include("retraction_maps.jl")
+# end
 
 @testset "Costs" begin
     include("cost_tests.jl")
