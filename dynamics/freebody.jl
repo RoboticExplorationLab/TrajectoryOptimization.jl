@@ -4,6 +4,8 @@
     Jinv::Diagonal{T,SVector{3,T}} = Diagonal(@SVector ones(3))
 end
 
+(::FreeBody)(;kwargs...) = FreeBody{UnitQuaternion{Float64,CayleyMap},Float64}(;kwargs...)
+
 function forces(model::FreeBody, x::SVector, u::SVector)
     q = orientation(model, x)
     F = @SVector [u[1], u[2], u[3]]
@@ -11,7 +13,7 @@ function forces(model::FreeBody, x::SVector, u::SVector)
 end
 
 function moments(model::FreeBody, x::SVector, u::SVector)
-    return @SVector [u[4], x[5], u[6]]  # body frame
+    return @SVector [u[4], u[5], u[6]]  # body frame
 end
 
 Base.size(::FreeBody{<:UnitQuaternion}) = 13,6
