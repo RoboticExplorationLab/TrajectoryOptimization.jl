@@ -102,6 +102,8 @@ function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
     end
 end
 
+@inline get_trajectory(solver::AbstractSolver) = solver.Z
+
 # ConstrainedSolver methods
 num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
 

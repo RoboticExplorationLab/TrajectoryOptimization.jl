@@ -218,17 +218,17 @@ end
 # Default methods for converting KnotPoints to states and controls
 for method in [:evaluate, :jacobian]
 	@eval begin
-			@inline $(method)(con::AbstractConstraint{S,Stage},   Z::KnotPoint) where S = $(method)(con, state(Z), control(Z))
-			@inline $(method)(con::AbstractConstraint{S,State},   Z::KnotPoint) where S = $(method)(con, state(Z))
-			@inline $(method)(con::AbstractConstraint{S,Control}, Z::KnotPoint) where S = $(method)(con, control(Z))
+			@inline $(method)(con::AbstractConstraint{S,Stage},   Z::AbstractKnotPoint) where S = $(method)(con, state(Z), control(Z))
+			@inline $(method)(con::AbstractConstraint{S,State},   Z::AbstractKnotPoint) where S = $(method)(con, state(Z))
+			@inline $(method)(con::AbstractConstraint{S,Control}, Z::AbstractKnotPoint) where S = $(method)(con, control(Z))
 
-			@inline $(method)(con::AbstractConstraint{S,Coupled}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,Coupled}, Z′::AbstractKnotPoint, Z::AbstractKnotPoint) where S =
 				$(method)(con, state(Z′), control(Z′), state(Z), control(Z))
-			@inline $(method)(con::AbstractConstraint{S,Dynamical}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,Dynamical}, Z′::AbstractKnotPoint, Z::AbstractKnotPoint) where S =
 				$(method)(con, state(Z′), state(Z), control(Z))
-			@inline $(method)(con::AbstractConstraint{S,CoupledState}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,CoupledState}, Z′::AbstractKnotPoint, Z::AbstractKnotPoint) where S =
 				$(method)(con, state(Z′), state(Z))
-			@inline $(method)(con::AbstractConstraint{S,CoupledControl}, Z′::KnotPoint, Z::KnotPoint) where S =
+			@inline $(method)(con::AbstractConstraint{S,CoupledControl}, Z′::AbstractKnotPoint, Z::AbstractKnotPoint) where S =
 				$(method)(con, control(Z′), control(Z))
 	end
 end

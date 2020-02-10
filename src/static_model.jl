@@ -114,7 +114,7 @@ Compute the Jacobian of the continuous-time dynamics using ForwardDiff. The inpu
 a static vector of the concatenated state and control, or a KnotPoint. They must be concatenated
 to avoid unnecessary memory allocations.
 """
-function jacobian(model::AbstractModel, z::KnotPoint)
+function jacobian(model::AbstractModel, z::AbstractKnotPoint)
     ix, iu = z._x, z._u
     f_aug(z) = dynamics(model, z[ix], z[iu])
     s = z.z

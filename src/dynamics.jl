@@ -40,5 +40,6 @@ include("../dynamics/satellite.jl")
 include("../dynamics/yak_plane.jl")
 include("../dynamics/noisy_rigidbody.jl")
 include("../dynamics/freebody.jl")
+include("../dynamics/copymodel.jl")
 
 end

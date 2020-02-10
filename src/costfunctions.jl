@@ -339,7 +339,7 @@ function cost_expansion(cost::ErrorQuadratic{Rot}, model::AbstractModel,
 
     # Hessian
     ∇jac = inverse_map_∇jacobian(model, dx, Q*err)
-    Qxx = G'dmap'Q*dmap*G + G'∇jac*G
+    Qxx = G'dmap'Q*dmap*G + G'∇jac*G + ∇²differential(model, x, dmap'Q*err)
     Quu = cost.R
     Qux = @SMatrix zeros(M,N-1)
     return Qxx, Quu, Qux, Qx, Qu

@@ -4,6 +4,8 @@ export
     state,
     control
 
+abstract type AbstractKnotPoint end
+
 """ $(TYPEDEF)
 Stores critical information corresponding to each knot point in the trajectory optimization
 problem, including the state and control values, as well as the time and time step length.
@@ -35,7 +37,7 @@ KnotPoint(x, m, t=0.0)  # for terminal knot point
 Use `is_terminal(z::KnotPoint)` to determine if a `KnotPoint` is a terminal knot point (e.g.
 has no time step length and z.t == tf).
 """
-mutable struct KnotPoint{T,N,M,NM}
+mutable struct KnotPoint{T,N,M,NM} <: AbstractKnotPoint
     z::SVector{NM,T}
     _x::SVector{N,Int}
     _u::SVector{M,Int}
@@ -60,9 +62,9 @@ function KnotPoint(x::AbstractVector, m::Int, t=0.0)
     KnotPoint(x, u, 0., t)
 end
 
-@inline state(z::KnotPoint) = z.z[z._x]
-@inline control(z::KnotPoint) = z.z[z._u]
-@inline is_terminal(z::KnotPoint) = z.dt == 0
+@inline state(z::AbstractKnotPoint) = z.z[z._x]
+@inline control(z::AbstractKnotPoint) = z.z[z._u]
+@inline is_terminal(z::AbstractKnotPoint) = z.dt == 0
 
 const Traj = AbstractVector{<:KnotPoint}
 traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
@@ -117,4 +119,12 @@ function set_times!(Z::Traj, ts)
     for k in eachindex(ts)
         Z[k].t = ts[k]
     end
+end
+
+struct StaticKnotPoint{T,N,M,NM} <: AbstractKnotPoint
+    z::SVector{NM,T}
+    _x::SVector{N,Int}
+    _u::SVector{M,Int}
+    dt::T # time step
+    t::T  # total time
 end

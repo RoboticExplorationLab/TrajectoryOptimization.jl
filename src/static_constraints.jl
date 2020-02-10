@@ -169,6 +169,26 @@ function evaluate(con::SphereConstraint{T,P}, x::SVector) where {T,P}
 end
 
 ############################################################################################
+#  								SELF-COLLISION CONSTRAINT 								   #
+############################################################################################
+
+struct CollisionConstraint{D} <: AbstractConstraint{Inequality,State,1}
+	n::Int
+    x1::SVector{D,Int}
+    x2::SVector{D,Int}
+    radius::Float64
+end
+
+state_dim(con::CollisionConstraint) = con.n
+
+function evaluate(con::CollisionConstraint, x::SVector)
+    x1 = x[con.x1]
+    x2 = x[con.x2]
+    d = x1 - x2
+    @SVector [con.radius^2 - d'd]
+end
+
+############################################################################################
 #								NORM CONSTRAINT											   #
 ############################################################################################
 
@@ -251,6 +271,21 @@ function jacobian(con::QuatSlackConstraint, x::SVector, u::SVector)
 	return @SMatrix [0 0 0 q[1]*M  q[2]*M  q[3]*M  q[4]*M  0 0 0  0 0 0  0 0 0 0 nq]
 end
 
+############################################################################################
+# 								COPY CONSTRAINT 										   #
+############################################################################################
+
+# struct CopyConstraint{K,W,S,P,N,M} <: AbstractConstraint{W,S,P}
+# 	con::AbstractConstraint{W,S,P}
+#     xinds::Vector{SVector{N,Int}}
+#     uinds::Vector{SVector{M,Int}}
+# end
+#
+# function evaluate(con::CopyConstraint{K}, z::KnotPoint)
+# 	c = evaluate(con,)
+# 	for 2 = 1:K
+# 	end
+# end
 
 
 ############################################################################################
