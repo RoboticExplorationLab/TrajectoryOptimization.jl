@@ -2,7 +2,8 @@ using Interpolations
 using StaticArrays
 using LinearAlgebra
 using Statistics
-using Makie
+using QuadGK
+# using Makie
 
 """
 Get a trajectory of s, ϕ, κ from a set of E,N pairs defining the path, where
@@ -52,6 +53,9 @@ function pathToLocal(X,Y)
     end
     s = cumsum(r .* w)
 
+    # Make the first path length zero
+    s[1] = 0.0
+
     return s, ϕ, κ
 end
 
@@ -92,7 +96,13 @@ function localToGlobal(X,Y,S,Φ,s,e)
     nomX = itpX.(s)
     nomY = itpY.(s)
     nomΦ = itpΦ.(s)
-    x = @. nomX + e*sin(nomΦ)
-    y = @. nomY - e*cos(nomΦ)
+    x = @. nomX - e*sin(nomΦ)
+    y = @. nomY + e*cos(nomΦ)
     return x,y
+end
+
+function localToGlobal(path::CarPath, Z::Traj)
+    e = [z.z[7] for z in Z]
+    s = [z.t for z in Z]
+    localToGlobal(path.X, path.Y, path.s, path.ϕ, s, e)
 end

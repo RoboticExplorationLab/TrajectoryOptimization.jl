@@ -4,11 +4,21 @@ using TrajectoryOptimization
 import TrajectoryOptimization: dynamics, AbstractConstraint, evaluate, state_dim
 const TO = TrajectoryOptimization
 
+struct CarPath{T}
+    s::Vector{T}
+    ϕ::Vector{T}
+    κ::Vector{T}
+    X::Vector{T}
+    Y::Vector{T}
+end
 
+function curvature(path::CarPath, s)
+    k = searchsortedfirst(path.s, s)
+    return path.κ[k]
+end
 
 @with_kw mutable struct BicycleCar{T} <: AbstractModel
-    k_s::Dict{Float64,Float64} =
-        Dict( collect(range(0,stop=30, length=100)) .=> fill(0.1, 100) )
+    path::CarPath{T}
     a::T = 1.2169  # dist to front axle (m)
     b::T = 1.4131  # dist to rear axle (m)
     h::T = 0.5       # height of center of gravity? (m)
@@ -39,32 +49,55 @@ function dynamics(car::BicycleCar, x, u, s)
     t  = x[8]  # time
 
     # Road curvature
-    k = car.k_s[s]
+    k = curvature(car.path, s)
 
-    # Drag Force
-    Fx_drag = 0.0
+    # # Drag Force
+    # Fx_drag = 0.0
+    #
+    # # Spatial derivative
+    # s_dot = (Ux * cos(Δψ) - Uy * sin(Δψ)) / (1 - k*e)
+    #
+    # # Get tire forces
+    # Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
+    #
+    # # State Derivatives
+    # r_dot  = (car.a * (Fxf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
+    # Ux_dot =  r * Uy + (Fxf * cos(δ) - Fyf * sin(δ) + Fxr - Fx_drag) / car.mass
+    # Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ) + Fyr) / car.mass
+    # Δψ_dot = r - k * s_dot
+    # e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
+    # t_dot = 1 / s_dot
 
-    # Spatial derivative
-    s_dot = (Ux * cos(Δψ) - Uy * sin(Δψ)) / (1 - k*e)
+    # Slip angles
+    αf = atan(Uy + car.a*r, Ux) - δ
+    αr = atan(Uy - car.b*r, Ux)
 
-    # Get tire forces
-    Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
+    # Get longitudinal forces
+    Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)
 
-    # State Derivatives
-    r_dot  = (car.a * (Fxf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
-    Ux_dot =  r * Uy + (Fxf * cos(δ) - Fyf * sin(δ) + Fxr - Fx_drag) / car.mass
-    Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ) + Fyr) / car.mass
-    Δψ_dot = r - k * s_dot
-    e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
-    t_dot = 1 / s_dot
+    # Get lateral forces
+    Fyf = logit_tire_model(αf, car.μ, car.Cαf, Fxf, Fzf)
+    Fyr = logit_tire_model(αr, car.μ, car.Cαr, Fxr, Fzr)
+
+    # Dynamics from paper
+    s_dot = Ux - Uy*Δψ
+    e_dot = Uy + Ux*Δψ
+
+    Δψ_dot = r - k*Ux
+    Ux_dot = (Fxf + Fxr)/car.mass + r*Uy
+    Uy_dot = (Fyf + Fyr)/car.mass - r*Ux
+    r_dot = (car.a*Fyf - car.b*Fyr)/car.Iz
+    t_dot = 1/s_dot
 
     return @SVector [δ_dot, fx_dot, r_dot, Uy_dot, Ux_dot, Δψ_dot, e_dot, t_dot]
 end
 
 function FWD_force_model(car::BicycleCar, fx)
     l = car.a + car.b
-    Fxf = max(fx * car.b / l, fx)
-    Fxr = min(fx * car.a / l, 0.0)
+    Fxf = max(fx * car.b / l, fx)  # lower bound
+    Fxr = min(fx * car.a / l, 0.0)  # lower bound
+    # Fxf = fx*car.b / l
+    # Fxr = fx*car.a / l
     Fzf = car.mass * car.g * car.b / l
     Fzr = car.mass * car.g * car.a / l
     return Fxf, Fxr, Fzf, Fzr
@@ -87,7 +120,8 @@ function logit_lateral_force_model(car::BicycleCar, x)
     return Fxf, Fxr, Fyf, Fyr
 end
 
-function logit_tire_model(μ, Cα, α, Fx, Fz)
+
+function logit_tire_model(α, μ, Cα, Fx, Fz)
     Fy_max = sqrt((μ*Fz)^2 - Fx^2)
     slope = 2*Cα / Fy_max
     Fy = Fy_max * (1-1*exp(slope*α)) / (1 + exp(slope*α))
