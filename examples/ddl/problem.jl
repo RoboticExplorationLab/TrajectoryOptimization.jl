@@ -3,6 +3,7 @@ include("path.jl")
 import TrajectoryOptimization: set_state!
 using Plots
 
+
 # Scenario
 t = range(0,20,length=1001)
 radius = 20
@@ -14,6 +15,7 @@ plot(path.X,path.Y, aspect_ratio=:equal)
 s[end]
 nomX = interpolate((path.s,), path.X, Gridded(Linear()))
 intp_heading = interpolate((path.s,), path.ϕ, Gridded(Linear()))
+
 
 
 # Discretization
@@ -30,6 +32,10 @@ car = BicycleCar(path=path)
 n,m = size(car)
 p_c = 0.1 # probability of contingency plan
 
+x,u = zeros(car)
+fiala(a) = fiala_tire_model(car.μ, car.Cαf, a, 0.0, 10000)
+plot(fiala.(range(-0.2,0.2, length=100)))
+car.μ
 
 # Objective
 Ux_des = 5.
@@ -86,7 +92,7 @@ R = Diagonal(Rd)
 obj = LQRObjective(Q,R,Q,xd,N)
 
 # Bound Constraints
-δ_dot_bound = deg2rad(90)  # deg/s
+δ_dot_bound = deg2rad(20)  # deg/s
 δ_bound = deg2rad(27)  # deg
 Fx_max = car.μ*car.mass*car.g
 Ux_min = 1  # m/s
@@ -132,6 +138,7 @@ U0 = [@SVector zeros(m) for k = 1:N-1]
 
 solver = iLQRSolver(prob)
 solver = AugmentedLagrangianSolver(prob)
+benchmark_solve!(solver)
 initial_controls!(solver, U0)
 rollout!(solver)
 

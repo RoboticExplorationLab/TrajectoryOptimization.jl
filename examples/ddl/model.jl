@@ -1,5 +1,5 @@
 using Parameters, StaticArrays, BenchmarkTools, LinearAlgebra, Interpolations
-using MAT
+# using MAT
 using TrajectoryOptimization
 import TrajectoryOptimization: dynamics, AbstractConstraint, evaluate, state_dim
 const TO = TrajectoryOptimization
@@ -24,10 +24,10 @@ end
     h::T = 0.5       # height of center of gravity? (m)
     mass::T = 1744.  # mass (kg)
     Iz::T = 2.7635e3  # moment of inertia (kg⋅m²)
-    Cαf::T = 66000. # (N/rad)
-    Cαr::T = 60000. # (N/rad)
-    μ::T = 0.25  # coefficient of friction
-    Cd0::T = 218.06   # Cd0 (N)
+    Cαf::T = 66000.  # (N/rad)
+    Cαr::T = 60000.  # (N/rad)
+    μ::T = 0.9       # coefficient of friction
+    Cd0::T = 218.06  # Cd0 (N)
     Cd1::T = 0.0 # (N/mps)
     g::T = 9.81  # gravity (m/s²)
 end
@@ -52,42 +52,42 @@ function dynamics(car::BicycleCar, x, u, s)
     k = curvature(car.path, s)
 
     # # Drag Force
-    # Fx_drag = 0.0
+    Fx_drag = 0.0
     #
     # # Spatial derivative
-    # s_dot = (Ux * cos(Δψ) - Uy * sin(Δψ)) / (1 - k*e)
+    s_dot = (Ux * cos(Δψ) - Uy * sin(Δψ)) / (1 - k*e)
     #
     # # Get tire forces
-    # Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
+    Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
     #
     # # State Derivatives
-    # r_dot  = (car.a * (Fxf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
-    # Ux_dot =  r * Uy + (Fxf * cos(δ) - Fyf * sin(δ) + Fxr - Fx_drag) / car.mass
-    # Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ) + Fyr) / car.mass
-    # Δψ_dot = r - k * s_dot
-    # e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
-    # t_dot = 1 / s_dot
+    r_dot  = (car.a * (Fyf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
+    Ux_dot =  r * Uy + (Fxf * cos(δ) - Fyf * sin(δ) + Fxr - Fx_drag) / car.mass
+    Uy_dot = -r * Ux + (Fyf * cos(δ) + Fxf * sin(δ) + Fyr) / car.mass
+    Δψ_dot = r - k * s_dot
+    e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
+    t_dot = 1 / s_dot
 
     # Slip angles
     αf = atan(Uy + car.a*r, Ux) - δ
     αr = atan(Uy - car.b*r, Ux)
 
-    # Get longitudinal forces
-    Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)
+    # # Get longitudinal forces
+    # Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)
 
-    # Get lateral forces
-    Fyf = logit_tire_model(αf, car.μ, car.Cαf, Fxf, Fzf)
-    Fyr = logit_tire_model(αr, car.μ, car.Cαr, Fxr, Fzr)
-
-    # Dynamics from paper
-    s_dot = Ux - Uy*Δψ
-    e_dot = Uy + Ux*Δψ
-
-    Δψ_dot = r - k*Ux
-    Ux_dot = (Fxf + Fxr)/car.mass + r*Uy
-    Uy_dot = (Fyf + Fyr)/car.mass - r*Ux
-    r_dot = (car.a*Fyf - car.b*Fyr)/car.Iz
-    t_dot = 1/s_dot
+    # # Get lateral forces
+    # Fyf = logit_tire_model(αf, car.μ, car.Cαf, Fxf, Fzf)
+    # Fyr = logit_tire_model(αr, car.μ, car.Cαr, Fxr, Fzr)
+    #
+    # # Dynamics from paper
+    # s_dot = Ux - Uy*Δψ
+    # e_dot = Uy + Ux*Δψ
+    #
+    # Δψ_dot = r - k*Ux
+    # Ux_dot = (Fxf + Fxr)/car.mass + r*Uy
+    # Uy_dot = (Fyf + Fyr)/car.mass - r*Ux
+    # r_dot = (car.a*Fyf - car.b*Fyr)/car.Iz
+    # t_dot = 1/s_dot
 
     return @SVector [δ_dot, fx_dot, r_dot, Uy_dot, Ux_dot, Δψ_dot, e_dot, t_dot]
 end
@@ -104,12 +104,13 @@ function FWD_force_model(car::BicycleCar, fx)
 end
 
 function logit_lateral_force_model(car::BicycleCar, x)
+    δ = x[1]
     fx = x[2]
     r  = x[3]
     Uy = x[4]
     Ux = x[5]
 
-    α_f = atan(Uy + car.a * r, Ux)
+    α_f = atan(Uy + car.a * r, Ux) - δ
     α_r = atan(Uy - car.b * r, Ux)
 
     Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)
@@ -124,17 +125,17 @@ end
 function logit_tire_model(α, μ, Cα, Fx, Fz)
     Fy_max = sqrt((μ*Fz)^2 - Fx^2)
     slope = 2*Cα / Fy_max
-    Fy = Fy_max * (1-1*exp(slope*α)) / (1 + exp(slope*α))
+    Fy = Fy_max * (1-2*exp(slope*α)) / (1 + exp(slope*α))
     return Fy
 end
 
 function fiala_tire_model(μ, Cα, α, Fx, Fz)
-    Fx = min( 0.99*μ*Fz, Fx)
+    Fx = min( 0.99*μ*Fz, Fx)  # try removing this?
     Fx = max(-0.99*μ*Fz, Fx)
     Fy_max = sqrt((μ*Fz)^2 - Fx^2)
     a_slide = atan(3*Fy_max, Cα)
     tan_a = tan(α)
-    Fy_unsat = ( -Cα * tan_a + Cα^2/(3*Fy_max)*tan_a*abs(tan_a))
+    Fy_unsat = ( -Cα * tan_a + Cα^2/(3*Fy_max)*tan_a*abs(tan_a) - Cα^3/(27*Fy_max^2) * tan_a^3 )
     Fy_sat = -Fy_max*sign(α)
     if abs(α) < a_slide
         return Fy_unsat
