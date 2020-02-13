@@ -1,0 +1,95 @@
+\begin{tikzpicture}[]
+\begin{axis}[legend style = {{at={(1.0,0.65)},anchor=north east}}, ylabel = {time (s)}, xmin = {3.0}, xmax = {15}, axis equal image = {false}, ymax = {45}, ymode = {log}, xlabel = {number of lift agents}, hide axis = {false}, grid=both, ymin = {0.0}]\addplot+ [mark = {}, color=blue, thick]coordinates {
+(3.0, 1.521)
+(4.0, 6.0266)
+(5.0, 6.4757)
+(6.0, 10.4257)
+(7.0, 10.5166)
+(8.0, 13.476)
+(10.0, 20.3489)
+(11.0, 24.5767)
+(12.0, 28.4216)
+(13.0, 31.9788)
+(14.0, 35.8373)
+(15.0, 41.173)
+};
+\addlegendentry{batch}
+\addplot+ [mark = {}, color=green, thick]coordinates {
+(3.0, 0.586)
+(4.0, 0.583)
+(5.0, 0.6301)
+(6.0, 0.5965)
+(7.0, 0.6167)
+(8.0, 0.6244)
+(9.0, 0.5924)
+(10.0, 0.617)
+(11.0, 0.6113)
+(12.0, 0.6316)
+(13.0, 0.6275)
+(14.0, 0.6183)
+(15.0, 0.6325)
+};
+\addlegendentry{sequential}
+\addplot+ [mark = {}, color=orange, thick]coordinates {
+(3.0, 0.4996)
+(4.0, 0.5095)
+(5.0, 0.5153)
+(6.0, 0.5371)
+(7.0, 0.5374)
+(8.0, 0.5601)
+(9.0, 0.5507)
+(10.0, 0.5653)
+(11.0, 0.5623)
+(12.0, 0.5625)
+(13.0, 0.5816)
+(14.0, 0.575)
+(15.0, 0.5765)
+};
+\addlegendentry{parallel}
+\addplot+[scatter, scatter src=explicit symbolic, only marks = {true}, scatter/classes = {{a={mark=*,blue,scale=1.0, mark options={fill=blue}}}}] coordinates {
+(3, 1.521) [a]
+(4, 6.0266) [a]
+(5, 6.4757) [a]
+(6, 10.4257) [a]
+(7, 10.5166) [a]
+(8, 13.476) [a]
+(10, 20.3489) [a]
+(11, 24.5767) [a]
+(12, 28.4216) [a]
+(13, 31.9788) [a]
+(14, 35.8373) [a]
+(15, 41.173) [a]
+};
+\addplot+[scatter, scatter src=explicit symbolic, only marks = {true}, scatter/classes = {{a={mark=*,green,scale=1.0, mark options={fill=green}}}}] coordinates {
+(3, 0.586) [a]
+(4, 0.583) [a]
+(5, 0.6301) [a]
+(6, 0.5965) [a]
+(7, 0.6167) [a]
+(8, 0.6244) [a]
+(9, 0.5924) [a]
+(10, 0.617) [a]
+(11, 0.6113) [a]
+(12, 0.6316) [a]
+(13, 0.6275) [a]
+(14, 0.6183) [a]
+(15, 0.6325) [a]
+};
+\addplot+[scatter, scatter src=explicit symbolic, only marks = {true}, scatter/classes = {{a={mark=*,orange,scale=1.0, mark options={fill=orange}}}}] coordinates {
+(3, 0.4996) [a]
+(4, 0.5095) [a]
+(5, 0.5153) [a]
+(6, 0.5371) [a]
+(7, 0.5374) [a]
+(8, 0.5601) [a]
+(9, 0.5507) [a]
+(10, 0.5653) [a]
+(11, 0.5623) [a]
+(12, 0.5625) [a]
+(13, 0.5816) [a]
+(14, 0.575) [a]
+(15, 0.5765) [a]
+};
+\end{axis}
+
+\end{tikzpicture}
