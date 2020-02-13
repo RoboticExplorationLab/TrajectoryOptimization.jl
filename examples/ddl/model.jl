@@ -4,21 +4,11 @@ using TrajectoryOptimization
 import TrajectoryOptimization: dynamics, AbstractConstraint, evaluate, state_dim
 const TO = TrajectoryOptimization
 
-struct CarPath{T}
-    s::Vector{T}
-    ϕ::Vector{T}
-    κ::Vector{T}
-    X::Vector{T}
-    Y::Vector{T}
-end
 
-function curvature(path::CarPath, s)
-    k = searchsortedfirst(path.s, s)
-    return path.κ[k]
-end
+
 
 @with_kw mutable struct BicycleCar{T} <: AbstractModel
-    path::CarPath{T}
+    path::AbstractPath = CirclePath(20.0)
     a::T = 1.2169  # dist to front axle (m)
     b::T = 1.4131  # dist to rear axle (m)
     h::T = 0.5       # height of center of gravity? (m)
@@ -49,7 +39,7 @@ function dynamics(car::BicycleCar, x, u, s)
     t  = x[8]  # time
 
     # Road curvature
-    k = curvature(car.path, s)
+    k = curvature(car.path, s + 10.0)
 
     # # Drag Force
     Fx_drag = 0.0
@@ -155,7 +145,7 @@ struct BrakeForceConstraint{T} <: AbstractConstraint{Inequality,State,1}
     car::BicycleCar{T}
 end
 
-state_dim(con::BrakeForceConstraint) = size(car)[1]
+state_dim(con::BrakeForceConstraint) = size(con.car)[1]
 
 function evaluate(con::BrakeForceConstraint, x::SVector)
     car = con.car
@@ -202,4 +192,20 @@ function dynamics(car::ContingencyCar, x, u, s)
     x2,u2 = x[ix[2]], u[iu[2]]
     ẋ2 = dynamics(cars[2], x1, u1, s)
     return [ẋ1; ẋ2]
+end
+
+function localToGlobal(path::AbstractPath, Z::Traj)
+    e = [z.z[7] for z in Z]
+    s = [z.t for z in Z]
+    localToGlobal(path, s, e)
+end
+
+function Plots.plot(solver::TrajectoryOptimization.AbstractSolver)
+    plot(get_model(solver), get_trajectory(solver))
+end
+
+function Plots.plot(car::BicycleCar, Z::Traj)
+    path = car.path
+    x,y = localToGlobal(path, Z)
+    plot!(x,y, linewidth=2)
 end
