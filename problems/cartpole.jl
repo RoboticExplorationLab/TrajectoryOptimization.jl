@@ -22,4 +22,4 @@ X0 = [@SVector fill(NaN,n) for k = 1:N]
 u0 = @SVector fill(0.01,m)
 U0 = [u0 for k = 1:N-1]
 Z = Traj(X0,U0,dt*ones(N))
-cartpole_static = Problem{RK3}(model, obj, conSet, x0, xf, Z, N, tf)
+cartpole_static = Problem{RK3}(model, obj, conSet, x0, xf, Z, N, 0.0, tf)

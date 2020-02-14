@@ -221,6 +221,18 @@ function reset!(conSet::ConstraintSet)
 	end
 end
 
+function reset_duals!(conSet::ConstraintSet)
+	for con in conSet.constraints
+		reset_duals!(con)
+	end
+end
+
+function reset_penalties!(conSet::ConstraintSet)
+	for con in conSet.constraints
+		reset_penalties!(con)
+	end
+end
+
 """ ```julia
 change_dimension(conSet::ConstraintSet, n, m)
 ```

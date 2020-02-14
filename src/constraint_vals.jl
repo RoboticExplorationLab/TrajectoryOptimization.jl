@@ -148,13 +148,23 @@ get_c_max(con::ConstraintVals) = maximum(con.c_max)
 
 
 function reset!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
+	reset_duals!(con)
+	reset_penalties!(con)
+end
+
+function reset_duals!(con::ConstraintVals)
 	λ = con.λ
+	for i in eachindex(con.inds)
+		λ[i] *= 0.0
+	end
+end
+
+function reset_penalties!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
 	c = con.vals
 	μ = con.μ
 	for i in eachindex(con.inds)
 		μ[i] = con.params.μ0 * @SVector ones(T,P)
 		c[i] *= 0.0
-		λ[i] *= 0.0
 	end
 end
 

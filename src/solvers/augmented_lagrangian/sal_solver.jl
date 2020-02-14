@@ -82,11 +82,14 @@ $(FIELDS)
     "terminal solve when maximum penalty is reached."
     kickout_max_penalty::Bool = false
 
+    reset_duals::Bool = true
+
+    reset_penalties::Bool = true
+
     log_level::Base.CoreLogging.LogLevel = OuterLoop
 end
 
 function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
-    reset!(conSet)
     if !isnan(opts.dual_max)
         for con in conSet.constraints
             params = get_params(con)::ConstraintParams{T}
@@ -110,6 +113,12 @@ function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions
             params = get_params(con)::ConstraintParams{T}
             params.ϕ = opts.penalty_scaling
         end
+    end
+    if opts.reset_duals
+        reset_duals!(conSet)
+    end
+    if opts.reset_penalties
+        reset_penalties!(conSet)
     end
 end
 
@@ -178,7 +187,7 @@ function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts::AugmentedLagrangian
     alobj = ALObjective(prob.obj, prob.constraints)
     rollout!(prob)
     prob_al = Problem(prob.model, alobj, ConstraintSet(size(prob)...),
-        prob.x0, prob.xf, prob.Z, prob.N, prob.tf)
+        prob.x0, prob.xf, prob.Z, prob.N, prob.t0, prob.tf)
 
     solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
 

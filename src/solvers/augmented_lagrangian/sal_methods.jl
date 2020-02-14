@@ -17,7 +17,6 @@ function solve!(solver::AugmentedLagrangianSolver{T,S}) where {T,S}
         J = sum(J_)
         c_max = maximum(conSet.c_max)
 
-
         record_iteration!(solver, J, c_max)
 
         converged = evaluate_convergence(solver)
@@ -35,7 +34,7 @@ function initialize!(solver::AugmentedLagrangianSolver)
 	clear_cache!(solver.opts)
 
 	# Reset solver
-    reset!(get_constraints(solver))
+    reset!(get_constraints(solver), solver.opts)
     solver.stats.iterations = 0
 	solver.stats.iterations_total = 0
 
