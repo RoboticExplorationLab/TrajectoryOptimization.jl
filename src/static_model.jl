@@ -10,7 +10,9 @@ export
 
 export
     QuadratureRule,
+	RK2,
     RK3,
+	RK4,
     HermiteSimpson
 
 
@@ -53,12 +55,22 @@ abstract type RigidBody{R<:Rotation} <: AbstractModel end
 
 "Integration rule for approximating the continuous integrals for the equations of motion"
 abstract type QuadratureRule end
+
 "Integration rules of the form x′ = f(x,u), where x′ is the next state"
 abstract type Implicit <: QuadratureRule end
+
 "Integration rules of the form x′ = f(x,u,x′,u′), where x′,u′ are the states and controls at the next time step."
 abstract type Explicit <: QuadratureRule end
-"Third-order Runge-Kutta method with zero-order-old on the controls"
+
+"Fourth-order Runge-Kutta method with zero-order-old on the controls"
+abstract type RK4 <: Implicit end
+
+"Second-order Runge-Kutta method with zero-order-old on the controls"
 abstract type RK3 <: Implicit end
+
+"Second-order Runge-Kutta method with zero-order-old on the controls"
+abstract type RK2 <: Implicit end
+
 "Third-order Runge-Kutta method with first-order-hold on the controls"
 abstract type HermiteSimpson <: Explicit end
 

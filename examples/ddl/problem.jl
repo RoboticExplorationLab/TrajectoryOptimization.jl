@@ -5,7 +5,7 @@ using TrajOptPlots
 import TrajectoryOptimization: set_state!
 using Plots
 
-function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
+function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0, integration=RK3)
 
 	# Discretization
 	sf = L + s0
@@ -60,13 +60,13 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	               0.000,      # fx
 	               0.000,      # r
 	               0.000,      # Uy
-	               100.0,      # Ux
+	               10.0,      # Ux
 	               100.0,      # dpsi
 	               100.0,      # e
 	               0.00]      # t
 
-	Rd   = @SVector [0.001,  # δ_dot
-	                 0.001]    # fx_dot
+	Rd   = @SVector [0.01,  # δ_dot
+	                 0.01]    # fx_dot
 	Rd_c = @SVector [0.3282,  # δ_dot
 	                 4e-8]    # fx_dot
 
@@ -81,7 +81,7 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	obj = LQRObjective(Q,R,Q,xd,N)
 
 	# Bound Constraints
-	δ_dot_bound = deg2rad(50)  # deg/s
+	δ_dot_bound = deg2rad(20)  # deg/s
 	δ_bound = deg2rad(27)  # deg
 	Fx_max = car.μ*car.mass*car.g
 	Ux_min = 1.0  # m/s
@@ -111,7 +111,8 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	add_constraint!(conSet, brake, 1:N)
 
 	# Problem
-	prob = Problem(car, obj, xd, sf, constraints=conSet, x0=x0, t0=s0)
+	prob = Problem(car, obj, xd, sf, constraints=conSet, x0=x0, t0=s0,
+		integration=integration)
 	initial_controls!(prob, U0)
 
 	return prob
@@ -140,16 +141,16 @@ end
 
 # Circle Path
 line = StraightPath(10., pi/2)
-arc = ArcPath(line, 30, pi/2)
+arc = ArcPath(line, 15, 3pi/4)
 path = DubinsPath([line, arc])
 # path = line
 plot(path, aspect_ratio=:equal)
 
 # Solve the initial problem
 function initial_solve()
-	N = 101
+	N = 31
 	U0 = [@SVector zeros(2) for k = 1:N-1]
-	prob = gen_car_prob(U0, path, N, s0=8.0, δ0=deg2rad(0), L=10.0)
+	prob = gen_car_prob(U0, path, N, s0=6.0, δ0=deg2rad(0), L=5.0, integration=RK2)
 	solver = AugmentedLagrangianSolver(prob)
 	solver.opts.penalty_initial = 0.1
 	solver.opts.opts_uncon.verbose = false
@@ -169,8 +170,8 @@ function advance_problem!(solver)
 	solver.opts.reset_duals = false
 	shift_fill!(get_constraints(solver))
 	solver.opts.penalty_initial = 1000.0
-	solver.opts.penalty_scaling = 100.0
-	solver.opts.cost_tolerance_intermediate = 1e-2
+	solver.opts.penalty_scaling = 10.0
+	solver.opts.cost_tolerance_intermediate = 1e-3
 
 	# Set the new initial condition
 	set_initial_state!(solver, state(Z[2]))
@@ -181,6 +182,19 @@ solver = initial_solve()
 plot(solver)
 findmax_violation(solver)
 
+solver.opts.verbose = false
+solver.opts.opts_uncon.verbose = false
+for i = 1:20
+	@time begin
+		advance_problem!(solver)
+		solve!(solver)
+		@show iterations(solver)
+		plot(solver)
+	end
+end
+plot(solver)
+
+
 times = zeros(100)
 solver = initial_solve()
 solver.opts.verbose = false
@@ -189,16 +203,17 @@ for i = 1:100
 		advance_problem!(solver)
 		solve!(solver)
 	end
+	@show iterations(solver)
 	times[i] = t
 end
 times
 median(times)*1000
 plot(solver)
-
-plot(path, aspect_ratio=:equal)
-e = [z.z[7] for z in Z]
-s = [z.t for z in Z]
-x,y = localToGlobal(path, e, s)
+#
+# plot(path, aspect_ratio=:equal)
+# e = [z.z[7] for z in Z]
+# s = [z.t for z in Z]
+# x,y = localToGlobal(path, e, s)
 
 # # Simulate the next time step
 # U_guess = U_sol[1:end]
