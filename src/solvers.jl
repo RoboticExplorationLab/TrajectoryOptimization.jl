@@ -84,6 +84,7 @@ function rollout!(solver::AbstractSolver)
     rollout!(model, Z, x0)
 end
 
+set_initial_state!(solver, x0) = copyto!(get_initial_state(solver), x0)
 
 states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
@@ -103,6 +104,7 @@ function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
 end
 
 @inline get_trajectory(solver::AbstractSolver) = solver.Z
+@inline get_times(solver::AbstractSolver) = get_times(get_trajectory(solver))
 
 # ConstrainedSolver methods
 num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
@@ -117,6 +119,9 @@ function max_violation(solver::ConstrainedSolver)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end
+
+@inline findmax_violation(solver::ConstrainedSolver) =
+    findmax_violation(get_constraints(solver))
 
 """ $(SIGNATURES)
 Calculate all the constraint values given the trajectory `Z`

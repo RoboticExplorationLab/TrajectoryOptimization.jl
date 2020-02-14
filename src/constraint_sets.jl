@@ -168,6 +168,12 @@ function max_penalty!(conSet::ConstraintSet{T}) where T
 	end
 end
 
+function shift_fill!(conSet::ConstraintSet)
+	for con in conSet.constraints
+		shift_fill!(con)
+	end
+end
+
 
 """```julia
 evaluate!(conSet::ConstraintSet, Z::Traj)

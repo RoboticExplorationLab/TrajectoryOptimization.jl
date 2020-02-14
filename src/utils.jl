@@ -1,5 +1,6 @@
 export
-	benchmark_solve!
+	benchmark_solve!,
+	shift_fill!
 
 function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
     n,N1 = size(X)
@@ -50,6 +51,18 @@ function benchmark_solve!(solver, data::Dict; samples=10, evals=10)
    # Run stats
    push!(data[:time], time(median(b))*1e-6)  # ms
    push!(data[:iterations], iterations(solver))
-   push!(data[:cost], cost(solver)) 
+   push!(data[:cost], cost(solver))
    return b
+end
+
+function shift_fill!(A::Vector{<:SVector}, n=1)
+	N = length(A)
+	@inbounds for k = n+1:N
+		A[k-n] = A[k]
+	end
+	a_last = A[N-n]
+	@inbounds for k = N-n:N
+		A[k] = a_last
+	end
+	return nothing
 end

@@ -158,6 +158,11 @@ function reset!(con::ConstraintVals{T,W,C,P}) where {T,W,C,P}
 	end
 end
 
+function shift_fill!(con::ConstraintVals)
+	shift_fill!(con.μ)
+	shift_fill!(con.λ)
+end
+
 function cost!(J, con::ConstraintVals, Z)
 	for (i,k) in enumerate(con.inds)
 		c = con.vals[i]

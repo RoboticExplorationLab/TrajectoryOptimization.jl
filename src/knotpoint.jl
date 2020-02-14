@@ -121,6 +121,22 @@ function set_times!(Z::Traj, ts)
     end
 end
 
+function get_times(Z::Traj)
+    [z.t for z in Z]
+end
+
+function shift_fill!(Z::Traj)
+    N = length(Z)
+    for k in eachindex(Z)
+        Z[k].t += Z[k].dt
+        if k < N
+            Z[k].z = Z[k+1].z
+        else
+            Z[k].t += Z[k-1].dt
+        end
+    end
+end
+
 struct StaticKnotPoint{T,N,M,NM} <: AbstractKnotPoint
     z::SVector{NM,T}
     _x::SVector{N,Int}
