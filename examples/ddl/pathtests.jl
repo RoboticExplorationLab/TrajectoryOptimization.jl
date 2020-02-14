@@ -24,5 +24,18 @@ line = StraightPath(10, pi/2)
 arc = ArcPath(line, 10, pi)
 line2 = StraightPath(arc, 12)
 paths = [line,arc,line2]
-path = DubinsPath([line,arc,line2])
+paths = (line,arc,line2)
+path = DubinsPath(paths)
 plot(path, aspect_ratio=:equal)
+
+s = range(0,total_length(path), length=N)
+e = sin.(s*10)*0.2
+e = fill(-0.2, N)
+x,y = localToGlobal(path, s, e)
+plot(x,y, aspect_ratio=:equal)
+
+using BenchmarkTools
+s = 1.2
+@btime curvature($path, 1.2)
+@code_warntype curvature(path, 1.2)
+path

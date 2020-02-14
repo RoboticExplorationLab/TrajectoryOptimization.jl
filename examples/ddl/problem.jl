@@ -1,5 +1,5 @@
-include("model.jl")
 include("path.jl")
+include("model.jl")
 using TrajectoryOptimization
 using TrajOptPlots
 import TrajectoryOptimization: set_state!
@@ -46,10 +46,10 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	               0,      # e
 	               0]      # t
 
-	Qd = @SVector [0.1,      # δ
+	Qd = @SVector [0.01,      # δ
 	               0.01,      # fx
-	               0.00,      # r
-	               0.00,      # Uy
+	               0.01,      # r
+	               0.01,      # Uy
 	               1.0,      # Ux
 	               10.0,      # dpsi
 	               10.0,      # e
@@ -60,13 +60,13 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	               0.000,      # fx
 	               0.000,      # r
 	               0.000,      # Uy
-	               1000.0,      # Ux
+	               100.0,      # Ux
 	               100.0,      # dpsi
 	               100.0,      # e
 	               0.00]      # t
 
-	Rd   = @SVector [0.90,  # δ_dot
-	                 0.01]    # fx_dot
+	Rd   = @SVector [0.001,  # δ_dot
+	                 0.001]    # fx_dot
 	Rd_c = @SVector [0.3282,  # δ_dot
 	                 4e-8]    # fx_dot
 
@@ -81,7 +81,7 @@ function gen_car_prob(U0, path, N; s0=0.0, L=10.0, δ0=0.0)
 	obj = LQRObjective(Q,R,Q,xd,N)
 
 	# Bound Constraints
-	δ_dot_bound = deg2rad(20)  # deg/s
+	δ_dot_bound = deg2rad(50)  # deg/s
 	δ_bound = deg2rad(27)  # deg
 	Fx_max = car.μ*car.mass*car.g
 	Ux_min = 1.0  # m/s
@@ -139,54 +139,77 @@ end
 # s[end]
 
 # Circle Path
-path = CirclePath(50.)
-s_total = path.r*2*pi
+line = StraightPath(10., pi/2)
+arc = ArcPath(line, 30, pi/2)
+path = DubinsPath([line, arc])
+# path = line
+plot(path, aspect_ratio=:equal)
 
-# Generate problem
-N = 101
-U0 = [@SVector zeros(2) for k = 1:N-1]
-prob = gen_car_prob(U0, path, N, s0=0.0, δ0=deg2rad(3.12))
-solver = AugmentedLagrangianSolver(prob)
-solver.opts.penalty_initial = 0.1
-solver.opts.opts_uncon.verbose = true
-solver.opts.verbose = true
-initial_controls!(solver, U0)
-solve!(solver)
+# Solve the initial problem
+function initial_solve()
+	N = 101
+	U0 = [@SVector zeros(2) for k = 1:N-1]
+	prob = gen_car_prob(U0, path, N, s0=8.0, δ0=deg2rad(0), L=10.0)
+	solver = AugmentedLagrangianSolver(prob)
+	solver.opts.penalty_initial = 0.1
+	solver.opts.opts_uncon.verbose = false
+	solver.opts.verbose = true
+	initial_controls!(solver, U0)
+	rollout!(solver)
+	solve!(solver)
+end
+
+function advance_problem!(solver)
+	Z = get_trajectory(solver)
+
+	# Advance the time and controls by one time step
+	shift_fill!(Z)
+
+	# Advance the duals
+	solver.opts.reset_duals = false
+	shift_fill!(get_constraints(solver))
+	solver.opts.penalty_initial = 1000.0
+	solver.opts.penalty_scaling = 100.0
+	solver.opts.cost_tolerance_intermediate = 1e-2
+
+	# Set the new initial condition
+	set_initial_state!(solver, state(Z[2]))
+
+	nothing
+end
+solver = initial_solve()
 plot(solver)
-
-Z = get_trajectory(solver)
-rad2deg(state(Z[50])[1])
 findmax_violation(solver)
 
-
-
-
-# Start the next time step
-U_sol = deepcopy(controls(solver))
-shift_fill!(U_sol)
-Z_sol = get_trajectory(solver)
-TO.set_times!(get_trajectory(solver), t .+ Z_sol[2].t)
-get_trajectory(solver)
-set_initial_state!(solver, state(Z_sol[2]))
-initial_controls!(solver, U_sol)
-rollout!(solver)
-conSet = get_constraints(solver)
-initialize!(solver)
-
-solve!(solver)
-@show get_trajectory(solver)[end].t
+times = zeros(100)
+solver = initial_solve()
+solver.opts.verbose = false
+for i = 1:100
+	t = @elapsed begin
+		advance_problem!(solver)
+		solve!(solver)
+	end
+	times[i] = t
+end
+times
+median(times)*1000
 plot(solver)
 
-# Simulate the next time step
-U_guess = U_sol[1:end]
-initial_controls!(prob, U_sol)
-solver2 = AugmentedLagrangianSolver(prob)
-rollout!(solver2)
-plot(solver2)
-solve!(solver)
-iterations(solver)
-plot(solver)
+plot(path, aspect_ratio=:equal)
+e = [z.z[7] for z in Z]
+s = [z.t for z in Z]
+x,y = localToGlobal(path, e, s)
 
+# # Simulate the next time step
+# U_guess = U_sol[1:end]
+# initial_controls!(prob, U_sol)
+# solver2 = AugmentedLagrangianSolver(prob)
+# rollout!(solver2)
+# plot(solver2)
+# solve!(solver)
+# iterations(solver)
+# plot(solver)
+#
 Z = get_trajectory(solver)
 plot(states(Z),1:2)  # steering, accel
 plot(states(Z),3:3)  # yaw rate
@@ -195,8 +218,8 @@ plot(states(Z),5:5)  # velocity
 plot(states(Z),6:6)  # heading error
 plot(states(Z),7:7)  # lateral error
 plot(states(Z),8:8)  # time
-
 plot(controls(Z))
-
-plot(path.X,path.Y, aspect_ratio=:equal)
-plot!(x,y)
+# #
+# # plot(path.X,path.Y, aspect_ratio=:equal)
+# # plot!(x,y)
+plot(solver)

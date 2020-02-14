@@ -31,6 +31,8 @@ struct CirclePath <: AbstractPath
 end
 curvature(path::CirclePath, s) = 1/path.r
 
+
+""" ArcPath """
 struct ArcPath <: AbstractPath
     ang0::Float64
     radius::Float64
@@ -53,7 +55,7 @@ final_angle(arc::ArcPath) = arc.ang0 + arc.ang
 function localToGlobal(arc::ArcPath, s, e)
     r = arc.radius
     θ = s ./ r
-    radius = r .+ e
+    radius = r .- e
     # radius = r
     ϕ = θ .- π/2 .+ arc.ang0
     x = radius .* cos.(ϕ) .+ arc.xc
@@ -61,6 +63,7 @@ function localToGlobal(arc::ArcPath, s, e)
     return x,y
 end
 
+""" Straight Path """
 struct StraightPath <: AbstractPath
     len::Float64
     ang::Float64
@@ -73,7 +76,7 @@ function position_change(path::StraightPath)
 end
 total_length(path::StraightPath) = path.len
 final_angle(path::StraightPath) = path.ang
-curvature(path::StraightPath) = 0.0
+curvature(path::StraightPath, s) = 0.0
 function localToGlobal(path::StraightPath, s, e)
     Rot2(path.ang)*@SVector [s, e]
 end
@@ -88,17 +91,19 @@ function ArcPath(line::StraightPath, radius, ang)
     ArcPath(final_angle(line), radius, ang)
 end
 
-struct DubinsPath <: AbstractPath
-    paths::Vector{AbstractPath}
+""" Dubins Path """
+struct DubinsPath{P} <: AbstractPath
+    paths::P
     lengths::Vector{Float64}
     ds::Vector{Float64}
     dx::Vector{Float64}
     dy::Vector{Float64}
+    curvature::Vector{Float64}
 end
 
 function DubinsPath(paths)
     num_paths = length(paths)
-    lengths = cumsum(map(total_length, paths))
+    lengths = cumsum([total_length(p) for p in paths])
     ds = circshift(lengths, 1)
     ds[1] = 0
     dx,dy = zeros(num_paths), zeros(num_paths)
@@ -107,14 +112,15 @@ function DubinsPath(paths)
     end
     dx = cumsum(dx)
     dy = cumsum(dy)
-    DubinsPath(paths, lengths, ds, dx, dy)
+    κ = [curvature(path,0.0) for path in paths]
+    DubinsPath(paths, lengths, ds, dx, dy, κ)
 end
 
 total_length(path::DubinsPath) = path.lengths[end]
 final_angle(path::DubinsPath) = final_angle(path.paths[end])
 function curvature(path::DubinsPath, s)
-    i = match_segment(path, s)
-    curvature(path.paths[i], s)
+    i = match_segment(path, s)::Int
+    return path.curvature[i]
 end
 
 function match_segment(path::DubinsPath, s::AbstractVector)

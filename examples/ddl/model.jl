@@ -7,8 +7,8 @@ const TO = TrajectoryOptimization
 
 
 
-@with_kw mutable struct BicycleCar{T} <: AbstractModel
-    path::AbstractPath = CirclePath(20.0)
+@with_kw mutable struct BicycleCar{T,P} <: AbstractModel
+    path::P = StraightPath(30.0, 0.)
     a::T = 1.2169  # dist to front axle (m)
     b::T = 1.4131  # dist to rear axle (m)
     h::T = 0.5       # height of center of gravity? (m)
@@ -39,7 +39,7 @@ function dynamics(car::BicycleCar, x, u, s)
     t  = x[8]  # time
 
     # Road curvature
-    k = curvature(car.path, s + 10.0)
+    k = curvature(car.path, s)
 
     # # Drag Force
     Fx_drag = 0.0
@@ -57,6 +57,7 @@ function dynamics(car::BicycleCar, x, u, s)
     Δψ_dot = r - k * s_dot
     e_dot = Ux * sin(Δψ) + Uy * cos(Δψ)
     t_dot = 1 / s_dot
+
 
     # Slip angles
     αf = atan(Uy + car.a*r, Ux) - δ
@@ -79,7 +80,7 @@ function dynamics(car::BicycleCar, x, u, s)
     # r_dot = (car.a*Fyf - car.b*Fyr)/car.Iz
     # t_dot = 1/s_dot
 
-    return @SVector [δ_dot, fx_dot, r_dot, Uy_dot, Ux_dot, Δψ_dot, e_dot, t_dot]
+    return t_dot * @SVector [δ_dot, fx_dot, r_dot, Uy_dot, Ux_dot, Δψ_dot, e_dot, 1]
 end
 
 function FWD_force_model(car::BicycleCar, fx)
@@ -141,8 +142,8 @@ function load_scenario!(car::BicycleCar, s, k, s_interp)
     return nothing
 end
 
-struct BrakeForceConstraint{T} <: AbstractConstraint{Inequality,State,1}
-    car::BicycleCar{T}
+struct BrakeForceConstraint{L} <: AbstractConstraint{Inequality,State,1}
+    car::L
 end
 
 state_dim(con::BrakeForceConstraint) = size(con.car)[1]
@@ -206,6 +207,7 @@ end
 
 function Plots.plot(car::BicycleCar, Z::Traj)
     path = car.path
+    plot(path, aspect_ratio=:equal)
     x,y = localToGlobal(path, Z)
     plot!(x,y, linewidth=2)
 end
