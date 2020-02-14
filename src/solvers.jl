@@ -19,8 +19,10 @@ export
     initial_states!,
     initial_trajectory!,
     rollout!,
+    set_initial_state!,
     get_trajectory,
     get_model,
+    get_times,
     initialize!
 
 """ $(TYPEDEF)

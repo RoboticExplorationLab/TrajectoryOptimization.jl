@@ -44,28 +44,31 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     xf::SVector
     Z::Traj
     N::Int
+    t0::T
     tf::T
     function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
             constraints::ConstraintSet,
             x0::SVector, xf::SVector,
-            Z::Traj, N::Int, tf::T) where {Q,T}
+            Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
         n,m = size(model)
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
-        new{Q,T}(model, obj, constraints, x0, xf, Z, N, tf)
+        @assert tf > t0
+        new{Q,T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
 
 "Use RK3 as default integration"
-Problem(model, obj, constraints, x0, xf, Z, N, tf) =
-    Problem{RK3}(model, obj, constraints, x0, xf, Z, N, tf)
+Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
+    Problem{RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
         constraints=ConstraintSet(size(model)...,length(obj)),
+        t0=zero(tf),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
-        dt=fill(tf/(N-1),N),
+        dt=fill((tf-t0)/(N-1),N),
         integration=DEFAULT_Q) where {L,O}
     n,m = size(model)
     if dt isa Real
@@ -77,10 +80,11 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    Z = Traj(X0,U0,dt)
+    t = range(t0, tf, length=N)
+    Z = Traj(X0,U0,dt,t)
 
     Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
-        Z, N, tf)
+        Z, N, t0, tf)
 end
 
 
@@ -163,7 +167,7 @@ Compute the cost for the current trajectory"
 "Copy the problem"
 function copy(prob::Problem{Q}) where Q
     Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
-        copy(prob.Z), prob.N, prob.tf)
+        copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
 
 
@@ -187,12 +191,12 @@ change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
     Problem{Q}(prob)
 
 function Problem{Q}(p::Problem) where Q
-    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.tf)
+    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p,t0, p.tf)
 end
 
 @inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
 
 function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
-    x0=p.x0, xf=p.xf)
-    Problem(model, obj, constraints, x0, xf, p.Z, p.N, p.tf)
+    x0=p.x0, xf=p.xf, t0=p.t0, tf=p.tf)
+    Problem(model, obj, constraints, x0, xf, p.Z, p.N, t0, tf)
 end

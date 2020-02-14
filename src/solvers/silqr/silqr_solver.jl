@@ -115,7 +115,7 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: UnconstrainedSo
     obj::O
 
     # Problem info
-    x0::SVector{n,T}
+    x0::MVector{n,T}
     xf::SVector{n,T}
     tf::T
     N::Int
