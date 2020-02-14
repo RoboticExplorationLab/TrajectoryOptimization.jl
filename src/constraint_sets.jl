@@ -1,6 +1,7 @@
 export
     ConstraintSet,
-	add_constraint!
+	add_constraint!,
+	findmax_violation
 
 
 
@@ -135,6 +136,23 @@ function max_violation!(conSet::ConstraintSet{T}) where T
 		max_violation!(con)
 		conSet.c_max[i] = maximum(con.c_max::Vector{T})
 	end
+end
+
+function findmax_violation(conSet::ConstraintSet)
+	max_violation!(conSet)
+	c_max0, j_con = findmax(conSet.c_max) # which constraint
+	if c_max0 < 1e-16
+		return "No constraints violated"
+	end
+	con = conSet.constraints[j_con]
+	i_con = findmax(con.c_max)[2]  # whicn index
+	k_con = con.inds[i_con] # time step
+	con_sense = sense(con)
+	viol = violation(con_sense, con.vals[i_con])
+	c_max, i_max = findmax(viol)  # index into constraint
+	@assert c_max == c_max0
+	con_name = string(typeof(con.con).name)
+	return con_name * " at time step $k_con at " * con_label(con.con, i_max)
 end
 
 "Calculate the maximum penalty parameter across all constraints"

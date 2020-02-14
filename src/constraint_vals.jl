@@ -111,6 +111,14 @@ function viol_eq(v::T, a)::T where T
 	return v
 end
 
+function violation(::Type{Inequality}, vals::SVector)
+	return max.(vals, 0)
+end
+
+function violation(::Type{Equality}, vals::SVector)
+	return abs.(vals)
+end
+
 function max_violation!(con::ConstraintVals{T,W,C}) where
 		{T,W,C<:AbstractConstraint{Inequality}}
 	for i in eachindex(con.c_max)
@@ -127,6 +135,7 @@ function max_violation!(con::ConstraintVals{T,W,C}) where
 	end
 	return nothing
 end
+
 
 function max_penalty!(con::ConstraintVals)
 	for i in eachindex(con.c_max)

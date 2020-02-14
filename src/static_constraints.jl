@@ -298,14 +298,14 @@ BoundConstraint(n, m; x_min, x_max, u_min, u_max)
 ```
 Any of the bounds can be ±∞. The bound can also be specifed as a single scalar, which applies the bound to all state/controls.
 """
-struct BoundConstraint{T,P,PN,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
+struct BoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
 	n::Int
 	m::Int
 	z_max::SVector{NM,T}
 	z_min::SVector{NM,T}
 	b::SVector{P,T}
 	B::SMatrix{P,NM,T,PNM}
-	active_N::SVector{PN,Int}
+	inds::SVector{P,Int}
 end
 
 function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
@@ -321,16 +321,31 @@ function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVecto
 	bN = [x_max; u_max*Inf; x_min; -u_min*Inf]
 
 	active = isfinite.(b)
-	active_N = isfinite.(bN)
 	p = sum(active)
-	pN = sum(active_N)
-
 	inds = SVector{p}(findall(active))
-	inds_N = SVector{pN}(findall(active_N[active]))
 
 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
 
-	BoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds_N)
+	BoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds)
+end
+
+function con_label(con::BoundConstraint, ind::Int)
+	i = con.inds[ind]
+	n,m = state_dim(con), control_dim(con)
+	if 1 <= i <= n
+		return "x max $i"
+	elseif n < i <= n + m
+		j = i - n
+		return "u max $j"
+	elseif n + m < i <= 2n+m
+		j = i - (n+m)
+		return "x min $j"
+	elseif 2n+m < i <= 2n+2m
+		j = i - (2n+m)
+		return "u min $j"
+	else
+		throw(BoundsError())
+	end
 end
 
 function checkBounds(::Val{N}, u::AbstractVector, l::AbstractVector) where N
@@ -356,7 +371,7 @@ lower_bound(bnd::BoundConstraint) = bnd.z_min
 upper_bound(bnd::BoundConstraint) = bnd.z_max
 
 
-function evaluate(bnd::BoundConstraint{T,P,PN,NM,PNM}, x, u) where {T,P,PN,NM,PNM}
+function evaluate(bnd::BoundConstraint{T,P,NM}, x, u) where {T,P,NM}
 	bnd.B*SVector{NM}([x; u]) + bnd.b
 end
 

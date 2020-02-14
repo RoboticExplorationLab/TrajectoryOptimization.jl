@@ -155,6 +155,7 @@ state_dims(::AbstractConstraint{S,Control}) where S =
 
 Base.length(::AbstractConstraint{S,W,P}) where {S,W,P} = P
 
+con_label(::AbstractConstraint, i::Int) = "index $i"
 
 ############################################################################################
 # 								EVALUATION METHODS 										   #
