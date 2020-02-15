@@ -27,6 +27,11 @@ labels(::BicycleCar) = ["delta" "fx" "r" "Uy" "Ux" "dpsi" "e" "t"]
 Base.size(::BicycleCar) = 8,2
 
 function dynamics(car::BicycleCar, x, u, s)
+    # Scale the dynamics
+    Sx, Su = scaling(car)
+    x = Sx*x
+    u = Su*u
+
     δ_dot  = u[1]  # steering angle rate
     fx_dot = u[2]  # accel rate
     δ  = x[1]  # steering angle
@@ -41,6 +46,14 @@ function dynamics(car::BicycleCar, x, u, s)
     # Road curvature
     k = curvature(car.path, s)
 
+    # Tire forces
+    α_f = atan(Uy + car.a * r, Ux) - δ
+    α_r = atan(Uy - car.b * r, Ux)
+
+    Fxf, Fxr, Fzf, Fzr = FWD_force_model(car, fx)  # long. and downward forces
+    Fyf = fiala_tire_model(car.μ, car.Cαf, α_f, Fxf, Fzf)  # front lateral force
+    Fyr = fiala_tire_model(car.μ, car.Cαr, α_r, Fxr, Fzr)  # rear  lateral force
+
     # # Drag Force
     Fx_drag = 0.0
     #
@@ -48,7 +61,7 @@ function dynamics(car::BicycleCar, x, u, s)
     s_dot = (Ux * cos(Δψ) - Uy * sin(Δψ)) / (1 - k*e)
     #
     # # Get tire forces
-    Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
+    # Fxf, Fxr, Fyf, Fyr = logit_lateral_force_model(car, x)
     #
     # # State Derivatives
     r_dot  = (car.a * (Fyf * cos(δ) + Fxf*sin(δ)) - car.b * Fyr) / car.Iz
@@ -83,10 +96,16 @@ function dynamics(car::BicycleCar, x, u, s)
     return t_dot * @SVector [δ_dot, fx_dot, r_dot, Uy_dot, Ux_dot, Δψ_dot, e_dot, 1]
 end
 
+function scaling(model::BicycleCar)
+    Sx = Diagonal(@SVector [1,1e3,1,1,1,1,1,1])
+    Su = Diagonal(@SVector [1,1e2])
+    return Sx, Su
+end
+
 function FWD_force_model(car::BicycleCar, fx)
     l = car.a + car.b
     Fxf = max(fx * car.b / l, fx)  # lower bound
-    Fxr = min(fx * car.a / l, 0.0)  # lower bound
+    Fxr = min(fx * car.a / l, 0.0)  # upper bound (can't accelerate)
     # Fxf = fx*car.b / l
     # Fxr = fx*car.a / l
     Fzf = car.mass * car.g * car.b / l
@@ -149,6 +168,8 @@ end
 state_dim(con::BrakeForceConstraint) = size(con.car)[1]
 
 function evaluate(con::BrakeForceConstraint, x::SVector)
+    Sx, = scaling(con.car)
+    x = Sx*x
     car = con.car
     l = car.a + car.b
 
