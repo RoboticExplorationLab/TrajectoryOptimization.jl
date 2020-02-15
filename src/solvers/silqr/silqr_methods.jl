@@ -32,9 +32,7 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
             return solver
         end
 
-        for k = 1:N
-            Z[k].z = Z̄[k].z
-        end
+        copy_trajectories!(solver)
 
         dJ = abs(J - J_prev)
         J_prev = copy(J)
@@ -44,6 +42,12 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
         evaluate_convergence(solver) ? break : nothing
     end
     return solver
+end
+
+function copy_trajectories!(solver::iLQRSolver)
+    for k = 1:solver.N
+        solver.Z[k].z = solver.Z̄[k].z
+    end
 end
 
 """
@@ -173,6 +177,16 @@ function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule
         end
 
         # Regularization
+        if solver.opts.bp_reg
+            vals = eigvals(Hermitian(Quu_reg))
+            if minimum(vals) <= 0
+                @warn "Backward pass regularized"
+                regularization_update!(solver, :increase)
+                k = N-1
+                ΔV = @SVector zeros(2)
+                continue
+            end
+        end
 
         # Compute gains
         K[k] = -(Quu_reg\Qux_reg)
@@ -287,6 +301,7 @@ function rollout!(solver::iLQRSolver{T,Q}, α) where {T,Q}
 
     temp = 0.0
 
+
     for k = 1:solver.N-1
         δx = state_diff(solver.model, state(Z̄[k]), state(Z[k]))
         ū = control(Z[k]) + K[k]*δx + α*d[k]
@@ -295,7 +310,6 @@ function rollout!(solver::iLQRSolver{T,Q}, α) where {T,Q}
         # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
         Z̄[k+1].z = [discrete_dynamics(Q, solver.model, Z̄[k]);
             control(Z[k+1])]
-
 
         temp = norm(Z̄[k+1].z)
         if temp > solver.opts.max_state_value
@@ -306,7 +320,12 @@ function rollout!(solver::iLQRSolver{T,Q}, α) where {T,Q}
 end
 
 "Simulate the forward the dynamics open-loop"
-@inline rollout!(solver::iLQRSolver) = rollout!(solver.model, solver.Z, solver.x0)
+function rollout!(solver::iLQRSolver)
+    rollout!(solver.model, solver.Z, solver.x0)
+    for k in eachindex(solver.Z)
+        solver.Z̄[k].t = solver.Z[k].t
+    end
+end
 
 function rollout!(model::AbstractModel, Z::Traj, x0)
     Z[1].z = [x0; control(Z[1])]

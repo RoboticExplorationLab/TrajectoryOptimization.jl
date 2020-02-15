@@ -89,6 +89,8 @@ $(FIELDS)
     "regularization scaling factor for square root method."
     bp_reg_sqrt_increase_factor::T = 10.0
 
+	bp_reg::Bool = false
+
     # Solver Numerical Limits
     "maximum cost value, if exceded solve will error."
     max_cost_value::T = 1.0e8
