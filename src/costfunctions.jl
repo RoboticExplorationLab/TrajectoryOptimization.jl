@@ -111,7 +111,7 @@ end
 
 # Cost function methods
 function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
-    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c + u'*cost.H*x
+    0.5*x'cost.Q*x + 0.5*u'*cost.R*u + cost.q'x + cost.r'u + cost.c #+ u'*cost.H*x
 end
 
 function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
@@ -130,6 +130,27 @@ function hessian(cost::QuadraticCost, x, u)
     Qux = cost.H
     return Qxx, Quu, Qux
 end
+
+function gradient!(E::Expansion, cost::QuadraticCost, x, u)
+    # E.x .= cost.Q*x + cost.q + cost.H'*u
+    mul!(E.x, cost.Q, x)
+    E.x .+= cost.q
+    mul!(E.x, cost.H', u, 1.0, 1.0)
+
+    # E.u .= cost.R*u + cost.r + cost.H*x
+    mul!(E.u, cost.R, u)
+    E.u .+= cost.r
+    mul!(E.u, cost.H, x, 1.0, 1.0)
+    return nothing
+end
+
+function hessian!(E::Expansion, cost::QuadraticCost, x, u)
+    E.xx .= cost.Q
+    E.uu .= cost.R
+    E.ux .= cost.H
+    return nothing
+end
+
 
 
 # Additional Methods

@@ -4,7 +4,7 @@ export
     state,
     control
 
-abstract type AbstractKnotPoint end
+abstract type AbstractKnotPoint{T,N,M,NM} end
 
 """ $(TYPEDEF)
 Stores critical information corresponding to each knot point in the trajectory optimization
@@ -37,7 +37,7 @@ KnotPoint(x, m, t=0.0)  # for terminal knot point
 Use `is_terminal(z::KnotPoint)` to determine if a `KnotPoint` is a terminal knot point (e.g.
 has no time step length and z.t == tf).
 """
-mutable struct KnotPoint{T,N,M,NM} <: AbstractKnotPoint
+mutable struct KnotPoint{T,N,M,NM} <: AbstractKnotPoint{T,N,M,NM}
     z::SVector{NM,T}
     _x::SVector{N,Int}
     _u::SVector{M,Int}
@@ -139,7 +139,7 @@ function shift_fill!(Z::Traj)
     end
 end
 
-struct StaticKnotPoint{T,N,M,NM} <: AbstractKnotPoint
+struct StaticKnotPoint{T,N,M,NM} <: AbstractKnotPoint{T,N,M,NM}
     z::SVector{NM,T}
     _x::SVector{N,Int}
     _u::SVector{M,Int}

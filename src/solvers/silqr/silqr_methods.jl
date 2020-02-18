@@ -22,7 +22,6 @@ function solve!(solver::iLQRSolver{T}) where T<:AbstractFloat
     cost!(solver.obj, Z)
     J_prev = sum(_J)
 
-
     for i = 1:solver.opts.iterations
         J = step!(solver, J_prev)
 
@@ -131,7 +130,7 @@ $(SIGNATURES)
 Calculates the optimal feedback gains K,d as well as the 2nd Order approximation of the
 Cost-to-Go, using a backward Riccati-style recursion. (non-allocating)
 """
-function backwardpass!(solver::iLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule}
+function backwardpass!(solver::StaticiLQRSolver{T,QUAD}) where {T,QUAD<:QuadratureRule}
     n,m,N = size(solver)
 
     # Objective
@@ -293,7 +292,7 @@ $(SIGNATURES)
 Simulate forward the system with the optimal feedback gains from the iLQR backward pass.
 (non-allocating)
 """
-function rollout!(solver::iLQRSolver{T,Q}, α) where {T,Q}
+function rollout!(solver::StaticiLQRSolver{T,Q}, α) where {T,Q}
     Z = solver.Z; Z̄ = solver.Z̄
     K = solver.K; d = solver.d;
 

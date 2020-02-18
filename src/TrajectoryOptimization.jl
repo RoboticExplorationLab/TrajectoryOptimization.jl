@@ -22,7 +22,7 @@ using MathOptInterface
 using Quaternions
 
 const MOI = MathOptInterface
-const MAX_ELEM = 170 
+const MAX_ELEM = 170
 
 import Base.copy
 
@@ -140,24 +140,17 @@ export
 include("utils.jl")
 include("rotations.jl")
 include("logger.jl")
-# include("constraints.jl")
-# include("constraint_sets.jl")
 include("knotpoint.jl")
+include("expansions.jl")
 include("static_model.jl")
 include("costfunctions.jl")
-# include("model.jl")
-# include("integration.jl")
 include("objective.jl")
-# include("problem.jl")
 include("solvers.jl")
-# include("rollout.jl")
 include("abstract_constraint.jl")
 include("static_constraints.jl")
 include("dynamics_constraints.jl")
 include("integration.jl")
 include("dynamics.jl")
-# include("logger.jl")
-# include("../dynamics/quaternions.jl")
 
 include("cost.jl")
 include("static_methods.jl")
@@ -172,6 +165,8 @@ include("solvers/direct/static_primals.jl")
 include("solvers/direct/static_pn.jl")
 include("solvers/direct/static_pn_methods.jl")
 include("solvers/altro/saltro_solver.jl")
+include("solvers/ilqr/ilqr.jl")
+include("solvers/ilqr/ilqr_solve.jl")
 
 include("solvers/direct/static_moi.jl")
 include("solvers/direct/copy_blocks.jl")

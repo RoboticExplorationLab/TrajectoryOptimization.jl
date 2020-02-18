@@ -194,6 +194,29 @@ function TrajectoryOptimization.discrete_jacobian(::Type{Q}, model::CopyModel{K,
     return [A B C]
 end
 
+function discrete_jacobian!(::Type{Q}, ∇f, model::Dynamics.CopyModel{K,N0,M0},
+		z::KnotPoint{T,N,M,NM}) where {T,N,M,NM,K,N0,M0,Q<:TrajectoryOptimization.Implicit}
+    xinds = model.xinds
+    uinds = model.uinds
+	ix = model.ix
+	iu = model.iu
+	iz = [ix; iu; @SVector [N0+M0+1]]
+	x,u = state(z), control(z)
+	for i = 1:K
+		z_ = [x[xinds[i]]; u[uinds[i]]]
+		z_ = StaticKnotPoint(z_, ix, iu, z.dt, z.t)
+		∇f_ = discrete_jacobian(Q, model.model, z_)
+		A,B,C = ∇f_[ix,ix], ∇f_[ix,iu], ∇f_[ix,N0+M0+1]
+
+		ix_ = ix .+ (i-1)*N0
+		iu_ = iu .+ (i-1)*M0 .+ N .- N0
+		it_ = NM+1
+		∇f[ix_,ix_] .= A
+		∇f[ix_,iu_] .= B
+		∇f[ix_,it_] .= C
+	end
+end
+
 function state_diff_size(model::CopyModel{K}) where K
     return state_diff_size(model.model)*K
 end
@@ -273,5 +296,17 @@ end
             G = [G; G_]
         end
         G
+    end
+end
+
+function ∇²differential!(G, model::Dynamics.CopyModel{K,N,M,L},
+        x::SVector, dx::Vector) where {K,N,M,L<:RigidBody{R}} where R
+    ix = SVector{12}(1:12)
+    xinds = model.xinds
+    for i = 1:K
+        ix_ = ix .+ (i-1)*12
+        dx_ = dx[ix_]
+        G_ = ∇²differential(model.model, x[xinds[i]], dx_)
+        G[ix_, ix_] .= G_
     end
 end

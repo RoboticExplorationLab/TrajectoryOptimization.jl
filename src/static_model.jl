@@ -191,6 +191,15 @@ function discrete_jacobian(::Type{Q}, model::AbstractModel,
     ForwardDiff.jacobian(fd_aug, s)
 end
 
+function discrete_jacobian!(::Type{Q}, ∇f, model::AbstractModel,
+		z::KnotPoint{T,N,M,NM}) where {T,N,M,NM,Q<:Implicit}
+    ix,iu,idt = z._x, z._u, NM+1
+    t = z.t
+    fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
+    s = [z.z; @SVector [z.dt]]
+    ForwardDiff.jacobian!(∇f, fd_aug, s)
+end
+
 function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
 	ix,iu = z._x, z._u
 	A = G2'∇f[ix,ix]*G1
@@ -198,12 +207,29 @@ function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
 	return A,B
 end
 
+function dynamics_expansion!(D::DynamicsExpansion, G1, G2, model::AbstractModel, z::KnotPoint)
+	ix,iu = z._x, z._u
+	discrete_jacobian!(RK3, D.∇f, model, z)
+	A = D.A_
+	B = D.B_
+	mul!(D.tmp, A, G1)
+	mul!(D.A, G2', D.tmp)
+	mul!(D.B, G2', B)
+end
+
+function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, G, model::AbstractModel,
+		Z::Traj)
+	for k in eachindex(D)
+		dynamics_expansion!(D[k], G[k], G[k+1], model, Z[k])
+	end
+end
+
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #
 ############################################################################################
 
-@inline state_diff(model::AbstractModel, x, x0) = x - x0
+state_diff(model::AbstractModel, x, x0) = x - x0
 # @inline state_diff_jacobian(model::AbstractModel, x::SVector{N,T}) where {N,T} = Diagonal(@SVector ones(T,N))
 @inline state_diff_jacobian(model::AbstractModel, x::SVector{N,T}) where {N,T} = I
 @inline state_diff_size(model::AbstractModel) = size(model)[1]
@@ -218,7 +244,12 @@ end
 
 is_quat(model::AbstractModel, z::KnotPoint{T,N}) where {T,N} = @SVector zeros(N)
 
-∇²differential(model::AbstractModel, x::SVector, b::SVector) = I*0
+∇²differential(model::AbstractModel, x::SVector{N}, b::AbstractVector) where N =
+	Diagonal(@SVector zeros(N))
+
+function ∇²differential!(G, model::AbstractModel, x::SVector, dx::Vector)
+	G .= ∇²differential(model, x, dx)
+end
 
 ############################################################################################
 #                               INFEASIBLE MODELS                                          #
@@ -304,7 +335,7 @@ function state_diff_jacobian(model::InfeasibleModel, x::SVector)
 	state_diff_jacobian(model.model, x)
 end
 
-function TrajectoryOptimization.state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
+function state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
 	state_diff_jacobian!(G, model.model, Z)
 end
 

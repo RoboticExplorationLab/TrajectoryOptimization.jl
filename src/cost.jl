@@ -23,7 +23,6 @@ cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj,
     map!(stage_cost, obj.J, obj.cost, Z)
 end
 
-
 function cost_gradient(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
     Qx,Qu = gradient(cost, state(z), control(z))
     return G'Qx, Qu
@@ -37,10 +36,9 @@ end
 function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
     Qx,Qu = gradient(cost, state(z), control(z))
     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
-    iq,idq = is_quat(model,z)
-    Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
     Qux = Qux*G
     Qx = G'Qx
+    Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
     return Qxx, Quu, Qux, Qx, Qu
 end
 
@@ -57,6 +55,33 @@ function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
         end
         E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
             Qxx*dt_x, Quu*dt_u, Qux*dt_u, Qx*dt_x, Qu*dt_u
+    end
+end
+
+# In-place cost-expansion
+function cost_expansion!(E::Expansion, cost::CostFunction, model::AbstractModel, z::KnotPoint, G::Matrix)
+    gradient!(E, cost, state(z), control(z))
+    hessian!(E, cost, state(z), control(z))
+    return nothing
+end
+
+function cost_expansion!(E::Vector{<:Expansion}, G, obj::Objective, model::AbstractModel, Z::Traj)
+    for k in eachindex(Z)
+        z = Z[k]
+        cost_expansion!(E[k], obj.cost[k], model, z, G[k])
+        # Qxx, Quu, Qux, Qx, Qu = cost_expansion(obj.cost[k], model, z, G[k])
+        if is_terminal(z)
+            dt_x = 1.0
+            dt_u = 0.0
+        else
+            dt_x = z.dt
+            dt_u = z.dt
+        end
+        E[k].xx .*= dt_x
+        E[k].uu .*= dt_u
+        E[k].ux .*= dt_u
+        E[k].x .*= dt_x
+        E[k].u .*= dt_u
     end
 end
 
@@ -129,4 +154,17 @@ end
 function cost_expansion!(E, obj::Objective, Z::Traj)
     cost_gradient!(E, obj, Z)
     cost_hessian!(E, obj, Z)
+end
+
+
+"Calculate the error cost expansion"
+function error_expansion!(E::Expansion, Q::Expansion, model::AbstractModel, z::KnotPoint, G)
+    ∇²differential!(E.xx, model, state(z), Q.x)
+    E.u .= Q.u
+    E.uu .= Q.uu
+    mul!(E.ux, Q.ux, G)
+    mul!(E.x, G', Q.x)
+    mul!(E.tmp, Q.xx, G)
+    mul!(E.xx, G', E.tmp, 1.0, 1.0)
+    return nothing
 end

@@ -20,6 +20,12 @@ end
 "Evaluate the discrete dynamics Jacobian for all knot points"
 function discrete_jacobian!(∇f, model, Z::Traj)
     for k in eachindex(∇f)
+        ∇f[k] .= discrete_jacobian(model, Z[k])
+    end
+end
+
+function discrete_jacobian!(∇f::Vector{<:SMatrix}, model, Z::Traj)
+    for k in eachindex(∇f)
         ∇f[k] = discrete_jacobian(model, Z[k])
     end
 end

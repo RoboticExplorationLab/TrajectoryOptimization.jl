@@ -104,6 +104,7 @@ $(FIELDS)
     log_level::Base.CoreLogging.LogLevel = InnerLoop
 end
 
+abstract type iLQRSolver{T} <: UnconstrainedSolver{T} end
 
 """$(TYPEDEF)
 iLQR is an unconstrained indirect method for trajectory optimization that parameterizes only the controls and enforces strict dynamics feasibility at every iteration by simulating forward the dynamics with an LQR feedback controller.
@@ -111,7 +112,7 @@ The main algorithm consists of two parts:
 1) a backward pass that uses Differential Dynamic Programming to compute recursively a quadratic approximation of the cost-to-go, along with linear feedback and feed-forward gain matrices, `K` and `d`, respectively, for an LQR tracking controller, and
 2) a forward pass that uses the gains `K` and `d` to simulate forward the full nonlinear dynamics with feedback.
 """
-struct iLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: UnconstrainedSolver{T}
+struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: iLQRSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -147,7 +148,7 @@ struct iLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: UnconstrainedSo
 
     logger::SolverLogger
 
-    function iLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
+    function StaticiLQRSolver{T,I}(model::L, obj::O, x0, xf, tf, N, opts, stats,
             Z::Vector{KnotPoint{T,n,m,L1}}, Z̄, K::Vector{A}, d,
             ∇F::Vector{D}, G::Vector{F}, S::E1, Q::E2, ρ, dρ, grad,
             logger) where {T,I,L,O,n,m,L1,D,F,E1,E2,A}
@@ -198,7 +199,7 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
 
     logger = default_logger(opts.verbose)
 
-    solver = iLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+    solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
         Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad, logger)
 
     reset!(solver)
@@ -216,7 +217,7 @@ function reset!(solver::iLQRSolver{T}, reset_stats=true) where T
     return nothing
 end
 
-Base.size(solver::iLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
+Base.size(solver::StaticiLQRSolver{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
 @inline get_trajectory(solver::iLQRSolver) = solver.Z
 @inline get_objective(solver::iLQRSolver) = solver.obj
 @inline get_model(solver::iLQRSolver) = solver.model
