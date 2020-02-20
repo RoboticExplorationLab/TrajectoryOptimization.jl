@@ -101,6 +101,8 @@ $(FIELDS)
     "maximum control value, evaluated during rollout, if exceded solve will error."
     max_control_value::T = 1.0e8
 
+	static_bp::Bool = true
+
     log_level::Base.CoreLogging.LogLevel = InnerLoop
 end
 

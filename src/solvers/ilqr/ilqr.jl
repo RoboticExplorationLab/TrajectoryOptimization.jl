@@ -1,7 +1,7 @@
 export
 	iLQRSolver2
 
-struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1} <: iLQRSolver{T}
+struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,ET,GT} <: iLQRSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -25,11 +25,11 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1} <: iLQRSolver{T}
     d::Vector{SizedVector{m,T,1}}  # Feedforward gains (m,N-1)
 
     D::Vector{SizedDynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
-    G::Vector{SizedMatrix{n,n̄,T,2}}               # state difference jacobian (n̄, n)
+    G::Vector{GT}                               # state difference jacobian (n̄, n)
 
-    S::Vector{SizedExpansion{T,n,n̄,m}}  # Optimal cost-to-go expansion trajectory
-    Q::Vector{SizedExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
-	E::SizedExpansion{T,n,n̄,m}          # error cost expansion
+    S::Vector{ET}  # Optimal cost-to-go expansion trajectory
+    Q::Vector{ET}  # cost-to-go expansion trajectory
+	E::ET
 
 	Quu_reg::SizedMatrix{m,m,T,2}
 	Qux_reg::SizedMatrix{m,n̄,T,2}
@@ -62,16 +62,18 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUA
     d = [zeros(T,m)   for k = 1:N-1]
 
 	D = [SizedDynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
-    G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
 	if state_diff_jacobian(prob.model, x0) isa UniformScaling
-		for k in eachindex(G)
-			G[k] .= I(n)
-		end
+		G = [I for k = 1:N]
+	else
+		G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
 	end
 
-    S = [SizedExpansion{T}(n̄,m)   for k = 1:N]
-    Q = [SizedExpansion{T}(n,m) for k = 1:N]
-	E = SizedExpansion{T}(n,n̄,m)
+    # S = [SizedExpansion{T}(n̄,m)   for k = 1:N]
+    # Q = [SizedExpansion{T}(n,m) for k = 1:N]
+	# E = SizedExpansion{T}(n,n̄,m)
+    S = [GeneralExpansion{T}(SizedArray,n,n̄,m)   for k = 1:N]
+    Q = [GeneralExpansion{T}(SizedArray,n,n,m) for k = 1:N]
+	E = GeneralExpansion{T}(SizedArray,n,n̄,m)
 
 	Quu_reg = SizedMatrix{m,m}(zeros(m,m))
 	Qux_reg = SizedMatrix{m,n̄}(zeros(m,n̄))
@@ -83,8 +85,10 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUA
     logger = default_logger(opts.verbose)
 	L = typeof(prob.model)
 	O = typeof(prob.obj)
+	ET = typeof(E)
+	GT = eltype(G)
 
-    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,ET,GT}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
         Z, Z̄, K, d, D, G, S, Q, E, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
 
     reset!(solver)

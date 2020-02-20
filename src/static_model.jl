@@ -218,6 +218,9 @@ function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
     mul!(D.B, Transpose(G2), D.tmpB)
 end
 
+@inline error_expansion!(D::SizedDynamicsExpansion,G1::UniformScaling,G2::UniformScaling) =
+	begin D.A .= D.A_; D.B .= D.B_ end
+
 function dynamics_expansion!(D::SizedDynamicsExpansion, G1, G2, model::AbstractModel, z::KnotPoint)
 	copy_AB!(D)
 	ix,iu = z._x, z._u

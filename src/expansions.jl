@@ -62,6 +62,18 @@ struct SizedExpansion{T,N,N̄,M} <: AbstractExpansion{T}
 	end
 end
 
+struct StaticExpansion{T,N,M,NN,MM,NM} <: AbstractExpansion{T}
+	x::SVector{N,T}
+	xx::SMatrix{N,N,T,NN}
+	u::SVector{M,T}
+	uu::SMatrix{M,M,T,MM}
+	ux::SMatrix{M,N,T,NM}
+end
+
+function StaticExpansion(E::AbstractExpansion)
+	StaticExpansion(SVector(E.x), SMatrix(E.xx),
+		SVector(E.u), SMatrix(E.uu), SMatrix(E.ux))
+end
 
 struct GeneralExpansion{T,X,XX,U,UU,UX,TMP} <: AbstractExpansion{T}
 	x::X

@@ -59,29 +59,28 @@ function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
 end
 
 # In-place cost-expansion
-function cost_expansion!(E::AbstractExpansion, cost::CostFunction, model::AbstractModel, z::KnotPoint, G::AbstractMatrix)
+function cost_expansion!(E::AbstractExpansion, cost::CostFunction, z::KnotPoint)
     gradient!(E, cost, state(z), control(z))
     hessian!(E, cost, state(z), control(z))
+    if is_terminal(z)
+        dt_x = 1.0
+        dt_u = 0.0
+    else
+        dt_x = z.dt
+        dt_u = z.dt
+    end
+    E.xx .*= dt_x
+    E.uu .*= dt_u
+    E.ux .*= dt_u
+    E.x .*= dt_x
+    E.u .*= dt_u
     return nothing
 end
 
 function cost_expansion!(E::Vector{<:AbstractExpansion}, G, obj::Objective, model::AbstractModel, Z::Traj)
     for k in eachindex(Z)
         z = Z[k]
-        cost_expansion!(E[k], obj.cost[k], model, z, G[k])
-        # Qxx, Quu, Qux, Qx, Qu = cost_expansion(obj.cost[k], model, z, G[k])
-        if is_terminal(z)
-            dt_x = 1.0
-            dt_u = 0.0
-        else
-            dt_x = z.dt
-            dt_u = z.dt
-        end
-        E[k].xx .*= dt_x
-        E[k].uu .*= dt_u
-        E[k].ux .*= dt_u
-        E[k].x .*= dt_x
-        E[k].u .*= dt_u
+        cost_expansion!(E[k], obj.cost[k], z)
     end
 end
 
@@ -172,3 +171,4 @@ function _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G)
     mul!(E.tmp, Q.xx, G)
     mul!(E.xx, Transpose(G), E.tmp, 1.0, 1.0)
 end
+@inline _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G::UniformScaling) = copyto!(E,Q)
