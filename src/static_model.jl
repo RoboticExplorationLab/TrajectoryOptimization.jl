@@ -207,20 +207,28 @@ function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
 	return A,B
 end
 
-function dynamics_expansion!(D::DynamicsExpansion, G1, G2, model::AbstractModel, z::KnotPoint)
-	ix,iu = z._x, z._u
-	discrete_jacobian!(RK3, D.∇f, model, z)
-	A = D.A_
-	B = D.B_
-	mul!(D.tmp, A, G1)
-	mul!(D.A, G2', D.tmp)
-	mul!(D.B, G2', B)
+function copy_AB!(D)
+    D.tmpA .= D.A_
+    D.tmpB .= D.B_
 end
 
-function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, G, model::AbstractModel,
+function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
+    mul!(D.tmp, D.tmpA, G1)
+    mul!(D.A, Transpose(G2), D.tmp)
+    mul!(D.B, Transpose(G2), D.tmpB)
+end
+
+function dynamics_expansion!(D::SizedDynamicsExpansion, G1, G2, model::AbstractModel, z::KnotPoint)
+	copy_AB!(D)
+	ix,iu = z._x, z._u
+	discrete_jacobian!(RK3, D.∇f, model, z)
+end
+
+function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, G, model::AbstractModel,
 		Z::Traj)
 	for k in eachindex(D)
 		dynamics_expansion!(D[k], G[k], G[k+1], model, Z[k])
+		error_expansion!(D[k], G[k], G[k+1])
 	end
 end
 
@@ -247,7 +255,7 @@ is_quat(model::AbstractModel, z::KnotPoint{T,N}) where {T,N} = @SVector zeros(N)
 ∇²differential(model::AbstractModel, x::SVector{N}, b::AbstractVector) where N =
 	Diagonal(@SVector zeros(N))
 
-function ∇²differential!(G, model::AbstractModel, x::SVector, dx::Vector)
+function ∇²differential!(G, model::AbstractModel, x::SVector, dx::AbstractVector)
 	G .= ∇²differential(model, x, dx)
 end
 

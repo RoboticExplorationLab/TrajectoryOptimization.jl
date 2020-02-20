@@ -131,7 +131,7 @@ function hessian(cost::QuadraticCost, x, u)
     return Qxx, Quu, Qux
 end
 
-function gradient!(E::Expansion, cost::QuadraticCost, x, u)
+function gradient!(E::AbstractExpansion, cost::QuadraticCost, x, u)
     # E.x .= cost.Q*x + cost.q + cost.H'*u
     mul!(E.x, cost.Q, x)
     E.x .+= cost.q
@@ -144,7 +144,7 @@ function gradient!(E::Expansion, cost::QuadraticCost, x, u)
     return nothing
 end
 
-function hessian!(E::Expansion, cost::QuadraticCost, x, u)
+function hessian!(E::AbstractExpansion, cost::QuadraticCost, x, u)
     E.xx .= cost.Q
     E.uu .= cost.R
     E.ux .= cost.H

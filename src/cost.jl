@@ -59,13 +59,13 @@ function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
 end
 
 # In-place cost-expansion
-function cost_expansion!(E::Expansion, cost::CostFunction, model::AbstractModel, z::KnotPoint, G::Matrix)
+function cost_expansion!(E::AbstractExpansion, cost::CostFunction, model::AbstractModel, z::KnotPoint, G::AbstractMatrix)
     gradient!(E, cost, state(z), control(z))
     hessian!(E, cost, state(z), control(z))
     return nothing
 end
 
-function cost_expansion!(E::Vector{<:Expansion}, G, obj::Objective, model::AbstractModel, Z::Traj)
+function cost_expansion!(E::Vector{<:AbstractExpansion}, G, obj::Objective, model::AbstractModel, Z::Traj)
     for k in eachindex(Z)
         z = Z[k]
         cost_expansion!(E[k], obj.cost[k], model, z, G[k])
@@ -158,13 +158,17 @@ end
 
 
 "Calculate the error cost expansion"
-function error_expansion!(E::Expansion, Q::Expansion, model::AbstractModel, z::KnotPoint, G)
+function error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, model::AbstractModel, z::KnotPoint, G)
     ∇²differential!(E.xx, model, state(z), Q.x)
+    # E.tmp .= G
+    return _error_expansion!(E, Q, G)
+end
+
+function _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G)
     E.u .= Q.u
     E.uu .= Q.uu
     mul!(E.ux, Q.ux, G)
-    mul!(E.x, G', Q.x)
+    mul!(E.x, Transpose(G), Q.x)
     mul!(E.tmp, Q.xx, G)
-    mul!(E.xx, G', E.tmp, 1.0, 1.0)
-    return nothing
+    mul!(E.xx, Transpose(G), E.tmp, 1.0, 1.0)
 end

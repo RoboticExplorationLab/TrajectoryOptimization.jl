@@ -1,7 +1,7 @@
 export
 	iLQRSolver2
 
-struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,m,L1} <: iLQRSolver{T}
+struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1} <: iLQRSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -21,22 +21,22 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,m,L1} <: iLQRSolver{T}
 
     # Data variables
     # K::Vector{SMatrix{m,n̄,T,L2}}  # State feedback gains (m,n,N-1)
-    K::Vector{Matrix{T}}  # State feedback gains (m,n,N-1)
-    d::Vector{Vector{T}} # Feedforward gains (m,N-1)
+    K::Vector{SizedMatrix{m,n̄,T,2}}  # State feedback gains (m,n,N-1)
+    d::Vector{SizedVector{m,T,1}}  # Feedforward gains (m,N-1)
 
-    D::Vector{DynamicsExpansion{T}} # discrete dynamics jacobian (block) (n,n+m+1,N)
-    G::Vector{Matrix{T}}  # state difference jacobian (n̄, n)
+    D::Vector{SizedDynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
+    G::Vector{SizedMatrix{n,n̄,T,2}}               # state difference jacobian (n̄, n)
 
-    S::Vector{Expansion{T}}  # Optimal cost-to-go expansion trajectory
-    Q::Vector{Expansion{T}}  # cost-to-go expansion trajectory
-	E::Expansion{T}          # error cost expansion
+    S::Vector{SizedExpansion{T,n,n̄,m}}  # Optimal cost-to-go expansion trajectory
+    Q::Vector{SizedExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
+	E::SizedExpansion{T,n,n̄,m}          # error cost expansion
 
-	Quu_reg::Matrix{T}
-	Qux_reg::Matrix{T}
-    ρ::Vector{T} # Regularization
-    dρ::Vector{T} # Regularization rate of change
+	Quu_reg::SizedMatrix{m,m,T,2}
+	Qux_reg::SizedMatrix{m,n̄,T,2}
+    ρ::Vector{T}   # Regularization
+    dρ::Vector{T}  # Regularization rate of change
 
-    grad::Vector{T} # Gradient
+    grad::Vector{T}  # Gradient
 
     logger::SolverLogger
 
@@ -61,18 +61,20 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUA
 	K = [zeros(T,m,n̄) for k = 1:N-1]
     d = [zeros(T,m)   for k = 1:N-1]
 
-	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
-    G = [zeros(n,n̄) for k = 1:N]
+	D = [SizedDynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
+    G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
 	if state_diff_jacobian(prob.model, x0) isa UniformScaling
-		G = [I(n) for k = 1:N]
+		for k in eachindex(G)
+			G[k] .= I(n)
+		end
 	end
 
-    S = [Expansion{T}(n̄,m)   for k = 1:N]
-    Q = [Expansion{T}(n,m) for k = 1:N]
-	E = Expansion{T}(n,n̄,m)
+    S = [SizedExpansion{T}(n̄,m)   for k = 1:N]
+    Q = [SizedExpansion{T}(n,m) for k = 1:N]
+	E = SizedExpansion{T}(n,n̄,m)
 
-	Quu_reg = zeros(m,m)
-	Qux_reg = zeros(m,n̄)
+	Quu_reg = SizedMatrix{m,m}(zeros(m,m))
+	Qux_reg = SizedMatrix{m,n̄}(zeros(m,n̄))
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
@@ -82,7 +84,7 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUA
 	L = typeof(prob.model)
 	O = typeof(prob.obj)
 
-    solver = iLQRSolver2{T,QUAD,L,O,n,m,n+m}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
         Z, Z̄, K, d, D, G, S, Q, E, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
 
     reset!(solver)
