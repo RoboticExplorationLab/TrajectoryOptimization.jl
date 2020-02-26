@@ -6,13 +6,18 @@ end
 
 (::FreeBody)(;kwargs...) = FreeBody{UnitQuaternion{Float64,CayleyMap},Float64}(;kwargs...)
 
-function forces(model::FreeBody, x::SVector, u::SVector)
+function wrenches(model::FreeBody, x, u)
+    F = forces(model, x, u)
+    M = moments(model, x, u)
+    return F,M
+end
+function forces(model::FreeBody, x, u)
     q = orientation(model, x)
     F = @SVector [u[1], u[2], u[3]]
     q*F  # world frame
 end
 
-function moments(model::FreeBody, x::SVector, u::SVector)
+function moments(model::FreeBody, x, u)
     return @SVector [u[4], u[5], u[6]]  # body frame
 end
 

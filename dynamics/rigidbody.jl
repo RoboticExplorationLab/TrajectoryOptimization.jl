@@ -33,13 +33,13 @@ end
 
 
 @inline Base.position(model::RigidBody, x) = SVector{3}(x[1],x[2],x[3])
-orientation(model::RigidBody{R}, x::SVector{N,T}, renorm=false) where {R,N,T} =
+orientation(model::RigidBody{R}, x::AbstractVector{T}, renorm=false) where {R,T} =
     R(T,x[4],x[5],x[6])
 @inline linear_velocity(model::RigidBody, x) = SVector{3}(x[7],x[8],x[9])
 @inline angular_velocity(model::RigidBody, x) = SVector{3}(x[10],x[11],x[12])
 
-function orientation(model::RigidBody{UnitQuaternion{T,D}}, x::SVector{N,T2},
-        renorm=false) where {T,D,N,T2}
+function orientation(model::RigidBody{UnitQuaternion{T,D}}, x::AbstractVector{T2},
+        renorm=false) where {T,D,T2}
     q = UnitQuaternion{T2,D}(x[4],x[5],x[6],x[7])
     if renorm
         q = normalize(q)
@@ -210,7 +210,8 @@ state_diff_size(::RigidBody) = 12
 state_diff_size(::RigidBody{UnitQuaternion{T,Union{IdentityMap}}}) where T = 13
 state_diff_size(::RigidBody{UnitQuaternion{T,Union{ReNorm}}}) where T = 13
 
-function TrajectoryOptimization.∇²differential(model::RigidBody, x::SVector, dx::SVector)
+function TrajectoryOptimization.∇²differential(model::RigidBody,
+        x::SVector, dx::SVector)
       q = orientation(model, x)
       dq = SVector(orientation(model, dx, false))
       G2 = TrajectoryOptimization.∇²differential(q, dq)
