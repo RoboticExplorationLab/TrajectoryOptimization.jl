@@ -1,6 +1,7 @@
 export
     RBState,
     randbetween
+import TrajectoryOptimization.Dynamics: angular_velocity, linear_velocity, orientation
 
 struct RBState{T}
     r::SVector{3,T}
@@ -34,6 +35,11 @@ function RBState(model::RigidBody, Z::Traj)
     [RBState(model, state(z)) for z in Z]
 end
 
+@inline Base.position(x::RBState) = x.r
+@inline orientation(x::RBState) = x.q
+@inline angular_velocity(x::RBState) = x.ω
+@inline linear_velocity(x::RBState) = x.v
+
 function Dynamics.build_state(model::RigidBody{R}, rbs::RBState) where R
     Dynamics.build_state(model, rbs.r, rbs.q, rbs.v, rbs.ω)
 end
@@ -60,6 +66,10 @@ Base.zero(s1::RBState) = zero(RBState)
 function Base.zero(::Type{<:RBState})
     RBState((@SVector zeros(3)), UnitQuaternion(I),
         (@SVector zeros(3)), (@SVector zeros(3)))
+end
+
+function Base.rand(::Type{RBState})
+    RBState(rand(3), rand(UnitQuaternion), rand(3), rand(3))
 end
 
 function randbetween(xmin::RBState, xmax::RBState)
