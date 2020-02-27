@@ -1,10 +1,13 @@
 import TrajectoryOptimization.Dynamics: forces, moments, inertia, inertia_inv, mass_matrix
-import TrajectoryOptimization.Rotation
+import TrajectoryOptimization: Rotation, control_dim
 
 export
     orientation,
     linear_velocity,
     angular_velocity
+
+@inline Base.size(model::RigidBody{<:UnitQuaternion}) = 13, control_dim(model)
+@inline Base.size(model::RigidBody) = 12, control_dim(model)
 
 function Base.rand(model::RigidBody{D}) where {D}
     n,m = size(model)
