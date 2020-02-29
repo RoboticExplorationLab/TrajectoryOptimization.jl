@@ -116,7 +116,7 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
     cf = 0.5*xf'*Qf*xf
 
     ℓ = QuadraticCost(Q, R, H, q, r, c, checks=checks)
-    ℓN = QuadraticCost(Qf, qf, cf, check=checks)
+    ℓN = QuadraticCost(Qf, qf, cf, checks=checks)
 
     Objective(ℓ, ℓN, N)
 end
