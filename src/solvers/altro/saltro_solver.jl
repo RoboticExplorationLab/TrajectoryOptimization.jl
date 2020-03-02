@@ -48,6 +48,14 @@ $(FIELDS)
 
 end
 
+function ALTROSolverOptions(opts::SolverOptions)
+    ALTROSolverOptions(
+        opts_al=AugmentedLagrangianSolverOptions(opts),
+        opts_pn=ProjectedNewtonSolverOptions(opts),
+        verbose=opts.verbose,
+        constraint_tolerance=opts.constraint_tolerance
+    )
+end
 
 """$(TYPEDEF)
 Augmented Lagrangian Trajectory Optimizer (ALTRO) is a solver developed by the Robotic Exploration Lab at Stanford University.
@@ -66,7 +74,7 @@ end
 AbstractSolver(prob::Problem, opts::ALTROSolverOptions) = ALTROSolver(prob, opts)
 
 function ALTROSolver(prob::Problem{Q,T},
-        opts::ALTROSolverOptions=ALTROSolverOptions{T}();
+        opts::SolverOptions=SolverOptions{T}();
         infeasible=false) where {Q,T}
     if infeasible
         # Convert to an infeasible problem
@@ -78,9 +86,10 @@ function ALTROSolver(prob::Problem{Q,T},
         # con_inf.params.μ0 = opts.penalty_initial_infeasible
         # con_inf.params.ϕ = opts.penalty_scaling_infeasible
     end
-    solver_al = AugmentedLagrangianSolver(prob, opts.opts_al)
-    solver_pn = ProjectedNewtonSolver(prob, opts.opts_pn)
-    ALTROSolver{T}(opts,solver_al,solver_pn)
+    opts_altro = ALTROSolverOptions(opts)
+    solver_al = AugmentedLagrangianSolver(prob, opts)
+    solver_pn = ProjectedNewtonSolver(prob, opts)
+    ALTROSolver{T}(opts_altro, solver_al, solver_pn)
 end
 
 @inline Base.size(solver::ALTROSolver) = size(solver.solver_pn)

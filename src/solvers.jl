@@ -63,9 +63,6 @@ state vector, often solving the KKT system directly.
 """
 abstract type DirectSolver{T} <: ConstrainedSolver{T} end
 
-abstract type AbstractSolverOptions{T<:Real} end
-abstract type DirectSolverOptions{T} <: AbstractSolverOptions{T} end
-
 include("solvers/direct/dircol_ipopt.jl")
 include("solvers/direct/dircol_snopt.jl")
 

@@ -106,6 +106,14 @@ $(FIELDS)
     log_level::Base.CoreLogging.LogLevel = InnerLoop
 end
 
+function iLQRSolverOptions(opts::Union{SolverOptions,UnconstrainedSolverOptions})
+	iLQRSolverOptions(
+		cost_tolerance=opts.cost_tolerance,
+		iterations=opts.iterations,
+		verbose=opts.verbose
+	)
+end
+
 abstract type iLQRSolver{T} <: UnconstrainedSolver{T} end
 
 """$(TYPEDEF)
@@ -159,7 +167,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: iLQRSolve
     end
 end
 
-function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
+function iLQRSolver(prob::Problem{I,T}, opts=SolverOptions{T}()) where {I,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
@@ -193,7 +201,6 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
     S = CostExpansion(n̄,m,N)
     Q = CostExpansion(n̄,m,N)
 
-
     ρ = zeros(T,1)
     dρ = zeros(T,1)
 
@@ -201,7 +208,9 @@ function iLQRSolver(prob::Problem{I,T}, opts=iLQRSolverOptions()) where {I,T}
 
     logger = default_logger(opts.verbose)
 
-    solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+	opts_ilqr = iLQRSolverOptions(opts)
+
+    solver = StaticiLQRSolver{T,I}(prob.model, prob.obj, x0, xf, prob.tf, N, opts_ilqr, stats,
         Z, Z̄, K, d, ∇F, G, S, Q, ρ, dρ, grad, logger)
 
     reset!(solver)

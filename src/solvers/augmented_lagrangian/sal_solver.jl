@@ -32,7 +32,7 @@ $(FIELDS)
     verbose::Bool=false
 
     "unconstrained solver options."
-    opts_uncon::AbstractSolverOptions{T} = iLQRSolverOptions{Float64}()
+    opts_uncon::UnconstrainedSolverOptions{T} = UnconstrainedSolverOptions{Float64}()
 
     "dJ < ϵ, cost convergence criteria for unconstrained solve or to enter outerloop for constrained solve."
     cost_tolerance::T = 1.0e-4
@@ -87,6 +87,19 @@ $(FIELDS)
     reset_penalties::Bool = true
 
     log_level::Base.CoreLogging.LogLevel = OuterLoop
+end
+
+function AugmentedLagrangianSolverOptions(opts::SolverOptions)
+    opts_uncon = UnconstrainedSolverOptions(opts)
+    AugmentedLagrangianSolverOptions(
+        opts_uncon=opts_uncon,
+        cost_tolerance=opts.cost_tolerance,
+        cost_tolerance_intermediate=opts.cost_tolerance_intermediate,
+        iterations=opts.iterations,
+        penalty_initial=opts.penalty_initial,
+        penalty_scaling=opts.penalty_scaling,
+        verbose=opts.verbose
+    )
 end
 
 function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
@@ -178,20 +191,22 @@ AbstractSolver(prob::Problem{Q,T},
 Form an augmented Lagrangian cost function from a Problem and AugmentedLagrangianSolver.
     Does not allocate new memory for the internal arrays, but points to the arrays in the solver.
 """
-function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts::AugmentedLagrangianSolverOptions=AugmentedLagrangianSolverOptions{T}()) where {Q,T}
+function AugmentedLagrangianSolver(prob::Problem{Q,T}, opts=SolverOptions{T}();
+        solver_uncon=iLQRSolver) where {Q,T}
     # Init solver statistics
     stats = ALStats()
-    stats_uncon = Vector{iLQRSolverOptions{T}}()
+    stats_uncon = Vector{iLQRStats{T}}()
 
     # Convert problem to AL problem
+    opts_al = AugmentedLagrangianSolverOptions(opts)
     alobj = ALObjective(prob.obj, prob.constraints)
     rollout!(prob)
     prob_al = Problem(prob.model, alobj, ConstraintSet(size(prob)...),
         prob.x0, prob.xf, prob.Z, prob.N, prob.t0, prob.tf)
 
-    solver_uncon = AbstractSolver(prob_al, opts.opts_uncon)
+    solver_uncon = solver_uncon(prob_al, opts)
 
-    solver = AugmentedLagrangianSolver(opts,stats,stats_uncon,solver_uncon)
+    solver = AugmentedLagrangianSolver(opts_al, stats, stats_uncon, solver_uncon)
     reset!(solver)
     return solver
 end

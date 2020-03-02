@@ -18,9 +18,17 @@ $(FIELDS)
     n_steps::Int = 1
     solve_type::Symbol = :feasible
     active_set_tolerance::T = 1e-3
-    feasibility_tolerance::T = 1e-6
+    constraint_tolerance::T = 1e-6
     ρ::T = 1e-2
     r_threshold::T = 1.1
+end
+
+function ProjectedNewtonSolverOptions(opts::SolverOptions)
+    ProjectedNewtonSolverOptions(
+        constraint_tolerance=opts.constraint_tolerance,
+        active_set_tolerance=opts.active_set_tolerance,
+        verbose=opts.verbose,
+    )
 end
 
 
@@ -72,7 +80,7 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
     con_inds::Vector{<:Vector}
 end
 
-function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions())
+function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     Z = prob.Z  # grab trajectory before copy to keep associativity
     prob = copy(prob)  # don't modify original problem
 
@@ -112,8 +120,10 @@ function ProjectedNewtonSolver(prob::Problem, opts=ProjectedNewtonSolverOptions(
     # Set constant pieces of the Jacobian
     xinds,uinds = P.xinds, P.uinds
 
+    opts_pn = ProjectedNewtonSolverOptions(opts)
     dyn_inds = SVector{n,Int}[]
-    ProjectedNewtonSolver(prob_info, Z, Z̄, opts, stats, P, P̄, H, g, E, D, d, dyn_vals, active_set, dyn_inds, con_inds)
+    ProjectedNewtonSolver(prob_info, Z, Z̄, opts_pn, stats,
+        P, P̄, H, g, E, D, d, dyn_vals, active_set, dyn_inds, con_inds)
 end
 
 

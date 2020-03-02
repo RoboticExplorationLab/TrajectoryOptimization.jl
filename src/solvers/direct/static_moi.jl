@@ -15,7 +15,14 @@ $(FIELDS)"
     verbose::Bool = true
 
     "Feasibility tolerance"
-    feasibility_tolerance::T = -1.0
+    constraint_tolerance::T = -1.0
+end
+
+function DIRCOLSolverOptions(opts::SolverOptions)
+	DIRCOLSolverOptions(
+		constraint_tolerance = opts.constraint_tolerance,
+		verbose=verbose
+	)
 end
 
 """
@@ -25,7 +32,7 @@ Uses a commerical NLP solver to solve the Trajectory Optimization problem.
 Uses the MathOptInterface to interface with the NLP.
 """
 struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
-    opts::DIRCOLSolverOptions
+    opts::SolverOptions{T}
     stats::Dict{Symbol,Any}
 
     NN::Int
@@ -63,8 +70,10 @@ end
 Base.size(solver::DIRCOLSolver{Q,L,T,n,m,NM}) where {Q,L,T,n,m,NM} = n,m,length(solver.Z)
 
 function DIRCOLSolver(prob::Problem{Q},
-        opts::DIRCOLSolverOptions=DIRCOLSolverOptions(),
-        jacobian_structure=:by_knotpoint) where Q
+        opts=SolverOptions(),
+        jacobian_structure=:by_knotpoint,
+    	opts_optimizer::Dict{Symbol,Any} = Dict{Symbol,Any}(),
+		nlp=Ipopt.Optimizer()) where Q
 
     n,m,N = size(prob)
     Z = prob.Z
@@ -107,8 +116,8 @@ function DIRCOLSolver(prob::Problem{Q},
     linds = [[@SVector zeros(Int,blk) for i = 1:len] for (blk,len) in zip(blk_len, con_len)]
 
     # Create MOI Optimizer
-    nlp_opts = Dict(Symbol(key)=>value for (key,val) in pairs(opts.nlp.options))
-    optimizer = typeof(opts.nlp)(;nlp_opts..., nlp_options(opts)...)
+    nlp_opts = Dict(Symbol(key)=>value for (key,val) in pairs(opts_optimizer))
+    optimizer = typeof(nlp)(;nlp_opts..., nlp_options(nlp, opts)...)
 
     # Create Solver
     d = DIRCOLSolver(opts, stats, NN, NP, dyn_con, prob.obj, conSet, conSet_all,
@@ -135,6 +144,8 @@ function DIRCOLSolver(prob::Problem{Q},
 
     return d
 end
+
+@inline AbstractSolver(prob::Problem, opts::DIRCOLSolverOptions) = DIRCOLSolver(prob, opts)
 
 # AbstractSolver Interface
 get_initial_state(solver::DIRCOLSolver) = solver.x0
@@ -238,7 +249,7 @@ MOI.eval_hessian_lagrangian(::DIRCOLSolver, H, x, σ, μ) = nothing
 
 function solve!(d::DIRCOLSolver)
     # Update options
-    nlp_opts = nlp_options(d.opts)
+    nlp_opts = nlp_options(d.optimizer, d.opts)
     for (key,val) in nlp_opts
         d.optimizer.options[String(key)] = val
     end
@@ -258,29 +269,30 @@ function solve!(d::DIRCOLSolver)
     return nothing
 end
 
-function nlp_options(opts::DIRCOLSolverOptions)
-    solver_name = optimizer_name(opts.nlp)
+function nlp_options(nlp::MOI.AbstractOptimizer, opts::SolverOptions)
+    solver_name = optimizer_name(nlp)
+	opts_optimizer = Dict{Symbol,Any}()
     if solver_name == :Ipopt
-        !opts.verbose ? opts.opts[:print_level] = 0 : opts.opts[:print_level] = 5
-        if opts.feasibility_tolerance > 0.
-            opts.opts[:constr_viol_tol] = opts.feasibility_tolerance
-            opts.opts[:tol] = opts.feasibility_tolerance
+        !opts.verbose ? opts_optimizer[:print_level] = 0 : opts_optimizer[:print_level] = 5
+        if opts.constraint_tolerance > 0.
+            opts_optimizer[:constr_viol_tol] = opts.constraint_tolerance
+            opts_optimizer[:tol] = opts.constraint_tolerance
         end
     elseif solver_name == :SNOPT7
         if !opts.verbose
-            opts.opts[:Major_print_level] = 0
-            opts.opts[:Minor_print_level] = 0
+            opts_optimizer[:Major_print_level] = 0
+            opts_optimizer[:Minor_print_level] = 0
         end
-        if opts.feasibility_tolerance > 0.
-            opts.opts[:Major_feasibility_tolerance] = opts.feasibility_tolerance
-            opts.opts[:Minor_feasibility_tolerance] = opts.feasibility_tolerance
-            opts.opts[:Major_optimality_tolerance] = opts.feasibility_tolerance
+        if opts.constraint_tolerance > 0.
+            opts_optimizer[:Major_constraint_tolerance] = opts.constraint_tolerance
+            opts_optimizer[:Minor_constraint_tolerance] = opts.constraint_tolerance
+            opts_optimizer[:Major_optimality_tolerance] = opts.constraint_tolerance
         end
     else
         error("Nonlinear solver not implemented")
     end
 
-    return opts.opts
+    return opts_optimizer
 end
 
 function optimizer_name(optimizer::MathOptInterface.AbstractOptimizer)

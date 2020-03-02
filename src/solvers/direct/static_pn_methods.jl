@@ -19,7 +19,7 @@ end
 
 
 function projection_solve!(solver::ProjectedNewtonSolver)
-    ϵ_feas = solver.opts.feasibility_tolerance
+    ϵ_feas = solver.opts.constraint_tolerance
     viol = norm(solver.d[solver.active_set], Inf)
     max_projection_iters = 10
 
@@ -92,7 +92,7 @@ function _projection_solve!(solver::ProjectedNewtonSolver)
         end
 
         if convergence_rate < convergence_rate_threshold ||
-                       viol < solver.opts.feasibility_tolerance
+                       viol < solver.opts.constraint_tolerance
             break
         end
     end
