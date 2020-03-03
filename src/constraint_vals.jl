@@ -45,7 +45,7 @@ function ConstraintVals(con::C, inds::UnitRange; kwargs...) where C
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	if p*w > MAX_ELEM
+	if p*w > MAX_ELEM*10
 		∇c = [zeros(Float64,p,w) for k = 1:P]
 	else
 		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
