@@ -37,7 +37,7 @@ struct ConstraintVals{T,W,C,P,A}
 	end
 end
 
-function ConstraintVals(con::C, inds::UnitRange; kwargs...) where C
+function ConstraintVals(con::C, inds::UnitRange; mutable=false, kwargs...) where C
 	p = length(con)
 	w = width(con)
 	P = length(inds)
@@ -45,8 +45,8 @@ function ConstraintVals(con::C, inds::UnitRange; kwargs...) where C
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	if p*w > MAX_ELEM*10
-		∇c = [zeros(Float64,p,w) for k = 1:P]
+	if p*w > MAX_ELEM*10 || mutable
+		∇c = [SizedMatrix{p,w}(zeros(Float64,p,w)) for k = 1:P]
 	else
 		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
 	end
@@ -208,6 +208,49 @@ end
 
 			E.x[k] += cx'g
 			E.u[k] += cu'g
+		end
+	end
+	quote
+		ix,iu = Z[1]._x, Z[1]._u
+		@inbounds for i in eachindex(con.inds)
+			k = con.inds[i]
+			c = con.vals[i]
+			λ = con.λ[i]
+			μ = con.μ[i]
+			a = con.active[i]
+			Iμ = Diagonal( a .* μ )
+			g = Iμ*c + λ
+
+			$expansion
+		end
+	end
+end
+
+@generated function cost_expansion!(E::Vector{<:AbstractExpansion}, con::ConstraintVals{T,W},
+		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
+	if W <: State
+		expansion = quote
+			cx = SMatrix(con.∇c[i])
+			E[k].xx .+= cx'Iμ*cx
+			E[k].x .+= cx'g
+		end
+	elseif W <: Control
+		expansion = quote
+			cu = SMatrix(con.∇c[i])
+			E[k].uu .+= cu'Iμ*cu
+			E[k].u .+= cu'g
+		end
+	else
+		expansion = quote
+			cx = SMatrix(con.∇c[i])[:,ix]
+			cu = SMatrix(con.∇c[i])[:,iu]
+
+			E[k].xx .+= cx'Iμ*cx
+			E[k].uu .+= cu'Iμ*cu
+			E[k].ux .+= cu'Iμ*cx
+
+			E[k].x .+= cx'g
+			E[k].u .+= cu'g
 		end
 	end
 	quote

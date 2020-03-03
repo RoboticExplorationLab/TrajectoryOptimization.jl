@@ -73,7 +73,7 @@ function DIRCOLSolver(prob::Problem{Q},
         opts=SolverOptions(),
         jacobian_structure=:by_knotpoint,
     	opts_optimizer::Dict{Symbol,Any} = Dict{Symbol,Any}(),
-		nlp=Ipopt.Optimizer()) where Q
+		nlp=Ipopt.Optimizer(); integration=Q) where Q
 
     n,m,N = size(prob)
     Z = prob.Z
@@ -82,8 +82,8 @@ function DIRCOLSolver(prob::Problem{Q},
 
     # Add dynamics constraints
     prob = copy(prob)
-    add_dynamics_constraints!(prob)
-    dyn_con = get_constraints(prob).constraints[2].con::DynamicsConstraint{Q}
+    add_dynamics_constraints!(prob, integration)
+    dyn_con = get_constraints(prob).constraints[2].con::DynamicsConstraint{integration}
     conSet = get_constraints(prob)
 
     # Store a copy of the constraint set with all constraints

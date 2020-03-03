@@ -84,12 +84,12 @@ end
 add_dynamics_constraints!(prob::Problem)
 ```
 Add dynamics constraints to the constraint set"
-function add_dynamics_constraints!(prob::Problem{Q}) where Q
+function add_dynamics_constraints!(prob::Problem{Q}, integration=Q) where Q
 	n,m = size(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
-    dyn_con = ConstraintVals( DynamicsConstraint{Q}(prob.model, prob.N), 1:prob.N-1 )
+    dyn_con = ConstraintVals(DynamicsConstraint{integration}(prob.model, prob.N), 1:prob.N-1)
     add_constraint!(conSet, dyn_con, 1)
 
     # Initial condition

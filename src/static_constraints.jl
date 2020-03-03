@@ -379,6 +379,10 @@ function jacobian(bnd::BoundConstraint, z::KnotPoint)
 	bnd.B
 end
 
+function jacobian!(∇c, bnd::BoundConstraint, z::KnotPoint)
+	∇c .= bnd.B
+end
+
 
 ############################################################################################
 #  							VARIABLE BOUND CONSTRAINT 									   #
