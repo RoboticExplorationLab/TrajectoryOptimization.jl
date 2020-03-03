@@ -164,7 +164,7 @@ function InfeasibleProblem(prob::Problem, Z0::Traj, R_inf::Real)
     obj = infeasible_objective(prob.obj, R_inf)
 
     # Create new problem
-    Problem(model_inf, obj, conSet, prob.x0, prob.xf, Z, N, prob.tf)
+    Problem(model_inf, obj, conSet, prob.x0, prob.xf, Z, N, prob.t0, prob.tf)
 end
 
 function infeasible_objective(obj::Objective, regularizer)

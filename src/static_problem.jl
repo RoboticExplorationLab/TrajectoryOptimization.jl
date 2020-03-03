@@ -191,7 +191,7 @@ change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
     Problem{Q}(prob)
 
 function Problem{Q}(p::Problem) where Q
-    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p,t0, p.tf)
+    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.t0, p.tf)
 end
 
 @inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
