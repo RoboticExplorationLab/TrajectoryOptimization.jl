@@ -49,18 +49,9 @@ function backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,QUAD<:Q
 		Q = _calc_Q!(Q, S[k+1], S[k], fdx, fdu)
 
 		# Regularization
-		# _bp_reg!(Quu_reg, Qux_reg, Q, fdx, fdu,
-		# 	solver.ρ[1], solver.opts.bp_reg_type)
-        if solver.opts.bp_reg_type == :state
-            Quu_reg .= Q.uu #+ solver.ρ[1]*fdu'fdu
-			mul!(Quu_reg, Transpose(fdu), fdu, solver.ρ[1], 1.0)
-            Qux_reg .= Q.ux #+ solver.ρ[1]*fdu'fdx
-			mul!(Qux_reg, fdu', fdx, solver.ρ[1], 1.0)
-        elseif solver.opts.bp_reg_type == :control
-            Quu_reg .= Q.uu #+ solver.ρ[1]*I
-			Quu_reg .+= solver.ρ[1]*Diagonal(@SVector ones(m))
-            Qux_reg .= Q.ux
-        end
+		Quu_reg .= Q.uu #+ solver.ρ[1]*I
+		Quu_reg .+= solver.ρ[1]*Diagonal(@SVector ones(m))
+		Qux_reg .= Q.ux
 
 	    if solver.opts.bp_reg
 	        vals = eigvals(Hermitian(Quu_reg))
@@ -117,18 +108,18 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 
 		# Get error state expanions
 		fdx,fdu = SMatrix(solver.D[k].A), SMatrix(solver.D[k].B)
-		# error_expansion!(E, solver.Q[k], model, Z[k], solver.G[k])
-
-		# Q = StaticExpansion(E)
-		Q = StaticExpansion(solver.Q[k])
-		# S1 = StaticExpansion(S[k+1])
+		if n == n̄
+			Q = StaticExpansion(solver.Q[k])
+		else
+			error_expansion!(E, solver.Q[k], model, Z[k], solver.G[k])
+			Q = StaticExpansion(E)
+		end
 
 		# Calculate action-value expansion
 		Q = _calc_Q!(Q, Sxx, Sx, fdx, fdu)
 
 		# Regularization
-		Quu_reg, Qux_reg = _bp_reg!(Q, fdx, fdu,
-			solver.ρ[1], solver.opts.bp_reg_type)
+		Quu_reg, Qux_reg = _bp_reg!(Q, fdx, fdu, solver.ρ[1], solver.opts.bp_reg_type)
 
 	    if solver.opts.bp_reg
 	        vals = eigvals(Hermitian(Quu_reg))

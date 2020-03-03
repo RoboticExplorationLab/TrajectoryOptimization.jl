@@ -42,7 +42,7 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,ET,GT} <: iLQRSolver{T}
 
 end
 
-function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUAD,T}
+function iLQRSolver2(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
@@ -88,7 +88,9 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=iLQRSolverOptions()) where {QUA
 	ET = typeof(E)
 	GT = eltype(G)
 
-    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,ET,GT}(prob.model, prob.obj, x0, xf, prob.tf, N, opts, stats,
+	opts_ilqr = iLQRSolverOptions(opts)
+    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,ET,GT}(prob.model, prob.obj, x0, xf,
+		prob.tf, N, opts_ilqr, stats,
         Z, Z̄, K, d, D, G, S, Q, E, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
 
     reset!(solver)

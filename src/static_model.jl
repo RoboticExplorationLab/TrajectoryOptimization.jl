@@ -218,19 +218,26 @@ function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
     mul!(D.B, Transpose(G2), D.tmpB)
 end
 
-@inline error_expansion!(D::SizedDynamicsExpansion,G1::UniformScaling,G2::UniformScaling) =
+@inline error_expansion!(D::SizedDynamicsExpansion, G1::UniformScaling, G2::UniformScaling) =
 	begin D.A .= D.A_; D.B .= D.B_ end
 
-function dynamics_expansion!(D::SizedDynamicsExpansion, G1, G2, model::AbstractModel, z::KnotPoint)
+function dynamics_expansion!(D::SizedDynamicsExpansion{T,N,N,M}, G1, G2,
+		model::AbstractModel, z::KnotPoint) where {T,N,M}
 	copy_AB!(D)
-	ix,iu = z._x, z._u
+	discrete_jacobian!(RK3, D.∇f, model, z)
+end
+
+function dynamics_expansion!(D::SizedDynamicsExpansion{T,N,N̄,M}, G1, G2,
+		model::AbstractModel, z::KnotPoint) where {T,N,N̄,M}
+	copy_AB!(D)
 	discrete_jacobian!(RK3, D.∇f, model, z)
 end
 
 function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, G, model::AbstractModel,
 		Z::Traj)
 	for k in eachindex(D)
-		dynamics_expansion!(D[k], G[k], G[k+1], model, Z[k])
+		# dynamics_expansion!(D[k], G[k], G[k+1], model, Z[k])
+		discrete_jacobian!(RK3, D[k].∇f, model, Z[k])
 		error_expansion!(D[k], G[k], G[k+1])
 	end
 end
