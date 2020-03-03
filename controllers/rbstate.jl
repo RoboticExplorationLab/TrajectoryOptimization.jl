@@ -18,6 +18,12 @@ function RBState(r::AbstractVector, q::Rotation, v::AbstractVector, ω::Abstract
     RBState(r_, q_, v_, ω_)
 end
 
+function RBState(r::AbstractVector, q::AbstractVector, v::AbstractVector, ω::AbstractVector)
+    @assert length(q) == 4
+    q = UnitQuaternion(q...)
+    RBState(r, q, v, ω)
+end
+
 function RBState(x::SVector{13})
     r_ = @SVector [x[1],x[2],x[3]]
     q_ = UnitQuaternion(x[4], x[5], x[6], x[7])
