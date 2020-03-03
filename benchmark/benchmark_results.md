@@ -1,7 +1,7 @@
 # Benchmark Report for *TrajectoryOptimization*
 
 ## Job Properties
-* Time of benchmark: 2 Mar 2020 - 17:12
+* Time of benchmark: 2 Mar 2020 - 17:33
 * Package commit: dirty
 * Julia commit: 2d5741
 * Julia command flags: None
@@ -15,19 +15,24 @@ The percentages accompanying time and memory values in the below table are noise
 time/memory value for a given benchmark is expected to fall within this percentage of the reported value.
 An empty cell means that the value was zero.
 
-| ID                           | time            | GC time    | memory          | allocations |
-|------------------------------|----------------:|-----------:|----------------:|------------:|
-| `["ALTRO", "3obs"]`          | 966.225 μs (5%) |            | 980.07 KiB (1%) |         883 |
-| `["ALTRO", "cartpole"]`      |   4.795 ms (5%) |            |  22.13 KiB (1%) |         508 |
-| `["ALTRO", "double_int"]`    |  41.746 μs (5%) |            |   3.31 KiB (1%) |         108 |
-| `["ALTRO", "escape"]`        |   14.039 s (5%) | 511.091 ms |   2.45 GiB (1%) |    61866024 |
-| `["ALTRO", "parallel_park"]` |   1.155 ms (5%) |            |   1.27 MiB (1%) |         931 |
-| `["ALTRO", "pendulum"]`      |   1.038 ms (5%) |            | 333.46 KiB (1%) |         643 |
+| ID                           | time            | GC time | memory          | allocations |
+|------------------------------|----------------:|--------:|----------------:|------------:|
+| `["ALTRO", "3obs"]`          | 960.824 μs (5%) |         | 980.07 KiB (1%) |         883 |
+| `["ALTRO", "cartpole"]`      |   4.836 ms (5%) |         |  22.13 KiB (1%) |         508 |
+| `["ALTRO", "double_int"]`    |  41.154 μs (5%) |         |   3.31 KiB (1%) |         108 |
+| `["ALTRO", "escape"]`        |   8.907 ms (5%) |         |   1.65 MiB (1%) |         840 |
+| `["ALTRO", "parallel_park"]` |   1.182 ms (5%) |         |   1.27 MiB (1%) |         931 |
+| `["ALTRO", "pendulum"]`      |   1.030 ms (5%) |         | 333.46 KiB (1%) |         643 |
+| `["iLQR", "cartpole"]`       |   5.272 ms (5%) |         |                 |             |
+| `["iLQR", "double_int"]`     |  21.497 μs (5%) |         |                 |             |
+| `["iLQR", "parallel_park"]`  | 316.800 μs (5%) |         |                 |             |
+| `["iLQR", "pendulum"]`       |   2.160 ms (5%) |         |                 |             |
 
 ## Benchmark Group List
 Here's a list of all the benchmark groups executed by this job:
 
 - `["ALTRO"]`
+- `["iLQR"]`
 
 ## Julia versioninfo
 ```
@@ -39,11 +44,11 @@ Platform Info:
   uname: Linux 4.15.0-1073-oem #83-Ubuntu SMP Mon Feb 17 11:21:18 UTC 2020 x86_64 x86_64
   CPU: Intel(R) Core(TM) i9-9900 CPU @ 3.10GHz: 
                  speed         user         nice          sys         idle          irq
-       #1-16  4800 MHz    6346001 s       4606 s    2388991 s   53309124 s          0 s
+       #1-16  4800 MHz    6474851 s       4620 s    2418885 s   55166880 s          0 s
        
-  Memory: 31.199615478515625 GB (15796.4921875 MB free)
-  Uptime: 467809.0 sec
-  Load Avg:  1.44189453125  1.21630859375  1.1982421875
+  Memory: 31.199615478515625 GB (16184.97265625 MB free)
+  Uptime: 469074.0 sec
+  Load Avg:  1.49560546875  1.421875  1.31787109375
   WORD_SIZE: 64
   LIBM: libopenlibm
   LLVM: libLLVM-6.0.1 (ORCJIT, skylake)

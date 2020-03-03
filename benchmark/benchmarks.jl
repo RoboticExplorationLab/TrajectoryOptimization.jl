@@ -32,4 +32,12 @@ altro["escape"]        = benchmarkable_solve!(ALTROSolver(Problems.DubinsCar(:es
     infeasible=true, R_inf=0.1))
 suite["ALTRO"] = altro
 
+# iLQR
+const ilqr = BenchmarkGroup(["unconstrained"])
+ilqr["double_int"]    = benchmarkable_solve!(iLQRSolver(Problems.DoubleIntegrator()...))
+ilqr["pendulum"]      = benchmarkable_solve!(iLQRSolver(Problems.Pendulum()...))
+ilqr["cartpole"]      = benchmarkable_solve!(iLQRSolver(Problems.Cartpole()...))
+ilqr["parallel_park"] = benchmarkable_solve!(iLQRSolver(Problems.DubinsCar(:parallel_park)...))
+suite["iLQR"] = ilqr
+
 SUITE = suite
