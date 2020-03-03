@@ -117,6 +117,12 @@ function set_controls!(Z::Traj, U)
     end
 end
 
+function set_controls!(Z::Traj, u::SVector)
+    for k in 1:length(Z)-1
+        Z[k].z = [state(Z[k]); u]
+    end
+end
+
 function set_times!(Z::Traj, ts)
     for k in eachindex(ts)
         Z[k].t = ts[k]
