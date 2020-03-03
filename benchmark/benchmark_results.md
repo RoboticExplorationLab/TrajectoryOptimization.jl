@@ -1,7 +1,7 @@
 # Benchmark Report for *TrajectoryOptimization*
 
 ## Job Properties
-* Time of benchmark: 2 Mar 2020 - 17:33
+* Time of benchmark: 2 Mar 2020 - 19:52
 * Package commit: dirty
 * Julia commit: 2d5741
 * Julia command flags: None
@@ -17,21 +17,28 @@ An empty cell means that the value was zero.
 
 | ID                           | time            | GC time | memory          | allocations |
 |------------------------------|----------------:|--------:|----------------:|------------:|
-| `["ALTRO", "3obs"]`          | 960.824 μs (5%) |         | 980.07 KiB (1%) |         883 |
-| `["ALTRO", "cartpole"]`      |   4.836 ms (5%) |         |  22.13 KiB (1%) |         508 |
-| `["ALTRO", "double_int"]`    |  41.154 μs (5%) |         |   3.31 KiB (1%) |         108 |
-| `["ALTRO", "escape"]`        |   8.907 ms (5%) |         |   1.65 MiB (1%) |         840 |
-| `["ALTRO", "parallel_park"]` |   1.182 ms (5%) |         |   1.27 MiB (1%) |         931 |
-| `["ALTRO", "pendulum"]`      |   1.030 ms (5%) |         | 333.46 KiB (1%) |         643 |
-| `["iLQR", "cartpole"]`       |   5.272 ms (5%) |         |                 |             |
-| `["iLQR", "double_int"]`     |  21.497 μs (5%) |         |                 |             |
-| `["iLQR", "parallel_park"]`  | 316.800 μs (5%) |         |                 |             |
-| `["iLQR", "pendulum"]`       |   2.160 ms (5%) |         |                 |             |
+| `["ALTRO", "3obs"]`          | 961.085 μs (5%) |         | 980.07 KiB (1%) |         883 |
+| `["ALTRO", "cartpole"]`      |   4.763 ms (5%) |         |  22.13 KiB (1%) |         508 |
+| `["ALTRO", "double_int"]`    |  41.575 μs (5%) |         |   3.31 KiB (1%) |         108 |
+| `["ALTRO", "escape"]`        |   9.003 ms (5%) |         |   1.65 MiB (1%) |         840 |
+| `["ALTRO", "parallel_park"]` |   1.180 ms (5%) |         |   1.27 MiB (1%) |         931 |
+| `["ALTRO", "pendulum"]`      |   1.035 ms (5%) |         | 333.46 KiB (1%) |         643 |
+| `["Ipopt", "3obs"]`          | 179.453 ms (5%) |         |   1.99 MiB (1%) |       36955 |
+| `["Ipopt", "cartpole"]`      | 119.807 ms (5%) |         |   2.01 MiB (1%) |       36644 |
+| `["Ipopt", "double_int"]`    |  15.654 ms (5%) |         | 712.05 KiB (1%) |       13875 |
+| `["Ipopt", "escape"]`        |    6.068 s (5%) |         |  18.99 MiB (1%) |      396811 |
+| `["Ipopt", "parallel_park"]` |  59.814 ms (5%) |         |   1.60 MiB (1%) |       27414 |
+| `["Ipopt", "pendulum"]`      | 255.768 ms (5%) |         |   1.87 MiB (1%) |       37452 |
+| `["iLQR", "cartpole"]`       |   5.233 ms (5%) |         |                 |             |
+| `["iLQR", "double_int"]`     |  21.352 μs (5%) |         |                 |             |
+| `["iLQR", "parallel_park"]`  | 303.221 μs (5%) |         |                 |             |
+| `["iLQR", "pendulum"]`       |   2.159 ms (5%) |         |                 |             |
 
 ## Benchmark Group List
 Here's a list of all the benchmark groups executed by this job:
 
 - `["ALTRO"]`
+- `["Ipopt"]`
 - `["iLQR"]`
 
 ## Julia versioninfo
@@ -44,11 +51,11 @@ Platform Info:
   uname: Linux 4.15.0-1073-oem #83-Ubuntu SMP Mon Feb 17 11:21:18 UTC 2020 x86_64 x86_64
   CPU: Intel(R) Core(TM) i9-9900 CPU @ 3.10GHz: 
                  speed         user         nice          sys         idle          irq
-       #1-16  4800 MHz    6474851 s       4620 s    2418885 s   55166880 s          0 s
+       #1-16  4228 MHz    7210025 s       4644 s    2612538 s   67508375 s          0 s
        
-  Memory: 31.199615478515625 GB (16184.97265625 MB free)
-  Uptime: 469074.0 sec
-  Load Avg:  1.49560546875  1.421875  1.31787109375
+  Memory: 31.199615478515625 GB (16205.56640625 MB free)
+  Uptime: 477402.0 sec
+  Load Avg:  1.5234375  1.49365234375  1.2900390625
   WORD_SIZE: 64
   LIBM: libopenlibm
   LLVM: libLLVM-6.0.1 (ORCJIT, skylake)

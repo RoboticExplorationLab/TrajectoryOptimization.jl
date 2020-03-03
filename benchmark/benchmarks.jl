@@ -21,6 +21,7 @@ function benchmarkable_solve!(solver; samples=10, evals=10)
     return b
 end
 
+
 # ALTRO
 const altro = BenchmarkGroup(["constrained"])
 altro["double_int"]    = benchmarkable_solve!(ALTROSolver(Problems.DoubleIntegrator()...))
@@ -39,5 +40,15 @@ ilqr["pendulum"]      = benchmarkable_solve!(iLQRSolver(Problems.Pendulum()...))
 ilqr["cartpole"]      = benchmarkable_solve!(iLQRSolver(Problems.Cartpole()...))
 ilqr["parallel_park"] = benchmarkable_solve!(iLQRSolver(Problems.DubinsCar(:parallel_park)...))
 suite["iLQR"] = ilqr
+
+# DIRCOL
+const dircol = BenchmarkGroup(["constrained"])
+dircol["double_int"] = benchmarkable_solve!(DIRCOLSolver(Problems.DoubleIntegrator()..., integration=HermiteSimpson))
+dircol["pendulum"]   = benchmarkable_solve!(DIRCOLSolver(Problems.Pendulum()..., integration=HermiteSimpson))
+dircol["cartpole"]   = benchmarkable_solve!(DIRCOLSolver(Problems.Cartpole()..., integration=HermiteSimpson))
+dircol["parallel_park"]   = benchmarkable_solve!(DIRCOLSolver(Problems.DubinsCar(:parallel_park)..., integration=HermiteSimpson))
+dircol["3obs"]       = benchmarkable_solve!(DIRCOLSolver(Problems.DubinsCar(:three_obstacles)..., integration=HermiteSimpson))
+dircol["escape"]     = benchmarkable_solve!(DIRCOLSolver(Problems.DubinsCar(:escape)..., integration=HermiteSimpson))
+suite["Ipopt"] = dircol
 
 SUITE = suite
