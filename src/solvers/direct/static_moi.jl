@@ -153,6 +153,7 @@ get_model(solver::DIRCOLSolver) = solver.dyn_con.model
 get_constraints(solver::DIRCOLSolver) = solver.constraints
 get_trajectory(solver::DIRCOLSolver) = solver.Z
 get_objective(solver::DIRCOLSolver) = solver.objective
+iterations(solver::DIRCOLSolver) = stats(solver)[:iterations]
 
 num_primals(solver::DIRCOLSolver) = solver.NN
 num_duals(solver::DIRCOLSolver) =  solver.NP
