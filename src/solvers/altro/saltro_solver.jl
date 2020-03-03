@@ -20,8 +20,8 @@ $(FIELDS)
     "Use infeasible model (augment controls to make it fully actuated)"
     infeasible::Bool = false
 
-    "regularization term for infeasible controls."
-    R_inf::T = 1.0
+    # "regularization term for infeasible controls."
+    # R_inf::T = 1.0
 
     "project infeasible results to feasible space using TVLQR."
     dynamically_feasible_projection::Bool = true
@@ -75,10 +75,11 @@ AbstractSolver(prob::Problem, opts::ALTROSolverOptions) = ALTROSolver(prob, opts
 
 function ALTROSolver(prob::Problem{Q,T},
         opts::SolverOptions=SolverOptions{T}();
-        infeasible=false) where {Q,T}
+        infeasible=false,
+        R_inf=1.0) where {Q,T}
     if infeasible
         # Convert to an infeasible problem
-        prob = InfeasibleProblem(prob, prob.Z, opts.R_inf/prob.Z[1].dt)
+        prob = InfeasibleProblem(prob, prob.Z, R_inf/prob.Z[1].dt)
 
         # Set infeasible constraint parameters
         # con_inf = get_constraints(prob).constraints[end]
