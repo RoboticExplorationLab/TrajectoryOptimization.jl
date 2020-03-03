@@ -300,6 +300,17 @@ function (⊖)(q::UnitQuaternion{T,IdentityMap}, q0::UnitQuaternion) where {T}
     # return SVector(q0\q)
 end
 
+function rotation_between(from::SVector{3}, to::SVector{3})
+    # Robustified version of implementation from https://www.gamedev.net/topic/429507-finding-the-quaternion-betwee-two-vectors/#entry3856228
+    normprod = sqrt(dot(from, from) * dot(to, to))
+    T = typeof(normprod)
+    normprod < eps(T) && throw(ArgumentError("Input vectors must be nonzero."))
+    w = normprod + dot(from, to)
+    # v = abs(w) < 100 * eps(T) ? perpendicular_vector(from) : cross(from, to)
+    v = from × to
+    @inbounds return normalize(UnitQuaternion(w, v[1], v[2], v[3])) # relies on normalization in constructor
+end
+
 """
 Jacobian of q ⊕ ϕ, when ϕ is near zero. Useful for converting Jacobians from R⁴ to R³ and
     correctly account for unit norm constraint. Jacobians for different
