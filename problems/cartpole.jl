@@ -30,6 +30,7 @@ function Cartpole(method=:none)
     U0 = [u0 for k = 1:N-1]
     Z = Traj(X0,U0,dt*ones(N))
     prob = Problem{RK3}(model, obj, conSet, x0, xf, Z, N, 0.0, tf)
+    rollout!(prob)
 
     return prob, opts
 end

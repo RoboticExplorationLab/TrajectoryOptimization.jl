@@ -47,6 +47,7 @@ function DubinsCar(scenario=:three_obstacles)
         U = [@SVector fill(0.01,m) for k = 1:N-1]
         car_3obs_static = Problem(model, obj, xf, tf, constraints=conSet, x0=x0)
         initial_controls!(car_3obs_static, U)
+        rollout!(car_3obs_static)
         return car_3obs_static, opts
 
     elseif scenario==:parallel_park
@@ -86,6 +87,7 @@ function DubinsCar(scenario=:three_obstacles)
         conSet = ConstraintSet(n,m,[con_bnd, con_goal], N)
 
         prob = Problem(model, obj, xf, tf, constraints=conSet, x0=x0, U0=U)
+        rollout!(prob)
 
         return prob, opts
 

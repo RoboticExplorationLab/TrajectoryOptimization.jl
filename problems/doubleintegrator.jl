@@ -30,5 +30,6 @@ function DoubleIntegrator()
     conSet = ConstraintSet(n,m,[con_bnd], N)
 
     doubleintegrator_static = Problem(model, obj, xf, tf, constraints=conSet, x0=x0, N=N)
+    rollout!(doubleintegrator_static)
     return doubleintegrator_static, opts
 end
