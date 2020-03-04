@@ -230,6 +230,8 @@ function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
     mul!(D.B, Transpose(G2), D.tmpB)
 end
 
+@inline error_expansion(D::SizedDynamicsExpansion, model::RigidBody) = D.A, D.B
+@inline error_expansion(D::SizedDynamicsExpansion, model::AbstractModel) = D.tmpA, D.tmpB
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #

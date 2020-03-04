@@ -78,26 +78,6 @@ function SizedCostExpansion{T}(n::Int, m::Int) where T
 	SizedCostExpansion(x,xx,u,uu,ux, x, xx, u, uu, ux, tmp, x_)
 end
 
-function error_expansion!(E::AbstractExpansion, Q::SizedCostExpansion)
-	E.x  .= Q.x
-	E.u  .= Q.u
-	E.xx .= Q.xx
-	E.uu .= Q.uu
-	E.ux .= Q.ux
-end
-
-@inline function error_expansion(E::SizedCostExpansion, model::RigidBody)
-	return StaticExpansion(E.x_, E.xx_, E.u_, E.uu_, E.ux_)
-end
-
-@inline function error_expansion(E::SizedCostExpansion, model::AbstractModel)
-	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
-end
-
-@inline function cost_expansion(E::SizedCostExpansion{<:Any,N,N}) where N
-	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
-end
-
 
 struct SizedExpansion{T,N0,N,M} <: AbstractExpansion{T}
 	x::SizedVector{N,T,1}
@@ -263,6 +243,3 @@ struct SizedDynamicsExpansion{T,N,N̄,M} <: AbstractExpansion{T}
 		new{T,n,n,m}(∇f,A_,B_,A,B,tmpA,tmpB,tmp)
 	end
 end
-
-@inline error_expansion(D::SizedDynamicsExpansion, model::RigidBody) = D.A, D.B
-@inline error_expansion(D::SizedDynamicsExpansion, model::AbstractModel) = D.tmpA, D.tmpB

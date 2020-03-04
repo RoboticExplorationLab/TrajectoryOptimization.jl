@@ -207,3 +207,23 @@ function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G
         mul!(E.xx_, Transpose(G), E.tmp, 1.0, 1.0)
     end
 end
+
+function error_expansion!(E::AbstractExpansion, Q::SizedCostExpansion)
+	E.x  .= Q.x
+	E.u  .= Q.u
+	E.xx .= Q.xx
+	E.uu .= Q.uu
+	E.ux .= Q.ux
+end
+
+@inline function error_expansion(E::SizedCostExpansion, model::RigidBody)
+	return StaticExpansion(E.x_, E.xx_, E.u_, E.uu_, E.ux_)
+end
+
+@inline function error_expansion(E::SizedCostExpansion, model::AbstractModel)
+	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
+end
+
+@inline function cost_expansion(E::SizedCostExpansion{<:Any,N,N}) where N
+	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
+end

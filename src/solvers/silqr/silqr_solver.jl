@@ -167,7 +167,7 @@ struct StaticiLQRSolver{T,I<:QuadratureRule,L,O,n,m,L1,D,F,E1,E2,A} <: iLQRSolve
     end
 end
 
-function iLQRSolver(prob::Problem{I,T}, opts=SolverOptions{T}()) where {I,T}
+function StaticiLQRSolver(prob::Problem{I,T}, opts=SolverOptions{T}()) where {I,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())

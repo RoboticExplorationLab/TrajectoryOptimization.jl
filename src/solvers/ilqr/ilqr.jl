@@ -42,7 +42,7 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
 
 end
 
-function iLQRSolver2(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,T}
+function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,T}
 
     # Init solver statistics
     stats = iLQRStats{T}() # = Dict{Symbol,Any}(:timer=>TimerOutput())
