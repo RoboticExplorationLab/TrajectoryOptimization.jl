@@ -30,7 +30,7 @@ function backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,QUAD<:Q
 	Qux_reg = solver.Qux_reg
 
     # Terminal cost-to-go
-	error_expansion!(Q, solver.Q[N], model, Z[N], solver.G[N])
+	error_expansion!(Q, solver.Q[N])
     S[N].xx .= Q.xx
     S[N].x .= Q.x
 
@@ -43,11 +43,11 @@ function backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,QUAD<:Q
         iu = Z[k]._u
 
 		# Get error state expanions
-		fdx,fdu = solver.D[k].A, solver.D[k].B
-		error_expansion!(Q, solver.Q[k], model, Z[k], solver.G[k])
+		fdx,fdu = error_expansion(solver.D[k], model)
+		error_expansion!(Q, solver.Q[k])
 
 		# Calculate action-value expansion
-		Q = _calc_Q!(Q, S[k+1], S[k], fdx, fdu)
+		_calc_Q!(Q, S[k+1], S[k], fdx, fdu)
 
 		# Regularization
 		Quu_reg .= Q.uu #+ solver.ρ[1]*I
@@ -96,7 +96,7 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 	Qux_reg = SMatrix(solver.Qux_reg)
 
     # Terminal cost-to-go
-	Q = error_expansion(solver.Q[N])
+	Q = error_expansion(solver.Q[N], model)
 	Sxx = SMatrix(Q.xx)
 	Sx = SVector(Q.x)
 
@@ -109,8 +109,9 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
         iu = Z[k]._u
 
 		# Get error state expanions
-		fdx,fdu = SMatrix(solver.D[k].A), SMatrix(solver.D[k].B)
-		Q = error_expansion(solver.Q[k])
+		fdx,fdu = error_expansion(solver.D[k], model)
+		fdx,fdu = SMatrix(fdx), SMatrix(fdu)
+		Q = error_expansion(solver.Q[k], model)
 
 		# Calculate action-value expansion
 		Q = _calc_Q!(Q, Sxx, Sx, fdx, fdu)
@@ -189,7 +190,7 @@ function _calc_Q!(Q, S1, S, fdx, fdu)
 	mul!(S.ux, Transpose(fdu), S1.xx)
 	mul!(Q.ux, S.ux, fdx, 1.0, 1.0)
 
-	return Q
+	return nothing
 end
 
 function _calc_Q!(Q::StaticExpansion, Sxx, Sx, fdx::SMatrix, fdu::SMatrix)

@@ -69,7 +69,11 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD
 	end
 
     S = [SizedExpansion{T}(n,n̄,m) for k = 1:N]
-    Q = [SizedCostExpansion{T}(n,n̄,m) for k = 1:N]
+	if prob.model isa RigidBody
+		Q = [SizedCostExpansion{T}(n,n̄,m) for k = 1:N]
+	else
+		Q = [SizedCostExpansion{T}(n,m) for k = 1:N]
+	end
 	E = SizedExpansion{T}(n,n̄,m)
     # S = [GeneralExpansion{T}(SizedArray,n,n̄,m)   for k = 1:N]
     # Q = [GeneralExpansion{T}(SizedArray,n,n,m) for k = 1:N]

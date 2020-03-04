@@ -211,6 +211,8 @@ function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::Abstrac
 		Z::Traj)
 	for k in eachindex(D)
 		discrete_jacobian!(RK3, D[k].∇f, model, Z[k])
+		D[k].tmpA .= D[k].A_  # avoids allocations later
+		D[k].tmpB .= D[k].B_
 	end
 end
 
@@ -223,8 +225,6 @@ function error_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::RigidBody,
 end
 
 function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
-	D.tmpA .= D.A_  # avoids allocations from multiplying views
-	D.tmpB .= D.B_
     mul!(D.tmp, D.tmpA, G1)
     mul!(D.A, Transpose(G2), D.tmp)
     mul!(D.B, Transpose(G2), D.tmpB)
@@ -291,8 +291,7 @@ function InfeasibleModel(model::AbstractModel)
     n,m = size(model)
     _u  = SVector{m}(1:m)
     _ui = SVector{n}((1:n) .+ m)
-	∇f = zeros(n,n+m+1)
-    InfeasibleModel(model, _u, _ui, ∇f)
+    InfeasibleModel(model, _u, _ui)
 end
 
 function Base.size(model::InfeasibleModel)

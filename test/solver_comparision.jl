@@ -22,15 +22,15 @@ function make_mutable(prob::Problem)
 end
 
 # Test entire solve
-prob,opts = Problems.Quadrotor()
+prob,opts = Problems.DubinsCar(:escape)
 solver0 = iLQRSolver(copy(prob), opts)
 solver1 = iLQRSolver2(copy(make_mutable(prob)), opts)
-solver0 = ALTROSolver(copy(prob), opts) #, infeasible=true, R_inf=0.1)
-solver1 = ALTROSolver(copy(make_mutable(prob)), opts, solver_uncon=iLQRSolver2) #, infeasible=true, R_inf=0.1)
+solver0 = ALTROSolver(copy(prob), opts, infeasible=true, R_inf=0.1)
+solver1 = ALTROSolver(copy(make_mutable(prob)), opts, solver_uncon=iLQRSolver2, infeasible=true, R_inf=0.1)
 # solve!(solver0)
 # solve!(solver1)
-solver0.opts.projected_newton = false
-solver1.opts.projected_newton = false
+# solver0.opts.projected_newton = false
+# solver1.opts.projected_newton = false
 b1 = benchmark_solve!(solver0)
 b2 = benchmark_solve!(solver1)
 judge(median(b2),median(b1))
@@ -74,24 +74,25 @@ states(solver0) ≈ states(solver1)
 cost(solver0) ≈ cost(solver1)
 TO.state_diff_jacobian!(solver0.G, solver0.model, solver0.Z)
 TO.state_diff_jacobian!(solver1.G, solver1.model, solver1.Z)
-solver0.G ≈ solver1.G
+# solver0.G ≈ solver1.G
 TO.cost_expansion!(solver0.Q, solver0.G, solver0.obj, solver0.model, solver0.Z)
 TO.cost_expansion!(solver1.Q, solver1.obj, solver1.Z)
 TO.error_expansion!(solver1.Q, solver1.model, solver1.Z, solver1.G)
 
-Qxx = [Q.xx_ for Q in solver1.Q]
-Quu = [Q.uu_ for Q in solver1.Q]
-Qux = [Q.ux_ for Q in solver1.Q]
-Qx = [Q.x_ for Q in solver1.Q]
-Qu = [Q.u_ for Q in solver1.Q]
+Q = [TO.error_expansion(Q, solver1.model) for Q in solver1.Q]
+Qxx = [Q.xx for Q in Q]
+Quu = [Q.uu for Q in Q]
+Qux = [Q.ux for Q in Q]
+Qx  = [Q.x for Q in Q]
+Qu  = [Q.u for Q in Q]
+
 Qxx ≈ solver0.Q.xx
 Quu ≈ solver0.Q.uu
 Qux ≈ solver0.Q.ux
 Qx ≈ solver0.Q.x
 Qu ≈ solver0.Q.u
 TO.discrete_jacobian!(solver0.∇F, solver0.model, solver0.Z)
-TO.dynamics_expansion!(solver1.D, solver1.G, solver1.model, solver1.Z)
-solver1.D[1].A_
+TO.dynamics_expansion!(solver1.D, solver1.model, solver1.Z)
 ∇F = [D.∇f for D in solver1.D]
 ∇F ≈ solver0.∇F
 
@@ -133,11 +134,6 @@ solver1 = al1.solver_uncon
 @btime ΔV0 = backwardpass!($solver0)
 @btime ΔV1 = backwardpass!($solver1)
 @btime ΔV1 = TO.static_backwardpass!($solver1)
-Q = solver1.Q[1]
-z = solver1.Z[1]
-G = solver1.G[1]
-@btime TO.error_expansion!($Q, $solver1.model, $z, SMatrix($G))
-@btime TO.error_expansion($Q)
 
 @btime TO.forwardpass!($solver0, $ΔV0, cost($solver0))
 @btime TO.forwardpass!($solver1, $ΔV1, cost($solver1))

@@ -67,9 +67,33 @@ function SizedCostExpansion{T}(n0::Int, n::Int, m::Int) where T
 	SizedCostExpansion(x0,xx0,u0,uu0,ux0, x, xx, u, uu, ux, tmp, x_)
 end
 
-@inline function error_expansion(E::SizedCostExpansion)
+function SizedCostExpansion{T}(n::Int, m::Int) where T
+	x  = SizedVector{n}(zeros(T,n))
+	xx = SizedMatrix{n,n}(zeros(T,n,n))
+	u  = SizedVector{m}(zeros(T,m))
+	uu = SizedMatrix{m,m}(zeros(T,m,m))
+	ux = SizedMatrix{m,n}(zeros(T,m,n))
+	tmp = SizedMatrix{n,n}(zeros(T,n,n))
+	x_ = copy(x)
+	SizedCostExpansion(x,xx,u,uu,ux, x, xx, u, uu, ux, tmp, x_)
+end
+
+function error_expansion!(E::AbstractExpansion, Q::SizedCostExpansion)
+	E.x  .= Q.x
+	E.u  .= Q.u
+	E.xx .= Q.xx
+	E.uu .= Q.uu
+	E.ux .= Q.ux
+end
+
+@inline function error_expansion(E::SizedCostExpansion, model::RigidBody)
 	return StaticExpansion(E.x_, E.xx_, E.u_, E.uu_, E.ux_)
 end
+
+@inline function error_expansion(E::SizedCostExpansion, model::AbstractModel)
+	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
+end
+
 @inline function cost_expansion(E::SizedCostExpansion{<:Any,N,N}) where N
 	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
 end
@@ -103,6 +127,14 @@ struct SizedExpansion{T,N0,N,M} <: AbstractExpansion{T}
 		ux = SizedMatrix{m,n}(zeros(m,n))
 		tmp = SizedMatrix{n0,n}(zeros(n0,n))
 		new{T,n0,n,m}(x,xx,u,uu,ux,tmp)
+	end
+	function SizedExpansion(
+			x::SizedVector{N,T,1},
+			xx::SizedMatrix{N,N,T,2},
+			u::SizedVector{M,T,1},
+			uu::SizedMatrix{M,M,T,2},
+			ux::SizedMatrix{M,N,T,2}) where {T,N,M}
+		new{T,N,N,M}(x,xx,u,uu,ux)
 	end
 end
 
@@ -217,4 +249,20 @@ struct SizedDynamicsExpansion{T,N,N̄,M} <: AbstractExpansion{T}
 		tmp = zeros(n0,n)
 		new{T,n0,n,m}(∇f,A_,B_,A,B,tmpA,tmpB,tmp)
 	end
+	function SizedDynamicsExpansion{T}(n::Int, m::Int) where T
+		∇f = zeros(n,n+m+1)
+		ix = 1:n
+		iu = n .+ (1:m)
+		A_ = view(∇f, ix, ix)
+		B_ = view(∇f, ix, iu)
+		A = SizedMatrix{n,n}(zeros(n,n))
+		B = SizedMatrix{n,m}(zeros(n,m))
+		tmpA = A
+		tmpB = B
+		tmp = zeros(n,n)
+		new{T,n,n,m}(∇f,A_,B_,A,B,tmpA,tmpB,tmp)
+	end
 end
+
+@inline error_expansion(D::SizedDynamicsExpansion, model::RigidBody) = D.A, D.B
+@inline error_expansion(D::SizedDynamicsExpansion, model::AbstractModel) = D.tmpA, D.tmpB
