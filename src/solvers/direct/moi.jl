@@ -47,7 +47,7 @@ struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
 
     optimizer::MOI.AbstractOptimizer
 
-    E::CostExpansion
+    E::Vector{SizedCostExpansion{T,N,N,M}}
 
     xinds::Vector{SVector{N,Int}}
     uinds::Vector{SVector{M,Int}}
@@ -100,7 +100,7 @@ function DIRCOLSolver(prob::Problem{Q},
 
     # Initialize arrays
     dyn_vals = DynamicsVals(dyn_con)
-    E = CostExpansion(n,m,N)
+	E = [SizedCostExpansion{Float64}(n,m) for k = 1:N]
 
     NN = (n+m)*N
     NP = sum(num_constraints(prob))

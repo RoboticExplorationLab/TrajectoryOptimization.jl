@@ -184,17 +184,17 @@ function cost_expansion!(solver::ProjectedNewtonSolver)
 end
 
 function copy_expansion!(H, g, E, xinds, uinds)
-    N = length(E.x)
+    N = length(E)
 
     for k = 1:N-1
-        H[xinds[k],xinds[k]] .= E.xx[k]
-        H[uinds[k],uinds[k]] .= E.uu[k]
-        H[uinds[k],xinds[k]] .= E.ux[k]
-        g[xinds[k]] .= E.x[k]
-        g[uinds[k]] .= E.u[k]
+        H[xinds[k],xinds[k]] .= E[k].xx
+        H[uinds[k],uinds[k]] .= E[k].uu
+        H[uinds[k],xinds[k]] .= E[k].ux
+        g[xinds[k]] .= E[k].x
+        g[uinds[k]] .= E[k].u
     end
-    H[xinds[N],xinds[N]] .= E.xx[N]
-    g[xinds[N]] .= E.x[N]
+    H[xinds[N],xinds[N]] .= E[N].xx
+    g[xinds[N]] .= E[N].x
     return nothing
 end
 

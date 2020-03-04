@@ -68,7 +68,7 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
 
     H::SparseMatrixCSC{T,Int}
     g::Vector{T}
-    E::CostExpansion
+    E::Vector{SizedCostExpansion{T,N,N,M}}
 
     D::SparseMatrixCSC{T,Int}
     d::Vector{T}
@@ -104,7 +104,7 @@ function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     # Allocate Cost Hessian & Gradient
     H = spzeros(NN,NN)
     g = zeros(NN)
-    E = CostExpansion(n,m,N)
+    E = [SizedCostExpansion{Float64}(n,m) for k = 1:N]
 
     D = spzeros(NP,NN)
     d = zeros(NP)
