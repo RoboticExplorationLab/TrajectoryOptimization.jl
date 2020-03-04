@@ -1,7 +1,7 @@
 export
 	iLQRSolver2
 
-struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,ET,GT} <: iLQRSolver{T}
+struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -27,9 +27,9 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,ET,GT} <: iLQRSolver{T}
     D::Vector{SizedDynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
     G::Vector{GT}                               # state difference jacobian (n̄, n)
 
-    S::Vector{ET}  # Optimal cost-to-go expansion trajectory
-    Q::Vector{ET}  # cost-to-go expansion trajectory
-	E::ET
+    S::Vector{SizedExpansion{T,n,n̄,m}}      # Optimal cost-to-go expansion trajectory
+    Q::Vector{SizedCostExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
+	E::SizedExpansion{T,n,n̄,m}
 
 	Quu_reg::SizedMatrix{m,m,T,2}
 	Qux_reg::SizedMatrix{m,n̄,T,2}
@@ -68,12 +68,12 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD
 		G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
 	end
 
-    # S = [SizedExpansion{T}(n̄,m)   for k = 1:N]
-    # Q = [SizedExpansion{T}(n,m) for k = 1:N]
-	# E = SizedExpansion{T}(n,n̄,m)
-    S = [GeneralExpansion{T}(SizedArray,n,n̄,m)   for k = 1:N]
-    Q = [GeneralExpansion{T}(SizedArray,n,n,m) for k = 1:N]
-	E = GeneralExpansion{T}(SizedArray,n,n̄,m)
+    S = [SizedExpansion{T}(n,n̄,m) for k = 1:N]
+    Q = [SizedCostExpansion{T}(n,n̄,m) for k = 1:N]
+	E = SizedExpansion{T}(n,n̄,m)
+    # S = [GeneralExpansion{T}(SizedArray,n,n̄,m)   for k = 1:N]
+    # Q = [GeneralExpansion{T}(SizedArray,n,n,m) for k = 1:N]
+	# E = GeneralExpansion{T}(SizedArray,n,n̄,m)
 
 	Quu_reg = SizedMatrix{m,m}(zeros(m,m))
 	Qux_reg = SizedMatrix{m,n̄}(zeros(m,n̄))
@@ -89,7 +89,7 @@ function iLQRSolver2(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD
 	GT = eltype(G)
 
 	opts_ilqr = iLQRSolverOptions(opts)
-    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,ET,GT}(prob.model, prob.obj, x0, xf,
+    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,GT}(prob.model, prob.obj, x0, xf,
 		prob.tf, N, opts_ilqr, stats,
         Z, Z̄, K, d, D, G, S, Q, E, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
 

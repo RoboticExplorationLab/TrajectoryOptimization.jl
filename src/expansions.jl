@@ -31,13 +31,57 @@ struct Expansion{T} <: AbstractExpansion{T}
 	end
 end
 
-struct SizedExpansion{T,N,N̄,M} <: AbstractExpansion{T}
+struct SizedCostExpansion{T,N0,N,M} <: AbstractExpansion{T}
+	# Cost Expansion Terms
+	x ::SizedVector{N0,T,1}
+	xx::SizedMatrix{N0,N0,T,2}
+	u ::SizedVector{M,T,1}
+	uu::SizedMatrix{M,M,T,2}
+	ux::SizedMatrix{M,N0,T,2}
+
+	# Error Expansion Terms
+	x_ ::SizedVector{N,T,1}
+	xx_::SizedMatrix{N,N,T,2}
+	u_ ::SizedVector{M,T,1}
+	uu_::SizedMatrix{M,M,T,2}
+	ux_::SizedMatrix{M,N,T,2}
+
+	tmp::SizedMatrix{N0,N,T,2}
+	x0::SizedVector{N0,T,1}  # gradient of cost function only (no multipliers)
+end
+
+function SizedCostExpansion{T}(n0::Int, n::Int, m::Int) where T
+	x0  = SizedVector{n0}(zeros(T,n0))
+	xx0 = SizedMatrix{n0,n0}(zeros(T,n0,n0))
+	u0  = SizedVector{m}(zeros(T,m))
+	uu0 = SizedMatrix{m,m}(zeros(T,m,m))
+	ux0 = SizedMatrix{m,n0}(zeros(T,m,n0))
+
+	x  = SizedVector{n}(zeros(T,n))
+	xx = SizedMatrix{n,n}(zeros(T,n,n))
+	u  = SizedVector{m}(zeros(T,m))
+	uu = SizedMatrix{m,m}(zeros(T,m,m))
+	ux = SizedMatrix{m,n}(zeros(T,m,n))
+	tmp = SizedMatrix{n0,n}(zeros(T,n0,n))
+	x_ = copy(x0)
+	SizedCostExpansion(x0,xx0,u0,uu0,ux0, x, xx, u, uu, ux, tmp, x_)
+end
+
+@inline function error_expansion(E::SizedCostExpansion)
+	return StaticExpansion(E.x_, E.xx_, E.u_, E.uu_, E.ux_)
+end
+@inline function cost_expansion(E::SizedCostExpansion{<:Any,N,N}) where N
+	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
+end
+
+
+struct SizedExpansion{T,N0,N,M} <: AbstractExpansion{T}
 	x::SizedVector{N,T,1}
 	xx::SizedMatrix{N,N,T,2}
 	u::SizedVector{M,T,1}
 	uu::SizedMatrix{M,M,T,2}
 	ux::SizedMatrix{M,N,T,2}
-	tmp::SizedMatrix{N,N̄,T,2}
+	tmp::SizedMatrix{N0,N,T,2}
 	function SizedExpansion{T}(n::Int) where T
 		x = SizedVector{n}(zeros(n))
 		xx = SizedMatrix{n,n}(zeros(n,n))
@@ -58,7 +102,7 @@ struct SizedExpansion{T,N,N̄,M} <: AbstractExpansion{T}
 		uu = SizedMatrix{m,m}(zeros(m,m))
 		ux = SizedMatrix{m,n}(zeros(m,n))
 		tmp = SizedMatrix{n0,n}(zeros(n0,n))
-		new{T,n,n,m}(x,xx,u,uu,ux,tmp)
+		new{T,n0,n,m}(x,xx,u,uu,ux,tmp)
 	end
 end
 
@@ -73,6 +117,10 @@ end
 function StaticExpansion(E::AbstractExpansion)
 	StaticExpansion(SVector(E.x), SMatrix(E.xx),
 		SVector(E.u), SMatrix(E.uu), SMatrix(E.ux))
+end
+
+function StaticExpansion(x,xx,u,uu,ux)
+	StaticExpansion(SVector(x), SMatrix(xx), SVector(u), SMatrix(uu), SMatrix(ux))
 end
 
 struct GeneralExpansion{T,X,XX,U,UU,UX,TMP} <: AbstractExpansion{T}
@@ -135,7 +183,7 @@ struct DynamicsExpansion{T} <: AbstractExpansion{T}
 	B::Matrix{T} # nbar × m
 	tmp::Matrix{T} # n × nbar
 	function DynamicsExpansion{T}(n0::Int, n::Int, m::Int) where T
-		∇f = zeros(n,n+m+1)
+		∇f = zeros(n0,n0+m+1)
 		ix = 1:n
 		iu = n .+ (1:m)
 		A_ = view(∇f, ix, ix)
@@ -157,9 +205,9 @@ struct SizedDynamicsExpansion{T,N,N̄,M} <: AbstractExpansion{T}
 	tmpB::SizedMatrix{N,M,T,2}
 	tmp::SizedMatrix{N,N̄,T,2}
 	function SizedDynamicsExpansion{T}(n0::Int, n::Int, m::Int) where T
-		∇f = zeros(n,n+m+1)
-		ix = 1:n
-		iu = n .+ (1:m)
+		∇f = zeros(n0,n0+m+1)
+		ix = 1:n0
+		iu = n0 .+ (1:m)
 		A_ = view(∇f, ix, ix)
 		B_ = view(∇f, ix, iu)
 		A = SizedMatrix{n,n}(zeros(n,n))

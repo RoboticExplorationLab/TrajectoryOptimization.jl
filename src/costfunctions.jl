@@ -89,8 +89,8 @@ Cost function of the form
 R must be positive definite, Q must be positive semidefinite
 """
 function LQRCost(Q::AbstractArray, R::AbstractArray,
-        xf::AbstractVector, uf=zeros(size(R,1)); checks=true)
-    H = zeros(size(R,1),size(Q,1))
+        xf::AbstractVector, uf=(@SVector zeros(size(R,1))); checks=true)
+    H = @SMatrix zeros(size(R,1),size(Q,1))
     q = -Q*xf
     r = -R*uf
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf

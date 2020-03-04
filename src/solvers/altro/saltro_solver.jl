@@ -65,9 +65,9 @@ ALTRO consists of two "phases":
 1) AL-iLQR: iLQR is used with an Augmented Lagrangian framework to solve the problem quickly to rough constraint satisfaction
 2) Projected Newton: A collocation-flavored active-set solver projects the solution from AL-iLQR onto the feasible subspace to achieve machine-precision constraint satisfaction.
 """
-struct ALTROSolver{T} <: ConstrainedSolver{T}
+struct ALTROSolver{T,S} <: ConstrainedSolver{T}
     opts::ALTROSolverOptions{T}
-    solver_al::AugmentedLagrangianSolver{T}
+    solver_al::AugmentedLagrangianSolver{T,S}
     solver_pn::ProjectedNewtonSolver{T}
 end
 
@@ -76,7 +76,8 @@ AbstractSolver(prob::Problem, opts::ALTROSolverOptions) = ALTROSolver(prob, opts
 function ALTROSolver(prob::Problem{Q,T},
         opts::SolverOptions=SolverOptions{T}();
         infeasible=false,
-        R_inf=1.0) where {Q,T}
+        R_inf=1.0,
+        solver_uncon=iLQRSolver) where {Q,T}
     if infeasible
         # Convert to an infeasible problem
         prob = InfeasibleProblem(prob, prob.Z, R_inf/prob.Z[1].dt)
@@ -88,13 +89,14 @@ function ALTROSolver(prob::Problem{Q,T},
         # con_inf.params.ϕ = opts.penalty_scaling_infeasible
     end
     opts_altro = ALTROSolverOptions(opts)
-    solver_al = AugmentedLagrangianSolver(prob, opts)
+    solver_al = AugmentedLagrangianSolver(prob, opts, solver_uncon=solver_uncon)
     solver_pn = ProjectedNewtonSolver(prob, opts)
-    ALTROSolver{T}(opts_altro, solver_al, solver_pn)
+    S = typeof(solver_al.solver_uncon)
+    ALTROSolver{T,S}(opts_altro, solver_al, solver_pn)
 end
 
 @inline Base.size(solver::ALTROSolver) = size(solver.solver_pn)
-@inline get_trajectory(solver::ALTROSolver) = get_trajectory(solver.solver_al)
+@inline get_trajectory(solver::ALTROSolver)::Traj = get_trajectory(solver.solver_al)
 @inline get_objective(solver::ALTROSolver) = get_objective(solver.solver_al)
 function iterations(solver::ALTROSolver)
     if !solver.opts.projected_newton

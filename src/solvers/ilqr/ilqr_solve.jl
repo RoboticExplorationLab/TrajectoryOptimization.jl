@@ -30,8 +30,9 @@ function backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,QUAD<:Q
 	Qux_reg = solver.Qux_reg
 
     # Terminal cost-to-go
-    S[N].xx .= solver.Q[N].xx
-    S[N].x .= solver.Q[N].x
+	error_expansion!(Q, solver.Q[N], model, Z[N], solver.G[N])
+    S[N].xx .= Q.xx
+    S[N].x .= Q.x
 
     # Initialize expecte change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -95,8 +96,9 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 	Qux_reg = SMatrix(solver.Qux_reg)
 
     # Terminal cost-to-go
-	Sxx = SMatrix(solver.Q[N].xx)
-	Sx = SVector(solver.Q[N].x)
+	Q = error_expansion(solver.Q[N])
+	Sxx = SMatrix(Q.xx)
+	Sx = SVector(Q.x)
 
     # Initialize expected change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -108,12 +110,7 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 
 		# Get error state expanions
 		fdx,fdu = SMatrix(solver.D[k].A), SMatrix(solver.D[k].B)
-		if n == n̄
-			Q = StaticExpansion(solver.Q[k])
-		else
-			error_expansion!(E, solver.Q[k], model, Z[k], solver.G[k])
-			Q = StaticExpansion(E)
-		end
+		Q = error_expansion(solver.Q[k])
 
 		# Calculate action-value expansion
 		Q = _calc_Q!(Q, Sxx, Sx, fdx, fdu)
@@ -305,8 +302,10 @@ function step!(solver::iLQRSolver2, J)
     Z = solver.Z
     state_diff_jacobian!(solver.G, solver.model, Z)
     # discrete_jacobian!(solver.∇F, solver.model, Z)
-	dynamics_expansion!(solver.D, solver.G, solver.model, solver.Z)
-    cost_expansion!(solver.Q, solver.G, solver.obj, solver.model, solver.Z)
+	dynamics_expansion!(solver.D, solver.model, solver.Z)
+    cost_expansion!(solver.Q, solver.obj, solver.Z)
+	error_expansion!(solver.D, solver.model, solver.G)
+	error_expansion!(solver.Q, solver.model, Z, solver.G)
 	if solver.opts.static_bp
     	ΔV = static_backwardpass!(solver)
 	else

@@ -23,19 +23,29 @@ cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj,
     map!(stage_cost, obj.J, obj.cost, Z)
 end
 
-function cost_gradient(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
-    Qx,Qu = gradient(cost, state(z), control(z))
-    return G'Qx, Qu
-end
-
-function cost_hessian(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
-    Qxx,Quu,Qux = hessian(cost, state(z), control(z))
-    return G'Qxx*G
-end
+# function cost_gradient(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+#     Qx,Qu = gradient(cost, state(z), control(z))
+#     return G'Qx, Qu
+# end
+#
+# function cost_hessian(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+#     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
+#     return G'Qxx*G
+# end
 
 function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
     Qx,Qu = gradient(cost, state(z), control(z))
     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
+    if is_terminal(z)
+        dt_x = 1.0
+        dt_u = 0.0
+    else
+        dt_x = z.dt
+        dt_u = z.dt
+    end
+    Qx,Qu = Qx*dt_x, Qu*dt_u
+    Qxx,Quu,Qux = Qxx*dt_x, Quu*dt_u, Qux*dt_u
+
     Qux = Qux*G
     Qx = G'Qx
     Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
@@ -45,16 +55,8 @@ end
 function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
     for k in eachindex(Z)
         z = Z[k]
-        Qxx, Quu, Qux, Qx, Qu = cost_expansion(obj.cost[k], model, z, G[k])
-        if is_terminal(z)
-            dt_x = 1.0
-            dt_u = 0.0
-        else
-            dt_x = z.dt
-            dt_u = z.dt
-        end
         E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
-            Qxx*dt_x, Quu*dt_u, Qux*dt_u, Qx*dt_x, Qu*dt_u
+            cost_expansion(obj.cost[k], model, z, G[k])
     end
 end
 
@@ -62,6 +64,7 @@ end
 function cost_expansion!(E::AbstractExpansion, cost::CostFunction, z::KnotPoint)
     gradient!(E, cost, state(z), control(z))
     hessian!(E, cost, state(z), control(z))
+    E.x0 .= E.x  # copy cost-only gradient
     if is_terminal(z)
         dt_x = 1.0
         dt_u = 0.0
@@ -72,12 +75,12 @@ function cost_expansion!(E::AbstractExpansion, cost::CostFunction, z::KnotPoint)
     E.xx .*= dt_x
     E.uu .*= dt_u
     E.ux .*= dt_u
-    E.x .*= dt_x
-    E.u .*= dt_u
+    E.x  .*= dt_x
+    E.u  .*= dt_u
     return nothing
 end
 
-function cost_expansion!(E::Vector{<:AbstractExpansion}, G, obj::Objective, model::AbstractModel, Z::Traj)
+function cost_expansion!(E::Vector{<:AbstractExpansion}, obj::Objective, Z::Traj)
     for k in eachindex(Z)
         z = Z[k]
         cost_expansion!(E[k], obj.cost[k], z)
@@ -156,19 +159,51 @@ function cost_expansion!(E, obj::Objective, Z::Traj)
 end
 
 
-"Calculate the error cost expansion"
-function error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, model::AbstractModel, z::KnotPoint, G)
-    ∇²differential!(E.xx, model, state(z), Q.x)
-    # E.tmp .= G
-    return _error_expansion!(E, Q, G)
+# "Calculate the error cost expansion"
+# function error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, model::AbstractModel, z::KnotPoint, G)
+#     ∇²differential!(E.xx, model, state(z), Q.x)
+#     # E.tmp .= G
+#     return _error_expansion!(E, Q, G)
+# end
+#
+# function _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G)
+#     E.u .= Q.u
+#     E.uu .= Q.uu
+#     mul!(E.ux, Q.ux, G)
+#     mul!(E.x, Transpose(G), Q.x)
+#     mul!(E.tmp, Q.xx, G)
+#     mul!(E.xx, Transpose(G), E.tmp, 1.0, 1.0)
+# end
+# @inline _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G::UniformScaling) = copyto!(E,Q)
+
+"""
+Assumes the cost expansion is already complete
+"""
+@inline error_expansion!(E::Vector{<:SizedCostExpansion}, model::AbstractModel, Z::Traj, G) = nothing
+function error_expansion!(E::Vector{<:SizedCostExpansion}, model::RigidBody, Z::Traj, G)
+    for k in eachindex(E)
+        error_expansion!(E[k], model, Z[k], G[k])
+    end
 end
 
-function _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G)
-    E.u .= Q.u
-    E.uu .= Q.uu
-    mul!(E.ux, Q.ux, G)
-    mul!(E.x, Transpose(G), Q.x)
-    mul!(E.tmp, Q.xx, G)
-    mul!(E.xx, Transpose(G), E.tmp, 1.0, 1.0)
+function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G) where N
+    if N < 15
+        G = SMatrix(G)
+        E.u_  .= E.u
+        E.uu_ .= E.uu
+        E.ux_ .= SMatrix(E.ux)*G
+        E.x_  .= G'*SVector(E.x)
+
+        ∇²differential!(E.xx_, model, state(z), E.x0)
+        E.xx_ .+= G'E.xx*G
+    else
+        E.u_ .= E.u
+        E.uu_ .= E.uu
+        mul!(E.ux_, E.ux, G)
+        mul!(E.x_, Transpose(G), E.x)
+
+        ∇²differential!(E.xx_, model, state(z), E.x0)
+        mul!(E.tmp, E.xx, G)
+        mul!(E.xx_, Transpose(G), E.tmp, 1.0, 1.0)
+    end
 end
-@inline _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G::UniformScaling) = copyto!(E,Q)

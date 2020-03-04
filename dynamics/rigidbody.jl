@@ -214,7 +214,7 @@ state_diff_size(::RigidBody{UnitQuaternion{T,Union{IdentityMap}}}) where T = 13
 state_diff_size(::RigidBody{UnitQuaternion{T,Union{ReNorm}}}) where T = 13
 
 function TrajectoryOptimization.∇²differential(model::RigidBody,
-        x::SVector, dx::SVector)
+        x::SVector, dx::AbstractVector)
       q = orientation(model, x)
       dq = SVector(orientation(model, dx, false))
       G2 = TrajectoryOptimization.∇²differential(q, dq)

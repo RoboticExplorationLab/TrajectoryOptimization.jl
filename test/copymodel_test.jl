@@ -87,6 +87,10 @@ solve!(solver)
 @test iterations(solver) < 20  # should be 16
 @test max_violation(solver) < 1e-10 # should be 0
 
+prob = Problem(models, obj, xf, tf, x0=x0, constraints=conSet)
+solver = iLQRSolver2(prob)
+solve!(solver)
+visualize!(vis, solver)
 
 # Test with rigid bodies
 Rot = UnitQuaternion{Float64,CayleyMap}

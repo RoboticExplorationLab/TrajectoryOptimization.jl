@@ -192,7 +192,7 @@ function discrete_jacobian(::Type{Q}, model::AbstractModel,
 end
 
 function discrete_jacobian!(::Type{Q}, ∇f, model::AbstractModel,
-		z::KnotPoint{T,N,M,NM}) where {T,N,M,NM,Q<:Implicit}
+		z::AbstractKnotPoint{T,N,M,NM}) where {T,N,M,NM,Q<:Implicit}
     ix,iu,idt = z._x, z._u, NM+1
     t = z.t
     fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
@@ -207,39 +207,27 @@ function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
 	return A,B
 end
 
-function copy_AB!(D)
-    D.tmpA .= D.A_
-    D.tmpB .= D.B_
+function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::AbstractModel,
+		Z::Traj)
+	for k in eachindex(D)
+		discrete_jacobian!(RK3, D[k].∇f, model, Z[k])
+	end
+end
+
+@inline error_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::AbstractModel, G) = nothing
+
+function error_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::RigidBody, G)
+	for k in eachindex(D)
+		error_expansion!(D[k], G[k], G[k+1])
+	end
 end
 
 function error_expansion!(D::SizedDynamicsExpansion,G1,G2)
+	D.tmpA .= D.A_  # avoids allocations from multiplying views
+	D.tmpB .= D.B_
     mul!(D.tmp, D.tmpA, G1)
     mul!(D.A, Transpose(G2), D.tmp)
     mul!(D.B, Transpose(G2), D.tmpB)
-end
-
-@inline error_expansion!(D::SizedDynamicsExpansion, G1::UniformScaling, G2::UniformScaling) =
-	begin D.A .= D.A_; D.B .= D.B_ end
-
-function dynamics_expansion!(D::SizedDynamicsExpansion{T,N,N,M}, G1, G2,
-		model::AbstractModel, z::KnotPoint) where {T,N,M}
-	copy_AB!(D)
-	discrete_jacobian!(RK3, D.∇f, model, z)
-end
-
-function dynamics_expansion!(D::SizedDynamicsExpansion{T,N,N̄,M}, G1, G2,
-		model::AbstractModel, z::KnotPoint) where {T,N,N̄,M}
-	copy_AB!(D)
-	discrete_jacobian!(RK3, D.∇f, model, z)
-end
-
-function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, G, model::AbstractModel,
-		Z::Traj)
-	for k in eachindex(D)
-		# dynamics_expansion!(D[k], G[k], G[k+1], model, Z[k])
-		discrete_jacobian!(RK3, D[k].∇f, model, Z[k])
-		error_expansion!(D[k], G[k], G[k+1])
-	end
 end
 
 
@@ -254,9 +242,15 @@ state_diff(model::AbstractModel, x, x0) = x - x0
 
 @inline state_diff_jacobian!(G, model::AbstractModel, Z::Traj) = nothing
 
-function state_diff_jacobian!(G, model::RigidBody, Z::Traj)
+function state_diff_jacobian!(G::Vector{<:SMatrix}, model::RigidBody, Z::Traj)
     for k in eachindex(Z)
         G[k] = state_diff_jacobian(model, state(Z[k]))
+    end
+end
+
+function state_diff_jacobian!(G, model::RigidBody, Z::Traj)
+    for k in eachindex(Z)
+        G[k] .= state_diff_jacobian(model, state(Z[k]))
     end
 end
 
@@ -297,7 +291,8 @@ function InfeasibleModel(model::AbstractModel)
     n,m = size(model)
     _u  = SVector{m}(1:m)
     _ui = SVector{n}((1:n) .+ m)
-    InfeasibleModel(model, _u, _ui)
+	∇f = zeros(n,n+m+1)
+    InfeasibleModel(model, _u, _ui, ∇f)
 end
 
 function Base.size(model::InfeasibleModel)
@@ -342,6 +337,35 @@ end
         ∇f = discrete_jacobian($Q, model.model, s0, z.t, $_x, $_u)::SMatrix{N,NM+1}
         ∇dt = ∇f[$_x, N+M+1]
         [∇f[$_x, $_z] $∇u0 ∇dt] + $∇ui
+    end
+end
+
+@generated function discrete_jacobian!(::Type{Q}, ∇f, model::InfeasibleModel{N,M},
+        z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Implicit}
+
+    ∇ui = [(@SMatrix zeros(N,N+M)) Diagonal(@SVector ones(N)) @SVector zeros(N)]
+    _x = SVector{N}(1:N)
+    _u = SVector{M}((1:M) .+ N)
+    _z = SVector{N+M}(1:N+M)
+    _ui = SVector{N}((1:N) .+ (N+M))
+    zi = [:(z.z[$i]) for i = 1:N+M]
+    NM1 = N+M+1
+    ∇u0 = @SMatrix zeros(N,N)
+
+    quote
+        # Build KnotPoint for original model
+        s0 = SVector{$NM1}($(zi...), z.dt)
+
+        u0 = z.z[$_u]
+        ui = z.z[$_ui]
+		z_ = StaticKnotPoint(z.z[$_z], $_x, $_u, z.dt, z.t)
+		∇f_ = uview(∇f, 1:N, 1:$NM1)
+        discrete_jacobian!($Q, ∇f_, model.model, z_)
+		∇f[$_x, N+NM+1] .= ∇f_[$_x, N+M+1] # ∇dt
+		∇f[$_x, $_ui] .= Diagonal(@SVector ones(N))
+		return
+		# ∇f[$_x,$_ui]
+        # [∇f[$_x, $_z] $∇u0 ∇dt] + $∇ui
     end
 end
 

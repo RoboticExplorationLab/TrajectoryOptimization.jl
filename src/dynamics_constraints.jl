@@ -61,7 +61,7 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{Q,L,T,N},
+function jacobian!(∇c::Vector{<:SMatrix}, con::DynamicsConstraint{Q,L,T,N},
 		Z::Traj, inds=1:length(Z)-1) where {Q<:Implicit,L,T,N}
 	In = Diagonal(@SVector ones(N))
 	zinds = [Z[1]._x; Z[1]._u]
@@ -71,6 +71,17 @@ function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{Q,L,T
 	end
 end
 
+function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{Q,L,T,N},
+		Z::Vector{<:AbstractKnotPoint{T,n,m}}, inds=1:length(Z)-1) where {Q<:Implicit,L,T,N,n,m}
+	In = Diagonal(@SVector ones(N))
+	zinds = [Z[1]._x; Z[1]._u]
+	for k in inds
+		∇f = uview(∇c, 1:n, 1:n+m+1)
+		discrete_jacobian!(Q, ∇f, con.model, Z[k])
+		∇c[1:n, n+m .+ (1:n)] .= -Diagonal(@SVector ones(n))
+		# ∇c[k] = [AB[:,zinds] -In]
+	end
+end
 
 
 struct DynamicsVals{T,N,A}

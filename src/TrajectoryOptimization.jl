@@ -20,6 +20,7 @@ using Parameters
 using Rotations
 using MathOptInterface
 using Quaternions
+using UnsafeArrays
 
 const MOI = MathOptInterface
 const MAX_ELEM = 170
