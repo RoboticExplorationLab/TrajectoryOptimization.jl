@@ -1,13 +1,17 @@
 
-function YakProblems(Rot=MRP{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQuaternion,
+function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellroll, use_rot=Rot<:UnitQuaternion,
         costfun=:Quadratic, normcon=false)
     model = Dynamics.YakPlane(Rot, use_rot=use_rot)
     rsize = size(model)[1] - 9
 
+    opts = SolverOptions()
+
     # Discretization
     tf = 1.25
-    dt = 0.025
-    N = Int(1.25/dt+1)
+    N = 101
+    dt = tf/(N-1)
+    # N = Int(1.25/dt+1)
+    # dt = 0.025
 
     if scenario == :barrellroll
         ey = @SVector [0,1,0.]
@@ -47,6 +51,12 @@ function YakProblems(Rot=MRP{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQ
             costterm = ErrorQuadratic(model, Qf, R, xf, utrim)
         end
         obj = Objective(costfun, costterm, N)
+
+        # Constraints
+        conSet = ConstraintSet(n,m,N)
+        goal = GoalConstraint(xf, 4:7)
+        add_constraint!(conSet,goal,N:N)
+
     else
         throw(ArgumentError("$scenario isn't a known scenario"))
     end
@@ -55,7 +65,7 @@ function YakProblems(Rot=MRP{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQ
     U0 = [copy(utrim) for k = 1:N-1]
 
     # Build problem
-    prob = Problem(model, obj, xf, tf, x0=x0)
+    prob = Problem(model, obj, xf, tf, x0=x0, constraints=conSet)
     initial_controls!(prob, U0)
-    prob
+    prob, opts
 end

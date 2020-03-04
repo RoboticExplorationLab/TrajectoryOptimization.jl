@@ -8,6 +8,8 @@ function Pendulum()
 
     model = Dynamics.Pendulum()
     n,m = size(model)
+    tf = 3.0
+    N = 51
 
     # cost
     Q = 1e-3*Diagonal(@SVector ones(n))
@@ -18,13 +20,12 @@ function Pendulum()
     obj = LQRObjective(Q,R,Qf,xf,N)
 
     # constraints
+    conSet = ConstraintSet(n,m,N)
     u_bnd = 3.
     bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
-    goal_con = GoalConstraint(xf)
-
-    con_bnd = ConstraintVals(bnd, 1:N-1)
-    con_xf = ConstraintVals(goal_con, N:N)
-    conSet = ConstraintSet(n,m,[con_bnd, con_xf],N)
+    goal = GoalConstraint(xf)
+    add_constraint!(conSet, bnd, 1:N-1)
+    add_constraint!(conSet, goal, N:N)
 
     # problem
     U = [@SVector fill(0.1, m) for k = 1:N-1]
