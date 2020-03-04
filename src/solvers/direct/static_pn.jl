@@ -15,7 +15,7 @@ $(FIELDS)
 """
 @with_kw mutable struct ProjectedNewtonSolverOptions{T} <: DirectSolverOptions{T}
     verbose::Bool = true
-    n_steps::Int = 1
+    n_steps::Int = 2
     solve_type::Symbol = :feasible
     active_set_tolerance::T = 1e-3
     constraint_tolerance::T = 1e-6

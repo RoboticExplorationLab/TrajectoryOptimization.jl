@@ -21,7 +21,7 @@ end
 function projection_solve!(solver::ProjectedNewtonSolver)
     ϵ_feas = solver.opts.constraint_tolerance
     viol = norm(solver.d[solver.active_set], Inf)
-    max_projection_iters = 10
+    max_projection_iters = solver.opts.n_steps
 
     count = 0
     while count < max_projection_iters && viol > ϵ_feas
