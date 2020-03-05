@@ -528,8 +528,8 @@ struct IndexedConstraint{S,W,P,N,M,w,C} <: AbstractConstraint{S,W,P}
 	B::SubArray{Float64,2,SizedMatrix{P,w,Float64,2},Tuple{UnitRange{Int},UnitRange{Int}},false}
 end
 
-state_dim(con::IndexedConstraint{S,Union{Stage,State}}) where S = con.n
-control_dim(con::IndexedConstraint{S,Union{Stage,Control}}) where S = con.m
+state_dim(con::IndexedConstraint{<:Any,<:Union{Stage,State}}) = con.n
+control_dim(con::IndexedConstraint{<:Any,<:Union{Stage,Control}}) = con.m
 Base.length(::IndexedConstraint{S,W,P}) where {S,W,P} = P
 
 function IndexedConstraint(n,m,con::AbstractConstraint{S,W,P},
@@ -582,6 +582,17 @@ end
 	iP = 1:P
 	ix = SVector{N0}(1:N0)
 	iu = SVector{M0}(N0 .+ (1:M0))
+	if eltype(∇c) <: SizedMatrix
+		assignment = quote
+			uview(∇c.data,$iP,iA) .= con.A
+			uview(∇c.data,$iP,iB) .= con.B
+		end
+	else
+		assignment = quote
+			uview(∇c,$iP,iA) .= con.A
+			uview(∇c,$iP,iB) .= con.B
+		end
+	end
 	quote
 		x0 = state(z)[con.ix]
 		u0 = control(z)[con.iu]
@@ -589,8 +600,7 @@ end
 		jacobian!(con.∇c, con.con, z_)
 		iA = con.ix
 		iB = N .+ con.iu
-		uview(∇c.data,$iP,iA) .= con.A
-		uview(∇c.data,$iP,iB) .= con.B
+		$assignment
 	end
 end
 
@@ -599,27 +609,37 @@ end
 	iP = 1:P
 	ix = SVector{N0}(1:N0)
 	iu = SVector{M0}(N0 .+ (1:M0))
+	if eltype(∇c) <: SizedArray
+		assignment = :(uview(∇c.data,$iP,iA) .= con.∇c)
+	else
+		assignment = :(uview(∇c,$iP,iA) .= con.∇c)
+	end
 	quote
 		x0 = state(z)[con.ix]
 		u0 = control(z)[con.iu]
 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-		jacobian(con.∇c, con.con, z_)
+		jacobian!(con.∇c, con.con, z_)
 		iA = con.ix
-		uview(∇c.data,$iP,iA) .= con.∇c
+		$assignment
 	end
 end
 
-@generated function jacobian(con::IndexedConstraint{<:Any,Control,P,N0,M0},
+@generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Control,P,N0,M0},
 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
 	iP = 1:P
 	ix = SVector{N0}(1:N0)
 	iu = SVector{M0}(N0 .+ (1:M0))
+	if eltype(∇c) <: SizedArray
+		assignment = :(uview(∇c.data,$iP,iB) .= con.∇c)
+	else
+		assignment = :(uview(∇c,$iP,iB) .= con.∇c)
+	end
 	quote
 		x0 = state(z)[con.ix]
 		u0 = control(z)[con.iu]
 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-		jacobian(con.∇c, con.con, z_)
+		jacobian!(con.∇c, con.con, z_)
 		iB = con.iu
-		uview(∇c.data,$iP,iB) .= con.∇c
+		$assignment
 	end
 end

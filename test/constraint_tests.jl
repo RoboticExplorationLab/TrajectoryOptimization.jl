@@ -1,8 +1,10 @@
 using Test
 
 function alloc_con(con,z)
+    p,w = length(con), TO.width(con)
+    ∇c = zeros(p,w)
     allocs  = @allocated evaluate(con,z)
-    allocs += @allocated jacobian(con,z)
+    allocs += @allocated jacobian!(∇c, con,z)
 end
 
 model = Dynamics.DubinsCar()
@@ -13,10 +15,14 @@ n,m = size(model)
 # All static
 A = @SMatrix rand(4,3)
 b = @SVector rand(4)
+∇c = zeros(4,3)
 con = LinearConstraint{Inequality,State}(n,m,A,b)
 evaluate(con, z)
+@test length(con) == 4
+@test TO.width(con) == 3
 @test evaluate(con, z) == A*x - b
-@test jacobian(con, x) == A
+jacobian!(∇c, con, x)
+@test ∇c == A
 @test alloc_con(con,z) == 0
 @test state_dim(con) == n
 @test_throws MethodError control_dim(con)
@@ -24,13 +30,15 @@ evaluate(con, z)
 # both dynamic
 con = LinearConstraint{Inequality,State}(n,m,Matrix(A),Vector(b))
 @test evaluate(con, z) == A*x - b
-@test jacobian(con, x) == A
+jacobian!(∇c, con, x)
+@test ∇c == A
 @test alloc_con(con,z) == 0
 
 # mixed
 con = LinearConstraint{Inequality,State}(n,m,A,Vector(b))
 @test evaluate(con, z) == A*x - b
-@test jacobian(con, x) == A
+jacobian!(∇c, con, x)
+@test ∇c == A
 @test alloc_con(con,z) == 0
 
 # wrong input size
@@ -38,7 +46,8 @@ con = LinearConstraint{Inequality,State}(n,m,A,Vector(b))
 @test_throws AssertionError LinearConstraint{Inequality,Control}(n,m,A,b)
 con = LinearConstraint{Inequality,Control}(n,n,A,b)
 @test evaluate(con, x) == A*x - b
-@test jacobian(con, z) == A
+jacobian!(∇c, con, x)
+@test ∇c == A
 
 
 model = Dynamics.Quadrotor2{UnitQuaternion{Float64,VectorPart}}()
@@ -48,21 +57,23 @@ n,m = size(model)
 # Goal Constraint
 xf = @SVector rand(n)
 con = GoalConstraint(xf)
+size(con) == (13,13)
+∇c = zeros(size(con)...)
 @test evaluate(con, x) == x-xf
-@test jacobian(con, x) == I(n)
+@test jacobian!(∇c, con, x) == I(n)
 
 con = GoalConstraint(xf, 1:3)
+∇c = zeros(size(con))
 @test evaluate(con, x) == (x-xf)[1:3]
-@test jacobian(con, x) == Matrix(I,3,n)
+@test jacobian!(∇c, con, x) == Matrix(I,3,n)
 
 noquat = collect(1:n)
 noquat = deleteat!(noquat, 4:7)
 noquat = SVector{9}(noquat)
 con = GoalConstraint(xf, noquat)
+∇c = zeros(size(con))
 @test evaluate(con, x) == (x-xf)[noquat]
-@test jacobian(con, x) == I(n)[noquat,:]
-@test jacobian(con, x) isa SMatrix{9,13}
-
+@test jacobian!(∇c, con, x) == I(n)[noquat,:]
 
 # Sphere Constraint
 xc = @SVector rand(4)
@@ -70,9 +81,10 @@ yc = @SVector rand(4)
 zc = @SVector rand(4)
 r = @SVector fill(0.1,4)
 con = SphereConstraint(n, xc, yc, zc, r)
+∇c = zeros(size(con))
 @test state_dim(con) == n
 @test evaluate(con, x) isa SVector{4}
-@test jacobian(con, x) isa SMatrix{4,n}
+@test norm(jacobian!(∇c, con, x)[:,4:end],Inf) == 0
 
 
 # Norm Constraint
@@ -123,26 +135,38 @@ Z = Traj(x,u,0.1,N)
 # Indexed Constraint
 bnd = BoundConstraint(n,m, x_max=x_max, x_min=x_min)
 con = TO.IndexedConstraint(2n,2m, bnd)
+∇c = zeros(size(con))
 x2 = repeat(x,2)
 u2 = repeat(u,2)
 z = KnotPoint(x,u,0.1)
 z2 = KnotPoint(x2,u2,0.1)
 @test evaluate(bnd, z) ≈ evaluate(con, z2)
-@test jacobian(con, z2) ≈ [jacobian(bnd, z) zeros(26, 17)]
+∇c0 = zeros(size(bnd))
+jacobian!(∇c0, bnd, z)
+jacobian!(∇c, con, z2)
+@test ∇c ≈ [∇c0 zeros(26, 17)]
 
 @test TO.width(con) == 2(n+m)
 @test TO.width(bnd) == n+m
 
 con = TO.NormConstraint{Equality,Control}(m,4.0)
+∇c0 = zeros(size(con))
 ix = n .+ @SVector [i for i in 1:n]
 iu = m .+ @SVector [i for i in 1:m]
 idx = TO.IndexedConstraint(2n,2m, con, ix, iu)
+∇c = zeros(size(idx))
 @test TO.contype(idx) == Control
 @test TO.sense(idx) == Equality
 @test evaluate(idx, z2) == evaluate(con, z)
-@test jacobian(idx, z2) == [zeros(1,m) jacobian(con, z)]
+jacobian!(∇c0, con, z)
+jacobian!(∇c, idx, z2)
+@test ∇c == [zeros(1,m) ∇c0]
 
 con = TO.NormConstraint{Equality,State}(n,4.0)
 idx = TO.IndexedConstraint(2n,2m, con)
 @test evaluate(idx, z2) == evaluate(con, z)
-@test jacobian(idx, z2) == [jacobian(con, z) zeros(1,n)]
+∇c0 = zeros(size(con))
+∇c = zeros(size(idx))
+jacobian!(∇c0, con, z)
+jacobian!(∇c, idx, z2)
+@test ∇c == [∇c0 zeros(1,n)]

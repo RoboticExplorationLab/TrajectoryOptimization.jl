@@ -50,37 +50,44 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Hermi
 	end
 end
 
-function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n},
-		Z::Traj, inds=1:length(Z)-1) where {L,T,n}
+function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n,m},
+		Z::Traj, inds=1:length(Z)-1) where {L,T,n,m}
 	N = length(Z)
 	model = con.model
 	∇f = con.∇f
+	A = con.A
+	B = con.B
 	xMid = con.xMid
 	In = Diagonal(@SVector ones(n))
+	Fmid = con.∇fMid[1]
+	Amid = con.Am[1]
+	Bmid = con.Bm[1]
 
 	xi = Z[1]._x
 	ui = Z[1]._u
 
 	# Compute dynamics Jacobian at each knot point
 	for k = inds.start:inds.stop+1
-		∇f[k] = jacobian(model, Z[k].z)
+		jacobian!(∇f[k], model, Z[k])
 	end
 
+	# TODO: write an in-place version for large arrays where this will probably die at compile time
 	for k in inds
 		Um = (control(Z[k]) + control(Z[k+1]))*0.5
-		Fm = jacobian(model, [xMid[k]; Um])
-		A1 = ∇f[k][xi,xi]
-		B1 = ∇f[k][xi,ui]
-		Am = Fm[xi,xi]
-		Bm = Fm[xi,ui]
-		A2 = ∇f[k+1][xi,xi]
-		B2 = ∇f[k+1][xi,ui]
+		zMid = StaticKnotPoint([xMid[k]; Um], xi, ui, Z[k].dt, Z[k].t)
+		jacobian!(Fmid, model, zMid)
+		A1 = SMatrix{n,n}(A[k])
+		B1 = SMatrix{n,m}(B[k])
+		Am = SMatrix{n,n}(Amid)
+		Bm = SMatrix{n,m}(Bmid)
+		A2 = SMatrix{n,n}(A[k+1])
+		B2 = SMatrix{n,m}(B[k+1])
 		dt = Z[k].dt
-		A = dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In
-		B = dt/6*(B1 + 4Am*( dt/8*B1) + 2Bm)
-		C = dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In
-		D = dt/6*(B2 + 4Am*(-dt/8*B2) + 2Bm)
-		∇c[k] = [A B C D]
+		A_ = dt/6*(A1 + 4Am*( dt/8*A1 + In/2)) + In
+		B_ = dt/6*(B1 + 4Am*( dt/8*B1) + 2Bm)
+		C_ = dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In
+		D_ = dt/6*(B2 + 4Am*(-dt/8*B2) + 2Bm)
+		∇c[k] .= [A_ B_ C_ D_]
 	end
 end
 
@@ -106,7 +113,8 @@ function cost(obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 	return J
 end
 
-function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
+function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson},
+		Z::Vector{<:KnotPoint{<:Any,n,m}}) where {n,m}
 	N = length(Z)
 	xi = Z[1]._x
 	ui = Z[1]._u
@@ -115,7 +123,12 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 	fVal = dyn_con.fVal
 	xMid = dyn_con.xMid
 	∇f = dyn_con.∇f
+	A = dyn_con.A
+	B = dyn_con.B
 	grad = dyn_con.grad
+	Fm = dyn_con.∇fMid[1]
+	Amid = dyn_con.Am[1]
+	Bmid = dyn_con.Bm[1]
 
 	for k = 1:N
 		fVal[k] = dynamics(model, Z[k])
@@ -124,7 +137,7 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 		xMid[k] = (state(Z[k]) + state(Z[k+1]))/2 + Z[k].dt/8 * (fVal[k] - fVal[k+1])
 	end
 	for k = 1:N
-		∇f[k] = jacobian(model, Z[k])
+		jacobian!(∇f[k], model, Z[k])
 		E[k].x .*= 0
 		E[k].u .*= 0
 	end
@@ -133,13 +146,15 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 		x1, u1 = state(Z[k]),   control(Z[k])
 		x2, u2 = state(Z[k+1]), control(Z[k+1])
 		xm, um = xMid[k], 0.5*(u1 + u2)
-		Fm = jacobian(model, [xm; um])
-		A1 = ∇f[k][xi,xi]
-		B1 = ∇f[k][xi,ui]
-		Am = Fm[xi,xi]
-		Bm = Fm[xi,ui]
-		A2 = ∇f[k+1][xi,xi]
-		B2 = ∇f[k+1][xi,ui]
+
+		zMid = StaticKnotPoint([xm; um], xi, ui, Z[k].dt, Z[k].t)
+		jacobian!(Fm, model, zMid)
+		A1 = SMatrix{n,n}(A[k])
+		B1 = SMatrix{n,m}(B[k])
+		Am = SMatrix{n,n}(Amid)
+		Bm = SMatrix{n,m}(Bmid)
+		A2 = SMatrix{n,n}(A[k+1])
+		B2 = SMatrix{n,m}(B[k+1])
 		dt = Z[k].dt
 
 		gradient!(grad[1], obj[k], x1, u1)

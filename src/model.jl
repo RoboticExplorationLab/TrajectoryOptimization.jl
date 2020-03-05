@@ -4,8 +4,8 @@ export
     RigidBody,
     dynamics,
     discrete_dynamics,
-    jacobian,
-    discrete_jacobian,
+    jacobian!,
+    discrete_jacobian!,
 	orientation
 
 export
@@ -119,25 +119,28 @@ Compute the continuous dynamics of a dynamical system given a KnotPoint"""
 @inline dynamics(model::AbstractModel, x, u, t) = dynamics(model, x, u)
 
 """```
-∇f = jacobian(model, z::KnotPoint)
-∇f = jacobian(model, z::SVector)
+∇f = jacobian!(∇c, model, z::KnotPoint)
+∇f = jacobian!(∇c, model, z::SVector)
 ```
 Compute the Jacobian of the continuous-time dynamics using ForwardDiff. The input can be either
 a static vector of the concatenated state and control, or a KnotPoint. They must be concatenated
 to avoid unnecessary memory allocations.
 """
-function jacobian(model::AbstractModel, z::AbstractKnotPoint)
+@inline jacobian!(∇c::SizedMatrix, model::AbstractModel, z::AbstractKnotPoint) =
+	jacobian!(∇c.data, model, z)
+function jacobian!(∇c::Matrix, model::AbstractModel, z::AbstractKnotPoint)
     ix, iu = z._x, z._u
     f_aug(z) = dynamics(model, z[ix], z[iu])
     s = z.z
-    ForwardDiff.jacobian(f_aug, s)
+	ForwardDiff.jacobian!(∇c, f_aug, s)
 end
 
-function jacobian(model::AbstractModel, z::SVector)
+# QUESTION: is this one needed?
+function jacobian!(∇c, model::AbstractModel, z::SVector)
     n,m = size(model)
     ix,iu = 1:n, n .+ (1:m)
     f_aug(z) = dynamics(model, view(z,ix), view(z,iu))
-    ForwardDiff.jacobian(f_aug, z)
+    ForwardDiff.jacobian!(∇c, f_aug, z)
 end
 
 ############################################################################################
@@ -232,6 +235,12 @@ end
 
 @inline error_expansion(D::SizedDynamicsExpansion, model::RigidBody) = D.A, D.B
 @inline error_expansion(D::SizedDynamicsExpansion, model::AbstractModel) = D.tmpA, D.tmpB
+@inline SizedDynamicsExpansion(model::AbstractModel) = SizedDynamicsExpansion{Float64}(model)
+@inline function SizedDynamicsExpansion{T}(model::AbstractModel) where T
+	n,m = size(model)
+	n̄ = state_diff_size(model)
+	SizedDynamicsExpansion{T}(n,n̄,m)
+end
 
 ############################################################################################
 #                               STATE DIFFERENTIALS                                        #

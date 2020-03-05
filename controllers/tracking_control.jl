@@ -69,17 +69,23 @@ function tvlqr!(K, A, B, Q, R)
     N = length(A)
 
     # Solve infinite-horizon at goal state
-    Qf = dare(A[N], B[N], Q, R)
+    # Qf = dare(A[N], B[N], Q, R)
+    Qf = Q
 
     P_ = similar_type(A[N])
     P = copy(Qf)
     for k = N-1:-1:1
-        Pk = Q + A[k]'P*A[k] - A[k]'P*B[k]*((R+B[k]'P*B[k])\(B[k]'P*A[k]))
-        K[k] = -(R+B[k]'P*B[k])\(B[k]'P*A[k])
-        P = copy(Pk)
+        P,K[k] = riccati(P,A[k],B[k],Q,R)
     end
     return K
 end
+
+function riccati(P,A,B,Q,R)
+    P_ = Q + A'P*A - A'P*B*((R+B'P*B)\(B'P*A))
+    K = -(R+B'P*B)\(B'P*A)
+    return P_,K
+end
+
 
 """ Discrete LQR
 """
@@ -292,30 +298,37 @@ end
 
 function linearize(model::AbstractModel, xeq, ueq, dt)
     # Linearize the system about the given point
+    n,m = size(model)
     z = KnotPoint(xeq, ueq, dt)
-    ∇f = discrete_jacobian(model, z)
+    ∇f = zeros(n,n+m+1)
+    discrete_jacobian!(RK3, ∇f, model, z)
     ix,iu = z._x, z._u
     A = ∇f[ix,ix]
     B = ∇f[ix,iu]
     return A,B
 end
 
+# TODO: redo without static matrices
 function linearize(model::AbstractModel, Z::Traj)
     N = length(Z)
-    n,m = size(model)
-    n̄ = TO.state_diff_size(model)
-    A = [@SMatrix zeros(n̄,n̄) for k = 1:N]
-    B = [@SMatrix zeros(n̄,m) for k = 1:N]
+    D = [TO.SizedDynamicsExpansion(model) for k = 1:N]
     for k = 1:N
-        ix,iu = Z[k]._x, Z[k]._u
-        ∇f = discrete_jacobian(RK3, model, Z[k])
-        x2 = discrete_dynamics(RK3, model, Z[k])
-        G1 = TO.state_diff_jacobian(model, state(Z[k]))
-        G2 = TO.state_diff_jacobian(model, x2)
-        A[k] = G2'∇f[ix,ix]*G1
-        B[k] = G2'∇f[ix,iu]
+        _linearize!(D[k], model, Z[k])
     end
+    A = [SMatrix(d.A) for d in D]
+    B = [SMatrix(d.B) for d in D]
     return A,B
+end
+
+function _linearize!(D::TO.SizedDynamicsExpansion, model::AbstractModel, z::KnotPoint)
+    discrete_jacobian!(RK3, D.∇f, model, z)
+	D.tmpA .= D.A_  # avoids allocations later
+	D.tmpB .= D.B_
+    x2 = discrete_dynamics(RK3, model, z)
+    G1 = TO.state_diff_jacobian(model, state(z))
+    G2 = TO.state_diff_jacobian(model, x2)
+    TO.error_expansion!(D,G1,G2)
+    return nothing
 end
 
 function calc_LQR_gain(A::AbstractMatrix, B::AbstractMatrix, Q::AbstractMatrix, R::AbstractMatrix;

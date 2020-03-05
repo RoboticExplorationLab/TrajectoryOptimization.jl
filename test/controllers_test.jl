@@ -2,25 +2,13 @@ using TrajectoryOptimization
 using StaticArrays
 using LinearAlgebra
 using Random
+using Test
 using Distributions
-
-opts_ilqr = iLQRSolverOptions(verbose=false,
-    cost_tolerance=1e-4,
-    iterations=300)
-
-opts_al = AugmentedLagrangianSolverOptions(verbose=false,
-    opts_uncon=opts_ilqr,
-    iterations=40,
-    cost_tolerance=1.0e-5,
-    cost_tolerance_intermediate=1.0e-4,
-    constraint_tolerance=1e-4,
-    penalty_scaling=10.,
-    penalty_initial=1.)
+const TO = TrajectoryOptimization
 
 # Solve Quadrotor zig-zag problem
-Rot = MRP{Float64}
-prob = Problems.gen_quadrotor_zigzag(Rot, costfun=:Quadratic, use_rot=false)
-solver = iLQRSolver(prob)
+prob,opts = Problems.Quadrotor(:zigzag, costfun=:Quadratic)
+solver = iLQRSolver(prob,opts)
 solve!(solver)
 iterations(solver)
 @test norm(state(solver.Z[end])[1:3] - solver.xf[1:3]) < 0.1
@@ -32,16 +20,17 @@ push!(Uref, Dynamics.trim_controls(solver.model))
 dt_ref = solver.Z[1].dt
 
 # Track with different model
-Rot = UnitQuaternion{Float64,CayleyMap}
+Rot = MRP{Float64}
 model = Dynamics.Quadrotor2{Rot}(use_rot=true, mass=.5)
 dt = 1e-4
 Nsim = Int(solver.tf/dt) + 1
 inds = Int.(range(1,Nsim,length=solver.N))
 Q = Diagonal(Dynamics.fill_error_state(model, 200, 200, 50, 50))
 R = Diagonal(@SVector fill(1.0, 4))
+
 mlqr = Controllers.TVLQR(model, Q, R, Xref, Uref, dt_ref)
 
-noise = MvNormal(Diagonal(fill(5.,6)))
+noise = Distributions.MvNormal(Diagonal(fill(5.,6)))
 model_ = Dynamics.NoisyRB(model, noise)
 X = Controllers.simulate(model_, mlqr, Xref[1], solver.tf, w=0.0)
 res_lqr = [Controllers.RBState(model, x) for x in X[inds]]
@@ -104,14 +93,12 @@ res = Controllers.simulate(model, cntrl, xinit, tf, dt=dt, w=0.0)
 # Test HFCA
 Rot = UnitQuaternion{Float64,IdentityMap}
 model = Dynamics.Quadrotor2{Rot}(use_rot=false)
-xref = zeros(model)[1]
-err = TrajectoryOptimization.state_diff(model, res[end], xref)
-@test norm(err) < 0.01
 
 times = range(0,tf,step=dt)
+xref = zeros(model)[1]
 Xref = [copy(xref) for k = 1:length(times)]
 bref = [@SVector [1,0,0.] for k = 1:length(times)]
-Xdref = [@SVector zeros(13) for k = 1:length(times)]
+Xdref = [copy(xref) for k = 1:length(times)]
 
 cntrl = Controllers.HFCA(model, Xref, Xdref, bref, collect(times))
 xinit = Dynamics.build_state(model, x0)

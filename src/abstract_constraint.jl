@@ -162,6 +162,7 @@ state_dims(::AbstractConstraint{S,Control}) where S =
 	throw(ErrorException("Cannot get state dimension from a control-only constraint"))
 
 Base.length(::AbstractConstraint{S,W,P}) where {S,W,P} = P
+Base.size(con::AbstractConstraint) = length(con), width(con)
 
 con_label(::AbstractConstraint, i::Int) = "index $i"
 
