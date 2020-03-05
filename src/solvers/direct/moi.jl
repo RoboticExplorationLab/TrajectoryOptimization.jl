@@ -38,7 +38,7 @@ struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
     NN::Int
     NP::Int
 
-    dyn_con::DynamicsConstraint{Q,L,T,N,NM}
+    dyn_con::DynamicsConstraint{Q,L,T,N,M,NM}
     objective::AbstractObjective
     constraints::ConstraintSet{T}
     constraints_all::ConstraintSet{T}

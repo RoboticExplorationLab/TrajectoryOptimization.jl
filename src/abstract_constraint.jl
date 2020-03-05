@@ -125,6 +125,14 @@ width(con::AbstractConstraint{S,CoupledState}) where S = 2*state_dim(con)
 width(con::AbstractConstraint{S,CoupledControl}) where S = 2*control_dim(con)
 width(con::AbstractConstraint{S,<:General}) where S = Inf
 
+width(::Type{Stage},N,M) = N+M
+width(::Type{State},N,M) = N
+width(::Type{Control},N,M) = M
+width(::Type{Coupled},N,M) = 2N + 2M
+width(::Type{Dynamical},N,M) = 2N + M
+width(::Type{CoupledState},N,M) = 2N
+width(::Type{CoupledControl},N,M) = 2M
+
 "Upper bound of the constraint, as a vector, which is 0 for all constraints
 (except bound constraints)"
 upper_bound(con::AbstractConstraint{Inequality,W,P}) where {P,W} = @SVector zeros(P)
@@ -202,19 +210,19 @@ For W<:Coupled this will loop over calls to `jacobian(con,Z[k+1],Z[k])`
 For W<:General,this must function must be explicitly defined. Other types may define it
 	if desired.
 """
-function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Stage},
-		Z::Traj, inds=1:length(Z)) where P
-	for (i,k) in enumerate(inds)
-		∇c[i] = jacobian(con, Z[k])
-	end
-end
-
-function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Coupled},
-	Z::Traj, inds=1:length(Z)-1) where P
-	for (i,k) in enumerate(inds)
-		∇c[i] = jacobian(con, Z[k+1], Z[k])
-	end
-end
+# function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Stage},
+# 		Z::Traj, inds=1:length(Z)) where P
+# 	for (i,k) in enumerate(inds)
+# 		∇c[i] = jacobian(con, Z[k])
+# 	end
+# end
+#
+# function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Coupled},
+# 	Z::Traj, inds=1:length(Z)-1) where P
+# 	for (i,k) in enumerate(inds)
+# 		∇c[i] = jacobian(con, Z[k+1], Z[k])
+# 	end
+# end
 
 function jacobian!(∇c::Vector{<:SizedMatrix}, con::AbstractConstraint{P,<:Stage},
 		Z::Traj, inds=1:length(Z)) where P
@@ -224,7 +232,7 @@ function jacobian!(∇c::Vector{<:SizedMatrix}, con::AbstractConstraint{P,<:Stag
 end
 
 # Default methods for converting KnotPoints to states and controls
-for method in [:evaluate, :jacobian]
+for method in [:evaluate]#, :jacobian]
 	@eval begin
 			@inline $(method)(con::AbstractConstraint{S,Stage},   Z::AbstractKnotPoint) where S = $(method)(con, state(Z), control(Z))
 			@inline $(method)(con::AbstractConstraint{S,State},   Z::AbstractKnotPoint) where S = $(method)(con, state(Z))
@@ -241,17 +249,17 @@ for method in [:evaluate, :jacobian]
 	end
 end
 
-
-# Method for automatically calculating the gradient for constraints with only 1 input
-function jacobian(con::AbstractConstraint{S,W}, x::SVector{N}) where {S,N,W<:Union{State,Control}}
-	eval_c(x) = evaluate(con, x)
-	ForwardDiff.jacobian(eval_c, x)
-end
-
+# Default method for converting KnotPoints to states and controls
 @inline jacobian!(∇c, con::AbstractConstraint{P,State}, z::AbstractKnotPoint) where P =
 	jacobian!(∇c, con, state(z))
 @inline jacobian!(∇c, con::AbstractConstraint{P,Control}, z::AbstractKnotPoint) where P =
 	jacobian!(∇c, con, control(z))
+
+# Method for automatically calculating the gradient for constraints with only 1 input
+# function jacobian(con::AbstractConstraint{S,W}, x::SVector{N}) where {S,N,W<:Union{State,Control}}
+# 	eval_c(x) = evaluate(con, x)
+# 	ForwardDiff.jacobian(eval_c, x)
+# end
 
 function jacobian!(∇c, con::AbstractConstraint{S,W}, x::SVector{N}) where {S,N,W<:Union{State,Control}}
 	eval_c(x) = evaluate(con, x)

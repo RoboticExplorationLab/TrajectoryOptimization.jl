@@ -15,12 +15,12 @@ is applied. This type should be fairly transparent to the user, and only needs t
 directly dealt with when writing solvers or setting fine-tuned updates per constraint
 (via the `.params` field).
 """
-struct ConstraintVals{T,W,C,P,A}
+struct ConstraintVals{T,W,C,P,N}
 	con::C
 	inds::UnitRange{Int}
 	vals::Vector{SVector{P,T}}
 	vals_prev::Vector{SVector{P,T}}
-	∇c::Vector{A}
+	∇c::Vector{SizedMatrix{P,N,T,2}}
 	λ::Vector{SVector{P,T}}
 	μ::Vector{SVector{P,T}}
 	active::Vector{SVector{P,Bool}}
@@ -29,15 +29,15 @@ struct ConstraintVals{T,W,C,P,A}
 
 	function ConstraintVals(con::AbstractConstraint{S, W},
 			inds::UnitRange{Int}, vals::V, vals_prev,
-			∇c::Vector{A}, λ::V, μ::V,
+			∇c::Vector{<:SizedMatrix{P,N}}, λ::V, μ::V,
 			active::Vector{SVector{P,Bool}}, c_max::Vector{T},
-			params::ConstraintParams) where {S,W,T,P,A,V}
-		new{T,W,typeof(con),P,eltype(∇c)}(con,inds,vals,vals_prev,∇c,λ,μ,
+			params::ConstraintParams) where {S,W,T,P,N,V}
+		new{T,W,typeof(con),P,N}(con,inds,vals,vals_prev,∇c,λ,μ,
 			active,c_max, params)
 	end
 end
 
-function ConstraintVals(con::C, inds::UnitRange; mutable=false, kwargs...) where C
+function ConstraintVals(con::C, inds::UnitRange, kwargs...) where C
 	p = length(con)
 	w = width(con)
 	P = length(inds)
@@ -45,11 +45,7 @@ function ConstraintVals(con::C, inds::UnitRange; mutable=false, kwargs...) where
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	if p*w > MAX_ELEM*10 || mutable
-		∇c = [SizedMatrix{p,w}(zeros(Float64,p,w)) for k = 1:P]
-	else
-		∇c = [@SMatrix zeros(Float64,p,w) for k = 1:P]
-	end
+	∇c = [SizedMatrix{p,w}(zeros(Float64,p,w)) for k = 1:P]
 	params = ConstraintParams(;kwargs...)
 	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P),
 		params)

@@ -25,11 +25,12 @@ DynamicsConstraint{Q}(model::AbstractModel, N)
 ```
 where `N` is the number of knot points and `Q<:QuadratureRule` is the integration method.
 """
-struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,W,A} <: AbstractDynamicsConstraint{Coupled,N}
+struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,W,A} <: AbstractDynamicsConstraint{Coupled,N}
 	model::L
     fVal::Vector{SVector{N,T}}
     xMid::Vector{SVector{N,T}}
-    ∇f::Vector{A}
+    ∇f::Vector{SizedMatrix{N,W,T,2}}
+	grad::Vector{GradientExpansion{T,N,M}}
 end
 
 function DynamicsConstraint{Q}(model::L, N) where {Q,L}
@@ -43,14 +44,15 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 		∇f = [@SMatrix zeros(n,n+m) for k = 1:N]
 	end
 	NM = n+m
-	DynamicsConstraint{Q,L,T,n,NM,eltype(∇f)}(model, fVal, xMid, ∇f)
+	grad = [GradientExpansion{T}(n,m) for k = 1:3]
+	DynamicsConstraint{Q,L,T,n,m,NM,eltype(∇f)}(model, fVal, xMid, ∇f, grad)
 end
 
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 integration(::DynamicsConstraint{Q}) where Q = Q
 
-width(con::DynamicsConstraint{<:Implicit,L,T,N,NM}) where {L,T,N,NM} = 2N+NM-N
-width(con::DynamicsConstraint{<:Explicit,L,T,N,NM}) where {L,T,N,NM} = 2NM
+width(con::DynamicsConstraint{<:Implicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2N+M
+width(con::DynamicsConstraint{<:Explicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2NM
 ####!
 
 # Implicit
@@ -76,10 +78,9 @@ function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{Q,L,T,N}
 	In = Diagonal(@SVector ones(N))
 	zinds = [Z[1]._x; Z[1]._u]
 	for k in inds
-		∇f = uview(∇c, 1:n, 1:n+m+1)
+		∇f = uview(∇c[k], 1:n, 1:n+m+1)
 		discrete_jacobian!(Q, ∇f, con.model, Z[k])
-		∇c[1:n, n+m .+ (1:n)] .= -Diagonal(@SVector ones(n))
-		# ∇c[k] = [AB[:,zinds] -In]
+		∇c[k][1:n, n+m .+ (1:n)] .= -Diagonal(@SVector ones(n))
 	end
 end
 

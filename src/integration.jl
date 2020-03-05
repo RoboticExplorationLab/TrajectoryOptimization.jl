@@ -50,7 +50,7 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Hermi
 	end
 end
 
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n},
+function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n},
 		Z::Traj, inds=1:length(Z)-1) where {L,T,n}
 	N = length(Z)
 	model = con.model
@@ -115,6 +115,7 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 	fVal = dyn_con.fVal
 	xMid = dyn_con.xMid
 	∇f = dyn_con.∇f
+	grad = dyn_con.grad
 
 	for k = 1:N
 		fVal[k] = dynamics(model, Z[k])
@@ -124,8 +125,8 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 	end
 	for k = 1:N
 		∇f[k] = jacobian(model, Z[k])
-		E.x[k] *= 0
-		E.u[k] *= 0
+		E[k].x .*= 0
+		E[k].u .*= 0
 	end
 
 	for k in 1:N-1
@@ -141,16 +142,21 @@ function cost_gradient!(E, obj, dyn_con::DynamicsConstraint{HermiteSimpson}, Z)
 		B2 = ∇f[k+1][xi,ui]
 		dt = Z[k].dt
 
-		∇x1,∇u1 = gradient(obj[k], x1, u1)
-		∇x2,∇u2 = gradient(obj[k], x2, u2)
-		∇xm,∇um = gradient(obj[k], xm, um)
+		gradient!(grad[1], obj[k], x1, u1)
+		gradient!(grad[2], obj[k], x2, u2)
+		gradient!(grad[3], obj[k], xm, um)
 
-		E.x[k]   += dt/6 * (∇x1 + 4*( dt/8 * A1 + I/2)'∇xm)
-		E.u[k]   += dt/6 * (∇u1 + 4*( ( dt/8 * B1)'∇xm + 0.5I'*∇um))
-		E.x[k+1] += dt/6 * (∇x2 + 4*(-dt/8 * A2 + I/2)'∇xm)
-		E.u[k+1] += dt/6 * (∇u2 + 4*( (-dt/8 * B2)'∇xm + 0.5I'*∇um))
+		∇x1,∇u1 = grad[1].x, grad[1].u #gradient(obj[k], x1, u1)
+		∇x2,∇u2 = grad[2].x, grad[2].u #gradient(obj[k], x2, u2)
+		∇xm,∇um = grad[3].x, grad[3].u #gradient(obj[k], xm, um)
+
+		E[k].x   .+= dt/6 * (∇x1 + 4*( dt/8 * A1 + I/2)'∇xm)
+		E[k].u   .+= dt/6 * (∇u1 + 4*( ( dt/8 * B1)'∇xm + 0.5I'*∇um))
+		E[k+1].x .+= dt/6 * (∇x2 + 4*(-dt/8 * A2 + I/2)'∇xm)
+		E[k+1].u .+= dt/6 * (∇u2 + 4*( (-dt/8 * B2)'∇xm + 0.5I'*∇um))
 	end
 
-	E.x[N] += gradient(obj[N], state(Z[N]), control(Z[N]))[1]
+	gradient!(grad[1], obj[N], state(Z[N]), control(Z[N]))
+	E[N].x .+= grad[1].x #gradient(obj[N], state(Z[N]), control(Z[N]))[1]
 	return nothing
 end

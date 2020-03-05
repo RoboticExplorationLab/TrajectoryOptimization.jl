@@ -23,60 +23,38 @@ cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj,
     map!(stage_cost, obj.J, obj.cost, Z)
 end
 
-# function cost_gradient(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
+# function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
 #     Qx,Qu = gradient(cost, state(z), control(z))
-#     return G'Qx, Qu
+#     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
+#     if is_terminal(z)
+#         dt_x = 1.0
+#         dt_u = 0.0
+#     else
+#         dt_x = z.dt
+#         dt_u = z.dt
+#     end
+#     Qx,Qu = Qx*dt_x, Qu*dt_u
+#     Qxx,Quu,Qux = Qxx*dt_x, Quu*dt_u, Qux*dt_u
+#
+#     Qux = Qux*G
+#     Qx = G'Qx
+#     Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
+#     return Qxx, Quu, Qux, Qx, Qu
 # end
 #
-# function cost_hessian(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
-#     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
-#     return G'Qxx*G
+# function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
+#     for k in eachindex(Z)
+#         z = Z[k]
+#         E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
+#             cost_expansion(obj.cost[k], model, z, G[k])
+#     end
 # end
-
-function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
-    Qx,Qu = gradient(cost, state(z), control(z))
-    Qxx,Quu,Qux = hessian(cost, state(z), control(z))
-    if is_terminal(z)
-        dt_x = 1.0
-        dt_u = 0.0
-    else
-        dt_x = z.dt
-        dt_u = z.dt
-    end
-    Qx,Qu = Qx*dt_x, Qu*dt_u
-    Qxx,Quu,Qux = Qxx*dt_x, Quu*dt_u, Qux*dt_u
-
-    Qux = Qux*G
-    Qx = G'Qx
-    Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
-    return Qxx, Quu, Qux, Qx, Qu
-end
-
-function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
-    for k in eachindex(Z)
-        z = Z[k]
-        E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
-            cost_expansion(obj.cost[k], model, z, G[k])
-    end
-end
 
 # In-place cost-expansion
 function cost_expansion!(E::AbstractExpansion, cost::CostFunction, z::KnotPoint)
-    gradient!(E, cost, state(z), control(z))
-    hessian!(E, cost, state(z), control(z))
+    cost_gradient!(E, cost, z)
+    cost_hessian!(E, cost, z)
     E.x0 .= E.x  # copy cost-only gradient
-    if is_terminal(z)
-        dt_x = 1.0
-        dt_u = 0.0
-    else
-        dt_x = z.dt
-        dt_u = z.dt
-    end
-    E.xx .*= dt_x
-    E.uu .*= dt_u
-    E.ux .*= dt_u
-    E.x  .*= dt_x
-    E.u  .*= dt_u
     return nothing
 end
 
@@ -91,8 +69,8 @@ end
 Qx,Qu = cost_gradient(cost::CostFunction, z::KnotPoint)
 ```
 Get Qx, Qu pieces of gradient of cost function, multiplied by dt"
-function cost_gradient(cost::CostFunction, z::KnotPoint)
-    Qx, Qu = gradient(cost, state(z), control(z))
+function cost_gradient!(E, cost::CostFunction, z::KnotPoint)
+    gradient!(E, cost, state(z), control(z))
     if is_terminal(z)
         dt_x = 1.0
         dt_u = 0.0
@@ -100,15 +78,17 @@ function cost_gradient(cost::CostFunction, z::KnotPoint)
         dt_x = z.dt
         dt_u = z.dt
     end
-    return Qx*dt_x, Qu*dt_u
+	E.x .*= dt_x
+	E.u .*= dt_u
+    return nothing
 end
 
 "```
 Qxx,Quu,Qux = cost_hessian(cost::CostFunction, z::KnotPoint)
 ```
 Get Qxx, Quu, Qux pieces of Hessian of cost function, multiplied by dt"
-function cost_hessian(cost::CostFunction, z::KnotPoint)
-    Qxx, Quu, Qux = hessian(cost, state(z), control(z))
+function cost_hessian!(E, cost::CostFunction, z::KnotPoint)
+    hessian!(E, cost, state(z), control(z))
     if is_terminal(z)
         dt_x = 1.0
         dt_u = 0.0
@@ -116,7 +96,10 @@ function cost_hessian(cost::CostFunction, z::KnotPoint)
         dt_x = z.dt
         dt_u = z.dt
     end
-    return Qxx*dt_x, Quu*dt_u, Qux*dt_u
+	E.xx .*= dt_x
+	E.uu .*= dt_u
+	E.ux .*= dt_u
+    return nothing
 end
 
 # "Calculate the 2nd order expansion of the cost at a knot point"
@@ -134,7 +117,7 @@ Calculate the cost gradient for an entire trajectory. If a dynamics constraint i
 function cost_gradient!(E, obj::Objective, Z::Traj)
     N = length(Z)
     for k in eachindex(Z)
-        E.x[k], E.u[k] = cost_gradient(obj[k], Z[k])
+        cost_gradient!(E, obj[k], Z[k])
     end
 end
 
@@ -148,7 +131,7 @@ cost_hessian!(E::CostExpansion, obj::Objective, Z::Traj)
 function cost_hessian!(E, obj::Objective, Z::Traj)
     N = length(Z)
     for k in eachindex(Z)
-        E.xx[k], E.uu[k], E.ux[k] = cost_hessian(obj[k], Z[k])
+        cost_hessian(E[k], obj[k], Z[k])
     end
 end
 
@@ -177,7 +160,8 @@ end
 # @inline _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G::UniformScaling) = copyto!(E,Q)
 
 """
-Assumes the cost expansion is already complete
+Compute the error expansion along the entire trajectory
+	Assumes the cost expansion is already complete
 """
 @inline error_expansion!(E::Vector{<:SizedCostExpansion}, model::AbstractModel, Z::Traj, G) = nothing
 function error_expansion!(E::Vector{<:SizedCostExpansion}, model::RigidBody, Z::Traj, G)
@@ -186,6 +170,7 @@ function error_expansion!(E::Vector{<:SizedCostExpansion}, model::RigidBody, Z::
     end
 end
 
+"Compute the error expansion at a single KnotPoint (only for state vectors not in Vector space)"
 function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G) where N
     if N < 15
         G = SMatrix(G)
@@ -208,6 +193,7 @@ function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G
     end
 end
 
+"Copy the error expansion to another expansion"
 function error_expansion!(E::AbstractExpansion, Q::SizedCostExpansion)
 	E.x  .= Q.x
 	E.u  .= Q.u
@@ -216,14 +202,17 @@ function error_expansion!(E::AbstractExpansion, Q::SizedCostExpansion)
 	E.ux .= Q.ux
 end
 
+"Get the error expansion"
 @inline function error_expansion(E::SizedCostExpansion, model::RigidBody)
 	return StaticExpansion(E.x_, E.xx_, E.u_, E.uu_, E.ux_)
 end
 
+"Get the error expansion (same as cost expansion)"
 @inline function error_expansion(E::SizedCostExpansion, model::AbstractModel)
 	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
 end
 
+"Get cost expansion"
 @inline function cost_expansion(E::SizedCostExpansion{<:Any,N,N}) where N
 	return StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)
 end
