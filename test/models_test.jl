@@ -3,15 +3,18 @@ using Test, BenchmarkTools
 function num_allocs(model)
     dt = 0.1
     x, u = rand(model)
+    n,m = size(model)
     z = KnotPoint(x, u, dt)
+    ∇c  = zeros(n,n+m)
+    ∇cd = zeros(n,n+m+1)
     dynamics(model, x, u)
-    jacobian(model, z)
+    jacobian!(∇c, model, z)
     discrete_dynamics(RK3, model, x, u, z.t, dt)
-    discrete_jacobian(RK3, model, z)
+    discrete_jacobian!(RK3, ∇cd, model, z)
     allocs  = @allocated dynamics(model, x, u)
-    allocs += @allocated jacobian(model, z)
+    allocs += @allocated jacobian!(∇c, model, z)
     allocs += @allocated discrete_dynamics(RK3, model, x, u, z.t, dt)
-    allocs += @allocated discrete_jacobian(RK3, model, z)
+    allocs += @allocated discrete_jacobian!(RK3, ∇cd, model, z)
 end
 
 # Double Integrator
@@ -61,11 +64,13 @@ dt = 0.1
 
 function inf_allocs(inf)
     x,u = rand(inf)
+    n,m = size(inf)
     dt = 0.1
     z = KnotPoint(x,u,0.1)
     # allocs = @allocated discrete_dynamics(RK3, inf, x, u, dt)
+    ∇c = zeros(n,n+m+1)
     allocs = @allocated discrete_dynamics(RK3, inf, z)
-    allocs += @allocated discrete_jacobian(RK3, inf, z)
+    allocs += @allocated discrete_jacobian!(RK3, ∇c, inf, z)
 end
 @test inf_allocs(inf) == 0
 

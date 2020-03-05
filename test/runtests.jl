@@ -1,4 +1,5 @@
 using TrajectoryOptimization
+using Distributions
 using Test
 using BenchmarkTools
 using LinearAlgebra
