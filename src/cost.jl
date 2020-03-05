@@ -23,33 +23,6 @@ cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj,
     map!(stage_cost, obj.J, obj.cost, Z)
 end
 
-# function cost_expansion(cost::CostFunction, model::AbstractModel, z::KnotPoint, G=I)
-#     Qx,Qu = gradient(cost, state(z), control(z))
-#     Qxx,Quu,Qux = hessian(cost, state(z), control(z))
-#     if is_terminal(z)
-#         dt_x = 1.0
-#         dt_u = 0.0
-#     else
-#         dt_x = z.dt
-#         dt_u = z.dt
-#     end
-#     Qx,Qu = Qx*dt_x, Qu*dt_u
-#     Qxx,Quu,Qux = Qxx*dt_x, Quu*dt_u, Qux*dt_u
-#
-#     Qux = Qux*G
-#     Qx = G'Qx
-#     Qxx = G'Qxx*G + ∇²differential(model, state(z), Qx) #- Diagonal(idq)*(Qx'Diagonal(iq)*state(z))
-#     return Qxx, Quu, Qux, Qx, Qu
-# end
-#
-# function cost_expansion!(E, G, obj::Objective, model::AbstractModel, Z::Traj)
-#     for k in eachindex(Z)
-#         z = Z[k]
-#         E.xx[k], E.uu[k], E.ux[k], E.x[k], E.u[k] =
-#             cost_expansion(obj.cost[k], model, z, G[k])
-#     end
-# end
-
 # In-place cost-expansion
 function cost_expansion!(E::AbstractExpansion, cost::CostFunction, z::KnotPoint)
     cost_gradient!(E, cost, z)
@@ -102,10 +75,6 @@ function cost_hessian!(E, cost::CostFunction, z::KnotPoint)
     return nothing
 end
 
-# "Calculate the 2nd order expansion of the cost at a knot point"
-# cost_expansion(cost::CostFunction, z::KnotPoint) =
-#     cost_gradient(cost, z)..., cost_hessian(cost, z)...
-
 
 """```
 cost_gradient!(E::CostExpansion, obj::Objective, Z::Traj)
@@ -140,24 +109,6 @@ function cost_expansion!(E, obj::Objective, Z::Traj)
     cost_gradient!(E, obj, Z)
     cost_hessian!(E, obj, Z)
 end
-
-
-# "Calculate the error cost expansion"
-# function error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, model::AbstractModel, z::KnotPoint, G)
-#     ∇²differential!(E.xx, model, state(z), Q.x)
-#     # E.tmp .= G
-#     return _error_expansion!(E, Q, G)
-# end
-#
-# function _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G)
-#     E.u .= Q.u
-#     E.uu .= Q.uu
-#     mul!(E.ux, Q.ux, G)
-#     mul!(E.x, Transpose(G), Q.x)
-#     mul!(E.tmp, Q.xx, G)
-#     mul!(E.xx, Transpose(G), E.tmp, 1.0, 1.0)
-# end
-# @inline _error_expansion!(E::AbstractExpansion, Q::AbstractExpansion, G::UniformScaling) = copyto!(E,Q)
 
 """
 Compute the error expansion along the entire trajectory

@@ -178,50 +178,6 @@ function cost!(J, con::ConstraintVals, Z)
 	end
 end
 
-# Assumes constraints, active set, and constraint jacobian have all been calculated
-@generated function cost_expansion(E, G, con::ConstraintVals{T,W},
-		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
-	if W <: State
-		expansion = quote
-			cx = con.∇c[i]*G[k]
-			E.xx[k] += cx'Iμ*cx
-			E.x[k] += cx'g
-		end
-	elseif W <: Control
-		expansion = quote
-			cu = con.∇c[i]
-			E.uu[k] += cu'Iμ*cu
-			E.u[k] += cu'g
-		end
-	else
-		expansion = quote
-			cx = con.∇c[i][:,ix]*G[k]
-			cu = con.∇c[i][:,iu]
-
-			E.xx[k] += cx'Iμ*cx
-			E.uu[k] += cu'Iμ*cu
-			E.ux[k] += cu'Iμ*cx
-
-			E.x[k] += cx'g
-			E.u[k] += cu'g
-		end
-	end
-	quote
-		ix,iu = Z[1]._x, Z[1]._u
-		@inbounds for i in eachindex(con.inds)
-			k = con.inds[i]
-			c = con.vals[i]
-			λ = con.λ[i]
-			μ = con.μ[i]
-			a = con.active[i]
-			Iμ = Diagonal( a .* μ )
-			g = Iμ*c + λ
-
-			$expansion
-		end
-	end
-end
-
 @generated function cost_expansion!(E::Vector{<:AbstractExpansion}, con::ConstraintVals{T,W},
 		Z::Vector{<:KnotPoint{T,N,M}}) where {T,W<:Stage,N,M}
 	if W <: State

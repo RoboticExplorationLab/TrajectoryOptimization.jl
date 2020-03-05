@@ -175,25 +175,6 @@ Methods:
 ```
 where `s = [x; u; dt]`, `t` is the time, and `ix` and `iu` are the indices to extract the state and controls.
 """
-# @inline discrete_jacobian(model::AbstractModel, z::KnotPoint) =
-#     discrete_jacobian(DEFAULT_Q, model, z)
-#
-# function discrete_jacobian(::Type{Q}, model::AbstractModel,
-#         z::KnotPoint{T,N,M,NM}) where {Q<:Implicit,T,N,M,NM}
-#     ix,iu,idt = z._x, z._u, NM+1
-#     t = z.t
-#     fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
-#     s = [z.z; @SVector [z.dt]]
-#     ForwardDiff.jacobian(fd_aug, s)
-# end
-#
-# function discrete_jacobian(::Type{Q}, model::AbstractModel,
-#        s::SVector{NM1}, t::T, ix::SVector{N}, iu::SVector{M}) where {Q<:Implicit,T,N,M,NM1}
-#     idt = NM1
-#     fd_aug(s) = discrete_dynamics(Q, model, s[ix], s[iu], t, s[idt])
-#     ForwardDiff.jacobian(fd_aug, s)
-# end
-
 function discrete_jacobian!(::Type{Q}, ∇f, model::AbstractModel,
 		z::AbstractKnotPoint{T,N,M,NM}) where {T,N,M,NM,Q<:Implicit}
     ix,iu,idt = z._x, z._u, NM+1
@@ -202,13 +183,6 @@ function discrete_jacobian!(::Type{Q}, ∇f, model::AbstractModel,
     s = [z.z; @SVector [z.dt]]
     ForwardDiff.jacobian!(∇f, fd_aug, s)
 end
-
-# function dynamics_expansion(∇f, G1, G2, model::AbstractModel, z::KnotPoint)
-# 	ix,iu = z._x, z._u
-# 	A = G2'∇f[ix,ix]*G1
-# 	B = G2'∇f[ix,iu]
-# 	return A,B
-# end
 
 function dynamics_expansion!(D::Vector{<:SizedDynamicsExpansion}, model::AbstractModel,
 		Z::Traj)
@@ -252,20 +226,11 @@ state_diff(model::AbstractModel, x, x0) = x - x0
 
 @inline state_diff_jacobian!(G, model::AbstractModel, Z::Traj) = nothing
 
-# function state_diff_jacobian!(G::Vector{<:SMatrix}, model::RigidBody, Z::Traj)
-#     for k in eachindex(Z)
-#         G[k] = state_diff_jacobian(model, state(Z[k]))
-#     end
-# end
-
 function state_diff_jacobian!(G, model::RigidBody, Z::Traj)
     for k in eachindex(Z)
         G[k] .= state_diff_jacobian(model, state(Z[k]))
     end
 end
-
-# ∇²differential(model::AbstractModel, x::SVector{N}, b::AbstractVector) where N =
-# 	Diagonal(@SVector zeros(N))
 
 function ∇²differential!(G, model::AbstractModel, x::SVector, dx::AbstractVector)
 	G .= ∇²differential(model, x, dx)

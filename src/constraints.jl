@@ -375,10 +375,6 @@ function evaluate(bnd::BoundConstraint{T,P,NM}, x, u) where {T,P,NM}
 	bnd.B*SVector{NM}([x; u]) + bnd.b
 end
 
-# function jacobian(bnd::BoundConstraint, z::AbstractKnotPoint)
-# 	bnd.B
-# end
-
 function jacobian!(∇c, bnd::BoundConstraint, z::AbstractKnotPoint)
 	∇c .= bnd.B
 end
@@ -470,7 +466,6 @@ struct InfeasibleConstraint{N,M} <: AbstractConstraint{Equality, Control, N} end
 InfeasibleConstraint(model::InfeasibleModel{N,M}) where {N,M} = InfeasibleConstraint{N,M}()
 InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
 control_dim(::InfeasibleConstraint{N,M}) where {N,M} = N+M
-# Base.length(::InfeasibleConstraint{N,M}) where {N,M} = N
 
 @generated function evaluate(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
     _u = SVector{M}(1:M)

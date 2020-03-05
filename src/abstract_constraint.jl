@@ -211,20 +211,6 @@ For W<:Coupled this will loop over calls to `jacobian(con,Z[k+1],Z[k])`
 For W<:General,this must function must be explicitly defined. Other types may define it
 	if desired.
 """
-# function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Stage},
-# 		Z::Traj, inds=1:length(Z)) where P
-# 	for (i,k) in enumerate(inds)
-# 		∇c[i] = jacobian(con, Z[k])
-# 	end
-# end
-#
-# function jacobian!(∇c::Vector{<:SMatrix}, con::AbstractConstraint{P,<:Coupled},
-# 	Z::Traj, inds=1:length(Z)-1) where P
-# 	for (i,k) in enumerate(inds)
-# 		∇c[i] = jacobian(con, Z[k+1], Z[k])
-# 	end
-# end
-
 function jacobian!(∇c::Vector{<:SizedMatrix}, con::AbstractConstraint{P,<:Stage},
 		Z::Traj, inds=1:length(Z)) where P
 	for (i,k) in enumerate(inds)
@@ -255,12 +241,6 @@ end
 	jacobian!(∇c, con, state(z))
 @inline jacobian!(∇c, con::AbstractConstraint{P,Control}, z::AbstractKnotPoint) where P =
 	jacobian!(∇c, con, control(z))
-
-# Method for automatically calculating the gradient for constraints with only 1 input
-# function jacobian(con::AbstractConstraint{S,W}, x::SVector{N}) where {S,N,W<:Union{State,Control}}
-# 	eval_c(x) = evaluate(con, x)
-# 	ForwardDiff.jacobian(eval_c, x)
-# end
 
 function jacobian!(∇c, con::AbstractConstraint{S,W}, x::SVector{N}) where {S,N,W<:Union{State,Control}}
 	eval_c(x) = evaluate(con, x)

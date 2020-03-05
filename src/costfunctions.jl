@@ -118,19 +118,6 @@ function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
     0.5*xN'cost.Q*xN + cost.q'*xN + cost.c
 end
 
-# function gradient(cost::QuadraticCost, x, u)
-#     Qx = cost.Q*x + cost.q + cost.H'*u
-#     Qu = cost.R*u + cost.r + cost.H*x
-#     return Qx, Qu
-# end
-#
-# function hessian(cost::QuadraticCost, x, u)
-#     Qxx = cost.Q
-#     Quu = cost.R
-#     Qux = cost.H
-#     return Qxx, Quu, Qux
-# end
-
 function gradient!(E::AbstractExpansion, cost::QuadraticCost, x, u)
     E.x .= cost.Q*x + cost.q + cost.H'*u
     E.u .= cost.R*u + cost.r + cost.H*x
@@ -221,26 +208,6 @@ function stage_cost(cost::QuadraticQuatCost, x::SVector)
     dq = cost.q_ref'q
     J += cost.w*min(1+dq, 1-dq)
 end
-
-# function cost_expansion(cost::QuadraticQuatCost, z::KnotPoint, G)
-#     # Gradient
-#     Qx = cost.Q*x + cost.q
-#     q = x[cost.q_ind]
-#     quat = UnitQuaternion(q)
-#     dq = cost.q_ref'q
-#     if dq < 0
-#         Qx += cost.Iq*cost.q_ref*G
-#     else
-#         Qx -= cost.Iq*cost.q_ref*G
-#     end
-#     Qu = cost.R*u + cost.r
-#
-#     # Hessian
-#     Q = cost.Q
-#     Qxx = G'Q*G
-#
-#     return Qx, Qu
-# end
 
 function gradient(cost::QuadraticQuatCost{T,N,M}, x::SVector, u::SVector) where {T,N,M}
     Qx = cost.Q*x + cost.q
