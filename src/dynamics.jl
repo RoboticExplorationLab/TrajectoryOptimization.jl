@@ -27,7 +27,7 @@ export
 include("../dynamics/testrigidbody.jl")
 include("../dynamics/pendulum.jl")
 # include("../dynamics/doublependulum.jl")
-# include("../dynamics/acrobot.jl")
+include("../dynamics/acrobot.jl")
 # include("../dynamics/ballonbeam.jl")
 include("../dynamics/cartpole.jl")
 include("../dynamics/quadrotor.jl")

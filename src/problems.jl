@@ -12,6 +12,7 @@ using StaticArrays
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")
+include("../problems/acrobot.jl")
 include("../problems/parallel_park.jl")
 include("../problems/cartpole.jl")
 include("../problems/car_escape.jl")
