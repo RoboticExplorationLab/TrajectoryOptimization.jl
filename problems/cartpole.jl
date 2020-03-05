@@ -1,8 +1,9 @@
 function Cartpole(method=:none)
 
     opts = SolverOptions(
-        penalty_scaling=500.,
-        penalty_initial=1.
+        cost_tolerance_intermediate=1e-2,
+        penalty_scaling=10.,
+        penalty_initial=1.0
     )
 
     model = Dynamics.Cartpole()

@@ -46,9 +46,6 @@ end
 
 state_diff_size(::Satellite) = 6
 
-TrajectoryOptimization.is_quat(::Satellite, z::KnotPoint) =
-    (@SVector [0,0,0,1,1,1,1]), (@SVector [0,0,0,1,1,1])
-
 function TrajectoryOptimization.state_diff_jacobian!(G, model::Satellite, Z::Traj)
     for k in eachindex(Z)
         G[k] = state_diff_jacobian(model, state(Z[k]))
@@ -166,11 +163,6 @@ end
 
 state_diff_size(::Satellite2) = 6
 state_diff_size(::Satellite2{<:UnitQuaternion,false}) = 7
-
-TrajectoryOptimization.is_quat(::Satellite2{<:UnitQuaternion}, z::KnotPoint) =
-    (@SVector [0,0,0,1,1,1,1]), (@SVector [0,0,0,1,1,1])
-TrajectoryOptimization.is_quat(::Satellite2, z::KnotPoint) =
-    (@SVector [0,0,0,1,1,1]), (@SVector [0,0,0,1,1,1])
 
 
 function TrajectoryOptimization.state_diff_jacobian!(G, model::Satellite2, Z::Traj)

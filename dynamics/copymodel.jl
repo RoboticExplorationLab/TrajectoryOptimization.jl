@@ -154,45 +154,45 @@ function TrajectoryOptimization.jacobian(model::CopyModel{K,N0,M0},
     return [A B]
 end
 
-function TrajectoryOptimization.discrete_jacobian(::Type{Q}, model::CopyModel{K,N0,M0},
-        z::KnotPoint{T,N,M,NM}) where {K,N0,M0,T,N,M,NM,Q<:TrajectoryOptimization.Implicit}
-    A0 = @SMatrix zeros(N0,N0)
-    B0 = @SMatrix zeros(N0,M0)
-    ix = model.ix
-    iu = model.iu
-    it = N0+M0+1
-
-    xinds = model.xinds
-    uinds = model.uinds
-    x,u = state(z), control(z)
-    dt = @SVector [z.dt]
-
-    z_ = [x[xinds[1]]; u[uinds[1]]; dt]
-    ∇f = discrete_jacobian(Q, model.model, z_, z.t, ix, iu)
-    A,B,C = ∇f[ix,ix], ∇f[ix,iu], ∇f[ix,it]
-    for i = 2:K
-        A = [A  A0]
-        B = [B  B0]
-    end
-    for i = 2:K
-        z_ = [x[xinds[i]]; u[uinds[i]]; dt]
-        ∇f = discrete_jacobian(Q, model.model, z_, z.t, ix, iu)
-        A_,B_,C_ = ∇f[ix,ix], ∇f[ix,iu], ∇f[ix,it]
-
-        for j = 1:i-1
-            A_ = [A0 A_]
-            B_ = [B0 B_]
-        end
-        for j = i+1:K
-            A_ = [A_ A0]
-            B_ = [B_ B0]
-        end
-        A = [A; A_]
-        B = [B; B_]
-        C = [C; C_]
-    end
-    return [A B C]
-end
+# function TrajectoryOptimization.discrete_jacobian(::Type{Q}, model::CopyModel{K,N0,M0},
+#         z::KnotPoint{T,N,M,NM}) where {K,N0,M0,T,N,M,NM,Q<:TrajectoryOptimization.Implicit}
+#     A0 = @SMatrix zeros(N0,N0)
+#     B0 = @SMatrix zeros(N0,M0)
+#     ix = model.ix
+#     iu = model.iu
+#     it = N0+M0+1
+#
+#     xinds = model.xinds
+#     uinds = model.uinds
+#     x,u = state(z), control(z)
+#     dt = @SVector [z.dt]
+#
+#     z_ = [x[xinds[1]]; u[uinds[1]]; dt]
+#     ∇f = discrete_jacobian(Q, model.model, z_, z.t, ix, iu)
+#     A,B,C = ∇f[ix,ix], ∇f[ix,iu], ∇f[ix,it]
+#     for i = 2:K
+#         A = [A  A0]
+#         B = [B  B0]
+#     end
+#     for i = 2:K
+#         z_ = [x[xinds[i]]; u[uinds[i]]; dt]
+#         ∇f = discrete_jacobian(Q, model.model, z_, z.t, ix, iu)
+#         A_,B_,C_ = ∇f[ix,ix], ∇f[ix,iu], ∇f[ix,it]
+#
+#         for j = 1:i-1
+#             A_ = [A0 A_]
+#             B_ = [B0 B_]
+#         end
+#         for j = i+1:K
+#             A_ = [A_ A0]
+#             B_ = [B_ B0]
+#         end
+#         A = [A; A_]
+#         B = [B; B_]
+#         C = [C; C_]
+#     end
+#     return [A B C]
+# end
 
 function discrete_jacobian!(::Type{Q}, ∇f, model::Dynamics.CopyModel{K,N0,M0},
 		z::KnotPoint{T,N,M,NM}) where {T,N,M,NM,K,N0,M0,Q<:TrajectoryOptimization.Implicit}
@@ -231,6 +231,15 @@ function state_diff(model::CopyModel{K,N,M,L}, x::SVector, x0::SVector) where {K
     end
     return dx
 end
+
+TrajectoryOptimization.state_diff_jacobian!(G, model::CopyModel, Z::Traj) = nothing
+function TrajectoryOptimization.state_diff_jacobian!(G,
+        model::CopyModel{<:Any,<:Any,<:Any,L}, Z::Traj) where {L<:RigidBody{R}} where R
+    for k in eachindex(Z)
+        G[k] .= state_diff_jacobian(model, state(Z[k]))
+    end
+end
+
 
 state_diff_jacobian(::CopyModel, x::SVector) = I
 @generated function state_diff_jacobian(model::CopyModel{K,N,M,L},

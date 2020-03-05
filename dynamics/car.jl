@@ -10,7 +10,8 @@
 #
 # car = Model(car_dynamics!,n,m)
 
-struct DubinsCar <: AbstractModel
+@with_kw struct DubinsCar <: AbstractModel
+    radius::Float64 = 0.175  # [m] radius of a Roomba
 end
 Base.size(::DubinsCar) = 3,2
 

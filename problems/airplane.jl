@@ -4,7 +4,11 @@ function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellrol
     model = Dynamics.YakPlane(Rot, use_rot=use_rot)
     rsize = size(model)[1] - 9
 
-    opts = SolverOptions()
+    opts = SolverOptions(
+        cost_tolerance_intermediate = 1e-1,
+        penalty_scaling = 1000.,
+        penalty_initial = 0.01
+    )
 
     # Discretization
     tf = 1.25
@@ -54,7 +58,7 @@ function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellrol
 
         # Constraints
         conSet = ConstraintSet(n,m,N)
-        goal = GoalConstraint(xf, 4:7)
+        goal = GoalConstraint(xf)
         add_constraint!(conSet,goal,N:N)
 
     else

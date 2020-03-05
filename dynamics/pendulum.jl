@@ -49,3 +49,5 @@ function dynamics(p::Pendulum, x, u)
     @SVector [x[2],
               u[1]/m - p.g*sin(x[1])/p.lc - p.b*x[2]/m]
 end
+@inline Base.position(::Pendulum, x) = @SVector zeros(3)
+orientation(::Pendulum, x) = expm((pi-x[1])*@SVector [1,0,0.])

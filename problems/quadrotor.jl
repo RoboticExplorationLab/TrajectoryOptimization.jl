@@ -4,7 +4,10 @@ function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
         model = Dynamics.Quadrotor2{Rot}(use_rot=use_rot)
         n,m = size(model)
 
-        opts = SolverOptions()
+        opts = SolverOptions(
+            penalty_scaling=100.,
+            penalty_initial=0.1,
+        )
 
         # discretization
         N = 101 # number of knot points
