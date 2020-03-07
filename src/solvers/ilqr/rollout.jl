@@ -11,8 +11,8 @@ function rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
 
     for k = 1:solver.N-1
         δx .= state_diff(solver.model, state(Z̄[k]), state(Z[k]))
-		δu .= d[k]
-		mul!(δu, K[k], δx, 1.0, α)
+		δu .= d[k] .* α
+		mul!(δu, K[k], δx, 1.0, 1.0)
         ū = control(Z[k]) + δu
         set_control!(Z̄[k], ū)
 

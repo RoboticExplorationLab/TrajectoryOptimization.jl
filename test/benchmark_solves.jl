@@ -1,3 +1,4 @@
+# TEST_TIME = true
 TEST_TIME = false
 
 # Double Integrator
@@ -16,36 +17,36 @@ TEST_TIME && @test minimum(b).time / 1e6 < 1
 
 # Cartpole
 solver = ALTROSolver(Problems.Cartpole()...)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time / 1e6 < 5
+b = benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time / 1e6 < 5
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 40 # 40
 
 # Acrobot
 solver = ALTROSolver(Problems.Acrobot()...)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time / 1e6 < 10
+b = benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time / 1e6 < 10
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 50 # 50
 
 # Parallel Park
 solver = ALTROSolver(Problems.DubinsCar(:parallel_park)...)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time /1e6 < 10
+b =  benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time /1e6 < 10
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 13 # 13
 
 # Three Obstacles
 solver = ALTROSolver(Problems.DubinsCar(:three_obstacles)...)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time /1e6 < 10
+b = benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time /1e6 < 10
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 20 # 20
 
 # Escape
 solver = ALTROSolver(Problems.DubinsCar(:escape)..., infeasible=true, R_inf=0.1)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time / 1e6 < 20
+b = benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time / 1e6 < 20
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 13 # 13
 
@@ -58,7 +59,7 @@ TEST_TIME && @test minimum(b).time / 1e6 < 50
 
 # Barrell Roll
 solver = ALTROSolver(Problems.YakProblems()...)
-TEST_TIME && b = benchmark_solve!(solver)
-@test minimum(b).time / 1e6 < 100
+b = benchmark_solve!(solver)
+TEST_TIME && @test minimum(b).time / 1e6 < 100
 @test max_violation(solver) < 1e-6
 @test iterations(solver) <= 18 # 18
