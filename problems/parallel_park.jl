@@ -7,7 +7,7 @@ function ParallelPark(method=:none)
     )
 
     # model
-    model = TrajectoryOptimization.Dynamics.DubinsCar()
+    model = RobotZoo.DubinsCar()
     n,m = size(model)
     N = 101
     tf = 3.

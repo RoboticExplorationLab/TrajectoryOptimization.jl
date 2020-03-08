@@ -5,7 +5,7 @@ function DoubleIntegrator()
         penalty_initial=1.,
     )
 
-    model = Dynamics.DoubleIntegrator()
+    model = RobotZoo.DoubleIntegrator()
     n,m = size(model)
 
     # Task

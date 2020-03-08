@@ -3,7 +3,7 @@
 T = Float64;
 
 # model
-model = Dynamics.DubinsCar()
+model = RobotZoo.DubinsCar()
 n,m = size(model)
 x0 = @SVector [2.5,2.5,0.]
 xf = @SVector [7.5,2.5,0.]

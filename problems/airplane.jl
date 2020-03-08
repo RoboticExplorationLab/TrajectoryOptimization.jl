@@ -1,7 +1,8 @@
 
 function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellroll, use_rot=Rot<:UnitQuaternion,
         costfun=:Quadratic, normcon=false)
-    model = Dynamics.YakPlane(Rot, use_rot=use_rot)
+    model = RobotZoo.YakPlane(Rot)
+    n,m = size(model)
     rsize = size(model)[1] - 9
 
     opts = SolverOptions(

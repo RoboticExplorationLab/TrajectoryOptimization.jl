@@ -22,8 +22,10 @@ using MathOptInterface
 using Quaternions
 using UnsafeArrays
 using Dynamics
+using DifferentialRotations
 
-import Dynamics: Implicit, Explicit, AbstractKnotPoint
+import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, set_state!, set_control!, set_controls!, set_states!, state_diff_size, state_diff_jacobian, is_terminal, state_diff_jacobian!,
+    dynamics_expansion!, error_expansion!, error_expansion, state_diff, discrete_jacobian!, states, controls, StaticKnotPoint
 
 const MOI = MathOptInterface
 const MAX_ELEM = 170
@@ -134,7 +136,7 @@ export
 
 
 include("utils.jl")
-include("rotations.jl")
+# include("rotations.jl")
 include("logger.jl")
 include("expansions.jl")
 include("infeasible_model.jl")
@@ -170,7 +172,7 @@ include("solvers/direct/moi.jl")
 include("solvers/direct/copy_blocks.jl")
 include("solvers/direct/direct_constraints.jl")
 
-# include("problems.jl")
+include("problems.jl")
 # include("controllers.jl")
 
 write_ipopt_options()

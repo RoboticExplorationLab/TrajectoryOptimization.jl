@@ -6,7 +6,7 @@ function Pendulum()
         penalty_initial=0.1,
     )
 
-    model = Dynamics.Pendulum()
+    model = RobotZoo.Pendulum()
     n,m = size(model)
     tf = 3.0
     N = 51

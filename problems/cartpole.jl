@@ -6,7 +6,7 @@ function Cartpole(method=:none)
         penalty_initial=1.0
     )
 
-    model = Dynamics.Cartpole()
+    model = RobotZoo.Cartpole()
     n,m = size(model)
     N = 101
     tf = 5.

@@ -5,7 +5,7 @@ function Acrobot()
         penalty_initial = 0.001,
     )
     # model
-    model = Dynamics.Acrobot()
+    model = RobotZoo.Acrobot()
     n,m = size(model)
 
     # discretization

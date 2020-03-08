@@ -130,7 +130,7 @@ function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G
         E.ux_ .= SMatrix(E.ux)*G
         E.x_  .= G'*SVector(E.x)
 
-        ∇²differential!(E.xx_, model, state(z), E.x0)
+        Dynamics.∇²differential!(E.xx_, model, state(z), E.x0)
         E.xx_ .+= G'E.xx*G
     else
         E.u_ .= E.u
@@ -138,7 +138,7 @@ function error_expansion!(E::SizedCostExpansion{<:Any,N}, model::RigidBody, z, G
         mul!(E.ux_, E.ux, G)
         mul!(E.x_, Transpose(G), E.x)
 
-        ∇²differential!(E.xx_, model, state(z), E.x0)
+        Dynamics.∇²differential!(E.xx_, model, state(z), E.x0)
         mul!(E.tmp, E.xx, G)
         mul!(E.xx_, Transpose(G), E.tmp, 1.0, 1.0)
     end

@@ -1,7 +1,7 @@
 function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
-        use_rot=Rot<:UnitQuaternion, costfun=:Quadratic, normcon=false)
+        costfun=:Quadratic, normcon=false)
     if scenario == :zigzag
-        model = Dynamics.Quadrotor2{Rot}(use_rot=use_rot)
+        model = RobotZoo.Quadrotor{Rot}()
         n,m = size(model)
 
         opts = SolverOptions(
@@ -16,7 +16,7 @@ function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
 
         # Initial condition
         x0_pos = @SVector [0., -10., 1.]
-        x0 = Dynamics.build_state(model, x0_pos, I(UnitQuaternion), zeros(3), zeros(3))
+        x0 = Dynamics.build_state(model, x0_pos, UnitQuaternion(I), zeros(3), zeros(3))
 
         # cost
         costfun == :QuatLQR ? sq = 0 : sq = 1
@@ -24,7 +24,7 @@ function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
         Q_diag = Dynamics.fill_state(model, 1e-5, 1e-5*sq, 1e-3, 1e-3)
         Q = Diagonal(Q_diag)
         R = Diagonal(@SVector fill(1e-4,m))
-        q_nom = I(UnitQuaternion)
+        q_nom = UnitQuaternion(I)
         v_nom, ω_nom = zeros(3), zeros(3)
         x_nom = Dynamics.build_state(model, zeros(3), q_nom, v_nom, ω_nom)
 
@@ -43,7 +43,7 @@ function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
         times = [33, 66, 101]
         Qw_diag = Dynamics.fill_state(model, 1e3,1*sq,1,1)
         Qf_diag = Dynamics.fill_state(model, 10., 100*sq, 10, 10)
-        xf = Dynamics.build_state(model, wpts[end], I(UnitQuaternion), zeros(3), zeros(3))
+        xf = Dynamics.build_state(model, wpts[end], UnitQuaternion(I), zeros(3), zeros(3))
 
         costs = map(1:length(wpts)) do i
             r = wpts[i]

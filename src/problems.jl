@@ -9,16 +9,19 @@ using LinearAlgebra
 using ForwardDiff
 using Random
 using StaticArrays
+using RobotZoo
+using Dynamics
+using DifferentialRotations
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")
 include("../problems/acrobot.jl")
 include("../problems/parallel_park.jl")
 include("../problems/cartpole.jl")
-include("../problems/car_escape.jl")
-include("../problems/car_3obs.jl")
+include("../problems/dubins_car.jl")
+# include("../problems/car_3obs.jl")
 include("../problems/quadrotor.jl")
-include("../problems/quadrotor_maze.jl")
+# include("../problems/quadrotor_maze.jl")
 include("../problems/airplane.jl")
 
 export
