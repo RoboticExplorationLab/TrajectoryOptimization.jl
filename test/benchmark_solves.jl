@@ -1,5 +1,7 @@
-# TEST_TIME = true
 TEST_TIME = false
+if !isdefined(Main,:TEST_TIME)
+    TEST_TIME = true
+end
 
 # Double Integrator
 solver = ALTROSolver(Problems.DoubleIntegrator()...)
