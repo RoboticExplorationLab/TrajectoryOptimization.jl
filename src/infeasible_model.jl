@@ -136,12 +136,12 @@ function infeasible_trajectory(model::InfeasibleModel{n,m}, Z0::Vector{<:KnotPoi
     Z = [KnotPoint(state(z), [control(z); ui], z.dt, z.t) for z in Z0]
     N = length(Z0)
     for k = 1:N-1
-        propagate_dynamics(RK3, model, Z[k+1], Z[k])
+        Dynamics.propagate_dynamics(RK3, model, Z[k+1], Z[k])
         x′ = state(Z[k+1])
         u_slack = state(Z0[k+1]) - x′
         u = [control(Z0[k]); u_slack]
-        set_control!(Z[k], u)
-        set_state!(Z[k+1], x′ + u_slack)
+        Dynamics.set_control!(Z[k], u)
+        Dynamics.set_state!(Z[k+1], x′ + u_slack)
     end
     return Z
 end

@@ -24,7 +24,9 @@ using UnsafeArrays
 using Dynamics
 using DifferentialRotations
 
-import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, set_state!, set_control!, set_controls!, set_states!, state_diff_size, state_diff_jacobian, is_terminal, state_diff_jacobian!,
+import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q,
+
+import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, set_state!, state_diff_size, state_diff_jacobian, is_terminal, state_diff_jacobian!,
     dynamics_expansion!, error_expansion!, error_expansion, state_diff, discrete_jacobian!, states, controls, StaticKnotPoint
 
 const MOI = MathOptInterface
