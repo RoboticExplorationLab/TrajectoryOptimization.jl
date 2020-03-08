@@ -311,7 +311,7 @@ end
 # TODO: redo without static matrices
 function linearize(model::AbstractModel, Z::Traj)
     N = length(Z)
-    D = [TO.SizedDynamicsExpansion(model) for k = 1:N]
+    D = [DynamicsExpansion(model) for k = 1:N]
     for k = 1:N
         _linearize!(D[k], model, Z[k])
     end
@@ -320,7 +320,7 @@ function linearize(model::AbstractModel, Z::Traj)
     return A,B
 end
 
-function _linearize!(D::TO.SizedDynamicsExpansion, model::AbstractModel, z::KnotPoint)
+function _linearize!(D::DynamicsExpansion, model::AbstractModel, z::KnotPoint)
     discrete_jacobian!(RK3, D.∇f, model, z)
 	D.tmpA .= D.A_  # avoids allocations later
 	D.tmpB .= D.B_

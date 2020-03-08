@@ -21,6 +21,9 @@ using Rotations
 using MathOptInterface
 using Quaternions
 using UnsafeArrays
+using Dynamics
+
+import Dynamics: Implicit, Explicit, AbstractKnotPoint
 
 const MOI = MathOptInterface
 const MAX_ELEM = 170
@@ -129,12 +132,12 @@ export
 export
     convertProblem
 
+
 include("utils.jl")
 include("rotations.jl")
 include("logger.jl")
-include("knotpoint.jl")
 include("expansions.jl")
-include("model.jl")
+include("infeasible_model.jl")
 include("costfunctions.jl")
 include("objective.jl")
 include("solver_opts.jl")
@@ -143,7 +146,7 @@ include("abstract_constraint.jl")
 include("constraints.jl")
 include("dynamics_constraints.jl")
 include("integration.jl")
-include("dynamics.jl")
+# include("dynamics.jl")
 
 include("cost.jl")
 include("static_methods.jl")
@@ -167,9 +170,10 @@ include("solvers/direct/moi.jl")
 include("solvers/direct/copy_blocks.jl")
 include("solvers/direct/direct_constraints.jl")
 
-include("problems.jl")
-include("controllers.jl")
+# include("problems.jl")
+# include("controllers.jl")
 
 write_ipopt_options()
 Logging.global_logger(default_logger(true))
+
 end

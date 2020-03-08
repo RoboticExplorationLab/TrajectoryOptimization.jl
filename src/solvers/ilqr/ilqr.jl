@@ -139,7 +139,7 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
     K::Vector{SizedMatrix{m,n̄,T,2}}  # State feedback gains (m,n,N-1)
     d::Vector{SizedVector{m,T,1}}  # Feedforward gains (m,N-1)
 
-    D::Vector{SizedDynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
+    D::Vector{DynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
     G::Vector{GT}                               # state difference jacobian (n̄, n)
 
     S::Vector{SizedExpansion{T,n,n̄,m}}      # Optimal cost-to-go expansion trajectory
@@ -176,7 +176,7 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
 	K = [zeros(T,m,n̄) for k = 1:N-1]
     d = [zeros(T,m)   for k = 1:N-1]
 
-	D = [SizedDynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
+	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
 	if state_diff_jacobian(prob.model, x0) isa UniformScaling
 		G = [I for k = 1:N]
 	else
