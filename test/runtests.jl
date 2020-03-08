@@ -22,6 +22,8 @@ end
 
 @testset "Full Solves" begin
     include("car_tests.jl")
+    TEST_TIME = false  # don't test timing results
+    include("benchmark_solves.jl")
 end
 
 @testset "Solvers" begin
