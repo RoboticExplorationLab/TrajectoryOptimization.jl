@@ -34,7 +34,7 @@ end
 
 function Base.copyto!(V::AbstractVector{<:Real}, Z::Traj,
         xinds::Vector{<:AbstractVector}, uinds::Vector{<:AbstractVector})
-    n,m,N = traj_size(Z)
+    n,m,N = Dynamics.traj_size(Z)
     equal = (n+m)*N == length(V)
 
     uN = equal ? N : N-1
@@ -63,7 +63,7 @@ end
 
 function Base.copyto!(Z::Traj, V::Vector{<:Real},
         xinds::Vector{<:AbstractVector}, uinds::Vector{<:AbstractVector})
-    n,m,N = traj_size(Z)
+    n,m,N = Dynamics.traj_size(Z)
     equal = (n+m)*N == length(V)
 
     uN = equal ? N : N-1

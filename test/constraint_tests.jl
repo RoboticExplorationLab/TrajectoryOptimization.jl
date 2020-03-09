@@ -7,7 +7,7 @@ function alloc_con(con,z)
     allocs += @allocated jacobian!(∇c, con,z)
 end
 
-model = Dynamics.DubinsCar()
+model = RobotZoo.DubinsCar()
 x,u = rand(model)
 z = KnotPoint(x,u,0.1)
 n,m = size(model)
@@ -49,8 +49,9 @@ con = LinearConstraint{Inequality,Control}(n,n,A,b)
 jacobian!(∇c, con, x)
 @test ∇c == A
 
+#~~~~~~~~~~~~~~~~ QUADROTOR ~~~~~~~~~~~~~~~~~~~~~~~~#
 
-model = Dynamics.Quadrotor2{UnitQuaternion{Float64,VectorPart}}()
+model = RobotZoo.Quadrotor{UnitQuaternion{Float64,VectorPart}}()
 x,u = rand(model)
 n,m = size(model)
 

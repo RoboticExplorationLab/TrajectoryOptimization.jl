@@ -25,7 +25,7 @@ using Dynamics
 using DifferentialRotations
 
 import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, is_terminal, state_diff, StaticKnotPoint
-import Dynamics: error_expansion!, error_expansion  # extended methods
+import Dynamics: jacobian!, error_expansion!, error_expansion, state_dim, control_dim  # extended methods
 
 const MOI = MathOptInterface
 const MAX_ELEM = 170

@@ -9,6 +9,9 @@ using SparseArrays
 using Ipopt
 using Logging
 using ForwardDiff
+using RobotZoo
+using Dynamics
+using DifferentialRotations
 const TO = TrajectoryOptimization
 
 @testset "Logging" begin
@@ -43,6 +46,6 @@ end
     include("cost_tests.jl")
 end
 
-@testset "Controllers" begin
-    include("controllers_test.jl")
-end
+# @testset "Controllers" begin
+#     include("controllers_test.jl")
+# end

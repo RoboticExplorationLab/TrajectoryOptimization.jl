@@ -19,36 +19,36 @@ end
 
 # Double Integrator
 dim = 3
-di = Dynamics.DoubleIntegrator(dim)
+di = RobotZoo.DoubleIntegrator(dim)
 n,m = size(di)
 @test (n,m) == (6,3)
 x,u = rand(di)
 @test num_allocs(di) == 0
 
 # Pendulum
-pend = Dynamics.Pendulum()
+pend = RobotZoo.Pendulum()
 @test size(pend) == (2,1)
 @test num_allocs(pend) == 0
 
 # Car
-car = Dynamics.DubinsCar()
+car = RobotZoo.DubinsCar()
 @test size(car) == (3,2)
 @test num_allocs(car) == 0
 
 # Cartpole
-cartpole = Dynamics.Cartpole()
+cartpole = RobotZoo.Cartpole()
 @test size(cartpole) == (4,1)
 @test num_allocs(cartpole) == 0
 
 # Quadrotor
-quad = Dynamics.Quadrotor2()
+quad = RobotZoo.Quadrotor()
 @test size(quad) == (13,4)
 @test num_allocs(cartpole) == 0
 
 
 # Infeasible
-model = Dynamics.DubinsCar()
-inf = InfeasibleModel(model)
+model = RobotZoo.DubinsCar()
+inf = TO.InfeasibleModel(model)
 @test inf._u == 1:2
 @test inf._ui == 3:5
 @test size(inf) == (3,5)
@@ -76,7 +76,7 @@ end
 
 
 # Test other functions
-car = Dynamics.DubinsCar()
+car = RobotZoo.DubinsCar()
 n,m = size(car)
 @test zeros(car) == (zeros(n), zeros(m))
 @test zeros(Int,car)[1] isa SVector{n,Int}

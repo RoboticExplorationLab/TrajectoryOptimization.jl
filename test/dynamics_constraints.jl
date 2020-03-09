@@ -1,4 +1,4 @@
-model = Dynamics.Cartpole()
+model = RobotZoo.Cartpole()
 prob = Problems.Cartpole()[1]
 bnd = prob.constraints.constraints[1]
 n,m = size(prob)
