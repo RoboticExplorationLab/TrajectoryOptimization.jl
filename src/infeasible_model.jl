@@ -51,30 +51,6 @@ Dynamics.dynamics(::InfeasibleModel, x, u) =
     end
 end
 
-# @generated function discrete_jacobian(::Type{Q}, model::InfeasibleModel{N,M},
-#         z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Implicit}
-#
-#     ∇ui = [(@SMatrix zeros(N,N+M)) Diagonal(@SVector ones(N)) @SVector zeros(N)]
-#     _x = SVector{N}(1:N)
-#     _u = SVector{M}((1:M) .+ N)
-#     _z = SVector{N+M}(1:N+M)
-#     _ui = SVector{N}((1:N) .+ (N+M))
-#     zi = [:(z.z[$i]) for i = 1:N+M]
-#     NM1 = N+M+1
-#     ∇u0 = @SMatrix zeros(N,N)
-#
-#     quote
-#         # Build KnotPoint for original model
-#         s0 = SVector{$NM1}($(zi...), z.dt)
-#
-#         u0 = z.z[$_u]
-#         ui = z.z[$_ui]
-#         ∇f = discrete_jacobian($Q, model.model, s0, z.t, $_x, $_u)::SMatrix{N,NM+1}
-#         ∇dt = ∇f[$_x, N+M+1]
-#         [∇f[$_x, $_z] $∇u0 ∇dt] + $∇ui
-#     end
-# end
-
 @inline Dynamics.rotation_type(model::InfeasibleModel) where D = rotation_type(model.model)
 
 @generated function Dynamics.discrete_jacobian!(::Type{Q}, ∇f, model::InfeasibleModel{N,M},
@@ -110,12 +86,8 @@ function Dynamics.state_diff(model::InfeasibleModel, x::SVector, x0::SVector)
 	state_diff(model.model, x, x0)
 end
 
-# function state_diff_jacobian(model::InfeasibleModel, x::SVector)
-# 	state_diff_jacobian(model.model, x)
-# end
-
 function Dynamics.state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
-	state_diff_jacobian!(G, model.model, Z)
+	Dynamics.state_diff_jacobian!(G, model.model, Z)
 end
 
 function Dynamics.∇²differential(model::InfeasibleModel, x::SVector, dx::SVector)

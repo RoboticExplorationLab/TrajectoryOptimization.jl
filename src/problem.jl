@@ -107,7 +107,7 @@ controls(::Traj)
 ```
 Get the control trajectory
 "
-controls(prob::Problem) = controls(prob.Z)
+Dynamics.controls(prob::Problem) = controls(prob.Z)
 
 "```julia
 states(::Problem)
@@ -116,7 +116,7 @@ states(::Traj)
 ```
 Get the state trajectory
 "
-states(prob::Problem) = states(prob.Z)
+Dynamics.states(prob::Problem) = states(prob.Z)
 
 "```julia
 initial_trajectory!(::Problem, Z)

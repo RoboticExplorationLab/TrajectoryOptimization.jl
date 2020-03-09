@@ -24,10 +24,8 @@ using UnsafeArrays
 using Dynamics
 using DifferentialRotations
 
-import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q,
-
-import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, set_state!, state_diff_size, state_diff_jacobian, is_terminal, state_diff_jacobian!,
-    dynamics_expansion!, error_expansion!, error_expansion, state_diff, discrete_jacobian!, states, controls, StaticKnotPoint
+import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, is_terminal, state_diff, StaticKnotPoint
+import Dynamics: error_expansion!, error_expansion  # extended methods
 
 const MOI = MathOptInterface
 const MAX_ELEM = 170
@@ -153,7 +151,7 @@ include("integration.jl")
 # include("dynamics.jl")
 
 include("cost.jl")
-include("static_methods.jl")
+# include("static_methods.jl")
 include("constraint_vals.jl")
 include("constraint_sets.jl")
 include("problem.jl")

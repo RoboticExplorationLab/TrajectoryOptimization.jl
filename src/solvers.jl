@@ -85,9 +85,9 @@ end
 
 set_initial_state!(solver, x0) = copyto!(get_initial_state(solver), x0)
 
-states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
+Dynamics.states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
-function controls(solver::AbstractSolver)
+function Dynamics.controls(solver::AbstractSolver)
     N = size(solver)[3]
     Z = get_trajectory(solver)
     [control(Z[k]) for k = 1:N-1]

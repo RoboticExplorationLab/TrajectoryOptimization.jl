@@ -46,9 +46,8 @@ end
 
 function step!(solver::iLQRSolver2, J)
     Z = solver.Z
-    state_diff_jacobian!(solver.G, solver.model, Z)
-    # discrete_jacobian!(solver.∇F, solver.model, Z)
-	dynamics_expansion!(solver.D, solver.model, solver.Z)
+    Dynamics.state_diff_jacobian!(solver.G, solver.model, Z)
+	Dynamics.dynamics_expansion!(solver.D, solver.model, solver.Z)
     cost_expansion!(solver.Q, solver.obj, solver.Z)
 	error_expansion!(solver.D, solver.model, solver.G)
 	error_expansion!(solver.Q, solver.model, Z, solver.G)

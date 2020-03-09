@@ -14,7 +14,7 @@ function rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
 		δu .= d[k] .* α
 		mul!(δu, K[k], δx, 1.0, 1.0)
         ū = control(Z[k]) + δu
-        set_control!(Z̄[k], ū)
+        Dynamics.set_control!(Z̄[k], ū)
 
         # Z̄[k].z = [state(Z̄[k]); control(Z[k]) + δu]
         Z̄[k+1].z = [discrete_dynamics(Q, solver.model, Z̄[k]);
