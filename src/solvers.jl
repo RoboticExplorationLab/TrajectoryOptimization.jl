@@ -18,7 +18,6 @@ export
     initial_controls!,
     initial_states!,
     initial_trajectory!,
-    rollout!,
     set_initial_state!,
     get_trajectory,
     get_model,
@@ -76,14 +75,14 @@ function cost(solver::AbstractSolver)
     cost(obj, Z)
 end
 
-function rollout!(solver::AbstractSolver)
+function Dynamics.rollout!(solver::AbstractSolver)
     Z = get_trajectory(solver)
     model = get_model(solver)
     x0 = get_initial_state(solver)
     rollout!(model, Z, x0)
 end
 
-set_initial_state!(solver, x0) = copyto!(get_initial_state(solver), x0)
+TrajOptCore.set_initial_state!(solver, x0) = copyto!(get_initial_state(solver), x0)
 
 Dynamics.states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
@@ -93,9 +92,9 @@ function Dynamics.controls(solver::AbstractSolver)
     [control(Z[k]) for k = 1:N-1]
 end
 
-@inline initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
-@inline initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
-function initial_trajectory!(solver::AbstractSolver, Z0::Traj)
+@inline TrajOptCore.initial_states!(solver::AbstractSolver, X0) = set_states!(get_trajectory(solver), X0)
+@inline TrajOptCore.initial_controls!(solver::AbstractSolver, U0) = set_controls!(get_trajectory(solver), U0)
+function TrajOptCore.initial_trajectory!(solver::AbstractSolver, Z0::Traj)
     Z = get_trajectory(solver)
     for k in eachindex(Z)
         Z[k].z = copy(Z0[k].z)
@@ -106,20 +105,20 @@ end
 @inline get_times(solver::AbstractSolver) = get_times(get_trajectory(solver))
 
 # ConstrainedSolver methods
-num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
+TrajOptCore.num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
 
-function max_violation(solver::ConstrainedSolver, Z::Traj)
+function TrajOptCore.max_violation(solver::ConstrainedSolver, Z::Traj)
     update_constraints!(solver, Z)
     max_violation(solver)
 end
 
-function max_violation(solver::ConstrainedSolver)
+function TrajOptCore.max_violation(solver::ConstrainedSolver)
     conSet = get_constraints(solver)
     max_violation!(conSet)
     return maximum(conSet.c_max)
 end
 
-@inline findmax_violation(solver::ConstrainedSolver) =
+@inline TrajOptCore.findmax_violation(solver::ConstrainedSolver) =
     findmax_violation(get_constraints(solver))
 
 """ $(SIGNATURES)
@@ -130,7 +129,7 @@ function update_constraints!(solver::ConstrainedSolver, Z::Traj=get_trajectory(s
     evaluate!(conSet, Z)
 end
 
-function update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
+function TrajOptCore.update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
     conSet = get_constraints(solver)
     update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
 end

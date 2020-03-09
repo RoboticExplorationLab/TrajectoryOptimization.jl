@@ -14,15 +14,6 @@ function interp_rows(N::Int,tf::Float64,X::AbstractMatrix)::Matrix
     return X2
 end
 
-function ispossemidef(A)
-	eigs = eigvals(A)
-	if any(real(eigs) .< 0)
-		return false
-	else
-		return true
-	end
-end
-
 function convertInf!(A::VecOrMat{Float64},infbnd=1.1e20)
     infs = isinf.(A)
     A[infs] = sign.(A[infs])*infbnd

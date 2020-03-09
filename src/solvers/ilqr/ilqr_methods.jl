@@ -52,15 +52,6 @@ function step!(prob::Problem{T}, solver::iLQRSolver{T}, J::T) where T
     @timeit to "forward pass" forwardpass!(prob,solver,ΔV,J)
 end
 
-function cost_expansion!(prob::Problem{T},solver::iLQRSolver{T}) where T
-    reset!(solver.Q)
-    if solver.opts.square_root
-        cost_expansion_sqrt!(solver.Q, prob.obj, prob.X, prob.U, get_dt_traj(prob))
-    else
-        cost_expansion!(solver.Q, prob.obj, prob.X, prob.U, get_dt_traj(prob))
-    end
-end
-
 "Plot state, control trajectories"
 function live_plotting(prob::Problem{T},solver::iLQRSolver{T}) where T
     if solver.opts.live_plotting == :state

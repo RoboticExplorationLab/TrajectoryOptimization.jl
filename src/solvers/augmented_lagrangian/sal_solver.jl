@@ -105,33 +105,33 @@ end
 function reset!(conSet::ConstraintSet{T}, opts::AugmentedLagrangianSolverOptions{T}) where T
     if !isnan(opts.dual_max)
         for con in conSet.constraints
-            params = get_params(con)::ConstraintParams{T}
+            params = TrajOptCore.get_params(con)::ConstraintParams{T}
             params.λ_max = opts.dual_max
         end
     end
     if !isnan(opts.penalty_max)
         for con in conSet.constraints
-            params = get_params(con)::ConstraintParams{T}
+            params = TrajOptCore.get_params(con)::ConstraintParams{T}
             params.μ_max = opts.penalty_max
         end
     end
     if !isnan(opts.penalty_initial)
         for con in conSet.constraints
-            params = get_params(con)::ConstraintParams{T}
+            params = TrajOptCore.get_params(con)::ConstraintParams{T}
             params.μ0 = opts.penalty_initial
         end
     end
     if !isnan(opts.penalty_scaling)
         for con in conSet.constraints
-            params = get_params(con)::ConstraintParams{T}
+            params = TrajOptCore.get_params(con)::ConstraintParams{T}
             params.ϕ = opts.penalty_scaling
         end
     end
     if opts.reset_duals
-        reset_duals!(conSet)
+        TrajOptCore.reset_duals!(conSet)
     end
     if opts.reset_penalties
-        reset_penalties!(conSet)
+        TrajOptCore.reset_penalties!(conSet)
     end
 end
 
@@ -227,7 +227,7 @@ Base.size(solver::AugmentedLagrangianSolver) = size(solver.solver_uncon)
 @inline iterations(solver::AugmentedLagrangianSolver) = solver.stats.iterations_total
 
 
-function get_constraints(solver::AugmentedLagrangianSolver{T}) where T
+function TrajOptCore.get_constraints(solver::AugmentedLagrangianSolver{T}) where T
     obj = get_objective(solver)::ALObjective{T}
     obj.constraints
 end
@@ -240,7 +240,7 @@ struct ALObjective{T,O<:Objective} <: AbstractObjective
     constraints::ConstraintSet{T}
 end
 
-get_J(obj::ALObjective) = obj.obj.J
+TrajOptCore.get_J(obj::ALObjective) = obj.obj.J
 Base.length(obj::ALObjective) = length(obj.obj)
 
 # TrajectoryOptimization.num_constraints(prob::Problem{Q,T,<:ALObjective}) where {T,Q} = prob.obj.constraints.p
@@ -249,7 +249,7 @@ function Base.copy(obj::ALObjective)
     ALObjective(obj.obj, ConstraintSet(copy(obj.constraints.constraints), length(obj.obj)))
 end
 
-function cost!(obj::ALObjective, Z::Traj)
+function TrajOptCore.cost!(obj::ALObjective, Z::Traj)
     # Calculate unconstrained cost
     cost!(obj.obj, Z)
 
@@ -261,7 +261,7 @@ function cost!(obj::ALObjective, Z::Traj)
     end
 end
 
-function cost_expansion!(E, G, obj::ALObjective, model::AbstractModel, Z::Traj)
+function TrajOptCore.cost_expansion!(E, G, obj::ALObjective, model::AbstractModel, Z::Traj)
     # Update constraint jacobians
     jacobian!(obj.constraints, Z)
 
@@ -276,7 +276,7 @@ function cost_expansion!(E, G, obj::ALObjective, model::AbstractModel, Z::Traj)
     end
 end
 
-function cost_expansion!(E::Vector{<:AbstractExpansion}, obj::ALObjective,Z::Traj)
+function TrajOptCore.cost_expansion!(E::Vector{<:TrajOptCore.AbstractExpansion}, obj::ALObjective,Z::Traj)
     # Update constraint jacobians
     jacobian!(obj.constraints, Z)
 

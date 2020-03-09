@@ -47,7 +47,7 @@ struct DIRCOLSolver{Q<:QuadratureRule,L,T,N,M,NM} <: DirectSolver{T}
 
     optimizer::MOI.AbstractOptimizer
 
-    E::Vector{SizedCostExpansion{T,N,N,M}}
+    E::Vector{CostExpansion{T,N,N,M}}
 
     xinds::Vector{SVector{N,Int}}
     uinds::Vector{SVector{M,Int}}
@@ -100,7 +100,7 @@ function DIRCOLSolver(prob::Problem{Q},
 
     # Initialize arrays
     dyn_vals = DynamicsVals(dyn_con)
-	E = [SizedCostExpansion{Float64}(n,m) for k = 1:N]
+	E = [CostExpansion{Float64}(n,m) for k = 1:N]
 
     NN = (n+m)*N
     NP = sum(num_constraints(prob))
@@ -159,7 +159,7 @@ num_primals(solver::DIRCOLSolver) = solver.NN
 num_duals(solver::DIRCOLSolver) =  solver.NP
 
 # Include bounds when calculating max violation on the solver
-function max_violation(solver::DIRCOLSolver)
+function TrajOptCore.max_violation(solver::DIRCOLSolver)
 	Z = get_trajectory(solver)
     conSet = solver.constraints_all
     max_violation(conSet, Z)
@@ -171,7 +171,7 @@ jacobian_linear_inds(prob::DIRCOLSolver) = prob.linds
 @inline copy_gradient!(grad_f, solver::DIRCOLSolver) = copy_gradient!(grad_f, solver.E, solver.xinds, solver.uinds)
 @inline Base.copyto!(d::DIRCOLSolver, V::Vector{<:Real}) = copyto!(d.Z, V, primal_partition(d)...)
 
-function initial_controls!(d::DIRCOLSolver, U0)
+function TrajOptCore.initial_controls!(d::DIRCOLSolver, U0)
     Z = get_trajectory(d)
     set_controls!(Z, U0)
     V = [MOI.VariableIndex(i) for i = 1:d.NN]
@@ -180,7 +180,7 @@ function initial_controls!(d::DIRCOLSolver, U0)
     MOI.set(d.optimizer, MOI.VariablePrimalStart(), V, V0)
 end
 
-function initial_states!(d::DIRCOLSolver, X0)
+function TrajOptCore.initial_states!(d::DIRCOLSolver, X0)
     Z = get_trajectory(d)
     set_states!(Z, X0)
     V = [MOI.VariableIndex(i) for i = 1:d.NN]
@@ -195,13 +195,13 @@ function get_rc(A::SparseMatrixCSC)
     row[v],col[v]
 end
 
-function cost(solver::DIRCOLSolver{Q}) where Q<:QuadratureRule
+function TrajOptCore.cost(solver::DIRCOLSolver{Q}) where Q<:QuadratureRule
 	Z = get_trajectory(solver)
 	obj = get_objective(solver)
 	cost(obj, solver.dyn_con, Z)
 end
 
-function cost_gradient!(solver::DIRCOLSolver{Q}) where Q
+function TrajOptCore.cost_gradient!(solver::DIRCOLSolver{Q}) where Q
 	obj = get_objective(solver)
 	Z = get_trajectory(solver)
 	dyn_con = solver.dyn_con

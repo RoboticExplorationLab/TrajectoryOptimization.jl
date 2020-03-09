@@ -117,3 +117,31 @@ function infeasible_trajectory(model::InfeasibleModel{n,m}, Z0::Vector{<:KnotPoi
     end
     return Z
 end
+
+############################################################################################
+#  								INFEASIBLE CONSTRAINT 									   #
+############################################################################################
+""" $(TYPEDEF) Constraints additional ``infeasible'' controls to be zero.
+Constructors: ```julia
+InfeasibleConstraint(model::InfeasibleModel)
+InfeasibleConstraint(n,m)
+```
+"""
+struct InfeasibleConstraint{N,M} <: AbstractConstraint{Equality, Control, N} end
+
+InfeasibleConstraint(model::InfeasibleModel{N,M}) where {N,M} = InfeasibleConstraint{N,M}()
+InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
+TrajOptCore.control_dim(::InfeasibleConstraint{N,M}) where {N,M} = N+M
+
+@generated function TrajOptCore.evaluate(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
+    _u = SVector{M}(1:M)
+    _ui = SVector{N}((1:N) .+ M)
+	quote
+        ui = u[$_ui] # infeasible controls
+	end
+end
+
+@generated function TrajOptCore.jacobian(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
+	Iu = [(@SMatrix zeros(N,M)) Diagonal(@SVector ones(N))]
+	return :($Iu)
+end

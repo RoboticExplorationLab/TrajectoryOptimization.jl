@@ -114,7 +114,7 @@ function gen_con_inds(conSet::ConstraintSet, structure=:by_knotpoint)
 	if structure == :by_constraint
 	    for (i,con) in enumerate(conSet.constraints)
 			for (j,k) in enumerate(con.inds)
-				cons[i][_index(con,k)] = idx .+ (1:conLen[i])
+				cons[i][TrajOptCore._index(con,k)] = idx .+ (1:conLen[i])
 				idx += conLen[i]
 	        end
 	    end
@@ -122,7 +122,7 @@ function gen_con_inds(conSet::ConstraintSet, structure=:by_knotpoint)
 		for k = 1:N
 			for (i,con) in enumerate(conSet.constraints)
 				if k in con.inds
-					j = _index(con,k)
+					j = TrajOptCore._index(con,k)
 					cons[i][j] = idx .+ (1:conLen[i])
 					idx += conLen[i]
 				end

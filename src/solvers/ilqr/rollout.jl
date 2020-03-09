@@ -1,5 +1,5 @@
 
-function rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
+function Dynamics.rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
     Z = solver.Z; Z̄ = solver.Z̄
     K = solver.K; d = solver.d;
 
@@ -29,16 +29,9 @@ function rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
 end
 
 "Simulate the forward the dynamics open-loop"
-function rollout!(solver::iLQRSolver)
+function Dynamics.rollout!(solver::iLQRSolver)
     rollout!(solver.model, solver.Z, solver.x0)
     for k in eachindex(solver.Z)
         solver.Z̄[k].t = solver.Z[k].t
-    end
-end
-
-function rollout!(model::AbstractModel, Z::Traj, x0)
-    Z[1].z = [x0; control(Z[1])]
-    for k = 2:length(Z)
-        Dynamics.propagate_dynamics(DEFAULT_Q, model, Z[k], Z[k-1])
     end
 end

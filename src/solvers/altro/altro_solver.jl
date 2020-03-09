@@ -106,7 +106,7 @@ function iterations(solver::ALTROSolver)
     end
 end
 
-function get_constraints(solver::ALTROSolver)
+function TrajOptCore.get_constraints(solver::ALTROSolver)
     if solver.opts.projected_newton
         get_constraints(solver.solver_pn)
     else

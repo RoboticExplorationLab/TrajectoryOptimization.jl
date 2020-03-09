@@ -68,7 +68,7 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
 
     H::SparseMatrixCSC{T,Int}
     g::Vector{T}
-    E::Vector{SizedCostExpansion{T,N,N,M}}
+    E::Vector{CostExpansion{T,N,N,M}}
 
     D::SparseMatrixCSC{T,Int}
     d::Vector{T}
@@ -104,7 +104,7 @@ function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     # Allocate Cost Hessian & Gradient
     H = spzeros(NN,NN)
     g = zeros(NN)
-    E = [SizedCostExpansion{Float64}(n,m) for k = 1:N]
+    E = [CostExpansion{Float64}(n,m) for k = 1:N]
 
     D = spzeros(NP,NN)
     d = zeros(NP)
@@ -132,8 +132,8 @@ primal_partition(solver::ProjectedNewtonSolver) = solver.P.xinds, solver.P.uinds
 
 # AbstractSolver interface
 Base.size(solver::ProjectedNewtonSolver{T,n,m}) where {T,n,m} = n,m,length(solver.Z)
-get_model(solver::ProjectedNewtonSolver) = solver.prob.model
-get_constraints(solver::ProjectedNewtonSolver) = solver.prob.conSet
-get_trajectory(solver::ProjectedNewtonSolver) = solver.Z
-get_objective(solver::ProjectedNewtonSolver) = solver.prob.obj
+TrajOptCore.get_model(solver::ProjectedNewtonSolver) = solver.prob.model
+TrajOptCore.get_constraints(solver::ProjectedNewtonSolver) = solver.prob.conSet
+TrajOptCore.get_trajectory(solver::ProjectedNewtonSolver) = solver.Z
+TrajOptCore.get_objective(solver::ProjectedNewtonSolver) = solver.prob.obj
 get_active_set(solver::ProjectedNewtonSolver) = solver.active_set

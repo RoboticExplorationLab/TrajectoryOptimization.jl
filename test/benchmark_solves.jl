@@ -1,6 +1,8 @@
-TEST_TIME = false
+using Test
 if !isdefined(Main,:TEST_TIME)
     TEST_TIME = true
+else
+    TEST_TIME = false
 end
 
 # Double Integrator

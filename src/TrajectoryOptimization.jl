@@ -23,138 +23,70 @@ using Quaternions
 using UnsafeArrays
 using Dynamics
 using DifferentialRotations
+using TrajOptCore
 
-import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, is_terminal, state_diff, StaticKnotPoint
-import Dynamics: jacobian!, error_expansion!, error_expansion, state_dim, control_dim  # extended methods
+import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoint
+import TrajOptCore: DynamicsVals, num_constraints, get_J, cost_expansion!, error_expansion,
+    max_violation!, max_penalty!, initial_trajectory!, change_dimension
+import TrajOptCore: cost, cost!, get_constraints, get_objective, get_model  # extended
+# import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, is_terminal, state_diff, StaticKnotPoint
+# import Dynamics: jacobian!, error_expansion!, error_expansion, state_dim, control_dim  # extended methods
+import Dynamics: state_diff
 
-const MOI = MathOptInterface
-const MAX_ELEM = 170
-
-import Base.copy
-
+# modules
 export
-    Dynamics,
-    Problems,
-    Controllers
+    Problems
 
-export
-    state_dim,
-    control_dim
-
-# Primary types
-export
-    Model,
-    QuadraticCost,
-    LQRCost,
-    LQRObjective,
-    GenericCost,
-    Trajectory
-
+#~~~~ Re-export TrajOptCore ~~~~#
 export
     Problem,
-    iLQRSolver,
-    iLQRSolverOptions,
-    AugmentedLagrangianSolver,
-    AugmentedLagrangianSolverOptions,
-    AugmentedLagrangianProblem,
-    ALTROSolverOptions,
-    DIRCOLSolver,
-    DIRCOLSolverOptions,
-    ProjectedNewtonSolver,
-    ProjectedNewtonSolverOptions,
-    SequentialNewtonSolver,
-    Discrete,
-    Continuous,
-    Constraint,
-    BoundConstraint,
-    Equality,
-    Inequality,
     Objective,
-    Constraints
+    LQRObjective,
+    LQRCost,
+    QuadraticCost,
+    initial_states!,
+    initial_controls!
 
+# constraints
 export
-    rk3,
-    rk4,
-    midpoint,
-    add_constraints!,
-    goal_constraint,
-    initial_controls!,
-    initial_state!,
-    circle_constraint,
-    sphere_constraint
+    AbstractConstraint,
+    ConstraintSet,
+    GoalConstraint,
+    BoundConstraint,
+    NormConstraint,
+    CircleConstraint,
+    SphereConstraint,
+    LinearConstraint,
+    add_constraint!,
+    max_violation
 
-
-# Primary methods
+# solvers
 export
-    solve,
-    solve!,
-    rollout!,
-    rollout,
-    forwardpass!,
-    backwardpass!,
-    cost,
-    max_violation,
-    max_violation_direct,
-    infeasible_control,
-    line_trajectory,
-    evaluate!,
-    jacobian!
+    solve!
 
-export
-    get_sizes,
-    num_constraints,
-    get_num_constraints,
-    get_num_controls,
-    init_results,
-    to_array,
-    get_N,
-    to_dvecs,
-    quat2rot,
-    sphere_constraint,
-    circle_constraint,
-    plot_trajectory!,
-    plot_vertical_lines!,
-    convergence_rate,
-    plot_obstacles,
-    evals,
-    reset,
-    reset_evals,
-    final_time,
-    total_time,
-    count_constraints,
-    inequalities,
-    equalities,
-    bounds,
-    labels,
-    terminal,
-    stage,
-    interp_rows
-
-# Static methods
-export
-    convertProblem
+const MOI = MathOptInterface
 
 
 include("utils.jl")
 # include("rotations.jl")
 include("logger.jl")
-include("expansions.jl")
+# include("expansions.jl")
 include("infeasible_model.jl")
-include("costfunctions.jl")
-include("objective.jl")
+# include("costfunctions.jl")
+# include("objective.jl")
 include("solver_opts.jl")
 include("solvers.jl")
-include("abstract_constraint.jl")
-include("constraints.jl")
-include("dynamics_constraints.jl")
-include("integration.jl")
+# include("abstract_constraint.jl")
+# include("constraints.jl")
+# include("dynamics_constraints.jl")
+# include("integration.jl")
 # include("dynamics.jl")
 
-include("cost.jl")
+# include("cost.jl")
 # include("static_methods.jl")
-include("constraint_vals.jl")
-include("constraint_sets.jl")
-include("problem.jl")
+# include("constraint_vals.jl")
+# include("constraint_sets.jl")
+# include("problem.jl")
 # include("solvers/silqr/silqr_solver.jl")
 # include("solvers/silqr/silqr_methods.jl")
 include("solvers/ilqr/ilqr.jl")

@@ -119,7 +119,7 @@ end
 ############################
 #      COST EXPANSION      #
 ############################
-function cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V) where T
+function TrajOptCore.cost_expansion!(prob::Problem, solver::ProjectedNewtonSolver, V=solver.V) where T
     n,m,N = size(prob)
     NN = N*n + (N-1)*m
     H = solver.H

@@ -142,8 +142,8 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
     D::Vector{DynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
     G::Vector{GT}                               # state difference jacobian (n̄, n)
 
-    S::Vector{SizedExpansion{T,n,n̄,m}}      # Optimal cost-to-go expansion trajectory
-    Q::Vector{SizedCostExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
+    S::Vector{Expansion{T,n,n̄,m}}      # Optimal cost-to-go expansion trajectory
+    Q::Vector{CostExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
 	# E::SizedExpansion{T,n,n̄,m}
 
 	Quu_reg::SizedMatrix{m,m,T,2}
@@ -183,11 +183,11 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
 		G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
 	end
 
-    S = [SizedExpansion{T}(n,n̄,m) for k = 1:N]
+    S = [Expansion{T}(n,n̄,m) for k = 1:N]
 	if prob.model isa RigidBody
-		Q = [SizedCostExpansion{T}(n,n̄,m) for k = 1:N]
+		Q = [CostExpansion{T}(n,n̄,m) for k = 1:N]
 	else
-		Q = [SizedCostExpansion{T}(n,m) for k = 1:N]
+		Q = [CostExpansion{T}(n,m) for k = 1:N]
 	end
 
 	Quu_reg = SizedMatrix{m,m}(zeros(m,m))

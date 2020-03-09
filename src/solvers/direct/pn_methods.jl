@@ -170,7 +170,7 @@ function active_constraints(solver::ProjectedNewtonSolver)
     return solver.D[solver.active_set, :], solver.d[solver.active_set]  # this allocates
 end
 
-function cost_expansion!(solver::ProjectedNewtonSolver)
+function TrajOptCore.cost_expansion!(solver::ProjectedNewtonSolver)
     Z = get_trajectory(solver)
     E = solver.E
     obj = get_objective(solver)
