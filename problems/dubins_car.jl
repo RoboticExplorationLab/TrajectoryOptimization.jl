@@ -30,16 +30,14 @@ function DubinsCar(scenario=:three_obstacles)
         circle_y = 3*@SVector [0.25, 0.5, 0.75]
         circle_r = @SVector fill(r_circle_3obs+model.radius, 3)
 
-        circle_con = CircleConstraint(n, circle_x, circle_y, circle_r)
-        con_obs = ConstraintVals(circle_con, 2:N-1)
-
+        obs = CircleConstraint(n, circle_x, circle_y, circle_r)
         bnd = BoundConstraint(n,m, u_min=[0,-3],u_max=[3,3])
-        con_bnd = ConstraintVals(bnd, 1:N-1)
+        goal = GoalConstraint(xf)
 
-        goal_con = GoalConstraint(xf)
-        con_xf = ConstraintVals(goal_con, N:N)
-
-        conSet = ConstraintSet(n,m,[con_obs, con_bnd, con_xf], N)
+        conSet = ConstraintSet(n,m,N)
+        add_constraint!(conSet, obs, 2:N-1)
+        add_constraint!(conSet, bnd, 1:N-1)
+        add_constraint!(conSet, goal, N:N)
 
         # Create problem
         U = [@SVector fill(0.01,m) for k = 1:N-1]
@@ -75,15 +73,13 @@ function DubinsCar(scenario=:three_obstacles)
         bnd = BoundConstraint(n,m,x_min=x_min,x_max=x_max,u_min=-u_bnd,u_max=u_bnd)
         goal = GoalConstraint(xf)
 
-        # Constraint vals
-        con_bnd = ConstraintVals(bnd, 1:N-1)
-        con_goal = ConstraintVals(goal, N:N)
+        conSet = ConstraintSet(n,m,N)
+        add_constraint!(conSet, bnd, 1:N-1)
+        add_constraint!(conSet, goal, N:N)
 
         # problem
         U = [@SVector fill(0.1,m) for k = 1:N-1]
         obj = LQRObjective(Q,R,Qf,xf,N)
-
-        conSet = ConstraintSet(n,m,[con_bnd, con_goal], N)
 
         prob = Problem(model, obj, xf, tf, constraints=conSet, x0=x0, U0=U)
         rollout!(prob)
@@ -149,15 +145,13 @@ function DubinsCar(scenario=:three_obstacles)
         r = SVector{n_circles_escape}(r)
 
         obs = CircleConstraint(n,x,y,r)
-        con_obs = ConstraintVals(obs, 2:N-1)
-
         bnd = BoundConstraint(n,m,u_min=-5.,u_max=5.)
-        con_bnd = ConstraintVals(bnd, 1:N-1)
-
         goal = GoalConstraint(xf)
-        con_xf = ConstraintVals(goal, N:N)
 
-        conSet = ConstraintSet(n,m,[con_obs, con_bnd, con_xf], N)
+        conSet = ConstraintSet(n,m,N)
+        add_constraint!(conSet, obs, 2:N-1)
+        add_constraint!(conSet, bnd, 1:N-1)
+        add_constraint!(conSet, goal, N:N)
 
         # Build problem
         U0 = [@SVector ones(m) for k = 1:N-1]
@@ -172,7 +166,7 @@ function DubinsCar(scenario=:three_obstacles)
                    7.5 6.25 -.261;
                    9 5. -1.57;
                    7.5 2.5 0.]
-        X0_escape = interp_rows(N,tf,Array(X_guess'))
+        X0_escape = TrajectoryOptimization.interp_rows(N,tf,Array(X_guess'))
         initial_states!(car_escape_static, X0_escape)
 
         return car_escape_static, opts
