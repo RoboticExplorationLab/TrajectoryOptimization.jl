@@ -29,8 +29,6 @@ import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoi
 import TrajOptCore: DynamicsVals, num_constraints, get_J, cost_expansion!, error_expansion,
     max_violation!, max_penalty!, initial_trajectory!, change_dimension
 import TrajOptCore: cost, cost!, get_constraints, get_objective, get_model  # extended
-# import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, is_terminal, state_diff, StaticKnotPoint
-# import Dynamics: jacobian!, error_expansion!, error_expansion, state_dim, control_dim  # extended methods
 import Dynamics: state_diff
 
 # modules
@@ -59,6 +57,10 @@ export
     LinearConstraint,
     add_constraint!,
     max_violation
+
+# dynamics and integration
+export
+    RK2, RK3, RK4, HermiteSimpson
 
 # solvers
 export

@@ -18,11 +18,6 @@ const TO = TrajectoryOptimization
     include("logger_tests.jl")
 end
 
-@testset "Dynamics" begin
-    include("models_test.jl")
-    include("dynamics_constraints.jl")
-end
-
 @testset "Full Solves" begin
     include("car_tests.jl")
     TEST_TIME = false  # don't test timing results
@@ -33,18 +28,10 @@ end
     include("solver_options.jl")
 end
 
-@testset "Constraints" begin
-    include("constraint_tests.jl")
-end
-
 # @testset "Rotations" begin
 #     include("rotations_tests.jl")
 #     include("retraction_maps.jl")
 # end
-
-@testset "Costs" begin
-    include("cost_tests.jl")
-end
 
 # @testset "Controllers" begin
 #     include("controllers_test.jl")

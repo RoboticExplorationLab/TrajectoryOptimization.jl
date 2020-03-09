@@ -4,7 +4,7 @@ function remove_bounds!(conSet::ConstraintSet)
     bnds = filter(is_bound, conSet.constraints)
     n,m = conSet.n, conSet.m
     filter!(x->!is_bound(x), conSet.constraints)
-    num_constraints!(conSet)  # re-calculate number of constraints after removing bounds
+    TrajOptCore.num_constraints!(conSet)  # re-calculate number of constraints after removing bounds
 	return bnds
 end
 
@@ -14,7 +14,7 @@ end
 function remove_constraint_type!(conSet::ConstraintSet, ::Type{Con}) where Con <: AbstractConstraint
 	goals = filter(x->x.con isa Con, conSet.constraints)
 	filter!(x->!(x.con isa Con), conSet.constraints)
-    num_constraints!(conSet)  # re-calculate number of constraints after removing goals
+    TrajOptCore.num_constraints!(conSet)  # re-calculate number of constraints after removing goals
 	return goals
 end
 
@@ -66,7 +66,7 @@ function get_bounds(conSet::ConstraintSet)
     for k = 1:N
         for (i,con) in enumerate(conSet.constraints)
             if k ∈ con.inds
-                j = _index(con,k)
+                j = TrajOptCore._index(con,k)
                 gL[cinds[i][j]] = lower_bound(con)
                 gU[cinds[i][j]] = upper_bound(con)
             end
@@ -167,7 +167,7 @@ function constraint_jacobian_structure(solver::DirectSolver,
 			for (i,con) in enumerate(conSet.constraints)
 				if k in con.inds
 					inds = idx .+ (1:blk_len[i])
-					j = _index(con,k)
+					j = TrajOptCore._index(con,k)
 					linds[i][j] = inds
 					con.∇c[j] = inds
 					idx += blk_len[i]
