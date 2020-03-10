@@ -28,6 +28,10 @@ end
     include("solver_options.jl")
 end
 
+@testset "Other" begin
+    include("infeasible_model.jl")
+end
+
 # @testset "Rotations" begin
 #     include("rotations_tests.jl")
 #     include("retraction_maps.jl")
