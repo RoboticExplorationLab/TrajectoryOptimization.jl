@@ -21,7 +21,7 @@ using Rotations
 using MathOptInterface
 using Quaternions
 using UnsafeArrays
-using Dynamics
+using RobotDynamics
 using DifferentialRotations
 using TrajOptCore
 
