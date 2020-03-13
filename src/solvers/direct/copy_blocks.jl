@@ -50,18 +50,22 @@ function copy_jacobian!(D, con::ConstraintVals{T,Control}, cinds, xinds, uinds) 
     end
 end
 
-function copy_jacobian!(D, con::ConstraintVals{T,Coupled}, cinds, xinds, uinds) where T
-    for (i,k) in enumerate(con.inds)
-        zind = [xinds[k]; uinds[k]; xinds[k+1]; uinds[k+1]]
-        D[cinds[i], zind] .= con.∇c[i]
-    end
-end
+# function copy_jacobian!(D, con::ConstraintVals{T,Coupled}, cinds, xinds, uinds) where T
+#     for (i,k) in enumerate(con.inds)
+#         zind = [xinds[k]; uinds[k]; xinds[k+1]; uinds[k+1]]
+#         D[cinds[i], zind] .= con.∇c[i]
+#     end
+# end
 
-function copy_jacobian!(D, con::Union{ConstraintVals{T,Dynamical}, ConstraintVals{T,Coupled,<:DynamicsConstraint{Q}}},
-		cinds, xinds, uinds) where {T,Q<:Implicit}
+function copy_jacobian!(D, con::ConstraintVals{<:Any,Coupled,<:DynamicsConstraint{<:Implicit}},
+		cinds, xinds, uinds)
+	N = length(xinds)
     for (i,k) in enumerate(con.inds)
         zind = [xinds[k]; uinds[k]; xinds[k+1]]
-        D[cinds[i], zind] .= con.∇c[i]
+		zind1 = [xinds[k]; uinds[k]]
+		zind2 = [xinds[k+1]; uinds[k+1]]
+        D[cinds[i], zind1] .= con.∇c[i,1]
+		D[cinds[i], xinds[k+1]] .= con.∇c[i,2][xinds[1],xinds[1]]
     end
 end
 

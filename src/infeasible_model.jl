@@ -72,9 +72,9 @@ end
         u0 = z.z[$_u]
         ui = z.z[$_ui]
 		z_ = StaticKnotPoint(z.z[$_z], $_x, $_u, z.dt, z.t)
-		∇f_ = uview(∇f, 1:N, 1:$NM1)
+		∇f_ = uview(∇f, 1:N, 1:$NM)
         discrete_jacobian!($Q, ∇f_, model.model, z_)
-		∇f[$_x, N+NM+1] .= ∇f_[$_x, N+M+1] # ∇dt
+		# ∇f[$_x, N+NM] .= ∇f_[$_x, N+M] # ∇dt
 		∇f[$_x, $_ui] .= Diagonal(@SVector ones(N))
 		return
 		# ∇f[$_x,$_ui]
