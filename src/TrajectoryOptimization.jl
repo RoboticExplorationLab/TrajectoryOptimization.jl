@@ -25,11 +25,11 @@ using RobotDynamics
 using DifferentialRotations
 using TrajOptCore
 
-import Dynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoint
+import RobotDynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoint
 import TrajOptCore: DynamicsVals, num_constraints, get_J, cost_expansion!, error_expansion,
     max_violation!, max_penalty!, initial_trajectory!, change_dimension
 import TrajOptCore: cost, cost!, get_constraints, get_objective, get_model  # extended
-import Dynamics: state_diff
+import RobotDynamics: state_diff
 
 # modules
 export

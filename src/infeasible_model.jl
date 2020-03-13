@@ -35,10 +35,10 @@ function Base.size(model::InfeasibleModel)
     return n, n+m
 end
 
-Dynamics.dynamics(::InfeasibleModel, x, u) =
+RobotDynamics.dynamics(::InfeasibleModel, x, u) =
     throw(ErrorException("Cannot evaluate continuous dynamics on an infeasible model"))
 
-@generated function Dynamics.discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M},
+@generated function RobotDynamics.discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M},
         z::KnotPoint{T,N}) where {T,N,M,Q<:Implicit}
     _u = SVector{M}((1:M) .+ N)
     _ui = SVector{N}((1:N) .+ (N+M))
@@ -51,9 +51,9 @@ Dynamics.dynamics(::InfeasibleModel, x, u) =
     end
 end
 
-@inline Dynamics.rotation_type(model::InfeasibleModel) where D = rotation_type(model.model)
+@inline RobotDynamics.rotation_type(model::InfeasibleModel) where D = rotation_type(model.model)
 
-@generated function Dynamics.discrete_jacobian!(::Type{Q}, ∇f, model::InfeasibleModel{N,M},
+@generated function RobotDynamics.discrete_jacobian!(::Type{Q}, ∇f, model::InfeasibleModel{N,M},
         z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Implicit}
 
     ∇ui = [(@SMatrix zeros(N,N+M)) Diagonal(@SVector ones(N)) @SVector zeros(N)]
@@ -82,23 +82,23 @@ end
     end
 end
 
-function Dynamics.state_diff(model::InfeasibleModel, x::SVector, x0::SVector)
+function RobotDynamics.state_diff(model::InfeasibleModel, x::SVector, x0::SVector)
 	state_diff(model.model, x, x0)
 end
 
-function Dynamics.state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
-	Dynamics.state_diff_jacobian!(G, model.model, Z)
+function RobotDynamics.state_diff_jacobian!(G, model::InfeasibleModel, Z::Traj)
+	RobotDynamics.state_diff_jacobian!(G, model.model, Z)
 end
 
-function Dynamics.∇²differential(model::InfeasibleModel, x::SVector, dx::SVector)
+function RobotDynamics.∇²differential(model::InfeasibleModel, x::SVector, dx::SVector)
 	return ∇²differential(model.model, x, dx)
 end
 
-Dynamics.state_diff_size(model::InfeasibleModel) = state_diff_size(model.model)
+RobotDynamics.state_diff_size(model::InfeasibleModel) = state_diff_size(model.model)
 
 Base.position(model::InfeasibleModel, x::SVector) = position(model.model, x)
 
-Dynamics.orientation(model::InfeasibleModel, x::SVector) = orientation(model.model, x)
+RobotDynamics.orientation(model::InfeasibleModel, x::SVector) = orientation(model.model, x)
 
 "Calculate a dynamically feasible initial trajectory for an infeasible problem, given a
 desired trajectory"
@@ -108,12 +108,12 @@ function infeasible_trajectory(model::InfeasibleModel{n,m}, Z0::Vector{<:KnotPoi
     Z = [KnotPoint(state(z), [control(z); ui], z.dt, z.t) for z in Z0]
     N = length(Z0)
     for k = 1:N-1
-        Dynamics.propagate_dynamics(RK3, model, Z[k+1], Z[k])
+        RobotDynamics.propagate_dynamics(RK3, model, Z[k+1], Z[k])
         x′ = state(Z[k+1])
         u_slack = state(Z0[k+1]) - x′
         u = [control(Z0[k]); u_slack]
-        Dynamics.set_control!(Z[k], u)
-        Dynamics.set_state!(Z[k+1], x′ + u_slack)
+        RobotDynamics.set_control!(Z[k], u)
+        RobotDynamics.set_state!(Z[k+1], x′ + u_slack)
     end
     return Z
 end

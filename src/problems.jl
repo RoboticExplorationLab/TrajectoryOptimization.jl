@@ -10,8 +10,9 @@ using ForwardDiff
 using Random
 using StaticArrays
 using RobotZoo
-using Dynamics
+using RobotDynamics
 using DifferentialRotations
+const Dynamics = RobotDynamics
 
 include("../problems/doubleintegrator.jl")
 include("../problems/pendulum.jl")

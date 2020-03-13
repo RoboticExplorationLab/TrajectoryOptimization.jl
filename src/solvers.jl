@@ -75,7 +75,7 @@ function cost(solver::AbstractSolver)
     cost(obj, Z)
 end
 
-function Dynamics.rollout!(solver::AbstractSolver)
+function RobotDynamics.rollout!(solver::AbstractSolver)
     Z = get_trajectory(solver)
     model = get_model(solver)
     x0 = get_initial_state(solver)
@@ -84,9 +84,9 @@ end
 
 TrajOptCore.set_initial_state!(solver, x0) = copyto!(get_initial_state(solver), x0)
 
-Dynamics.states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
+RobotDynamics.states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
 
-function Dynamics.controls(solver::AbstractSolver)
+function RobotDynamics.controls(solver::AbstractSolver)
     N = size(solver)[3]
     Z = get_trajectory(solver)
     [control(Z[k]) for k = 1:N-1]

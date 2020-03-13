@@ -177,7 +177,7 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
     d = [zeros(T,m)   for k = 1:N-1]
 
 	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
-	if Dynamics.state_diff_jacobian(prob.model, x0) isa UniformScaling
+	if RobotDynamics.state_diff_jacobian(prob.model, x0) isa UniformScaling
 		G = [I for k = 1:N]
 	else
 		G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
