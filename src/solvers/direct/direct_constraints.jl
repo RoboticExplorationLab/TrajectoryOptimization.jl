@@ -80,25 +80,6 @@ function get_bounds(conSet::ConstraintSet)
     return zU, zL, gU, gL
 end
 
-"```julia
-add_dynamics_constraints!(prob::Problem)
-```
-Add dynamics constraints to the constraint set"
-function add_dynamics_constraints!(prob::Problem{Q}, integration=Q) where Q
-	n,m = size(prob)
-    conSet = prob.constraints
-
-    # Implicit dynamics
-    dyn_con = ConstraintVals(DynamicsConstraint{integration}(prob.model, prob.N), 1:prob.N-1)
-    add_constraint!(conSet, dyn_con, 1)
-
-    # Initial condition
-    init_con = ConstraintVals( GoalConstraint(prob.x0), 1:1)
-    add_constraint!(conSet, init_con, 1)
-
-    return nothing
-end
-
 "$(SIGNATURES) Generate the indices into the concatenated constraint vector for each constraint.
 Determines the bandedness of the Jacobian"
 function gen_con_inds(conSet::ConstraintSet, structure=:by_knotpoint)
