@@ -173,7 +173,7 @@ function infeasible_objective(obj::Objective, regularizer)
     n,m = state_dim(obj.cost[1]), control_dim(obj.cost[1])
     Rd = [@SVector zeros(m); @SVector fill(regularizer,n)]
     R = Diagonal(Rd)
-    cost_inf = QuadraticCost(Diagonal(@SVector zeros(n)),R,checks=false)
+    cost_inf = DiagonalCost(Diagonal(@SVector zeros(n)),R)
     costs = map(obj.cost) do cost
         cost_idx = change_dimension(cost, n, n+m)
         cost_idx + cost_inf

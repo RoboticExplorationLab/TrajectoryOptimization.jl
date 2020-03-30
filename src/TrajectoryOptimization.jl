@@ -19,10 +19,9 @@ using BenchmarkTools
 using Parameters
 using Rotations
 using MathOptInterface
-using Quaternions
 using UnsafeArrays
 using RobotDynamics
-using DifferentialRotations
+using Rotations
 using TrajOptCore
 
 import RobotDynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoint

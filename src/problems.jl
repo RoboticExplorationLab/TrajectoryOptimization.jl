@@ -11,7 +11,7 @@ using Random
 using StaticArrays
 using RobotZoo
 using RobotDynamics
-using DifferentialRotations
+using Rotations
 const Dynamics = RobotDynamics
 
 include("../problems/doubleintegrator.jl")

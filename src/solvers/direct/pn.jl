@@ -89,7 +89,7 @@ function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     stats = ProjectedNewtonStats()
 
     # Add dynamics constraints
-    add_dynamics_constraints!(prob)
+    TrajOptCore.add_dynamics_constraints!(prob)
     conSet = prob.constraints
     NP = sum(num_constraints(conSet))
 
