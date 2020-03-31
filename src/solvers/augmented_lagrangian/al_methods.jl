@@ -99,47 +99,11 @@ end
 "General Dual Update"
 function dual_update!(solver::AugmentedLagrangianSolver) where {T,Q,N,M,NM}
     conSet = get_constraints(solver)
-    for i in eachindex(conSet.constraints)
-        dual_update!(conSet.constraints[i])
-    end
-end
-
-"Dual Update for Equality Constraints"
-function dual_update!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractConstraint{Equality}}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	λ_max = con.params.λ_max
-	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], -λ_max, λ_max)
-	end
-end
-
-"Dual Update for Inequality Constraints"
-function dual_update!(con::ConstraintVals{T,W,C}) where
-		{T,W,C<:AbstractConstraint{Inequality}}
-	λ = con.λ
-	c = con.vals
-	μ = con.μ
-	for i in eachindex(con.inds)
-		λ[i] = clamp.(λ[i] + μ[i] .* c[i], 0.0, con.params.λ_max)
-	end
+	TrajOptCore.dual_update!(conSet)
 end
 
 "General Penalty Update"
 function penalty_update!(solver::AugmentedLagrangianSolver)
     conSet = get_constraints(solver)
-    for i in eachindex(conSet.constraints)
-        penalty_update!(conSet.constraints[i])
-    end
-end
-
-"Penalty Update for ConstraintVals"
-function penalty_update!(con::ConstraintVals{T}) where T
-	ϕ = con.params.ϕ
-	μ = con.μ
-	for i in eachindex(con.inds)
-		μ[i] = clamp.(ϕ * μ[i], 0.0, con.params.μ_max)
-	end
+	TrajOptCore.penalty_update!(conSet)
 end

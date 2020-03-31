@@ -114,8 +114,7 @@ end
 
 function TrajOptCore.max_violation(solver::ConstrainedSolver)
     conSet = get_constraints(solver)
-    max_violation!(conSet)
-    return maximum(conSet.c_max)
+    max_violation(conSet)
 end
 
 @inline TrajOptCore.findmax_violation(solver::ConstrainedSolver) =

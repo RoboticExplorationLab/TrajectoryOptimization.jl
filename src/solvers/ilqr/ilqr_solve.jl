@@ -48,9 +48,9 @@ function step!(solver::iLQRSolver2, J)
     Z = solver.Z
     RobotDynamics.state_diff_jacobian!(solver.G, solver.model, Z)
 	RobotDynamics.dynamics_expansion!(solver.D, solver.model, solver.Z)
-    cost_expansion!(solver.Q, solver.obj, solver.Z)
 	error_expansion!(solver.D, solver.model, solver.G)
-	error_expansion!(solver.Q, solver.model, Z, solver.G)
+    cost_expansion!(solver.quad_obj, solver.obj, solver.Z)
+	error_expansion!(solver.Q, solver.quad_obj, solver.model, Z, solver.G)
 	if solver.opts.static_bp
     	ΔV = static_backwardpass!(solver)
 	else
@@ -169,7 +169,7 @@ $(SIGNATURES)
     Calculate the problem gradient using heuristic from iLQG (Todorov) solver
 """
 function gradient_todorov!(solver::iLQRSolver2)
-	tmp = solver.S[end].u
+	tmp = solver.S[end].r
     for k in eachindex(solver.d)
 		tmp .= abs.(solver.d[k])
 		u = abs.(control(solver.Z[k])) .+ 1

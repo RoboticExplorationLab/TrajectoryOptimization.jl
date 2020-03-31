@@ -83,9 +83,10 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 	Qux_reg = SMatrix(solver.Qux_reg)
 
     # Terminal cost-to-go
-	Q = error_expansion(solver.Q[N], model)
-	Sxx = SMatrix(Q.xx)
-	Sx = SVector(Q.x)
+	# Q = error_expansion(solver.Q[N], model)
+	Q = solver.Q[N]
+	Sxx = SMatrix(Q.Q)
+	Sx = SVector(Q.q)
 
     # Initialize expected change in cost-to-go
     ΔV = @SVector zeros(2)
@@ -98,7 +99,9 @@ function static_backwardpass!(solver::iLQRSolver2{T,QUAD,L,O,n,n̄,m}) where {T,
 		# Get error state expanions
 		fdx,fdu = error_expansion(solver.D[k], model)
 		fdx,fdu = SMatrix(fdx), SMatrix(fdu)
-		Q = error_expansion(solver.Q[k], model)
+		Q = TrajOptCore.static_expansion(solver.Q[k])
+		# Q = error_expansion(solver.Q[k], model)
+		# Q = solver.Q[k]
 
 		# Calculate action-value expansion
 		Q = _calc_Q!(Q, Sxx, Sx, fdx, fdu)

@@ -116,7 +116,7 @@ end
 
 abstract type iLQRSolver{T} <: UnconstrainedSolver{T} end
 
-struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
+struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1} <: iLQRSolver{T}
     # Model + Objective
     model::L
     obj::O
@@ -140,11 +140,11 @@ struct iLQRSolver2{T,I<:QuadratureRule,L,O,n,n̄,m,L1,GT} <: iLQRSolver{T}
     d::Vector{SizedVector{m,T,1}}  # Feedforward gains (m,N-1)
 
     D::Vector{DynamicsExpansion{T,n,n̄,m}}  # discrete dynamics jacobian (block) (n,n+m+1,N)
-    G::Vector{GT}                               # state difference jacobian (n̄, n)
+    G::Vector{SizedMatrix{n,n̄,T,2}}        # state difference jacobian (n̄, n)
 
-    S::Vector{Expansion{T,n,n̄,m}}      # Optimal cost-to-go expansion trajectory
-    Q::Vector{CostExpansion{T,n,n̄,m}}  # cost-to-go expansion trajectory
-	# E::SizedExpansion{T,n,n̄,m}
+	quad_obj::QuadraticObjective{n,m,T}  # quadratic expansion of obj
+	S::QuadraticObjective{n̄,m,T}         # Cost-to-go expansion
+	Q::QuadraticObjective{n̄,m,T}         # Action-value expansion
 
 	Quu_reg::SizedMatrix{m,m,T,2}
 	Qux_reg::SizedMatrix{m,n̄,T,2}
@@ -177,18 +177,11 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
     d = [zeros(T,m)   for k = 1:N-1]
 
 	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
-	if RobotDynamics.state_diff_jacobian(prob.model, x0) isa UniformScaling
-		G = [I for k = 1:N]
-	else
-		G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N]
-	end
+	G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]  # add one to the end to use as an intermediate result
 
-    S = [Expansion{T}(n,n̄,m) for k = 1:N]
-	if prob.model isa RigidBody
-		Q = [CostExpansion{T}(n,n̄,m) for k = 1:N]
-	else
-		Q = [CostExpansion{T}(n,m) for k = 1:N]
-	end
+	Q = QuadraticObjective(n̄,m,N)
+	quad_exp = QuadraticObjective(Q, prob.model)
+	S = QuadraticObjective(n̄,m,N)
 
 	Quu_reg = SizedMatrix{m,m}(zeros(m,m))
 	Qux_reg = SizedMatrix{m,n̄}(zeros(m,n̄))
@@ -200,13 +193,11 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
     logger = default_logger(opts.verbose)
 	L = typeof(prob.model)
 	O = typeof(prob.obj)
-	ET = typeof(E)
-	GT = eltype(G)
 
 	opts_ilqr = iLQRSolverOptions(opts)
-    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m,GT}(prob.model, prob.obj, x0, xf,
+    solver = iLQRSolver2{T,QUAD,L,O,n,n̄,m,n+m}(prob.model, prob.obj, x0, xf,
 		prob.tf, N, opts_ilqr, stats,
-        Z, Z̄, K, d, D, G, S, Q, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
+        Z, Z̄, K, d, D, G, quad_exp, S, Q, Quu_reg, Qux_reg, ρ, dρ, grad, logger)
 
     reset!(solver)
     return solver
@@ -221,7 +212,7 @@ end
 #     return nothing
 # end
 #
-Base.size(solver::iLQRSolver2{T,I,L,O,n,m}) where {T,I,L,O,n,m} = n,m,solver.N
+Base.size(solver::iLQRSolver2{<:Any,<:Any,<:Any,<:Any,n,<:Any,m}) where {n,m} = n,m,solver.N
 # @inline get_trajectory(solver::iLQRSolver2) = solver.Z
 # @inline get_objective(solver::iLQRSolver2) = solver.obj
 # @inline get_model(solver::iLQRSolver2) = solver.model

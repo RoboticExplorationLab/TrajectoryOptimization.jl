@@ -127,21 +127,26 @@ InfeasibleConstraint(model::InfeasibleModel)
 InfeasibleConstraint(n,m)
 ```
 """
-struct InfeasibleConstraint{N,M} <: AbstractConstraint{Equality, Control, N} end
-
-InfeasibleConstraint(model::InfeasibleModel{N,M}) where {N,M} = InfeasibleConstraint{N,M}()
-InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
-TrajOptCore.control_dim(::InfeasibleConstraint{N,M}) where {N,M} = N+M
-
-@generated function TrajOptCore.evaluate(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
-    _u = SVector{M}(1:M)
-    _ui = SVector{N}((1:N) .+ M)
-	quote
-        ui = u[$_ui] # infeasible controls
+struct InfeasibleConstraint{n} <: AbstractConstraint
+	ui::SVector{n,Int}
+	m::Int
+	function InfeasibleConstraint(n::Int, m::Int)
+		ui = SVector{n}((1:n) .+ m)
+		new{n}(ui, m)
 	end
 end
 
-@generated function TrajOptCore.jacobian(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
-	Iu = [(@SMatrix zeros(N,M)) Diagonal(@SVector ones(N))]
-	return :($Iu)
+InfeasibleConstraint(model::InfeasibleModel{n,m}) where {n,m} = InfeasibleConstraint(n,m)
+RobotDynamics.control_dim(con::InfeasibleConstraint{n}) where n = n + con.m
+@inline sense(::InfeasibleConstraint) = Equality()
+@inline Base.length(::InfeasibleConstraint{n}) where n = n
+
+function TrajOptCore.evaluate(con::InfeasibleConstraint, u::SVector)
+    ui = u[con.ui] # infeasible controls
+end
+
+function TrajOptCore.jacobian!(∇c, con::InfeasibleConstraint{n}, u::SVector) where n
+	for (i,j) in enumerate(con.ui)
+		∇c[i,j] = 1
+	end
 end

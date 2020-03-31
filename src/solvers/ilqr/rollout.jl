@@ -6,8 +6,8 @@ function RobotDynamics.rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
     Z̄[1].z = [solver.x0; control(Z[1])]
 
     temp = 0.0
-	δx = solver.S[end].x
-	δu = solver.S[end].u
+	δx = solver.S[end].q
+	δu = solver.S[end].r
 
     for k = 1:solver.N-1
         δx .= state_diff(solver.model, state(Z̄[k]), state(Z[k]))

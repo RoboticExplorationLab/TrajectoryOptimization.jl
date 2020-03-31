@@ -20,7 +20,7 @@ function Cartpole(method=:none)
     obj = LQRObjective(Q,R,Qf,xf,N)
 
     u_bnd = 3.0
-    conSet = ConstraintSet(n,m,N)
+    conSet = ConstraintList(n,m,N)
     bnd = BoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd)
     goal = GoalConstraint(xf)
     add_constraint!(conSet, bnd, 1:N-1)
