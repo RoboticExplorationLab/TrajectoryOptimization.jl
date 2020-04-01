@@ -35,14 +35,14 @@ end
 struct ProblemInfo{T,N}
     model::AbstractModel
     obj::Objective
-    conSet::ConstraintSet{T}
+    conSet::ALConstraintSet{T}
     x0::SVector{N,T}
     xf::SVector{N,T}
 end
 
 function ProblemInfo(prob::Problem)
     n = size(prob)[1]
-    ProblemInfo(prob.model, prob.obj, prob.constraints, SVector{n}(prob.x0), SVector{n}(prob.xf))
+    ProblemInfo(prob.model, prob.obj, ALConstraintSet(prob), SVector{n}(prob.x0), SVector{n}(prob.xf))
 end
 
 
@@ -68,7 +68,8 @@ struct ProjectedNewtonSolver{T,N,M,NM} <: DirectSolver{T}
 
     H::SparseMatrixCSC{T,Int}
     g::Vector{T}
-    E::Vector{CostExpansion{T,N,N,M}}
+    # E::Vector{CostExpansion{T,N,N,M}}
+    E::QuadraticObjective{N,M,T}
 
     D::SparseMatrixCSC{T,Int}
     d::Vector{T}
@@ -89,7 +90,7 @@ function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     stats = ProjectedNewtonStats()
 
     # Add dynamics constraints
-    TrajOptCore.add_dynamics_constraints!(prob)
+    TrajOptCore.add_dynamics_constraints!(prob, integration(prob), 1)
     conSet = prob.constraints
     NP = sum(num_constraints(conSet))
 
@@ -104,7 +105,8 @@ function ProjectedNewtonSolver(prob::Problem, opts=SolverOptions())
     # Allocate Cost Hessian & Gradient
     H = spzeros(NN,NN)
     g = zeros(NN)
-    E = [CostExpansion{Float64}(n,m) for k = 1:N]
+    # E = [CostExpansion{Float64}(n,m) for k = 1:N]
+    E = QuadraticObjective(n,m,N)
 
     D = spzeros(NP,NN)
     d = zeros(NP)

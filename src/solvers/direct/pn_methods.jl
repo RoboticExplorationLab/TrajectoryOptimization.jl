@@ -131,7 +131,7 @@ function _projection_linesearch!(solver::ProjectedNewtonSolver,
         viol = norm(d,Inf)
 
         if solver.opts.verbose
-            println("feas: ", viol, " (", viol_, ")")
+            println("feas: ", viol, " (α = ", α, ")")
         end
         if viol < viol0 || count > 10
             break
@@ -187,14 +187,14 @@ function copy_expansion!(H, g, E, xinds, uinds)
     N = length(E)
 
     for k = 1:N-1
-        H[xinds[k],xinds[k]] .= E[k].xx
-        H[uinds[k],uinds[k]] .= E[k].uu
-        H[uinds[k],xinds[k]] .= E[k].ux
-        g[xinds[k]] .= E[k].x
-        g[uinds[k]] .= E[k].u
+        H[xinds[k],xinds[k]] .= E[k].Q
+        H[uinds[k],uinds[k]] .= E[k].R
+        H[uinds[k],xinds[k]] .= E[k].H
+        g[xinds[k]] .= E[k].q
+        g[uinds[k]] .= E[k].r
     end
-    H[xinds[N],xinds[N]] .= E[N].xx
-    g[xinds[N]] .= E[N].x
+    H[xinds[N],xinds[N]] .= E[N].Q
+    g[xinds[N]] .= E[N].q
     return nothing
 end
 

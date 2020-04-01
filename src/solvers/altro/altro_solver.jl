@@ -91,6 +91,7 @@ function ALTROSolver(prob::Problem{Q,T},
     opts_altro = ALTROSolverOptions(opts)
     solver_al = AugmentedLagrangianSolver(prob, opts, solver_uncon=solver_uncon)
     solver_pn = ProjectedNewtonSolver(prob, opts)
+    TrajOptCore.link_constraints!(get_constraints(solver_pn), get_constraints(solver_al))
     S = typeof(solver_al.solver_uncon)
     ALTROSolver{T,S}(opts_altro, solver_al, solver_pn)
 end

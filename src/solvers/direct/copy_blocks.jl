@@ -14,7 +14,7 @@ end
 "Copy constraints to a single concatenated vector"
 function copy_constraints!(d, solver::DirectSolver)
     conSet = get_constraints(solver)
-    for (i,con) in enumerate(conSet.constraints)
+    for (i,con) in enumerate(conSet.errvals)
         copy_inds(d, con.vals, solver.con_inds[i])
     end
     return nothing
@@ -23,28 +23,28 @@ end
 "Copy active set to a single concatenated vector"
 function copy_active_set!(a, solver::DirectSolver)
     conSet = get_constraints(solver)
-    for i = 1:length(conSet.constraints)
-        copy_inds(solver.active_set, conSet.constraints[i].active, solver.con_inds[i])
+    for i = 1:length(conSet.errvals)
+        copy_inds(solver.active_set, conSet.active[i], solver.con_inds[i])
     end
 end
 
 
 """Copy constraint Jacobians to given indices in a sparse array
 Dispatches on bandedness of the constraint"""
-function copy_jacobian!(D, con::ConstraintVals{T,Stage}, cinds, xinds, uinds) where T
+function copy_jacobian!(D, con::ConVal{<:StageConstraint}, cinds, xinds, uinds) where T
     for (i,k) in enumerate(con.inds)
         zind = [xinds[k]; uinds[k]]
-        D[cinds[i], zind] .= con.∇c[i]
+        D[cinds[i], zind] .= con.jac[i]
     end
 end
 
-function copy_jacobian!(D, con::ConstraintVals{T,State}, cinds, xinds, uinds) where T
+function copy_jacobian!(D, con::ConVal{<:StateConstraint}, cinds, xinds, uinds) where T
     for (i,k) in enumerate(con.inds)
-        D[cinds[i], xinds[k]] .= con.∇c[i]
+        D[cinds[i], xinds[k]] .= con.jac[i]
     end
 end
 
-function copy_jacobian!(D, con::ConstraintVals{T,Control}, cinds, xinds, uinds) where T
+function copy_jacobian!(D, con::ConVal{<:ControlConstraint}, cinds, xinds, uinds) where T
     for (i,k) in enumerate(con.inds)
         D[cinds[i], uinds[k]] .= con.∇c[i]
     end
@@ -57,15 +57,16 @@ end
 #     end
 # end
 
-function copy_jacobian!(D, con::ConstraintVals{<:Any,Coupled,<:DynamicsConstraint{<:Implicit}},
+function copy_jacobian!(D, con::ConVal{<:DynamicsConstraint{<:Explicit}},
 		cinds, xinds, uinds)
 	N = length(xinds)
     for (i,k) in enumerate(con.inds)
         zind = [xinds[k]; uinds[k]; xinds[k+1]]
 		zind1 = [xinds[k]; uinds[k]]
 		zind2 = [xinds[k+1]; uinds[k+1]]
-        D[cinds[i], zind1] .= con.∇c[i,1]
-		D[cinds[i], xinds[k+1]] .= con.∇c[i,2][xinds[1],xinds[1]]
+        D[cinds[i], zind1] .= con.jac[i,1]
+		D[cinds[i], xinds[k+1]] .= con.∇x[i,2]
+		# D[cinds[i], zind2] .= con.jac[i,2]
     end
 end
 
@@ -75,18 +76,18 @@ function copy_jacobians!(D, solver::DirectSolver)
     xinds, uinds = primal_partition(solver)
     cinds = solver.con_inds
 
-    for i = 1:length(conSet.constraints)
-        copy_jacobian!(D, conSet.constraints[i], cinds[i], xinds, uinds)
+    for i = 1:length(conSet.errvals)
+        copy_jacobian!(D, conSet.errvals[i], cinds[i], xinds, uinds)
     end
     return nothing
 end
 
 
 "Copy constraint Jacobians to linear indices of a vector"
-function copy_jacobian!(d::AbstractVector{<:Real}, con::ConstraintVals, linds)
+function copy_jacobian!(d::AbstractVector{<:Real}, con::ConVal, linds)
 	for (j,k) in enumerate(con.inds)
 		inds = linds[j]
-		d[inds] = con.∇c[j]
+		d[inds] = con.jac[j]
 	end
 end
 

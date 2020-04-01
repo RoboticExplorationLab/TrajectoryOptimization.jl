@@ -130,7 +130,7 @@ end
 
 function TrajOptCore.update_active_set!(solver::ConstrainedSolver, Z=get_trajectory(solver))
     conSet = get_constraints(solver)
-    update_active_set!(conSet, Z, Val(solver.opts.active_set_tolerance))
+    update_active_set!(conSet, Val(solver.opts.active_set_tolerance))
 end
 
 """ $(SIGNATURES)
