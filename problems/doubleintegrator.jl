@@ -26,7 +26,7 @@ function DoubleIntegrator()
     # Constraints
     u_bnd = 3.0
     x_bnd = [Inf,0.6]
-    conSet = ConstraintSet(n,m,N)
+    conSet = ConstraintList(n,m,N)
     bnd = BoundConstraint(n,m, u_min=-u_bnd, u_max=u_bnd, x_min=-x_bnd, x_max=x_bnd)
     goal = GoalConstraint(xf)
     add_constraint!(conSet, bnd, 1:N-1)

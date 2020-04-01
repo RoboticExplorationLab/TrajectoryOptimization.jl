@@ -1,4 +1,4 @@
-function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
+function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64};
         costfun=:Quadratic, normcon=false)
     if scenario == :zigzag
         model = RobotZoo.Quadrotor{Rot}()
@@ -81,7 +81,7 @@ function Quadrotor(scenario=:zigzag, Rot=UnitQuaternion{Float64,CayleyMap};
         U_hover = [copy(u0) for k = 1:N-1] # initial hovering control trajectory
 
         # Constaints
-        conSet = ConstraintSet(n,m,N)
+        conSet = ConstraintList(n,m,N)
         if normcon
             if use_rot == :slack
                 add_constraint!(conSet, QuatSlackConstraint(), 1:N-1)

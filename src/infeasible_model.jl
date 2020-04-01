@@ -39,7 +39,7 @@ RobotDynamics.dynamics(::InfeasibleModel, x, u) =
     throw(ErrorException("Cannot evaluate continuous dynamics on an infeasible model"))
 
 @generated function RobotDynamics.discrete_dynamics(::Type{Q}, model::InfeasibleModel{N,M},
-        z::KnotPoint{T,N}) where {T,N,M,Q<:Implicit}
+        z::KnotPoint{T,N}) where {T,N,M,Q<:Explicit}
     _u = SVector{M}((1:M) .+ N)
     _ui = SVector{N}((1:N) .+ (N+M))
     quote

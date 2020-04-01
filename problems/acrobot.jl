@@ -23,7 +23,7 @@ function Acrobot()
     obj = LQRObjective(Q,R,Qf,xf,N)
 
     # constraints
-    conSet = ConstraintSet(n,m,N)
+    conSet = ConstraintList(n,m,N)
     goal = GoalConstraint(xf)
     bnd  = BoundConstraint(n,m, u_min=-15, u_max=15)
     add_constraint!(conSet, goal, N:N)

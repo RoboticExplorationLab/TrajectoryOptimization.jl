@@ -20,7 +20,7 @@ function Pendulum()
     obj = LQRObjective(Q,R,Qf,xf,N)
 
     # constraints
-    conSet = ConstraintSet(n,m,N)
+    conSet = ConstraintList(n,m,N)
     u_bnd = 3.
     bnd = BoundConstraint(n,m,u_min=-u_bnd,u_max=u_bnd)
     goal = GoalConstraint(xf)
