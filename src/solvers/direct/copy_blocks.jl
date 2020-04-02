@@ -77,7 +77,7 @@ function copy_jacobians!(D, solver::DirectSolver)
     cinds = solver.con_inds
 
     for i = 1:length(conSet.errvals)
-        copy_jacobian!(D, conSet.errvals[i], cinds[i], xinds, uinds)
+        copy_jacobian!(D, conSet.convals[i], cinds[i], xinds, uinds) # TODO: switch to errvals
     end
     return nothing
 end

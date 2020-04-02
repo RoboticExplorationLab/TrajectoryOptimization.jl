@@ -1,5 +1,5 @@
 
-function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellroll, use_rot=Rot<:UnitQuaternion,
+function YakProblems(Rot=UnitQuaternion{Float64}; scenario=:barrellroll, use_rot=Rot<:UnitQuaternion,
         costfun=:Quadratic, normcon=false)
     model = RobotZoo.YakPlane(Rot)
     n,m = size(model)
@@ -58,7 +58,7 @@ function YakProblems(Rot=UnitQuaternion{Float64,CayleyMap}; scenario=:barrellrol
         obj = Objective(costfun, costterm, N)
 
         # Constraints
-        conSet = ConstraintSet(n,m,N)
+        conSet = ConstraintList(n,m,N)
         goal = GoalConstraint(xf)
         add_constraint!(conSet,goal,N:N)
 
