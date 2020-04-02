@@ -1,4 +1,7 @@
-prob = copy(Problems.car_3obs_static)
+import TrajectoryOptimization: InfeasibleModel, InfeasibleConstraint
+const TO = TrajectoryOptimization
+
+prob = Problems.DubinsCar(:three_obstacles)[1]
 n,m,N = size(prob)
 U0 = deepcopy(controls(prob))
 dt = prob.Z[1].dt
@@ -15,8 +18,8 @@ Z0 = Traj(X0,U0,dt*ones(N))
 # Create infeasible model
 inf_model = InfeasibleModel(prob.model)
 inf_con = InfeasibleConstraint(inf_model)
+Z = TO.infeasible_trajectory(inf_model, Z0)
 
-Z = infeasible_trajectory(inf_model, Z0)
 @test states(Z) ≈ states(Z0)
 rollout!(inf_model, Z, x0)
 @test states(Z) ≈ states(Z0)
@@ -32,70 +35,73 @@ z = KnotPoint(x,u,dt)
 
 function test_con_allocs(con,z)
     allocs = @allocated evaluate(con, z)
-    allocs += @allocated jacobian(con, z)
+    ∇c = TrajOptCore.gen_jacobian(con)
+    allocs += @allocated jacobian!(∇c, con, z)
 end
 
 
-con = prob.constraints[1].con
-idx_con = IndexedConstraint(n,n+m,con)
+con = prob.constraints[1]
+idx_con = TO.change_dimension(con, n, n+m, 1:n, 1:m)
 @test evaluate(idx_con, z) == evaluate(con, z0)
-@test jacobian(idx_con, z) == jacobian(con, z0)
-@test test_con_allocs(idx_con, z) == 0
+∇c1 = TrajOptCore.gen_jacobian(con)
+∇c2 = TrajOptCore.gen_jacobian(idx_con)
+jacobian!(∇c1, con, z0)
+jacobian!(∇c2, idx_con, z)
+@test ∇c1 ≈ ∇c2
+# @test test_con_allocs(idx_con, z) == 0
 
 bnd = BoundConstraint(n,m, u_min=[0,-2], u_max=[Inf,2])
-idx_bnd = IndexedConstraint(n,n+m,bnd)
+idx_bnd = TrajOptCore.change_dimension(bnd, n, n+m, 1:n, 1:m)
 
 @test test_con_allocs(idx_bnd, z) == 0
 
-evaluate(bnd, z0)
-evaluate(idx_bnd, z)
 @test evaluate(bnd, z0) == evaluate(idx_bnd, z)
-@test [jacobian(bnd, z0) zeros(3,3)] == jacobian(idx_bnd, z)
+∇c1 = TrajOptCore.gen_jacobian(bnd)
+∇c2 = TrajOptCore.gen_jacobian(idx_bnd)
+jacobian!(∇c1, bnd, z0)
+jacobian!(∇c2, idx_bnd, z)
+@test ∇c1 ≈ ∇c2[:,1:n+m]
 
 conSet0 = copy(get_constraints(prob))
 add_constraint!(conSet0, bnd, 1:N-1, 1)
-conSet = change_dimension(conSet0, n, n+m)
-evaluate!(conSet, Z)
-jacobian!(conSet, Z)
-@test size(conSet[1].∇c[1]) == (3,8)
-@test size(conSet0[1].∇c[1]) == (3,5)
+conSet = TrajOptCore.change_dimension(conSet0, n, n+m, 1:n, 1:m)
+@test size(conSet[1]) == (3,8)
+@test size(conSet0[1]) == (3,5)
 
 
 # Cost functions
 cost0 = prob.obj[1]
 ix = 1:n
 iu = 1:m
-idx_cost = IndexedCost(cost0,ix,iu)
-@test stage_cost(cost0, x, u0) ≈ stage_cost(idx_cost, x, u)
-@test stage_cost(cost0, x) ≈ stage_cost(idx_cost, x)
-Qx0, Qu0 = gradient(cost0, x, u0)
-Qx, Qu = gradient(idx_cost, x, u)
-@test Qx0 == Qx
-@test [Qu0; zeros(n)] == Qu
+# idx_cost = IndexedCost(cost0,ix,iu)
+idx_cost = TrajOptCore.change_dimension(cost0, n, n+m, ix, iu)
+@test u0 ≈ u[1:2]
+@test cost0.Q ≈ idx_cost.Q
+@test cost0.q ≈ idx_cost.q
+@test cost0.R ≈ idx_cost.R[1:m,1:m]
+@test cost0.r ≈ idx_cost.r[1:m]
+@test cost0.c ≈ idx_cost.c
+@test TrajOptCore.stage_cost(cost0, x, u0) ≈ TrajOptCore.stage_cost(idx_cost, x, u)
+@test TrajOptCore.stage_cost(cost0, x) ≈ TrajOptCore.stage_cost(idx_cost, x)
 
-Qxx0, Quu0, Qux0 = hessian(cost0, x, u0)
-Qxx, Quu, Qux = hessian(idx_cost, x, u)
-@test Qxx0 == Qxx
-@test Qux == zeros(n+m,n)
-@test Quu == Diagonal([diag(Quu0); zeros(n)])
+E0 = QuadraticCost{Float64}(n,m)
+E  = QuadraticCost{Float64}(n,n+m)
+TrajOptCore.gradient!(E0, cost0, x, u0)
+TrajOptCore.gradient!(E, idx_cost, x, u)
+@test E0.q == E.q
+@test [E0.r; zeros(n)] == E.r
 
-costfun = change_dimension(cost0, n, n+m)
-@test stage_cost(costfun, x, u) == stage_cost(idx_cost, x, u)
-@test gradient(costfun, x, u) == gradient(idx_cost, x, u)
-@test hessian(costfun, x, u) == hessian(idx_cost, x, u)
-@test costfun.Q isa Diagonal{Float64,<:SVector}
-@test costfun.R isa Diagonal{Float64,<:SVector}
-@test costfun.H isa SMatrix
-@test costfun.q isa SVector
-@test costfun.r isa SVector
+TrajOptCore.hessian!(E0, cost0, x, u0)
+TrajOptCore.hessian!(E, idx_cost, x, u)
+@test E0.Q == E.Q
+@test Diagonal([diag(E0.R); zeros(n)]) ≈ E.R
 
-costs = infeasible_objective(prob.obj, 2.3)
+costs = TO.infeasible_objective(prob.obj, 2.3)
 @test costs[1].Q == cost0.Q
 @test costs[1].R == Diagonal([diag(cost0.R); fill(2.3,n)])
 @test costs[1].q == cost0.q
 @test costs[1].r == [cost0.r; zeros(n)]
-@test sum(costs[1].H) == sum(cost0.H)
-
+# @test sum(costs[1].H) == sum(cost0.H)
 
 # Test the solve
 sprob = copy(Problems.car_3obs_static)

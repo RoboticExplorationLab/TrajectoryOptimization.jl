@@ -8,8 +8,6 @@ using Test
 const TO = TrajectoryOptimization
 
 # Solve AL-iLQR problem
-prob = Problems.Cartpole()[1]
-prob.constraints.p
 solver = ALTROSolver(Problems.Cartpole()...)
 al = solver.solver_al
 solve!(al)

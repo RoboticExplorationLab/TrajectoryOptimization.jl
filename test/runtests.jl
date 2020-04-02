@@ -10,8 +10,8 @@ using Ipopt
 using Logging
 using ForwardDiff
 using RobotZoo
-using Dynamics
-using DifferentialRotations
+using RobotDynamics
+using Rotations
 const TO = TrajectoryOptimization
 
 @testset "Logging" begin

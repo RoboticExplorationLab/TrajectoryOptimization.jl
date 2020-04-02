@@ -157,7 +157,7 @@ function InfeasibleProblem(prob::Problem, Z0::Traj, R_inf::Real)
     Z = infeasible_trajectory(model_inf, Z0)
 
     # Convert constraints so that they accept new dimensions
-    conSet = change_dimension(get_constraints(prob),n, m+n)
+    conSet = change_dimension(get_constraints(prob), n, m+n, 1:n, 1:m)
 
     # Constrain additional controls to be zero
     inf = InfeasibleConstraint(model_inf)
@@ -176,10 +176,10 @@ function infeasible_objective(obj::Objective, regularizer)
     R = Diagonal(Rd)
     cost_inf = DiagonalCost(Diagonal(@SVector zeros(n)),R)
     costs = map(obj.cost) do cost
-        cost_idx = change_dimension(cost, n, n+m)
+        cost_idx = change_dimension(cost, n, n+m, 1:n, 1:m)
         cost_idx + cost_inf
     end
-    Objective(costs, copy(obj.J))
+    Objective(costs)
 end
 
 get_model(solver::ALTROSolver) = get_model(solver.solver_al)

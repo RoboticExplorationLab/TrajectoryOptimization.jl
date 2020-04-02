@@ -46,7 +46,7 @@ end
 
 function copy_jacobian!(D, con::ConVal{<:ControlConstraint}, cinds, xinds, uinds) where T
     for (i,k) in enumerate(con.inds)
-        D[cinds[i], uinds[k]] .= con.∇c[i]
+        D[cinds[i], uinds[k]] .= con.jac[i]
     end
 end
 

@@ -54,7 +54,7 @@ end
 @inline RobotDynamics.rotation_type(model::InfeasibleModel) where D = rotation_type(model.model)
 
 @generated function RobotDynamics.discrete_jacobian!(::Type{Q}, ∇f, model::InfeasibleModel{N,M},
-        z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Implicit}
+        z::KnotPoint{T,N,NM,L}) where {T,N,M,NM,L,Q<:Explicit}
 
     ∇ui = [(@SMatrix zeros(N,N+M)) Diagonal(@SVector ones(N)) @SVector zeros(N)]
     _x = SVector{N}(1:N)
@@ -127,7 +127,7 @@ InfeasibleConstraint(model::InfeasibleModel)
 InfeasibleConstraint(n,m)
 ```
 """
-struct InfeasibleConstraint{n} <: AbstractConstraint
+struct InfeasibleConstraint{n} <: ControlConstraint
 	ui::SVector{n,Int}
 	m::Int
 	function InfeasibleConstraint(n::Int, m::Int)
@@ -138,7 +138,7 @@ end
 
 InfeasibleConstraint(model::InfeasibleModel{n,m}) where {n,m} = InfeasibleConstraint(n,m)
 RobotDynamics.control_dim(con::InfeasibleConstraint{n}) where n = n + con.m
-@inline sense(::InfeasibleConstraint) = Equality()
+@inline TrajOptCore.sense(::InfeasibleConstraint) = Equality()
 @inline Base.length(::InfeasibleConstraint{n}) where n = n
 
 function TrajOptCore.evaluate(con::InfeasibleConstraint, u::SVector)
