@@ -101,8 +101,8 @@ function TrajOptCore.initial_trajectory!(solver::AbstractSolver, Z0::Traj)
     end
 end
 
-@inline get_trajectory(solver::AbstractSolver) = solver.Z
-@inline get_times(solver::AbstractSolver) = get_times(get_trajectory(solver))
+@inline TrajOptCore.get_trajectory(solver::AbstractSolver) = solver.Z
+@inline RobotDynamics.get_times(solver::AbstractSolver) = RobotDynamics.get_times(get_trajectory(solver))
 
 # ConstrainedSolver methods
 TrajOptCore.num_constraints(solver::AbstractSolver) = num_constraints(get_constraints(solver))
