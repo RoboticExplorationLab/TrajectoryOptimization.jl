@@ -62,13 +62,16 @@ abstract type Implicit <: QuadratureRule end
 "Integration rules of the form x′ = f(x,u,x′,u′), where x′,u′ are the states and controls at the next time step."
 abstract type Explicit <: QuadratureRule end
 
-"Fourth-order Runge-Kutta method with zero-order-old on the controls"
+"Eigth-order Runge-Kutta method"
+abstract type RK8 <: Implicit end
+
+"Fourth-order Runge-Kutta method with zero-order-hold on the controls"
 abstract type RK4 <: Implicit end
 
-"Second-order Runge-Kutta method with zero-order-old on the controls"
+"Second-order Runge-Kutta method with zero-order-hold on the controls"
 abstract type RK3 <: Implicit end
 
-"Second-order Runge-Kutta method with zero-order-old on the controls"
+"Second-order Runge-Kutta method with zero-order-hold on the controls"
 abstract type RK2 <: Implicit end
 
 "Third-order Runge-Kutta method with first-order-hold on the controls"
