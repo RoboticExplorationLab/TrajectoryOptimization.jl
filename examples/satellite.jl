@@ -54,7 +54,7 @@ visualize!(vis, solver)
 Q = Diagonal(SA[1,1,1, 0,0,0,0.])
 Qf = 100*Q
 cost0 = TrajOptCore.QuatLQRCost(Q,  R, xf)
-costN = TrajOptCore.QuatLQRCost(Qf, R, xf)
+costN = TrajOptCore.QuatLQRCost(Qf, R, xf, w=100.)
 obj = Objective(cost0, costN, N)
 
 prob = Problem(model, obj, xf, tf, x0=x0)
