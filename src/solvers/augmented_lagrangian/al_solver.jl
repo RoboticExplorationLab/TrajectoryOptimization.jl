@@ -215,10 +215,10 @@ end
 
 
 Base.size(solver::AugmentedLagrangianSolver) = size(solver.solver_uncon)
-@inline cost(solver::AugmentedLagrangianSolver) = cost(solver.solver_uncon)
-@inline get_trajectory(solver::AugmentedLagrangianSolver) = get_trajectory(solver.solver_uncon)
-@inline get_objective(solver::AugmentedLagrangianSolver) = get_objective(solver.solver_uncon)
-@inline get_model(solver::AugmentedLagrangianSolver) = get_model(solver.solver_uncon)
+@inline TrajOptCore.cost(solver::AugmentedLagrangianSolver) = cost(solver.solver_uncon)
+@inline TrajOptCore.get_trajectory(solver::AugmentedLagrangianSolver) = get_trajectory(solver.solver_uncon)
+@inline TrajOptCore.get_objective(solver::AugmentedLagrangianSolver) = get_objective(solver.solver_uncon)
+@inline TrajOptCore.get_model(solver::AugmentedLagrangianSolver) = get_model(solver.solver_uncon)
 @inline get_initial_state(solver::AugmentedLagrangianSolver) = get_initial_state(solver.solver_uncon)
 @inline iterations(solver::AugmentedLagrangianSolver) = solver.stats.iterations_total
 
