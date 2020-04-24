@@ -3,7 +3,6 @@ export
 	iLQRSolver2,
     iLQRSolver
 
-import TrajOptCore.QuadraticExpansion
 
 @with_kw mutable struct iLQRStats{T}
     iterations::Int = 0
@@ -180,13 +179,8 @@ function iLQRSolver(prob::Problem{QUAD,T}, opts=SolverOptions{T}()) where {QUAD,
 	D = [DynamicsExpansion{T}(n,n̄,m) for k = 1:N-1]
 	G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]  # add one to the end to use as an intermediate result
 
-	# quad_exp, Q = TrajOptCore.build_cost_expansion(prob.obj, prob.model)
 	Q = QuadraticObjective(n̄,m,N)
-	if prob.model isa LieGroupModel
-		quad_exp = QuadraticObjective(n,m,N)
-	else
-		quad_exp = Q
-	end
+	quad_exp = QuadraticObjective(Q, prob.model)
 	S = QuadraticObjective(n̄,m,N)
 
 	Quu_reg = SizedMatrix{m,m}(zeros(m,m))
