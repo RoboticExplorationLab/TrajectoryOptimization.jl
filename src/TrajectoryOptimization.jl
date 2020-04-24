@@ -89,6 +89,8 @@ include("solvers/altro/altro_solver.jl")
 # include("solvers/direct/moi.jl")
 include("solvers/direct/copy_blocks.jl")
 include("solvers/direct/direct_constraints.jl")
+include("merit_functions.jl")
+include("line_search.jl")
 
 include("problems.jl")
 # include("controllers.jl")
