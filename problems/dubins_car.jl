@@ -1,5 +1,5 @@
 
-function DubinsCar(scenario=:three_obstacles)
+function DubinsCar(scenario=:three_obstacles; N=101)
     if scenario == :three_obstacles
         opts = SolverOptions(
             cost_tolerance_intermediate=1e-2,
@@ -46,6 +46,38 @@ function DubinsCar(scenario=:three_obstacles)
         rollout!(car_3obs_static)
         return car_3obs_static, opts
 
+    elseif scenario==:turn90
+        opts = SolverOptions(
+            cost_tolerance_intermediate=1e-3,
+            active_set_tolerance=1e-4
+        )
+
+        # model
+        model = RobotZoo.DubinsCar()
+        n,m = size(model)
+        tf = 3.
+
+        # cost
+        d = 1.5
+        x0 = @SVector [0., 0., 0.]
+        xf = @SVector [d, d,  deg2rad(90)]
+        Qf = 100.0*Diagonal(@SVector ones(n))
+        Q = (1e-2)*Diagonal(@SVector ones(n))
+        R = (1e-2)*Diagonal(@SVector ones(m))
+
+        # problem
+        U = [@SVector fill(0.1,m) for k = 1:N-1]
+        obj = LQRObjective(Q,R,Qf,xf,N)
+
+        # constraints
+        cons = ConstraintList(n,m,N)
+        add_constraint!(cons, GoalConstraint(xf), N)
+
+        prob = Problem(model, obj, xf, tf, x0=x0, U0=U)
+        rollout!(prob)
+
+        return prob, opts
+
     elseif scenario==:parallel_park
         opts = SolverOptions(
             cost_tolerance_intermediate=1e-3,
@@ -55,7 +87,6 @@ function DubinsCar(scenario=:three_obstacles)
         # model
         model = RobotZoo.DubinsCar()
         n,m = size(model)
-        N = 101
         tf = 3.
 
         # cost
