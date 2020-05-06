@@ -76,7 +76,7 @@ widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N
 
 # Implicit
 function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
-	discrete_dynamics(Q, con.model, z1) - state(z2)
+	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
 end
 
 # function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
@@ -105,7 +105,7 @@ end
 function jacobian!(∇c, con::DynamicsConstraint{Q},
 		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,n}
 	if i == 1
-		discrete_jacobian!(Q, ∇c, con.model, z)
+		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z)
 		return false  # not constant
 	elseif i == 2
 		for i = 1:n
@@ -114,15 +114,4 @@ function jacobian!(∇c, con::DynamicsConstraint{Q},
 		return true   # is constant
 	end
 	# return nothing
-end
-
-
-struct DynamicsVals{T,N,A}
-    fVal::Vector{SVector{N,T}}
-    xMid::Vector{SVector{N,T}}
-    ∇f::Vector{A}
-end
-
-function DynamicsVals(dyn_con::DynamicsConstraint)
-	DynamicsVals(dyn_con.fVal, dyn_con.xMid, dyn_con.∇f)
 end

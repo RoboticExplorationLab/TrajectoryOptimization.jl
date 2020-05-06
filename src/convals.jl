@@ -22,7 +22,7 @@ struct ConVal{C,V,M,W}
         P = length(vals)
         ix = 1:n
         iu = n .+ (1:m)
-		views = [TrajOptCore.gen_views(∇c, con, n, m) for ∇c in jac]
+		views = [gen_views(∇c, con, n, m) for ∇c in jac]
 		∇x = [v[1] for v in views]
 		∇u = [v[2] for v in views]
         c_max = zeros(P)

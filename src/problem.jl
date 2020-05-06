@@ -60,7 +60,7 @@ end
 
 "Use RK3 as default integration"
 Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
-    Problem{RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
+    Problem{RobotDynamics.RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
         constraints=ConstraintList(size(model)...,length(obj)),

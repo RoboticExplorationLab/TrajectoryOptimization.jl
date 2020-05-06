@@ -95,6 +95,7 @@ end
 # 	end
 # end
 
+# TODO: Move to ALTRO
 struct DynamicsExpansion{T,N,N̄,M}
 	∇f::Matrix{T} # n × (n+m+1)
 	A_::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
@@ -132,10 +133,10 @@ struct DynamicsExpansion{T,N,N̄,M}
 	end
 end
 
-function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, model::AbstractModel,
+function dynamics_expansion!(Q, D::Vector{<:DynamicsExpansion}, model::AbstractModel,
 		Z::Traj)
 	for k in eachindex(D)
-		discrete_jacobian!(RK3, D[k].∇f, model, Z[k])
+		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k])
 		D[k].tmpA .= D[k].A_  # avoids allocations later
 		D[k].tmpB .= D[k].B_
 	end
@@ -154,7 +155,7 @@ function linearize!(::Type{Q}, D::DynamicsExpansion{<:Any,<:Any,N,M}, model::Abs
 	return D.tmpA, D.tmpB
 end
 
-function linearize!(::Type{Q}, D::DynamicsExpansion, model::RigidBody) where Q
+function linearize!(::Type{Q}, D::DynamicsExpansion, model::LieGroupModel) where Q
 	discrete_jacobian!(Q, D.∇f, model, z)
 	D.tmpA .= D.A_  # avoids allocations later
 	D.tmpB .= D.B_
