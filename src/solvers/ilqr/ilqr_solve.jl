@@ -46,8 +46,8 @@ end
 
 function step!(solver::iLQRSolver2, J)
     Z = solver.Z
-    RobotDynamics.state_diff_jacobian!(solver.G, solver.model, Z)
-	RobotDynamics.dynamics_expansion!(solver.D, solver.model, solver.Z)
+    TrajOptCore.state_diff_jacobian!(solver.G, solver.model, Z)
+	TrajOptCore.dynamics_expansion!(solver.D, solver.model, solver.Z)
 	TrajOptCore.error_expansion!(solver.D, solver.model, solver.G)
     TrajOptCore.cost_expansion!(solver.quad_obj, solver.obj, solver.Z)
 	TrajOptCore.error_expansion!(solver.Q, solver.quad_obj, solver.model, Z, solver.G)

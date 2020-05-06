@@ -171,15 +171,15 @@ function norm_grad(solver::ConstrainedSolver, recalculate::Bool=true)
 end
 
 #--- Rollout ---#
-function RobotDynamics.rollout!(solver::AbstractSolver)
+function rollout!(solver::AbstractSolver)
     Z = get_trajectory(solver)
     model = get_model(solver)
     x0 = get_initial_state(solver)
     rollout!(model, Z, x0)
 end
 
-RobotDynamics.states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
-function RobotDynamics.controls(solver::AbstractSolver)
+states(solver::AbstractSolver) = [state(z) for z in get_trajectory(solver)]
+function controls(solver::AbstractSolver)
     N = size(solver)[3]
     Z = get_trajectory(solver)
     [control(Z[k]) for k = 1:N-1]
@@ -197,7 +197,7 @@ function TrajOptCore.initial_trajectory!(solver::AbstractSolver, Z0::Traj)
 end
 
 # Default getters
-@inline RobotDynamics.get_times(solver::AbstractSolver) = RobotDynamics.get_times(get_trajectory(solver))
+@inline TrajOptCore.get_times(solver::AbstractSolver) = TrajOptCore.get_times(get_trajectory(solver))
 
 
 # Line Search and Merit Functions

@@ -5,6 +5,7 @@
 module Problems
 
 using TrajectoryOptimization
+using TrajOptCore
 using LinearAlgebra
 using ForwardDiff
 using Random

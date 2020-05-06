@@ -7,6 +7,7 @@ end
 
 # Double Integrator
 solver = ALTROSolver(Problems.DoubleIntegrator()...)
+solve!(solver)
 b = benchmark_solve!(solver)
 TEST_TIME && @test minimum(b).time / 1e6 < 0.5
 @test max_violation(solver) < 1e-6
@@ -56,10 +57,11 @@ TEST_TIME && @test minimum(b).time / 1e6 < 20
 
 # Zig-zag
 solver = ALTROSolver(Problems.Quadrotor(:zigzag)...)
+solve!(solver)
 b = benchmark_solve!(solver)
 TEST_TIME && @test minimum(b).time / 1e6 < 50
 @test max_violation(solver) < 1e-6
-@test iterations(solver) <= 15 # 14
+@test iterations(solver) == 14 # 14
 
 # Barrell Roll
 solver = ALTROSolver(Problems.YakProblems()...)

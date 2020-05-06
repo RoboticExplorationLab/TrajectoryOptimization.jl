@@ -26,7 +26,8 @@ using TrajOptCore
 
 import RobotDynamics: Implicit, Explicit, AbstractKnotPoint, DEFAULT_Q, StaticKnotPoint
 import TrajOptCore: DynamicsVals, num_constraints, get_J, cost_expansion!, error_expansion,
-    max_violation!, max_penalty!, initial_trajectory!, change_dimension
+    max_violation!, max_penalty!, initial_trajectory!, change_dimension, DynamicsExpansion,
+    rollout!, states
 import TrajOptCore: cost, cost!, get_constraints, get_objective, get_model  # extended
 import RobotDynamics: state_diff
 
@@ -64,7 +65,8 @@ export
 
 # solvers
 export
-    solve!
+    solve!,
+    rollout!
 
 const MOI = MathOptInterface
 

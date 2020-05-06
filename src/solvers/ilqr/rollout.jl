@@ -1,5 +1,5 @@
 
-function RobotDynamics.rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
+function rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
     Z = solver.Z; Z̄ = solver.Z̄
     K = solver.K; d = solver.d;
 
@@ -29,7 +29,7 @@ function RobotDynamics.rollout!(solver::iLQRSolver2{T,Q,n}, α) where {T,Q,n}
 end
 
 "Simulate the forward the dynamics open-loop"
-function RobotDynamics.rollout!(solver::iLQRSolver)
+function rollout!(solver::iLQRSolver)
     rollout!(solver.model, solver.Z, solver.x0)
     for k in eachindex(solver.Z)
         solver.Z̄[k].t = solver.Z[k].t
