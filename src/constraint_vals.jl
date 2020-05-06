@@ -1,11 +1,15 @@
-export
-	ConstraintVals
+# export
+# 	ConstraintVals
 
-@with_kw mutable struct ConstraintParams{T}
-	ϕ::T = 10.0  	  # penalty scaling parameter
-	μ0::T = 1.0 	  # initial penalty parameter
-	μ_max::T = 1e8    # max penalty parameter
-	λ_max::T = 1e8    # max Lagrange multiplier
+mutable struct ConstraintParams{T}
+	ϕ::T  	    # penalty scaling parameter
+	μ0::T 	    # initial penalty parameter
+	μ_max::T    # max penalty parameter
+	λ_max::T    # max Lagrange multiplier
+end
+function ConstraintParams(ϕ::T1 = 10, μ0::T2 = 1.0, μ_max::T3 = 1e8, λ_max::T4 = 1e8) where {T1,T2,T3,T4}
+	T = promote_type(T1,T2,T3,T4)
+	ConstraintParams(T(ϕ), T(μ0), T(μ_max), T(λ_max))
 end
 
 """ $(TYPEDEF)
@@ -15,12 +19,12 @@ is applied. This type should be fairly transparent to the user, and only needs t
 directly dealt with when writing solvers or setting fine-tuned updates per constraint
 (via the `.params` field).
 """
-struct ConstraintVals{T,W,C,P,N}
+struct ConstraintVals{T,W,C,P,MT}
 	con::C
 	inds::UnitRange{Int}
 	vals::Vector{SVector{P,T}}
 	vals_prev::Vector{SVector{P,T}}
-	∇c::Vector{SizedMatrix{P,N,T,2}}
+	∇c::Matrix{MT}
 	λ::Vector{SVector{P,T}}
 	μ::Vector{SVector{P,T}}
 	active::Vector{SVector{P,Bool}}
@@ -29,26 +33,36 @@ struct ConstraintVals{T,W,C,P,N}
 
 	function ConstraintVals(con::AbstractConstraint{S, W},
 			inds::UnitRange{Int}, vals::V, vals_prev,
-			∇c::Vector{<:SizedMatrix{P,N}}, λ::V, μ::V,
+			∇c::Matrix{MT}, λ::V, μ::V,
 			active::Vector{SVector{P,Bool}}, c_max::Vector{T},
-			params::ConstraintParams) where {S,W,T,P,N,V}
-		new{T,W,typeof(con),P,N}(con,inds,vals,vals_prev,∇c,λ,μ,
+			params::ConstraintParams) where {S,W,T,P,N,V,MT}
+		new{T,W,typeof(con),P,MT}(con,inds,vals,vals_prev,∇c,λ,μ,
 			active,c_max, params)
 	end
 end
 
-function ConstraintVals(con::C, inds::UnitRange, kwargs...) where C
+function ConstraintVals(con::C, inds::UnitRange, MT::Type=SizedMatrix, kwargs...) where C
 	p = length(con)
-	w = width(con)
+	w = widths(con)
 	P = length(inds)
+	nw = length(w)
 	λ    = [@SVector zeros(p) for k = 1:P]
 	μ    = [@SVector ones(p)  for k = 1:P]
 	atv  = [@SVector ones(Bool,p) for k = 1:P]
 	vals = [@SVector zeros(p) for k = 1:P]
-	∇c = [SizedMatrix{p,w}(zeros(Float64,p,w)) for k = 1:P]
+	if MT <: SizedArray
+		∇c = [SizedMatrix{p,w[i]}(zeros(Float64,p,w[i])) for k = 1:P, i = 1:nw]
+	elseif MT <: SubArray
+		∇c = [view(zeros(Float64,p,w[i]),1:p,1:w[i]) for k = 1:P, i = 1:nw]
+	end
 	params = ConstraintParams(;kwargs...)
 	ConstraintVals(con, inds, vals, deepcopy(vals), ∇c, λ, μ, atv, zeros(P),
 		params)
+end
+
+function ConstraintVals(conVal::ConstraintVals, ∇c::Matrix{<:AbstractMatrix})
+	ConstraintVals(conVal.con, conVal.inds, conVal.vals, conVal.vals_prev,
+		∇c, conVal.λ, conVal.μ, conVal.active, conVal.c_max, conVal.params)
 end
 
 get_params(con::ConstraintVals)::ConstraintParams = con.params

@@ -2,33 +2,6 @@
 #                                  IMPLICIT METHODS 								       #
 ############################################################################################
 
-function discrete_dynamics(::Type{RK3}, model::AbstractModel, x::SVector{N,T}, u::SVector{M,T},
-		t, dt::T) where {N,M,T}
-    k1 = dynamics(model, x,             u, t       )*dt;
-    k2 = dynamics(model, x + k1/2,      u, t + dt/2)*dt;
-    k3 = dynamics(model, x - k1 + 2*k2, u, t + dt  )*dt;
-    x + (k1 + 4*k2 + k3)/6
-end
-
-function discrete_dynamics(::Type{RK2}, model::AbstractModel, x::SVector, u::SVector, t, dt)
-	k1 = dynamics(model, x,        u, t       )*dt
-	k2 = dynamics(model, x + k1/2, u, t + dt/2)*dt
-	x + k2
-end
-
-function discrete_dynamics(::Type{RK4}, model::AbstractModel, x::SVector, u::SVector, t, dt)
-	k1 = dynamics(model, x,        u, t       )*dt
-	k2 = dynamics(model, x + k1/2, u, t + dt/2)*dt
-	k3 = dynamics(model, x + k2/2, u, t + dt/2)*dt
-	k4 = dynamics(model, x + k3,   u, t + dt  )*dt
-	x + (k1 + 2k2 + 2k3 + k4)/6
-end
-
-
-############################################################################################
-#                                  EXPLICIT METHODS 								       #
-############################################################################################
-
 # Hermite Simpson
 function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{HermiteSimpson},
 		Z::Traj, inds=1:length(Z)-1)
@@ -46,12 +19,12 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Hermi
 	for k in inds
 		Um = (control(Z[k]) + control(Z[k+1]))*0.5
 		fValm = dynamics(model, xMid[k], Um)
-		vals[k] = state(Z[k]) - state(Z[k+1]) + Z[k].dt*(fVal[k] + 4*fValm + fVal[k+1])/6
+		vals[k] .= state(Z[k]) - state(Z[k+1]) + Z[k].dt*(fVal[k] + 4*fValm + fVal[k+1])/6
 	end
 end
 
-function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{HermiteSimpson,L,T,n,m},
-		Z::Traj, inds=1:length(Z)-1) where {L,T,n,m}
+function jacobian!(∇c::Matrix{<:SizedMatrix}, con::DynamicsConstraint{HermiteSimpson,L,n,m},
+		Z::Traj, inds=1:length(Z)-1) where {L,n,m}
 	N = length(Z)
 	model = con.model
 	∇f = con.∇f
@@ -87,7 +60,8 @@ function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{HermiteS
 		B_ = dt/6*(B1 + 4Am*( dt/8*B1) + 2Bm)
 		C_ = dt/6*(A2 + 4Am*(-dt/8*A2 + In/2)) - In
 		D_ = dt/6*(B2 + 4Am*(-dt/8*B2) + 2Bm)
-		∇c[k] .= [A_ B_ C_ D_]
+		∇c[k,1] .= [A_ B_]
+		∇c[k,2] .= [C_ D_]
 	end
 end
 

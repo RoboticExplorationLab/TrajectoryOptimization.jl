@@ -1,16 +1,26 @@
-export
-	DynamicsConstraint,
-	integration
+# export
+# 	DynamicsConstraint,
+# 	integration
 
 ############################################################################################
 #                              DYNAMICS CONSTRAINTS										   #
 ############################################################################################
 
 
-abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractConstraint{Equality,W,P} end
+abstract type AbstractDynamicsConstraint <: CoupledConstraint end
+sense(::AbstractDynamicsConstraint) = Equality()
 state_dim(con::AbstractDynamicsConstraint) = size(con.model)[1]
 control_dim(con::AbstractDynamicsConstraint) = size(con.model)[2]
 Base.length(con::AbstractDynamicsConstraint) = size(con.model)[1]
+
+function has_dynamics_constraint(conSet::ConstraintList)
+	for con in conSet
+		if con isa DynamicsConstraint
+			return true
+		end
+	end
+	return false
+end
 
 """ $(TYPEDEF)
 An equality constraint imposed by the discretized system dynamics. Links adjacent time steps.
@@ -25,7 +35,7 @@ DynamicsConstraint{Q}(model::AbstractModel, N)
 ```
 where `N` is the number of knot points and `Q<:QuadratureRule` is the integration method.
 """
-struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
+struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,N,M,NM,T} <: AbstractDynamicsConstraint
 	model::L
     fVal::Vector{SVector{N,T}}
     xMid::Vector{SVector{N,T}}
@@ -50,37 +60,60 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 	B  = [view(∇f[k], ix,iu) for k = 1:N]
 	Am = [view(∇fm[k],ix,ix) for k = 1:3]
 	Bm = [view(∇fm[k],ix,iu) for k = 1:3]
-	NM = n+m
 	grad  = [GradientExpansion{T}(n,m) for k = 1:3]
-	DynamicsConstraint{Q,L,T,n,m,NM}(model, fVal, xMid, ∇f, A, B,
+	DynamicsConstraint{Q,L,n,m,n+m,T}(model, fVal, xMid, ∇f, A, B,
 		grad, ∇fm, Am, Bm)
 end
 
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 integration(::DynamicsConstraint{Q}) where Q = Q
 
-width(con::DynamicsConstraint{<:Implicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2N+M
-width(con::DynamicsConstraint{<:Explicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2NM
+widths(con::DynamicsConstraint{<:Any,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n+m)
+widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n)
+# width(con::DynamicsConstraint{<:Implicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2N+M
+# width(con::DynamicsConstraint{<:Explicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2NM
 ####!
 
 # Implicit
-function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
-		Z::Traj, inds=1:length(Z)-1) where Q<:Implicit
-	for k in inds
-		vals[k] = discrete_dynamics(Q, con.model, Z[k]) - state(Z[k+1])
-	end
+function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
+	discrete_dynamics(Q, con.model, z1) - state(z2)
 end
 
-function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{Q,L,T,N},
-		Z::Vector{<:AbstractKnotPoint{T,n,m}}, inds=1:length(Z)-1) where {Q<:Implicit,L,T,N,n,m}
-	In = Diagonal(@SVector ones(N))
-	zinds = [Z[1]._x; Z[1]._u]
-	for k in inds
-		∇f = uview(∇c[k].data, 1:n, 1:n+m+1)
-		discrete_jacobian!(Q, ∇f, con.model, Z[k])
-		∇f2 = uview(∇c[k].data, 1:n, n+m .+ (1:n))
-		∇f2 .= -Diagonal(@SVector ones(n))
+# function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
+# 		Z::Traj, inds=1:length(Z)-1) where Q<:Explicit
+# 	for k in inds
+# 		vals[k] .= discrete_dynamics(Q, con.model, Z[k]) - state(Z[k+1])
+# 	end
+# end
+
+# function jacobian!(∇c::Matrix{<:AbstractMatrix}, con::DynamicsConstraint{Q},
+# 		Z::Vector{<:AbstractKnotPoint{<:Any,n,m}}, inds=1:length(Z)-1) where {Q<:Explicit,n,m}
+# 	In = Diagonal(@SVector ones(n))
+# 	ix = Z[1]._x
+# 	zinds = [Z[1]._x; Z[1]._u]
+# 	for k in inds
+# 		# ∇f = uview(∇c[k].data, 1:n, 1:n+m+1)
+# 		∇f = ∇c[k,1]
+# 		discrete_jacobian!(Q, ∇f, con.model, Z[k])
+# 		# ∇f2 = uview(∇c[k].data, 1:n, n+m .+ (1:n))
+# 		∇f2 = ∇c[k,2]
+# 		∇f2[ix,ix] .= -Diagonal(@SVector ones(n))
+# 		return
+# 	end
+# end
+
+function jacobian!(∇c, con::DynamicsConstraint{Q},
+		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,n}
+	if i == 1
+		discrete_jacobian!(Q, ∇c, con.model, z)
+		return false  # not constant
+	elseif i == 2
+		for i = 1:n
+			∇c[i,i] = -1
+		end
+		return true   # is constant
 	end
+	# return nothing
 end
 
 

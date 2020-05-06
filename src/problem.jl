@@ -1,6 +1,6 @@
-export
-    Problem,
-    change_integration
+# export
+#     Problem,
+#     change_integration
 
 
 
@@ -39,16 +39,16 @@ At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `t
 struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     model::AbstractModel
     obj::AbstractObjective
-    constraints::ConstraintSet{T}
-    x0::SVector
-    xf::SVector
+    constraints::ConstraintList
+    x0::MVector
+    xf::MVector
     Z::Traj
     N::Int
     t0::T
     tf::T
     function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
-            constraints::ConstraintSet,
-            x0::SVector, xf::SVector,
+            constraints::ConstraintList,
+            x0::StaticVector, xf::StaticVector,
             Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
         n,m = size(model)
         @assert length(x0) == length(xf) == n
@@ -63,7 +63,7 @@ Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
     Problem{RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintSet(size(model)...,length(obj)),
+        constraints=ConstraintList(size(model)...,length(obj)),
         t0=zero(tf),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
@@ -143,6 +143,15 @@ function initial_states!(prob::Problem, X0::AbstractMatrix)
     set_states!(prob.Z, X0)
 end
 
+"""```julia
+set_initial_state!(prob::Problem, x0::AbstractVector)
+```
+Set the initial state in `prob` to `x0`
+"""
+function set_initial_state!(prob::Problem, x0::AbstractVector)
+    prob.x0 .= x0
+end
+
 "```julia
 initial_controls!(::Union{Problem,AbstractSolver}, U0::Vector{<:AbstractVector})
 initial_controls!(::Union{Problem,AbstractSolver}, U0::AbstractMatrx)
@@ -181,6 +190,9 @@ end
 num_constraints(prob::Problem) = get_constraints(prob).p
 
 @inline get_constraints(prob::Problem) = prob.constraints
+@inline get_model(prob::Problem) = prob.model
+@inline get_objective(prob::Problem) = prob.obj
+@inline get_trajectory(prob::Problem) = prob.Z
 
 
 "```julia
@@ -199,4 +211,23 @@ end
 function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
     x0=p.x0, xf=p.xf, t0=p.t0, tf=p.tf)
     Problem(model, obj, constraints, x0, xf, p.Z, p.N, t0, tf)
+end
+
+"```julia
+add_dynamics_constraints!(prob::Problem)
+```
+Add dynamics constraints to the constraint set"
+function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
+	n,m = size(prob)
+    conSet = prob.constraints
+
+    # Implicit dynamics
+    dyn_con = DynamicsConstraint{integration}(prob.model, prob.N)
+    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
+
+    # Initial condition
+    init_con = GoalConstraint(prob.x0)
+    add_constraint!(conSet, init_con, 1, 1)  # add it at the top
+
+    return nothing
 end
