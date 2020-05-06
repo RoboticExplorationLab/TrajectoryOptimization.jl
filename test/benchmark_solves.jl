@@ -57,7 +57,6 @@ TEST_TIME && @test minimum(b).time / 1e6 < 20
 
 # Zig-zag
 solver = ALTROSolver(Problems.Quadrotor(:zigzag)...)
-solve!(solver)
 b = benchmark_solve!(solver)
 TEST_TIME && @test minimum(b).time / 1e6 < 50
 @test max_violation(solver) < 1e-6

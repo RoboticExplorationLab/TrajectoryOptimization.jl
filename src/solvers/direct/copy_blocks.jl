@@ -104,12 +104,12 @@ function copy_jacobians!(jac::AbstractVector{<:Real}, solver::DirectSolver)
     return nothing
 end
 
-function copy_gradient!(grad_f, E::Vector{<:CostExpansion}, xinds, uinds)
-    for k = 1:length(uinds)
-        grad_f[xinds[k]] = E[k].x
-        grad_f[uinds[k]] = E[k].u
-    end
-    if length(xinds) != length(uinds)
-        grad_f[xinds[end]] = E[end].x
-    end
-end
+# function copy_gradient!(grad_f, E::Vector{<:CostExpansion}, xinds, uinds)
+#     for k = 1:length(uinds)
+#         grad_f[xinds[k]] = E[k].x
+#         grad_f[uinds[k]] = E[k].u
+#     end
+#     if length(xinds) != length(uinds)
+#         grad_f[xinds[end]] = E[end].x
+#     end
+# end
