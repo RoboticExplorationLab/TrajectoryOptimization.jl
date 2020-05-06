@@ -1,9 +1,3 @@
-# export
-#     Traj,
-# 	states,
-# 	controls,
-# 	set_states!,
-# 	set_controls!
 """
     Traj
 

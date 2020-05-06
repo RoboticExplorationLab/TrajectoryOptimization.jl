@@ -1,6 +1,3 @@
-# export
-# 	DynamicsConstraint,
-# 	integration
 
 ############################################################################################
 #                              DYNAMICS CONSTRAINTS										   #
@@ -12,15 +9,6 @@ sense(::AbstractDynamicsConstraint) = Equality()
 state_dim(con::AbstractDynamicsConstraint) = size(con.model)[1]
 control_dim(con::AbstractDynamicsConstraint) = size(con.model)[2]
 Base.length(con::AbstractDynamicsConstraint) = size(con.model)[1]
-
-function has_dynamics_constraint(conSet::ConstraintList)
-	for con in conSet
-		if con isa DynamicsConstraint
-			return true
-		end
-	end
-	return false
-end
 
 """ $(TYPEDEF)
 An equality constraint imposed by the discretized system dynamics. Links adjacent time steps.
@@ -70,37 +58,11 @@ integration(::DynamicsConstraint{Q}) where Q = Q
 
 widths(con::DynamicsConstraint{<:Any,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n+m)
 widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n)
-# width(con::DynamicsConstraint{<:Implicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2N+M
-# width(con::DynamicsConstraint{<:Explicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2NM
-####!
 
 # Implicit
 function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
 	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
 end
-
-# function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
-# 		Z::Traj, inds=1:length(Z)-1) where Q<:Explicit
-# 	for k in inds
-# 		vals[k] .= discrete_dynamics(Q, con.model, Z[k]) - state(Z[k+1])
-# 	end
-# end
-
-# function jacobian!(∇c::Matrix{<:AbstractMatrix}, con::DynamicsConstraint{Q},
-# 		Z::Vector{<:AbstractKnotPoint{<:Any,n,m}}, inds=1:length(Z)-1) where {Q<:Explicit,n,m}
-# 	In = Diagonal(@SVector ones(n))
-# 	ix = Z[1]._x
-# 	zinds = [Z[1]._x; Z[1]._u]
-# 	for k in inds
-# 		# ∇f = uview(∇c[k].data, 1:n, 1:n+m+1)
-# 		∇f = ∇c[k,1]
-# 		discrete_jacobian!(Q, ∇f, con.model, Z[k])
-# 		# ∇f2 = uview(∇c[k].data, 1:n, n+m .+ (1:n))
-# 		∇f2 = ∇c[k,2]
-# 		∇f2[ix,ix] .= -Diagonal(@SVector ones(n))
-# 		return
-# 	end
-# end
 
 function jacobian!(∇c, con::DynamicsConstraint{Q},
 		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,n}

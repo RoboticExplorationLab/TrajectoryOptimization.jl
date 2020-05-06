@@ -1,6 +1,6 @@
 """
     TrajectoryOptimization
-Primary module for setting up and solving trajectory optimization problems.
+Primary module for setting up and evaluating trajectory optimization problems.
 """
 module TrajectoryOptimization
 
@@ -54,6 +54,7 @@ include("objective.jl")
 include("abstract_constraint.jl")
 include("constraints.jl")
 include("dynamics_constraints.jl")
+include("constraint_list.jl")
 include("integration.jl")
 
 include("cost.jl")

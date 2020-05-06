@@ -1,9 +1,3 @@
-# export
-#     Problem,
-#     change_integration
-
-
-
 """$(TYPEDEF) Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:
 * dynamics model (`Model`)

@@ -1,17 +1,3 @@
-# export
-# 	ConstraintSense,
-# 	Inequality,
-# 	Equality,
-# 	Stage,
-# 	State,
-# 	Control,
-# 	Coupled,
-# 	Dynamical
-#
-# export
-# 	evaluate,
-# 	jacobian
-
 import RobotDynamics: jacobian!
 
 
@@ -86,29 +72,21 @@ const ControlConstraints = Union{StageConstraint, ControlConstraint, CoupledCons
 
 "Get constraint sense (Inequality vs Equality)"
 sense(::C) where C <: AbstractConstraint = throw(NotImplemented(:sense, Symbol(C)))
+
 "Get type of constraint (bandedness)"
 contype(::C) where C <: AbstractConstraint = throw(NotImplemented(:contype, Symbol(C)))
+
 "Dimension of the state vector"
 RobotDynamics.state_dim(::C) where C <: StateConstraint = throw(NotImplemented(:state_dim, Symbol(C)))
+
 "Dimension of the control vector"
 RobotDynamics.control_dim(::C) where C <: ControlConstraint = throw(NotImplemented(:control_dim, Symbol(C)))
+
 "Return the constraint value"
 evaluate(::C) where C <: AbstractConstraint = throw(NotImplemented(:evaluate, Symbol(C)))
+
 "Length of constraint vector"
 Base.length(::C) where C <: AbstractConstraint = throw(NotImplemented(:length, Symbol(C)))
-
-Base.size(con::AbstractConstraint) = (length(con), width(con))
-
-"Returns the width of the constraint Jacobian, i.e. the total number of inputs
-to the constraint"
-width(con::AbstractConstraint) = sum(widths(con))
-
-width(::StageConstraint,n,m) = n+m
-width(::StateConstraint,n,m) = n
-width(::ControlConstraint,n,m) = m
-width(::CoupledConstraint,n,m) = 2n + 2m
-width(::CoupledStateConstraint,n,m) = 2n
-width(::CoupledControlConstraint,n,m) = 2m
 
 widths(con::StageConstraint, n=state_dim(con), m=control_dim(con)) = (n+m,)
 widths(con::StateConstraint, n=state_dim(con), m=0) = (n,)
@@ -145,24 +123,6 @@ get_dims(con::AbstractConstraint, nm::Int) = state_dim(con), control_dim(con)
 
 con_label(::AbstractConstraint, i::Int) = "index $i"
 
-"""
-	get_z(con::AbstractConstraint, z1::AbstractKnotPoint, z2::AbstractKnotPoint)
-Get the values used to calculate `con`, returned as a tuple of the current and the next
-time step. For example, a `StageConstraint` is a function of the states at only the current
-time step, so will return `(x,)`. An explicit dynamics constraint is a function of the
-states and controls at the current time step and only the state at the next time step, so
-will return `(z, x2)`.
-Useful for getting the vectors of the appropriate size to multiply the Jacobians.
-"""
-RobotDynamics.get_z(con::StateConstraint, z::AbstractKnotPoint) = (state(z),)
-RobotDynamics.get_z(con::ControlConstraint, z::AbstractKnotPoint) = (control(z),)
-RobotDynamics.get_z(con::StageConstraint, z::AbstractKnotPoint) = (RobotDynamics.get_z(z),)
-RobotDynamics.get_z(con::StageConstraint, z::AbstractKnotPoint, z2::AbstractKnotPoint) =
-	RobotDynamics.get_z(con, z)
-RobotDynamics.get_z(con::CoupledConstraint, z::AbstractKnotPoint, z2::AbstractKnotPoint) =
-	(RobotDynamics.get_z(z), RobotDynamics.get_z(z2))
-RobotDynamics.get_z(con::StageConstraint, Z::Traj, k) = RobotDynamics.get_z(con, Z[k])
-RobotDynamics.get_z(con::CoupledConstraint, Z::Traj, k) = RobotDynamics.get_z(con, Z[k], Z[k+1])
 
 ############################################################################################
 # 								EVALUATION METHODS 										   #
@@ -243,17 +203,11 @@ function jacobian!(∇c, con::StageConstraint, x::StaticVector)
 	return false
 end
 
-# function jacobian!(∇c, con::StageConstraint, x::StaticVector, u::StaticVector)
-# 	eval_c(z) = evaluate(con, StaticKnotPoint(z))
-# 	∇c .= ForwardDiff.jacobian(eval_c, [x; u])
-# 	return false
-# end
 
-@inline gen_jacobian(con::AbstractConstraint) = SizedMatrix{size(con)...}(zeros(size(con)))
-function gen_jacobian(con::CoupledConstraint)
+function gen_jacobian(con::AbstractConstraint,i=1)
 	ws = widths(con)
 	p = length(con)
-	C1 = SizedMatrix{p,ws[1]}(zeros(p,ws[1]))
+	C1 = SizedMatrix{p,ws[i]}(zeros(p,ws[i]))
 end
 
 function gen_views(∇c::AbstractMatrix, con::StateConstraint, n=state_dim(con), m=0)
@@ -270,121 +224,4 @@ function gen_views(∇c::AbstractMatrix, con::AbstractConstraint, n=state_dim(co
 	else
 		view(∇c,:,1:n), view(∇c,:,n .+ (1:m))
 	end
-end
-
-
-############################################################################################
-#					             CONSTRAINT LIST										   #
-############################################################################################
-"""
-	AbstractConstraintSet
-
-Stores constraint error and Jacobian values, correctly accounting for the error state if
-necessary.
-
-# Interface
-- `get_convals(::AbstractConstraintSet)::Vector{<:ConVal}` where the size of the Jacobians
-	match the full state dimension
-- `get_errvals(::AbstractConstraintSet)::Vector{<:ConVal}` where the size of the Jacobians
-	match the error state dimension
-- must have field `c_max::Vector{<:AbstractFloat}` of length `length(get_convals(conSet))`
-
-# Methods
-Once the previous interface is defined, the following methods are defined
-- `Base.iterate`: iterates over `get_convals(conSet)`
-- `Base.length`: number of independent constraints
-- `evaluate!(conSet, Z::Traj)`: evaluate the constraints over the entire trajectory `Z`
-- `jacobian!(conSet, Z::Traj)`: evaluate the constraint Jacobians over the entire trajectory `Z`
-- `error_expansion!(conSet, model, G)`: evaluate the Jacobians for the error state using the
-	state error Jacobian `G`
-- `max_violation(conSet)`: return the maximum constraint violation
-- `findmax_violation(conSet)`: return details about the location of the maximum
-	constraint violation in the trajectory
-"""
-abstract type AbstractConstraintSet end
-
-struct ConstraintList <: AbstractConstraintSet
-	n::Int
-	m::Int
-	constraints::Vector{AbstractConstraint}
-	inds::Vector{UnitRange{Int}}
-	p::Vector{Int}
-	function ConstraintList(n::Int, m::Int, N::Int)
-		constraints = AbstractConstraint[]
-		inds = UnitRange{Int}[]
-		p = zeros(Int,N)
-		new(n, m, constraints, inds, p)
-	end
-end
-
-function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
-	@assert check_dims(con, cons.n, cons.m) "New constaint not consistent with n=$(cons.n) and m=$(cons.m)"
-	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
-	if idx == -1
-		push!(cons.constraints, con)
-		push!(cons.inds, inds)
-	elseif 0 < idx <= length(cons)
-		insert!(cons.constraints, idx, con)
-		insert!(cons.inds, idx, inds)
-	else
-		throw(ArgumentError("cannot insert constraint at index=$idx. Length = $(length(cons))"))
-	end
-	num_constraints!(cons)
-	@assert length(cons.constraints) == length(cons.inds)
-end
-
-@inline add_constraint!(cons::ConstraintList, con::AbstractConstraint, k::Int, idx=-1) =
-	add_constraint!(cons, con, k:k, idx)
-
-# Iteration
-Base.iterate(cons::ConstraintList) = length(cons) == 0 ? nothing : (cons[1], 1)
-Base.iterate(cons::ConstraintList, i) = i < length(cons) ? (cons[i+1], i+1) : nothing
-@inline Base.length(cons::ConstraintList) = length(cons.constraints)
-Base.IteratorSize(::ConstraintList) = Base.HasLength()
-Base.IteratorEltype(::ConstraintList) = Base.HasEltype()
-Base.eltype(::ConstraintList) = AbstractConstraint
-Base.firstindex(::ConstraintList) = 1
-Base.lastindex(cons::ConstraintList) = length(cons.constraints)
-
-Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
-
-@inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
-
-function Base.copy(cons::ConstraintList)
-	cons2 = ConstraintList(cons.n, cons.m, length(cons.p))
-	for i in eachindex(cons.constraints)
-		add_constraint!(cons2, cons.constraints[i], copy(cons.inds[i]))
-	end
-	return cons2
-end
-
-@inline num_constraints(cons::ConstraintList) = cons.p
-
-function num_constraints!(cons::ConstraintList)
-	cons.p .*= 0
-	for i = 1:length(cons)
-		p = length(cons[i])
-		for k in cons.inds[i]
-			cons.p[k] += p
-		end
-	end
-end
-
-function change_dimension(cons::ConstraintList, n::Int, m::Int, ix=1:n, iu=1:m)
-	new_list = ConstraintList(n, m, length(cons.p))
-	for (i,con) in enumerate(cons)
-		new_con = change_dimension(con, n, m, ix, iu)
-		add_constraint!(new_list, new_con, cons.inds[i])
-	end
-	return new_list
-end
-
-# sort the constraint list by stage < coupled, preserving ordering
-function Base.sort!(cons::ConstraintList; rev::Bool=false)
-	lt(con1,con2) = false
-	lt(con1::StageConstraint, con2::CoupledConstraint) = true
-	inds = sortperm(cons.constraints, alg=MergeSort, lt=lt, rev=rev)
-	permute!(cons.inds, inds)
-	permute!(cons.constraints, inds)
-	return cons
 end
