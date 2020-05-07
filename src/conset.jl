@@ -290,7 +290,7 @@ function cost!(J::Vector{<:Real}, conval::ConVal, λ::Vector{<:StaticVector},
 	end
 end
 
-function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::Traj, init::Bool=false)
+function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::Traj, init::Bool=false, rezero::Bool=false)
 	for i in eachindex(conSet.errvals)
 		cost_expansion!(E, conSet.convals[i], conSet.λ[i], conSet.μ[i], conSet.active[i])
 	end

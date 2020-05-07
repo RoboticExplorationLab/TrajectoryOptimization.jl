@@ -46,11 +46,16 @@ function cost_gradient!(E::Objective, obj::Objective, Z::Traj, init::Bool=false)
     end
 end
 
-function cost_hessian!(E::Objective, obj::Objective, Z::Traj, init::Bool=false)
+function cost_hessian!(E::Objective, obj::Objective, Z::Traj, init::Bool=false, rezero::Bool=false)
     is_const = E.const_hess
     N = length(Z)
     for k in eachindex(Z)
         if init || !is_const[k]
+			if rezero
+				E[k].Q .= 0
+				E[k].R .= 0
+				!is_blockdiag(E[k]) && (E[k].H .= 0)
+			end
 			if is_terminal(Z[k])
             	is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]))
 			else
@@ -65,9 +70,9 @@ function cost_hessian!(E::Objective, obj::Objective, Z::Traj, init::Bool=false)
     end
 end
 
-function cost_expansion!(E::Objective, obj::Objective, Z::Traj, init::Bool=false)
+function cost_expansion!(E::Objective, obj::Objective, Z::Traj, init::Bool=false, rezero::Bool=false)
     cost_gradient!(E, obj, Z, init)
-    cost_hessian!(E, obj, Z, init)
+    cost_hessian!(E, obj, Z, init, rezero)
     return nothing
 end
 
