@@ -191,14 +191,6 @@ function Base.:\(cost::DiagonalCost, z::AbstractKnotPoint)
     return StaticKnotPoint([x;u], z._x, z._u, z.dt, z.t)
 end
 
-# function Base.:+(cost1::DiagonalCost, cost2::DiagonalCost)
-#     @assert state_dim(cost1) == state_dim(cost2)
-#     @assert control_dim(cost1) == control_dim(cost2)
-#     terminal = cost1.terminal || cost2.terminal
-#     DiagonalCost(cost1.Q + cost2.Q, cost1.R + cost2.R, cost1.q + cost2.q, cost1.r + cost2.r,
-#         cost1.c + cost2.c, terminal=terminal)
-# end
-
 function change_dimension(cost::DiagonalCost, n::Int, m::Int, ix, iu)
     Qd = zeros(n)
     Rd = zeros(m)
