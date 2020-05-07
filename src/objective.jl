@@ -199,9 +199,9 @@ function LQRObjective(
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
 
-    ℓ = DiagonalCost(Q, R, q, r, c, false)
+    ℓ = DiagonalCost(Q, R, q, r, c, terminal=false)
 
-    ℓN = DiagonalCost(Qf, R, qf, r, cf, true)
+    ℓN = DiagonalCost(Qf, R, qf, r, cf, terminal=true)
 
     Objective(ℓ, ℓN, N)
 end
