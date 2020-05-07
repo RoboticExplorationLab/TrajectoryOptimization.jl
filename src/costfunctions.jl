@@ -8,10 +8,74 @@ abstract type CostFunction end
 
 abstract type QuadraticCostFunction{n,m,T} <: CostFunction end
 
-@inline QuadraticCostFunction(cost::QuadraticCostFunction) = cost
-@inline QuadraticCostFunction(cost::CostFunction) =
-    QuadraticCost{Float64}(state_dim(cost), control_dim(cost))
 is_diag(cost::QuadraticCostFunction) = is_blockdiag(cost) && cost.Q isa Diagonal && cost.R isa Diagonal
+
+state_dim(::QuadraticCostFunction{n}) where n = n
+control_dim(::QuadraticCostFunction{<:Any,m}) where m = m
+
+function run_posdef_checks(Q, R)
+    valid = true
+    if !isposdef(Array(R))
+        @warn "R is not positive definite"
+        valid &= false
+    end
+    if !ispossemidef(Array(Q))
+        @warn "Q must be positive semi-definite"
+        valid &= false
+    end
+    return valid
+end
+
+function stage_cost(cost::QuadraticCostFunction, x::AbstractVector, u::AbstractVector)
+    J = 0.5*u'cost.R*u + cost.r'u + stage_cost(cost, x)
+    if !is_blockdiag(cost)
+        J += u*cost.H*x
+    end
+    return J
+end
+
+function stage_cost(cost::QuadraticCostFunction, x::AbstractVector{T}) where T
+    0.5*x'cost.Q*x .+ cost.q'*x .+ cost.c
+end
+
+function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x)
+    E.q .= cost.Q*x .+ cost.q
+    if !is_blockdiag(cost)
+        E.q .+= cost.H'u
+    end
+    return false
+end
+
+function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x, u)
+    gradient!(E, cost, x)
+    E.r .= cost.R*u .+ cost.r
+    if !is_blockdiag(cost)
+        E.r .+= cost.H*x
+    end
+    return false
+end
+
+function hessian!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x)
+    if is_diag(cost)
+        for i = 1:length(x); E.Q[i,i] = cost.Q[i,i] end
+    else
+        E.Q .= cost.Q
+    end
+    return true
+end
+
+function hessian!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x, u)
+    hessian!(E, cost, x)
+    if is_diag(cost)
+        for i = 1:length(u); E.R[i,i] = cost.R[i,i]; end
+    else
+        E.R .= cost.R
+    end
+    if !is_blockdiag(cost)
+        E.H .= cost.H
+    end
+    return true
+end
 
 function invert!(Ginv, cost::QuadraticCostFunction{n,m}) where {n,m}
     ix = 1:n
@@ -76,49 +140,8 @@ function DiagonalCost(Q::AbstractVector, R::AbstractVector, terminal=false)
     DiagonalCost(Q, R, q, r, c, terminal)
 end
 
-state_dim(::DiagonalCost{n}) where n = n
-control_dim(::DiagonalCost{<:Any,m}) where m = m
 is_blockdiag(::DiagonalCost) = true
 is_diag(::DiagonalCost) = true
-
-function stage_cost(cost::DiagonalCost, x::SVector, u::SVector)
-    return cost.r'u + 0.5*u'cost.R*u + stage_cost(cost, x)
-end
-
-function stage_cost(cost::DiagonalCost, x::SVector)
-    return 0.5*x'cost.Q*x + cost.q'x + cost.c
-end
-
-function gradient!(E::AbstractExpansion, cost::DiagonalCost, x, u)
-    E.x .= cost.Q*x .+ cost.q
-    E.u .= cost.R*u .+ cost.r
-end
-
-function hessian!(E::AbstractExpansion, cost::DiagonalCost, x, u)
-    E.xx .= cost.Q
-    E.uu .= cost.R
-    E.ux .= 0
-end
-
-function gradient!(E::QuadraticCostFunction, cost::DiagonalCost, x)
-    E.q .= cost.Q*x .+ cost.q
-    return false
-end
-function gradient!(E::QuadraticCostFunction, cost::DiagonalCost, x, u)
-    gradient!(E, cost, x)
-    E.r .= cost.R*u .+ cost.r
-    return false
-end
-
-function hessian!(E::QuadraticCostFunction, cost::DiagonalCost, x)
-    E.Q .= cost.Q
-    return false
-end
-function hessian!(E::QuadraticCostFunction, cost::DiagonalCost, x, u)
-    hessian!(E, cost, x)
-    E.R .= cost.R
-    return true
-end
 
 function LinearAlgebra.inv(cost::DiagonalCost)
     return DiagonalCost(inv(cost.Q), inv(cost.R), cost.q, cost.r, cost.c, cost.terminal)
@@ -261,58 +284,6 @@ function LQRCostTerminal(Qf::AbstractArray,xf::AbstractVector)
     return QuadraticCost(Qf,zeros(0,0),zeros(0,size(Qf,1)),qf,zeros(0),cf,true)
 end
 
-# Cost function methods
-function stage_cost(cost::QuadraticCost, x::AbstractVector, u::AbstractVector)
-    0.5*x'cost.Q*x .+ 0.5*u'*cost.R*u .+ cost.q'x .+ cost.r'u .+ cost.c .+ u'*cost.H*x
-end
-
-function stage_cost(cost::QuadraticCost, xN::AbstractVector{T}) where T
-    0.5*xN'cost.Q*xN .+ cost.q'*xN .+ cost.c
-end
-
-function gradient!(E::QuadraticCost, cost::QuadraticCost, x)
-    E.q .= cost.Q*x .+ cost.q .+ cost.H'u
-    return false
-end
-function gradient!(E::QuadraticCost, cost::QuadraticCost, x, u)
-    gradient!(E, cost, x)
-    E.r .= cost.R*u .+ cost.r .+ cost.H*x
-    return false
-end
-
-function hessian!(E::QuadraticCost, cost::QuadraticCost, x)
-    E.Q .= cost.Q
-    return true
-end
-function hessian!(E::QuadraticCost, cost::QuadraticCost, x, u)
-    hessian!(E, cost, x)
-    E.R .= cost.R
-    if is_blockdiag(cost)
-        E.H .= cost.H
-    end
-    return true
-end
-
-function gradient!(E::AbstractExpansion, cost::QuadraticCost, x, u)
-    E.x .= cost.Q*x + cost.q + cost.H'u
-    E.u .= cost.R*u + cost.r + cost.H*x
-    return nothing
-    mul!(E.x, cost.Q, x)
-    E.x .+= cost.q
-    mul!(E.x, cost.H', u, 1.0, 1.0)
-
-    mul!(E.u, cost.R, u)
-    E.u .+= cost.r
-    mul!(E.u, cost.H, x, 1.0, 1.0)
-    return nothing
-end
-
-function hessian!(E::AbstractExpansion, cost::QuadraticCost, x, u)
-    E.xx .= cost.Q
-    E.uu .= cost.R
-    E.ux .= cost.H
-    return nothing
-end
 
 function LinearAlgebra.inv(cost::QuadraticCost)
     if norm(cost.H,Inf) ≈ 0
