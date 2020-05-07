@@ -211,22 +211,29 @@ function reset!(conSet::ALConstraintSet)
 end
 
 function reset_duals!(conSet::ALConstraintSet)
+	function _reset!(V::Vector{<:SVector})
+	    for i in eachindex(V)
+	        V[i] = zero(V[i])
+	    end
+	end
     for i in eachindex(conSet.λ)
-        reset!(conSet.λ[i], 0.0)
+        _reset!(conSet.λ[i])
     end
 end
 
 function reset_penalties!(conSet::ALConstraintSet)
+	function _reset!(V::Vector{<:SVector}, params::ConstraintParams)
+	    for i in eachindex(V)
+	        V[i] = zero(V[i]) .+ params.μ0
+	    end
+	end
     for i in eachindex(conSet.μ)
-        reset!(conSet.μ[i], conSet.params[i].μ0)
+        # reset!(conSet.μ[i], conSet.params[i].μ0)
+		# μ0 = conSet.params[i].μ0
+        _reset!(conSet.μ[i], conSet.params[i])
     end
 end
 
-function reset!(V::Vector{<:SVector}, v0)
-    for i in eachindex(V)
-        V[i] = zero(V[i]) .+ v0
-    end
-end
 
 # Augmented Lagrangian Updated
 function dual_update!(conSet::ALConstraintSet)
