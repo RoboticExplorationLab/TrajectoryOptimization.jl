@@ -16,7 +16,7 @@ const TO = TrajectoryOptimization
 end
 
 @testset "Dynamics" begin
-    include("models_test.jl")
+    # include("models_test.jl")
     include("dynamics_constraints.jl")
 end
 
@@ -43,6 +43,6 @@ end
     include("cost_tests.jl")
 end
 
-@testset "Controllers" begin
-    include("controllers_test.jl")
-end
+# @testset "Controllers" begin
+#     include("controllers_test.jl")
+# end
