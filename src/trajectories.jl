@@ -1,3 +1,5 @@
+abstract type AbstractTrajectory{n,m,T} <: AbstractVector{T} end
+
 """
     Traj
 
@@ -9,14 +11,32 @@ A vector of KnotPoints
     Traj(X, U, dt, t)
     Traj(X, U, dt)
 """
-const Traj = AbstractVector{<:AbstractKnotPoint}
+struct Traj{n,m,T,KP} <: AbstractTrajectory{n,m,T}
+	data::Vector{KP}
+	function Traj(Z::Vector{<:AbstractKnotPoint{T,n,m}}) where {n,m,T}
+		new{n,m,T,eltype(Z)}(Z)
+	end
+end
+
+# AbstractArray interface
+@inline Base.iterate(Z::Traj, k::Int) = iterate(Z.data, k)
+Base.IteratorSize(Z::Traj) = Base.HasLength()
+Base.IteratorEltype(Z::Traj) = IteratorEltype(Z.data)
+@inline Base.eltype(Z::Traj) = eltype(Z.data)
+@inline Base.length(Z::Traj) = length(Z.data)
+@inline Base.size(Z::Traj) = size(Z.data)
+@inline Base.getindex(Z::Traj, i) = Z.data[i]
+@inline Base.setindex!(Z::Traj, v, i) = Z.data[i] = v
+@inline Base.firstindex(Z::Traj) = 1
+@inline Base.lastindex(Z::Traj) = lastindex(Z.data)
+Base.IndexStyle(::Traj) = IndexLinear()
 
 Traj(Z::Traj) = Z
 
-traj_size(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M} = N,M,length(Z)
+traj_size(Z::Traj) where {T,N,M} = N,M,length(Z)
 
-function Base.copy(Z::Vector{<:KnotPoint{T,N,M}}) where {T,N,M}
-    [KnotPoint(copy(z.z), copy(z._x), copy(z._u), z.dt, z.t) for z in Z]
+function Base.copy(Z::Traj) where {T,N,M}
+    Traj([KnotPoint(copy(z.z), copy(z._x), copy(z._u), z.dt, z.t) for z in Z])
 end
 
 function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
@@ -32,7 +52,7 @@ function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int, equal=false)
         m = length(u)
         push!(Z, KnotPoint(x,m,(N-1)*dt))
     end
-    return Z
+    return Traj(Z)
 end
 
 function Traj(X::Vector, U::Vector, dt::Vector, t=cumsum(dt) .- dt[1])
@@ -40,7 +60,7 @@ function Traj(X::Vector, U::Vector, dt::Vector, t=cumsum(dt) .- dt[1])
     if length(U) == length(X)-1
         push!(Z, KnotPoint(X[end],length(U[1]),t[end]))
     end
-    return Z
+    return Traj(Z)
 end
 
 @inline states(Z::Traj) = state.(Z)
