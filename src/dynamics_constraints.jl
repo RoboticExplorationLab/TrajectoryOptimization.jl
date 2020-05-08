@@ -59,6 +59,8 @@ integration(::DynamicsConstraint{Q}) where Q = Q
 widths(con::DynamicsConstraint{<:Any,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n+m)
 widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n)
 
+get_inds(con::DynamicsConstraint{<:Explicit}, n, m) = (1:n+m, (n+m) .+ (1:n))
+
 # Implicit
 function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
 	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
@@ -76,4 +78,15 @@ function jacobian!(∇c, con::DynamicsConstraint{Q},
 		return true   # is constant
 	end
 	# return nothing
+end
+
+function ∇jacobian!(G, con::DynamicsConstraint{<:Explicit},
+	z::AbstractKnotPoint, z2::AbstractKnotPoint, λ, i=1)
+	if i == 1
+		dyn(x) = evaluate(con, StaticKnotPoint(z,x), z2)'λ
+		G .+= ForwardDiff.hessian(dyn, z.z)
+	elseif i == 2
+		nothing
+	end
+	return false
 end

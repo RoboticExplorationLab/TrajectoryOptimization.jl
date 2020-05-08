@@ -51,6 +51,15 @@ end
 @inline sense(::GoalConstraint) = Equality()
 @inline Base.length(con::GoalConstraint{P}) where P = P
 @inline state_dim(con::GoalConstraint) = con.n
+@inline is_bound(::GoalConstraint) = true
+function primal_bounds!(zL,zU,con::GoalConstraint)
+	for i in con.inds
+		zL[i] = con.xf[i]
+		zU[i] = con.xf[i] 
+	end
+	return true
+end
+
 evaluate(con::GoalConstraint, x::SVector) = x[con.inds] - con.xf
 function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
 	T = eltype(∇c)
@@ -59,6 +68,8 @@ function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
 	end
 	return true
 end
+
+∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
 
 function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
 	GoalConstraint(n, con.xf, xi[con.inds])
@@ -458,6 +469,13 @@ checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, (@SVector fill(
 @inline sense(::BoundConstraint) = Inequality()
 @inline Base.length(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
 
+function primal_bounds!(zL, zU, bnd::BoundConstraint)
+	for i = 1:length(zL)
+		zL[i] = max(bnd.z_min[i], zL[i])
+		zU[i] = min(bnd.z_max[i], zU[i])
+	end
+	return true
+end
 
 function evaluate(bnd::BoundConstraint, z::AbstractKnotPoint)
 	[(z.z - bnd.z_max); (bnd.z_min - z.z)][bnd.inds]
@@ -472,6 +490,8 @@ function jacobian!(∇c, bnd::BoundConstraint{U,L}, z::AbstractKnotPoint) where 
 	end
 	return true
 end
+
+∇jacobian!(G, con::BoundConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
 
 function change_dimension(con::BoundConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 	n0,m0 = con.n, con.m

@@ -8,19 +8,6 @@ state_dim(obj::AbstractObjective) = throw(ErrorException("state_dim not implemen
 control_dim(obj::AbstractObjective) = throw(ErrorException("control_dim not implemented"))
 get_J(obj::AbstractObjective) = throw(ErrorException("get_J not implemented"))
 
-"""```
-cost(obj::Objective, Z::Traj)::Float64
-cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
-```
-Evaluate the cost for a trajectory.
-Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
-    use the appropriate integration rule, if defined.
-"""
-function cost(obj::AbstractObjective, Z)
-    cost!(obj, Z)
-    J = get_J(obj)
-    return sum(J)
-end
 
 
 """$(TYPEDEF)

@@ -103,16 +103,23 @@ end
 @inline get_errvals(conSet::ALConstraintSet) = conSet.errvals
 
 # Constraint Evaluation
-function evaluate!(conSet::AbstractConstraintSet, Z::Traj)
+function evaluate!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
     for conval in get_convals(conSet)
         evaluate!(conval, Z)
     end
 end
 
-function jacobian!(conSet::AbstractConstraintSet, Z::Traj)
+function jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
     for conval in get_convals(conSet)
         jacobian!(conval, Z)
     end
+end
+
+function ∇jacobian!(G::Vector{<:Matrix}, conSet::AbstractConstraintSet, Z::AbstractTrajectory,
+		λ::Vector{<:Vector})
+	for (i,conval) in enumerate(get_convals(conSet))
+		∇jacobian!(G[i], conval, Z, λ[i])
+	end
 end
 
 function error_expansion!(conSet::AbstractConstraintSet, model::AbstractModel, G)
@@ -159,7 +166,7 @@ function norm_violation!(conSet::AbstractConstraintSet, p=2)
 	end
 end
 
-function norm_dgrad(conSet::AbstractConstraintSet, dx::Traj, p=1)
+function norm_dgrad(conSet::AbstractConstraintSet, dx::AbstractTrajectory, p=1)
 	convals = get_convals(conSet)
 	T = eltype(conSet.c_max)
 	for i in eachindex(convals)
@@ -297,7 +304,8 @@ function cost!(J::Vector{<:Real}, conval::ConVal, λ::Vector{<:StaticVector},
 	end
 end
 
-function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::Traj, init::Bool=false, rezero::Bool=false)
+function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::AbstractTrajectory, 
+		init::Bool=false, rezero::Bool=false)
 	for i in eachindex(conSet.errvals)
 		cost_expansion!(E, conSet.convals[i], conSet.λ[i], conSet.μ[i], conSet.active[i])
 	end

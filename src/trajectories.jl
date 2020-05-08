@@ -1,5 +1,26 @@
 abstract type AbstractTrajectory{n,m,T} <: AbstractVector{T} end
 
+terminal_control(Z::AbstractTrajectory) = !RobotDynamics.is_terminal(Z[end])
+traj_size(Z::AbstractTrajectory{n,m}) where {n,m} = n,m,length(Z)
+num_vars(Z::AbstractTrajectory) = num_vars(traj_size(Z)..., terminal_control(Z))
+eachcontrol(Z::AbstractTrajectory) = terminal_control(Z) ? Base.OneTo(length(Z)) : Base.OneTo(length(Z)-1)
+
+function Base.copyto!(Z1::AbstractTrajectory, Z2::AbstractTrajectory)
+	@assert traj_size(Z1) == traj_size(Z2)
+	for k = 1:length(Z1)
+		Z1[k] = Z2[k]
+	end
+	return Z1
+end
+
+@inline states(Z::AbstractTrajectory) = state.(Z)
+function controls(Z::AbstractTrajectory)
+	return [control(Z[k]) for k in eachcontrol(Z) ]
+end
+
+states(x) = states(get_trajectory(x))
+controls(x) = controls(get_trajectory(x))
+
 """
     Traj
 
@@ -33,8 +54,6 @@ Base.IndexStyle(::Traj) = IndexLinear()
 
 Traj(Z::Traj) = Z
 
-traj_size(Z::Traj) where {T,N,M} = N,M,length(Z)
-
 function Base.copy(Z::Traj) where {T,N,M}
     Traj([KnotPoint(copy(z.z), copy(z._x), copy(z._u), z.dt, z.t) for z in Z])
 end
@@ -63,8 +82,6 @@ function Traj(X::Vector, U::Vector, dt::Vector, t=cumsum(dt) .- dt[1])
     return Traj(Z)
 end
 
-@inline states(Z::Traj) = state.(Z)
-@inline controls(Z::Traj) = control.(Z[1:end-1])
 
 states(Z::Traj, i::Int) = [state(z)[i] for z in Z]
 

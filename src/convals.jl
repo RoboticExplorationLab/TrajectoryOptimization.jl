@@ -11,7 +11,7 @@ struct ConVal{C,V,M,W}
     ∇x::Matrix{W}
     ∇u::Matrix{W}
     c_max::Vector{Float64}
-	is_const::Vector{Bool}  # are the Jacobians constant
+	is_const::Vector{Vector{Bool}}  # are the Jacobians constant
 	iserr::Bool  # are the Jacobians on the error state
     function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::UnitRange, jac, vals, iserr::Bool=false)
 		if !iserr && size(gen_jacobian(con)) != size(jac[1])
@@ -26,7 +26,7 @@ struct ConVal{C,V,M,W}
 		∇x = [v[1] for v in views]
 		∇u = [v[2] for v in views]
         c_max = zeros(P)
-		is_const = zeros(Bool,P)
+		is_const = [zeros(Bool,P), zeros(Bool,P)]
         new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
 			inds, vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
     end
@@ -58,11 +58,11 @@ function _index(cval::ConVal, k::Int)
 	end
 end
 
-function evaluate!(cval::ConVal, Z::Traj)
+function evaluate!(cval::ConVal, Z::AbstractTrajectory)
 	evaluate!(cval.vals, cval.con, Z, cval.inds)
 end
 
-function jacobian!(cval::ConVal, Z::Traj, init::Bool=false)
+function jacobian!(cval::ConVal, Z::AbstractTrajectory, init::Bool=false)
 	if cval.iserr
 		throw(ErrorException("Can't evaluate Jacobians directly on the error state Jacobians"))
 	else
@@ -74,6 +74,10 @@ function jacobian!(cval::ConVal, Z::Traj, init::Bool=false)
 		# 	end
 	    # end
 	end
+end
+
+function ∇jacobian!(G, cval::ConVal, Z::AbstractTrajectory, λ, init::Bool=false)
+	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.is_const[2], init)
 end
 
 @inline violation(::Equality, v) = norm(v,Inf)
@@ -126,7 +130,7 @@ function norm_violation!(cval::ConVal, p=2)
 	end
 end
 
-function norm_dgrad!(cval::ConVal, Z::Traj, p=1)
+function norm_dgrad!(cval::ConVal, Z::AbstractTrajectory, p=1)
 	for (i,k) in enumerate(cval.inds)
 		zs = RobotDynamics.get_z(cval.con, Z, k)
 		mul!(cval.vals2[i], cval.jac[i,1], zs[1])

@@ -10,6 +10,10 @@ using LinearAlgebra
 using DocStringExtensions
 using ForwardDiff
 using UnsafeArrays
+using SparseArrays
+using MathOptInterface
+const MOI = MathOptInterface
+
 import RobotDynamics
 
 using RobotDynamics: AbstractModel, LieGroupModel,
@@ -37,7 +41,9 @@ export  # methods
 	initial_controls!,
 	initial_states!,
 	initial_trajectory!,
-	rollout!
+	rollout!,
+	states,
+	controls
 
 export
 	BoundConstraint,
@@ -62,6 +68,8 @@ include("convals.jl")
 
 include("problem.jl")
 include("conset.jl")
+
+include("nlp.jl")
 
 include("utils.jl")
 end
