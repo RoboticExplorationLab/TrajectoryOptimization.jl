@@ -179,15 +179,87 @@ D_ = TO.jacobian_structure(nlp_)
 
 # Constraint type
 IE = TO.constraint_type(nlp)
-@test IE[1:n] == ones(n)             # initial state constraint
-@test IE[n .+ (1:4)] == zeros(4)     # bound constraint
-@test IE[(n+4) .+ (1:n)] == ones(n)  # dynamics constraint
+@test IE[1:n] == fill(:Equality,n)              # initial state constraint
+@test IE[n .+ (1:4)] == fill(:Inequality,4)     # bound constraint
+@test IE[(n+4) .+ (1:n)] == fill(:Equality,n)   # dynamics constraint
 
 cL,cU = TO.constraint_bounds(nlp)
 @test cL[1:n] == zeros(n)
 @test cL[n .+ (1:4)] == fill(-Inf,4)     # bound constraint
 @test cL[(n+4) .+ (1:n)] == zeros(n)  # dynamics constraint
 @test all(cU .== 0 )
+
+# Test view reset
+nlp = TO.TrajOptNLP(prob)
+conSet = get_constraints(nlp)
+TO.eval_c!(nlp)
+TO.jac_c!(nlp)
+@test conSet.convals[1].vals[1].parent === nlp.data.d
+D = spzeros(P,NN)
+d = zeros(P)
+D0 = copy(nlp.data.D)
+d0 = copy(nlp.data.d)
+nlp.data.D = D
+nlp.data.d = d
+
+TO.reset_views!(conSet, nlp.data)
+@test conSet.convals[1].vals[1].parent === d
+@test conSet.convals[end].jac[1,2].parent === D
+@test d == zeros(P)
+@test D == spzeros(P,NN)
+TO.eval_c!(nlp)
+TO.jac_c!(nlp)
+@test d == d0 != zeros(P)
+@test D == D0 != spzeros(P,NN)
+
+nlp_ = TO.TrajOptNLP(prob, jac_type=:vector)
+conSet = get_constraints(nlp_)
+TO.eval_c!(nlp_)
+TO.jac_c!(nlp_)
+@test typeof(nlp_.conSet.convals[1].jac[1]) <: Base.ReshapedArray{<:Any,2,<:SubArray}
+@test nlp_.data.d ≈ d0
+@test conSet.convals[1].jac[1].parent.parent === nlp_.data.v
+v = zero(nlp_.data.v)
+d = zero(nlp_.data.d)
+v0 = copy(nlp_.data.v)
+d0 = copy(nlp_.data.d)
+nlp_.data.v = v
+nlp_.data.d = d
+
+TO.reset_views!(conSet, nlp_.data)
+@test conSet.convals[1].vals[1].parent === d
+@test conSet.convals[end].jac[1,2].parent.parent === v
+@test d ≈ zeros(P)
+@test v == zero(v0)
+TO.eval_c!(nlp_)
+TO.jac_c!(nlp_)
+@test d == d0 != zeros(P)
+@test v == v0 != zero(v)
+
+# Test view reset on cost expansion
+nlp = TO.TrajOptNLP(prob)
+TO.grad_f!(nlp)
+TO.hess_f!(nlp)
+G = spzeros(NN,NN)
+g = zeros(NN)
+G0 = copy(nlp.data.G)
+g0 = copy(nlp.data.g)
+nlp.data.G = G
+nlp.data.g = g
+
+TO.reset_views!(nlp.E, nlp.data)
+@test nlp.E[1].Q.parent === G
+@test nlp.E[1].R.parent === G
+@test nlp.E[end].Q.parent === G
+@test nlp.E[1].q.parent === g
+@test nlp.E[N].q.parent === g
+@test nlp.E[1].r.parent === g
+TO.grad_f!(nlp)
+TO.hess_f!(nlp)
+@test nlp.data.G !== G0
+@test nlp.data.G == G0
+@test nlp.data.g !== g0
+@test nlp.data.g == g0
 
 # Test bounds removal
 cons = prob.constraints

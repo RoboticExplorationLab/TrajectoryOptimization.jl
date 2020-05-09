@@ -1,4 +1,5 @@
 using TrajectoryOptimization
+using ALTRO
 using Ipopt
 using MathOptInterface
 const MOI = MathOptInterface

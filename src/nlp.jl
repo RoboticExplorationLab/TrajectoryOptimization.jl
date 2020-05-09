@@ -142,6 +142,36 @@ end
 
 @inline ∇jacobian!(conSet::NLPConstraintSet, Z) = ∇jacobian!(conSet.hess, conSet, Z, conSet.λ)
 
+function reset_views!(conSet::NLPConstraintSet, data::NLPData)
+	D,d = data.D, data.d
+	v = data.v
+	λ = data.λ
+	for i = 1:length(conSet)
+		cval = conSet.convals[i]
+		for (j,k) in enumerate(cval.inds)
+			cval.vals[j] = change_parent(cval.vals[j], d)
+			conSet.λ[i][j] = change_parent(conSet.λ[i][j], λ)
+			for l = 1:size(cval.jac,2)
+				jac = cval.jac[j,l]
+				if jac isa Base.ReshapedArray{<:Any,2,<:SubArray}
+					parent = v
+				else
+					parent = D
+				end
+				cval.jac[j,l] = change_parent(cval.jac[j,l], parent)
+			end
+		end
+	end
+end
+
+function change_parent(x::SubArray, P::AbstractArray)
+	return view(P, x.indices...)
+end
+
+function change_parent(x::Base.ReshapedArray{<:Any,2,<:SubArray}, P::AbstractArray)
+	return reshape(view(P, x.parent.indices...), x.dims)
+end
+
 
 """
 	QuadraticViewCost{n,m,T}
@@ -210,6 +240,29 @@ function QuadraticViewCost(G::SparseMatrixCSC, g::Vector,
 end
 
 is_blockdiag(cost::QuadraticViewCost) = cost.zeroH
+
+function reset_views!(obj::Objective{<:QuadraticViewCost}, data::NLPData)
+	N = length(obj)
+	G,g = data.G, data.g
+	for k = 1:N
+		obj.cost[k] = change_parent(obj[k], G, g)
+	end
+end
+
+function change_parent(costfun::QuadraticViewCost, G, g)
+	Q = change_parent(costfun.Q, G)
+	q = change_parent(costfun.q, g)
+	if !costfun.terminal
+		R = change_parent(costfun.R, G)
+		H = change_parent(costfun.H, G)
+		r = change_parent(costfun.r, g)
+	else
+		R = costfun.R
+		H = costfun.H
+		r = costfun.r
+	end
+	QuadraticViewCost(Q, R, H, q, r, costfun.c, checks=false, terminal=costfun.terminal)
+end
 
 """
 	ViewKnotPoint{T,n,m}
@@ -415,7 +468,7 @@ function eval_f(nlp::TrajOptNLP, Z=get_primals(nlp))
 end
 function cost(nlp::TrajOptNLP, Z=get_trajectory(nlp))
 	if Z !== get_trajectory(nlp)
-		copyto!(nlp.Z, Z)
+		nlp.Z.Z = Z
 	end
 	eval_f(nlp)
 end
@@ -425,12 +478,14 @@ end
 
 Evaluate the gradient of the cost function
 """
-function grad_f!(nlp::TrajOptNLP, Z, g=nlp.data.g)
+function grad_f!(nlp::TrajOptNLP, Z=get_primals(nlp), g=nlp.data.g)
 	N = num_knotpoints(nlp)
 	nlp.Z.Z = Z
 	cost_gradient!(nlp.E, nlp.obj, nlp.Z)
 	if g !== nlp.data.g
-		g .= nlp.data.g  # TODO: reset views instead of copying
+		println("reset gradient views")
+		nlp.data.g = g
+		reset_views!(nlp.E, nlp.data)
 	end
 	return g
 end
@@ -440,13 +495,14 @@ end
 
 Evaluate the hessian of the cost function `G`.
 """
-function hess_f!(nlp::TrajOptNLP, Z, G=nlp.data.G)
+function hess_f!(nlp::TrajOptNLP, Z=get_primals(nlp), G=nlp.data.G)
 	N = num_knotpoints(nlp)
 	nlp.Z.Z = Z
 	cost_hessian!(nlp.E, nlp.obj, nlp.Z, true)  # TODO: figure out how to not require the reset
 	if G !== nlp.data.G
-		copyto!(G, nlp.G)  # TODO: reset views instead of copying
-		@warn "Copying hessian"
+		println("reset Hessian views")
+		nlp.data.G = G
+		reset_views!(nlp.E, nlp.data)
 	end
 	return G
 end
@@ -498,7 +554,7 @@ end
 
 Evaluate the constraints at `Z`, storing the result in `c`.
 """
-function eval_c!(nlp::TrajOptNLP, Z, c=nlp.data.d)
+function eval_c!(nlp::TrajOptNLP, Z=get_primals(nlp), c=nlp.data.d)
 	if eltype(Z) !== eltype(nlp.Z.Z)
 		# Back-up if trying to ForwardDiff
 		Z_ = NLPTraj(Z, nlp.Z.Zdata)
@@ -508,7 +564,9 @@ function eval_c!(nlp::TrajOptNLP, Z, c=nlp.data.d)
 	end
 	evaluate!(nlp.conSet, Z_)
 	if c !== nlp.data.d
-		copyto!(c, nlp.data.d)  # TODO: reset views instead of copying
+		println("reset constraint views")
+		nlp.data.d = c
+		reset_views!(nlp.conSet, nlp.data)
 	end
 	return c
 end
@@ -522,9 +580,12 @@ function jac_c!(nlp::TrajOptNLP, Z=get_primals(nlp), C::AbstractArray=nlp.data.D
 	nlp.Z.Z = Z
 	jacobian!(nlp.conSet, nlp.Z)
 	if C isa AbstractMatrix && C !== nlp.data.D
-		copyto!(C, nlp.data.D)  # TODO: reset views instead of copying
+		nlp.data.D = C
+		reset_views(nlp.conet, nlp.data)
 	elseif C isa AbstractVector && C != nlp.data.v
-		copyto!(C, nlp.data.v)
+		println("reset Jacobian views")
+		nlp.data.v = C
+		reset_views!(nlp.conSet, nlp.data)
 	end
 	return C
 end
@@ -548,7 +609,7 @@ and dual variables `λ`.
 function hess_L!(nlp::TrajOptNLP, Z, λ=nlp.data.λ, G=nlp.data.G)
 	nlp.Z.Z = Z
 	if λ !== nlp.data.λ
-		copyto!(nlp.data.λ)  # TODO: reset views instead of copying
+		copyto!(nlp.data.λ, λ)  # TODO: reset views instead of copying
 	end
 
 	# Cost hessian
@@ -561,6 +622,23 @@ function hess_L!(nlp::TrajOptNLP, Z, λ=nlp.data.λ, G=nlp.data.G)
 		copyto!(G, nlp.data.G)  # TODO: reset views instead of copying
 	end
 	return G
+end
+
+function ∇jac_c!(nlp::TrajOptNLP, Z=get_primals(nlp), λ=nlp.data.λ, C=nlp.data.G)
+	C .= 0  # zero out since ∇jacobian adds to the current result
+
+	nlp.Z.Z = Z
+	if λ !== nlp.data.λ
+		copyto!(nlp.data.λ, λ)  # TODO: reset views instead of copying
+	end
+
+	# Add Second-order constraint expansion
+	∇jacobian!(nlp.conSet, nlp.Z)
+
+	if C !== nlp.data.G
+		copyto!(C, nlp.data.G)  # leave as copy since nlp.data.G is the hessian of the Lagrangian (or cost)
+	end
+	return C
 end
 
 """
@@ -590,16 +668,18 @@ Legend:
  - 1 -> Equality
 """
 function constraint_type(nlp::TrajOptNLP)
-	IE = zeros(Int, num_constraints(nlp))
+	# IE = zeros(Int, num_constraints(nlp))
+	IE = Vector{Symbol}(undef, num_constraints(nlp))
 	constraint_type!(nlp, IE)
 end
 function constraint_type!(nlp::TrajOptNLP, IE)
 	conSet = nlp.conSet
+
 	for i = 1:length(conSet)
 		conval = conSet.convals[i]
 		cinds = conSet.jac.cinds[i]
 		for j = 1:length(cinds)
-			v = sense(conval.con) == Equality() ? 1 : 0
+			v = sense(conval.con) == Equality() ? :Equality : :Inequality
 			IE[cinds[j]] .= v
 		end
 	end
@@ -612,9 +692,9 @@ function constraint_bounds(nlp::TrajOptNLP)
 	cL = zeros(P)
 	cU = zeros(P)
 	for i = 1:P
-		if IE[i] == 0  # Inequality
+		if IE[i] == :Inequality
 			cL[i] = -Inf
-		elseif i == 1  # Equality
+		elseif i == :Equality
 			cL[i] = 0
 		end
 		cU[i] = 0
