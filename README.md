@@ -24,6 +24,9 @@ To install TrajectoryOptimization.jl, run the following from the Julia REPL:
 Pkg.add("TrajectoryOptimization")
 ```
 
+# What's New
+`TrajectoryOptimization.jl` underwent significant changes between versions `v0.1` and `v0.2`. The new code is significantly faster (up to 100x faster). The core part of the ALTRO solver (everything except the projected newton phase) is completely allocation-free once the solver has been initialized. Most of the API has changed significantly. See the documentation for more information on the new API.
+
 ## Quick Start
 To run a simple example of a constrained 1D block move (see script in `/examples/quickstart.jl`):
 ```julia
