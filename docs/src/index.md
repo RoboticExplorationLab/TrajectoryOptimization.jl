@@ -12,7 +12,16 @@ Pages = ["index.md"]
 
 
 ## Overview
-This package is a testbed for state-of-the-art trajectory optimization algorithms. Trajectory optimization problems are of the form,
+This package facilitates the definition and evaluation of trajectory optimization problems.
+Importantly, this package should be considered more of a modeling framework than an
+optimization solver, similar to [Convex.jl](https://github.com/JuliaOpt/Convex.jl).
+While general trajectory optimization problems are nonconvex, primarily due to the
+presence of nonlinear equality constraints imposed by the dynamics, they exhibit a unique
+structure that allows purpose-built solvers such as [ALTRO.jl](https://github.com/bjack205/ALTRO.jl)
+to gain significant computational savings over the use of more generalized NLP solvers such
+as SNOPT and Ipopt.
+
+Trajectory optimization problems are of the form,
 ```math
 \begin{aligned}
   \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
@@ -22,22 +31,10 @@ This package is a testbed for state-of-the-art trajectory optimization algorithm
 \end{aligned}
 ```
 
-This package currently implements the following methods for solving trajectory optimization problems:
-* Iterative LQR (iLQR): indirect method based on Differential Dynamic Programming
-* AL-iLQR: iLQR within an Augmented Lagrangian framework
-* Direct Collocation: direct method that formulates the problem as an NLP and passes the problem off to a commercial NLP solver
-* ALTRO (Augmented Lagrangian Trajectory Optimizer): A novel algorithm developed by the Robotic Exploration Lab at Stanford University, which uses iLQR within an augmented Lagrangian framework combined with a "Projected Newton" direct method for solution polishing and enforcement of feasibility.
-
 Key features include:
+* Easy and intuitive interface for setting up trajectory optimization problems
 * Support for general, per-timestep constraints
 * ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints
-
-
-## Getting Started
-To set up and solve a trajectory optimization problem with `TrajectoryOptimization.jl`, the user will go through the following steps:
-
-1) Create a [Model](@ref model_section)
-2) Create an [Objective](@ref objective_section)
-3) (Optionally) Add [constraints](@ref constraint_section)
-4) Instantiate a [Problem](@ref problem_section)
-5) [Solve](@ref solving_section) the problem
+* Efficient methods for evaluating the trajectory optimization problem as a general NLP,
+  so that it can be passed off to NLP solvers such as Ipopt or SNOPT via
+  [MathOptInterface.jl](https://github.com/JuliaOpt/MathOptInterface.jl).
