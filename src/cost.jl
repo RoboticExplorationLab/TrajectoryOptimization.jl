@@ -112,6 +112,7 @@ end
 
 function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::AbstractKnotPoint,
         G, tmp)
+	E.Q .= 0
     RobotDynamics.∇²differential!(E.Q, model, state(z), cost.q)
     if size(model)[1] < 15
         G = SMatrix(G)
