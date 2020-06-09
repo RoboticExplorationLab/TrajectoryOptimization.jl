@@ -23,7 +23,7 @@ end
 function stage_cost(cost::QuadraticCostFunction, x::AbstractVector, u::AbstractVector)
     J = 0.5*u'cost.R*u + cost.r'u + stage_cost(cost, x)
     if !is_blockdiag(cost)
-        J += u*cost.H*x
+        J += u'cost.H*x
     end
     return J
 end
@@ -34,9 +34,6 @@ end
 
 function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x)
     E.q .= cost.Q*x .+ cost.q
-    if !is_blockdiag(cost)
-        E.q .+= cost.H'u
-    end
     return false
 end
 
@@ -44,6 +41,7 @@ function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x, u)
     gradient!(E, cost, x)
     E.r .= cost.R*u .+ cost.r
     if !is_blockdiag(cost)
+        E.q .+= cost.H'u
         E.r .+= cost.H*x
     end
     return false
@@ -77,7 +75,6 @@ function Base.copy(c::QC) where QC<:QuadraticCostFunction
 end
 
 # Other methods
-Base.promote_rule(::Type{<:QuadraticCostFunction}, ::Type{<:QuadraticCostFunction}) = QuadraticCost
 
 function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
     @assert state_dim(c1) == state_dim(c2)
@@ -85,9 +82,10 @@ function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
     n,m = state_dim(c1), control_dim(c1)
     H1 = c1 isa DiagonalCost ? zeros(m,n) : c1.H
     H2 = c2 isa DiagonalCost ? zeros(m,n) : c2.H
-    QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, H1 + H2,
-                  c1.q + c2.q, c1.r + c2.r, c1.c + c2.c,
-                  checks=false, terminal=c1.terminal && c2.terminal)
+    QC = promote_type(typeof(c1), typeof(c2))
+    QC(c1.Q + c2.Q, c1.R + c2.R, H1 + H2,
+       c1.q + c2.q, c1.r + c2.r, c1.c + c2.c,
+       checks=false, terminal=c1.terminal && c2.terminal)
 end
 
 function invert!(Ginv, cost::QuadraticCostFunction{n,m}) where {n,m}
@@ -146,7 +144,7 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
         if checks
             if any(x->x<0, Qd)
                 @warn "Q needs to be positive semi-definite."
-            elseif any(x->x<=0, Rd)
+            elseif any(x->x<=0, Rd) && !terminal
                 @warn "R needs to be positive definite."
             end
         end
@@ -155,7 +153,7 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
 end
 
 # strip away the H
-@inline function DiagonalCost(Q::AbstractArray, R::AbstractArray, H::AbstractArray,
+@inline function (::Type{<:DiagonalCost})(Q::AbstractArray, R::AbstractArray, H::AbstractArray,
         q::AbstractVector, r::AbstractVector, c; kwargs...)
     DiagonalCost(Q, R, q, r, c; kwargs...)
 end
@@ -182,7 +180,7 @@ is_blockdiag(::DiagonalCost) = true
 is_diag(::DiagonalCost) = true
 
 function LinearAlgebra.inv(cost::DiagonalCost)
-    return DiagonalCost(inv(cost.Q), inv(cost.R), cost.q, cost.r, cost.c, cost.terminal)
+    return DiagonalCost(inv(cost.Q), inv(cost.R), cost.q, cost.r, cost.c, terminal=cost.terminal)
 end
 
 function Base.:\(cost::DiagonalCost, z::AbstractKnotPoint)
@@ -232,18 +230,20 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
         @assert size(R,1) == length(r)
         @assert size(H) == (length(r), length(q))
         if checks
-            if !isposdef(Array(R))
+            if !isposdef(Array(R)) && !terminal
                 @warn "R is not positive definite"
             end
             if !ispossemidef(Array(Q))
-                err = ArgumentError("Q must be positive semi-definite")
-                throw(err)
+                @warn "Q is not positive semidefinite"
             end
         end
         zeroH = norm(H,Inf) ≈ 0
         m,n = size(H)
         T = promote_type(eltype(Q), eltype(R), eltype(H), eltype(q), eltype(r), typeof(c))
         new{n,m,T,TQ,TR}(Q,R,H,q,r,c,terminal,zeroH)
+    end
+    function QuadraticCost{n,m,T,TQ,TR}(qcost::QuadraticCost) where {n,m,T,TQ,TR}
+        new{n,m,T,TQ,TR}(qcost.Q, qcost.R, qcost.H, qcost.q, qcost.r, qcost.c, qcost.terminal, qcost.zeroH)
     end
 end
 
@@ -252,14 +252,16 @@ control_dim(cost::QuadraticCost) = length(cost.r)
 is_blockdiag(cost::QuadraticCost) = cost.zeroH
 
 function QuadraticCost{T}(n::Int,m::Int; terminal=false) where T
-    Q = SizedMatrix{n,n}(Matrix(one(Float64)*I,n,n))
-    R = SizedMatrix{m,m}(Matrix(one(Float64)*I,m,m))
+    Q = SizedMatrix{n,n}(Matrix(one(T)*I,n,n))
+    R = SizedMatrix{m,m}(Matrix(one(T)*I,m,m))
     H = SizedMatrix{m,n}(zeros(T,m,n))
     q = SizedVector{n}(zeros(T,n))
     r = SizedVector{m}(zeros(T,m))
     c = zero(T)
     QuadraticCost(Q,R,H,q,r,c, checks=false, terminal=terminal)
 end
+
+QuadraticCost(cost::QuadraticCost) = cost
 
 function LinearAlgebra.inv(cost::QuadraticCost)
     if norm(cost.H,Inf) ≈ 0
@@ -281,49 +283,35 @@ function LinearAlgebra.inv(cost::QuadraticCost)
     end
 end
 
-raw"""
-Solve the system
-``\begin{bmatrix} Q & H \\ H^T R \end{bmatrix} \begin{bmatrix} x \\ u \end{bmatrix}
-    = \begin{bmatrix} c \\ d \end{bmatrix}``
-Efficient and non-allocating since the cost stores the required matrix inverses, and uses
-the Shur compliment in the case H is non-zero.
-
-Returns a `StaticKnotPoint` with the solution
-"""
-function Base.:\(cost::QuadraticCost, z::AbstractKnotPoint)
-    Qinv,Rinv,H = cost.Qinv, cost.Rinv, cost.H
-    c = state(z)
-    d = control(z)
-    if cost.zeroH
-        x = Qinv*c
-        u = Rinv*d
-    else
-        x = cost.Sinv*(c - H*(Rinv*d))
-        u = Rinv*(d - H'x)
-    end
-    return StaticKnotPoint([x;u], z._x, z._u, z.dt, z.t)
+@inline function (::Type{<:QuadraticCost})(dcost::DiagonalCost)
+    QuadraticCost(dcost,Q, dcost.R, q=dcost.q, r=dcost.r, c=dcost.c, terminal=dcost.terminal)
 end
 
-"Add two Quadratic costs of the same size"
-# function +(c1::QuadraticCost, c2::QuadraticCost)
-#     @assert state_dim(c1) == state_dim(c2)
-#     @assert control_dim(c1) == control_dim(c2)
-#     QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, c1.H + c2.H,
-#                   c1.q + c2.q, c1.r + c2.r, c1.c + c2.c)
-# end
-#
-# function +(c1::DiagonalCost, c2::QuadraticCost)
-#     @assert state_dim(c1) == state_dim(c2)
-#     @assert control_dim(c1) == control_dim(c2)
-#     QuadraticCost(c1.Q + c2.Q, c1.R + c2.R, c2.H,
-#                   c1.q + c2.q, c1.r + c2.r, c1.c + c2.c)
-# end
-# @inline +(c1::QuadraticCost, c2::DiagonalCost) = c2+c1
+function Base.convert(::Type{<:QuadraticCost}, dcost::DiagonalCost)
+    QuadraticCost(dcost.Q, dcost.R, q=dcost.q, r=dcost.r, c=dcost.c, terminal=dcost.terminal)
+end
 
-# function copy(cost::QuadraticCost)
-#     return QuadraticCost(copy(cost.Q), copy(cost.R), copy(cost.H), copy(cost.q), copy(cost.r), copy(cost.c))
-# end
+Base.promote_rule(::Type{<:QuadraticCostFunction}, ::Type{<:QuadraticCostFunction}) = QuadraticCost
 
+function Base.promote_rule(::Type{<:QuadraticCost{n,m,T1,Q1,R1}},
+                           ::Type{<:QuadraticCost{n,m,T2,Q2,R2}}) where {n,m,T1,T2,Q1,Q2,R1,R2}
+    T = promote_type(T1,T2)
+    function diag_type(T1,T2,n)
+        elT = promote_type(eltype(T1), eltype(T2))
+        if T1 == T2
+            return T1
+        elseif (T1 <: Diagonal) && (T2 <: Diagonal)
+            return Diagonal{elT,MVector{n,elT}}
+        else
+            return SizedMatrix{n,n,elT,2}
+        end
+    end
+    Q = diag_type(Q1,Q2,n)
+    R = diag_type(R1,R2,m)
+    QuadraticCost{n,m,T, Q, R}
+end
+
+@inline Base.convert(::Type{QC}, cost::QuadraticCost) where QC <: QuadraticCost = QC(cost)
 
 """
 $(SIGNATURES)
@@ -337,7 +325,7 @@ function LQRCost(Q::AbstractArray, R::AbstractArray,
     q = -Q*xf
     r = -R*uf
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
-    return QuadraticCost(Q, R, H, q, r, c, kwargs...)
+    return DiagonalCost(Q, R, H, q, r, c, kwargs...)
 end
 
 function LQRCost(Q::Diagonal{<:Any,<:SVector{n}},R::Diagonal{<:Any,<:SVector{m}},
@@ -347,8 +335,6 @@ function LQRCost(Q::Diagonal{<:Any,<:SVector{n}},R::Diagonal{<:Any,<:SVector{m}}
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
     return DiagonalCost(Q, R, q, r, c; kwargs...)
 end
-
-
 
 
 

@@ -33,7 +33,8 @@ export  # types
 	DiagonalCost,
 	QuadraticCost,
 	LQRCost,
-	Traj
+	Traj,
+	KnotPoint   # from RobotDynamics
 
 export  # methods
 	cost,
@@ -43,7 +44,9 @@ export  # methods
 	initial_trajectory!,
 	rollout!,
 	states,
-	controls
+	controls,
+	state_dim,    # from RobotDynamics
+	control_dim   # from RobotDynamics
 
 export
 	BoundConstraint,

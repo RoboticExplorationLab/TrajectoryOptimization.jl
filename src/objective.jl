@@ -43,8 +43,9 @@ function Objective(cost::CostFunction,N::Int)
     Objective([cost for k = 1:N])
 end
 
-function Objective(cost::CostFunction,cost_terminal::CostFunction,N::Int)
-    Objective([k < N ? cost : cost_terminal for k = 1:N])
+function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
+    stage, term = promote(cost, cost_terminal)
+    Objective([k < N ? stage : term for k = 1:N])
 end
 
 function Objective(cost::Vector{<:CostFunction},cost_terminal::CostFunction)
@@ -105,14 +106,20 @@ end
 
 
 # Convenience constructors
-@doc raw"""```julia
-LQRObjective(Q, R, Qf, xf, N)
-```
+@doc raw"""
+    LQRObjective(Q, R, Qf, xf, N)
+
 Create an objective of the form
 `` (x_N - x_f)^T Q_f (x_N - x_f) + \sum_{k=0}^{N-1} (x_k-x_f)^T Q (x_k-x_f) + u_k^T R u_k``
+
+Where `eltype(obj) <: DiagonalCost` if `Q`, `R`, and `Qf` are
+    `Union{Diagonal{<:Any,<:StaticVector}}, <:StaticVector}`
 """
 function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
         xf::AbstractVector, N::Int; checks=true, uf=@SVector zeros(size(R,1)))
+    @assert size(Q,1) == length(xf)
+    @assert size(Qf,1) == length(xf)
+    @assert size(R,1) == length(uf)
     n = size(Q,1)
     m = size(R,1)
     H = SizedMatrix{m,n}(zeros(m,n))
@@ -123,27 +130,32 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
     cf = 0.5*xf'*Qf*xf
 
     ℓ = QuadraticCost(Q, R, H, q, r, c, checks=checks)
-    ℓN = QuadraticCost(Q, R*0, H*0, q, r*0, c, checks=false, terminal=true)
-    # ℓN = QuadraticCost(Qf, qf, cf, check=checks, terminal=true)
+    ℓN = QuadraticCost(Qf, R, H, q, r, cf, checks=false, terminal=true)
 
     Objective(ℓ, ℓN, N)
 end
 
 function LQRObjective(
-        Q::Union{Diagonal{T,<:SVector{n}},SMatrix{n,n}},
-        R::Union{Diagonal{T,<:SVector{m}},SMatrix{m,m}},
-        Qf::AbstractArray, xf::AbstractVector, N::Int;
-        uf=(@SVector zeros(m)),
-        checks=true) where {T,n,m}
+        Q::Union{<:Diagonal, <:AbstractVector},
+        R::Union{<:Diagonal, <:AbstractVector},
+        Qf::Union{<:Diagonal, <:AbstractVector},
+        xf::AbstractVector, N::Int;
+        uf=(@SVector zeros(size(R,1))),
+        checks=true)
+    n,m = size(Q,1), size(R,1)
+    @assert size(Q,1) == length(xf)
+    @assert size(Qf,1) == length(xf)
+    @assert size(R,1) == length(uf)
+    Q,R,Qf = Diagonal(Q), Diagonal(R), Diagonal(Qf)
     q = -Q*xf
     r = -R*uf
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
     qf = -Qf*xf
     cf = 0.5*xf'*Qf*xf
 
-    ℓ = DiagonalCost(Q, R, q, r, c, terminal=false)
+    ℓ = DiagonalCost(Q, R, q, r, c, checks=checks, terminal=false)
 
-    ℓN = DiagonalCost(Qf, R, qf, r, cf, terminal=true)
+    ℓN = DiagonalCost(Qf, R, qf, r, cf, checks=false, terminal=true)
 
     Objective(ℓ, ℓN, N)
 end
