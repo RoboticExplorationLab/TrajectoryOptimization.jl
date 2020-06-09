@@ -43,7 +43,7 @@ cartpole = Dynamics.Cartpole()
 # Quadrotor
 quad = Dynamics.Quadrotor2()
 @test size(quad) == (13,4)
-@test num_allocs(cartpole) == 0
+@test num_allocs(quad) == 0
 
 
 # Infeasible
