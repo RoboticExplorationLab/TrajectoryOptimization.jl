@@ -5,8 +5,10 @@ using Random
 using StaticArrays
 using SparseArrays
 using ForwardDiff
+using RobotDynamics
 const TO = TrajectoryOptimization
 
+include("test_models.jl")
 
 @testset "Costs" begin
     include("cost_tests.jl")

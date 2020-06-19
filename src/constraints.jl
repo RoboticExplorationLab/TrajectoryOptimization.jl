@@ -55,7 +55,7 @@ end
 function primal_bounds!(zL,zU,con::GoalConstraint)
 	for i in con.inds
 		zL[i] = con.xf[i]
-		zU[i] = con.xf[i] 
+		zU[i] = con.xf[i]
 	end
 	return true
 end
@@ -154,9 +154,17 @@ struct CircleConstraint{P,T} <: StateConstraint
 	radius::SVector{P,T}
 	xi::Int  # index of x-state
 	yi::Int  # index of y-state
-	CircleConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, radius::SVector{P,T},
-			xi=1, yi=2) where {T,P} =
-		 new{P,T}(n,xc,yc,radius,xi,yi)
+	function CircleConstraint{P,T}(n::Int, xc::AbstractVector, yc::AbstractVector, radius::AbstractVector,
+			xi=1, yi=2) where {P,T}
+    	@assert length(xc) == length(yc) == length(radius) == P "Lengths of xc, yc, and radius must be equal. Got lengths ($(length(xc)), $(length(yc)), $(length(radius)))"
+        new{P,T}(n, xc, yc, radius, xi, yi)
+    end
+end
+function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius::AbstractVector,
+		xi=1, yi=2)
+    T = promote_type(eltype(xc), eltype(yc), eltype(radius))
+    P = length(xc)
+    CircleConstraint{P,T}(n, xc, yc, radius, xi, yi)
 end
 state_dim(con::CircleConstraint) = con.n
 
@@ -213,9 +221,19 @@ struct SphereConstraint{P,T} <: StateConstraint
 	yi::Int
 	zi::Int
 	radius::SVector{P,T}
-	SphereConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, zc::SVector{P,T},
-			radius::SVector{P,T}, xi=1, yi=2, zi=3) where {T,P} =
-			new{P,T}(n,xc,yc,zc,xi,yi,zi,radius)
+	function SphereConstraint{P,T}(n::Int, xc::AbstractVector, yc::AbstractVector,
+            zc::AbstractVector, radius::AbstractVector,
+			xi=1, yi=2, zi=3) where {P,T}
+    	@assert length(xc) == length(yc) == length(radius) == length(zc) == P "Lengths of xc, yc, zc, and radius must be equal. Got lengths ($(length(xc)), $(length(yc)), $(length(zc)), $(length(radius)))"
+        new{P,T}(n, xc, yc, zc, xi, yi, zi, radius)
+    end
+end
+function SphereConstraint(n::Int, xc::AbstractVector, yc::AbstractVector,
+        zc::AbstractVector, radius::AbstractVector,
+		xi=1, yi=2, zi=3)
+    T = promote_type(eltype(xc), eltype(yc), eltype(zc), eltype(radius))
+    P = length(xc)
+    SphereConstraint{P,T}(n, xc, yc, zc, radius, xi, yi, zi)
 end
 
 @inline state_dim(con::SphereConstraint) = con.n
@@ -256,11 +274,27 @@ end
 #  								SELF-COLLISION CONSTRAINT 								   #
 ############################################################################################
 
+"""
+    CollisionConstraint
+
+Enforces a pairwise non self-collision constraint on the state, such that
+    `norm(x[x1] - x[x2]).^2 > r^2`,
+    where `x1` and `x2` are the indices of the positions of the respective bodies and `r`
+    is the collision radius.
+
+# Constructor
+CollisionConstraint(n::Int, x1::AbstractVector{Int}, x2::AbstractVector{Int}, r::Real)
+"""
 struct CollisionConstraint{D} <: StateConstraint
 	n::Int
     x1::SVector{D,Int}
     x2::SVector{D,Int}
     radius::Float64
+    function CollisionConstraint(n::Int, x1::AbstractVector{Int}, x2::AbstractVector{Int}, r::Real)
+        @assert length(x1) == length(x2) "Position dimensions must be of equal length, got $(length(x1)) and $(length(x2))"
+        D = length(x1)
+        new{D}(n, x1, x2, r)
+    end
 end
 
 @inline state_dim(con::CollisionConstraint) = con.n
@@ -298,27 +332,31 @@ end
 
 Constraint of the form
 ``\\|y\\|^2 \\{\\leq,=\\} a``
-where ``y`` is either a state or a control vector (but not both)
+where ``y`` is made up of elements from the state and/or control vectors.
 
-# Constructors:
+# Constructor:
 ```
-NormConstraint{S,State}(n,a)
-NormConstraint{S,Control}(m,a)
+NormConstraint(n, m, a, sense, [inds])
 ```
-where `a` is the constant on the right-hand side of the equation.
+where `n` is the number of states,
+    `m` is the number of controls,
+    `a` is the constant on the right-hand side of the equation,
+    `sense` is either `Inequality()` or `Equality()`, and
+    `inds` can be a `UnitRange`, `AbstractVector{Int}`, or either `:state` or `:control`
 
 # Examples:
 ```julia
-NormConstraint{Equality,Control}(2,4.0)
+NormConstraint(3, 2, 4, Equality(), :control)
 ```
 creates a constraint equivalent to
 ``\\|u\\|^2 = 4.0`` for a problem with 2 controls.
 
 ```julia
-NormConstraint{Inequality,State}(3, 2.3)
+NormConstraint(3, 2. 3, Inequality(), :state
 ```
 creates a constraint equivalent to
 ``\\|x\\|^2 \\leq 2.3`` for a problem with 3 states.
+
 """
 struct NormConstraint{S,D,T} <: StageConstraint
 	n::Int
@@ -588,9 +626,9 @@ Compute a constraint on an arbitrary portion of either the state or control,
 or both. Useful for dynamics augmentation. e.g. you are controlling two models, and have
 individual constraints on each. You can define constraints as if they applied to the individual
 model, and then wrap it in an `IndexedConstraint` to apply it to the appropriate portion of
-the concatenated state. Assumes the indexed state portion is contiguous.
+the concatenated state. Assumes the indexed state or control portion is contiguous.
 
-Type params:
+# Type params:
 * S - Inequality or Equality
 * W - ConstraintType
 * P - Constraint length
@@ -600,10 +638,10 @@ Type params:
 * Bu - location of the first element in the control index
 * C - type of original constraint
 
-Constructors:
+# Constructors:
 ```julia
 IndexedConstraint(n, m, con)
-IndexedConstraint(n, m, con, ix::SVector, iu::SVector)
+IndexedConstraint(n, m, con, ix::UnitRange, iu::UnitRange)
 ```
 where the arguments `n` and `m` are the state and control dimensions of the new dynamics.
 `ix` and `iu` are the indices into the state and control vectors. If left out, they are

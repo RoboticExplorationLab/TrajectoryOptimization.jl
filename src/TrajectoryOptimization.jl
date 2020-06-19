@@ -49,10 +49,15 @@ export  # methods
 	control_dim   # from RobotDynamics
 
 export
+	Equality,
+	Inequality,
 	BoundConstraint,
 	CircleConstraint,
 	SphereConstraint,
 	GoalConstraint,
+	LinearConstraint,
+	CollisionConstraint,
+	NormConstraint,
 	add_constraint!
 
 include("trajectories.jl")
