@@ -620,7 +620,7 @@ end
 #  								INDEXED CONSTRAINT 	 									   #
 ############################################################################################
 """
-	IndexedConstraint{C,NM}
+	IndexedConstraint{C,N,M}
 
 Compute a constraint on an arbitrary portion of either the state or control,
 or both. Useful for dynamics augmentation. e.g. you are controlling two models, and have
@@ -649,15 +649,14 @@ assumed to start at the beginning of the vector.
 
 NOTE: Only part of this functionality has been tested. Use with caution!
 """
-struct IndexedConstraint{C,NM} <: StageConstraint
+struct IndexedConstraint{C,N,M} <: StageConstraint
 	n::Int  # new dimension
 	m::Int  # new dimension
 	n0::Int # old dimension
 	m0::Int # old dimension
 	con::C
-	ix::UnitRange{Int}  # index of old x in new z
-	iu::UnitRange{Int}  # index of old u in new z
-	iz::SVector{NM,Int} # index of old z in new z
+	ix::SVector{N,Int}  # index of old x in new z
+	iu::SVector{M,Int}  # index of old u in new z
 	∇c::Matrix{Float64}
 	A::SubArray{Float64,2,Matrix{Float64},Tuple{UnitRange{Int},UnitRange{Int}},false}
 	B::SubArray{Float64,2,Matrix{Float64},Tuple{UnitRange{Int},UnitRange{Int}},false}
@@ -674,15 +673,24 @@ function IndexedConstraint(n,m,con::AbstractConstraint,
 	n0,m0 = length(ix), length(iu)
 	iu = iu .+ n
 	iz = SVector{n0+m0}([ix; iu])
-	w = width(con)
+	w = widths(con)[1]
 	∇c = zeros(p,w)
 	if con isa StageConstraint
-		A = view(∇c, 1:p, 1:n0)
-		B = view(∇c, 1:p, n0 .+ (1:m0))
+		if con isa ControlConstraint
+			A = view(∇c, 1:p, 1:0)
+			B = view(∇c, 1:p, 1:m0)
+		else
+			A = view(∇c, 1:p, 1:n0)
+			if con isa StateConstraint
+				B = view(∇c, 1:p, n0:n0-1)
+			else
+				B = view(∇c, 1:p, n0 .+ (1:m0))
+			end
+		end
 	else
 		throw(ArgumentError("IndexedConstraint not support for CoupledConstraint yet"))
 	end
-	IndexedConstraint{typeof(con),n0+m0}(n,m,n0,m0,con,ix,iu,iz,∇c,A,B)
+	IndexedConstraint{typeof(con),n0,m0}(n,m,n0,m0,con,ix,iu,∇c,A,B)
 end
 
 function IndexedConstraint(n,m,con::AbstractConstraint)
@@ -702,7 +710,9 @@ function IndexedConstraint(n,m,con::AbstractConstraint)
 end
 
 function evaluate(con::IndexedConstraint, z::AbstractKnotPoint)
-	z_ = StaticKnotPoint(z, z.z[con.iz])
+	x0 = z.z[con.ix]
+	u0 = z.z[con.iu]
+	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
 	evaluate(con.con, z_)
 end
 
@@ -726,11 +736,17 @@ end
 		end
 	end
 	quote
-		z_ = StaticKnotPoint(z, z.z[con.iz])
+		x0 = z.z[con.ix]
+		u0 = z.z[con.iu]
+		z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
 		$assignment
 		return isconst
 	end
 end
+
+@inline is_bound(idx::IndexedConstraint) = is_bound(idx.con)
+@inline upper_bound(idx::IndexedConstraint) = upper_bound(idx.con)
+@inline lower_bound(idx::IndexedConstraint) = lower_bound(idx.con)
 
 function change_dimension(con::AbstractConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 	IndexedConstraint(n, m, con, ix, iu)
