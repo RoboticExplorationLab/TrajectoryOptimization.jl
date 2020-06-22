@@ -8,7 +8,7 @@ end
 
 Cartpole() = Cartpole(1.0, 0.2, 0.5, 9.81)
 
-function dynamics(model::Cartpole, x, u)
+function RobotDynamics.dynamics(model::Cartpole, x, u)
     mc = model.mc  # mass of the cart in kg (10)
     mp = model.mp   # mass of the pole (point mass at the end) in kg
     l = model.l   # length of the pole in m

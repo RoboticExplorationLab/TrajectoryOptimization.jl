@@ -151,6 +151,18 @@ function max_violation!(conSet::AbstractConstraintSet)
 	return nothing
 end
 
+"""
+	norm_violation(conSet, [p=2])
+	norm_violation(conVal, [p=2])
+
+Calculate the norm of the violation of a `AbstractConstraintSet`, a `Conval` using the `p`-norm.
+
+	norm_violation(sense::ConstraintSense, v::AbstractVector, [p=2])
+
+Calculate the `p`-norm of constraint violations given the vector of constraint values `v`,
+	for a constraint of sense `sense` (either `Inequality()` or `Equality()`).
+	Assumes that positive values are violations for inequality constraints.
+"""
 function norm_violation(conSet::AbstractConstraintSet, p=2)
 	norm_violation!(conSet, p)
 	norm(conSet.c_max, p)
@@ -177,6 +189,16 @@ function norm_dgrad(conSet::AbstractConstraintSet, dx::AbstractTrajectory, p=1)
 	return sum(conSet.c_max)
 end
 
+"""
+	max_penalty(conSet::ALConstraintSet)
+
+Calculate the maximum constrained penalty across all constraints.
+"""
+function max_penalty(conSet::ALConstraintSet)
+	max_penalty!(conSet)
+	maximum(conSet.μ_max)
+end
+
 function max_penalty!(conSet::ALConstraintSet{T}) where T
     conSet.c_max .*= 0
     for i in eachindex(conSet.μ)
@@ -193,6 +215,12 @@ function max_penalty!(μ_max::Vector{<:Real}, μ::Vector{<:StaticVector})
     return nothing
 end
 
+"""
+	findmax_violation(conSet)
+
+Return details on the where the largest violation occurs. Returns a string giving the
+constraint type, time step index, and index into the constraint.
+"""
 function findmax_violation(conSet::AbstractConstraintSet)
 	max_violation!(conSet)
 	c_max0, j_con = findmax(conSet.c_max) # which constraint
@@ -201,10 +229,10 @@ function findmax_violation(conSet::AbstractConstraintSet)
 	end
 	convals = get_convals(conSet)
 	conval = convals[j_con]
-	i_con = findmax(conval.c_max)[2]  # whicn index
+	i_con = findmax(conval.c_max)[2]  # which index
 	k_con = conval.inds[i_con] # time step
 	con_sense = sense(conval.con)
-	viol = violation(con_sense, conval.vals[i_con])
+	viol = [violation(con_sense, v) for v in conval.vals[i_con]]
 	c_max, i_max = findmax(viol)  # index into constraint
 	@assert c_max == c_max0
 	con_name = string(typeof(conval.con).name)
@@ -242,7 +270,7 @@ function reset_penalties!(conSet::ALConstraintSet)
 end
 
 
-# Augmented Lagrangian Updated
+# Augmented Lagrangian Updates
 function dual_update!(conSet::ALConstraintSet)
     for i in eachindex(conSet.λ)
         dual_update!(conSet.convals[i], conSet.λ[i], conSet.μ[i], conSet.params[i])
@@ -304,7 +332,7 @@ function cost!(J::Vector{<:Real}, conval::ConVal, λ::Vector{<:StaticVector},
 	end
 end
 
-function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::AbstractTrajectory, 
+function cost_expansion!(E::Objective, conSet::ALConstraintSet, Z::AbstractTrajectory,
 		init::Bool=false, rezero::Bool=false)
 	for i in eachindex(conSet.errvals)
 		cost_expansion!(E, conSet.convals[i], conSet.λ[i], conSet.μ[i], conSet.active[i])

@@ -17,14 +17,6 @@ end
 
 @testset "Constraints" begin
     include("constraint_tests.jl")
-end
-
-# @testset "Rotations" begin
-#     include("rotations_tests.jl")
-#     include("retraction_maps.jl")
-# end
-
-
-@testset "Controllers" begin
-    include("controllers_test.jl")
+    include("constraint_list.jl")
+    include("constraint_sets.jl")
 end

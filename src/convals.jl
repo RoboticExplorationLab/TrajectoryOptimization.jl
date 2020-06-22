@@ -82,6 +82,8 @@ end
 
 @inline violation(::Equality, v) = norm(v,Inf)
 @inline violation(::Inequality, v) = maximum(v)
+@inline violation(::Equality, v::Real) = abs(v)
+@inline violation(::Inequality, v::Real) = v > 0 ? v : 0.0
 
 function max_violation(cval::ConVal)
 	max_violation!(cval)
