@@ -17,6 +17,7 @@ end
 
 @testset "Constraints" begin
     include("constraint_tests.jl")
+    include("dynamics_constraints.jl")
     include("constraint_list.jl")
     include("constraint_sets.jl")
 end

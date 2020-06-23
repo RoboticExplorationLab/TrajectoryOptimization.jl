@@ -61,7 +61,7 @@ widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N
 
 get_inds(con::DynamicsConstraint{<:Explicit}, n, m) = (1:n+m, (n+m) .+ (1:n))
 
-# Implicit
+# Explict 
 function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
 	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
 end

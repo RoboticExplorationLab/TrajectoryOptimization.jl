@@ -1,4 +1,5 @@
 
+@testset "Constraint Sets" begin
 model = Cartpole()
 n,m = size(model)
 N = 11
@@ -85,7 +86,7 @@ cval.∇u[3] .= 2
 @test length(conset) == length(cons)
 
 #--- Test evaluation
-Z = Traj([rand(n) for k = 1:N], [rand(m) for k = 1:N-1], collect(0:dt:dt*N))
+Z = Traj([rand(n) for k = 1:N], [rand(m) for k = 1:N-1], fill(dt,N)) 
 TO.evaluate!(conset, Z)
 @test conset.errvals[end].vals[1] ≈ discrete_dynamics(RK3, model, Z[1]) - state(Z[2])
 @test conset.errvals[3].vals[2] ≈ TO.evaluate(lin, Z[3])
@@ -120,8 +121,6 @@ c_max = map(enumerate(vals)) do (i,val)
 end
 @test maximum(c_max) ≈ max_violation(conset)
 maximum(c_max)
-using BenchmarkTools
-@btime TO.max_violation!($conset)
 @test maximum(maximum.([maximum.(viol) for viol in viols])) ≈ max_violation(conset)
 
 p = 2
@@ -240,3 +239,5 @@ TO.link_constraints!(conset2, conset)
 @test conset.convals[end].jac === conset2.convals[end].jac
 @test length(conset) == 5
 @test length(conset2) == 4
+
+end
