@@ -58,13 +58,13 @@ function Base.copy(Z::Traj) where {T,N,M}
     Traj([KnotPoint(copy(z.z), copy(z._x), copy(z._u), z.dt, z.t) for z in Z])
 end
 
-function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int, equal=false)
+function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int; equal=false)
     x = NaN*@SVector ones(n)
     u = @SVector zeros(m)
     Traj(x,u,dt,N,equal)
 end
 
-function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int, equal=false)
+function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int; equal=false)
     equal ? uN = N : uN = N-1
     Z = [KnotPoint(x,u,dt,(k-1)*dt) for k = 1:uN]
     if !equal
@@ -132,7 +132,7 @@ function Base.copyto!(Z::Traj, Z0::Traj)
 	end
 end
 
-function Base.copyto!(Z::Vector{<:KnotPoint}, Z0::Traj)
+function Base.copyto!(Z::Union{Vector{<:KnotPoint},Traj{<:Any,<:Any,<:Any,<:KnotPoint}}, Z0::Traj)
 	@assert length(Z) == length(Z0)
 	for k in eachindex(Z)
 		Z[k].z = Z0[k].z
@@ -142,9 +142,9 @@ end
 #~~~~~~~~~~~~~~~~~~~~~~~~~~ FUNCTIONS ON TRAJECTORIES ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 "Evaluate the discrete dynamics for all knot points"
-function discrete_dynamics!(f, model, Z::Traj)
+function discrete_dynamics!(::Type{Q}, f, model, Z::Traj) where Q
     for k in eachindex(Z)
-        f[k] = discrete_dynamics(model, Z[k])
+        f[k] = RobotDynamics.discrete_dynamics(Q, model, Z[k])
     end
 end
 

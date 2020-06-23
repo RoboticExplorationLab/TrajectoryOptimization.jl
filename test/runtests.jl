@@ -21,3 +21,7 @@ end
     include("constraint_list.jl")
     include("constraint_sets.jl")
 end
+
+@testset "Utils" begin
+    include("trajectories.jl")
+end
