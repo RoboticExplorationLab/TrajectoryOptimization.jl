@@ -22,6 +22,15 @@ end
     include("constraint_sets.jl")
 end
 
+@testset "Problems" begin
+    include("problems_tests.jl")
+end
+
 @testset "Utils" begin
     include("trajectories.jl")
+end
+
+@testset "NLP" begin
+    include("nlp_tests.jl")
+    include("moi_test.jl")
 end

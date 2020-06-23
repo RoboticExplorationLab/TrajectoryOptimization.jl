@@ -61,7 +61,7 @@ end
 function Traj(n::Int, m::Int, dt::AbstractFloat, N::Int; equal=false)
     x = NaN*@SVector ones(n)
     u = @SVector zeros(m)
-    Traj(x,u,dt,N,equal)
+    Traj(x,u,dt,N; equal=equal)
 end
 
 function Traj(x::SVector, u::SVector, dt::AbstractFloat, N::Int; equal=false)

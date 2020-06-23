@@ -62,19 +62,20 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
-        dt=fill((tf-t0)/(N-1),N),
+        dt=fill((tf-t0)/(N-1),N-1),
         integration=DEFAULT_Q) where {L,O}
     n,m = size(model)
     if dt isa Real
         dt = fill(dt,N)
     end
+	@assert sum(dt[1:N-1]) ≈ tf "Time steps are inconsistent with final time"
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    t = range(t0, tf, length=N)
+    t = pushfirst!(cumsum(dt), 0)
     Z = Traj(X0,U0,dt,t)
 
     Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
@@ -111,6 +112,13 @@ states(::Traj)
 Get the state trajectory
 "
 states(prob::Problem) = states(prob.Z)
+
+"""
+	get_times(::Problem)
+
+Get the times for all the knot points in the problem.
+"""
+@inline get_times(prob::Problem) = get_times(get_trajectory(prob))
 
 "```julia
 initial_trajectory!(::Problem, Z)
