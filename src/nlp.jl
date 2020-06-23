@@ -1,4 +1,4 @@
-
+#--- NLPData
 mutable struct NLPData{T}
 	G::SparseMatrixCSC{T,Int}
 	g::Vector{T}
@@ -44,6 +44,7 @@ function NLPData(NN::Int, P::Int, nD=nothing)
 	end
 end
 
+#--- NLP Constraint Set
 """
 	NLPConstraintSet{T}
 
@@ -172,7 +173,7 @@ function change_parent(x::Base.ReshapedArray{<:Any,2,<:SubArray}, P::AbstractArr
 	return reshape(view(P, x.parent.indices...), x.dims)
 end
 
-
+#--- NLP Cost Functions
 """
 	QuadraticViewCost{n,m,T}
 
@@ -289,7 +290,7 @@ function ViewKnotPoint(z::SubArray, n, m, dt, t=0.0)
     ViewKnotPoint(z, ix, iu, dt, t)
 end
 
-#---
+#--- NLP Trajectories
 """
 	TrajData{n,m,T}
 
@@ -367,7 +368,18 @@ end
 @inline Base.firstindex(Z::NLPTraj) = 1
 @inline Base.lastindex(Z::NLPTraj) = length(Z)
 
-#---
+#--- TrajOpt NLP Problem
+
+mutable struct NLPOpts{T}
+	reset_views::Bool
+end
+
+function NLPOpts(;
+		reset_views::Bool = false 
+		)
+	NLPOpts{Float64}(reset_views)
+end
+
 
 """
 	TrajOptNLP{n,m,T}
@@ -404,6 +416,9 @@ struct TrajOptNLP{n,m,T} <: MOI.AbstractNLPEvaluator
 
 	# Solution
 	Z::NLPTraj{n,m,T}
+
+	# Options
+	opts::NLPOpts{T}
 end
 
 function TrajOptNLP(prob::Problem; remove_bounds::Bool=false, jac_type=:sparse)
@@ -437,7 +452,9 @@ function TrajOptNLP(prob::Problem; remove_bounds::Bool=false, jac_type=:sparse)
 			for k = 1:N])
 
 	Z = NLPTraj(prob.Z)
-	TrajOptNLP(prob.model, zinds, data, prob.obj, E, conSet, Z)
+
+	opts = NLPOpts()
+	TrajOptNLP(prob.model, zinds, data, prob.obj, E, conSet, Z, opts)
 end
 
 @inline num_knotpoints(nlp::TrajOptNLP) = length(nlp.zinds)
@@ -483,9 +500,12 @@ function grad_f!(nlp::TrajOptNLP, Z=get_primals(nlp), g=nlp.data.g)
 	nlp.Z.Z = Z
 	cost_gradient!(nlp.E, nlp.obj, nlp.Z)
 	if g !== nlp.data.g
-		println("reset gradient views")
-		nlp.data.g = g
-		reset_views!(nlp.E, nlp.data)
+		copyto!(g, nlp.data.g)
+		if nlp.opts.reset_views
+			println("reset gradient views")
+			nlp.data.g = g
+			reset_views!(nlp.E, nlp.data)
+		end
 	end
 	return g
 end
@@ -500,9 +520,12 @@ function hess_f!(nlp::TrajOptNLP, Z=get_primals(nlp), G=nlp.data.G)
 	nlp.Z.Z = Z
 	cost_hessian!(nlp.E, nlp.obj, nlp.Z, true)  # TODO: figure out how to not require the reset
 	if G !== nlp.data.G
-		println("reset Hessian views")
-		nlp.data.G = G
-		reset_views!(nlp.E, nlp.data)
+		copyto!(G, nlp.data.G)
+		if nlp.opts.reset_views
+			println("reset Hessian views")
+			nlp.data.G = G
+			reset_views!(nlp.E, nlp.data)
+		end
 	end
 	return G
 end
@@ -564,9 +587,12 @@ function eval_c!(nlp::TrajOptNLP, Z=get_primals(nlp), c=nlp.data.d)
 	end
 	evaluate!(nlp.conSet, Z_)
 	if c !== nlp.data.d
-		println("reset constraint views")
-		nlp.data.d = c
-		reset_views!(nlp.conSet, nlp.data)
+		copyto!(c, nlp.data.d)
+		if nlp.opts.reset_views
+			println("reset constraint views")
+			nlp.data.d = c
+			reset_views!(nlp.conSet, nlp.data)
+		end
 	end
 	return c
 end
@@ -580,12 +606,18 @@ function jac_c!(nlp::TrajOptNLP, Z=get_primals(nlp), C::AbstractArray=nlp.data.D
 	nlp.Z.Z = Z
 	jacobian!(nlp.conSet, nlp.Z)
 	if C isa AbstractMatrix && C !== nlp.data.D
-		nlp.data.D = C
-		reset_views(nlp.conet, nlp.data)
+		copyto!(C, nlp.data.C)
+		if nlp.opts.reset_views
+			nlp.data.D = C
+			reset_views(nlp.conet, nlp.data)
+		end
 	elseif C isa AbstractVector && C != nlp.data.v
-		println("reset Jacobian views")
-		nlp.data.v = C
-		reset_views!(nlp.conSet, nlp.data)
+		copyto!(C, nlp.data.v)
+		if nlp.opts.reset_views
+			println("reset Jacobian views")
+			nlp.data.v = C
+			reset_views!(nlp.conSet, nlp.data)
+		end
 	end
 	return C
 end

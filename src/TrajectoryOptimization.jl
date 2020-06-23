@@ -34,6 +34,7 @@ export  # types
 	QuadraticCost,
 	LQRCost,
 	Traj,
+	TrajOptNLP,
 	KnotPoint   # from RobotDynamics
 
 export  # methods

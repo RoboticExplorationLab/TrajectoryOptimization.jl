@@ -1,5 +1,5 @@
 using TrajectoryOptimization
-using ALTRO
+# using ALTRO
 using RobotDynamics
 using BenchmarkTools
 using ForwardDiff
@@ -8,18 +8,18 @@ using SparseArrays
 using LinearAlgebra
 const TO = TrajectoryOptimization
 
-using TrajectoryOptimization: StaticKnotPoint
-using TrajectoryOptimization: num_vars, TrajData, NLPTraj, TrajOptNLP, NLPConstraintSet,
-    JacobianStructure, NLPData
+# using TrajectoryOptimization: StaticKnotPoint
+# using TrajectoryOptimization: num_vars, TrajData, NLPTraj, TrajOptNLP, NLPConstraintSet,
+#     JacobianStructure, NLPData
 
 # Test NLPTraj iteration
 n,m,N = 3,2,101
-NN = num_vars(n,m,N)
+NN = TO.num_vars(n,m,N)
 @test NN == N*n + (N-1)*m
 Z0 = Traj(n,m,0.1,N)
-Zdata = TrajData(Z0)
+Zdata = TO.TrajData(Z0)
 Z = rand(NN)
-Z_ = NLPTraj(Z,Zdata)
+Z_ = TO.NLPTraj(Z,Zdata)
 @test Z_[1] isa StaticKnotPoint
 @test state(Z_[2]) == Z[(n+m) .+ (1:n)]
 @test state(Z_[end]) == Z[end-n+1:end]
@@ -29,7 +29,8 @@ Z_ = NLPTraj(Z,Zdata)
 @test eltype(Z_) == StaticKnotPoint{n,m,Float64,n+m}
 
 # Test with problem
-prob = Problems.DubinsCar(:parallel_park)[1]
+prob = DubinsCar(:parallel_park)
+prob.constraints
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
 cons = prob.constraints
@@ -37,7 +38,7 @@ NN = N*n + (N-1)*m
 P = sum(TO.num_constraints(prob))
 
 # Jacobian structure
-jac = JacobianStructure(cons)
+jac = TO.JacobianStructure(cons)
 TO.get_inds(cons[2],n,m)
 TO.widths(cons[end])
 @test jac.cinds[1][1] == 1:n
@@ -73,8 +74,8 @@ C,c = TO.gen_convals(D,d,cons)
 
 
 # Test second-order constraint term
-data = NLPData(NN, P, jac.nD)
-conSet = NLPConstraintSet(prob.model, prob.constraints, data)
+data = TO.NLPData(NN, P, jac.nD)
+conSet = TO.NLPConstraintSet(prob.model, prob.constraints, data)
 prob.Z[2].z += rand(n+m)
 conSet.λ[5][1] .= rand(n)
 TO.evaluate!(conSet, prob.Z)
@@ -90,7 +91,7 @@ Zdata = nlp.Z.Zdata
 @test states(nlp) ≈ states(prob.Z)
 @test controls(nlp) ≈ controls(prob.Z)
 
-Z_ = NLPTraj(prob.Z)
+Z_ = TO.NLPTraj(prob.Z)
 Z = Z_.Z
 @test Z_[10].z == prob.Z[10].z
 z = StaticKnotPoint(Z,Zdata,1)
@@ -114,11 +115,11 @@ G0 .*= 0
 
 # Constraint Functions
 initial_trajectory!(nlp, prob.Z)
-al = AugmentedLagrangianSolver(prob)
-max_violation(al)
+conSet = TO.ALConstraintSet(prob)
+TO.evaluate!(conSet, prob.Z)
 TO.evaluate!(nlp.conSet, prob.Z)
 c_max = max_violation(nlp.conSet)
-@test c_max ≈ max_violation(al)
+@test c_max ≈ max_violation(conSet)
 
 c = TO.eval_c!(nlp, Z)
 @test max_violation(nlp) ≈ c_max
@@ -191,7 +192,7 @@ cL,cU = TO.constraint_bounds(nlp)
 
 # Test view reset
 nlp = TO.TrajOptNLP(prob)
-conSet = get_constraints(nlp)
+conSet = TO.get_constraints(nlp)
 TO.eval_c!(nlp)
 TO.jac_c!(nlp)
 @test conSet.convals[1].vals[1].parent === nlp.data.d
@@ -213,7 +214,7 @@ TO.jac_c!(nlp)
 @test D == D0 != spzeros(P,NN)
 
 nlp_ = TO.TrajOptNLP(prob, jac_type=:vector)
-conSet = get_constraints(nlp_)
+conSet = TO.get_constraints(nlp_)
 TO.eval_c!(nlp_)
 TO.jac_c!(nlp_)
 @test typeof(nlp_.conSet.convals[1].jac[1]) <: Base.ReshapedArray{<:Any,2,<:SubArray}
@@ -271,8 +272,8 @@ TO.primal_bounds!(zL, zU, cons, false)
 @test zL[n+1:n+m] == fill(-2,m)
 @test zU[n+m+1:2n+m] == [0.25, 1.501, Inf]
 @test zL[n+m+1:2n+m] == [-0.25, -0.001, -Inf]
-@test zL[end-n+1:end] == zeros(n)
-@test zU[end-n+1:end] == zeros(n)
+@test zL[end-n+1:end] == prob.xf
+@test zU[end-n+1:end] == prob.xf
 
 @test length(cons) == 5
 cons2 = copy(cons)
@@ -281,7 +282,7 @@ TO.primal_bounds!(zL, zU, cons2, true)
 @test cons2[1] isa TO.DynamicsConstraint
 @test length(cons) == 5
 
-prob = Problems.DubinsCar(:parallel_park)[1]
+prob = DubinsCar(:parallel_park)
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
 cons = prob.constraints
@@ -290,6 +291,7 @@ nlp = TrajOptNLP(prob, remove_bounds=true)
 @test length(prob.constraints) == 5  # make sure it doesn't modify the problem
 @test length(nlp.conSet.convals) == 1
 @test (zL,zU) == TO.primal_bounds!(nlp)
+TO.jac_c!(nlp)
 
 
 # Test vector sparsity
@@ -297,4 +299,4 @@ nlp_ = TrajOptNLP(prob, remove_bounds=true, jac_type=:vector)
 TO.jac_c!(nlp_)
 @test nlp_.conSet.convals[end].jac[1].parent.parent == nlp_.data.v
 @test nlp_.data.v[1:n*(n+m)] == vec(nlp.data.D[1:n, 1:n+m])
-TO.primal_bounds!(nlp_)
+@test all(TO.primal_bounds!(nlp_) .≈ (zL,zU))
