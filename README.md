@@ -16,7 +16,7 @@ A library of solvers for trajectory optimization problems written in Julia. Curr
 Direct Collocation (DIRCOL)
   * Interfaces to Nonlinear Programming solvers (e.g., [Ipopt](https://github.com/coin-or/Ipopt), [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/)) via [MathOptInterface](https://github.com/JuliaOpt/MathOptInterface.jl)
 
-All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of dynamics, cost, or constraint functions. Dynamics can be computed directly from a URDF file via [RigidBodyDynamics.jl](https://github.com/JuliaRobotics/RigidBodyDynamics.jl).
+All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of dynamics, cost, or constraint functions.
 
 ## Installation
 To install TrajectoryOptimization.jl, run the following from the Julia REPL:
@@ -24,51 +24,59 @@ To install TrajectoryOptimization.jl, run the following from the Julia REPL:
 Pkg.add("TrajectoryOptimization")
 ```
 
+# What's New
+`TrajectoryOptimization.jl` underwent significant changes between versions `v0.1` and `v0.2`. The new code is significantly faster (up to 100x faster). The core part of the ALTRO solver (everything except the projected newton phase) is completely allocation-free once the solver has been initialized. Most of the API has changed significantly. See the documentation for more information on the new API.
+
 ## Quick Start
-To run a simple example of a constrained 1D block move:
+To run a simple example of a constrained 1D block move (see script in `/examples/quickstart.jl`):
 ```julia
-using TrajectoryOptimization, LinearAlgebra
+using TrajectoryOptimization
+using StaticArrays
+using LinearAlgebra
+const TO = TrajectoryOptimization
 
-function dynamics!(ẋ,x,u) # inplace dynamics
-    ẋ[1] = x[2]
-    ẋ[2] = u[1]
+struct DoubleIntegrator{T} <: AbstractModel
+    mass::T
 end
 
-n = 2 # number of states
-m = 1 # number of controls
-model = Model(dynamics!,n,m) # create model
-model_d = rk3(model) # create discrete model w/ rk3 integration
-
-x0 = [0.; 0.] # initial state
-xf = [1.; 0.] # goal state
-
-N = 21 # number of knot points
-dt = 0.1 # time step
-
-U0 = [0.01*rand(m) for k = 1:N-1]; # initial control trajectory
-
-Q = 1.0*Diagonal(I,n)
-Qf = 1.0*Diagonal(I,n)
-R = 1.0e-1*Diagonal(I,m)
-obj = LQRObjective(Q,R,Qf,xf,N) # objective
-
-bnd = BoundConstraint(n,m,u_max=1.5, u_min=-1.5) # control limits
-goal = goal_constraint(xf) # terminal constraint
-
-constraints = Constraints(N) # define constraints at each time step
-for k = 1:N-1
-    constraints[k] += bnd
+function TO.dynamics(model::DoubleIntegrator, x, u)
+    SA[x[2], u[1] / model.mass]
 end
-constraints[N] += goal
 
-prob = Problem(model_d, obj, constraints=constraints, x0=x0, xf=xf, N=N, dt=dt) # construct problem
-initial_controls!(prob,U0) # initialize problem with controls
+Base.size(::DoubleIntegrator) = 2,1
 
-solver = solve!(prob, ALTROSolverOptions{Float64}())
+# Model and discretization
+model = DoubleIntegrator(1.0)
+n,m = size(model)
+tf = 3.0  # sec
+N = 21    # number of knot points
+
+# Objective
+x0 = SA[0,0.]  # initial state
+xf = SA[1,0.]  # final state
+
+Q = Diagonal(@SVector ones(n))
+R = Diagonal(@SVector ones(m))
+obj = LQRObjective(Q, R, N*Q, xf, N)
+
+# Constraints
+cons = TO.ConstraintSet(n,m,N)
+add_constraint!(cons, GoalConstraint(xf), N:N)
+add_constraint!(cons, BoundConstraint(n,m, u_min=-10, u_max=10), 1:N-1)
+
+# Create and solve problem
+prob = Problem(model, obj, xf, tf, x0=x0, constraints=cons)
+solver = ALTROSolver(prob)
+cost(solver)           # initial cost
+solve!(solver)         # solve with ALTRO
+max_violation(solver)  # max constraint violation
+cost(solver)           # final cost
+iterations(solver)     # total number of iterations
+
+# Get the state and control trajectories
+X = states(solver)
+U = controls(solver)
 ```
 
 ## Examples
-Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples), including all the examples from our [IROS 2019 paper](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples/IROS_2019).
-
-## Documentation
-Detailed documentation for getting started with the package can be found [here](https://roboticexplorationlab.github.io/TrajectoryOptimization.jl/dev/).
+Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples), including all the examples from our [IROS 2019 paper](https://rexlab.stanford.edu/papers/altro-iros.pdf).

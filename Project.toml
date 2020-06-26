@@ -1,6 +1,6 @@
 name = "TrajectoryOptimization"
 uuid = "c79d492b-0548-5874-b488-5a62c1d9d0ca"
-version = "0.1.2"
+version = "0.2.0"
 
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -11,3 +11,36 @@ RobotDynamics = "38ceca67-d8d3-44e8-9852-78a5596522e1"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 UnsafeArrays = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
+
+[compat]
+BenchmarkTools = "0.4"
+Combinatorics = "1"
+CoordinateTransformations = "0.5,0.6"
+Distributions = "0.23"
+DocStringExtensions = "0.8"
+Documenter = "0.24"
+FFMPEG = "0.3"
+Formatting = "0.4"
+ForwardDiff = "0.10"
+Interpolations = "0.12"
+Ipopt = "0.6.0"
+IterTools = "1"
+MathOptInterface = "0.9"
+Parameters = "0.12"
+Quaternions = "0.4"
+RecipesBase = "1"
+Rotations = "0.13,1.0"
+StaticArrays = "0.12.3"
+StatsBase = "0.33"
+UnsafeArrays = "1"
+julia = "1.1.0"
+
+[extras]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["LinearAlgebra", "SparseArrays", "Random", "Test", "Logging", "ForwardDiff"]
