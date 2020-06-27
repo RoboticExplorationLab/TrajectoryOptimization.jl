@@ -5,8 +5,11 @@
 #                              COST METHODS                                                #
 ############################################################################################
 
-"$(TYPEDSIGNATURES) Evaluate the cost at a knot point, and automatically handle terminal
-knot point, multiplying by dt as necessary."
+"""
+	stage_cost(cost::CostFunction, z::AbstractKnotPoint)
+
+Evaluate the cost at a knot point, and automatically handle terminal
+knot point, multiplying by dt as necessary."""
 function stage_cost(cost::CostFunction, z::AbstractKnotPoint)
     if is_terminal(z)
         stage_cost(cost, state(z))
@@ -15,12 +18,11 @@ function stage_cost(cost::CostFunction, z::AbstractKnotPoint)
     end
 end
 
-"""```
-cost(obj::Objective, Z::Traj)::Float64
-cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
-```
-Evaluate the cost for a trajectory.
-Calculate the cost gradient for an entire trajectory. If a dynamics constraint is given,
+"""
+	cost(obj::Objective, Z::Traj)
+	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
+
+Evaluate the cost for a trajectory. If a dynamics constraint is given,
     use the appropriate integration rule, if defined.
 """
 function cost(obj::AbstractObjective, Z::AbstractTrajectory{<:Any,<:Any,<:AbstractFloat})
@@ -51,6 +53,13 @@ end
 #                              COST EXPANSIONS                                             #
 ############################################################################################
 
+"""
+	cost_gradient!(E::Objective, obj::Objective, Z, init)
+
+Evaluate the cost gradient along the entire tracjectory `Z`, storing the result in `E`.
+
+If `init == true`, all gradients will be evaluated, even if they are constant.
+"""
 function cost_gradient!(E::Objective, obj::Objective, Z::AbstractTrajectory, init::Bool=false)
     is_const = E.const_grad
     N = length(Z)
@@ -69,6 +78,14 @@ function cost_gradient!(E::Objective, obj::Objective, Z::AbstractTrajectory, ini
     end
 end
 
+"""
+	cost_hessian!(E::Objective, obj::Objective, Z, init)
+
+Evaluate the cost hessian along the entire tracjectory `Z`, storing the result in `E`.
+
+If `init == true`, all hessian will be evaluated, even if they are constant. If false,
+they will only be evaluated if they are not constant.
+"""
 function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init::Bool=false, rezero::Bool=false)
     is_const = E.const_hess
     N = length(Z)
@@ -93,6 +110,16 @@ function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init
     end
 end
 
+"""
+	cost_expansion!(E::Objective, obj::Objective, Z, [init, rezero])
+
+Evaluate the 2nd order Taylor expansion of the objective `obj` along the trajectory `Z`,
+storing the result in `E`.
+
+If `init == false`, the expansions will only be evaluated if they are not constant.
+
+If `rezero == true`, all expansions will be multiplied by zero before taking the expansion.
+"""
 function cost_expansion!(E::Objective, obj::Objective, Z::Traj, init::Bool=false, rezero::Bool=false)
     cost_gradient!(E, obj, Z, init)
     cost_hessian!(E, obj, Z, init, rezero)
@@ -151,6 +178,7 @@ end
 
 """
 	dgrad(E::QuadraticExpansion, dZ::Traj)
+
 Calculate the derivative of the cost in the direction of `dZ`, where `E` is the current
 quadratic expansion of the cost.
 """
@@ -166,6 +194,7 @@ end
 
 """
 	dhess(E::QuadraticCost, dZ::Traj)
+
 Calculate the scalar 0.5*dZ'G*dZ where G is the hessian of cost
 """
 function dhess(E::QuadraticExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
@@ -183,6 +212,7 @@ end
 
 """
 	norm_grad(E::QuadraticExpansion, p=2)
+
 Norm of the cost gradient
 """
 function norm_grad(E::QuadraticExpansion{n,m,T}, p=2)::T where {n,m,T}

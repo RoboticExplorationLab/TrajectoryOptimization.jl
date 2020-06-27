@@ -7,25 +7,19 @@ makedocs(
     pages = [
         "Introduction" => "index.md",
         "Getting Started" => [
-            "models.md",
+            "model.md",
             "costfunctions.md",
             "constraints.md",
-            "creating_problems.md",
-            "solving.md"
+            "creating_problems.md"
         ],
         "Interfaces" => [
             "costfunction_interface.md",
-            "constraint_interface.md",
-            "solver_interface.md"
+            "constraint_interface.md"
         ],
-        "Documentation" => [
-            "model_types.md",
-            "discretization.md",
+        "API" => [
             "cost_api.md",
             "constraint_api.md",
-            "problem.md",
-            "solvers.md",
-            "rotations.md"
+            "problem.md"
         ]
     ]
 )
@@ -35,6 +29,4 @@ makedocs(
 # for more information.
 deploydocs(
     repo = "github.com/RoboticExplorationLab/TrajectoryOptimization.jl.git",
-    deploy_config=Documenter.Travis(),
-    devbranch = "v1.3",
 )

@@ -2,6 +2,12 @@
 @inline get_data(A::AbstractArray) = A
 @inline get_data(A::SizedArray) = A.data
 
+
+"""
+	ConVal{C,V,M,W}
+
+Holds information about a constraint
+"""
 struct ConVal{C,V,M,W}
     con::C
     inds::UnitRange{Int}

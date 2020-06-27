@@ -4,11 +4,40 @@ import Base: copy, +
 #       COST FUNCTION CLASS       #
 #*********************************#
 
+"""
+Abstract type that represents a scalar-valued function that accepts a state and control
+at a single knot point.
+"""
 abstract type CostFunction end
 
+"""
+An abstract type that represents any [`CostFunction`](@ref) of the form
+```math
+\\frac{1}{2} x^T Q x + \\frac{1}{2} u^T R u + u^T H x + q^T x + r^T u + c
+```
+
+These types all support the following methods
+* [`is_diag`](@ref)
+* [`is_blockdiag`](@ref)
+* [`invert!`](@ref)
+
+As well as standard addition.
+"""
 abstract type QuadraticCostFunction{n,m,T} <: CostFunction end
 
+"""
+    is_diag(::QuadraticCostFunction)
+
+Determines if the hessian of a quadratic cost function is strictly diagonal.
+"""
 is_diag(cost::QuadraticCostFunction) = is_blockdiag(cost) && cost.Q isa Diagonal && cost.R isa Diagonal
+
+"""
+    is_diag(::QuadraticCostFunction)
+
+Determines if the hessian of a quadratic cost function is block diagonal (i.e. ``\\norm(H) = 0``).
+"""
+is_blockdiag(::QuadraticCostFunction) = false
 state_dim(::QuadraticCostFunction{n}) where n = n
 control_dim(::QuadraticCostFunction{<:Any,m}) where m = m
 
@@ -20,6 +49,13 @@ function (::Type{QC})(Q::AbstractArray, R::AbstractArray;
     QC(Q, R, H, q, r, c; kwargs...)
 end
 
+"""
+    stage_cost(costfun::CostFunction, x, u)
+    stage_cost(costfun::CostFunction, x)
+
+Calculate the scalar cost using `costfun` given state `x` and control `u`. If only the
+state is provided, it is assumed it is a terminal cost.
+"""
 function stage_cost(cost::QuadraticCostFunction, x::AbstractVector, u::AbstractVector)
     J = 0.5*u'cost.R*u + cost.r'u + stage_cost(cost, x)
     if !is_blockdiag(cost)
@@ -32,6 +68,14 @@ function stage_cost(cost::QuadraticCostFunction, x::AbstractVector{T}) where T
     0.5*x'cost.Q*x .+ cost.q'*x .+ cost.c
 end
 
+"""
+    gradient!(E::QuadraticCostFunction, costfun::CostFunction, x, u)
+    gradient!(E::QuadraticCostFunction, costfun::CostFunction, x)
+
+Evaluate the gradient of the cost function `costfun` at state `x` and control `u`, storing
+    the result in `E.q` and `E.r`. Return a `true` if the gradient is constant, and `false`
+    otherwise.
+"""
 function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x)
     E.q .= cost.Q*x .+ cost.q
     return false
@@ -47,6 +91,14 @@ function gradient!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x, u)
     return false
 end
 
+"""
+    hessian!(E::QuadraticCostFunction, costfun::CostFunction, x, u)
+    hessian!(E::QuadraticCostFunction, costfun::CostFunction, x)
+
+Evaluate the hessian of the cost function `costfun` at state `x` and control `u`, storing
+    the result in `E.Q`, `E.R`, and `E.H`. Return a `true` if the hessian is constant, and `false`
+    otherwise.
+"""
 function hessian!(E::QuadraticCostFunction, cost::QuadraticCostFunction, x)
     if is_diag(cost)
         for i = 1:length(x); E.Q[i,i] = cost.Q[i,i] end
@@ -88,6 +140,12 @@ function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
        checks=false, terminal=c1.terminal && c2.terminal)
 end
 
+"""
+    invert!(Ginv, cost::QuadraticCostFunction)
+
+Invert the hessian of the cost function, storing the result in `Ginv`. Performs the inversion
+    efficiently, depending on the structure of the Hessian (diagonal or block diagonal).
+"""
 function invert!(Ginv, cost::QuadraticCostFunction{n,m}) where {n,m}
     ix = 1:n
     iu = n .+ (1:m)
@@ -125,10 +183,16 @@ where ``Q`` and ``R`` are positive semi-definite and positive definite diagonal 
 respectively, and ``x`` is `n`-dimensional and ``u`` is `m`-dimensional.
 
 # Constructors
-    DiagonalCost(Qd::AbstractVector, Rd::AbstractVector, q::AbstractVector, r::AbstractVector, c; kwargs...)
-    DiagonalCost(Q::AbstractMatrix, R::AbstractMatrix, q::AbstractVector, r::AbstractVector, c; kwargs...)
-    DiagonalCost(Qd::AbstractVector, Rd::AbstractVector; [q::AbstractVector, r::AbstractVector, c, kwargs...])
-    DiagonalCost(Q::AbstractMatrix, R::AbstractMatrix; [q::AbstractVector, r::AbstractVector, c, kwargs...])
+    DiagonalCost(Qd, Rd, q, r, c; kwargs...)
+    DiagonalCost(Q, R, q, r, c; kwargs...)
+    DiagonalCost(Qd, Rd; [q, r, c, kwargs...])
+    DiagonalCost(Q, R; [q, r, c, kwargs...])
+
+where `Qd` and `Rd` are the diagonal vectors, and `Q` and `R` are matrices.
+
+Any optional or omitted values will be set to zero(s). The keyword arguments are
+* `terminal` - A `Bool` specifying if the cost function is terminal cost or not.
+* `checks` - A `Bool` specifying if `Q` and `R` will be checked for the required definiteness.
 """
 struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
     Q::Diagonal{T,SVector{n,T}}
@@ -202,18 +266,23 @@ function change_dimension(cost::DiagonalCost, n::Int, m::Int, ix, iu)
 end
 
 """
-$(TYPEDEF)
-Cost function of the form
-    1/2xₙᵀ Qf xₙ + qfᵀxₙ +  ∫ ( 1/2xᵀQx + 1/2uᵀRu + xᵀHu + q⁠ᵀx + rᵀu ) dt from 0 to tf
-R must be positive definite, Q and Qf must be positive semidefinite
+    QuadraticCost{n,m,T,TQ,TR}
 
-Constructor use any of the following constructors:
-```julia
-QuadraticCost(Q, R, H, q, r, c)
-QuadraticCost(Q, R; H, q, r, c)
-QuadraticCost(Q, q, c)
+Cost function of the form
+```math
+\\frac{1}{2} x^T Q x + \\frac{1}{2} u^T R u + u^T H x + q^T x + r^T u + c
 ```
-Any optional or omitted values will be set to zero(s).
+where ``R`` must be positive definite, ``Q`` and ``Q_f`` must be positive semidefinite.
+
+The type parameters `TQ` and `TR` specify the type of ``Q`` and ``R``.
+
+# Constructor
+    QuadraticCost(Q, R, H, q, r, c; kwargs...)
+    QuadraticCost(Q, R; H, q, r, c, kwargs...)
+
+Any optional or omitted values will be set to zero(s). The keyword arguments are
+* `terminal` - A `Bool` specifying if the cost function is terminal cost or not.
+* `checks` - A `Bool` specifying if `Q` and `R` will be checked for the required definiteness.
 """
 mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     Q::TQ                     # Quadratic stage cost for states (n,n)
@@ -314,10 +383,15 @@ end
 @inline Base.convert(::Type{QC}, cost::QuadraticCost) where QC <: QuadraticCost = QC(cost)
 
 """
-$(SIGNATURES)
-Cost function of the form
-``(x-x_f)^T Q (x_x_f) + u^T R u``
-R must be positive definite, Q must be positive semidefinite
+    LQRCost(Q, R, xf, [uf; kwargs...])
+
+Convenience constructor for a `QuadraticCostFunction` of the form:
+```math
+\\frac{1}{2} (x-x_f)^T Q (x-xf) + \\frac{1}{2} (u-u_f)^T R (u-u_f)
+```
+
+If ``Q`` and ``R`` are diagonal, the output will be a `DiagonalCost`, otherwise it will
+be a `QuadraticCost`.
 """
 function LQRCost(Q::AbstractArray, R::AbstractArray,
         xf::AbstractVector, uf=(@SVector zeros(size(R,1))); kwargs...)

@@ -208,6 +208,14 @@ function Problem{Q}(p::Problem) where Q
     Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.t0, p.tf)
 end
 
+"""
+	rollout!(::Problem)
+	rollout!(model::AbstractModel, Z::Traj, x0)
+
+Simulate the dynamics forward from the initial condition `x0` using the controls in the
+trajectory `Z`.
+If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0`.
+"""
 @inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
 
 function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,

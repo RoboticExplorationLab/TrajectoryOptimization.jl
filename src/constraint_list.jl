@@ -28,6 +28,32 @@ Once the previous interface is defined, the following methods are defined
 """
 abstract type AbstractConstraintSet end
 
+"""
+	ConstraintList
+
+Stores the set of constraints included in a trajectory optimization problem. Includes a list
+of both the constraint types [`AbstractConstraint`](@ref) as well as the knot points at which
+the constraint is applied. Each constraint is assumed to apply to a contiguous set of knot points.
+
+A `ConstraintList` supports iteration and indexing over the `AbstractConstraint`s, and
+iteration of both the constraints and the indices of the knot points at which they apply
+via `zip(cons::ConstraintList)`.
+
+Constraints are added via the [`add_constraint!`](@ref) method, which verifies that the constraint
+dimension is consistent with the state and control dimensions of the problem.
+
+The total number of constraints at each knot point can be queried using the
+[`num_constraints`](@ref) method.
+
+The constraint list can also be sorted to separate `StageConstraint`s and `CoupledConstraint`s
+via the `sort!` method.
+
+A constraint list can be queried if it has a `DynamicsConstraint` via
+`has_dynamics_constraint(::ConstraintList)`.
+
+# Constructor
+	ConstraintList(n::Int, m::Int, N::Int)
+"""
 struct ConstraintList <: AbstractConstraintSet
 	n::Int
 	m::Int
@@ -42,6 +68,41 @@ struct ConstraintList <: AbstractConstraintSet
 	end
 end
 
+"""
+	add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange, [idx])
+
+Add constraint `cons` to `ConstraintList` `cons` for knot points given by `inds`.
+
+Use `idx` to determine the location of the constraint in the constraint list.
+`idx=-1` (default) adds the constraint at the end of the list.
+
+# Example
+Here is an example of adding a goal and control limit constraint for a cartpole swing-up.
+```julia
+# Dimensions of our problem
+n,m,N = 4,1,51    # 51 knot points
+
+# Create our list of constraints
+cons = ConstraintList(n,m,N)
+
+# Create the goal constraint
+xf = [0,π,0,0]
+goalcon = GoalConstraint(xf)
+add_constraint!(cons, goalcon, N)  # add to the last time step
+
+# Create control limits
+ubnd = 3
+bnd = BoundConstraint(n,m, u_min=-ubnd, u_max=ubnd, idx=1)  # make it the first constraint
+add_constraint!(cons, bnd, 1:N-1)  # add to all but the last time step
+
+# Indexing
+cons[1] === bnd                            # (true)
+cons[2] === goal                           # (true)
+allcons = [con for con in cons]
+cons_and_inds = [(con,ind) in zip(cons)]
+cons_and_inds[1] == (bnd,1:n-1)            # (true)
+```
+"""
 function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
 	@assert check_dims(con, cons.n, cons.m) "New constaint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
@@ -83,6 +144,14 @@ function Base.copy(cons::ConstraintList)
 	return cons2
 end
 
+"""
+	num_constraints(::ConstraintList)
+	num_constraints(::Problem)
+	num_constraints(::TrajOptNLP)
+
+Return a vector of length `N` constaining the total number of constraint values at each
+knot point. 
+"""
 @inline num_constraints(cons::ConstraintList) = cons.p
 
 function num_constraints!(cons::ConstraintList)

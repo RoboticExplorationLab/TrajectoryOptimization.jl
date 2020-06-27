@@ -22,9 +22,12 @@ states(x) = states(get_trajectory(x))
 controls(x) = controls(get_trajectory(x))
 
 """
-    Traj
+    Traj{n,m,T,KP}
 
-A vector of KnotPoints
+A vector of `AbstractKnotPoint`s of type `KP` with state dimension `n`,
+control dimension `m`, and value type `T`
+
+Supports iteration and indexing.
 
 # Constructors
     Traj(n, m, dt, N, equal=false)

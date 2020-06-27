@@ -9,15 +9,20 @@ n = state_dim(cost)
 m = control_dim(cost)
 J = stage_cost(cost, x, u)
 J = stage_cost(cost, xN)
-Qx,Qu = gradient(cost, x, u)
-Qxx,Quu,Qux = hessian(cost, x, u)
+gradient!(E::QuadraticCostFunction, cost, x, u)
+gradient!(E::QuadraticCostFunction, cost, xN)
+hessian!(E::QuadraticCostFunction, cost, x, u)
+hessian!(E::QuadraticCostFunction, cost, xN)
 ```
-and inherit from `CostFunction`. They then inherit the following methods:
+and inherit from `CostFunction`. Note the it is good practice to use the method defined on
+the terminal state internal to the method defined for both the state and control, i.e.
+`gradient!(E, cost, x, u)` should call `gradient!(E, cost, xN)`.
+They then inherit the following methods defined on knot points:
 
-```@docs
+```julia
 stage_cost(::CostFunction, ::KnotPoint)
-cost_gradient(::CostFunction, ::KnotPoint)
-cost_hessian(::CostFunction, ::KnotPoint)
+gradient!(::QuadraticCostFunction, ::CostFunction, ::AbstractKnotPoint)
+hessian!(::QuadraticCostFunction, ::CostFunction, ::AbstractKnotPoint)
 ```
 
 

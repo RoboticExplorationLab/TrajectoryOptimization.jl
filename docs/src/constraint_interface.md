@@ -5,37 +5,36 @@ CurrentModule = TrajectoryOptimization
 # Constraint Interface
 
 ## Constraint Type
-All constraints inherit from `AbstractConstraint{S<:ConstraintSense,W<:ConstraintType,P}`,
-where `ConstraintSense` specifies `Inequality` or `Equality`, `ConstraintType` specifies the
-"bandedness" of the constraint (will be discussed more later), and `P` is the dimension of
-the constraint. This allows the software to easily dispatch over the type of constraint.
-Each constraint type represents a vector-valued constraint.
-The intention is that each constraint type represent one line in the constraints of
-problem definition (where they may be vector or scalar-valued).
-
+All constraints inherit from [`AbstractConstraint`](@ref).
 TrajectoryOptimization.jl assumes equality constraints are of the form ``g(x) = 0`` and inequality
 constraints are of the form ``h(x) \leq 0 ``.
 
 ```@docs
 AbstractConstraint
 ConstraintSense
-ConstraintType
+```
+
+## Evaluating Constraints
+The following methods are used to evaluate a constraint:
+```@docs
+evaluate
+evaluate!
+jacobian!
+∇jacobian!
 ```
 
 ### Methods
 The following methods are defined for all `AbstractConstraint`s
 ```@docs
-state_dims
-control_dims
-evaluate!
-jacobian!
-contype
+state_dim
+control_dim
 sense
-width
+widths
 upper_bound
 lower_bound
 is_bound
 check_dims
+get_inds
 ```
 
 ## Adding a New Constraint
@@ -82,16 +81,12 @@ end
 
 ### Constraint Types
 The `ConstraintType` defines the "bandedness" of the constraint, or the number of adjacent
-state or constraint values needed to calculate the constraint. 
+state or constraint values needed to calculate the constraint.
 ```@docs
-Stage
-State
-Control
-Coupled
-Dynamical
-CoupledState
-CoupledControl
-General
-GeneralState
-GeneralControl
+StageConstraint
+StateConstraint
+ControlConstraint
+CoupledConstraint
+CoupledStateConstraint
+CoupledControlConstraint
 ```

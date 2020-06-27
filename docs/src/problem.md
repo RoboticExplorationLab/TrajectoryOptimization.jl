@@ -8,7 +8,7 @@ CurrentModule = TrajectoryOptimization
 Pages = ["problem.md"]
 ```
 
-## Definition 
+## Definition
 ```@docs
 Problem
 ```
@@ -23,4 +23,5 @@ Base.copy(::Problem)
 integration(::Problem)
 states(::Problem)
 controls(::Problem)
+rollout!
 ```
