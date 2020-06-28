@@ -124,7 +124,7 @@ end
 
 # Iteration
 Base.iterate(cons::ConstraintList) = length(cons) == 0 ? nothing : (cons[1], 1)
-Base.iterate(cons::ConstraintList, i) = i < length(cons) ? (cons[i+1], i+1) : nothing
+Base.iterate(cons::ConstraintList, i::Int) = i < length(cons) ? (cons[i+1], i+1) : nothing
 @inline Base.length(cons::ConstraintList) = length(cons.constraints)
 Base.IteratorSize(::ConstraintList) = Base.HasLength()
 Base.IteratorEltype(::ConstraintList) = Base.HasEltype()
@@ -150,7 +150,7 @@ end
 	num_constraints(::TrajOptNLP)
 
 Return a vector of length `N` constaining the total number of constraint values at each
-knot point. 
+knot point.
 """
 @inline num_constraints(cons::ConstraintList) = cons.p
 

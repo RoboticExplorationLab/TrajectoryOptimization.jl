@@ -1,4 +1,20 @@
 #--- NLPData
+"""
+Holds all the required data structures for evaluating a trajectory optimization problem as
+	an NLP. It represents the cost gradient, Hessian, constraints, and constraint Jacobians
+	as large, sparse arrays, as applicable.
+
+# Constructors
+	NLPData(G, g, zL, zU, D, d, λ)
+	NLPData(G, g, zL, zU, D, d, λ, v, r, c)
+	NLPData(NN, P, [nD])  # suggested constructor
+
+where `G` and `g` are the cost function gradient and hessian of size `(NN,NN)` and `(NN,)`,
+`zL` and `zU` are the lower and upper bounds on the `NN` primal variables,
+`D` and `d` are the constraint jacobian and violation of size `(P,NN)` and `(P,)`, and
+`v`, `r`, `c` are the values, rows, and columns of the non-zero elements of the costraint
+Jacobian, all of length `nD`.
+"""
 mutable struct NLPData{T}
 	G::SparseMatrixCSC{T,Int}
 	g::Vector{T}
@@ -49,6 +65,8 @@ end
 	NLPConstraintSet{T}
 
 Constraint set that updates views to the NLP constraint vector and Jacobian.
+
+The views can be reset to new arrays using `reset_views!(::NLPConstraintSet, ::NLPData)`
 """
 struct NLPConstraintSet{T} <: AbstractConstraintSet
     convals::Vector{ConVal}
@@ -375,7 +393,7 @@ mutable struct NLPOpts{T}
 end
 
 function NLPOpts(;
-		reset_views::Bool = false 
+		reset_views::Bool = false
 		)
 	NLPOpts{Float64}(reset_views)
 end
@@ -493,7 +511,8 @@ end
 """
 	grad_f!(nlp::TrajOptNLP, Z, g)
 
-Evaluate the gradient of the cost function
+Evaluate the gradient of the cost function for the vector of decision variables `Z`, storing
+	the result in the vector `g`.
 """
 function grad_f!(nlp::TrajOptNLP, Z=get_primals(nlp), g=nlp.data.g)
 	N = num_knotpoints(nlp)
@@ -513,7 +532,8 @@ end
 """
 	hess_f!(nlp::TrajOptNLP, Z, G)
 
-Evaluate the hessian of the cost function `G`.
+Evaluate the hessian of the cost function for the vector of decision variables `Z`,
+	storing the result in `G`, a sparse matrix.
 """
 function hess_f!(nlp::TrajOptNLP, Z=get_primals(nlp), G=nlp.data.G)
 	N = num_knotpoints(nlp)
@@ -623,7 +643,7 @@ function jac_c!(nlp::TrajOptNLP, Z=get_primals(nlp), C::AbstractArray=nlp.data.D
 end
 
 """
-	jac_structure(nlp::TrajOptNLP)
+	jacobian_structure(nlp::TrajOptNLP)
 
 Returns a sparse matrix `D` of the same size as the constraint Jacobian, corresponding to
 the sparsity pattern of the constraint Jacobian. Additionally, `D[i,j]` is either zero or

@@ -19,7 +19,8 @@ makedocs(
         "API" => [
             "cost_api.md",
             "constraint_api.md",
-            "problem.md"
+            "problem.md",
+            "nlp.md"
         ]
     ]
 )
