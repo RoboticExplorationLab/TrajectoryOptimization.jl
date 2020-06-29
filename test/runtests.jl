@@ -1,48 +1,36 @@
 using TrajectoryOptimization
-using Distributions
 using Test
-using BenchmarkTools
 using LinearAlgebra
 using Random
 using StaticArrays
 using SparseArrays
-using Ipopt
-using Logging
 using ForwardDiff
+using RobotDynamics
 const TO = TrajectoryOptimization
 
-@testset "Logging" begin
-    include("logger_tests.jl")
-end
+include("test_models.jl")
 
-@testset "Dynamics" begin
-    # include("models_test.jl")
-    include("dynamics_constraints.jl")
-end
-
-@testset "Full Solves" begin
-    include("car_tests.jl")
-    TEST_TIME = false  # don't test timing results
-    include("benchmark_solves.jl")
-end
-
-@testset "Solvers" begin
-    include("solver_options.jl")
+@testset "Costs" begin
+    include("cost_tests.jl")
+    include("objective_tests.jl")
 end
 
 @testset "Constraints" begin
     include("constraint_tests.jl")
+    include("dynamics_constraints.jl")
+    include("constraint_list.jl")
+    include("constraint_sets.jl")
 end
 
-# @testset "Rotations" begin
-#     include("rotations_tests.jl")
-#     include("retraction_maps.jl")
-# end
-
-@testset "Costs" begin
-    include("cost_tests.jl")
+@testset "Problems" begin
+    include("problems_tests.jl")
 end
 
-# @testset "Controllers" begin
-#     include("controllers_test.jl")
-# end
+@testset "Utils" begin
+    include("trajectories.jl")
+end
+
+@testset "NLP" begin
+    include("nlp_tests.jl")
+    include("moi_test.jl")
+end

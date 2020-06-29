@@ -5,17 +5,17 @@ CurrentModule = TrajectoryOptimization
 # Cost Functions and Objectives
 This page details the functions related to building and evaluating cost functions and objectives.
 
-## Quadratic Cost Functions
+
+## Cost Functions
 ```@docs
+CostFunction
+QuadraticCostFunction
+DiagonalCost
 QuadraticCost
 LQRCost
-LQRCostTerminal
-LQRObjective
-```
-
-## Indexed Cost Functions
-```@docs
-IndexedCost
+is_diag
+is_blockdiag
+invert!
 ```
 
 ## Adding Cost Functions
@@ -36,19 +36,23 @@ cost3 = cost1 + cost2
 # cost3 is equivalent to QuadraticCost(Q1+Q2, R1+R2)
 ```
 
-## CostExpansion Type
-The `CostExpansion` type stores the pieces of the second order Taylor expansion of the cost for the entire trajectory, stored as vectors of Static Vectors or Static Matrices. e.g. to get the Hessian with respect to `x` at knotpoint 5 you would use `E.xx[5]`.
-```@docs
-CostExpansion
-```
-
-## Objective
+## Objectives
 ```@docs
 Objective
-cost(::Objective, Z::Traj)
+LQRObjective
 get_J
-cost_gradient
+dgrad
+dhess
+norm_grad
+```
+
+## Evaluating the Cost
+```@docs
+cost
+stage_cost
+gradient!
+hessian!
 cost_gradient!
-cost_hessian
 cost_hessian!
+cost_expansion!
 ```

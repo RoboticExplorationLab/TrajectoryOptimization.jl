@@ -80,37 +80,22 @@ where, again, these can either be matrices or vectors of vectors of the appropri
 It should be noted that these methods work on either `Problem`s or instances of `AbstractSolver`.
 
 Alternatively, the problem can be initialized with both the state and control trajectories
-simultaneously by passing in a vector of [`KnotPoint`](@ref)s, described in the next sections.
+simultaneously by passing in a vector of `KnotPoint`s, described in the next sections.
 
 ## `KnotPoint` Type
 Internally, TrajectoryOptimization.jl stores the state and controls at each time step as a
-concatenated vector inside of a custom `KnotPoint` type. In addition to storing the state
-and control, the `KnotPoint` type also stores the time and time step length for the current
-knot point.  
-
-```@docs
-KnotPoint
-```
+concatenated vector inside the `KnotPoint` type defined by RobotDynamics.jl.
+In addition to storing the state and control, the `KnotPoint` type also stores the
+time and time step length for the current knot point. See the documention in RobotDynamics
+for more information.
 
 ## `Traj` Type
 The `Traj` type is simply a vector of `KnotPoint`s. However, it provides a few helpful methods
 for constructing and working vectors of `KnotPoint`s, which effectively describe a discrete-time
 state-control trajectory.
 
-### Constructors
-Initialize a trajectory with `NaN` states and zeroed controls:
-```julia
-Traj(n, m, dt, N)
-```
-
-Copy a single state-control pair across `N` knot points:
-```julia
-Traj(x::SVector, u::SVector, dt, N)
-```
-
-Create a trajectory from individual state, control, and time step trajectories:
-```julia
-Traj(X::Vector{<:AbstractVector}, U::Vector{<:AbstractVector}, dt::Vector)
+```@docs
+Traj
 ```
 
 ### Other Methods

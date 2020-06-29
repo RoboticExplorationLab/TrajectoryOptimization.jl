@@ -5,38 +5,38 @@ CurrentModule = TrajectoryOptimization
 # Constraints
 This page provides details about the various types in TrajectoryOptimization.jl for working
 with constraints, as well as the methods defined on those types.
+In general, a [`ConstraintList`](@ref) is used to define the constraints, and another
+[`AbstractConstraintSet`](@ref), such as an [`ALConstraintSet`](@ref), is instantiated by a
+solver to hold the constraint values and Jacobians.
 
-
-## Constraint Sets
+## Constraint List
+A [`ConstraintList`](@ref) is used to define a trajectory optimization [`Problem`](@ref) and
+only holds basic information about the constraints included in the problem. Although it is
+a child of [`AbstractConstraintSet`](@ref) and supports indexing and iteration, it does not
+hold any information about constraint values or Jacobians.
 ```@docs
-ConstraintSet
-```
-
-### Information Methods
-These methods provide or calculate information about the constraint set
-```@docs
-Base.size(::ConstraintSet)
-Base.length(::ConstraintSet)
-num_constraints!
+ConstraintList
+add_constraint!
 num_constraints
 ```
 
-### Calculation Methods
-These methods perform calculations on the constraint set
+## Constraint Sets
+A constraint set holding a list of [`ConVal`](@ref)s is generally instantiated by a solver
+and holds the constraint definitions, as well as the associated constraint values, Jacobians,
+and other constraint-related information required by the solver.
 ```@docs
-max_violation
-max_penalty
-evaluate!(::ConstraintSet, ::Traj)
-jacobian!(::ConstraintSet, ::Traj)
-reset!(::ConstraintSet)
+AbstractConstraintSet
+ALConstraintSet
+link_constraints!
 ```
-`ConstraintSet` supports indexing and iteration, which returns the `ConstraintVals` at that index. However, to avoid allocations, iteration directly on the `.constraints` field.
 
-Additionally, to avoid allocations when computing `max_violation`, you can call `max_violation!(conSet)` and then `maximum(conSet.c_max)` to perform the reduction in the scope where the result is stored (thereby avoiding an allocation).
+## Constraint Value type
+The [`ConVal`](@ref) type holds all the constraint values and Jacobians for a particular
+constraint, and supports different ways of storing those (either as individual matrices/vectors
+or as views into a large matrix/vector).
 
-### Changing Dimension
 ```@docs
-change_dimension(conSet::ConstraintSet, n, m)
+ConVal
 ```
 
 ## Implemented Constraints
@@ -61,9 +61,4 @@ SphereConstraint
 NormConstraint
 DynamicsConstraint
 IndexedConstraint
-```
-
-## `ConstraintVals` Type
-```@docs
-ConstraintVals
 ```

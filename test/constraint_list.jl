@@ -1,0 +1,92 @@
+
+@testset "Constraint List" begin
+    model = Cartpole()
+    n,m = size(model)
+    N = 11
+    x,u = rand(model)
+    z = KnotPoint(x,u,0.1)
+
+    #--- Generate some constraints
+    # Circle Constraint
+    xc = SA[1,1,1]
+    yc = SA[1,2,3]
+    r  = SA[1,1,1]
+    cir = CircleConstraint(n, xc, yc, r)
+
+    # Goal Constraint
+    xf = @SVector rand(n)
+    goal = GoalConstraint(xf)
+
+    # Linear Constraint
+    p = 5
+    A = @SMatrix rand(p,n+m)
+    b = @SVector rand(p)
+    lin = LinearConstraint(n,m,A,b, Inequality())
+
+    # Bound Constraint
+    xmin = -@SVector rand(n)
+    xmax = +@SVector rand(n)
+    umin = -@SVector rand(m)
+    umax = +@SVector rand(m)
+    bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
+
+    # Dynamics Constraint
+    dyn = TO.DynamicsConstraint(model, N)
+
+    #--- Create a List
+    cons = ConstraintList(n,m,N)
+    add_constraint!(cons, cir, 1:N)
+    @test cons.constraints[1] === cir
+    @test cons[1] === cir
+    @test cons.inds[1] == 1:N
+    @test cons.p == fill(length(cir), N)
+
+    add_constraint!(cons, goal, N)
+    @test cons.constraints[2] === goal
+    @test cons[2] === goal
+    @test cons.inds[2] == N:N
+    @test cons.p[1:N-1] == fill(length(cir), N-1)
+    @test cons.p[end] == length(cir) + length(goal)
+
+    add_constraint!(cons, lin, 1:4, 1)
+    @test cons[1] === lin
+    @test cons[2] === cir
+    @test cons[end] === goal
+    @test cons.inds[1] === 1:4
+    @test cons.p[1:4] == fill(length(cir)+length(lin), 4)
+    @test cons.p[5:N-1] == fill(length(cir), N-1-4)
+    @test length(cons) == 3
+
+    cons2 = copy(cons)
+    add_constraint!(cons, bnd, 1:N-1)
+    @test length(cons) == 4
+    @test length(cons2) == 3
+
+    add_constraint!(cons, dyn, 1:N-1, 2)
+    @test cons[2] == dyn
+    @test collect(zip(cons))[2] == (1:N-1, dyn)
+    @test cons.p[1] == length(cir) + length(bnd) + length(lin) + n
+    @test length(cons) == 5
+
+    @test TO.has_dynamics_constraint(cons) == true
+    @test TO.has_dynamics_constraint(cons2) == false
+    @test TO.num_constraints(cons) === cons.p
+    @test TO.num_constraints(cons2) !== cons.p
+    @test cons[end] == bnd
+    sort!(cons)
+    @test cons[end] == dyn
+    @test cons[end-1] == bnd
+    @test cons[1] == lin
+    @test length(cons) == 5
+
+    # Try adding a constraint with incorrect dimensions
+    lin2 = LinearConstraint(2, 1, rand(3,2), rand(3), Inequality(), 1:2)
+    @test_throws AssertionError add_constraint!(cons, lin2, 1:4)
+    @test_throws AssertionError add_constraint!(cons2, dyn, 1:N+1)
+
+    # Test iteration
+    conlist = [lin, cir, goal, bnd, dyn]
+    @test all(conlist .=== [con for con in cons])
+    @test length.(cons) == length.(conlist)
+    @test eltype(cons) == TO.AbstractConstraint
+end

@@ -1,14 +1,15 @@
-export
-	GoalConstraint,
-	BoundConstraint,
-	CircleConstraint,
-	SphereConstraint,
-	NormConstraint,
-	LinearConstraint,
-	VariableBoundConstraint,
-	QuatNormConstraint,
-	QuatSlackConstraint
+# export
+# 	GoalConstraint,
+# 	BoundConstraint,
+# 	CircleConstraint,
+# 	SphereConstraint,
+# 	NormConstraint,
+# 	LinearConstraint,
+# 	VariableBoundConstraint,
+# 	QuatNormConstraint,
+# 	QuatSlackConstraint
 
+import RobotDynamics: state_dim, control_dim
 
 
 ############################################################################################
@@ -16,7 +17,8 @@ export
 ############################################################################################
 
 """
-$(TYPEDEF)
+	GoalConstraint{P,T}
+
 Constraint of the form ``x_g = a``, where ``x_g`` can be only part of the state
 vector.
 
@@ -28,9 +30,9 @@ GoalConstraint(xf::AbstractVector, inds)
 where `xf` is an n-dimensional goal state. If `inds` is provided,
 only `xf[inds]` will be used.
 """
-struct GoalConstraint{T,P,N,L} <: AbstractConstraint{Equality,State,P}
+struct GoalConstraint{P,T} <: StateConstraint
+	n::Int
 	xf::SVector{P,T}
-	Ix::SMatrix{P,N,T,L}
 	inds::SVector{P,Int}
 end
 
@@ -43,21 +45,43 @@ function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
 end
 
 function GoalConstraint(xf::SVector{n}, inds::SVector{p,Int}) where {n,p}
-	Ix = SMatrix{n,n}(Matrix(1.0I,n,n))
-	Ix = Ix[inds,:]
-	GoalConstraint(SVector{p}(xf[inds]), Ix, inds)
+	GoalConstraint(length(xf), SVector{p}(xf[inds]), inds)
 end
 
-state_dim(::GoalConstraint{T,P,N}) where {T,P,N} = N
+@inline sense(::GoalConstraint) = Equality()
+@inline Base.length(con::GoalConstraint{P}) where P = P
+@inline state_dim(con::GoalConstraint) = con.n
+@inline is_bound(::GoalConstraint) = true
+function primal_bounds!(zL,zU,con::GoalConstraint)
+	for i in con.inds
+		zL[i] = con.xf[i]
+		zU[i] = con.xf[i]
+	end
+	return true
+end
+
 evaluate(con::GoalConstraint, x::SVector) = x[con.inds] - con.xf
-jacobian(con::GoalConstraint, z::KnotPoint) = con.Ix
+function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
+	T = eltype(∇c)
+	for (i,j) in enumerate(con.inds)
+		∇c[i,j] = one(T)
+	end
+	return true
+end
+
+∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
+
+function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
+	GoalConstraint(n, con.xf, xi[con.inds])
+end
 
 
 ############################################################################################
 #                              LINEAR CONSTRAINTS 										   #
 ############################################################################################
 """
-$(TYPEDEF)
+	LinearConstraint{S,P,W,T}
+
 Linear constraint of the form ``Ay - b \\{\\leq,=\\} 0`` where ``y`` may be either the
 state or controls (but not a combination of both).
 
@@ -66,39 +90,53 @@ LinearConstraint{S,W}(n,m,A,b)
 ```
 where `W <: Union{State,Control}`.
 """
-struct LinearConstraint{S,W<:Union{State,Control},P,N,L,T} <: AbstractConstraint{S,W,P}
+struct LinearConstraint{S,P,W,T} <: StageConstraint
 	n::Int
 	m::Int
-	A::SMatrix{P,N,T,L}
+	A::SizedMatrix{P,W,T,2}
 	b::SVector{P,T}
+	sense::S
+	inds::SVector{W,Int}
+	function LinearConstraint(n::Int, m::Int, A::StaticMatrix{P,W,T}, b::StaticVector{P,T},
+			sense::ConstraintSense, inds=1:n+m) where {P,W,T}
+		@assert length(inds) == W
+		inds = SVector{W}(inds)
+		new{typeof(sense),P,W,T}(n,m,A,b,sense,inds)
+	end
 end
 
-function LinearConstraint{S,W}(n,m, A::AbstractMatrix, b::AbstractVector) where {S,W}
+function LinearConstraint(n::Int, m::Int, A::AbstractMatrix, b::AbstractVector,
+		sense::S, inds=1:n+m) where {S<:ConstraintSense}
 	@assert size(A,1) == length(b)
 	p,q = size(A)
-	A = SMatrix{p,q}(A)
+	A = SizedMatrix{p,q}(A)
 	b = SVector{p}(b)
-	LinearConstraint{S,W}(n,m, A, b)
+	LinearConstraint(n,m, A, b, sense, inds)
 end
 
-function LinearConstraint{S,W}(n::Int,m::Int, A::SMatrix{P,N,T}, b::SVector{P,T}) where {S,W,P,N,T}
-	con = LinearConstraint{S,W,P,N,P*N,T}(n,m,A,b)
-	@assert check_dims(con,n,m) "Dimensions of LinearConstraint are inconsistent"
-	return con
+
+@inline sense(con::LinearConstraint) = con.sense
+@inline Base.length(con::LinearConstraint{<:Any,P}) where P = P
+@inline state_dim(con::LinearConstraint) = con.n
+@inline control_dim(con::LinearConstraint) = con.m
+evaluate(con::LinearConstraint, z::AbstractKnotPoint) = con.A*z.z[con.inds] .- con.b
+function jacobian!(∇c, con::LinearConstraint, z::AbstractKnotPoint)
+	∇c[:,con.inds] .= con.A
+	return true
 end
 
-state_dim(::LinearConstraint{S,State,P,N}) where {S,P,N} = N
-control_dim(::LinearConstraint{S,Control,P,N}) where {S,P,N} = N
-evaluate(con::LinearConstraint,x::SVector) = con.A*x - con.b
-jacobian(con::LinearConstraint,x::SVector) = con.A
-
-
+function change_dimension(con::LinearConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	inds0 = [ix; n .+ iu]  # indices of original z in new z
+	inds = inds0[con.inds] # indices of elements in new z
+	LinearConstraint(n, m, con.A, con.b, con.sense, inds)
+end
 
 ############################################################################################
 #                              CIRCLE/SPHERE CONSTRAINTS 								   #
 ############################################################################################
 """
-$(TYPEDEF)
+	CircleConstraint{P,T}
+
 Constraint of the form
 `` (x - x_c)^2 + (y - y_c)^2 \\leq r^2 ``
 where ``x``, ``y`` are given by `x[xi]`,`x[yi]`, ``(x_c,y_c)`` is the center
@@ -109,29 +147,60 @@ of the circle, and ``r`` is the radius.
 CircleConstraint(n, xc::SVector{P}, yc::SVector{P}, radius::SVector{P}, xi=1, yi=2)
 ```
 """
-struct CircleConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
+struct CircleConstraint{P,T} <: StateConstraint
 	n::Int
 	x::SVector{P,T}
 	y::SVector{P,T}
 	radius::SVector{P,T}
 	xi::Int  # index of x-state
 	yi::Int  # index of y-state
-	CircleConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, radius::SVector{P,T},
-			xi=1, yi=2) where {T,P} =
-		 new{T,P}(n,xc,yc,radius,xi,yi)
+	function CircleConstraint{P,T}(n::Int, xc::AbstractVector, yc::AbstractVector, radius::AbstractVector,
+			xi=1, yi=2) where {P,T}
+    	@assert length(xc) == length(yc) == length(radius) == P "Lengths of xc, yc, and radius must be equal. Got lengths ($(length(xc)), $(length(yc)), $(length(radius)))"
+        new{P,T}(n, xc, yc, radius, xi, yi)
+    end
+end
+function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius::AbstractVector,
+		xi=1, yi=2)
+    T = promote_type(eltype(xc), eltype(yc), eltype(radius))
+    P = length(xc)
+    CircleConstraint{P,T}(n, xc, yc, radius, xi, yi)
 end
 state_dim(con::CircleConstraint) = con.n
 
-function evaluate(con::CircleConstraint{T,P}, x::SVector) where {T,P}
-	xc = con.x; xi = con.xi
-	yc = con.y; yi = con.yi
+function evaluate(con::CircleConstraint, X::StaticVector)
+	xc = con.x
+	yc = con.y
 	r = con.radius
-	-(x[xi] .- xc).^2 - (x[yi] .- yc).^2 + r.^2
+	x = X[con.xi]
+	y = X[con.yi]
+	-(x .- xc).^2 - (y .- yc).^2 + r.^2
 end
 
+function jacobian!(∇c, con::CircleConstraint{P}, X::SVector) where P
+	xc = con.x; xi = con.xi
+	yc = con.y; yi = con.yi
+	x = X[xi]
+	y = X[yi]
+	r = con.radius
+	∇f(x,xc) = -2*(x - xc)
+	for i = 1:P
+		∇c[i,xi] = ∇f(x, xc[i])
+		∇c[i,yi] = ∇f(y, yc[i])
+	end
+	return false
+end
+
+@inline Base.length(::CircleConstraint{P}) where P = P
+@inline sense(::CircleConstraint) = Inequality()
+
+function change_dimension(con::CircleConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	CircleConstraint(n, con.x, con.y, con.radius, ix[con.xi], ix[con.yi])
+end
 
 """
-$(TYPEDEF)
+	SphereConstraint{P,T}
+
 Constraint of the form
 `` (x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2 \\leq r^2 ``
 where ``x``, ``y``, ``z`` are given by `x[xi]`,`x[yi]`,`x[zi]`, ``(x_c,y_c,z_c)`` is the center
@@ -143,7 +212,7 @@ SphereConstraint(n, xc::SVector{P}, yc::SVector{P}, zc::SVector{P},
 	radius::SVector{P}, xi=1, yi=2, zi=3)
 ```
 """
-struct SphereConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
+struct SphereConstraint{P,T} <: StateConstraint
 	n::Int
 	x::SVector{P,T}
 	y::SVector{P,T}
@@ -152,14 +221,26 @@ struct SphereConstraint{T,P} <: AbstractConstraint{Inequality,State,P}
 	yi::Int
 	zi::Int
 	radius::SVector{P,T}
-	SphereConstraint(n::Int, xc::SVector{P,T}, yc::SVector{P,T}, zc::SVector{P,T},
-			radius::SVector{P,T}, xi=1, yi=2, zi=3) where {T,P} =
-			new{T,P}(n,xc,yc,zc,xi,yi,zi,radius)
+	function SphereConstraint{P,T}(n::Int, xc::AbstractVector, yc::AbstractVector,
+            zc::AbstractVector, radius::AbstractVector,
+			xi=1, yi=2, zi=3) where {P,T}
+    	@assert length(xc) == length(yc) == length(radius) == length(zc) == P "Lengths of xc, yc, zc, and radius must be equal. Got lengths ($(length(xc)), $(length(yc)), $(length(zc)), $(length(radius)))"
+        new{P,T}(n, xc, yc, zc, xi, yi, zi, radius)
+    end
+end
+function SphereConstraint(n::Int, xc::AbstractVector, yc::AbstractVector,
+        zc::AbstractVector, radius::AbstractVector,
+		xi=1, yi=2, zi=3)
+    T = promote_type(eltype(xc), eltype(yc), eltype(zc), eltype(radius))
+    P = length(xc)
+    SphereConstraint{P,T}(n, xc, yc, zc, radius, xi, yi, zi)
 end
 
-state_dim(con::SphereConstraint) = con.n
+@inline state_dim(con::SphereConstraint) = con.n
+@inline sense(::SphereConstraint) = Inequality()
+@inline Base.length(::SphereConstraint{P}) where P = P
 
-function evaluate(con::SphereConstraint{T,P}, x::SVector) where {T,P}
+function evaluate(con::SphereConstraint, x::SVector)
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
@@ -168,18 +249,57 @@ function evaluate(con::SphereConstraint{T,P}, x::SVector) where {T,P}
 	-((x[xi] .- xc).^2 + (x[yi] .- yc).^2 + (x[zi] .- zc).^2 - r.^2)
 end
 
+function jacobian!(con::SphereConstraint, X::SVector)
+	xc = con.x; xi = con.xi
+	yc = con.y; yi = con.yi
+	zc = con.z; zi = con.zi
+	x = X[xi]
+	y = X[yi]
+	z = X[zi]
+	r = con.radius
+	∇f(x,xc) = -2*(x - xc)
+	for i = 1:P
+		∇c[i,xi] = ∇f(x, xc[i])
+		∇c[i,yi] = ∇f(y, yc[i])
+		∇c[i,zi] = ∇f(z, zc[i])
+	end
+	return false
+end
+
+function change_dimension(con::SphereConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	SphereConstraint(n, con.x, con.y, con.z, con.radius, ix[con.xi], ix[con.yi], ix[con.zi])
+end
+
 ############################################################################################
 #  								SELF-COLLISION CONSTRAINT 								   #
 ############################################################################################
 
-struct CollisionConstraint{D} <: AbstractConstraint{Inequality,State,1}
+"""
+    CollisionConstraint
+
+Enforces a pairwise non self-collision constraint on the state, such that
+    `norm(x[x1] - x[x2]).^2 > r^2`,
+    where `x1` and `x2` are the indices of the positions of the respective bodies and `r`
+    is the collision radius.
+
+# Constructor
+CollisionConstraint(n::Int, x1::AbstractVector{Int}, x2::AbstractVector{Int}, r::Real)
+"""
+struct CollisionConstraint{D} <: StateConstraint
 	n::Int
     x1::SVector{D,Int}
     x2::SVector{D,Int}
     radius::Float64
+    function CollisionConstraint(n::Int, x1::AbstractVector{Int}, x2::AbstractVector{Int}, r::Real)
+        @assert length(x1) == length(x2) "Position dimensions must be of equal length, got $(length(x1)) and $(length(x2))"
+        D = length(x1)
+        new{D}(n, x1, x2, r)
+    end
 end
 
-state_dim(con::CollisionConstraint) = con.n
+@inline state_dim(con::CollisionConstraint) = con.n
+@inline sense(::CollisionConstraint) = Inequality()
+@inline Base.length(::CollisionConstraint) = 1
 
 function evaluate(con::CollisionConstraint, x::SVector)
     x1 = x[con.x1]
@@ -188,88 +308,94 @@ function evaluate(con::CollisionConstraint, x::SVector)
     @SVector [con.radius^2 - d'd]
 end
 
+function jacobian!(∇c, con::CollisionConstraint, x::SVector)
+    x1 = x[con.x1]
+    x2 = x[con.x2]
+    d = x1 - x2
+	∇x1 = -2d
+	∇x2 =  2d
+	∇c[1,con.x1] .= ∇x1
+	∇c[1,con.x2] .= ∇x2
+	return false
+end
+
+function change_dimension(con::CollisionConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	CollisionConstraint(n, ix[con.x1], ix[con.x2], con.radius)
+end
+
 ############################################################################################
 #								NORM CONSTRAINT											   #
 ############################################################################################
 
 """
-$(TYPEDEF)
+	NormConstraint{S,D,T}
+
 Constraint of the form
 ``\\|y\\|^2 \\{\\leq,=\\} a``
-where ``y`` is either a state or a control vector (but not both)
+where ``y`` is made up of elements from the state and/or control vectors.
 
-# Constructors:
+# Constructor:
 ```
-NormConstraint{S,State}(n,a)
-NormConstraint{S,Control}(m,a)
+NormConstraint(n, m, a, sense, [inds])
 ```
-where `a` is the constant on the right-hand side of the equation.
+where `n` is the number of states,
+    `m` is the number of controls,
+    `a` is the constant on the right-hand side of the equation,
+    `sense` is either `Inequality()` or `Equality()`, and
+    `inds` can be a `UnitRange`, `AbstractVector{Int}`, or either `:state` or `:control`
 
 # Examples:
 ```julia
-NormConstraint{Equality,Control}(2,4.0)
+NormConstraint(3, 2, 4, Equality(), :control)
 ```
 creates a constraint equivalent to
 ``\\|u\\|^2 = 4.0`` for a problem with 2 controls.
 
 ```julia
-NormConstraint{Inequality,State}(3, 2.3)
+NormConstraint(3, 2. 3, Inequality(), :state
 ```
 creates a constraint equivalent to
 ``\\|x\\|^2 \\leq 2.3`` for a problem with 3 states.
+
 """
-struct NormConstraint{S,W<:Union{State,Control},T} <: AbstractConstraint{S,W,1}
-	dim::Int
+struct NormConstraint{S,D,T} <: StageConstraint
+	n::Int
+	m::Int
 	val::T
-	function NormConstraint{S,W,T}(dim::Int, val::T) where {S,W<:Union{State,Control},T}
+	sense::S
+	inds::SVector{D,Int}
+	function NormConstraint(n::Int, m::Int, val::T, sense::ConstraintSense,
+			inds=SVector{n+m}(1:n+m)) where T
+		if inds == :state
+			inds = SVector{n}(1:n)
+		elseif inds == :control
+			inds = SVector{m}(n .+ (1:m))
+		end
 		@assert val ≥ 0 "Value must be greater than or equal to zero"
-		new{S,W,T}(dim, val)
+		new{typeof(sense),length(inds),T}(n,m,val,sense,inds)
 	end
 end
-NormConstraint{S,W}(n::Int, val::T) where {S,W,T} = NormConstraint{S,W,T}(n, val)
 
-state_dim(con::NormConstraint{S,State}) where S = con.dim
-control_dim(con::NormConstraint{S,Control}) where S = con.dim
+@inline state_dim(con::NormConstraint) = con.n
+@inline control_dim(con::NormConstraint) = con.m
+@inline sense(con::NormConstraint) = con.sense
+@inline Base.length(::NormConstraint) = 1
 
-function evaluate(con::NormConstraint, x::SVector)
-	return @SVector [norm(x)^2 - con.val]
+function evaluate(con::NormConstraint, z::AbstractKnotPoint)
+	x = z.z[con.inds]
+	return @SVector [x'x - con.val]
 end
 
-struct QuatNormConstraint <: AbstractConstraint{Equality,State,1}
-	n::Int
-	qinds::SVector{4,Int}
+function jacobian!(∇c, con::NormConstraint, z::AbstractKnotPoint)
+	x = z.z[con.inds]
+	∇c[1,con.inds] .= 2*x
+	return false
 end
 
-QuatNormConstraint(n::Int=13, qinds=(@SVector [4,5,6,7])) = QuatNormConstraint(n, qinds)
-
-state_dim(con::QuatNormConstraint) = con.n
-
-function evaluate(con::QuatNormConstraint, x::SVector)
-	q = x[con.qinds]
-	return @SVector [norm(q) - 1.0]
+function change_dimension(con::NormConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	NormConstraint(n, m, con.val, con.sense, ix[con.inds])
 end
 
-struct QuatSlackConstraint <: AbstractConstraint{Equality,Stage,1}
-	qinds::SVector{4,Int}
-end
-(::Type{<:QuatSlackConstraint})(qinds=(@SVector [4,5,6,7])) = QuatSlackConstraint(qinds)
-
-state_dim(::QuatSlackConstraint) = 13
-control_dim(::QuatSlackConstraint) = 5  # special cased for quadrotor
-
-function evaluate(con::QuatSlackConstraint, x::SVector, u::SVector)
-	s = u[end]
-	q = x[con.qinds]
-	return @SVector [norm(q)*s - 1.0]
-end
-
-function jacobian(con::QuatSlackConstraint, x::SVector, u::SVector)
-	s = u[end]
-	q = x[con.qinds]
-	nq = norm(q)
-	M = s/nq
-	return @SMatrix [0 0 0 q[1]*M  q[2]*M  q[3]*M  q[4]*M  0 0 0  0 0 0  0 0 0 0 nq]
-end
 
 ############################################################################################
 # 								COPY CONSTRAINT 										   #
@@ -291,42 +417,53 @@ end
 ############################################################################################
 # 								BOUND CONSTRAINTS 										   #
 ############################################################################################
-"""$(TYPEDEF) Linear bound constraint on states and controls
+"""
+	BoundConstraint{P,NM,T}
+
+Linear bound constraint on states and controls
 # Constructors
 ```julia
 BoundConstraint(n, m; x_min, x_max, u_min, u_max)
 ```
 Any of the bounds can be ±∞. The bound can also be specifed as a single scalar, which applies the bound to all state/controls.
 """
-struct BoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
+struct BoundConstraint{P,NM,T} <: StageConstraint
 	n::Int
 	m::Int
 	z_max::SVector{NM,T}
 	z_min::SVector{NM,T}
-	b::SVector{P,T}
-	B::SMatrix{P,NM,T,PNM}
+	i_max::Vector{Int}
+	i_min::Vector{Int}
 	inds::SVector{P,Int}
 end
 
 function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
+	nm = n+m
+
 	# Check and convert bounds
-	x_max, x_min = checkBounds(Val(n), x_max, x_min)
-	u_max, u_min = checkBounds(Val(m), u_max, u_min)
+	x_max, x_min = checkBounds(n, x_max, x_min)
+	u_max, u_min = checkBounds(m, u_max, u_min)
 
 	# Concatenate bounds
 	z_max = [x_max; u_max]
 	z_min = [x_min; u_min]
 	b = [-z_max; z_min]
-	bN = [x_max; u_max*Inf; x_min; -u_min*Inf]
+	inds = findall(isfinite, b)
+	inds = SVector{length(inds)}(inds)
 
-	active = isfinite.(b)
-	p = sum(active)
-	inds = SVector{p}(findall(active))
+	# Get linear indices of 1s of Jacobian
+	a_max = findall(isfinite, z_max)
+	a_min = findall(isfinite, z_min)
+	u = length(a_max)
+	l = length(a_min)
+	carts_u = [CartesianIndex(i,   j) for (i,j) in enumerate(a_max)]
+	carts_l = [CartesianIndex(i+u, j) for (i,j) in enumerate(a_min)]
+	∇c = zeros(u+l, n+m)
+	linds_u = LinearIndices(zeros(u+l,n+m))[carts_u]
+	linds_l = LinearIndices(zeros(u+l,n+m))[carts_l]
 
-	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
-
-	BoundConstraint(n, m, z_max, z_min, b[inds], B[inds,:], inds)
+	BoundConstraint(n, m, z_max, z_min, linds_u, linds_l, inds)
 end
 
 function con_label(con::BoundConstraint, ind::Int)
@@ -348,150 +485,150 @@ function con_label(con::BoundConstraint, ind::Int)
 	end
 end
 
-function checkBounds(::Val{N}, u::AbstractVector, l::AbstractVector) where N
+function checkBounds(n::Int, u::AbstractVector, l::AbstractVector)
 	if all(u .>= l)
-		return SVector{N}(u), SVector{N}(l)
+		return SVector{n}(u), SVector{n}(l)
 	else
 		throw(ArgumentError("Upper bounds must be greater than or equal to lower bounds"))
 	end
 end
 
-checkBounds(sze::Val{N}, u::Real, l::Real) where N =
-	checkBounds(sze, (@SVector fill(u,N)), (@SVector fill(l,N)))
-checkBounds(sze::Val{N}, u::AbstractVector, l::Real) where N =
-	checkBounds(sze, u, (@SVector fill(l,N)))
-checkBounds(sze::Val{N}, u::Real, l::AbstractVector) where N =
-	checkBounds(sze, (@SVector fill(u,N)), l)
+checkBounds(n::Int, u::Real, l::Real) =
+	checkBounds(n, (@SVector fill(u,n)), (@SVector fill(l,n)))
+checkBounds(n::Int, u::AbstractVector, l::Real) = checkBounds(n, u, (@SVector fill(l,N)))
+checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, (@SVector fill(u,N)), l)
 
 
-state_dim(con::BoundConstraint) = con.n
-control_dim(con::BoundConstraint) = con.m
-is_bound(::BoundConstraint) = true
-lower_bound(bnd::BoundConstraint) = bnd.z_min
-upper_bound(bnd::BoundConstraint) = bnd.z_max
+@inline state_dim(con::BoundConstraint) = con.n
+@inline control_dim(con::BoundConstraint) = con.m
+@inline is_bound(::BoundConstraint) = true
+@inline lower_bound(bnd::BoundConstraint) = bnd.z_min
+@inline upper_bound(bnd::BoundConstraint) = bnd.z_max
+@inline sense(::BoundConstraint) = Inequality()
+@inline Base.length(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
 
-
-function evaluate(bnd::BoundConstraint{T,P,NM}, x, u) where {T,P,NM}
-	bnd.B*SVector{NM}([x; u]) + bnd.b
+function primal_bounds!(zL, zU, bnd::BoundConstraint)
+	for i = 1:length(zL)
+		zL[i] = max(bnd.z_min[i], zL[i])
+		zU[i] = min(bnd.z_max[i], zU[i])
+	end
+	return true
 end
 
-function jacobian!(∇c, bnd::BoundConstraint, z::AbstractKnotPoint)
-	∇c .= bnd.B
+function evaluate(bnd::BoundConstraint, z::AbstractKnotPoint)
+	[(z.z - bnd.z_max); (bnd.z_min - z.z)][bnd.inds]
 end
 
+function jacobian!(∇c, bnd::BoundConstraint{U,L}, z::AbstractKnotPoint) where {U,L}
+	for i in bnd.i_max
+		∇c[i]  = 1
+	end
+	for i in bnd.i_min
+		∇c[i] = -1
+	end
+	return true
+end
+
+∇jacobian!(G, con::BoundConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
+
+function change_dimension(con::BoundConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	n0,m0 = con.n, con.m
+	x_max = fill(Inf,n)
+	x_min = fill(Inf,n)
+	u_max = fill(Inf,m)
+	u_min = fill(Inf,m)
+	x_max[ix] = con.z_max[1:n0]
+	x_min[ix] = con.z_min[1:n0]
+	u_max[iu] = con.z_max[n0 .+ (1:m0)]
+	u_min[iu] = con.z_min[n0 .+ (1:m0)]
+	BoundConstraint(n, m, x_max=x_max, x_min=x_min, u_max=u_max, u_min=u_min)
+end
 
 ############################################################################################
 #  							VARIABLE BOUND CONSTRAINT 									   #
 ############################################################################################
 
-struct VariableBoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
-	n::Int
-	m::Int
-	z_max::Vector{SVector{NM,T}}
-	z_min::Vector{SVector{NM,T}}
-	b::Vector{SVector{P,T}}
-	B::SMatrix{P,NM,T,PNM}
-	function VariableBoundConstraint(n::Int,m::Int,
-			z_max::Vector{<:SVector{NM,T}}, z_min::Vector{<:SVector{NM,T}},
-			b::Vector{<:SVector{P}}, B::SMatrix{P,NM,T,PNM}) where {T,P,PN,NM,PNM}
-		new{T,P,NM,PNM}(n,m,z_max,z_min,b,B)
-	end
-end
-
-state_dim(con::VariableBoundConstraint) = con.n
-control_dim(con::VariableBoundConstraint) = con.m
-is_bound(::VariableBoundConstraint) = true
-
-function evaluate!(vals::Vector{<:AbstractVector},
-		con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
-	for (i,k) in enumerate(inds)
-		vals[i] = con.B*Z[k].z + con.b[k]
-	end
-end
-
-function jacobian(con::VariableBoundConstraint, z::KnotPoint)
-	return con.B
-end
-
-function VariableBoundConstraint(n, m, N;
-		x_max=[Inf*(@SVector ones(n)) for k = 1:N], x_min=[-Inf*(@SVector ones(n)) for k = 1:N],
-		u_max=[Inf*(@SVector ones(m)) for k = 1:N], u_min=[-Inf*(@SVector ones(m)) for k = 1:N])
-	@assert length(x_max) == N
-	@assert length(u_max) == N
-	@assert length(x_min) == N
-	@assert length(u_min) == N
-
-	# Check and convert bounds
-	for k = 1:N
-		x_max[k], x_min[k] = checkBounds(Val(n), x_max[k], x_min[k])
-		u_max[k], u_min[k] = checkBounds(Val(m), u_max[k], u_min[k])
-	end
-
-	# Concatenate bounds
-	z_max = [SVector{n+m}([x_max[k]; u_max[k]]) for k = 1:N]
-	z_min = [SVector{n+m}([x_min[k]; u_min[k]]) for k = 1:N]
-	b = [[-z_max[k]; z_min[k]] for k = 1:N]
-
-	active = map(x->isfinite.(x), b)
-	equal_active = all(1:N-2) do k
-		active[k] == active[k+1]
-	end
-	if !equal_active
-		throw(ArgumentError("All bounds must have the same active constraints"))
-	end
-	active = active[1]
-	p = sum(active)
-
-	inds = SVector{p}(findall(active))
-
-	b = [bi[inds] for bi in b]
-	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
-
-	VariableBoundConstraint(n, m, z_max, z_min, b, B[inds,:])
-end
-
-
-
-############################################################################################
-#  								INFEASIBLE CONSTRAINT 									   #
-############################################################################################
-""" $(TYPEDEF) Constraints additional ``infeasible'' controls to be zero.
-Constructors: ```julia
-InfeasibleConstraint(model::InfeasibleModel)
-InfeasibleConstraint(n,m)
-```
-"""
-struct InfeasibleConstraint{N,M} <: AbstractConstraint{Equality, Control, N} end
-
-InfeasibleConstraint(model::InfeasibleModel{N,M}) where {N,M} = InfeasibleConstraint{N,M}()
-InfeasibleConstraint(n::Int, m::Int) = InfeasibleConstraint{n,m}()
-control_dim(::InfeasibleConstraint{N,M}) where {N,M} = N+M
-
-@generated function evaluate(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
-    _u = SVector{M}(1:M)
-    _ui = SVector{N}((1:N) .+ M)
-	quote
-        ui = u[$_ui] # infeasible controls
-	end
-end
-
-@generated function jacobian(con::InfeasibleConstraint{N,M}, u::SVector) where {N,M}
-	Iu = [(@SMatrix zeros(N,M)) Diagonal(@SVector ones(N))]
-	return :($Iu)
-end
+# struct VariableBoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
+# 	n::Int
+# 	m::Int
+# 	z_max::Vector{SVector{NM,T}}
+# 	z_min::Vector{SVector{NM,T}}
+# 	b::Vector{SVector{P,T}}
+# 	B::SMatrix{P,NM,T,PNM}
+# 	function VariableBoundConstraint(n::Int,m::Int,
+# 			z_max::Vector{<:SVector{NM,T}}, z_min::Vector{<:SVector{NM,T}},
+# 			b::Vector{<:SVector{P}}, B::SMatrix{P,NM,T,PNM}) where {T,P,PN,NM,PNM}
+# 		new{T,P,NM,PNM}(n,m,z_max,z_min,b,B)
+# 	end
+# end
+#
+# state_dim(con::VariableBoundConstraint) = con.n
+# control_dim(con::VariableBoundConstraint) = con.m
+# is_bound(::VariableBoundConstraint) = true
+#
+# function evaluate!(vals::Vector{<:AbstractVector},
+# 		con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
+# 	for (i,k) in enumerate(inds)
+# 		vals[i] = con.B*Z[k].z + con.b[k]
+# 	end
+# end
+#
+# function jacobian(con::VariableBoundConstraint, z::KnotPoint)
+# 	return con.B
+# end
+#
+# function VariableBoundConstraint(n, m, N;
+# 		x_max=[Inf*(@SVector ones(n)) for k = 1:N], x_min=[-Inf*(@SVector ones(n)) for k = 1:N],
+# 		u_max=[Inf*(@SVector ones(m)) for k = 1:N], u_min=[-Inf*(@SVector ones(m)) for k = 1:N])
+# 	@assert length(x_max) == N
+# 	@assert length(u_max) == N
+# 	@assert length(x_min) == N
+# 	@assert length(u_min) == N
+#
+# 	# Check and convert bounds
+# 	for k = 1:N
+# 		x_max[k], x_min[k] = checkBounds(Val(n), x_max[k], x_min[k])
+# 		u_max[k], u_min[k] = checkBounds(Val(m), u_max[k], u_min[k])
+# 	end
+#
+# 	# Concatenate bounds
+# 	z_max = [SVector{n+m}([x_max[k]; u_max[k]]) for k = 1:N]
+# 	z_min = [SVector{n+m}([x_min[k]; u_min[k]]) for k = 1:N]
+# 	b = [[-z_max[k]; z_min[k]] for k = 1:N]
+#
+# 	active = map(x->isfinite.(x), b)
+# 	equal_active = all(1:N-2) do k
+# 		active[k] == active[k+1]
+# 	end
+# 	if !equal_active
+# 		throw(ArgumentError("All bounds must have the same active constraints"))
+# 	end
+# 	active = active[1]
+# 	p = sum(active)
+#
+# 	inds = SVector{p}(findall(active))
+#
+# 	b = [bi[inds] for bi in b]
+# 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
+#
+# 	VariableBoundConstraint(n, m, z_max, z_min, b, B[inds,:])
+# end
 
 
 
 ############################################################################################
 #  								INDEXED CONSTRAINT 	 									   #
 ############################################################################################
-""" $(TYPEDEF) Compute a constraint on an arbitrary portion of either the state or control,
+"""
+	IndexedConstraint{C,N,M}
+
+Compute a constraint on an arbitrary portion of either the state or control,
 or both. Useful for dynamics augmentation. e.g. you are controlling two models, and have
 individual constraints on each. You can define constraints as if they applied to the individual
 model, and then wrap it in an `IndexedConstraint` to apply it to the appropriate portion of
-the concatenated state. Assumes the indexed state portion is contiguous.
+the concatenated state. Assumes the indexed state or control portion is contiguous.
 
-Type params:
+# Type params:
 * S - Inequality or Equality
 * W - ConstraintType
 * P - Constraint length
@@ -501,10 +638,10 @@ Type params:
 * Bu - location of the first element in the control index
 * C - type of original constraint
 
-Constructors:
+# Constructors:
 ```julia
 IndexedConstraint(n, m, con)
-IndexedConstraint(n, m, con, ix::SVector, iu::SVector)
+IndexedConstraint(n, m, con, ix::UnitRange, iu::UnitRange)
 ```
 where the arguments `n` and `m` are the state and control dimensions of the new dynamics.
 `ix` and `iu` are the indices into the state and control vectors. If left out, they are
@@ -512,129 +649,185 @@ assumed to start at the beginning of the vector.
 
 NOTE: Only part of this functionality has been tested. Use with caution!
 """
-struct IndexedConstraint{S,W,P,N,M,w,C} <: AbstractConstraint{S,W,P}
+struct IndexedConstraint{C,N,M} <: StageConstraint
 	n::Int  # new dimension
 	m::Int  # new dimension
+	n0::Int # old dimension
+	m0::Int # old dimension
 	con::C
-	ix::SVector{N,Int}
-	iu::SVector{M,Int}
-	∇c::SizedMatrix{P,w,Float64,2}
-	A::SubArray{Float64,2,SizedMatrix{P,w,Float64,2},Tuple{UnitRange{Int},UnitRange{Int}},false}
-	B::SubArray{Float64,2,SizedMatrix{P,w,Float64,2},Tuple{UnitRange{Int},UnitRange{Int}},false}
+	ix::SVector{N,Int}  # index of old x in new z
+	iu::SVector{M,Int}  # index of old u in new z
+	∇c::Matrix{Float64}
+	A::SubArray{Float64,2,Matrix{Float64},Tuple{UnitRange{Int},UnitRange{Int}},false}
+	B::SubArray{Float64,2,Matrix{Float64},Tuple{UnitRange{Int},UnitRange{Int}},false}
 end
 
-state_dim(con::IndexedConstraint{<:Any,<:Union{Stage,State}}) = con.n
-control_dim(con::IndexedConstraint{<:Any,<:Union{Stage,Control}}) = con.m
-Base.length(::IndexedConstraint{S,W,P}) where {S,W,P} = P
+@inline state_dim(con::IndexedConstraint) = con.n
+@inline control_dim(con::IndexedConstraint) = con.m
+@inline Base.length(con::IndexedConstraint) = length(con.con)
+@inline sense(con::IndexedConstraint) = sense(con.con)
 
-function IndexedConstraint(n,m,con::AbstractConstraint{S,W,P},
-		ix::SVector{N}, iu::SVector{M}) where {S,W,P,N,M}
-	x = @SVector rand(N)
-	u = @SVector rand(M)
-	w = width(con)
-	∇c = SizedMatrix{P,w}(zeros(P,w))
-	if W == Stage
-		A = view(∇c, 1:P, 1:N)
-		B = view(∇c, 1:P, N .+ (1:M))
+function IndexedConstraint(n,m,con::AbstractConstraint,
+		ix::UnitRange{Int}, iu::UnitRange{Int})
+	p = length(con)
+	n0,m0 = length(ix), length(iu)
+	iu = iu .+ n
+	iz = SVector{n0+m0}([ix; iu])
+	w = widths(con)[1]
+	∇c = zeros(p,w)
+	if con isa StageConstraint
+		if con isa ControlConstraint
+			A = view(∇c, 1:p, 1:0)
+			B = view(∇c, 1:p, 1:m0)
+		else
+			A = view(∇c, 1:p, 1:n0)
+			if con isa StateConstraint
+				B = view(∇c, 1:p, n0:n0-1)
+			else
+				B = view(∇c, 1:p, n0 .+ (1:m0))
+			end
+		end
 	else
-		A = view(∇c, 1:0, 1:0)
-		B = view(∇c, 1:0, 1:0)
+		throw(ArgumentError("IndexedConstraint not support for CoupledConstraint yet"))
 	end
-	IndexedConstraint{S,W,P,N,M,w,typeof(con)}(n,m,con,ix,iu,∇c,A,B)
+	IndexedConstraint{typeof(con),n0,m0}(n,m,n0,m0,con,ix,iu,∇c,A,B)
 end
 
-function IndexedConstraint(n,m,con::AbstractConstraint{S,W}) where {S,W}
-	if W <: Union{State,CoupledState}
+function IndexedConstraint(n,m,con::AbstractConstraint)
+	if con isa Union{StateConstraint, CoupledStateConstraint}
 		m0 = m
 	else
 		m0 = control_dim(con)
 	end
-	if W<: Union{Control,CoupledControl}
+	if con isa Union{ControlConstraint, CoupledControlConstraint}
 		n0 = n
 	else
 		n0 = state_dim(con)
 	end
-	ix = SVector{n0}(1:n0)
-	iu = SVector{m0}(1:m0)
-	IndexedConstraint(n,m,con, ix, iu)
+	ix = 1:n0
+	iu = 1:m0
+	IndexedConstraint(n, m, con, ix, iu)
 end
 
-# TODO: define higher-level evaluate! function instead
-@generated function evaluate(con::IndexedConstraint{<:Any,<:Stage,<:Any,N,M}, z::KnotPoint) where {N,M}
-	ix = SVector{N}(1:N)
-	iu = N .+ SVector{M}(1:M)
-	return quote
-		x0 = state(z)[con.ix]
-		u0 = control(z)[con.iu]
-		z_ = StaticKnotPoint([x0; u0], $ix, $iu, z.dt, z.t)
-		evaluate(con.con, z_)
-	end
+function evaluate(con::IndexedConstraint, z::AbstractKnotPoint)
+	x0 = z.z[con.ix]
+	u0 = z.z[con.iu]
+	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
+	evaluate(con.con, z_)
 end
 
-# TODO: define higher-leel jacobian! function instead
-@generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Stage,P,N0,M0},
-		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-	iP = 1:P
-	ix = SVector{N0}(1:N0)
-	iu = SVector{M0}(N0 .+ (1:M0))
-	if eltype(∇c) <: SizedMatrix
+@generated function jacobian!(∇c, con::IndexedConstraint{C}, z::AbstractKnotPoint) where C
+	if C <: StateConstraint
 		assignment = quote
-			uview(∇c.data,$iP,iA) .= con.A
-			uview(∇c.data,$iP,iB) .= con.B
+			∇c_ = uview(∇c, :, con.ix)
+			isconst = jacobian!(∇c_, con.con, z_)
+		end
+	elseif C <: ControlConstraint
+		assignment = quote
+			∇c_ = uview(∇c, :, con.iu)
+			isconst = jacobian!(∇c_, con.con, z_)
 		end
 	else
 		assignment = quote
-			uview(∇c,$iP,iA) .= con.A
-			uview(∇c,$iP,iB) .= con.B
+			∇c_ = con.∇c
+			isconst = jacobian!(∇c_, con.con, z_)
+			uview(∇c, :, con.ix) .= con.A
+			uview(∇c, :, con.iu) .= con.B
 		end
 	end
 	quote
-		x0 = state(z)[con.ix]
-		u0 = control(z)[con.iu]
-		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-		jacobian!(con.∇c, con.con, z_)
-		iA = con.ix
-		iB = N .+ con.iu
+		x0 = z.z[con.ix]
+		u0 = z.z[con.iu]
+		z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
 		$assignment
+		return isconst
 	end
 end
 
-@generated function jacobian!(∇c, con::IndexedConstraint{<:Any,State,P,N0,M0},
-		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-	iP = 1:P
-	ix = SVector{N0}(1:N0)
-	iu = SVector{M0}(N0 .+ (1:M0))
-	if eltype(∇c) <: SizedArray
-		assignment = :(uview(∇c.data,$iP,iA) .= con.∇c)
-	else
-		assignment = :(uview(∇c,$iP,iA) .= con.∇c)
-	end
-	quote
-		x0 = state(z)[con.ix]
-		u0 = control(z)[con.iu]
-		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-		jacobian!(con.∇c, con.con, z_)
-		iA = con.ix
-		$assignment
-	end
-end
+@inline is_bound(idx::IndexedConstraint) = is_bound(idx.con)
+@inline upper_bound(idx::IndexedConstraint) = upper_bound(idx.con)
+@inline lower_bound(idx::IndexedConstraint) = lower_bound(idx.con)
 
-@generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Control,P,N0,M0},
-		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-	iP = 1:P
-	ix = SVector{N0}(1:N0)
-	iu = SVector{M0}(N0 .+ (1:M0))
-	if eltype(∇c) <: SizedArray
-		assignment = :(uview(∇c.data,$iP,iB) .= con.∇c)
-	else
-		assignment = :(uview(∇c,$iP,iB) .= con.∇c)
-	end
-	quote
-		x0 = state(z)[con.ix]
-		u0 = control(z)[con.iu]
-		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-		jacobian!(con.∇c, con.con, z_)
-		iB = con.iu
-		$assignment
-	end
+function change_dimension(con::AbstractConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
+	IndexedConstraint(n, m, con, ix, iu)
 end
+#
+# # TODO: define higher-level evaluate! function instead
+# @generated function evaluate(con::IndexedConstraint{<:Any,<:Stage,<:Any,N,M}, z::KnotPoint) where {N,M}
+# 	ix = SVector{N}(1:N)
+# 	iu = N .+ SVector{M}(1:M)
+# 	return quote
+# 		x0 = state(z)[con.ix]
+# 		u0 = control(z)[con.iu]
+# 		z_ = StaticKnotPoint([x0; u0], $ix, $iu, z.dt, z.t)
+# 		evaluate(con.con, z_)
+# 	end
+# end
+#
+# # TODO: define higher-leel jacobian! function instead
+# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Stage,P,N0,M0},
+# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
+# 	iP = 1:P
+# 	ix = SVector{N0}(1:N0)
+# 	iu = SVector{M0}(N0 .+ (1:M0))
+# 	if eltype(∇c) <: SizedMatrix
+# 		assignment = quote
+# 			uview(∇c.data,$iP,iA) .= con.A
+# 			uview(∇c.data,$iP,iB) .= con.B
+# 		end
+# 	else
+# 		assignment = quote
+# 			uview(∇c,$iP,iA) .= con.A
+# 			uview(∇c,$iP,iB) .= con.B
+# 		end
+# 	end
+# 	quote
+# 		x0 = state(z)[con.ix]
+# 		u0 = control(z)[con.iu]
+# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
+# 		jacobian!(con.∇c, con.con, z_)
+# 		iA = con.ix
+# 		iB = N .+ con.iu
+# 		$assignment
+# 	end
+# end
+#
+# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,State,P,N0,M0},
+# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
+# 	iP = 1:P
+# 	ix = SVector{N0}(1:N0)
+# 	iu = SVector{M0}(N0 .+ (1:M0))
+# 	if eltype(∇c) <: SizedArray
+# 		assignment = :(uview(∇c.data,$iP,iA) .= con.∇c)
+# 	else
+# 		assignment = :(uview(∇c,$iP,iA) .= con.∇c)
+# 	end
+# 	quote
+# 		x0 = state(z)[con.ix]
+# 		u0 = control(z)[con.iu]
+# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
+# 		jacobian!(con.∇c, con.con, z_)
+# 		iA = con.ix
+# 		$assignment
+# 	end
+# end
+#
+# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Control,P,N0,M0},
+# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
+# 	iP = 1:P
+# 	ix = SVector{N0}(1:N0)
+# 	iu = SVector{M0}(N0 .+ (1:M0))
+# 	if eltype(∇c) <: SizedArray
+# 		assignment = :(uview(∇c.data,$iP,iB) .= con.∇c)
+# 	else
+# 		assignment = :(uview(∇c,$iP,iB) .= con.∇c)
+# 	end
+# 	quote
+# 		x0 = state(z)[con.ix]
+# 		u0 = control(z)[con.iu]
+# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
+# 		jacobian!(con.∇c, con.con, z_)
+# 		iB = con.iu
+# 		$assignment
+# 	end
+# end

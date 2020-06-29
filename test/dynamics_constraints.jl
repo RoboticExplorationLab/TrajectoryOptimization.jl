@@ -1,44 +1,48 @@
-model = Dynamics.Cartpole()
-prob = Problems.Cartpole()[1]
-bnd = prob.constraints.constraints[1]
-n,m = size(prob)
+@testset "Dynamics constraints" begin
+model = Cartpole()
+n,m = size(model)
+N = 11
+dt = 0.1
+Z = Traj([rand(n) for k = 1:N], [rand(m) for k = 1:N-1], fill(dt,N))
 
-N = prob.N
-rollout!(prob)
-Z = prob.Z
-vals = [@SVector zeros(model.n) for k = 1:N-1]
+dyn = TO.DynamicsConstraint(model, N)
+@test TO.evaluate(dyn, Z[1], Z[2]) ≈ discrete_dynamics(RK3, model, Z[1]) - state(Z[2])
+F = TO.gen_jacobian(dyn)
+F0 = zero(F)
+@test TO.jacobian!(F, dyn, Z[1], Z[2]) == false
+discrete_jacobian!(RK3, F0, model, Z[1])
+@test F0 ≈ F
+F .= 0
+@test TO.jacobian!(F, dyn, Z[1], Z[2], 2) == true
+@test F ≈ -Matrix(I,n,n+m)
 
-∇c = [SizedMatrix{n,2n+m}(zeros(n,2n+m)) for k = 1:N-1]
-dyn_con = DynamicsConstraint{RK3}(model, N)
-@test TO.width(dyn_con) == 2n+m
-evaluate!(vals, dyn_con, Z)
-jacobian!(∇c, dyn_con, Z)
-@test (@allocated evaluate!(vals, dyn_con, Z)) == 0
-@test (@allocated jacobian!(∇c, dyn_con, Z)) == 0
+dyn = TO.DynamicsConstraint{RK4}(model, N)
+@test TO.evaluate(dyn, Z[1], Z[2]) ≈ discrete_dynamics(RK4, model, Z[1]) - state(Z[2])
+F = TO.gen_jacobian(dyn)
+F0 = zero(F)
+@test TO.jacobian!(F, dyn, Z[1], Z[2]) == false
+discrete_jacobian!(RK4, F0, model, Z[1])
+@test F0 ≈ F
+F .= 0
+@test TO.jacobian!(F, dyn, Z[1], Z[2], 2) == true
+@test F ≈ -Matrix(I,n,n+m)
 
-con_rk3 = ConstraintVals(dyn_con, 1:N-1)
-evaluate!(con_rk3, Z)
-jacobian!(con_rk3, Z)
-TO.max_violation!(con_rk3)
-maximum(con_rk3.c_max)
-@test (@allocated evaluate!(con_rk3, Z)) == 0
-@test (@allocated jacobian!(con_rk3, Z)) == 0
+@test length(dyn) == n
+@test TO.widths(dyn) == (n+m,n)
 
-∇c = [zeros(SizedMatrix{n,2n+2m}) for k = 1:N-1]
-dyn_con = DynamicsConstraint{HermiteSimpson}(model, N)
-@test TO.width(dyn_con) == 2(n+m)
-evaluate!(vals, dyn_con, Z)
-jacobian!(∇c, dyn_con, Z)
-@test (@allocated evaluate!(vals, dyn_con, Z)) == 0
-@test (@allocated jacobian!(∇c, dyn_con, Z)) == 0
+dyn = TO.DynamicsConstraint{HermiteSimpson}(model, N)
+conval = TO.ConVal(n, m, dyn, 1:N-1)
+TO.evaluate!(conval, Z)
+X = states(Z)
+U = controls(Z)
+Xm = dyn.xMid
+fVal = dyn.fVal
+fValm = dynamics(model, Xm[1], 0.5*(U[1] + U[2]))
+@test conval.vals[1] ≈ X[1] - X[2] + dt * (fVal[1] + 4*fValm + fVal[2])/6
 
-con_hs = ConstraintVals(dyn_con, 1:N-1)
-evaluate!(con_hs, Z)
-jacobian!(con_hs, Z)
-@test (@allocated evaluate!(con_hs, Z)) == 0
-@test (@allocated jacobian!(con_hs, Z)) == 0
-
-
-# Test default
-dyn_con = DynamicsConstraint(model, N)
-@test integration(dyn_con) == RK3 == TO.DEFAULT_Q
+@test length(dyn) == n
+@test TO.widths(dyn) == (n+m,n+m)
+@test size(conval.jac[2]) == (n,n+m)
+@test TO.upper_bound(dyn) == zeros(n)
+@test TO.lower_bound(dyn) == zeros(n)
+end

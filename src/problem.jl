@@ -1,9 +1,3 @@
-export
-    Problem,
-    change_integration
-
-
-
 """$(TYPEDEF) Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:
 * dynamics model (`Model`)
@@ -39,16 +33,16 @@ At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `t
 struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     model::AbstractModel
     obj::AbstractObjective
-    constraints::ConstraintSet{T}
-    x0::SVector
-    xf::SVector
+    constraints::ConstraintList
+    x0::MVector
+    xf::MVector
     Z::Traj
     N::Int
     t0::T
     tf::T
     function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
-            constraints::ConstraintSet,
-            x0::SVector, xf::SVector,
+            constraints::ConstraintList,
+            x0::StaticVector, xf::StaticVector,
             Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
         n,m = size(model)
         @assert length(x0) == length(xf) == n
@@ -60,27 +54,28 @@ end
 
 "Use RK3 as default integration"
 Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
-    Problem{RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
+    Problem{RobotDynamics.RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
 
 function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintSet(size(model)...,length(obj)),
+        constraints=ConstraintList(size(model)...,length(obj)),
         t0=zero(tf),
         x0=zero(xf), N::Int=length(obj),
         X0=[x0*NaN for k = 1:N],
         U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
-        dt=fill((tf-t0)/(N-1),N),
+        dt=fill((tf-t0)/(N-1),N-1),
         integration=DEFAULT_Q) where {L,O}
     n,m = size(model)
     if dt isa Real
         dt = fill(dt,N)
     end
+	@assert sum(dt[1:N-1]) ≈ tf "Time steps are inconsistent with final time"
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    t = range(t0, tf, length=N)
+    t = pushfirst!(cumsum(dt), 0)
     Z = Traj(X0,U0,dt,t)
 
     Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
@@ -118,6 +113,13 @@ Get the state trajectory
 "
 states(prob::Problem) = states(prob.Z)
 
+"""
+	get_times(::Problem)
+
+Get the times for all the knot points in the problem.
+"""
+@inline get_times(prob::Problem) = get_times(get_trajectory(prob))
+
 "```julia
 initial_trajectory!(::Problem, Z)
 initial_trajectory!(::AbstractSolver, Z)
@@ -141,6 +143,15 @@ end
 function initial_states!(prob::Problem, X0::AbstractMatrix)
     X0 = [X0[:,k] for k = 1:size(X0,2)]
     set_states!(prob.Z, X0)
+end
+
+"""```julia
+set_initial_state!(prob::Problem, x0::AbstractVector)
+```
+Set the initial state in `prob` to `x0`
+"""
+function set_initial_state!(prob::Problem, x0::AbstractVector)
+    prob.x0 .= x0
 end
 
 "```julia
@@ -181,6 +192,9 @@ end
 num_constraints(prob::Problem) = get_constraints(prob).p
 
 @inline get_constraints(prob::Problem) = prob.constraints
+@inline get_model(prob::Problem) = prob.model
+@inline get_objective(prob::Problem) = prob.obj
+@inline get_trajectory(prob::Problem) = prob.Z
 
 
 "```julia
@@ -194,9 +208,36 @@ function Problem{Q}(p::Problem) where Q
     Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.t0, p.tf)
 end
 
+"""
+	rollout!(::Problem)
+	rollout!(model::AbstractModel, Z::Traj, x0)
+
+Simulate the dynamics forward from the initial condition `x0` using the controls in the
+trajectory `Z`.
+If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0`.
+"""
 @inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
 
 function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
     x0=p.x0, xf=p.xf, t0=p.t0, tf=p.tf)
     Problem(model, obj, constraints, x0, xf, p.Z, p.N, t0, tf)
+end
+
+"```julia
+add_dynamics_constraints!(prob::Problem)
+```
+Add dynamics constraints to the constraint set"
+function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
+	n,m = size(prob)
+    conSet = prob.constraints
+
+    # Implicit dynamics
+    dyn_con = DynamicsConstraint{integration}(prob.model, prob.N)
+    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
+
+    # Initial condition
+    init_con = GoalConstraint(prob.x0)
+    add_constraint!(conSet, init_con, 1, 1)  # add it at the top
+
+    return nothing
 end

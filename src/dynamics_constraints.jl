@@ -1,13 +1,11 @@
-export
-	DynamicsConstraint,
-	integration
 
 ############################################################################################
 #                              DYNAMICS CONSTRAINTS										   #
 ############################################################################################
 
 
-abstract type AbstractDynamicsConstraint{W<:Coupled,P} <: AbstractConstraint{Equality,W,P} end
+abstract type AbstractDynamicsConstraint <: CoupledConstraint end
+sense(::AbstractDynamicsConstraint) = Equality()
 state_dim(con::AbstractDynamicsConstraint) = size(con.model)[1]
 control_dim(con::AbstractDynamicsConstraint) = size(con.model)[2]
 Base.length(con::AbstractDynamicsConstraint) = size(con.model)[1]
@@ -25,7 +23,7 @@ DynamicsConstraint{Q}(model::AbstractModel, N)
 ```
 where `N` is the number of knot points and `Q<:QuadratureRule` is the integration method.
 """
-struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,T,N,M,NM} <: AbstractDynamicsConstraint{Coupled,N}
+struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,N,M,NM,T} <: AbstractDynamicsConstraint
 	model::L
     fVal::Vector{SVector{N,T}}
     xMid::Vector{SVector{N,T}}
@@ -50,46 +48,45 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 	B  = [view(∇f[k], ix,iu) for k = 1:N]
 	Am = [view(∇fm[k],ix,ix) for k = 1:3]
 	Bm = [view(∇fm[k],ix,iu) for k = 1:3]
-	NM = n+m
 	grad  = [GradientExpansion{T}(n,m) for k = 1:3]
-	DynamicsConstraint{Q,L,T,n,m,NM}(model, fVal, xMid, ∇f, A, B,
+	DynamicsConstraint{Q,L,n,m,n+m,T}(model, fVal, xMid, ∇f, A, B,
 		grad, ∇fm, Am, Bm)
 end
 
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 integration(::DynamicsConstraint{Q}) where Q = Q
 
-width(con::DynamicsConstraint{<:Implicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2N+M
-width(con::DynamicsConstraint{<:Explicit,L,T,N,M,NM}) where {L,T,N,M,NM} = 2NM
-####!
+widths(con::DynamicsConstraint{<:Any,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n+m)
+widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n)
 
-# Implicit
-function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Q},
-		Z::Traj, inds=1:length(Z)-1) where Q<:Implicit
-	for k in inds
-		vals[k] = discrete_dynamics(Q, con.model, Z[k]) - state(Z[k+1])
+get_inds(con::DynamicsConstraint{<:Explicit}, n, m) = (1:n+m, (n+m) .+ (1:n))
+
+# Explict 
+function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
+	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
+end
+
+function jacobian!(∇c, con::DynamicsConstraint{Q},
+		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,n}
+	if i == 1
+		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z)
+		return false  # not constant
+	elseif i == 2
+		for i = 1:n
+			∇c[i,i] = -1
+		end
+		return true   # is constant
 	end
+	# return nothing
 end
 
-function jacobian!(∇c::Vector{<:SizedMatrix}, con::DynamicsConstraint{Q,L,T,N},
-		Z::Vector{<:AbstractKnotPoint{T,n,m}}, inds=1:length(Z)-1) where {Q<:Implicit,L,T,N,n,m}
-	In = Diagonal(@SVector ones(N))
-	zinds = [Z[1]._x; Z[1]._u]
-	for k in inds
-		∇f = uview(∇c[k].data, 1:n, 1:n+m+1)
-		discrete_jacobian!(Q, ∇f, con.model, Z[k])
-		∇f2 = uview(∇c[k].data, 1:n, n+m .+ (1:n))
-		∇f2 .= -Diagonal(@SVector ones(n))
+function ∇jacobian!(G, con::DynamicsConstraint{<:Explicit},
+	z::AbstractKnotPoint, z2::AbstractKnotPoint, λ, i=1)
+	if i == 1
+		dyn(x) = evaluate(con, StaticKnotPoint(z,x), z2)'λ
+		G .+= ForwardDiff.hessian(dyn, z.z)
+	elseif i == 2
+		nothing
 	end
-end
-
-
-struct DynamicsVals{T,N,A}
-    fVal::Vector{SVector{N,T}}
-    xMid::Vector{SVector{N,T}}
-    ∇f::Vector{A}
-end
-
-function DynamicsVals(dyn_con::DynamicsConstraint)
-	DynamicsVals(dyn_con.fVal, dyn_con.xMid, dyn_con.∇f)
+	return false
 end

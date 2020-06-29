@@ -19,32 +19,39 @@ In general, trajectory optimization will take a second order Taylor series appro
 ```math
 x_N^T Q_f x_N + q_f^T x_N + \sum_{k=1}^{N-1} x_k^T Q_k x_k + q_k^T x_k + u_k^T R_k u_k + r_k^T u_k + u_k^T H_k x_k
 ```
-This type of quadratic cost is typical for trajectory optimization problems, especially when Q is positive semi-definite and R is positive definite, which is strictly convex. These problem behave well and reduce the computational requirements of taking second-order Taylor series expansions of the cost at each iteration.
+This type of quadratic cost is typical for trajectory optimization problems, especially when
+Q is positive semi-definite and R is positive definite, which is strictly convex.
+These problems behave well and reduce the computational requirements of taking second-order
+Taylor series expansions of the cost at each iteration.
 
 In TrajectoryOptimization.jl we differentiate between the entire objective and the cost functions at each time step. We use `Objective` to describe the function that is being minimized, which typically consists of a sum of cost functions, with potentially some additional terms (as is the case with augmented Lagrangian objectives). Describing the Objective as a sum of individual functions allows the solvers to more efficiently compute the gradient and Hessian of the entire cost, which is block-diagonal given the Markovianity of the problem.
 
 ## Cost functions
-There are several different cost function types that all inherit from `CostFunction`. The following sections detail the various methods for instantiating these cost function types.
+While TrajectoryOptimization allows for general nonlinear cost function in principle, currently
+only quadratic cost functions are implemented (implementing nonlinear cost functions is a
+great way to contribute!). All cost functions inherit from the general `CostFunction` type.
 
-### Quadratic Costs
-[`Quadratic costs`](@ref QuadraticCost) are the most standard cost function and excellent place to start. Let's assume we are creating an LQR tracking cost of the form
+Since quadratic costs are the most standard cost function they excellent place to start.
+Let's assume we are creating an LQR tracking cost of the form
 ```math
 (x_N - x_f)^T Q_f (x_N - x_f) + \sum_{k=1}^{N-1} (x_k - x_f)^T Q (x_k - x_f) + u_k^T R u_k
 ```
-for the simple pendulum with the goal of doing a swing-up. To do this we have very convenient constructors [`LQRCost`](@ref) and [`LQRCostTerminal`](@ref):
+for the simple cartpole with the goal of doing a swing-up. To do this we have very convenient
+method [`LQRCost`](@ref).
 ```julia
 using LinearAlgebra, StaticArrays
-n,m = 2,1
+n,m = 4,1
 Q = Diagonal(@SVector fill(0.1,n))
 R = Diagonal(@SVector fill(0.1,m))
 Qf = Diagonal(@SVector fill(1000,n))
-xf = @SVector [π,0]
-costfun = LQRCost(Q,R,Qf)
-costfun_term = LQRCostTerminal(Qf,xf)
+xf = @SVector [0,π,0,0]
+costfun = LQRCost(Q,R,xf)
+costfun_term = LQRCost(Qf,R*0,xf,terminal=true)
 ```
 It is HIGHLY recommended to specify any special structure, such as `Diagonal`, especially since these matrices are almost always diagonal.
 
-This constructor actually does a simple conversion to turn our cost function into a generic quadratic cost function. We could do this ourselves:
+This constructor actually does a simple conversion to turn our cost function into either the
+generic [`QuadraticCost`](@ref) or a [`DiagonalCost`](@ref). We could do this ourselves:
 ```julia
 H = @SMatrix zeros(m,n)
 q = -Q*xf
@@ -57,36 +64,20 @@ costfun_term = QuadraticCost(Qf, R*0, H, qf, r*0, cf)
 ```
 The `QuadraticCost` constructor also supports keyword arguments and one that allows for only `Q,q` and `c`.:
 ```julia
-costfun      = QuadraticCost(Q, R, q=q, c=c)
-costfun_term = QuadraticCost(Q, q, c)
+costfun = QuadraticCost(Q, R, q=q, c=c)
 ```
 
-Once we have defined the cost function, we can create an objective for our problem by simply copying over all time steps (except for the terminal).
+## Objective
+Once we have defined the cost function, we can create an objective for our problem by simply
+copying over all time steps (except for the terminal).
 ```julia
 # Create an objective from a single cost function
 N = 51
 obj = Objective(costfun, costfun_term, N)
 ```
 
-There's also a convenient constructor that builds an [`LQRObjective`](@ref)
+There's also a convenient constructor that skips all the previous steps and builds
+the objective directly, see[`LQRObjective`](@ref)
 ```julia
 obj = LQRObjective(Q, R, Qf, xf, N)
-```
-
-## Objectives
-Objectives can be created by copying a single cost function over all time steps. See
-[Objective](@ref) API for more information.
-
-```julia
-Objective(cost::CostFunction, N::Int)
-```
-
-or uniquely specifying the terminal cost function
-```julia
-Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
-```
-
-or by explicitly specifying a list of cost functions
-```julia
-Objective(costfuns::Vector{<:CostFunction})
 ```
