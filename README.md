@@ -80,4 +80,7 @@ U = controls(solver)
 ```
 
 ## Examples
-Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples), including all the examples from our [IROS 2019 paper](https://rexlab.stanford.edu/papers/altro-iros.pdf).
+Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples)
+
+## Related Papers
+* [IROS 2019 paper](https://rexlab.stanford.edu/papers/altro-iros.pdf).
