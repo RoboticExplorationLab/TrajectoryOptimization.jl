@@ -44,38 +44,48 @@ we have a 2-norm constraint on the controls at each time step, e.g. ``||u|| \leq
 We can do this with just a few lines of code:
 
 ```julia
-struct ControlNorm{T} <: AbstractConstraint{Inequality,Control,1}
-  m::Int
-  a::T
+struct ControlNorm{T} <: ControlConstraint
+	m::Int
+	val::T
+	function ControlNorm(m::Int, val::T) where T
+		@assert val ≥ 0 "Value must be greater than or equal to zero"
+		new{T}(m,val,sense,inds)
+	end
 end
 control_dim(con::ControlNorm) = con.m
-evaluate(con::ControlNorm, u::SVector) = @SVector [norm(u) - con.a] # needs to be a vector output
+sense(::ControlNorm) = Inequality()
+Base.length(::ControlNorm) = 1
+evaluate(con::ControlNorm, u::SVector) = SA[norm(u) - con.a] # needs to be a vector output
 jacobian(con::ControlNorm, u::SVector) = u'/norm(u)  # optional
 ```
 Importantly, note that the inheritance specifies the constraint applies only to
-individual controls, the constraint in an inequality, and has dimension 1.
+individual controls.
 
 Let's say the bound ``a`` varied by time-step. We could handle this easily by instead defining the methods operating on the entire trajectory:
 
 ```julia
-struct ControlNorm2{T} <: AbstractConstraint{Inequality,Control,1}
-  m::Int
-  a::Vector{T}
+struct ControlNorm2{T} <: ControlConstraint
+	m::Int
+	val::Vector{T}
+	function ControlNorm2(m::Int, val::T) where T
+		@assert val ≥ 0 "Value must be greater than or equal to zero"
+		new{T}(m,val,sense,inds)
+	end
 end
-control_dim(con::ControlNorm) = con.m
-function evaluate!(vals::Vector{<:AbstractVector}, con::ControlNorm,
-    Z, inds=1:length(Z)-1)
-  for (i,k) in enumerate(inds)
-    u = control(Z[k])
-    vals[i] = @SVector [norm(u) - con.a[k]]
-  end
+control_dim(con::ControlNorm2) = con.m
+sense(::ControlNorm2) = Inequality()
+Base.length(::ControlNorm2) = 1
+function evaluate!(vals, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z))
+	for (i,k) in enumerate(inds)
+		u = control(Z[k])
+		vals[i] = SA[norm(u) - con.a[i]]
+	end
 end
-function jacobian!(∇c::Vector{<:AbstractMatrix}, con::ControlNorm,
-    Z, inds=1:length(Z)-1)
-  for (i,k) in enumerate(inds)
-    u = control(Z[k])
-    ∇c[i] = u'/norm(u)
-  end
+function jacobian!(∇c, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z))
+	for (i,k) in enumerate(inds)
+			u = control(Z[k])
+			∇c[i] = u'/norm(u)
+	end
 end
 ```
 
