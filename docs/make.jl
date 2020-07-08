@@ -21,7 +21,8 @@ makedocs(
             "constraint_api.md",
             "problem.md",
             "nlp.md"
-        ]
+        ],
+        "Examples" => "examples.md"
     ]
 )
 
