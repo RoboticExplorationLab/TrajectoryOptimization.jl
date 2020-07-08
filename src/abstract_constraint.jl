@@ -75,23 +75,27 @@ abstract type CoupledStateConstraint <: CoupledConstraint end
 "Only a function of controls at adjacent knotpoints"
 abstract type CoupledControlConstraint <: CoupledConstraint end
 
-const StateConstraints = Union{StageConstraint, StateConstraint, CoupledConstraint, CoupledStateConstraint}
-const ControlConstraints = Union{StageConstraint, ControlConstraint, CoupledConstraint, CoupledControlConstraint}
+const StateConstraints =
+    Union{StageConstraint,StateConstraint,CoupledConstraint,CoupledStateConstraint}
+const ControlConstraints =
+    Union{StageConstraint,ControlConstraint,CoupledConstraint,CoupledControlConstraint}
 
 "Get constraint sense (Inequality vs Equality)"
-sense(::C) where C <: AbstractConstraint = throw(NotImplemented(:sense, Symbol(C)))
+sense(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:sense, Symbol(C)))
 
 "Dimension of the state vector"
-RobotDynamics.state_dim(::C) where C <: StateConstraint = throw(NotImplemented(:state_dim, Symbol(C)))
+RobotDynamics.state_dim(::C) where {C<:StateConstraint} =
+    throw(NotImplemented(:state_dim, Symbol(C)))
 
 "Dimension of the control vector"
-RobotDynamics.control_dim(::C) where C <: ControlConstraint = throw(NotImplemented(:control_dim, Symbol(C)))
+RobotDynamics.control_dim(::C) where {C<:ControlConstraint} =
+    throw(NotImplemented(:control_dim, Symbol(C)))
 
 "Return the constraint value"
-evaluate(::C) where C <: AbstractConstraint = throw(NotImplemented(:evaluate, Symbol(C)))
+evaluate(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:evaluate, Symbol(C)))
 
 "Length of constraint vector"
-Base.length(::C) where C <: AbstractConstraint = throw(NotImplemented(:length, Symbol(C)))
+Base.length(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:length, Symbol(C)))
 
 # widths(con::StageConstraint, n=state_dim(con), m=control_dim(con)) = (n+m,)
 # widths(con::StateConstraint, n=state_dim(con), m=0) = (n,)
@@ -102,13 +106,15 @@ Base.length(::C) where C <: AbstractConstraint = throw(NotImplemented(:length, S
 
 "Upper bound of the constraint, as a vector, which is 0 for all constraints
 (except bound constraints)"
-@inline upper_bound(con::AbstractConstraint) = upper_bound(sense(con)) * @SVector ones(length(con))
+@inline upper_bound(con::AbstractConstraint) =
+    upper_bound(sense(con)) * @SVector ones(length(con))
 @inline upper_bound(::Inequality) = 0.0
 @inline upper_bound(::Equality) = 0.0
 
 "Upper bound of the constraint, as a vector, which is 0 equality and -Inf for inequality
 (except bound constraints)"
-@inline lower_bound(con::AbstractConstraint) = lower_bound(sense(con)) * @SVector ones(length(con))
+@inline lower_bound(con::AbstractConstraint) =
+    lower_bound(sense(con)) * @SVector ones(length(con))
 @inline lower_bound(::Inequality) = -Inf
 @inline lower_bound(::Equality) = 0.0
 
@@ -125,9 +131,10 @@ primal_bounds!(zL, zU, con::AbstractConstraint) = false
 @inline is_bound(con::AbstractConstraint) = false
 
 "Check whether the constraint is consistent with the specified state and control dimensions"
-@inline check_dims(con::StateConstraint,n,m) = state_dim(con) == n
-@inline check_dims(con::ControlConstraint,n,m) = control_dim(con) == m
-@inline check_dims(con::AbstractConstraint,n,m) = state_dim(con) == n && control_dim(con) == m
+@inline check_dims(con::StateConstraint, n, m) = state_dim(con) == n
+@inline check_dims(con::ControlConstraint, n, m) = control_dim(con) == m
+@inline check_dims(con::AbstractConstraint, n, m) =
+    state_dim(con) == n && control_dim(con) == m
 
 get_dims(con::Union{StateConstraint,CoupledStateConstraint}, nm::Int) =
     state_dim(con), nm - state_dim(con)
@@ -157,12 +164,13 @@ Return a tuple of the widths of the Jacobians for a constraint. If `n` and `m` a
 in, they are assumed to be consistent with those returned by `state_dim` and `control_dim`.
 """
 @inline widths(con::AbstractConstraint, n, m) = length.(get_inds(con, n, m))
-@inline widths(con::StageConstraint) = (state_dim(con)+control_dim(con),)
+@inline widths(con::StageConstraint) = (state_dim(con) + control_dim(con),)
 @inline widths(con::StateConstraint) = (state_dim(con),)
 @inline widths(con::ControlConstraint) = (control_dim(con),)
-@inline widths(con::CoupledConstraint) = (state_dim(con)+control_dim(con),state_dim(con)+control_dim(con))
-@inline widths(con::CoupledStateConstraint) = (state_dim(con),state_dim(con))
-@inline widths(con::CoupledControlConstraint) = (control_dim(con),control_dim(con))
+@inline widths(con::CoupledConstraint) =
+    (state_dim(con) + control_dim(con), state_dim(con) + control_dim(con))
+@inline widths(con::CoupledStateConstraint) = (state_dim(con), state_dim(con))
+@inline widths(con::CoupledControlConstraint) = (control_dim(con), control_dim(con))
 
 ############################################################################################
 # 								EVALUATION METHODS 										   #
@@ -177,16 +185,24 @@ The `inds` argument determines at which knot points the constraint is evaluated.
 If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, or
 `evaluate(con, z1, z2)` if `con` is a `CoupledConstraint`.
 """
-function evaluate!(vals::Vector{<:AbstractVector}, con::StageConstraint,
-    Z::AbstractTrajectory, inds=1:length(Z))
-    for (i,k) in enumerate(inds)
+function evaluate!(
+    vals::Vector{<:AbstractVector},
+    con::StageConstraint,
+    Z::AbstractTrajectory,
+    inds = 1:length(Z),
+)
+    for (i, k) in enumerate(inds)
         vals[i] .= evaluate(con, Z[k])
     end
 end
 
-function evaluate!(vals::Vector{<:AbstractVector}, con::CoupledConstraint,
-    Z::AbstractTrajectory, inds=1:length(Z)-1)
-    for (i,k) in enumerate(inds)
+function evaluate!(
+    vals::Vector{<:AbstractVector},
+    con::CoupledConstraint,
+    Z::AbstractTrajectory,
+    inds = 1:length(Z)-1,
+)
+    for (i, k) in enumerate(inds)
         vals[i] .= evaluate(con, Z[k], Z[k+1])
     end
 end
@@ -204,18 +220,26 @@ The values are stored in `∇c`, which should be a matrix of matrices. If `con` 
 If `con` is a `StageConstraint`, this will call `jacobian!(∇c, con, z)` by default, or
 `jacobian!(∇c, con, z1, z2, i)` if `con` is a `CoupledConstraint`.
 """
-function jacobian!(∇c::VecOrMat{<:AbstractMatrix}, con::StageConstraint,
-    Z::AbstractTrajectory, inds=1:length(Z))
-    for (i,k) in enumerate(inds)
-    jacobian!(∇c[i], con, Z[k])
+function jacobian!(
+    ∇c::VecOrMat{<:AbstractMatrix},
+    con::StageConstraint,
+    Z::AbstractTrajectory,
+    inds = 1:length(Z),
+)
+    for (i, k) in enumerate(inds)
+        jacobian!(∇c[i], con, Z[k])
     end
 end
 
-function jacobian!(∇c::VecOrMat{<:AbstractMatrix}, con::CoupledConstraint,
-    Z::AbstractTrajectory, inds=1:size(∇c,1))
-    for (i,k) in enumerate(inds)
-    jacobian!(∇c[i,1], con, Z[k], Z[k+1], 1)
-    jacobian!(∇c[i,2], con, Z[k], Z[k+1], 2)
+function jacobian!(
+    ∇c::VecOrMat{<:AbstractMatrix},
+    con::CoupledConstraint,
+    Z::AbstractTrajectory,
+    inds = 1:size(∇c, 1),
+)
+    for (i, k) in enumerate(inds)
+        jacobian!(∇c[i, 1], con, Z[k], Z[k+1], 1)
+        jacobian!(∇c[i, 2], con, Z[k], Z[k+1], 2)
     end
 end
 
@@ -232,24 +256,36 @@ The method for each constraint should calculate the Jacobian of the vector-Jacob
 Importantly, this method should ADD and not overwrite the contents of `G`, since this term
 is dependent upon all the constraints acting at that time step.
 """
-function ∇jacobian!(G::VecOrMat{<:AbstractMatrix}, con::StageConstraint,
-    Z::AbstractTrajectory, λ::Vector{<:AbstractVector},
-    inds=1:length(Z), is_const=ones(Bool,length(inds)), init::Bool=false)
-    for (i,k) in enumerate(inds)
-    if init || !is_const[i]
-    is_const[i] = ∇jacobian!(G[i], con, Z[k], λ[i])
-    end
+function ∇jacobian!(
+    G::VecOrMat{<:AbstractMatrix},
+    con::StageConstraint,
+    Z::AbstractTrajectory,
+    λ::Vector{<:AbstractVector},
+    inds = 1:length(Z),
+    is_const = ones(Bool, length(inds)),
+    init::Bool = false,
+)
+    for (i, k) in enumerate(inds)
+        if init || !is_const[i]
+            is_const[i] = ∇jacobian!(G[i], con, Z[k], λ[i])
+        end
     end
 end
 
-function ∇jacobian!(G::VecOrMat{<:AbstractMatrix}, con::CoupledConstraint,
-    Z::AbstractTrajectory, λ::Vector{<:AbstractVector},
-    inds=1:length(Z), is_const=ones(Bool,length(inds)), init::Bool=false)
-    for (i,k) in enumerate(inds)
-    if init || !is_const[i]
-    is_const[i] = ∇jacobian!(G[i,1], con, Z[k], Z[k+1], λ[i], 1)
-    is_const[i] = ∇jacobian!(G[i,2], con, Z[k], Z[k+1], λ[i], 2)
-    end
+function ∇jacobian!(
+    G::VecOrMat{<:AbstractMatrix},
+    con::CoupledConstraint,
+    Z::AbstractTrajectory,
+    λ::Vector{<:AbstractVector},
+    inds = 1:length(Z),
+    is_const = ones(Bool, length(inds)),
+    init::Bool = false,
+)
+    for (i, k) in enumerate(inds)
+        if init || !is_const[i]
+            is_const[i] = ∇jacobian!(G[i, 1], con, Z[k], Z[k+1], λ[i], 1)
+            is_const[i] = ∇jacobian!(G[i, 2], con, Z[k], Z[k+1], λ[i], 2)
+        end
     end
 end
 
@@ -278,7 +314,8 @@ define
 """
 @inline evaluate(con::StateConstraint, z::AbstractKnotPoint) = evaluate(con, state(z))
 @inline evaluate(con::ControlConstraint, z::AbstractKnotPoint) = evaluate(con, control(z))
-@inline evaluate(con::StageConstraint, z::AbstractKnotPoint) = evaluate(con, state(z), control(z))
+@inline evaluate(con::StageConstraint, z::AbstractKnotPoint) =
+    evaluate(con, state(z), control(z))
 
 
 """
@@ -309,11 +346,11 @@ with respect to the first knot point's stage and controls is calculated.
 If `con` is a `StateConstraint` or `ControlConstraint` then this method is automatically
 defined using ForwardDiff.
 """
-jacobian!(∇c, con::StateConstraint, z::AbstractKnotPoint, i=1) =
+jacobian!(∇c, con::StateConstraint, z::AbstractKnotPoint, i = 1) =
     jacobian!(∇c, con, state(z))
-jacobian!(∇c, con::ControlConstraint, z::AbstractKnotPoint, i=1) =
+jacobian!(∇c, con::ControlConstraint, z::AbstractKnotPoint, i = 1) =
     jacobian!(∇c, con, control(z))
-jacobian!(∇c, con::StageConstraint, z::AbstractKnotPoint, i=1) =
+jacobian!(∇c, con::StageConstraint, z::AbstractKnotPoint, i = 1) =
     jacobian!(∇c, con, state(z), control(z))
 
 # ForwardDiff jacobians that are of only state or control
@@ -323,11 +360,11 @@ function jacobian!(∇c, con::StageConstraint, x::StaticVector)
     return false
 end
 
-@inline ∇jacobian!(G, con::StateConstraint, z::AbstractKnotPoint, λ, i=1) =
+@inline ∇jacobian!(G, con::StateConstraint, z::AbstractKnotPoint, λ, i = 1) =
     ∇jacobian!(G, con, state(z), λ)
-@inline ∇jacobian!(G, con::ControlConstraint, z::AbstractKnotPoint, λ, i=1) =
+@inline ∇jacobian!(G, con::ControlConstraint, z::AbstractKnotPoint, λ, i = 1) =
     ∇jacobian!(G, con, control(z), λ)
-@inline ∇jacobian!(G, con::StageConstraint, z::AbstractKnotPoint, λ, i=1) =
+@inline ∇jacobian!(G, con::StageConstraint, z::AbstractKnotPoint, λ, i = 1) =
     ∇jacobian!(G, con, state(z), control(z), λ)
 
 function ∇jacobian!(G, con::StageConstraint, x::StaticVector, λ)
@@ -337,33 +374,44 @@ function ∇jacobian!(G, con::StageConstraint, x::StaticVector, λ)
     return false
 end
 
-function ∇jacobian!(G, con::StageConstraint, x::StaticVector{n}, u::StaticVector{m}, λ) where {n,m}
+function ∇jacobian!(
+    G,
+    con::StageConstraint,
+    x::StaticVector{n},
+    u::StaticVector{m},
+    λ,
+) where {n,m}
     ix = SVector{n}(1:n)
     iu = SVector{m}(n .+ (1:m))
     eval_c(z) = evaluate(con, z[ix], z[iu])'λ
-    G .+= ForwardDiff.hessian(eval_c, [x;u])
+    G .+= ForwardDiff.hessian(eval_c, [x; u])
     return false
 end
 
 
-function gen_jacobian(con::AbstractConstraint,i=1)
+function gen_jacobian(con::AbstractConstraint, i = 1)
     ws = widths(con)
     p = length(con)
-    C1 = SizedMatrix{p,ws[i]}(zeros(p,ws[i]))
+    C1 = SizedMatrix{p,ws[i]}(zeros(p, ws[i]))
 end
 
-function gen_views(∇c::AbstractMatrix, con::StateConstraint, n=state_dim(con), m=0)
-    view(∇c,:,1:n), view(∇c,:,n:n-1)
+function gen_views(∇c::AbstractMatrix, con::StateConstraint, n = state_dim(con), m = 0)
+    view(∇c, :, 1:n), view(∇c, :, n:n-1)
 end
 
-function gen_views(∇c::AbstractMatrix, con::ControlConstraint, n=0, m=control_dim(con))
-    view(∇c,:,1:0), view(∇c,:,1:m)
+function gen_views(∇c::AbstractMatrix, con::ControlConstraint, n = 0, m = control_dim(con))
+    view(∇c, :, 1:0), view(∇c, :, 1:m)
 end
 
-function gen_views(∇c::AbstractMatrix, con::AbstractConstraint, n=state_dim(con), m=control_dim(con))
-    if size(∇c,2) < n+m
-    view(∇c,:,1:n), view(∇c,:,n:n-1)
+function gen_views(
+    ∇c::AbstractMatrix,
+    con::AbstractConstraint,
+    n = state_dim(con),
+    m = control_dim(con),
+)
+    if size(∇c, 2) < n + m
+        view(∇c, :, 1:n), view(∇c, :, n:n-1)
     else
-    view(∇c,:,1:n), view(∇c,:,n .+ (1:m))
+        view(∇c, :, 1:n), view(∇c, :, n .+ (1:m))
     end
 end
