@@ -498,7 +498,8 @@ end
 @inline get_constraints(nlp::TrajOptNLP) = nlp.conSet
 @inline get_model(nlp::TrajOptNLP) = nlp.model
 @inline max_violation(nlp::TrajOptNLP) = max_violation(get_constraints(nlp))
-@inline initial_trajectory!(nlp::TrajOptNLP, Z0) = copyto!(get_trajectory(nlp), Z0)
+@inline initial_trajectory!(nlp::TrajOptNLP, Z0::AbstractTrajectory) = 
+	copyto!(get_trajectory(nlp), Z0)
 
 #---  Evaluation methods
 
