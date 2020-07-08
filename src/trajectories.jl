@@ -57,7 +57,7 @@ Base.IndexStyle(::Traj) = IndexLinear()
 
 Traj(Z::Traj) = Z
 
-function Base.copy(Z::Traj) where {T,N,M}
+function Base.copy(Z::AbstractTrajectory) where {T,N,M}
     Traj([KnotPoint(copy(z.z), copy(z._x), copy(z._u), z.dt, z.t) for z in Z])
 end
 
@@ -90,23 +90,35 @@ states(Z::Traj, i::Int) = [state(z)[i] for z in Z]
 
 function set_states!(Z::Traj, X)
     for k in eachindex(Z)
-        Z[k].z = [X[k]; control(Z[k])]
+		RobotDynamics.set_state!(Z[k], X[k])
     end
 end
 
-function set_controls!(Z::Traj, U)
+function set_states!(Z::Traj, X::AbstractMatrix)
+    for k in eachindex(Z)
+		RobotDynamics.set_state!(Z[k], X[:,k])
+    end
+end
+
+function set_controls!(Z::AbstractTrajectory, U)
     for k in 1:length(Z)-1
-        Z[k].z = [state(Z[k]); U[k]]
+		RobotDynamics.set_control!(Z[k], U[k])
     end
 end
 
-function set_controls!(Z::Traj, u::SVector)
+function set_controls!(Z::AbstractTrajectory, U::AbstractMatrix)
     for k in 1:length(Z)-1
-        Z[k].z = [state(Z[k]); u]
+		RobotDynamics.set_control!(Z[k], U[:,k])
     end
 end
 
-function set_times!(Z::Traj, ts)
+function set_controls!(Z::AbstractTrajectory, u::SVector)
+    for k in 1:length(Z)-1
+		RobotDynamics.set_control!(Z[k], u)
+    end
+end
+
+function set_times!(Z::AbstractTrajectory, ts)
     for k in eachindex(ts)
         Z[k].t = ts[k]
     end

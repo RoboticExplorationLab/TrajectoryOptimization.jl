@@ -46,6 +46,7 @@ export  # methods
 	rollout!,
 	states,
 	controls,
+	get_trajectory,
 	state_dim,    # from RobotDynamics
 	control_dim   # from RobotDynamics
 

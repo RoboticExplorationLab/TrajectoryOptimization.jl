@@ -386,6 +386,20 @@ end
 @inline Base.firstindex(Z::NLPTraj) = 1
 @inline Base.lastindex(Z::NLPTraj) = length(Z)
 
+function set_states!(Z::NLPTraj, X0)
+	xinds = Z.Zdata.xinds
+	for k in eachindex(X0)
+		Z.Z[xinds[k]] = X0[k]
+	end
+end
+
+function set_controls!(Z::NLPTraj, U0)
+	uinds = Z.Zdata.uinds
+	for k in eachindex(U0)
+		Z.Z[uinds[k]] = U0[k]
+	end
+end
+
 #--- TrajOpt NLP Problem
 
 mutable struct NLPOpts{T}
@@ -482,6 +496,7 @@ end
 @inline get_primals(nlp::TrajOptNLP) = nlp.Z.Z
 @inline get_trajectory(nlp::TrajOptNLP) = nlp.Z
 @inline get_constraints(nlp::TrajOptNLP) = nlp.conSet
+@inline get_model(nlp::TrajOptNLP) = nlp.model
 @inline max_violation(nlp::TrajOptNLP) = max_violation(get_constraints(nlp))
 @inline initial_trajectory!(nlp::TrajOptNLP, Z0) = copyto!(get_trajectory(nlp), Z0)
 

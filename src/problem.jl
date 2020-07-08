@@ -97,7 +97,6 @@ integration(prob::Problem{Q}) where Q = Q
 
 "```julia
 controls(::Problem)
-controls(::AbstractSolver)
 controls(::Traj)
 ```
 Get the control trajectory
@@ -106,7 +105,6 @@ controls(prob::Problem) = controls(prob.Z)
 
 "```julia
 states(::Problem)
-states(::AbstractSolver)
 states(::Traj)
 ```
 Get the state trajectory
@@ -120,53 +118,44 @@ Get the times for all the knot points in the problem.
 """
 @inline get_times(prob::Problem) = get_times(get_trajectory(prob))
 
-"```julia
-initial_trajectory!(::Problem, Z)
-initial_trajectory!(::AbstractSolver, Z)
-```
-Copy the trajectory "
-function initial_trajectory!(prob::Problem, Z::Traj)
+
+"""
+	initial_trajectory!(prob::Problem, Z)
+
+Copy the trajectory
+"""
+function initial_trajectory!(prob, Z0::AbstractTrajectory)
+	Z = get_trajectory(prob)
     for k = 1:prob.N
-        prob.Z[k].z = Z[k].z
+        Z[k].z = Z0[k].z
     end
 end
 
-"```julia
-initial_states!(::Union{Problem,AbstractSolver}, X0::Vector{<:AbstractVector})
-initial_states!(::Union{Problem,AbstractSolver}, X0::AbstractMatrix)
-```
-Copy the state trajectory "
-function initial_states!(prob::Problem, X0::Vector{<:AbstractVector})
-    set_states!(prob.Z, X0)
-end
+"""
+	initial_states!(::Problem, X0::Vector{<:AbstractVector})
+	initial_states!(::Problem, X0::AbstractMatrix)
 
-function initial_states!(prob::Problem, X0::AbstractMatrix)
-    X0 = [X0[:,k] for k = 1:size(X0,2)]
-    set_states!(prob.Z, X0)
-end
+Copy the state trajectory
+"""
+@inline initial_states!(prob, X0) = set_states!(get_trajectory(prob), X0)
 
-"""```julia
-set_initial_state!(prob::Problem, x0::AbstractVector)
-```
+
+"""
+	set_initial_state!(prob::Problem, x0::AbstractVector)
+
 Set the initial state in `prob` to `x0`
 """
 function set_initial_state!(prob::Problem, x0::AbstractVector)
     prob.x0 .= x0
 end
 
-"```julia
-initial_controls!(::Union{Problem,AbstractSolver}, U0::Vector{<:AbstractVector})
-initial_controls!(::Union{Problem,AbstractSolver}, U0::AbstractMatrx)
-```
-Copy the control trajectory "
-function initial_controls!(prob::Problem, U0::Vector{<:AbstractVector})
-    set_controls!(prob.Z, U0)
-end
+"""
+	initial_controls!(::Problem, U0::Vector{<:AbstractVector})
+	initial_controls!(::Problem, U0::AbstractMatrx)
 
-function initial_controls!(prob::Problem, u0::AbstractVector{<:Real})
-    U0 = [copy(u0) for k = 1:prob.N]
-    initial_controls!(prob, U0)
-end
+Copy the control trajectory
+"""
+@inline initial_controls!(prob, U0) = set_controls!(get_trajectory(prob), U0)
 
 "```julia
 cost(::Problem)
@@ -195,6 +184,8 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline get_model(prob::Problem) = prob.model
 @inline get_objective(prob::Problem) = prob.obj
 @inline get_trajectory(prob::Problem) = prob.Z
+@inline is_constrained(prob) = isempty(get_constraints(prob))
+@inline get_initial_state(prob::Problem) = prob.x0
 
 
 "```julia
@@ -210,13 +201,12 @@ end
 
 """
 	rollout!(::Problem)
-	rollout!(model::AbstractModel, Z::Traj, x0)
 
 Simulate the dynamics forward from the initial condition `x0` using the controls in the
 trajectory `Z`.
 If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0`.
 """
-@inline rollout!(prob::Problem) = rollout!(prob.model, prob.Z, prob.x0)
+@inline rollout!(prob) = rollout!(get_model(prob), get_trajectory(prob), get_initial_state(prob))
 
 function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
     x0=p.x0, xf=p.xf, t0=p.t0, tf=p.tf)
