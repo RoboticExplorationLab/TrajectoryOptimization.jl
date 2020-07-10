@@ -1,9 +1,8 @@
 # TrajectoryOptimization
 
-![Build Status](https://travis-ci.org/RoboticExplorationLab/TrajectoryOptimization.jl.svg?branch=master)
-![CI](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/workflows/CI/badge.svg)
-[![codecov](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl)
-[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/dev)
+| *Build Status* | *Documentation* |
+| -------------- | --------------- |
+| ![Build Status](https://travis-ci.org/RoboticExplorationLab/TrajectoryOptimization.jl.svg?branch=master) ![CI](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/workflows/CI/badge.svg) [![codecov](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl) | [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/dev) [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/stable) |
 
 A library of solvers for trajectory optimization problems written in Julia. Currently, the following methods are implemented with a common interface:
 
