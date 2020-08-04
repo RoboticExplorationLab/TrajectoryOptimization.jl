@@ -149,6 +149,23 @@ function set_initial_state!(prob::Problem, x0::AbstractVector)
     prob.x0 .= x0
 end
 
+function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, constraint=true)
+    if objective
+        obj = get_objective(prob)
+        for k in eachindex(obj.cost)
+            set_LQR_goal!(obj[k], xf)
+        end
+    end
+    if constraint
+        for con in get_constraints(prob)
+            if con isa GoalConstraint
+                set_goal_state!(con, xf)
+            end
+        end
+    end
+    return nothing
+end
+
 """
 	initial_controls!(::Problem, U0::Vector{<:AbstractVector})
 	initial_controls!(::Problem, U0::AbstractMatrx)

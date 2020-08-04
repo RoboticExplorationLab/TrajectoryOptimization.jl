@@ -32,20 +32,20 @@ only `xf[inds]` will be used.
 """
 struct GoalConstraint{P,T} <: StateConstraint
 	n::Int
-	xf::SVector{P,T}
+	xf::MVector{P,T}
 	inds::SVector{P,Int}
 end
 
 function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
 	n = length(xf)
 	p = length(inds)
-	xf = SVector{n}(xf)
+	xf = MVector{n}(xf)
 	inds = SVector{p}(inds)
 	GoalConstraint(xf, inds)
 end
 
 function GoalConstraint(xf::SVector{n}, inds::SVector{p,Int}) where {n,p}
-	GoalConstraint(length(xf), SVector{p}(xf[inds]), inds)
+	GoalConstraint(length(xf), MVector{p}(xf[inds]), inds)
 end
 
 @inline sense(::GoalConstraint) = Equality()
@@ -75,6 +75,15 @@ function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
 	GoalConstraint(n, con.xf, xi[con.inds])
 end
 
+function set_goal_state!(con::GoalConstraint, xf::AbstractVector)
+	if length(xf) != length(con.xf)
+		for (i,j) in enumerate(con.inds)
+			con.xf[i] = xf[j]
+		end
+	else
+		con.xf .= xf
+	end
+end
 
 ############################################################################################
 #                              LINEAR CONSTRAINTS 										   #

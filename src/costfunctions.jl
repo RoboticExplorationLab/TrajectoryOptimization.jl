@@ -127,6 +127,24 @@ function Base.copy(c::QC) where QC<:QuadraticCostFunction
 end
 
 # Other methods
+"""
+    set_LQR_goal!(cost::QuadraticCostFunction, xf)
+    set_LQR_goal!(cost::QuadraticCostFunction, xf, uf)
+
+Change the reference state and control for an LQR tracking cost.
+Only changes `q` and `r`, and not the constant term `c`. If `uf` is 
+not passed in, it isn't changed. 
+"""
+function set_LQR_goal!(cost::QuadraticCostFunction, xf)
+    cost.q .= -cost.Q * xf
+    return nothing
+end
+
+function set_LQR_goal!(cost::QuadraticCostFunction, xf, uf)
+    set_LQR_goal!(cost, xf)
+    cost.r .= -cost.R * uf
+    return nothing
+end
 
 function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
     @assert state_dim(c1) == state_dim(c2)
@@ -197,8 +215,8 @@ Any optional or omitted values will be set to zero(s). The keyword arguments are
 struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
     Q::Diagonal{T,SVector{n,T}}
     R::Diagonal{T,SVector{m,T}}
-    q::SVector{n,T}
-    r::SVector{m,T}
+    q::MVector{n,T}
+    r::MVector{m,T}
     c::T
     terminal::Bool
     function DiagonalCost(Qd::StaticVector{n}, Rd::StaticVector{m},
