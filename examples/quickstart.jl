@@ -1,11 +1,13 @@
 using TrajectoryOptimization
+using Altro
+using RobotDynamics
 using StaticArrays
 using LinearAlgebra
 using RobotDynamics
 using Altro
 const TO = TrajectoryOptimization
 
-struct DoubleIntegrator{T} <: AbstractModel
+struct DoubleIntegrator{T} <: TO.AbstractModel
     mass::T
 end
 
