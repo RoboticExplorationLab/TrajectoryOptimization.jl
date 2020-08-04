@@ -17,7 +17,7 @@ Importantly, this package should be considered more of a modeling framework than
 optimization solver, similar to [Convex.jl](https://github.com/JuliaOpt/Convex.jl).
 While general trajectory optimization problems are nonconvex, primarily due to the
 presence of nonlinear equality constraints imposed by the dynamics, they exhibit a unique
-structure that allows purpose-built solvers such as [ALTRO.jl](https://github.com/bjack205/ALTRO.jl)
+structure that allows purpose-built solvers such as [Altro.jl](https://github.com/bjack205/ALTRO.jl)
 to gain significant computational savings over the use of more generalized NLP solvers such
 as SNOPT and Ipopt.
 
