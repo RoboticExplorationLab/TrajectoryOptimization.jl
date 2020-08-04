@@ -1,5 +1,4 @@
 using TrajectoryOptimization
-# using ALTRO
 using RobotDynamics
 using BenchmarkTools
 using ForwardDiff
