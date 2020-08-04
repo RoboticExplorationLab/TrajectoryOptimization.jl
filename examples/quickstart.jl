@@ -1,13 +1,15 @@
 using TrajectoryOptimization
 using StaticArrays
 using LinearAlgebra
+using RobotDynamics
+using Altro
 const TO = TrajectoryOptimization
 
 struct DoubleIntegrator{T} <: AbstractModel
     mass::T
 end
 
-function TO.dynamics(model::DoubleIntegrator, x, u)
+function RobotDynamics.dynamics(model::DoubleIntegrator, x, u)
     SA[x[2], u[1] / model.mass]
 end
 
@@ -28,8 +30,8 @@ R = Diagonal(@SVector ones(m))
 obj = LQRObjective(Q, R, N*Q, xf, N)
 
 # Constraints
-cons = TO.ConstraintSet(n,m,N)
-add_constraint!(cons, GoalConstraint(xf), N:N)
+cons = ConstraintList(n,m,N)
+add_constraint!(cons, GoalConstraint(xf), N)
 add_constraint!(cons, BoundConstraint(n,m, u_min=-10, u_max=10), 1:N-1)
 
 # Create and solve problem
