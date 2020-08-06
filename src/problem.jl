@@ -149,6 +149,21 @@ function set_initial_state!(prob::Problem, x0::AbstractVector)
     prob.x0 .= x0
 end
 
+"""
+    set_initial_time!(prob, t0)
+
+Set the initial time of the optimization problem, shifting the time of all points in the trajectory.
+Returns the updated final time.
+"""
+function set_initial_time!(prob::Problem, t0::Real)
+    Z = get_trajectory(prob)
+    Δt = t0 - Z[1].t
+    for k in eachindex(Z)
+        Z[k].t += Δt
+    end
+    return Z[end].t 
+end
+
 function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, constraint=true)
     if objective
         obj = get_objective(prob)
