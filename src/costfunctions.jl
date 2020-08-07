@@ -57,7 +57,7 @@ Calculate the scalar cost using `costfun` given state `x` and control `u`. If on
 state is provided, it is assumed it is a terminal cost.
 """
 function stage_cost(cost::QuadraticCostFunction, x::AbstractVector, u::AbstractVector)
-    J = 0.5*u'cost.R*u + cost.r'u + stage_cost(cost, x)
+    J = 0.5*u'cost.R*u + dot(cost.r,u) + stage_cost(cost, x)
     if !is_blockdiag(cost)
         J += u'cost.H*x
     end
@@ -65,7 +65,7 @@ function stage_cost(cost::QuadraticCostFunction, x::AbstractVector, u::AbstractV
 end
 
 function stage_cost(cost::QuadraticCostFunction, x::AbstractVector{T}) where T
-    0.5*x'cost.Q*x .+ cost.q'*x .+ cost.c
+    0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
 end
 
 """
@@ -230,7 +230,7 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
                 @warn "R needs to be positive definite."
             end
         end
-        new{n,m,T}(Diagonal(SVector(Qd)), Diagonal(SVector(Rd)), SVector(q), SVector(r), T(c), terminal)
+        new{n,m,T}(Diagonal(SVector(Qd)), Diagonal(SVector(Rd)), q, r, T(c), terminal)
     end
 end
 
@@ -246,9 +246,11 @@ function DiagonalCost(Q::AbstractArray, R::AbstractArray,
     n,m = length(q), length(r)
     Qd = SVector{n}(diag(Q))
     Rd = SVector{m}(diag(R))
-    DiagonalCost(Qd, Rd, SVector{n}(q), SVector{m}(r), c; kwargs...)
+    DiagonalCost(Qd, Rd, convert(MVector{n},q), convert(MVector{m},r), c; kwargs...)
 end
 
+
+# Pass in vectors for Q and R
 function DiagonalCost(Q::AbstractVector, R::AbstractVector,
         q::AbstractVector, r::AbstractVector, c::Real; kwargs...)
     DiagonalCost(Diagonal(Q), Diagonal(R), q, r, c; kwargs...)

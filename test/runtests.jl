@@ -6,6 +6,7 @@ using StaticArrays
 using SparseArrays
 using ForwardDiff
 using RobotDynamics
+using BenchmarkTools
 const TO = TrajectoryOptimization
 
 include("test_models.jl")

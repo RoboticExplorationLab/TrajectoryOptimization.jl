@@ -1,8 +1,8 @@
 #--- Setup
 function alloc_con(con,z)
     ∇c = TO.gen_jacobian(con)
-    allocs  = @allocated TO.evaluate(con, z)
-    allocs += @allocated TO.jacobian!(∇c, con,z)
+    allocs  = @ballocated TO.evaluate($con, $z) samples=1 evals=1
+    allocs += @ballocated TO.jacobian!($∇c, $con, $z) samples=1 evals=1
 end
 
 model = Cartpole()
@@ -31,7 +31,7 @@ z = KnotPoint(x,u,0.1)
     @test TO.widths(goal, n+1, m) == (n+1,)
     @test state_dim(goal) == n
 
-    @test GoalConstraint(Vector(xf)).xf isa SVector{n}
+    @test GoalConstraint(Vector(xf)).xf isa MVector{n}
 end
 
 

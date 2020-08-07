@@ -34,19 +34,17 @@ struct GoalConstraint{P,T} <: StateConstraint
 	n::Int
 	xf::MVector{P,T}
 	inds::SVector{P,Int}
+	function GoalConstraint(xf::AbstractVector{T}, inds::SVector{p,Int}) where {p,T}
+		new{p,T}(length(xf), xf[inds], inds)
+	end
 end
 
 function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
-	n = length(xf)
 	p = length(inds)
-	xf = MVector{n}(xf)
 	inds = SVector{p}(inds)
 	GoalConstraint(xf, inds)
 end
 
-function GoalConstraint(xf::SVector{n}, inds::SVector{p,Int}) where {n,p}
-	GoalConstraint(length(xf), MVector{p}(xf[inds]), inds)
-end
 
 @inline sense(::GoalConstraint) = Equality()
 @inline Base.length(con::GoalConstraint{P}) where P = P
@@ -60,7 +58,7 @@ function primal_bounds!(zL,zU,con::GoalConstraint)
 	return true
 end
 
-evaluate(con::GoalConstraint, x::SVector) = x[con.inds] - con.xf
+evaluate(con::GoalConstraint, x::StaticVector) = x[con.inds] - con.xf
 function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
 	T = eltype(∇c)
 	for (i,j) in enumerate(con.inds)
@@ -72,7 +70,7 @@ end
 ∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
 
 function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
-	GoalConstraint(n, con.xf, xi[con.inds])
+	GoalConstraint(con.xf, xi[con.inds])
 end
 
 function set_goal_state!(con::GoalConstraint, xf::AbstractVector)
