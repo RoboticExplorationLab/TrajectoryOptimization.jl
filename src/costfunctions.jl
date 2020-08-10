@@ -234,6 +234,10 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
     end
 end
 
+Base.copy(c::DiagonalCost) = 
+    DiagonalCost(c.Q.diag, c.R.diag, copy(c.q), copy(c.r), c.c, 
+        checks=false, terminal=c.terminal)
+
 # strip away the H
 @inline function (::Type{<:DiagonalCost})(Q::AbstractArray, R::AbstractArray, H::AbstractArray,
         q::AbstractVector, r::AbstractVector, c; kwargs...)

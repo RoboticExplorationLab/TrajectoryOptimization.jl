@@ -119,3 +119,45 @@ x0_ = rand(n)
 TO.set_initial_state!(prob, x0_)
 @test prob.x0 ≈ x0_
 @test_throws DimensionMismatch TO.set_initial_state!(prob, rand(2n))
+
+## Change initial and goal states
+prob = Problem(model, copy(obj), xf, tf, x0=x0, constraints=deepcopy(conSet))
+x0_new = @SVector rand(n)
+TO.set_initial_state!(prob, x0_new)
+@test TO.get_initial_state(prob) == x0_new
+TO.set_initial_state!(prob, Vector(2*x0_new))
+@test TO.get_initial_state(prob) ≈ 2*x0_new
+
+# goal state, changing both objective and terminal constraint
+@test conSet[2].xf ≈ xf
+xf_new = @SVector rand(n)
+TO.set_goal_state!(prob, xf_new)
+@test prob.xf ≈ xf_new
+@test prob.obj[1].q ≈ -Q*xf_new
+@test prob.constraints[2].xf ≈ xf_new
+
+# make sure it doesn't modify the orignal since they're copied
+@test obj[1].q ≈ -Q*xf
+@test conSet[2].xf ≈ xf
+
+# don't modify the terminal constraint
+prob = Problem(model, copy(obj), xf, tf, x0=x0, constraints=copy(conSet))
+TO.set_goal_state!(prob, xf_new, constraint=false)
+@test prob.xf ≈ xf_new
+@test prob.obj[1].q ≈ -Q*xf_new
+@test prob.obj[end].q ≈ -Qf*xf_new
+@test prob.constraints[2].xf ≈ xf
+
+# don't modify the objective, and leave off constraints
+prob = Problem(model, copy(obj), xf, tf, x0=x0)
+TO.set_goal_state!(prob, xf_new, objective=false)
+@test prob.xf ≈ xf_new
+@test prob.obj[1].q ≈ -Q*xf
+@test prob.obj[end].q ≈ -Qf*xf
+
+# check that it modifies the orignal objective and constraint list if not copied
+prob = Problem(model, obj, xf, tf, x0=x0, constraints=copy(conSet))
+TO.set_goal_state!(prob, xf_new)
+@test obj[1].q ≈ -Q*xf_new
+@test obj[end].q ≈ -Qf*xf_new
+@test conSet[2].xf ≈ xf_new

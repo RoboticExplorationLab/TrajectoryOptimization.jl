@@ -178,6 +178,7 @@ function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, cons
             end
         end
     end
+    copyto!(prob.xf, xf)
     return nothing
 end
 
