@@ -11,6 +11,7 @@
 
 import RobotDynamics: state_dim, control_dim
 
+Base.copy(con::AbstractConstraint) = con
 
 ############################################################################################
 #                              GOAL CONSTRAINTS 										   #
@@ -45,6 +46,7 @@ function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
 	GoalConstraint(xf, inds)
 end
 
+Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
 @inline Base.length(con::GoalConstraint{P}) where P = P
@@ -121,6 +123,8 @@ function LinearConstraint(n::Int, m::Int, A::AbstractMatrix, b::AbstractVector,
 	LinearConstraint(n,m, A, b, sense, inds)
 end
 
+Base.copy(con::LinearConstraint{S}) where S = 
+	LinearConstraint(con.n, con.m, copy(con.A), copy(con.b), S(), con.inds)
 
 @inline sense(con::LinearConstraint) = con.sense
 @inline Base.length(con::LinearConstraint{<:Any,P}) where P = P
@@ -444,6 +448,10 @@ struct BoundConstraint{P,NM,T} <: StageConstraint
 	inds::SVector{P,Int}
 end
 
+Base.copy(bnd::BoundConstraint{P,nm,T}) where {P,nm,T} =
+	BoundConstraint(bnd.n, bnd.m, bnd.z_max, bnd.z_min, 
+		copy(bnd.i_max), copy(bnd.i_min), bnd.inds)
+
 function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
 	nm = n+m
@@ -673,6 +681,11 @@ end
 @inline control_dim(con::IndexedConstraint) = con.m
 @inline Base.length(con::IndexedConstraint) = length(con.con)
 @inline sense(con::IndexedConstraint) = sense(con.con)
+
+function Base.copy(c::IndexedConstraint{C,n0,m0}) where {C,n0,m0}
+	IndexedConstraint{C,n0,m0,}(c.n, c.m, c.n0, c.m0, copy(c.con), c.ix, c.iu,
+		copy(∇c),copy(A),copy(B))
+end
 
 function IndexedConstraint(n,m,con::AbstractConstraint,
 		ix::UnitRange{Int}, iu::UnitRange{Int})

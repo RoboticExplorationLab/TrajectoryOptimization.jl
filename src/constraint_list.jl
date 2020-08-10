@@ -136,13 +136,17 @@ Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 
 @inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
 
-function Base.copy(cons::ConstraintList)
-	cons2 = ConstraintList(cons.n, cons.m, length(cons.p))
-	for i in eachindex(cons.constraints)
-		add_constraint!(cons2, cons.constraints[i], copy(cons.inds[i]))
+for method in (:deepcopy, :copy)
+	@eval function Base.$method(cons::ConstraintList)
+		cons2 = ConstraintList(cons.n, cons.m, length(cons.p))
+		for i in eachindex(cons.constraints)
+			con_ = $(method == :deepcopy ? :(copy(cons.constraints[i])) : :(cons.constraints[i]))
+			add_constraint!(cons2, con_, copy(cons.inds[i]))
+		end
+		return cons2
 	end
-	return cons2
 end
+
 
 """
 	num_constraints(::ConstraintList)
