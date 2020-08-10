@@ -28,7 +28,7 @@ Z_ = TO.NLPTraj(Z,Zdata)
 @test eltype(Z_) == StaticKnotPoint{n,m,Float64,n+m}
 
 # Test with problem
-prob = DubinsCar(:parallel_park)
+prob = DubinsCarProblem(:parallel_park)
 prob.constraints
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
@@ -281,7 +281,7 @@ TO.primal_bounds!(zL, zU, cons2, true)
 @test cons2[1] isa TO.DynamicsConstraint
 @test length(cons) == 5
 
-prob = DubinsCar(:parallel_park)
+prob = DubinsCarProblem(:parallel_park)
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
 cons = prob.constraints

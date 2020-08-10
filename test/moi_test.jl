@@ -9,7 +9,7 @@ if !isdefined(Main,:TEST_TIME)
 end
 
 # Parallel Park
-prob = DubinsCar(:parallel_park)
+prob = DubinsCarProblem(:parallel_park)
 TO.add_dynamics_constraints!(prob)
 
 nlp = TO.TrajOptNLP(prob, remove_bounds=true, jac_type=:vector)
