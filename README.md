@@ -4,17 +4,9 @@
 | -------------- | --------------- |
 | ![Build Status](https://travis-ci.org/RoboticExplorationLab/TrajectoryOptimization.jl.svg?branch=master) ![CI](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/workflows/CI/badge.svg) [![codecov](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/RoboticExplorationLab/TrajectoryOptimization.jl) | [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/dev) [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://RoboticExplorationLab.github.io/TrajectoryOptimization.jl/stable) |
 
-A library of solvers for trajectory optimization problems written in Julia. Currently, the following methods are implemented with a common interface:
+This package is built for the express purpose of defining and evaluating trajectory optimization problems. Although early versions (pre v0.3) also included methods to solve these problems, this is now left to separate packages that implement the interface defined in TrajectoryOptimization.jl. For example, [Altro.jl](https://github.com/RoboticExplorationLab/Altro.jl) implements the ALTRO solver that used to be included in TrajectoryOptimization.jl. This change was done to make this package lighter and allow more abstraction in how solvers set up and solve the problems defined by this package.
 
-[ALTRO (Augmented Lagrangian TRajectory Optimizer)](https://rexlab.stanford.edu/papers/altro-iros.pdf): A fast solver for constrained trajectory optimization problems formulated as MDPs that features:
-  * General nonlinear cost functions, including minimum time problems
-  * General nonlinear state and input constraints
-  * Infeasible state initialization
-  * Square-root methods for improved numerical conditioning
-  * Active-set projection method for solution polishing
-
-Direct Collocation (DIRCOL)
-  * Interfaces to Nonlinear Programming solvers (e.g., [Ipopt](https://github.com/coin-or/Ipopt), [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/)) via [MathOptInterface](https://github.com/JuliaOpt/MathOptInterface.jl)
+TrajectoryOptimization.jl aims to provide both a convenient API for setting up and defining trajectory optimization problem and extremely efficient methods for evaluating them. Nearly all of the methods implemented have zero memory allocations and have been highly optimized for speed. Since trajectory optimization problem have a unique structure that set them apart from generic NLPs (nonlinear programs), use of the specialized methods in TrajectoryOptimization.jl can provide dramatic improvements in the computational efficiency of the solvers that implement the API.
 
 All methods utilize Julia's extensive autodifferentiation capabilities via [ForwardDiff.jl](http://www.juliadiff.org/ForwardDiff.jl/) so that the user does not need to specify derivatives of dynamics, cost, or constraint functions.
 
@@ -27,56 +19,10 @@ Pkg.add("TrajectoryOptimization")
 # What's New
 `TrajectoryOptimization.jl` underwent significant changes between versions `v0.1` and `v0.2`. The new code is significantly faster (up to 100x faster). The core part of the ALTRO solver (everything except the projected newton phase) is completely allocation-free once the solver has been initialized. Most of the API has changed significantly. See the documentation for more information on the new API.
 
+In `v0.3` the package was split into several different packages for increased modularity. These include [RobotDynamics.jl](https://github.com/RoboticExplorationLab/RobotDynamics.jl), [Altro.jl](https://github.com/RoboticExplorationLab/Altro.jl), [RobotZoo.jl](https://github.com/bjack205/RobotZoo.jl), and [TrajOptPlots.jl](https://github.com/RoboticExplorationLab/TrajOptPlots.jl).
+
 ## Quick Start
-To run a simple example of a constrained 1D block move (see script in `/examples/quickstart.jl`):
-```julia
-using TrajectoryOptimization
-using StaticArrays
-using LinearAlgebra
-const TO = TrajectoryOptimization
-
-struct DoubleIntegrator{T} <: AbstractModel
-    mass::T
-end
-
-function TO.dynamics(model::DoubleIntegrator, x, u)
-    SA[x[2], u[1] / model.mass]
-end
-
-Base.size(::DoubleIntegrator) = 2,1
-
-# Model and discretization
-model = DoubleIntegrator(1.0)
-n,m = size(model)
-tf = 3.0  # sec
-N = 21    # number of knot points
-
-# Objective
-x0 = SA[0,0.]  # initial state
-xf = SA[1,0.]  # final state
-
-Q = Diagonal(@SVector ones(n))
-R = Diagonal(@SVector ones(m))
-obj = LQRObjective(Q, R, N*Q, xf, N)
-
-# Constraints
-cons = TO.ConstraintSet(n,m,N)
-add_constraint!(cons, GoalConstraint(xf), N:N)
-add_constraint!(cons, BoundConstraint(n,m, u_min=-10, u_max=10), 1:N-1)
-
-# Create and solve problem
-prob = Problem(model, obj, xf, tf, x0=x0, constraints=cons)
-solver = ALTROSolver(prob)
-cost(solver)           # initial cost
-solve!(solver)         # solve with ALTRO
-max_violation(solver)  # max constraint violation
-cost(solver)           # final cost
-iterations(solver)     # total number of iterations
-
-# Get the state and control trajectories
-X = states(solver)
-U = controls(solver)
-```
+To run a simple example of a constrained 1D block move see script in [`/examples/quickstart.jl`](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/blob/master/examples/quickstart.jl).
 
 ## Examples
 Notebooks with more detailed examples can be found [here](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/tree/master/examples)
