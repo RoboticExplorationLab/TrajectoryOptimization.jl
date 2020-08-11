@@ -36,9 +36,8 @@ end
 end
 
 using NBInclude
-include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
 @testset "Examples" begin
-    @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
+    # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
 end
