@@ -386,14 +386,14 @@ end
 @inline Base.firstindex(Z::NLPTraj) = 1
 @inline Base.lastindex(Z::NLPTraj) = length(Z)
 
-function set_states!(Z::NLPTraj, X0)
+function RobotDynamics.set_states!(Z::NLPTraj, X0)
 	xinds = Z.Zdata.xinds
 	for k in eachindex(X0)
 		Z.Z[xinds[k]] = X0[k]
 	end
 end
 
-function set_controls!(Z::NLPTraj, U0)
+function RobotDynamics.set_controls!(Z::NLPTraj, U0)
 	uinds = Z.Zdata.uinds
 	for k in eachindex(U0)
 		Z.Z[uinds[k]] = U0[k]

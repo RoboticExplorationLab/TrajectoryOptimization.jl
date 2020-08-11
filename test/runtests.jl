@@ -29,7 +29,6 @@ end
 end
 
 @testset "Utils" begin
-    include("trajectories.jl")
 end
 
 @testset "NLP" begin

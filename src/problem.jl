@@ -116,7 +116,7 @@ states(prob::Problem) = states(prob.Z)
 
 Get the times for all the knot points in the problem.
 """
-@inline get_times(prob::Problem) = get_times(get_trajectory(prob))
+@inline RobotDynamics.get_times(prob::Problem) = get_times(get_trajectory(prob))
 
 
 """
@@ -137,7 +137,7 @@ end
 
 Copy the state trajectory
 """
-@inline initial_states!(prob, X0) = set_states!(get_trajectory(prob), X0)
+@inline initial_states!(prob, X0) = RobotDynamics.set_states!(get_trajectory(prob), X0)
 
 
 """
@@ -188,7 +188,7 @@ end
 
 Copy the control trajectory
 """
-@inline initial_controls!(prob, U0) = set_controls!(get_trajectory(prob), U0)
+@inline initial_controls!(prob, U0) = RobotDynamics.set_controls!(get_trajectory(prob), U0)
 
 "```julia
 cost(::Problem)

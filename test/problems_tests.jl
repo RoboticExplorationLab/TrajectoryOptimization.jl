@@ -71,7 +71,7 @@ prob = Problem(model, obj, xf, tf)
 @test controls(prob) == [zeros(m) for k = 1:N-1]
 @test isempty(prob.constraints)
 @test TO.integration(prob) == RK3
-@test TO.get_times(prob) ≈ range(0, tf; step=dt)
+@test RobotDynamics.get_times(prob) ≈ range(0, tf; step=dt)
 
 # Set initial trajectories
 initial_states!(prob, 2 .* X0)
@@ -99,7 +99,7 @@ prob = Problem(model, obj, xf, tf, X0=X0_mat, U0=U0_mat)
 dts = rand(N-1)
 dts = dts / sum(dts) * tf
 prob = Problem(model, obj, xf, tf, dt=dts)
-times = TO.get_times(prob)
+times = RobotDynamics.get_times(prob)
 @test times[end] ≈ tf
 @test times[1] ≈ 0
 @test times[2] ≈ dts[1]
