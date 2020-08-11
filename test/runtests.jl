@@ -7,7 +7,6 @@ using SparseArrays
 using ForwardDiff
 using RobotDynamics
 using BenchmarkTools
-using NBInclude
 const TO = TrajectoryOptimization
 
 include("test_models.jl")
@@ -36,6 +35,8 @@ end
     include("moi_test.jl")
 end
 
+using NBInclude
+include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
 @testset "Examples" begin
     @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)

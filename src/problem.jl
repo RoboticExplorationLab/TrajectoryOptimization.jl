@@ -220,6 +220,8 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline is_constrained(prob) = isempty(get_constraints(prob))
 @inline get_initial_state(prob::Problem) = prob.x0
 
+states(x) = states(get_trajectory(x))
+controls(x) = controls(get_trajectory(x))
 
 "```julia
 change_integration(prob::Problem, Q<:QuadratureRule)

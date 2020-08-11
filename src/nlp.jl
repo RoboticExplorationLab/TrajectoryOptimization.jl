@@ -371,7 +371,7 @@ end
 @inline Base.getindex(Z::NLPTraj, k::Int) = StaticKnotPoint(Z.Z, Z.Zdata, k)
 function Base.setindex!(Z::NLPTraj, z::AbstractKnotPoint, k::Int)
 	Z.Z[Z.Zdata.xinds[k]] = state(z)
-	if k < length(Z) || terminal_control(Z)
+	if k < length(Z) || RobotDynamics.terminal_control(Z)
 		Z.Z[Z.Zdata.uinds[k]] = control(z)
 	end
 	return z
@@ -490,7 +490,7 @@ function TrajOptNLP(prob::Problem; remove_bounds::Bool=false, jac_type=:sparse)
 end
 
 @inline num_knotpoints(nlp::TrajOptNLP) = length(nlp.zinds)
-@inline num_vars(nlp::TrajOptNLP) = length(nlp.data.g)
+@inline RobotDynamics.num_vars(nlp::TrajOptNLP) = length(nlp.data.g)
 @inline num_constraints(nlp::TrajOptNLP) = length(nlp.data.d)
 
 @inline get_primals(nlp::TrajOptNLP) = nlp.Z.Z

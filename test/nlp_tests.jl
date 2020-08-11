@@ -7,13 +7,10 @@ using SparseArrays
 using LinearAlgebra
 const TO = TrajectoryOptimization
 
-# using TrajectoryOptimization: StaticKnotPoint
-# using TrajectoryOptimization: num_vars, TrajData, NLPTraj, TrajOptNLP, NLPConstraintSet,
-#     JacobianStructure, NLPData
 
 # Test NLPTraj iteration
 n,m,N = 3,2,101
-NN = TO.num_vars(n,m,N)
+NN = RobotDynamics.num_vars(n,m,N)
 @test NN == N*n + (N-1)*m
 Z0 = Traj(n,m,0.1,N)
 Zdata = TO.TrajData(Z0)
