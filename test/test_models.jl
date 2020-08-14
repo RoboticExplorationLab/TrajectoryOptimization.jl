@@ -1,36 +1,5 @@
+import RobotZoo: Cartpole, DubinsCar
 
-struct Cartpole{T} <: AbstractModel
-    mc::T
-    mp::T
-    l::T
-    g::T
-end
-
-Cartpole() = Cartpole(1.0, 0.2, 0.5, 9.81)
-
-function RobotDynamics.dynamics(model::Cartpole, x, u)
-    mc = model.mc  # mass of the cart in kg (10)
-    mp = model.mp   # mass of the pole (point mass at the end) in kg
-    l = model.l   # length of the pole in m
-    g = model.g  # gravity m/s^2
-
-    q = x[@SVector [1, 2]]
-    qd = x[@SVector [3, 4]]
-
-    s = sin(q[2])
-    c = cos(q[2])
-
-    H = @SMatrix [mc + mp mp * l * c; mp * l * c mp * l^2]
-    C = @SMatrix [0 -mp * qd[2] * l * s; 0 0]
-    G = @SVector [0, mp * g * l * s]
-    B = @SVector [1, 0]
-
-    qdd = -H \ (C * qd + G - B * u[1])
-    return [qd; qdd]
-end
-
-RobotDynamics.state_dim(::Cartpole) = 4
-RobotDynamics.control_dim(::Cartpole) = 1
 
 function CartpoleProblem()
     model = Cartpole()
@@ -63,21 +32,7 @@ function CartpoleProblem()
 end
 
 
-struct DubinsCar <: AbstractModel end
-
-RobotDynamics.state_dim(::DubinsCar) = 3
-RobotDynamics.control_dim(::DubinsCar) = 2
-
-function RobotDynamics.dynamics(::DubinsCar,x,u)
-    ẋ = @SVector [u[1]*cos(x[3]),
-                  u[1]*sin(x[3]),
-                  u[2]]
-end
-
-Base.position(::DubinsCar, x::SVector) = @SVector [x[1], x[2], 0.0]
-orientation(::DubinsCar, x::SVector) = expm(x[3]*@SVector [0,0,1.])
-
-function DubinsCar(scenario; N=101)
+function DubinsCarProblem(scenario; N=101)
     if scenario == :three_obstacles
 
         #  Car w/ obstacles

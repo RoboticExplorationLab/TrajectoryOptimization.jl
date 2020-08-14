@@ -116,7 +116,7 @@ states(prob::Problem) = states(prob.Z)
 
 Get the times for all the knot points in the problem.
 """
-@inline get_times(prob::Problem) = get_times(get_trajectory(prob))
+@inline RobotDynamics.get_times(prob::Problem) = get_times(get_trajectory(prob))
 
 
 """
@@ -137,7 +137,7 @@ end
 
 Copy the state trajectory
 """
-@inline initial_states!(prob, X0) = set_states!(get_trajectory(prob), X0)
+@inline initial_states!(prob, X0) = RobotDynamics.set_states!(get_trajectory(prob), X0)
 
 
 """
@@ -147,6 +147,21 @@ Set the initial state in `prob` to `x0`
 """
 function set_initial_state!(prob::Problem, x0::AbstractVector)
     prob.x0 .= x0
+end
+
+"""
+    set_initial_time!(prob, t0)
+
+Set the initial time of the optimization problem, shifting the time of all points in the trajectory.
+Returns the updated final time.
+"""
+function set_initial_time!(prob::Problem, t0::Real)
+    Z = get_trajectory(prob)
+    Δt = t0 - Z[1].t
+    for k in eachindex(Z)
+        Z[k].t += Δt
+    end
+    return Z[end].t 
 end
 
 function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, constraint=true)
@@ -163,6 +178,7 @@ function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, cons
             end
         end
     end
+    copyto!(prob.xf, xf)
     return nothing
 end
 
@@ -172,7 +188,7 @@ end
 
 Copy the control trajectory
 """
-@inline initial_controls!(prob, U0) = set_controls!(get_trajectory(prob), U0)
+@inline initial_controls!(prob, U0) = RobotDynamics.set_controls!(get_trajectory(prob), U0)
 
 "```julia
 cost(::Problem)
@@ -204,6 +220,8 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline is_constrained(prob) = isempty(get_constraints(prob))
 @inline get_initial_state(prob::Problem) = prob.x0
 
+states(x) = states(get_trajectory(x))
+controls(x) = controls(get_trajectory(x))
 
 "```julia
 change_integration(prob::Problem, Q<:QuadratureRule)

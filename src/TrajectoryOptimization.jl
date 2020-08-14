@@ -20,9 +20,11 @@ using RobotDynamics: AbstractModel, LieGroupModel,
 	KnotPoint, StaticKnotPoint, AbstractKnotPoint,
 	QuadratureRule, Implicit, Explicit, DEFAULT_Q, HermiteSimpson,
 	is_terminal, state_diff, state_diff_jacobian!, state_diff_jacobian,
-	state, control
+	state, control, states, controls, get_times, Traj, AbstractTrajectory,
+	num_vars
 
-import RobotDynamics: jacobian!, state_dim, control_dim, state_diff_jacobian!
+import RobotDynamics: jacobian!, state_dim, control_dim, states, controls, 
+	state_diff_jacobian!, rollout!
 
 # API
 export  # types
@@ -62,7 +64,6 @@ export
 	NormConstraint,
 	add_constraint!
 
-include("trajectories.jl")
 include("expansions.jl")
 include("costfunctions.jl")
 include("objective.jl")

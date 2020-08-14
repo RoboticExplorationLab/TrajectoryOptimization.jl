@@ -49,7 +49,11 @@ end
 # Max values
 function max_violation(conSet::AbstractConstraintSet)
 	max_violation!(conSet)
-    return maximum(conSet.c_max)
+	if isempty(conSet)
+		return 0
+	else
+		return maximum(conSet.c_max)
+	end
 end
 
 function max_violation!(conSet::AbstractConstraintSet)

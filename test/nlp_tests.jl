@@ -7,13 +7,10 @@ using SparseArrays
 using LinearAlgebra
 const TO = TrajectoryOptimization
 
-# using TrajectoryOptimization: StaticKnotPoint
-# using TrajectoryOptimization: num_vars, TrajData, NLPTraj, TrajOptNLP, NLPConstraintSet,
-#     JacobianStructure, NLPData
 
 # Test NLPTraj iteration
 n,m,N = 3,2,101
-NN = TO.num_vars(n,m,N)
+NN = RobotDynamics.num_vars(n,m,N)
 @test NN == N*n + (N-1)*m
 Z0 = Traj(n,m,0.1,N)
 Zdata = TO.TrajData(Z0)
@@ -28,7 +25,7 @@ Z_ = TO.NLPTraj(Z,Zdata)
 @test eltype(Z_) == StaticKnotPoint{n,m,Float64,n+m}
 
 # Test with problem
-prob = DubinsCar(:parallel_park)
+prob = DubinsCarProblem(:parallel_park)
 prob.constraints
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
@@ -281,7 +278,7 @@ TO.primal_bounds!(zL, zU, cons2, true)
 @test cons2[1] isa TO.DynamicsConstraint
 @test length(cons) == 5
 
-prob = DubinsCar(:parallel_park)
+prob = DubinsCarProblem(:parallel_park)
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
 cons = prob.constraints

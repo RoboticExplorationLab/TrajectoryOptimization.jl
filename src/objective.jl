@@ -57,7 +57,7 @@ end
 "Get the vector of costs at each knot point. `sum(get_J(obj))` is equal to the cost"
 get_J(obj::Objective) = obj.J
 
-Base.copy(obj::Objective) = Objective(copy(obj.cost))
+Base.copy(obj::Objective) = Objective(copy.(obj.cost))
 
 Base.getindex(obj::Objective,i::Int) = obj.cost[i]
 

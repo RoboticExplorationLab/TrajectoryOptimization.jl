@@ -7,6 +7,7 @@ x,u = rand(model)
 dt = 0.1
 z = KnotPoint(x,u,dt)
 
+
 #--- Generate some constraints
 # Circle Constraint
 xc = SA[1,1,1]
@@ -40,9 +41,13 @@ add_constraint!(cons, cir, 1:N)
 add_constraint!(cons, goal, N)
 add_constraint!(cons, lin, 2:N-1)
 cons2 = copy(cons)
+cons2_ = deepcopy(cons)
 add_constraint!(cons, bnd, 1:N-1)
 add_constraint!(cons, dyn, 1:N-1)
 @test length(cons) == 5
+@test length(cons2) == 3
+@test cons[2] === cons2[2]
+@test cons[2] !== cons2_[2]
 
 #--- Create an ALConstraintSet
 conset = TO.ALConstraintSet(cons, model)

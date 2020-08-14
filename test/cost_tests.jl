@@ -4,12 +4,11 @@
     Q = Diagonal(@SVector fill(0.1, n))
     R = Diagonal(@SVector fill(0.01, m))
     H = rand(m, n)
-    q = @SVector rand(n)
-    r = @SVector rand(m)
+    q = @MVector rand(n)
+    r = @MVector rand(m)
     c = rand()
     Qf = Diagonal(@SVector fill(10.0, n))
     xf = @SVector ones(n)
-
 
     @testset "Constructors" begin
         qcost = QuadraticCost(Q, R)
@@ -81,25 +80,25 @@
         dcost = DiagonalCost(Q, R)
         @test dcost.Q === Q
         @test dcost.R === R
-        @test dcost.r === zero(r)
-        @test dcost.q === zero(q)
+        @test dcost.r == zero(r)
+        @test dcost.q == zero(q)
 
         dcost = DiagonalCost(Q, R, q = q)
         @test dcost.Q === Q
         @test dcost.R === R
-        @test dcost.r === zero(r)
+        @test dcost.r == zero(r)
         @test dcost.q === q
 
         dcost = DiagonalCost(Q.diag, R.diag, q = q)
         @test dcost.Q === Q
         @test dcost.R === R
-        @test dcost.r === zero(r)
+        @test dcost.r == zero(r)
         @test dcost.q === q
 
         dcost = DiagonalCost(Vector(Q.diag), Vector(R.diag), q = q)
         @test dcost.Q === Q
         @test dcost.R === R
-        @test dcost.r === zero(r)
+        @test dcost.r == zero(r)
         @test dcost.q === q
         @test dcost.Q isa Diagonal{Float64,<:SVector}
 
