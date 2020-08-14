@@ -106,6 +106,9 @@ cons_and_inds[1] == (bnd,1:n-1)            # (true)
 function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
 	@assert check_dims(con, cons.n, cons.m) "New constaint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
+	if isempty(cons)
+		idx = -1
+	end
 	if idx == -1
 		push!(cons.constraints, con)
 		push!(cons.inds, inds)
