@@ -10,7 +10,7 @@ Holds information about a constraint
 """
 struct ConVal{C,V,M,W}
     con::C
-    inds::UnitRange{Int}
+    inds::Vector{Int}
     vals::Vector{V}
 	vals2::Vector{V}
     jac::Matrix{M}
@@ -19,7 +19,8 @@ struct ConVal{C,V,M,W}
     c_max::Vector{Float64}
 	is_const::Vector{Vector{Bool}}  # are the Jacobians constant
 	iserr::Bool  # are the Jacobians on the error state
-    function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::UnitRange, jac, vals, iserr::Bool=false)
+	function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::Union{Vector{Int},UnitRange}, 
+			jac, vals, iserr::Bool=false)
 		if !iserr && size(gen_jacobian(con)) != size(jac[1])
 			throw(DimensionMismatch("size of jac[i] $(size(jac[1])) does not match the expected size of $(size(gen_jacobian(con)))"))
 		end
@@ -34,7 +35,7 @@ struct ConVal{C,V,M,W}
         c_max = zeros(P)
 		is_const = [zeros(Bool,P), zeros(Bool,P)]
         new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
-			inds, vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
+			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
     end
 end
 
