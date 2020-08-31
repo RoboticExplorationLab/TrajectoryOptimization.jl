@@ -10,7 +10,7 @@ function evaluate!(vals::Vector{<:AbstractVector}, con::DynamicsConstraint{Hermi
 	fVal = con.fVal
 	xMid = con.xMid
 
-	for k = inds.start:inds.stop+1
+	for k = inds[1]:inds[end]+1
 		fVal[k] = RobotDynamics.dynamics(model, Z[k])
 	end
 	for k in inds
