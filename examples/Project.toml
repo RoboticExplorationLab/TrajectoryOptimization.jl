@@ -1,2 +1,9 @@
 [deps]
+Altro = "5dcf52e5-e2fb-48e0-b826-96f46d2e3e73"
+RobotDynamics = "38ceca67-d8d3-44e8-9852-78a5596522e1"
 RobotZoo = "74be38bb-dcc2-4b9e-baf3-d6373cd95f10"
+TrajOptPlots = "7770976a-8dee-4930-bf39-a1782fd21ce6"
+
+[compat]
+Altro = "0.2"
+RobotZoo = "0.1"
