@@ -155,7 +155,7 @@ end
 Set the initial time of the optimization problem, shifting the time of all points in the trajectory.
 Returns the updated final time.
 """
-function set_initial_time!(prob::Problem, t0::Real)
+function set_initial_time!(prob, t0::Real)
     Z = get_trajectory(prob)
     Δt = t0 - Z[1].t
     for k in eachindex(Z)
