@@ -38,6 +38,9 @@ struct GoalConstraint{P,T} <: StateConstraint
 	function GoalConstraint(xf::AbstractVector{T}, inds::SVector{p,Int}) where {p,T}
 		new{p,T}(length(xf), xf[inds], inds)
 	end
+	function GoalConstraint(n::Int, xf::MVector{P,T}, inds::SVector{P,Int}) where {P,T}
+		new{P,T}(n, xf, inds)
+	end
 end
 
 function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
@@ -53,9 +56,9 @@ Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
-	for i in con.inds
-		zL[i] = con.xf[i]
-		zU[i] = con.xf[i]
+	for (i,j) in enumerate(con.inds)
+		zL[j] = con.xf[i]
+		zU[j] = con.xf[i]
 	end
 	return true
 end
@@ -72,7 +75,7 @@ end
 ∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
 
 function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
-	GoalConstraint(con.xf, xi[con.inds])
+	GoalConstraint(con.n, con.xf, xi[con.inds])
 end
 
 function set_goal_state!(con::GoalConstraint, xf::AbstractVector)
