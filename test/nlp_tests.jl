@@ -111,14 +111,14 @@ G0 .*= 0
 
 # Constraint Functions
 initial_trajectory!(nlp, prob.Z)
-conSet = TO.ALConstraintSet(prob)
-TO.evaluate!(conSet, prob.Z)
-TO.evaluate!(nlp.conSet, prob.Z)
-c_max = max_violation(nlp.conSet)
-@test c_max ≈ max_violation(conSet)
+# conSet = TO.ALConstraintSet(prob)
+# TO.evaluate!(conSet, prob.Z)
+# TO.evaluate!(nlp.conSet, prob.Z)
+# c_max = max_violation(nlp.conSet)
+# @test c_max ≈ max_violation(conSet)
 
 c = TO.eval_c!(nlp, Z)
-@test max_violation(nlp) ≈ c_max
+# @test max_violation(nlp) ≈ c_max
 # @btime eval_c!($nlp, $Z)
 # @btime evaluate!($nlp.conSet, $(prob.Z))
 

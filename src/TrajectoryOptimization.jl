@@ -79,7 +79,6 @@ include("convals.jl")
 
 include("problem.jl")
 include("conset.jl")
-include("ALconset.jl")
 
 include("nlp.jl")
 
