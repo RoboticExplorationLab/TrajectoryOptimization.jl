@@ -203,7 +203,7 @@ function gen_convals(n̄::Int, m::Int, con::AbstractConstraint, inds)
     p = length(con)
 	ws = widths(con, n̄,m)
     C = [SizedMatrix{p,w}(zeros(p,w)) for k in inds, w in ws]
-    c = [@MVector zeros(p) for k in inds]
+	c = [@MVector zeros(p) for k in inds]
     return C, c
 end
 
