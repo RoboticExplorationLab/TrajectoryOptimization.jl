@@ -17,7 +17,7 @@ Base.iterate(conSet::AbstractConstraintSet) =
 	isempty(get_convals(conSet)) ? nothing : (get_convals(conSet)[1].con,1)
 Base.iterate(conSet::AbstractConstraintSet, state::Int) =
 	state >= length(conSet) ? nothing : (get_convals(conSet)[state+1].con, state+1)
-@inline Base.length(conSet) = length(get_convals(conSet))
+@inline Base.length(conSet::AbstractConstraintSet) = length(get_convals(conSet))
 Base.IteratorSize(::AbstractConstraintSet) = Base.HasLength()
 Base.IteratorEltype(::AbstractConstraintSet) = Base.HasEltype()
 Base.eltype(::AbstractConstraintSet) = AbstractConstraint
