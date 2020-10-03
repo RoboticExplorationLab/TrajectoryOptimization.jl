@@ -93,10 +93,9 @@ end
 @inline violation(::Equality, v::Real) = abs(v)
 @inline violation(::Inequality, v::Real) = v > 0 ? v : 0.0
 
-function violation(::SecondOrderCone, x)
-	s = x[end]
-	v = pop(x)
-	norm(v) - s
+function violation(cone::SecondOrderCone, x)
+	proj = projection(cone, x)
+	return norm(x - proj)
 end
 
 function max_violation(cval::AbstractConstraintValues)

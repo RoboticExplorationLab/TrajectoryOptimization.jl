@@ -95,18 +95,33 @@ function Base.in(x, ::SecondOrderCone)
     return a <= s
 end
 
-function hess_soc(x,b)
+function cone_status(::SecondOrderCone, x)
+    s = x[end]
+    v = pop(x)
+    a = norm(v)
+    if a <= -s
+        return :below
+    elseif a <= s
+        return :in
+    elseif a > abs(s)
+        return :outside
+    else
+        return :invalid
+    end
+end
+
+function ∇²projection!(::SecondOrderCone, hess, x::StaticVector, b::StaticVector)
     n = length(x)
     s = x[end]
-    v = x[1:end-1] 
+    v = pop(x)
     bs = b[end]
-    bv = b[1:end-1] 
-    a = nv = norm(v)
+    bv = pop(b)
+    a =  norm(v)
 
     if a <= -s
-        return zeros(n,n)
+        return hess .*= 0
     elseif a <= s
-        return zeros(n,n)
+        return hess .*= 0
     elseif a > abs(s)
         dvdv = -s/norm(v)^2/norm(v)*(I - (v*v')/(v'v))*bv*v' + 
             s/norm(v)*((v*(v'bv))/(v'v)^2 * 2v' - (I*(v'bv) + v*bv')/(v'v)) + 
@@ -114,7 +129,12 @@ function hess_soc(x,b)
         dvds = 1/norm(v)*(I - (v*v')/(v'v))*bv;
         dsdv = bv'/norm(v) - v'bv/norm(v)^3*v'
         dsds = 0
-        return 0.5*[dvdv dvds; dsdv dsds]
+        hess[1:n-1,1:n-1] .= dvdv*0.5
+        hess[1:n-1,n] .= dvds*0.5
+        hess[n:n,1:n-1] .= dsdv*0.5
+        hess[n,n] = 0
+        return hess
+        # return 0.5*[dvdv dvds; dsdv dsds]
     else
         throw(ErrorException("Invalid second-order cone projection"))
     end
