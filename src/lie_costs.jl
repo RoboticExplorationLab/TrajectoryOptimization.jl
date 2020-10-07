@@ -35,6 +35,22 @@ struct DiagonalLieCost{n,m,T,nV,nR,Rot} <: QuadraticCostFunction{n,m,T}
         R = Diagonal(SVector{m}(R))
         new{n,m,T,nV,nR,rotation_name(Rot)}(Q, R, q, r, c, w, vinds, rinds, qrefs)
     end
+    function DiagonalLieCost{Rot}(Q,R,q,r,c,w,vinds,qinds,qrefs) where Rot
+        nV = length(Q)
+        num_rots = length(qinds)
+        nR = length(qinds[1])
+        n = nV + num_rots*nR
+        m = size(R,1)
+        T = eltype(Q)
+        new{n,m,T,nV,nR,rotation_name(Rot)}(Q, R, q, r, c, w, vinds, qinds, qrefs)
+    end
+end
+
+function Base.copy(c::DiagonalLieCost)
+    Rot = RD.rotation_type(c)
+    DiagonalLieCost{Rot}(copy(c.Q), c.R, copy(c.q), copy(c.r), c.c, copy(c.w), 
+        copy(c.vinds), copy(c.qinds), deepcopy(c.qrefs)
+    )
 end
 
 function DiagonalLieCost(s::RD.LieState{Rot,P}, 
@@ -82,11 +98,33 @@ function DiagonalLieCost(s::RD.LieState{Rot,P}, Q::Diagonal, R::Diagonal;
     end
 end
 
+function LieLQRCost(s::RD.LieState{Rot,P}, 
+        Q::Vector{<:AbstractVector}, 
+        R::Union{<:AbstractVector,<:Diagonal},
+        xf; 
+        w=ones(length(Q)-1), 
+        uf=zeros(size(R,1))
+    ) where {Rot,P}
+    if R isa AbstractVector
+        R = Diagonal(R)
+    end
+    num_rots = length(P) - 1
+    vinds = [RobotDynamics.vec_inds(Rot, P, i) for i = 1:num_rots+1]
+    qinds = [RobotDynamics.rot_inds(Rot, P, i) for i = 1:num_rots]
+    qrefs = [Rot(xf[qinds[i]]) for i = 1:num_rots]
+    q = [-Diagonal(Q[i])*xf[vinds[i]] for i = 1:length(P)] 
+    r = -R*uf
+    c = sum(0.5*xf[vinds[i]]'Diagonal(Q[i])*xf[vinds[i]] for i = 1:length(P))
+    c += 0.5*uf'R*uf
+    return DiagonalLieCost(s, Q, R; q=q, r=r, c=c, w=w, qrefs=qrefs)
+end
+
 RobotDynamics.rotation_type(::DiagonalLieCost{<:Any,<:Any,<:Any, <:Any,<:Any, Rot}) where Rot = Rot
 RobotDynamics.state_dim(::DiagonalLieCost{n}) where n = n
 RobotDynamics.control_dim(::DiagonalLieCost{<:Any,m}) where m = m
 is_blockdiag(::DiagonalLieCost) = true
 is_diag(::DiagonalLieCost) = true
+
 
 function stage_cost(cost::DiagonalLieCost, x::AbstractVector)
     Rot = RobotDynamics.rotation_type(cost)
@@ -134,6 +172,7 @@ function hessian!(E::QuadraticCostFunction, cost::DiagonalLieCost{n}, x::Abstrac
     for (i,j) in enumerate(cost.vinds) 
         E.Q[j,j] = cost.Q[i]
     end
+    return true
 end
 
 toquat(::Type{<:UnitQuaternion}, q::AbstractVector) = q

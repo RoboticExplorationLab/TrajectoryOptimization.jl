@@ -499,14 +499,14 @@ function gradient!(E::QuadraticCostFunction, cost::DiagonalQuatCost{T,N,M},
     return false
 end
 
-function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
-        uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
-    r = -R*uf
-    q = -Q*xf
-    c = 0.5*xf'Q*xf + 0.5*uf'R*uf
-    q_ref = xf[quat_ind]
-    return DiagonalQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
-end
+# function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
+#         uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+#     r = -R*uf
+#     q = -Q*xf
+#     c = 0.5*xf'Q*xf + 0.5*uf'R*uf
+#     q_ref = xf[quat_ind]
+#     return DiagonalQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
+# end
 
 function change_dimension(cost::DiagonalQuatCost, n, m, ix, iu)
     Qd = zeros(n)

@@ -7,6 +7,7 @@ using BenchmarkTools
 using Rotations
 using StaticArrays, LinearAlgebra, ForwardDiff
 const TO = TrajectoryOptimization
+const RD = RobotDynamics
 
 import TrajectoryOptimization: DiagonalLieCost 
 
@@ -146,3 +147,29 @@ Rotations.jacobian(UnitQuaternion, RodriguesParam(q)) ≈
 g = Rotations.params(RodriguesParam(q))
 rp2quat(g)
 1/sqrt(1+g'g) * [1; g]
+
+
+## Test solving a problem
+model = Quadrotor()
+N = 51
+tf = 5.0
+dt = tf / (N-1)
+
+# Objective
+x0,u0 = zeros(model) 
+xf = RD.build_state(model, [2,3,1], expm(SA[0,0,1]*deg2rad(135)), zeros(3), zeros(3))
+Q = [fill(1,3), fill(0.1, 6)]
+R = fill(1e-2,4)
+costfun = TO.LieLQRCost(RD.LieState(model), Q, R, xf)
+costfun_term = TO.LieLQRCost(RD.LieState(model), Q .* 100, R, xf)
+obj = Objective(costfun, costfun_term, N)
+obj2 = copy(obj)
+
+prob = Problem(model, obj, xf, tf, x0=x0)
+using Altro
+solver = ALTROSolver(prob, show_summary=true)
+solve!(solver)
+states(solver)[end]
+xf_sol = RBState(model, states(solver)[end])
+x̄f = RBState(model, xf)
+norm(xf_sol ⊖ x̄f)
