@@ -68,6 +68,9 @@ function DiagonalLieCost(s::RD.LieState{Rot,P},
     if R isa Diagonal
         R = R.diag
     end
+    if w isa Real
+        w = fill(w,length(qrefs))
+    end
     DiagonalLieCost(s, Q, R, q, r, c, w, qrefs)
 end
 
@@ -99,11 +102,21 @@ function DiagonalLieCost(s::RD.LieState{Rot,P}, Q::Diagonal, R::Diagonal;
 end
 
 function LieLQRCost(s::RD.LieState{Rot,P}, 
+        Q::Diagonal,
+        R::Diagonal,
+        xf, uf=zeros(size(R,1)); kwargs...) where {Rot,P}
+    @assert length(Q.diag) == length(s)
+    vinds = [RobotDynamics.vec_inds(Rot, P, i) for i = 1:length(P)]
+    Qs = [Q[vind] for vind in vinds]
+    LieLQRCost(s, Qs, R, xf, uf; kwargs...)
+end
+
+function LieLQRCost(s::RD.LieState{Rot,P}, 
         Q::Vector{<:AbstractVector}, 
         R::Union{<:AbstractVector,<:Diagonal},
-        xf; 
+        xf, 
+        uf=zeros(size(R,1));
         w=ones(length(Q)-1), 
-        uf=zeros(size(R,1))
     ) where {Rot,P}
     if R isa AbstractVector
         R = Diagonal(R)
