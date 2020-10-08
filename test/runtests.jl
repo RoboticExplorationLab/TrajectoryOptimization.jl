@@ -27,8 +27,8 @@ end
     include("problems_tests.jl")
 end
 
-@testset "Utils" begin
-end
+# @testset "Utils" begin
+# end
 
 @testset "NLP" begin
     include("nlp_tests.jl")
