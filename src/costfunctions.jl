@@ -160,8 +160,8 @@ function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
     @assert state_dim(c1) == state_dim(c2)
     @assert control_dim(c1) == control_dim(c2)
     n,m = state_dim(c1), control_dim(c1)
-    H1 = c1 isa DiagonalCost ? zeros(m,n) : c1.H
-    H2 = c2 isa DiagonalCost ? zeros(m,n) : c2.H
+    H1 = is_diag(c1) ? zeros(m,n) : c1.H
+    H2 = is_diag(c2) ? zeros(m,n) : c2.H
     QC = promote_type(typeof(c1), typeof(c2))
     QC(c1.Q + c2.Q, c1.R + c2.R, H1 + H2,
        c1.q + c2.q, c1.r + c2.r, c1.c + c2.c,
@@ -231,7 +231,7 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
     terminal::Bool
     function DiagonalCost(Qd::StaticVector{n}, Rd::StaticVector{m},
                           q::StaticVector{n},  r::StaticVector{m},
-                          c::Real; terminal::Bool=false, checks::Bool=true) where {n,m}
+                          c::Real; terminal::Bool=false, checks::Bool=true, kwargs...) where {n,m}
         T = promote_type(typeof(c), eltype(Qd), eltype(Rd), eltype(q), eltype(r))
         if checks
             if any(x->x<0, Qd)
@@ -328,7 +328,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     terminal::Bool
     zeroH::Bool
     function (::Type{QC})(Q::TQ, R::TR, H::TH,
-            q::Tq, r::Tr, c::Real; checks=true, terminal=false) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
+            q::Tq, r::Tr, c::Real; checks=true, terminal=false, kwargs...) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
         @assert size(Q,1) == length(q)
         @assert size(R,1) == length(r)
         @assert size(H) == (length(r), length(q))
