@@ -266,7 +266,7 @@ function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) wher
     add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
 
     # Initial condition
-    init_con = GoalConstraint(prob.x0)
+    init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
     add_constraint!(conSet, init_con, 1, 1)  # add it at the top
 
     return nothing
