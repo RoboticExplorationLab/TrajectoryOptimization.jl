@@ -22,17 +22,16 @@ Base.IteratorSize(::AbstractConstraintSet) = Base.HasLength()
 Base.IteratorEltype(::AbstractConstraintSet) = Base.HasEltype()
 Base.eltype(::AbstractConstraintSet) = AbstractConstraint
 
-
 # Constraint Evaluation
 function evaluate!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
-    for conval in get_convals(conSet)
-        evaluate!(conval, Z)
+    for i = 1:length(conSet) 
+        evaluate!(conSet.convals[i], Z)
     end
 end
 
-function jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
+function jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory, init::Bool=true)
     for conval in get_convals(conSet)
-        jacobian!(conval, Z)
+        jacobian!(conval, Z, init)
     end
 end
 

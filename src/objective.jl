@@ -24,8 +24,8 @@ Objective(costs::Vector{<:CostFunction})
 struct Objective{C} <: AbstractObjective
     cost::Vector{C}
     J::Vector{Float64}
-    const_grad::Vector{Bool}
-    const_hess::Vector{Bool}
+    const_grad::BitVector
+    const_hess::BitVector
     function Objective(cost::Vector{C}) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
@@ -37,6 +37,18 @@ end
 
 state_dim(obj::Objective) = state_dim(obj.cost[1])
 control_dim(obj::Objective) = control_dim(obj.cost[1])
+
+"""
+    is_quadratic(obj::Objective)
+
+Only valid for a cost expansion, i.e. an objective containing the 2nd order expansion of 
+    another objective. Determines if the original objective is a quadratic function, or 
+    in other words, if the hessian of the objective is constant. 
+
+For example, if the original cost function is an augmented Lagrangian cost function, the
+    result will return true only if all constraints are linear.
+"""
+is_quadratic(obj::Objective) = all(obj.const_hess)
 
 # Constructors
 function Objective(cost::CostFunction,N::Int)

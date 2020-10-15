@@ -87,7 +87,10 @@ If `init == true`, all hessian will be evaluated, even if they are constant. If 
 they will only be evaluated if they are not constant.
 """
 function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init::Bool=false, rezero::Bool=false)
-    is_const = E.const_hess
+	is_const = E.const_hess
+	if !init && all(is_const)
+		return
+	end
     N = length(Z)
     for k in eachindex(Z)
         if init || !is_const[k]
@@ -99,7 +102,7 @@ function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init
 			if is_terminal(Z[k])
             	is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]))
 			else
-            	is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]), control(Z[k]))
+				is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]), control(Z[k]))
 			end
             dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
             dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
@@ -151,7 +154,8 @@ function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::Abstr
         mul!(E.q, Transpose(G), cost.q)
         mul!(tmp, cost.Q, G)
         mul!(E.Q, Transpose(G), tmp, 1.0, 1.0)
-    end
+	end
+	E.const_hess[i] = false  # hessian will always be dependent on the state
     return nothing
 end
 

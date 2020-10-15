@@ -18,7 +18,7 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
     ∇x::Matrix{W}
     ∇u::Matrix{W}
     c_max::Vector{Float64}
-	is_const::Vector{Vector{Bool}}  # are the Jacobians constant
+	is_const::BitArray{2}
 	iserr::Bool  # are the Jacobians on the error state
 	function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::Union{Vector{Int},UnitRange}, 
 			jac, vals, iserr::Bool=false)
@@ -34,7 +34,7 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
 		∇x = [v[1] for v in views]
 		∇u = [v[2] for v in views]
         c_max = zeros(P)
-		is_const = [zeros(Bool,P), zeros(Bool,P)]
+		is_const = BitArray(undef, size(jac)) 
         new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
 			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
     end
@@ -74,13 +74,12 @@ function jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory, init::
 	if cval.iserr
 		throw(ErrorException("Can't evaluate Jacobians directly on the error state Jacobians"))
 	else
-		jacobian!(cval.jac, cval.con, Z, cval.inds)
-		# is_const = cval.is_const
-	    # for (i,k) in enumerate(cval.inds)
-		# 	if init || !is_const[i]
-	    #     	is_const[i] = jacobian!(cval.jac[i], cval.con, Z[k])
-		# 	end
-	    # end
+		if init
+			cval.is_const .= true
+		elseif all(cval.is_const)
+			return
+		end
+		jacobian!(cval.jac, cval.con, Z, cval.inds, cval.is_const)
 	end
 end
 

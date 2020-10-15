@@ -347,9 +347,10 @@ function jacobian!(
     con::StageConstraint,
     Z::AbstractTrajectory,
     inds = 1:length(Z),
+    is_const = BitArray(undef, size(∇c))
 )
     for (i, k) in enumerate(inds)
-        jacobian!(∇c[i], con, Z[k])
+        is_const[i] = jacobian!(∇c[i], con, Z[k])
     end
 end
 
@@ -358,10 +359,11 @@ function jacobian!(
     con::CoupledConstraint,
     Z::AbstractTrajectory,
     inds = 1:size(∇c, 1),
+    is_const = BitArray(undef, size(∇c))
 )
     for (i, k) in enumerate(inds)
-        jacobian!(∇c[i, 1], con, Z[k], Z[k+1], 1)
-        jacobian!(∇c[i, 2], con, Z[k], Z[k+1], 2)
+        is_const[i,1] = jacobian!(∇c[i, 1], con, Z[k], Z[k+1], 1)
+        is_const[i,2] = jacobian!(∇c[i, 2], con, Z[k], Z[k+1], 2)
     end
 end
 
