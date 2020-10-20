@@ -137,7 +137,8 @@ end
 function error_expansion!(E::Objective, Jexp::Objective, model::LieGroupModel, Z::Traj, G, tmp=G[end])
     for k in eachindex(E.cost)
         error_expansion!(E.cost[k], Jexp.cost[k], model, Z[k], G[k], tmp)
-    end
+	end
+	E.const_hess .= false   # hessian will always be dependent on the state
 end
 
 function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::AbstractKnotPoint,
@@ -155,7 +156,6 @@ function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::Abstr
         mul!(tmp, cost.Q, G)
         mul!(E.Q, Transpose(G), tmp, 1.0, 1.0)
 	end
-	E.const_hess[i] = false  # hessian will always be dependent on the state
     return nothing
 end
 
