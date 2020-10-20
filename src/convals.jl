@@ -105,7 +105,7 @@ end
 function max_violation!(cval::AbstractConstraintValues)
 	s = sense(cval.con)
     for i in eachindex(cval.inds)
-        cval.c_max[i] = violation(s, cval.vals[i])
+        cval.c_max[i] = violation(s, SVector(cval.vals[i]))
     end
 end
 
