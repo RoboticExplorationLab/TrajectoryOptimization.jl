@@ -171,3 +171,18 @@ function LQRObjective(
 
     Objective(ℓ, ℓN, N)
 end
+
+function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
+    costs = map(Z) do z
+        LQRCost(Q, R, state(z), control(z))
+    end
+    costs[end] = LQRCost(Qf, R, state(Z[end]))
+    Objective(costs)
+end
+
+function update_trajectory!(obj::QuadraticExpansion, Z::AbstractTrajectory, start=1)
+    inds = (start-1) .+ (1:length(obj))
+    for (i,k) in enumerate(inds)
+        set_LQR_goal!(obj[i], state(Z[k]), control(Z[k]))
+    end
+end

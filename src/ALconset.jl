@@ -290,3 +290,9 @@ function reset_penalties!(conSet::ALConstraintSet)
         _reset!(conSet.μ[i], conSet.params[i])
     end
 end
+
+function shift_fill!(conSet::ALConstraintSet, n=1)
+	for i = 1:length(conSet)
+		shift_fill!(conSet.convals[i], n)
+	end
+end
