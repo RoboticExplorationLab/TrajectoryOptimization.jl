@@ -139,6 +139,7 @@ Base.keys(cons::ConstraintList) = 1:length(cons)
 Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 
 @inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
+Base.getindex(cons::ConstraintList, I) = cons.constraints[I]
 
 for method in (:deepcopy, :copy)
 	@eval function Base.$method(cons::ConstraintList)
