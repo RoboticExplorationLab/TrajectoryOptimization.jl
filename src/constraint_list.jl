@@ -134,6 +134,7 @@ Base.IteratorEltype(::ConstraintList) = Base.HasEltype()
 Base.eltype(::ConstraintList) = AbstractConstraint
 Base.firstindex(::ConstraintList) = 1
 Base.lastindex(cons::ConstraintList) = length(cons.constraints)
+Base.keys(cons::ConstraintList) = 1:length(cons)
 
 Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 
