@@ -94,7 +94,7 @@ end
 
 function violation(cone::SecondOrderCone, x)
 	proj = projection(cone, x)
-	return norm(x - proj)
+	return norm(x - proj,Inf)
 end
 
 function max_violation(cval::AbstractConstraintValues)
