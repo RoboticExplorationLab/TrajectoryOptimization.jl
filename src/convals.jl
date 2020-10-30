@@ -87,12 +87,23 @@ function ∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, 
 	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.is_const[2], init)
 end
 
-@inline violation(::Equality, v) = norm(v,Inf)
-@inline violation(::Inequality, v) = max(0,maximum(v))
-@inline violation(::Equality, v::Real) = abs(v)
-@inline violation(::Inequality, v::Real) = v > 0 ? v : 0.0
+violation(::Equality, x) = x
+violation(cone::Conic, x) = projection(cone, x) - x
+∇violation!(::Equality, ∇v, ∇c, x, tmp=zeros(length(x), length(x))) = ∇v .= ∇c
+function ∇violation!(cone::Conic, ∇v, ∇c, x, tmp=zeros(length(x), length(x))) 
+	∇projection!(cone, tmp, x)
+	for i = 1:length(x)
+		tmp[i,i] -= 1
+	end
+	mul!(∇v, tmp, ∇c)
+end
 
-function violation(cone::SecondOrderCone, x)
+@inline max_violation(::Equality, v) = norm(v,Inf)
+@inline max_violation(::Inequality, v) = max(0,maximum(v))
+@inline max_violation(::Equality, v::Real) = abs(v)
+@inline max_violation(::Inequality, v::Real) = v > 0 ? v : 0.0
+
+function max_violation(cone::SecondOrderCone, x)
 	proj = projection(cone, x)
 	return norm(x - proj,Inf)
 end
@@ -105,7 +116,7 @@ end
 function max_violation!(cval::AbstractConstraintValues)
 	s = sense(cval.con)
     for i in eachindex(cval.inds)
-        cval.c_max[i] = violation(s, SVector(cval.vals[i]))
+        cval.c_max[i] = max_violation(s, SVector(cval.vals[i]))
     end
 end
 
