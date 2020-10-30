@@ -32,15 +32,14 @@ dualcone(::SecondOrderCone) = SecondOrderCone()
 projection(::NegativeOrthant, x) = min.(0, x)
 projection(::PositiveOrthant, x) = max.(0, x)
 
-function projection(::SecondOrderCone, x::StaticVector, dual=false)
+function projection(::SecondOrderCone, x::StaticVector)
     # assumes x is stacked [v; s] such that ||v||₂ ≤ s
     s = x[end]
     v = pop(x)
     a = norm(v)
-    d = dual ? -1 : 1
-    if a <= -s*d        # below the cone
+    if a <= -s          # below the cone
         return zero(x) 
-    elseif a <= s*d     # in the cone
+    elseif a <= s       # in the cone
         return x
     elseif a >= abs(s)  # outside the cone
         return 0.5 * (1 + s/a) * push(v, a)
@@ -119,9 +118,9 @@ function ∇²projection!(::SecondOrderCone, hess, x::StaticVector, b::StaticVec
     a =  norm(v)
 
     if a <= -s
-        return hess .*= 0
+        return hess .= 0
     elseif a <= s
-        return hess .*= 0
+        return hess .= 0
     elseif a > abs(s)
         dvdv = -s/norm(v)^2/norm(v)*(I - (v*v')/(v'v))*bv*v' + 
             s/norm(v)*((v*(v'bv))/(v'v)^2 * 2v' - (I*(v'bv) + v*bv')/(v'v)) + 
@@ -139,6 +138,18 @@ function ∇²projection!(::SecondOrderCone, hess, x::StaticVector, b::StaticVec
         throw(ErrorException("Invalid second-order cone projection"))
     end
 end
+
+function ∇projection!(::NegativeOrthant, J, x::StaticVector{n}) where n
+    for i = 1:n
+        J[i,i] = x <= 0 ? 1 : 0
+    end
+end
+
+function ∇²projection!(::NegativeOrthant, hess, x::StaticVector, b::StaticVector)
+    hess .= 0
+end
+
+Base.in(::NegativeOrthant, x::StaticVector) = all(x->x<=0, x)
 
 """
     AbstractConstraint
