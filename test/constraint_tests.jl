@@ -163,7 +163,7 @@ end
 #--- Norm Constraint
 @testset "Norm Constraint" begin
     ncon = NormConstraint(n,m, 2.0, Inequality(), 1:n)
-    @test TO.evaluate(ncon, z) ≈ [x'x - 2]
+    @test TO.evaluate(ncon, z) ≈ [x'x - 2^2]
     ∇c = TO.gen_jacobian(ncon)
     @test TO.jacobian!(∇c, ncon, z) == false
     @test ∇c ≈ [2x; 0]'
@@ -176,13 +176,13 @@ end
     @test TO.evaluate(ncon, z) ≈ TO.evaluate(ncon2, z)
 
     ncon2 = NormConstraint(n, m, 3.0, Equality(), :control)
-    @test TO.evaluate(ncon2, z) ≈ [u'u - 3]
+    @test TO.evaluate(ncon2, z) ≈ [u'u - 3^2]
     ∇c = TO.gen_jacobian(ncon2)
     @test TO.jacobian!(∇c, ncon2, z) == false
     @test ∇c ≈ [zeros(n); 2u]'
 
     ncon3 = NormConstraint(n, m, 4.0, Inequality(), SA[1,3,5])
-    @test TO.evaluate(ncon3, z) ≈ [x[1]^2 + x[3]^2 + u'u - 4]
+    @test TO.evaluate(ncon3, z) ≈ [x[1]^2 + x[3]^2 + u'u - 4^2]
     ∇c = TO.gen_jacobian(ncon3)
     @test TO.jacobian!(∇c, ncon3, z) == false
     @test ∇c ≈ [2x[1] 0 2x[3] 0 2u[1]]

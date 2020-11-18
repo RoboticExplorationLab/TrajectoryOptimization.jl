@@ -19,6 +19,7 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
     ∇u::Matrix{W}
     c_max::Vector{Float64}
 	is_const::BitArray{2}
+	const_hess::BitVector
 	iserr::Bool  # are the Jacobians on the error state
 	function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::Union{Vector{Int},UnitRange}, 
 			jac, vals, iserr::Bool=false)
@@ -35,8 +36,9 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
 		∇u = [v[2] for v in views]
         c_max = zeros(P)
 		is_const = BitArray(undef, size(jac)) 
+		const_hess = BitVector(undef, P)
         new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
-			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
+			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, const_hess, iserr)
     end
 end
 
@@ -66,6 +68,8 @@ function _index(cval::AbstractConstraintValues, k::Int)
 	end
 end
 
+Base.length(cval::AbstractConstraintValues) = length(cval.con)
+
 function evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
 	evaluate!(cval.vals, cval.con, Z, cval.inds)
 end
@@ -84,7 +88,7 @@ function jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory, init::
 end
 
 function ∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, λ, init::Bool=false)
-	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.is_const[2], init)
+	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.const_hess, init)
 end
 
 violation(::Equality, x) = x
@@ -115,8 +119,9 @@ end
 
 function max_violation!(cval::AbstractConstraintValues)
 	s = sense(cval.con)
+	P = length(cval)
     for i in eachindex(cval.inds)
-        cval.c_max[i] = max_violation(s, SVector(cval.vals[i]))
+        cval.c_max[i] = max_violation(s, SVector{P}(cval.vals[i]))
     end
 end
 
