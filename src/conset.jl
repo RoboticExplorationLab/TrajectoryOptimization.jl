@@ -128,10 +128,10 @@ function findmax_violation(conSet::AbstractConstraintSet)
 	end
 	convals = get_convals(conSet)
 	conval = convals[j_con]
-	i_con = findmax(conval.c_max)[2]  # which index
+	i_con = argmax(conval.c_max) # which index
 	k_con = conval.inds[i_con] # time step
 	con_sense = sense(conval.con)
-	viol = [violation(con_sense, v) for v in conval.vals[i_con]]
+	viol = abs.(violation(con_sense, conval.vals[i_con])) 
 	c_max, i_max = findmax(viol)  # index into constraint
 	@assert c_max == c_max0
 	con_name = string(typeof(conval.con).name)
