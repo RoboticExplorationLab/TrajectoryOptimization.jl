@@ -24,8 +24,8 @@ Objective(costs::Vector{<:CostFunction})
 struct Objective{C} <: AbstractObjective
     cost::Vector{C}
     J::Vector{Float64}
-    const_grad::Vector{Bool}
-    const_hess::Vector{Bool}
+    const_grad::BitVector
+    const_hess::BitVector
     function Objective(cost::Vector{C}) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
@@ -37,6 +37,18 @@ end
 
 state_dim(obj::Objective) = state_dim(obj.cost[1])
 control_dim(obj::Objective) = control_dim(obj.cost[1])
+
+"""
+    is_quadratic(obj::Objective)
+
+Only valid for a cost expansion, i.e. an objective containing the 2nd order expansion of 
+    another objective. Determines if the original objective is a quadratic function, or 
+    in other words, if the hessian of the objective is constant. 
+
+For example, if the original cost function is an augmented Lagrangian cost function, the
+    result will return true only if all constraints are linear.
+"""
+is_quadratic(obj::Objective) = all(obj.const_hess)
 
 # Constructors
 function Objective(cost::CostFunction,N::Int)
@@ -158,4 +170,19 @@ function LQRObjective(
     ℓN = DiagonalCost(Qf, R, qf, r, cf, checks=false, terminal=true)
 
     Objective(ℓ, ℓN, N)
+end
+
+function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
+    costs = map(Z) do z
+        LQRCost(Q, R, state(z), control(z))
+    end
+    costs[end] = LQRCost(Qf, R, state(Z[end]))
+    Objective(costs)
+end
+
+function update_trajectory!(obj::QuadraticExpansion, Z::AbstractTrajectory, start=1)
+    inds = (start-1) .+ (1:length(obj))
+    for (i,k) in enumerate(inds)
+        set_LQR_goal!(obj[i], state(Z[k]), control(Z[k]))
+    end
 end

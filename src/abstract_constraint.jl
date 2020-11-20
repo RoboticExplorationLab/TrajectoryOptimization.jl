@@ -7,16 +7,149 @@ Valid subtypes are `Equality`, and `Inequality`.
 The sense of a constraint can be queried using `sense(::AbstractConstraint)`
 """
 abstract type ConstraintSense end
+abstract type Conic <: ConstraintSense end
+
 """
 Inequality constraints of the form ``h(x) \\leq 0``.
 Type singleton, so it is created with `Inequality()`
 """
-struct Equality <: ConstraintSense end
+struct Equality <: Conic end
 """
 Equality constraints of the form ``g(x) = 0`.
 Type singleton, so it is created with `Equality()`.
 """
-struct Inequality <: ConstraintSense end
+struct NegativeOrthant <: Conic end
+const Inequality = NegativeOrthant
+
+struct PositiveOrthant <: Conic end 
+
+struct SecondOrderCone <: Conic end
+
+dualcone(::NegativeOrthant) = NegativeOrthant()
+dualcone(::PositiveOrthant) = PositiveOrthant()
+dualcone(::SecondOrderCone) = SecondOrderCone()
+
+projection(::NegativeOrthant, x) = min.(0, x)
+projection(::PositiveOrthant, x) = max.(0, x)
+
+function projection(::SecondOrderCone, x::StaticVector)
+    # assumes x is stacked [v; s] such that ||v||₂ ≤ s
+    s = x[end]
+    v = pop(x)
+    a = norm(v)
+    if a <= -s          # below the cone
+        return zero(x) 
+    elseif a <= s       # in the cone
+        return x
+    elseif a >= abs(s)  # outside the cone
+        return 0.5 * (1 + s/a) * push(v, a)
+    else
+        throw(ErrorException("Invalid second-order cone projection"))
+    end
+end
+
+function ∇projection!(::SecondOrderCone, J, x::StaticVector{n}) where n
+    s = x[end]
+    v = pop(x)
+    a = norm(v)
+    if a <= -s                               # below cone
+        J .*= 0
+    elseif a <= s                            # in cone
+        J .*= 0
+        for i = 1:n
+            J[i,i] = 1.0
+        end
+    elseif a >= abs(s)                       # outside cone
+        # scalar
+        b = 0.5 * (1 + s/a)   
+        dbdv = -0.5*s/a^3 * v
+        dbds = 0.5 / a
+
+        # dvdv = dbdv * v' + b * oneunit(SMatrix{n-1,n-1,T})
+        for i = 1:n-1, j = 1:n-1
+            J[i,j] = dbdv[i] * v[j]
+            if i == j
+                J[i,j] += b
+            end
+        end
+
+        # dvds
+        J[1:n-1,n] .= dbds * v
+
+        # ds
+        dsdv = dbdv * a + b * v / a 
+        dsds = dbds * a
+        ds = push(dsdv, dsds)
+        J[n,:] .= ds
+    else
+        throw(ErrorException("Invalid second-order cone projection"))
+    end
+    return J
+end
+
+function Base.in(x, ::SecondOrderCone)
+    s = x[end]
+    v = pop(x)
+    a = norm(v)
+    return a <= s
+end
+
+function cone_status(::SecondOrderCone, x)
+    s = x[end]
+    v = pop(x)
+    a = norm(v)
+    if a <= -s
+        return :below
+    elseif a <= s
+        return :in
+    elseif a > abs(s)
+        return :outside
+    else
+        return :invalid
+    end
+end
+
+function ∇²projection!(::SecondOrderCone, hess, x::StaticVector, b::StaticVector)
+    n = length(x)
+    s = x[end]
+    v = pop(x)
+    bs = b[end]
+    bv = pop(b)
+    a =  norm(v)
+
+    if a <= -s
+        return hess .= 0
+    elseif a <= s
+        return hess .= 0
+    elseif a > abs(s)
+        dvdv = -s/norm(v)^2/norm(v)*(I - (v*v')/(v'v))*bv*v' + 
+            s/norm(v)*((v*(v'bv))/(v'v)^2 * 2v' - (I*(v'bv) + v*bv')/(v'v)) + 
+            bs/norm(v)*(I - (v*v')/(v'v))
+        dvds = 1/norm(v)*(I - (v*v')/(v'v))*bv;
+        dsdv = bv'/norm(v) - v'bv/norm(v)^3*v'
+        dsds = 0
+        hess[1:n-1,1:n-1] .= dvdv*0.5
+        hess[1:n-1,n] .= dvds*0.5
+        hess[n:n,1:n-1] .= dsdv*0.5
+        hess[n,n] = 0
+        return hess
+        # return 0.5*[dvdv dvds; dsdv dsds]
+    else
+        throw(ErrorException("Invalid second-order cone projection"))
+    end
+end
+
+function ∇projection!(::NegativeOrthant, J, x::StaticVector{n}) where n
+    for i = 1:n
+        J[i,i] = x <= 0 ? 1 : 0
+    end
+end
+
+function ∇²projection!(::NegativeOrthant, hess, x::StaticVector, b::StaticVector)
+    hess .= 0
+end
+
+Base.in(::NegativeOrthant, x::StaticVector) = all(x->x<=0, x)
 
 """
     AbstractConstraint
@@ -225,9 +358,10 @@ function jacobian!(
     con::StageConstraint,
     Z::AbstractTrajectory,
     inds = 1:length(Z),
+    is_const = BitArray(undef, size(∇c))
 )
     for (i, k) in enumerate(inds)
-        jacobian!(∇c[i], con, Z[k])
+        is_const[i] = jacobian!(∇c[i], con, Z[k])
     end
 end
 
@@ -236,10 +370,11 @@ function jacobian!(
     con::CoupledConstraint,
     Z::AbstractTrajectory,
     inds = 1:size(∇c, 1),
+    is_const = BitArray(undef, size(∇c))
 )
     for (i, k) in enumerate(inds)
-        jacobian!(∇c[i, 1], con, Z[k], Z[k+1], 1)
-        jacobian!(∇c[i, 2], con, Z[k], Z[k+1], 2)
+        is_const[i,1] = jacobian!(∇c[i, 1], con, Z[k], Z[k+1], 1)
+        is_const[i,2] = jacobian!(∇c[i, 2], con, Z[k], Z[k+1], 2)
     end
 end
 

@@ -48,6 +48,11 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
         @assert tf > t0
+        @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
+        @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
+        @assert constraints.n == n "Constraint state dimension doesn't match model"
+        @assert constraints.m == m "Constraint control dimension doesn't match model"
+        @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
         new{Q,T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
@@ -195,7 +200,7 @@ cost(::Problem)
 cost(::AbstractSolver)
 ```
 Compute the cost for the current trajectory"
-@inline cost(prob::Problem) = cost(prob.obj, prob.Z)
+@inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
 
 "Copy the problem"
 function copy(prob::Problem{Q}) where Q
@@ -261,7 +266,7 @@ function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) wher
     add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
 
     # Initial condition
-    init_con = GoalConstraint(prob.x0)
+    init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
     add_constraint!(conSet, init_con, 1, 1)  # add it at the top
 
     return nothing

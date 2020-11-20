@@ -104,7 +104,7 @@ cons_and_inds[1] == (bnd,1:n-1)            # (true)
 ```
 """
 function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
-	@assert check_dims(con, cons.n, cons.m) "New constaint not consistent with n=$(cons.n) and m=$(cons.m)"
+	@assert check_dims(con, cons.n, cons.m) "New constraint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
 		idx = -1
@@ -134,10 +134,12 @@ Base.IteratorEltype(::ConstraintList) = Base.HasEltype()
 Base.eltype(::ConstraintList) = AbstractConstraint
 Base.firstindex(::ConstraintList) = 1
 Base.lastindex(cons::ConstraintList) = length(cons.constraints)
+Base.keys(cons::ConstraintList) = 1:length(cons)
 
 Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 
 @inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
+Base.getindex(cons::ConstraintList, I) = cons.constraints[I]
 
 for method in (:deepcopy, :copy)
 	@eval function Base.$method(cons::ConstraintList)

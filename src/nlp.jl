@@ -400,6 +400,14 @@ function RobotDynamics.set_controls!(Z::NLPTraj, U0)
 	end
 end
 
+function RobotDynamics.rollout!(::Type{Q}, model::AbstractModel, Z::NLPTraj, x0=state(Z[1])) where Q <: RD.QuadratureRule
+	xinds = Z.Zdata.xinds
+	Z.Z[xinds[1]] = x0
+	for k = 1:length(Z)-1
+		Z.Z[xinds[k+1]] = RD.discrete_dynamics(Q, model, Z[k])
+	end
+end
+
 #--- TrajOpt NLP Problem
 
 mutable struct NLPOpts{T}
@@ -453,7 +461,10 @@ struct TrajOptNLP{n,m,T} <: MOI.AbstractNLPEvaluator
 	opts::NLPOpts{T}
 end
 
-function TrajOptNLP(prob::Problem; remove_bounds::Bool=false, jac_type=:sparse)
+function TrajOptNLP(prob::Problem; remove_bounds::Bool=false, jac_type=:sparse, add_dynamics=false)
+	if add_dynamics
+		add_dynamics_constraints!(prob)
+	end
 	n,m,N = size(prob)
 	NN = N*n + (N-1)*m  # number of primal variables
 
@@ -500,6 +511,16 @@ end
 @inline max_violation(nlp::TrajOptNLP) = max_violation(get_constraints(nlp))
 @inline initial_trajectory!(nlp::TrajOptNLP, Z0::AbstractTrajectory) = 
 	copyto!(get_trajectory(nlp), Z0)
+
+function integration(nlp::TrajOptNLP)
+	conSet = get_constraints(nlp)
+	for i = 1:length(conSet)
+		if conSet.convals[i].con isa DynamicsConstraint
+			return integration(conSet.convals[i].con)
+		end
+	end
+end
+rollout!(nlp::TrajOptNLP) = rollout!(integration(nlp), get_model(nlp), get_trajectory(nlp))
 
 #---  Evaluation methods
 
