@@ -61,14 +61,14 @@ function dynamics_expansion!(Q, D::Vector{<:DynamicsExpansion}, model::AbstractM
 	end
 end
 
-function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, model::AbstractModel,
-		Z::Traj, Q=RobotDynamics.RK3)
-	for k in eachindex(D)
-		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k])
-		D[k].tmpA .= D[k].A_  # avoids allocations later
-		D[k].tmpB .= D[k].B_
-	end
-end
+# function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, model::AbstractModel,
+# 		Z::Traj, Q=RobotDynamics.RK3)
+# 	for k in eachindex(D)
+# 		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k])
+# 		D[k].tmpA .= D[k].A_  # avoids allocations later
+# 		D[k].tmpB .= D[k].B_
+# 	end
+# end
 
 
 function error_expansion!(D::DynamicsExpansion,G1,G2)

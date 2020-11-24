@@ -2,13 +2,14 @@
 @inline get_data(A::AbstractArray) = A
 @inline get_data(A::SizedArray) = A.data
 
+abstract type AbstractConstraintValues{C<:AbstractConstraint} end
 
 """
 	ConVal{C,V,M,W}
 
 Holds information about a constraint
 """
-struct ConVal{C,V,M,W}
+struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
     con::C
     inds::Vector{Int}
     vals::Vector{V}
@@ -17,7 +18,8 @@ struct ConVal{C,V,M,W}
     ∇x::Matrix{W}
     ∇u::Matrix{W}
     c_max::Vector{Float64}
-	is_const::Vector{Vector{Bool}}  # are the Jacobians constant
+	is_const::BitArray{2}
+	const_hess::BitVector
 	iserr::Bool  # are the Jacobians on the error state
 	function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::Union{Vector{Int},UnitRange}, 
 			jac, vals, iserr::Bool=false)
@@ -33,9 +35,10 @@ struct ConVal{C,V,M,W}
 		∇x = [v[1] for v in views]
 		∇u = [v[2] for v in views]
         c_max = zeros(P)
-		is_const = [zeros(Bool,P), zeros(Bool,P)]
+		is_const = BitArray(undef, size(jac)) 
+		const_hess = BitVector(undef, P)
         new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
-			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, iserr)
+			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, const_hess, iserr)
     end
 end
 
@@ -57,7 +60,7 @@ function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::UnitRange{Int}, i
 	ConVal(n, m, con, inds, C, c)
 end
 
-function _index(cval::ConVal, k::Int)
+function _index(cval::AbstractConstraintValues, k::Int)
 	if k ∈ cval.inds
 		return k - cval.inds[1] + 1
 	else
@@ -65,42 +68,60 @@ function _index(cval::ConVal, k::Int)
 	end
 end
 
-function evaluate!(cval::ConVal, Z::AbstractTrajectory)
+Base.length(cval::AbstractConstraintValues) = length(cval.con)
+
+function evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
 	evaluate!(cval.vals, cval.con, Z, cval.inds)
 end
 
-function jacobian!(cval::ConVal, Z::AbstractTrajectory, init::Bool=false)
+function jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory, init::Bool=false)
 	if cval.iserr
 		throw(ErrorException("Can't evaluate Jacobians directly on the error state Jacobians"))
 	else
-		jacobian!(cval.jac, cval.con, Z, cval.inds)
-		# is_const = cval.is_const
-	    # for (i,k) in enumerate(cval.inds)
-		# 	if init || !is_const[i]
-	    #     	is_const[i] = jacobian!(cval.jac[i], cval.con, Z[k])
-		# 	end
-	    # end
+		if init
+			cval.is_const .= true
+		elseif all(cval.is_const)
+			return
+		end
+		jacobian!(cval.jac, cval.con, Z, cval.inds, cval.is_const)
 	end
 end
 
-function ∇jacobian!(G, cval::ConVal, Z::AbstractTrajectory, λ, init::Bool=false)
-	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.is_const[2], init)
+function ∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, λ, init::Bool=false)
+	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.const_hess, init)
 end
 
-@inline violation(::Equality, v) = norm(v,Inf)
-@inline violation(::Inequality, v) = maximum(v)
-@inline violation(::Equality, v::Real) = abs(v)
-@inline violation(::Inequality, v::Real) = v > 0 ? v : 0.0
+violation(::Equality, x) = x
+violation(cone::Conic, x) = projection(cone, x) - x
+∇violation!(::Equality, ∇v, ∇c, x, tmp=zeros(length(x), length(x))) = ∇v .= ∇c
+function ∇violation!(cone::Conic, ∇v, ∇c, x, tmp=zeros(length(x), length(x))) 
+	∇projection!(cone, tmp, x)
+	for i = 1:length(x)
+		tmp[i,i] -= 1
+	end
+	mul!(∇v, tmp, ∇c)
+end
 
-function max_violation(cval::ConVal)
+@inline max_violation(::Equality, v) = norm(v,Inf)
+@inline max_violation(::Inequality, v) = max(0,maximum(v))
+@inline max_violation(::Equality, v::Real) = abs(v)
+@inline max_violation(::Inequality, v::Real) = v > 0 ? v : 0.0
+
+function max_violation(cone::SecondOrderCone, x)
+	proj = projection(cone, x)
+	return norm(x - proj,Inf)
+end
+
+function max_violation(cval::AbstractConstraintValues)
 	max_violation!(cval)
     return maximum(cval.c_max)
 end
 
-function max_violation!(cval::ConVal)
+function max_violation!(cval::AbstractConstraintValues)
 	s = sense(cval.con)
+	P = length(cval)
     for i in eachindex(cval.inds)
-        cval.c_max[i] = violation(s, cval.vals[i])
+        cval.c_max[i] = max_violation(s, SVector{P}(cval.vals[i]))
     end
 end
 
@@ -127,19 +148,19 @@ end
 	end
 end
 
-function norm_violation(cval::ConVal, p=2)
+function norm_violation(cval::AbstractConstraintValues, p=2)
 	norm_violation!(cval, p)
 	return norm(cval.c_max, p)
 end
 
-function norm_violation!(cval::ConVal, p=2)
+function norm_violation!(cval::AbstractConstraintValues, p=2)
 	s = sense(cval.con)
 	for i in eachindex(cval.inds)
 		cval.c_max[i] = norm_violation(s, cval.vals[i], p)
 	end
 end
 
-function norm_dgrad!(cval::ConVal, Z::AbstractTrajectory, p=1)
+function norm_dgrad!(cval::AbstractConstraintValues, Z::AbstractTrajectory, p=1)
 	for (i,k) in enumerate(cval.inds)
 		zs = RobotDynamics.get_z(cval.con, Z, k)
 		mul!(cval.vals2[i], cval.jac[i,1], zs[1])
@@ -174,7 +195,7 @@ function norm_dgrad(x, dx, p=1)
 	return g
 end
 
-function norm_residual!(res, cval::ConVal, λ::Vector{<:AbstractVector}, p=2)
+function norm_residual!(res, cval::AbstractConstraintValues, λ::Vector{<:AbstractVector}, p=2)
 	for (i,k) in enumerate(cval.inds)
 		mul!(res[i], cval.jac[i,1], λ[i])
 		if size(cval.jac,2) > 1
@@ -185,7 +206,7 @@ function norm_residual!(res, cval::ConVal, λ::Vector{<:AbstractVector}, p=2)
 	return nothing
 end
 
-function error_expansion!(errval::ConVal, conval::ConVal, model::AbstractModel, G)
+function error_expansion!(errval::AbstractConstraintValues, conval::AbstractConstraintValues, model::AbstractModel, G)
 	if errval.jac !== conval.jac
 		for (i,k) in enumerate(conval.inds)
 			mul!(errval.∇x[i], conval.∇x[i], get_data(G[k]))
@@ -203,7 +224,7 @@ function gen_convals(n̄::Int, m::Int, con::AbstractConstraint, inds)
     p = length(con)
 	ws = widths(con, n̄,m)
     C = [SizedMatrix{p,w}(zeros(p,w)) for k in inds, w in ws]
-    c = [@MVector zeros(p) for k in inds]
+	c = [@MVector zeros(p) for k in inds]
     return C, c
 end
 

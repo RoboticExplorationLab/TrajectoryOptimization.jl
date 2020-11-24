@@ -12,9 +12,11 @@ using ForwardDiff
 using UnsafeArrays
 using SparseArrays
 using MathOptInterface
+using Rotations
 const MOI = MathOptInterface
 
 import RobotDynamics
+const RD = RobotDynamics
 
 using RobotDynamics: AbstractModel, LieGroupModel,
 	KnotPoint, StaticKnotPoint, AbstractKnotPoint,
@@ -66,6 +68,7 @@ export
 
 include("expansions.jl")
 include("costfunctions.jl")
+include("lie_costs.jl")
 include("objective.jl")
 
 include("abstract_constraint.jl")

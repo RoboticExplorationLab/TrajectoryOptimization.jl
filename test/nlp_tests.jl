@@ -133,7 +133,7 @@ D = nlp.data.D
 # Test Hessian lagrangian
 nlp.conSet.λ[end][1] .= 0
 @test TO.hess_L!(nlp, Z) ≈ G
-nlp.conSet.λ[end][1] .= rand(n)
+nlp.conSet.λ[end][1] .= rand(n) * 1000
 @test !(TO.hess_L!(nlp, Z) ≈ G)
 
 # Test cost hessian structure

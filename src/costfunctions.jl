@@ -49,6 +49,16 @@ function (::Type{QC})(Q::AbstractArray, R::AbstractArray;
     QC(Q, R, H, q, r, c; kwargs...)
 end
 
+function QuadraticCostFunction(Q::AbstractArray, R::AbstractArray,
+        H::AbstractArray, q::AbstractVector, r::AbstractVector, c::Real;
+        kwargs...)
+    if LinearAlgebra.isdiag(Q) && LinearAlgebra.isdiag(R) && norm(H) ≈ 0
+        DiagonalCost(diag(Q), diag(R), q, r, c)
+    else
+        QuadraticCost(Q, R, H, q, r, c; kwargs...)
+    end
+end
+
 """
     stage_cost(costfun::CostFunction, x, u)
     stage_cost(costfun::CostFunction, x)
@@ -150,8 +160,8 @@ function +(c1::QuadraticCostFunction, c2::QuadraticCostFunction)
     @assert state_dim(c1) == state_dim(c2)
     @assert control_dim(c1) == control_dim(c2)
     n,m = state_dim(c1), control_dim(c1)
-    H1 = c1 isa DiagonalCost ? zeros(m,n) : c1.H
-    H2 = c2 isa DiagonalCost ? zeros(m,n) : c2.H
+    H1 = is_diag(c1) ? zeros(m,n) : c1.H
+    H2 = is_diag(c2) ? zeros(m,n) : c2.H
     QC = promote_type(typeof(c1), typeof(c2))
     QC(c1.Q + c2.Q, c1.R + c2.R, H1 + H2,
        c1.q + c2.q, c1.r + c2.r, c1.c + c2.c,
@@ -221,7 +231,7 @@ struct DiagonalCost{n,m,T} <: QuadraticCostFunction{n,m,T}
     terminal::Bool
     function DiagonalCost(Qd::StaticVector{n}, Rd::StaticVector{m},
                           q::StaticVector{n},  r::StaticVector{m},
-                          c::Real; terminal::Bool=false, checks::Bool=true) where {n,m}
+                          c::Real; terminal::Bool=false, checks::Bool=true, kwargs...) where {n,m}
         T = promote_type(typeof(c), eltype(Qd), eltype(Rd), eltype(q), eltype(r))
         if checks
             if any(x->x<0, Qd)
@@ -318,7 +328,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     terminal::Bool
     zeroH::Bool
     function (::Type{QC})(Q::TQ, R::TR, H::TH,
-            q::Tq, r::Tr, c::Real; checks=true, terminal=false) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
+            q::Tq, r::Tr, c::Real; checks=true, terminal=false, kwargs...) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
         @assert size(Q,1) == length(q)
         @assert size(R,1) == length(r)
         @assert size(H) == (length(r), length(q))
@@ -423,7 +433,7 @@ function LQRCost(Q::AbstractArray, R::AbstractArray,
     q = -Q*xf
     r = -R*uf
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
-    return DiagonalCost(Q, R, H, q, r, c, kwargs...)
+    return QuadraticCostFunction(Q, R, H, q, r, c, kwargs...)
 end
 
 function LQRCost(Q::Diagonal{<:Any,<:SVector{n}},R::Diagonal{<:Any,<:SVector{m}},
@@ -433,240 +443,3 @@ function LQRCost(Q::Diagonal{<:Any,<:SVector{n}},R::Diagonal{<:Any,<:SVector{m}}
     c = 0.5*xf'*Q*xf + 0.5*uf'R*uf
     return DiagonalCost(Q, R, q, r, c; kwargs...)
 end
-
-
-
-############################################################################################
-#                        QUADRATIC QUATERNION COST FUNCTION
-############################################################################################
-
-struct QuadraticQuatCost{T,N,M,N4} <: CostFunction
-    Q::Diagonal{T,SVector{N,T}}
-    R::Diagonal{T,SVector{M,T}}
-    q::SVector{N,T}
-    r::SVector{M,T}
-    c::T
-    w::T
-    q_ref::SVector{4,T}
-    q_ind::SVector{4,Int}
-    Iq::SMatrix{N,4,T,N4}
-    function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
-            q::SVector{N,T}, r::SVector{M,T}, c::T, w::T,
-            q_ref::SVector{4,T}, q_ind::SVector{4,Int}) where {T,N,M}
-        Iq = @MMatrix zeros(N,4)
-        for i = 1:4
-            Iq[q_ind[i],i] = 1
-        end
-        Iq = SMatrix{N,4}(Iq)
-        return new{T,N,M,N*4}(Q, R, q, r, c, w, q_ref, q_ind, Iq)
-    end
-end
-
-
-state_dim(::QuadraticQuatCost{T,N,M}) where {T,N,M} = N
-control_dim(::QuadraticQuatCost{T,N,M}) where {T,N,M} = M
-
-function QuadraticQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}};
-        q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T), w=one(T),
-        q_ref=(@SVector [1.0,0,0,0]), q_ind=(@SVector [4,5,6,7])) where {T,N,M}
-    QuadraticQuatCost(Q, R, q, r, c, q_ref, q_ind)
-end
-
-function stage_cost(cost::QuadraticQuatCost, x::SVector, u::SVector)
-    stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
-end
-
-function stage_cost(cost::QuadraticQuatCost, x::SVector)
-    J = 0.5*x'cost.Q*x + cost.q'x + cost.c
-    q = x[cost.q_ind]
-    dq = cost.q_ref'q
-    J += cost.w*min(1+dq, 1-dq)
-end
-
-function gradient(cost::QuadraticQuatCost{T,N,M}, x::SVector, u::SVector) where {T,N,M}
-    Qx = cost.Q*x + cost.q
-    q = x[cost.q_ind]
-    dq = cost.q_ref'q
-    if dq < 0
-        Qx += cost.w*cost.Iq*cost.q_ref
-    else
-        Qx -= cost.w*cost.Iq*cost.q_ref
-    end
-    Qu = cost.R*u + cost.r
-    return Qx, Qu
-end
-
-function hessian(cost::QuadraticQuatCost, x::SVector{N}, u::SVector{M}) where {N,M}
-    Qxx = cost.Q
-    Quu = cost.R
-    Qux = @SMatrix zeros(M,N)
-    return Qxx, Quu, Qux
-end
-
-function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
-        uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
-    r = -R*uf
-    q = -Q*xf
-    c = 0.5*xf'Q*xf + 0.5*uf'R*uf
-    q_ref = xf[quat_ind]
-    return QuadraticQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
-end
-
-function change_dimension(cost::QuadraticQuatCost, n, m)
-    n0,m0 = state_dim(cost), control_dim(cost)
-    Q_diag = diag(cost.Q)
-    R_diag = diag(cost.R)
-    q = cost.q
-    r = cost.r
-    if n0 != n
-        dn = n - n0  # assumes n > n0
-        pad = @SVector zeros(dn)
-        Q_diag = [Q_diag; pad]
-        q = [q; pad]
-    end
-    if m0 != m
-        dm = m - m0  # assumes m > m0
-        pad = @SVector zeros(dm)
-        R_diag = [R_diag; pad]
-        r = [r; pad]
-    end
-    QuadraticQuatCost(Diagonal(Q_diag), Diagonal(R_diag), q, r, cost.c, cost.w,
-        cost.q_ref, cost.q_ind)
-end
-
-function (+)(cost1::QuadraticQuatCost, cost2::QuadraticCost)
-    @assert state_dim(cost1) == state_dim(cost2)
-    @assert control_dim(cost1) == control_dim(cost2)
-    @assert norm(cost2.H) ≈ 0
-    QuadraticQuatCost(cost1.Q + cost2.Q, cost1.R + cost2.R,
-        cost1.q + cost2.q, cost1.r + cost2.r, cost1.c + cost2.c,
-        cost1.w, cost1.q_ref, cost1.q_ind)
-end
-
-(+)(cost1::QuadraticCost, cost2::QuadraticQuatCost) = cost2 + cost1
-
-
-#
-#
-# struct ErrorQuadratic{Rot,N,M} <: CostFunction
-#     model::RigidBody{Rot}
-#     Q::Diagonal{Float64,SVector{12,Float64}}
-#     R::Diagonal{Float64,SVector{M,Float64}}
-#     r::SVector{M,Float64}
-#     c::Float64
-#     x_ref::SVector{N,Float64}
-#     q_ind::SVector{4,Int}
-# end
-#
-#
-# state_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = N
-# control_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = M
-#
-# function ErrorQuadratic(model::RigidBody{Rot}, Q::Diagonal{T,<:SVector{12}},
-#         R::Diagonal{T,<:SVector{M}},
-#         x_ref::SVector{N}, u_ref=(@SVector zeros(T,M)); r=(@SVector zeros(T,M)), c=zero(T),
-#         q_ind=(@SVector [4,5,6,7])) where {T,N,M,Rot}
-#     r += -R*u_ref
-#     c += 0.5*u_ref'R*u_ref
-#     return ErrorQuadratic{Rot,N,M}(model, Q, R, r, c, x_ref, q_ind)
-# end
-#
-# function stage_cost(cost::ErrorQuadratic, x::SVector)
-#     dx = state_diff(cost.model, x, cost.x_ref)
-#     return 0.5*dx'cost.Q*dx + cost.c
-# end
-#
-# function stage_cost(cost::ErrorQuadratic, x::SVector, u::SVector)
-#     stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
-# end
-#
-# function cost_expansion(cost::ErrorQuadratic{Rot}, model::AbstractModel,
-#         z::KnotPoint{T,N,M}, G) where {T,N,M,Rot<:UnitQuaternion}
-#     x,u = state(z), control(z)
-#     model = cost.model
-#     Q = cost.Q
-#     q = orientation(model, x)
-#     q_ref = orientation(model, cost.x_ref)
-#     dq = SVector(q_ref\q)
-#     err = state_diff(model, x, cost.x_ref)
-#     dx = @SVector [err[1],  err[2],  err[3],
-#                     dq[1],   dq[2],   dq[3],   dq[4],
-#                    err[7],  err[8],  err[9],
-#                    err[10], err[11], err[12]]
-#     G = state_diff_jacobian(model, dx) # n × dn
-#
-#     # Gradient
-#     dmap = inverse_map_jacobian(model, dx) # dn × n
-#     Qx = G'dmap'Q*err
-#     Qu = cost.R*u
-#
-#     # Hessian
-#     ∇jac = inverse_map_∇jacobian(model, dx, Q*err)
-#     Qxx = G'dmap'Q*dmap*G + G'∇jac*G + ∇²differential(model, x, dmap'Q*err)
-#     Quu = cost.R
-#     Qux = @SMatrix zeros(M,N-1)
-#     return Qxx, Quu, Qux, Qx, Qu
-# end
-#
-# function cost_expansion(cost::ErrorQuadratic, model::AbstractModel,
-#         z::KnotPoint{T,N,M}, G) where {T,N,M}
-#     x,u = state(z), control(z)
-#     model = cost.model
-#     q = orientation(model, x)
-#     q_ref = orientation(model, cost.x_ref)
-#     err = state_diff(model, x, cost.x_ref)
-#     dx = err
-#     G = state_diff_jacobian(model, dx) # n × n
-#
-#     # Gradient
-#     dmap = inverse_map_jacobian(model, dx) # n × n
-#     Qx = G'dmap'cost.Q*err
-#     Qu = cost.R*u + cost.r
-#
-#     # Hessian
-#     Qxx = G'dmap'cost.Q*dmap*G
-#     Quu = cost.R
-#     Qux = @SMatrix zeros(M,N)
-#     return Qxx, Quu, Qux, Qx, Qu
-# end
-#
-# function change_dimension(cost::ErrorQuadratic, n, m)
-#     n0,m0 = state_dim(cost), control_dim(cost)
-#     Q_diag = diag(cost.Q)
-#     R_diag = diag(cost.R)
-#     r = cost.r
-#     if n0 != n
-#         dn = n - n0  # assumes n > n0
-#         pad = @SVector zeros(dn) # assume the new states don't have quaternions
-#         Q_diag = [Q_diag; pad]
-#     end
-#     if m0 != m
-#         dm = m - m0  # assumes m > m0
-#         pad = @SVector zeros(dm)
-#         R_diag = [R_diag; pad]
-#         r = [r; pad]
-#     end
-#     ErrorQuadratic(cost.model, Diagonal(Q_diag), Diagonal(R_diag), r, cost.c,
-#         cost.x_ref, cost.q_ind)
-# end
-#
-# function (+)(cost1::ErrorQuadratic, cost2::QuadraticCost)
-#     @assert control_dim(cost1) == control_dim(cost2)
-#     @assert norm(cost2.H) ≈ 0
-#     @assert norm(cost2.q) ≈ 0
-#     if state_dim(cost2) == 13
-#         rm_quat = @SVector [1,2,3,4,5,6,8,9,10,11,12,13]
-#         Q2 = Diagonal(diag(cost2.Q)[rm_quat])
-#     else
-#         Q2 = cost2.Q
-#     end
-#     ErrorQuadratic(cost1.model, cost1.Q + Q2, cost1.R + cost2.R,
-#         cost1.r + cost2.r, cost1.c + cost2.c,
-#         cost1.x_ref, cost1.q_ind)
-# end
-#
-# (+)(cost1::QuadraticCost, cost2::ErrorQuadratic) = cost2 + cost1
-#
-#
-#
-#

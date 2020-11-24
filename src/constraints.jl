@@ -38,6 +38,9 @@ struct GoalConstraint{P,T} <: StateConstraint
 	function GoalConstraint(xf::AbstractVector{T}, inds::SVector{p,Int}) where {p,T}
 		new{p,T}(length(xf), xf[inds], inds)
 	end
+	function GoalConstraint(n::Int, xf::MVector{P,T}, inds::SVector{P,Int}) where {P,T}
+		new{P,T}(n, xf, inds)
+	end
 end
 
 function GoalConstraint(xf::AbstractVector, inds=1:length(xf))
@@ -53,9 +56,9 @@ Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
-	for i in con.inds
-		zL[i] = con.xf[i]
-		zU[i] = con.xf[i]
+	for (i,j) in enumerate(con.inds)
+		zL[j] = con.xf[i]
+		zU[j] = con.xf[i]
 	end
 	return true
 end
@@ -72,7 +75,7 @@ end
 ∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
 
 function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
-	GoalConstraint(con.xf, xi[con.inds])
+	GoalConstraint(con.n, con.xf, xi[con.inds])
 end
 
 function set_goal_state!(con::GoalConstraint, xf::AbstractVector)
@@ -342,7 +345,7 @@ end
 	NormConstraint{S,D,T}
 
 Constraint of the form
-``\\|y\\|^2 \\{\\leq,=\\} a``
+``\\|y\\|^2 \\{\\leq,=\\} a^2``
 where ``y`` is made up of elements from the state and/or control vectors.
 
 # Constructor:
@@ -391,16 +394,29 @@ end
 @inline control_dim(con::NormConstraint) = con.m
 @inline sense(con::NormConstraint) = con.sense
 @inline Base.length(::NormConstraint) = 1
+@inline Base.length(::NormConstraint{SecondOrderCone,D}) where D = D + 1
 
 function evaluate(con::NormConstraint, z::AbstractKnotPoint)
 	x = z.z[con.inds]
-	return @SVector [x'x - con.val]
+	return @SVector [x'x - con.val*con.val]
+end
+
+function evaluate(con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
+	v = z.z[con.inds]
+	return push(v, con.val)
 end
 
 function jacobian!(∇c, con::NormConstraint, z::AbstractKnotPoint)
 	x = z.z[con.inds]
 	∇c[1,con.inds] .= 2*x
 	return false
+end
+
+function jacobian!(∇c, con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
+	for (i,j) in enumerate(con.inds)
+		∇c[i,j] = 1.0 
+	end
+	return true
 end
 
 function change_dimension(con::NormConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -510,8 +526,8 @@ end
 
 checkBounds(n::Int, u::Real, l::Real) =
 	checkBounds(n, (@SVector fill(u,n)), (@SVector fill(l,n)))
-checkBounds(n::Int, u::AbstractVector, l::Real) = checkBounds(n, u, (@SVector fill(l,N)))
-checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, (@SVector fill(u,N)), l)
+checkBounds(n::Int, u::AbstractVector, l::Real) = checkBounds(n, u, fill(l,n))
+checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, fill(u,n), l)
 
 
 @inline state_dim(con::BoundConstraint) = con.n

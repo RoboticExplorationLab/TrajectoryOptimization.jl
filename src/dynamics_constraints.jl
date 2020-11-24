@@ -66,11 +66,11 @@ function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::Abstrac
 	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
 end
 
-function jacobian!(∇c, con::DynamicsConstraint{Q},
-		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,n}
+function jacobian!(∇c, con::DynamicsConstraint{Q,L},
+		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,L,n}
 	if i == 1
 		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z)
-		return false  # not constant
+		return L <: RD.LinearModel
 	elseif i == 2
 		for i = 1:n
 			∇c[i,i] = -1
