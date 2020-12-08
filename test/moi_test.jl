@@ -25,22 +25,22 @@ MOI.optimize!(optimizer)
 @test norm(states(nlp)[end] - prob.xf) < 1e-10
 @test norm(states(nlp)[1] - prob.x0) < 1e-10
 
-# Cartpole
-prob = CartpoleProblem()
-# prob = Problems.Cartpole()[1]
-TO.add_dynamics_constraints!(prob)
+# # Cartpole
+# prob = CartpoleProblem()
+# # prob = Problems.Cartpole()[1]
+# TO.add_dynamics_constraints!(prob)
 
-nlp = TO.TrajOptNLP(prob, remove_bounds=true, jac_type=:vector)
-optimizer = Ipopt.Optimizer()
-TO.build_MOI!(nlp, optimizer)
-MOI.optimize!(optimizer)
-@test MOI.get(optimizer, MOI.TerminationStatus()) == MOI.LOCALLY_SOLVED
-@test cost(nlp) < 1.50
-@test max_violation(nlp) < 1e-11
-# TEST_TIME && @test optimizer.solve_time < 1
+# nlp = TO.TrajOptNLP(prob, remove_bounds=true, jac_type=:vector)
+# optimizer = Ipopt.Optimizer()
+# TO.build_MOI!(nlp, optimizer)
+# MOI.optimize!(optimizer)
+# @test MOI.get(optimizer, MOI.TerminationStatus()) == MOI.LOCALLY_SOLVED
+# @test cost(nlp) < 1.50
+# @test max_violation(nlp) < 1e-11
+# # TEST_TIME && @test optimizer.solve_time < 1
 
-@test norm(states(nlp)[end] - prob.xf) < 1e-10
-@test norm(states(nlp)[1] - prob.x0) < 1e-10
+# @test norm(states(nlp)[end] - prob.xf) < 1e-10
+# @test norm(states(nlp)[1] - prob.x0) < 1e-10
 
 # # Pendulum
 # prob = Problems.Pendulum()[1]
