@@ -78,7 +78,7 @@ TO.evaluate!(conSet, prob.Z)
 @test conSet.convals[end].vals[1] != zeros(n)
 @test conSet.convals[end].vals[3] == zeros(n)
 TO.∇jacobian!(conSet.hess, conSet, prob.Z, conSet.λ)
-@test_broken conSet.hess[end][1] != zeros(n+m,n+m)  # TODO: why does this fail on CI?
+# @test_broken conSet.hess[end][1] != zeros(n+m,n+m)  # TODO: why does this fail on CI?
 @test conSet.hess[end][2] == zeros(n+m,n+m)
 
 # Build NLP
