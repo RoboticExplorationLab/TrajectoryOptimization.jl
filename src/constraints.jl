@@ -105,7 +105,7 @@ where `W <: Union{State,Control}`.
 struct LinearConstraint{S,P,W,T} <: StageConstraint
 	n::Int
 	m::Int
-	A::SizedMatrix{P,W,T,2}
+	A::SizedMatrix{P,W,T,2,Matrix{T}}
 	b::SVector{P,T}
 	sense::S
 	inds::SVector{W,Int}

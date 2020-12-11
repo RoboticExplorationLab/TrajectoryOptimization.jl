@@ -1,8 +1,8 @@
 abstract type AbstractExpansion{T} end
 
 struct GradientExpansion{T,N,M} <: AbstractExpansion{T}
-	x::SizedVector{N,T,1}
-	u::SizedVector{M,T,1}
+	x::SizedVector{N,T,Vector{T}}
+	u::SizedVector{M,T,Vector{T}}
 	function GradientExpansion{T}(n::Int,m::Int) where T
 		new{T,n,m}(SizedVector{n}(zeros(T,n)), SizedVector{m}(zeros(T,m)))
 	end
@@ -10,39 +10,51 @@ end
 
 # TODO: Move to ALTRO
 struct DynamicsExpansion{T,N,N̄,M}
-	∇f::Matrix{T} # n × (n+m+1)
+	∇f::Matrix{T} # n × (n+m)
+	∇²f::Matrix{T}  # (n+m) × (n+m)
 	A_::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
 	B_::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
-	A::SizedMatrix{N̄,N̄,T,2}
-	B::SizedMatrix{N̄,M,T,2}
-	tmpA::SizedMatrix{N,N,T,2}
-	tmpB::SizedMatrix{N,M,T,2}
-	tmp::SizedMatrix{N,N̄,T,2}
+	A::SizedMatrix{N̄,N̄,T,2,Matrix{T}}
+	B::SizedMatrix{N̄,M,T,2,Matrix{T}}
+	fxx::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
+	fuu::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
+	fux::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
+	tmpA::SizedMatrix{N,N,T,2,Matrix{T}}
+	tmpB::SizedMatrix{N,M,T,2,Matrix{T}}
+	tmp::SizedMatrix{N,N̄,T,2,Matrix{T}}
 	function DynamicsExpansion{T}(n0::Int, n::Int, m::Int) where T
 		∇f = zeros(n0,n0+m)
+		∇²f = zeros(n0+m,n0+m)
 		ix = 1:n0
 		iu = n0 .+ (1:m)
 		A_ = view(∇f, ix, ix)
 		B_ = view(∇f, ix, iu)
 		A = SizedMatrix{n,n}(zeros(n,n))
 		B = SizedMatrix{n,m}(zeros(n,m))
+		fxx = view(∇²f, ix, ix)
+		fuu = view(∇²f, iu, iu)
+		fux = view(∇²f, iu, ix)
 		tmpA = SizedMatrix{n0,n0}(zeros(n0,n0))
 		tmpB = SizedMatrix{n0,m}(zeros(n0,m))
 		tmp = zeros(n0,n)
-		new{T,n0,n,m}(∇f,A_,B_,A,B,tmpA,tmpB,tmp)
+		new{T,n0,n,m}(∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
 	end
 	function DynamicsExpansion{T}(n::Int, m::Int) where T
 		∇f = zeros(n,n+m)
+		∇²f = zeros(n+m,n+m)
 		ix = 1:n
 		iu = n .+ (1:m)
 		A_ = view(∇f, ix, ix)
 		B_ = view(∇f, ix, iu)
 		A = SizedMatrix{n,n}(zeros(n,n))
 		B = SizedMatrix{n,m}(zeros(n,m))
+		fxx = view(∇²f, ix, ix)
+		fuu = view(∇²f, iu, iu)
+		fux = view(∇²f, iu, ix)
 		tmpA = A
 		tmpB = B
 		tmp = zeros(n,n)
-		new{T,n,n,m}(∇f,A_,B_,A,B,tmpA,tmpB,tmp)
+		new{T,n,n,m}(∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
 	end
 end
 

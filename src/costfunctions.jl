@@ -321,7 +321,7 @@ Any optional or omitted values will be set to zero(s). The keyword arguments are
 mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     Q::TQ                     # Quadratic stage cost for states (n,n)
     R::TR                     # Quadratic stage cost for controls (m,m)
-    H::SizedMatrix{m,n,T,2}   # Quadratic Cross-coupling for state and controls (m,n)
+    H::SizedMatrix{m,n,T,2,Matrix{T}}   # Quadratic Cross-coupling for state and controls (m,n)
     q::MVector{n,T}           # Linear term on states (n,)
     r::MVector{m,T}           # Linear term on controls (m,)
     c::T                      # constant term
