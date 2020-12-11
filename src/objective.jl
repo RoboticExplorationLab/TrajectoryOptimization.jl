@@ -86,7 +86,7 @@ Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 ############################################################################################
 #                            Quadratic Objectives (Expansions)
 ############################################################################################
-const QuadraticObjective{n,m,T} = Objective{QuadraticCost{n,m,T,SizedMatrix{n,n,T,2},SizedMatrix{m,m,T,2}}}
+const QuadraticObjective{n,m,T} = Objective{QuadraticCost{n,m,T,SizedMatrix{n,n,T,2,Matrix{T}},SizedMatrix{m,m,T,2,Matrix{T}}}}
 const QuadraticExpansion{n,m,T} = Objective{<:QuadraticCostFunction{n,m,T}}
 const DiagonalCostFunction{n,m,T} = Union{DiagonalCost{n,m,T},QuadraticCost{n,m,T,<:Diagonal,<:Diagonal}}
 
