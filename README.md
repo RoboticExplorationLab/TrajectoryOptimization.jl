@@ -21,6 +21,8 @@ Pkg.add("TrajectoryOptimization")
 
 In `v0.3` the package was split into several different packages for increased modularity. These include [RobotDynamics.jl](https://github.com/RoboticExplorationLab/RobotDynamics.jl), [Altro.jl](https://github.com/RoboticExplorationLab/Altro.jl), [RobotZoo.jl](https://github.com/bjack205/RobotZoo.jl), and [TrajOptPlots.jl](https://github.com/RoboticExplorationLab/TrajOptPlots.jl).
 
+`v0.4` added support [SOCP](https://en.wikipedia.org/wiki/Second-order_cone_programming). 
+
 ## Quick Start
 To run a simple example of a constrained 1D block move see script in [`/examples/quickstart.jl`](https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/blob/master/examples/quickstart.jl).
 
