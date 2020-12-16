@@ -9,6 +9,7 @@ if !isdefined(Main,:TEST_TIME)
 end
 
 # Parallel Park
+Random.seed!(1)
 prob = DubinsCarProblem(:parallel_park)
 TO.add_dynamics_constraints!(prob)
 
