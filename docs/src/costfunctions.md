@@ -48,7 +48,9 @@ xf = @SVector [0,π,0,0]
 costfun = LQRCost(Q,R,xf)
 costfun_term = LQRCost(Qf,R*0,xf,terminal=true)
 ```
-It is HIGHLY recommended to specify any special structure, such as `Diagonal`, especially since these matrices are almost always diagonal.
+!!! tip
+    It is HIGHLY recommended to specify any special structure, such as `Diagonal`, especially since these matrices are almost always diagonal. See Julia's built-in
+    `LinearAlgebra` module for more specialized matrix types.
 
 This constructor actually does a simple conversion to turn our cost function into either the
 generic [`QuadraticCost`](@ref) or a [`DiagonalCost`](@ref). We could do this ourselves:

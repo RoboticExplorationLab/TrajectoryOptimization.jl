@@ -3,26 +3,41 @@ import RobotDynamics: jacobian!
 
 """"
 Specifies whether the constraint is an equality or inequality constraint.
-Valid subtypes are `Equality`, and `Inequality`.
+Valid subtypes are `Equality`, `Inequality` ⟺ `NegativeOrthant`, and `SecondOrderCone`.
+
 The sense of a constraint can be queried using `sense(::AbstractConstraint)`
+
+If `sense(con) <: Conic` (i.e. not `Equality`), then the following operations are supported:
+* `Base.in(::Conic, x::StaticVector)`. i.e. `x ∈ cone`
+* `projection(::Conic, x::StaticVector)`
+* `∇projection(::Conic, J, x::StaticVector)`
+* `∇²projection(::Conic, J, x::StaticVector, b::StaticVector)`
 """
 abstract type ConstraintSense end
 abstract type Conic <: ConstraintSense end
 
 """
-Inequality constraints of the form ``h(x) \\leq 0``.
-Type singleton, so it is created with `Inequality()`
-"""
-struct Equality <: Conic end
-"""
 Equality constraints of the form ``g(x) = 0`.
 Type singleton, so it is created with `Equality()`.
+"""
+struct Equality <: ConstraintSense end
+"""
+Inequality constraints of the form ``h(x) \\leq 0``.
+Type singleton, so it is created with `Inequality()`. 
+Equivalent to `NegativeOrthant`.
 """
 struct NegativeOrthant <: Conic end
 const Inequality = NegativeOrthant
 
 struct PositiveOrthant <: Conic end 
 
+"""
+The second-order cone is defined as 
+``\\|x\\| \\leq t``
+where ``x`` and ``t`` are both part of the cone.
+TrajectoryOptimization assumes the scalar part ``t`` is 
+the last element in the vector.
+"""
 struct SecondOrderCone <: Conic end
 
 dualcone(::NegativeOrthant) = NegativeOrthant()
@@ -341,11 +356,14 @@ function evaluate!(
 end
 
 """
-    jacobian!(∇c, con::AbstractConstraint, Z, [inds])
+    jacobian!(∇c, con::AbstractConstraint, Z, [inds, is_const])
 
 Evaluate constraints for entire trajectory. This is the most general method used to evaluate
 constraints along the trajectory `Z`, and should be the one used in other functions.
 The `inds` argument determines at which knot points the constraint is evaluated.
+The optional `is_const` argument is a `BitArray` of the same size as `∇c`, and captures 
+the output of `jacobian!`, which should return a Boolean specifying if the Jacobian is
+constant or not.
 
 The values are stored in `∇c`, which should be a matrix of matrices. If `con` is a
 `StageConstraint`, `size(∇c,2) = 1`, and `size(∇c,2) = 2` if `con` is a `CoupledConstraint`.
@@ -384,6 +402,9 @@ end
 
 Evaluate the second-order expansion of the constraint `con` along the trajectory `Z`
 after multiplying by the lagrange multiplier `λ`.
+The optional `is_const` argument is a `BitArray` of the same size as `∇c`, and captures 
+the output of `jacobian!`, which should return a Boolean specifying if the Jacobian is
+constant or not. The `init` flag will force re-calculation of constant Jacobians when true.
 
 The method for each constraint should calculate the Jacobian of the vector-Jacobian product,
     and therefore should be of size n × n if the input dimension is n.

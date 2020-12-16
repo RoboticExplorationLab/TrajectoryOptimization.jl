@@ -27,8 +27,8 @@ function dynamics(model::Cartpole, x, u)
     l = model.l   # length of the pole in m
     g = model.g  # gravity m/s^2
 
-    q = x[ @SVector [1,2] ]
-    qd = x[ @SVector [3,4] ]
+    q  = x[ SA[1,2] ]  # SA[...] creates a StaticArray.
+    qd = x[ SA[3,4] ]
 
     s = sin(q[2])
     c = cos(q[2])
@@ -47,3 +47,8 @@ RobotDynamics.control_dim(::Cartpole) = 1
 ```
 
 with our dynamics model defined, we are ready to start setting up the optimization problem.
+
+!!! tip
+    For best performance, use [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl), which offers loop-unrolling and allocation-free methods for 
+    small to medium-sized matrices and vectors.
+

@@ -3,15 +3,21 @@ CurrentModule = TrajectoryOptimization
 ```
 
 # Constraint Interface
-
-## Constraint Type
 All constraints inherit from [`AbstractConstraint`](@ref).
-TrajectoryOptimization.jl assumes equality constraints are of the form ``g(x) = 0`` and inequality
-constraints are of the form ``h(x) \leq 0 ``.
-
 ```@docs
 AbstractConstraint
+```
+
+## Constraint Sense 
+TrajectoryOptimization.jl assumes equality constraints are of the form ``g(x) = 0``, 
+and that all other constraints are constrained to lie with a specified cone. This 
+is referred to as the `ConstraintSense`. The following are currently implemented:
+
+```@docs
 ConstraintSense
+Equality
+NegativeOrthant
+SecondOrderCone
 ```
 
 ## Evaluating Constraints
@@ -81,10 +87,12 @@ function evaluate!(vals, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length
 		vals[i] = SA[norm(u) - con.a[i]]
 	end
 end
-function jacobian!(∇c, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z))
+function jacobian!(∇c, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z),
+		is_const = BitArray(undef, size(∇c)))
 	for (i,k) in enumerate(inds)
 			u = control(Z[k])
 			∇c[i] = u'/norm(u)
+			is_const[i] = false
 	end
 end
 ```

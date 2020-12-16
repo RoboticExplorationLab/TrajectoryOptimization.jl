@@ -6,7 +6,7 @@ CurrentModule = TrajectoryOptimization
 This page provides details about the various types in TrajectoryOptimization.jl for working
 with constraints, as well as the methods defined on those types.
 In general, a [`ConstraintList`](@ref) is used to define the constraints, and another
-[`AbstractConstraintSet`](@ref), such as an [`ALConstraintSet`](@ref), is instantiated by a
+[`AbstractConstraintSet`](@ref) is instantiated by a
 solver to hold the constraint values and Jacobians.
 
 ## Constraint List
@@ -26,8 +26,6 @@ and holds the constraint definitions, as well as the associated constraint value
 and other constraint-related information required by the solver.
 ```@docs
 AbstractConstraintSet
-ALConstraintSet
-link_constraints!
 ```
 
 ## Constraint Value type

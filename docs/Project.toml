@@ -1,3 +1,6 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-TrajectoryOptimization = "c79d492b-0548-5874-b488-5a62c1d9d0ca"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+RobotDynamics = "38ceca67-d8d3-44e8-9852-78a5596522e1"
+RobotZoo = "74be38bb-dcc2-4b9e-baf3-d6373cd95f10"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"

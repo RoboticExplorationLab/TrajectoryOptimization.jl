@@ -51,6 +51,10 @@ export  # methods
 	states,
 	controls,
 	get_trajectory,
+	get_times,
+	get_objective,
+	get_constraints,
+	get_model,
 	state_dim,    # from RobotDynamics
 	control_dim   # from RobotDynamics
 

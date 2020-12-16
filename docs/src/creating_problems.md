@@ -3,11 +3,13 @@ CurrentModule = TrajectoryOptimization
 ```
 
 # [4. Setting up a Problem](@id problem_section)
-The [`Problem`](@ref) contains all of the information needed to solve a trajectory optimization
-problem. At a minimum, this is the model, objective, and initial condition. A `Problem` is
-passed to a solver, which extracts needed information, and may or may or not modify its
-internal representation of the problem in order to solve it (e.g. the Augmented Lagrangian
-solver combines the constraints and objective into a single Augmented Lagrangian objective.)
+The [`Problem`](@ref) contains all of the information needed to solve a
+trajectory optimization problem. At a minimum, this is the model, objective,
+and initial condition. A `Problem` is passed to a solver, which extracts
+needed information, and may or may or not modify its internal representation
+of the problem in order to solve it (e.g. the Augmented Lagrangian solver
+combines the constraints and objective into a single Augmented Lagrangian
+objective.)
 
 ## Creating a Problem
 Let's say we're trying to solve the following trajectory optimization problem:
@@ -22,23 +24,28 @@ Let's say we're trying to solve the following trajectory optimization problem:
 We'll quickly set up the dynamics, objective, and constraints. See previous sections for more
 details on how to do this.
 
-```julia
+
+```@example
+using TrajectoryOptimization
+using RobotZoo: Cartpole
+using StaticArrays, LinearAlgebra
+
 # Dynamics and Constants
-model = Dynamics.Cartpole()
+model = Cartpole()
 n,m = size(model)
 N = 101   # number of knot points
 tf = 5.0  # final time
-x0 = @SVector[0.0, 0.0]  # initial state
-xf = @SVector [0, π]     # goal state (i.e. swing up)
+x0 = @SVector [0, 0, 0, 0.]  # initial state
+xf = @SVector [0, π, 0, 0.]  # goal state (i.e. swing up)
 
 # Objective
 Q = Diagonal(@SVector fill(1e-2,n))
 R = Diagonal(@SVector fill(1e-1,m))
-Qf = Diagonal(@SVector fill(100,n))
+Qf = Diagonal(@SVector fill(100.,n))
 obj = LQRObjective(Q, R, Qf, xf, N)
 
 # Constraints
-conSet = ConstraintSet(n,m,N)
+conSet = ConstraintList(n,m,N)
 bnd = BoundConstraint(n,m, u_min=-3.0, u_max=3.0)
 goal = GoalConstraint(xf)
 add_constraint!(conSet, bnd, 1:N-1)
@@ -63,6 +70,7 @@ This constructor has the following arguments:
 * (optional) `integration::Type{<:QuadratureRule}` - Quadrature rule for discretizing the dynamics. Default is given by `TrajectoryOptimization.DEFAULT_Q`.
 * (optional) `X0` - Initial guess for state trajectory. Can either be a matrix of size `(n,N)` or a vector of length `N` of `n`-dimensional vectors.
 * (optional) `U0` - Initial guess for control trajectory. Can either be a matrix of size `(m,N)` or a vector of length `N-1` of `n`-dimensional vectors.
+
 
 ## Initialization
 A good initialization is critical to getting good results for nonlinear optimization problems.
@@ -104,11 +112,16 @@ You can extract the state and control trajectories separately with the following
 states(Z::Traj)
 controls(Z::Traj)
 ```
-Note that these methods also work on `Problem` and `AbstractSolver` types.
+Note that these methods also work on `Problem`. 
 
 The states, control, and time trajectories can be set independently with the following methods:
 ```julia
 set_states!(Z::Traj, X::Vector{<:AbstractVector})
 set_controls!(Z::Traj, U::Vector{<:AbstractVector})
 set_times!(Z::Traj, t::Vector)
+```
+
+To initialize a problem with a given `Traj` type, you can use
+```
+initial_trajectory!(::Problem, Z::AbstractTrajectory)
 ```
