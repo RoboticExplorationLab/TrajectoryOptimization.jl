@@ -135,7 +135,7 @@ Base.copy(con::LinearConstraint{S}) where S =
 @inline control_dim(con::LinearConstraint) = con.m
 evaluate(con::LinearConstraint, z::AbstractKnotPoint) = con.A*z.z[con.inds] .- con.b
 function jacobian!(∇c, con::LinearConstraint, z::AbstractKnotPoint)
-	∇c[:,con.inds] .= con.A
+	∇c[:,con.inds[1]:con.inds[end]] .= con.A
 	return true
 end
 
@@ -867,3 +867,21 @@ end
 # 		$assignment
 # 	end
 # end
+
+struct QuatVecEq{T} <: StateConstraint
+    n::Int
+    qf::UnitQuaternion{T}
+    qind::SVector{4,Int}
+end
+function evaluate(con::QuatVecEq, x::StaticVector)
+    qf = Rotations.params(con.qf)
+    q = normalize(x[con.qind])
+    dq = qf'q
+    if dq < 0
+        qf *= -1
+    end
+    return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
+end
+sense(::QuatVecEq) = Equality()
+state_dim(con::QuatVecEq) = con.n
+Base.length(con::QuatVecEq) = 3
