@@ -121,8 +121,9 @@ function LinearConstraint(n::Int, m::Int, A::AbstractMatrix, b::AbstractVector,
 		sense::S, inds=1:n+m) where {S<:ConstraintSense}
 	@assert size(A,1) == length(b)
 	p,q = size(A)
-	A = SizedMatrix{p,q}(A)
-	b = SVector{p}(b)
+	T = promote_type(eltype(A), eltype(b))
+	A = SizedMatrix{p,q,T}(A)
+	b = SVector{p,T}(b)
 	LinearConstraint(n,m, A, b, sense, inds)
 end
 
