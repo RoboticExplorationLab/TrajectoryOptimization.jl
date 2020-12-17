@@ -233,7 +233,10 @@ Quadratic cost function for states that includes a 3D rotation, that penalizes d
 
 The cost function penalizes geodesic distance between unit quaternions:
 
-    ``\\min 1 \\pm q_d^T q```
+``\\frac{1}{2} \\big( x^T Q x + u^T R u \\big) + q^T x + r^T u + c + w \\min 1 \\pm p_f^T p``
+
+where ``p`` is the quaternion extracted from ``x`` (i.e. `p = x[q_ind]`), and ``p_f`` 
+is the reference quaternion. ``Q`` and ``R`` are assumed to be diagonal.
 
 We've found this perform better than penalizing a quadratic on the quaternion error 
 state ([`ErrorQuadratic`](@ref)). This cost should still be considered experimental.
@@ -309,17 +312,48 @@ end
 """
     QuatLQRCost(Q, R, xf, [uf; w, quat_ind])
 
-Defines a cost function that uses a quadratic penalty on deviations from a reference state,
-    including a quaratic penalty on the geodesic distance between a quaternion and a 
-    reference quaternion. See [`DiagonalQuatCost`](@ref).
+Defines a cost function of the form:
+
+``\\frac{1}{2} \\big( (x - x_f)^T Q (x - x_f) + (u - u_f)^T R (u - u_f) \\big) + w \\min 1 \\pm q_f^T q``
+
+where ``Q`` and ``R`` are diagonal, ``x_f`` is the goal state, 
+``u_f`` is the reference control, and ``q_f``, ``q`` are
+the quaternions, extracted from ``x`` using `quat_ind`, i.e. `q = x[quat_ind]`.
+
+The last term is the geodesic distance between quaternions. It's typically recommended that 
+`Q.diag[quad_ind] == zeros(4)`.
+
+This is just a convenience constructor for [`DiagonalQuatCost`](@ref).
+
+# Example 
+For a standard rigid body state vector `x = [p; q; v; ω]`, where `q` is a unit quaternion,
+we could define a cost function that penalizes the distance to the goal state `xf`. 
+We can create this cost function as follows:
+```julia
+Q = Diagonal(SVector(RBState(fill(0.1,3), zeros(4), fill(0.1,3), fill(0.1,3))))
+R = Diagonal(@SVector fill(0.01, 6))
+xf = RBState([1,2,3], rand(UnitQuaternion), zeros(3), zeros(3))
+QuatLQRCost(Q,R,xf)
+```
+We can add a reference control and change the weight on the rotation error with the optional
+arguments:
+```julia
+QuatLQRCost(Q,R,xf,uf, w=10.0)
+```
+which is equivalent to
+```julia
+QuatLQRCost(Q,R,xf,uf, w=10.0, quat_inds=4:7)
+```
 """
 function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
         uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    @assert length(quat_ind) == 4 "quat_ind argument must be of length 4"
+    quat_ind = SVector{4}(quat_ind)
     r = -R*uf
     q = -Q*xf
     c = 0.5*xf'Q*xf + 0.5*uf'R*uf
     q_ref = xf[quat_ind]
-    return DiagonalQuatCost(Q, R, q, r, c, w, q_ref, quat_ind)
+    return DiagonalQuatCost(Q, R, q, r, c, T(w), q_ref, quat_ind)
 end
 
 function change_dimension(cost::DiagonalQuatCost, n, m, ix, iu)
@@ -359,8 +393,14 @@ end
 """
     ErrorQuadratic{Rot,N,M}
 
-Cost function that uses a quadratic penalty on the error state, for a state that includes 
-    a single 3D rotation.
+Cost function of the form:
+
+``\\frac{1}{2} (x_k \\ominus x_d)^T Q_k (x_k \\ominus x_d)``
+
+where ``x_k \\ominus x_d`` is the error state, computed using 
+`RobotDynamics.state_diff`. 
+This cost function isn't recommended: we've found that `DiagonalQuatCost` usually
+    peforms better and is much more computationally efficient.
 """
 struct ErrorQuadratic{Rot,N,M} <: CostFunction
     model::RD.RigidBody{Rot}

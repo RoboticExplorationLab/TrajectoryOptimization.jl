@@ -20,6 +20,8 @@ makedocs(
             "cost_api.md",
             "constraint_api.md",
             "problem.md",
+            "rotations.md",
+            "dynamics.md",
             "nlp.md"
         ],
         "Examples" => "examples.md"

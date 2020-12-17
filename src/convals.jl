@@ -1,13 +1,33 @@
-
 @inline get_data(A::AbstractArray) = A
 @inline get_data(A::SizedArray) = A.data
 
+"""
+	AbstractConstraintValues{C<:AbstractConstraint}
+
+An abstract type for working with and storing constraint values, such as current 
+constraint values, Jacobians, dual variables, penalty parameters, etc. 
+The information that is actually store, and the way it is stored, is up to the 
+child type. However, at a minimum, it should store the following fields:
+* `con::AbstractConstraint`: the actual constraint
+* `vals::AbstractVector{<:AbstractVector}`: stores the constraint value for all time indices.
+* `jac::AbstractMatrix{<:AbstractMatrix}`: stores the constraint Jacobian for all time indices.
+* `inds::AbstractVector{Int}`: stores the time step indices.
+The first dimension of all of these data fields should be the same 
+(the number time indices).
+
+With these fields, the following methods are implemented:
+* `evaluate!(::AbstractConstraintValues, ::AbstractTrajectory)`
+* `jacobian!(::AbstractConstraintValues, ::AbstractTrajectory)`
+* `max_violation(::AbstractConstraintValues)`
+"""
 abstract type AbstractConstraintValues{C<:AbstractConstraint} end
 
 """
 	ConVal{C,V,M,W}
 
-Holds information about a constraint
+Holds information about a constraint of type `C`. Allows for any type of
+vector (`V`) or matrix (`M`) storage for constraint values and Jacobians
+(allowing StaticArrays or views into a large, sparse matrix).
 """
 struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
     con::C
@@ -206,11 +226,25 @@ function norm_residual!(res, cval::AbstractConstraintValues, λ::Vector{<:Abstra
 	return nothing
 end
 
-function error_expansion!(errval::AbstractConstraintValues, conval::AbstractConstraintValues, model::AbstractModel, G)
+function error_expansion!(errval::AbstractConstraintValues{C}, conval::AbstractConstraintValues, 
+		model::AbstractModel, G) where C
 	if errval.jac !== conval.jac
+		n,m = size(model)
+		ix = 1:n
+		iu = 1:m
 		for (i,k) in enumerate(conval.inds)
-			mul!(errval.∇x[i], conval.∇x[i], get_data(G[k]))
-			errval.∇u[i] .= conval.∇u[i]
+			if C <: StateConstraint
+				mul!(errval.jac[i], conval.jac[i], get_data(G[k]))
+			elseif C <: ControlConstraint
+				errval.jac[i] .= conval.jac[i]
+			else
+				∇x  = view(errval.jac[i], :, ix)
+				∇u  = view(errval.jac[i], :, iu)
+				∇x0 = view(conval.jac[i], :, ix)
+				∇u0 = view(conval.jac[i], :, iu)
+				mul!(∇x, ∇x0, get_data(G[k]))
+				∇u .= ∇u0
+			end
 		end
 	end
 end

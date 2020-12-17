@@ -21,19 +21,23 @@ num_constraints
 ```
 
 ## Constraint Sets
-A constraint set holding a list of [`ConVal`](@ref)s is generally instantiated by a solver
-and holds the constraint definitions, as well as the associated constraint values, Jacobians,
-and other constraint-related information required by the solver.
+A constraint set holding a list of [`ConVal`](@ref)s is generally
+instantiated by a solver and holds the constraint definitions, as well as the
+associated constraint values, Jacobians, and other constraint-related
+information required by the solver.
 ```@docs
 AbstractConstraintSet
 ```
 
 ## Constraint Value type
-The [`ConVal`](@ref) type holds all the constraint values and Jacobians for a particular
-constraint, and supports different ways of storing those (either as individual matrices/vectors
-or as views into a large matrix/vector).
+The [`AbstractConstraintValues`](@ref) type holds all the constraint values
+and Jacobians for a particular constraint, and supports different ways of
+storing those (either as individual matrices/vectors or as views into a large
+matrix/vector). This abstract type is meant to be implemented by the solver, but
+a reference implementation is provided, [`ConVal`](@ref).
 
 ```@docs
+AbstractConstraintValues
 ConVal
 ```
 

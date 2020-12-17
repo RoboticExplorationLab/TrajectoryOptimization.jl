@@ -9,6 +9,40 @@ struct GradientExpansion{T,N,M} <: AbstractExpansion{T}
 end
 
 # TODO: Move to ALTRO
+"""
+	DynamicsExpansion{T,N,N̄,M}
+
+Stores the dynamics expansion for a single time instance. 
+For a `LieGroupModel`, it will provide access to both the state and state
+error Jacobians.
+
+# Constructors
+```julia
+DynamicsExpansion{T}(n0, n, m)
+DynamicsExpansion{T}(n, m)
+```
+where `n0` is the size of the full state, and `n` is the size of the error state.
+
+# Methods
+To evaluate the dynamics Jacobians, use
+
+	dynamics_expansion!(::Type{Q}, D::DynamicsExpansion, model, Z)
+
+To compute the Jacobians for the error state, use
+	
+	error_expansion!(D::DynamicsExpansion, model, G)
+
+where `G` is a vector of error-state Jacobians. These can be computed using
+`RobotDynamics.state_diff_jacobian(G, model, Z)`.
+
+# Extracting Jacobians
+The Jacobians should be extracted using
+
+	fdx, fdu = error_expansion(D::DynamicsExpansion, model)
+
+This method will provide the error state Jacobians for `LieGroupModel`s, and 
+	the normal Jacobian otherwise. Both `fdx` and `fdu` are a `SizedMatrix`.
+"""
 struct DynamicsExpansion{T,N,N̄,M}
 	∇f::Matrix{T} # n × (n+m)
 	∇²f::Matrix{T}  # (n+m) × (n+m)
