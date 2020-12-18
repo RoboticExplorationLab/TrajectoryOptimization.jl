@@ -35,9 +35,10 @@ end
     include("moi_test.jl")
 end
 
-# using NBInclude
-# @testset "Examples" begin
-#     # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
-#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
-#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
-# end
+using NBInclude
+@testset "Examples" begin
+    @nbinclude(joinpath(@__DIR__, "..", "examples", "Internal API.ipynb"))
+    # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
+    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
+    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
+end

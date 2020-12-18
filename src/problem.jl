@@ -264,11 +264,15 @@ function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints
     Problem(model, obj, constraints, x0, xf, p.Z, p.N, t0, tf)
 end
 
-"```julia
-add_dynamics_constraints!(prob::Problem)
-```
-Add dynamics constraints to the constraint set"
-function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
+"""
+    add_dynamics_constraints!(prob::Problem, [integration; idx])
+
+Add dynamics constraints to the constraint set. The integration method `integration` 
+defaults to the same integration specified in `prob`, but can be changed. The keyword
+argument `idx` specifies the location of the dynamics constraint in the constraint vector.
+If `idx == -1`, it will be added at the end of the `ConstraintList`.
+"""
+function add_dynamics_constraints!(prob::Problem{Q}, integration=Q; idx=-1) where Q
 	n,m = size(prob)
     conSet = prob.constraints
 
