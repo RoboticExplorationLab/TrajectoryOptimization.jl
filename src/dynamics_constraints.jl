@@ -34,6 +34,8 @@ struct DynamicsConstraint{Q<:QuadratureRule,L<:AbstractModel,N,M,NM,T} <: Abstra
 	∇fMid::Vector{SizedMatrix{N,NM,T,2,Matrix{T}}}
 	Am::Vector{SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}}
 	Bm::Vector{SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}}
+	cache::FiniteDiff.JacobianCache{Vector{T}, Vector{T}, Vector{T}, 
+		UnitRange{Int}, Nothing, Val{:forward}(), T}
 end
 
 function DynamicsConstraint{Q}(model::L, N) where {Q,L}
@@ -49,8 +51,9 @@ function DynamicsConstraint{Q}(model::L, N) where {Q,L}
 	Am = [view(∇fm[k].data,ix,ix) for k = 1:3]
 	Bm = [view(∇fm[k].data,ix,iu) for k = 1:3]
 	grad  = [GradientExpansion{T}(n,m) for k = 1:3]
+	cache = FiniteDiff.JacobianCache(model)
 	DynamicsConstraint{Q,L,n,m,n+m,T}(model, fVal, xMid, ∇f, A, B,
-		grad, ∇fm, Am, Bm)
+		grad, ∇fm, Am, Bm, cache)
 end
 
 @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
@@ -69,7 +72,7 @@ end
 function jacobian!(∇c, con::DynamicsConstraint{Q,L},
 		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,L,n}
 	if i == 1
-		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z)
+		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z, con.cache)
 		return L <: RD.LinearModel
 	elseif i == 2
 		for i = 1:n

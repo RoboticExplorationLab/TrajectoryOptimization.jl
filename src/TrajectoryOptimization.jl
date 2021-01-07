@@ -9,6 +9,7 @@ using StaticArrays
 using LinearAlgebra
 using DocStringExtensions
 using ForwardDiff
+using FiniteDiff
 using UnsafeArrays
 using SparseArrays
 using MathOptInterface
