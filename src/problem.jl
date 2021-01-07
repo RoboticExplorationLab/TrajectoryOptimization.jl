@@ -209,8 +209,8 @@ Compute the cost for the current trajectory
 @inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
 
 "Copy the problem"
-function copy(prob::Problem{Q}) where Q
-    Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), prob.x0, prob.xf,
+function Base.copy(prob::Problem{Q}) where Q
+    Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
         copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
 
@@ -259,20 +259,20 @@ If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0
 """
 @inline rollout!(prob::Problem{Q}) where {Q} = rollout!(Q, get_model(prob), get_trajectory(prob), get_initial_state(prob))
 
-function Problem(p::Problem; model=p.model, obj=p.obj, constraints=p.constraints,
-    x0=p.x0, xf=p.xf, t0=p.t0, tf=p.tf)
-    Problem(model, obj, constraints, x0, xf, p.Z, p.N, t0, tf)
+function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
+    x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
+    Problem(model, obj, constraints, x0, xf, copy(p.Z), p.N, t0, tf)
 end
 
 """
     add_dynamics_constraints!(prob::Problem, [integration; idx])
 
 Add dynamics constraints to the constraint set. The integration method `integration` 
-defaults to the same integration specified in `prob`, but can be changed. The keyword
+defaults to the same integration specified in `prob`, but can be changed. The 
 argument `idx` specifies the location of the dynamics constraint in the constraint vector.
 If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
-function add_dynamics_constraints!(prob::Problem{Q}, integration=Q; idx=-1) where Q
+function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
 	n,m = size(prob)
     conSet = prob.constraints
 
