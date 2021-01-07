@@ -98,9 +98,9 @@ function save_tmp!(D::DynamicsExpansion)
 end
 
 function dynamics_expansion!(Q, D::Vector{<:DynamicsExpansion}, model::AbstractModel,
-		Z::Traj)
+		Z::Traj, args...)
 	for k in eachindex(D)
-		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k])
+		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k], args...)
 		# save_tmp!(D[k])
 		# D[k].tmpA .= D[k].A_  # avoids allocations later
 		# D[k].tmpB .= D[k].B_
