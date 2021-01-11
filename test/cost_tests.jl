@@ -200,6 +200,8 @@
         u = @SVector rand(m)
         dt = 0.1
         z = KnotPoint(x, u, dt)
+        zterm = KnotPoint(x, u, 0.0)
+        @test TO.is_terminal(zterm)
 
         qcost = QuadraticCost(Q, R, H, q, r, c)
         @test TO.stage_cost(qcost, z) ≈ TO.stage_cost(qcost, x, u) * dt
@@ -207,38 +209,46 @@
               0.5 * (x'Q * x + u'R * u) + q'x + r'u + c + u'H * x
 
         E = QuadraticCost{Float64}(n, m)
-        TO.gradient!(E, qcost, x)
+        TO.gradient!(E, qcost, zterm)
         @test E.q ≈ Q * x + q
         @test E.r ≈ zero(r)
-        TO.gradient!(E, qcost, x, u)
+        TO.gradient!(E, qcost, z)
         @test E.q ≈ Q * x + q + H'u
         @test E.r ≈ R * u + r + H * x
 
-        TO.hessian!(E, qcost, x)
+        TO.hessian!(E, qcost, zterm)
         @test E.Q ≈ Q
         @test E.R ≈ I(m)
-        TO.hessian!(E, qcost, x, u)
+        TO.hessian!(E, qcost, z) 
         @test E.R ≈ R
         @test E.H ≈ H
+        @test (@allocated TO.gradient!(E, qcost, zterm)) == 0
+        # @test (@allocated TO.gradient!(E, qcost, z)) == 0
+        @test (@allocated TO.hessian!(E, qcost, zterm)) == 0
+        @test (@allocated TO.hessian!(E, qcost, z)) == 0
 
         dcost = DiagonalCost(Q, R, q, r, c)
         @test TO.stage_cost(dcost, z) ≈ TO.stage_cost(dcost, x, u) * dt
         @test TO.stage_cost(dcost, x, u) ≈ 0.5 * (x'Q * x + u'R * u) + q'x + r'u + c
 
         E = QuadraticCost{Float64}(n, m)
-        TO.gradient!(E, dcost, x)
+        TO.gradient!(E, dcost, zterm)
         @test E.q ≈ Q * x + q
         @test E.r ≈ zero(r)
-        TO.gradient!(E, dcost, x, u)
+        TO.gradient!(E, dcost, z) 
         @test E.q ≈ Q * x + q
         @test E.r ≈ R * u + r
 
-        TO.hessian!(E, dcost, x)
+        TO.hessian!(E, dcost, zterm)
         @test E.Q ≈ Q
         @test E.R ≈ I(m)
-        TO.hessian!(E, dcost, x, u)
+        TO.hessian!(E, dcost, z) 
         @test E.R ≈ R
         @test E.H ≈ zero(H)
+        @test (@allocated TO.gradient!(E, dcost, zterm)) == 0
+        @test (@allocated TO.gradient!(E, dcost, z)) == 0
+        @test (@allocated TO.hessian!(E, dcost, zterm)) == 0
+        @test (@allocated TO.hessian!(E, dcost, z)) == 0
     end
 
 end

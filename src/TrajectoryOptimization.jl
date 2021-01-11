@@ -73,6 +73,7 @@ export
 
 include("expansions.jl")
 include("costfunctions.jl")
+include("quadratic_costs.jl")
 include("lie_costs.jl")
 include("objective.jl")
 

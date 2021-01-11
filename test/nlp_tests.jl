@@ -26,7 +26,6 @@ Z_ = TO.NLPTraj(Z,Zdata)
 
 # Test with problem
 prob = DubinsCarProblem(:parallel_park)
-prob.constraints
 TO.add_dynamics_constraints!(prob)
 n,m,N = size(prob)
 cons = prob.constraints

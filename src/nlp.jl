@@ -575,7 +575,7 @@ Evaluate the hessian of the cost function for the vector of decision variables `
 function hess_f!(nlp::TrajOptNLP, Z=get_primals(nlp), G=nlp.data.G)
 	N = num_knotpoints(nlp)
 	nlp.Z.Z = Z
-	cost_hessian!(nlp.E, nlp.obj, nlp.Z, true)  # TODO: figure out how to not require the reset
+	cost_hessian!(nlp.E, nlp.obj, nlp.Z, init=true)  # TODO: figure out how to not require the reset
 	if G !== nlp.data.G
 		copyto!(G, nlp.data.G)
 		if nlp.opts.reset_views

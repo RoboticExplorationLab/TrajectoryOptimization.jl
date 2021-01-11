@@ -129,10 +129,12 @@ using TrajectoryOptimization: state, control
 
         E = TO.QuadraticObjective(n, m, N)
         TO.cost_gradient!(E, obj, Z)
+        @test (@allocated TO.cost_gradient!(E, obj, Z)) == 0
         @test all([E[k].q ≈ obj[k].Q * (state(Z[k]) - xf) * (k < N ? dt : 1.0) for k = 1:N])
         @test all([E[k].r ≈ R * (control(Z[k]) - uref) * dt for k = 1:N-1])
 
-        TO.cost_hessian!(E, obj, Z)
+        TO.cost_hessian!(E, obj, Z, init=true)
+        # @test (@allocated TO.cost_hessian!(E, obj, Z, init=true)) == 0
         @test all([E[k].Q ≈ obj[k].Q * (k < N ? dt : 1.0) for k = 1:N])
         @test all([E[k].R ≈ R * dt for k = 1:N-1])
     end

@@ -65,12 +65,8 @@ function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory,
 	is_const = obj.const_grad
 	N = length(Z)
     for k in eachindex(Z)
-        if init || !is_const[k]
-			if is_terminal(Z[k])
-            	is_const[k] = gradient!(E[k], obj.cost[k], state(Z[k]), cache[3])
-			else
-            	is_const[k] = gradient!(E[k], obj.cost[k], Z[k], cache[1]) 
-			end
+		if init || !is_const[k]
+			is_const[k] = gradient!(E[k], obj.cost[k], Z[k], cache) 
             dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
             dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
             E[k].q .*= dt_x
@@ -102,11 +98,7 @@ function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory,
 				# E[k].R .= 0
 				# !is_blockdiag(E[k]) && (E[k].H .= 0)
 			end
-			if is_terminal(Z[k])
-            	is_const[k] = hessian!(E[k], obj.cost[k], state(Z[k]), cache[4])
-			else
-				is_const[k] = hessian!(E[k], obj.cost[k], Z[k], cache[2])
-			end
+			is_const[k] = hessian!(E[k], obj.cost[k], Z[k], cache)
             dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
             dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
             E[k].Q .*= dt_x
