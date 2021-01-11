@@ -105,7 +105,7 @@ function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory,
             E[k].R .*= dt_u
             E[k].H .*= dt_u
         end
-    end
+	end
 end
 
 """
@@ -125,26 +125,26 @@ function cost_expansion!(E, obj::Objective, Z::Traj,
     return nothing
 end
 
-function error_expansion!(E::Objective, Jexp::Objective, model::AbstractModel, Z::Traj, G, tmp=G[end])
+function error_expansion!(E, Jexp, model::AbstractModel, Z::Traj, G, tmp=G[end])
     @assert E === Jexp "E and Jexp should be the same object for AbstractModel"
     return nothing
 end
 
-function error_expansion!(E::Objective, Jexp::Objective, model::LieGroupModel, Z::Traj, G, tmp=G[end])
-    for k in eachindex(E.cost)
-        error_expansion!(E.cost[k], Jexp.cost[k], model, Z[k], G[k], tmp)
+function error_expansion!(E, Jexp, model::LieGroupModel, Z::Traj, G, tmp=G[end])
+    for k in eachindex(E)
+        error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
-	E.const_hess .= false   # hessian will always be dependent on the state
+	# E.const_hess .= false   # hessian will always be dependent on the state
 end
 
-function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::AbstractKnotPoint,
+function error_expansion!(E, cost, model, z::AbstractKnotPoint,
         G, tmp)
 	E.Q .= 0
     RobotDynamics.∇²differential!(E.Q, model, state(z), cost.q)
     if size(model)[1] < 15
         G = SMatrix(G)
         E.H .= SMatrix(cost.H) * G
-        E.q .= G'cost.q
+        E.q .= G'SVector(cost.q)
         E.Q .+= G'cost.Q*G
     else
         mul!(E.H, cost.H, G)

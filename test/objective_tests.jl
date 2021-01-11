@@ -109,6 +109,23 @@ using TrajectoryOptimization: state, control
 
         obj = LQRObjective(Diagonal(Vector(Q.diag)), R.diag, Vector(Qf.diag), xf, N)
         @test eltype(obj) <: DiagonalCost{n,m}
+
+        # Test error expansion constructor
+        model = Cartpole()
+        E0 = TO.CostExpansion(n,m,N)
+        E = TO.CostExpansion{Float32}(n,m,N)
+        @test eltype(E[1].hess) == Float32
+        E1 = TO.CostExpansion(E0, model)
+        @test E1 === E0
+
+        model = Quadrotor() 
+        E0 = TO.CostExpansion(13,4,11)
+        @test_throws AssertionError TO.CostExpansion(E0, model)
+        E0 = TO.CostExpansion(12,4,11)
+        E1 = TO.CostExpansion(E0, model)
+        @test E1 !== E0
+        @test size(E1[1].xx) == (13,13)
+        @test size(E0[1].xx) == (12,12)
     end
 
     @testset "Evaluation and expansion" begin
@@ -127,15 +144,41 @@ using TrajectoryOptimization: state, control
         TO.cost!(obj, Z)
         @test sum(TO.get_J(obj)) ≈ J
 
-        E = TO.QuadraticObjective(n, m, N)
-        TO.cost_gradient!(E, obj, Z)
-        @test (@allocated TO.cost_gradient!(E, obj, Z)) == 0
-        @test all([E[k].q ≈ obj[k].Q * (state(Z[k]) - xf) * (k < N ? dt : 1.0) for k = 1:N])
-        @test all([E[k].r ≈ R * (control(Z[k]) - uref) * dt for k = 1:N-1])
+        # E = TO.QuadraticObjective(n, m, N)
+        E0 = TO.CostExpansion(n, m, N)
+        TO.cost_gradient!(E0, obj, Z)
+        @test (@allocated TO.cost_gradient!(E0, obj, Z)) == 0
+        @test all([E0[k].q ≈ obj[k].Q * (state(Z[k]) - xf) * (k < N ? dt : 1.0) for k = 1:N])
+        @test all([E0[k].r ≈ R * (control(Z[k]) - uref) * dt for k = 1:N-1])
 
-        TO.cost_hessian!(E, obj, Z, init=true)
-        # @test (@allocated TO.cost_hessian!(E, obj, Z, init=true)) == 0
-        @test all([E[k].Q ≈ obj[k].Q * (k < N ? dt : 1.0) for k = 1:N])
-        @test all([E[k].R ≈ R * dt for k = 1:N-1])
+        TO.cost_hessian!(E0, obj, Z, init=true, rezero=true)
+        # @test (@allocated TO.cost_hessian!(E0, obj, Z, init=true)) == 0
+        @test all([E0[k].Q ≈ obj[k].Q * (k < N ? dt : 1.0) for k = 1:N])
+        @test all([E0[k].R ≈ R * dt for k = 1:N-1])
+
+        # pass in cache
+        cache = TO.ExpansionCache(obj[1])
+        TO.cost_expansion!(E0, obj, Z)
+        TO.cost_expansion!(E0, obj, Z, cache)
+
+        # Test error expansion
+        model = Cartpole()
+        G = [zeros(n,n) for k = 1:N]
+        E = TO.CostExpansion(E0, model)
+        RobotDynamics.state_diff_jacobian!(G, model, Z)
+        TO.error_expansion!(E, E0, model, Z, G)
+
+        model = Quadrotor()
+        G = [SizedMatrix{13,12}(zeros(13,12)) for k = 1:N]
+        Z = Traj([KnotPoint(rand(model)..., dt) for k = 1:N])
+        RobotDynamics.state_diff_jacobian!(G, model, Z)
+        E0 = TO.CostExpansion(12, 4, N)
+        E = TO.CostExpansion(E0, model)
+        obj = LQRObjective(Diagonal(rand(13)), Diagonal(rand(4)), 
+            Diagonal(rand(13)), rand(model)[1], N)
+        TO.cost_expansion!(E, obj, Z, init=true, rezero=true)
+        @test E[1].xx != zeros(13,13)
+        TO.error_expansion!(E0, E, model, Z, G)
+        @test (@allocated TO.error_expansion!(E0, E, model, Z, G)) == 0
     end
 end

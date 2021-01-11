@@ -9,6 +9,7 @@ using RobotDynamics
 using BenchmarkTools
 using FiniteDiff
 const TO = TrajectoryOptimization
+Random.seed!(1)
 
 include("test_models.jl")
 

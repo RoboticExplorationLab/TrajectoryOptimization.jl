@@ -84,6 +84,22 @@ Base.IteratorSize(obj::Objective) = Base.HasLength()
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
+const CostExpansion{n,m,T} = Vector{Expansion{n,m,T}} where {n,m,T}
+CostExpansion{T}(n::Int, m::Int, N::Int) where T<:Real = [Expansion{T}(n,m) for k = 1:N]
+@inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
+function CostExpansion(E::CostExpansion, model::AbstractModel)
+    # Create QuadraticObjective linked to error cost expansion
+    @assert RobotDynamics.state_diff_size(model) == size(model)[1]
+    return E 
+end
+
+function CostExpansion(E::CostExpansion{n,m,T}, model::LieGroupModel) where {n,m,T}
+    # Create an expansion for the full state dimension
+    @assert length(E[1].q) == RobotDynamics.state_diff_size(model)
+    n0 = state_dim(model)
+    return CostExpansion{T}(n0,m,length(E))
+end
+
 
 ############################################################################################
 #                            Quadratic Objectives (Expansions)

@@ -1,4 +1,4 @@
-import RobotZoo: Cartpole, DubinsCar
+import RobotZoo: Cartpole, DubinsCar, Quadrotor
 
 
 function CartpoleProblem()
