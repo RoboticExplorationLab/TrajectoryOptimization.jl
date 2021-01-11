@@ -10,6 +10,96 @@ at a single knot point.
 """
 abstract type CostFunction end
 
+import RobotDynamics: diffmethod, ForwardAD, FiniteDifference
+diffmethod(::CostFunction) = ForwardAD()
+
+# Automatic differentiation methods for generic costs
+@inline function gradient!(E, cost::CostFunction, args...)
+    _gradient!(diffmethod(cost), E, cost, args...)
+end
+
+@inline function hessian!(E, cost::CostFunction, args...)
+    _hessian!(diffmethod(cost), E, cost, args...)
+end
+
+function _gradient!(::ForwardAD, E, cost::CostFunction, x, cache=nothing)
+    costfun(x) = stage_cost(cost, x)
+    ForwardDiff.gradient!(E.x, costfun, x)
+    return false 
+end
+
+function _gradient!(::ForwardAD, E, cost::CostFunction, z::AbstractKnotPoint, cache=nothing)
+    ix,iu = z._x, z._u
+    costfun(z) = stage_cost(cost, z[ix], z[iu]) 
+    ForwardDiff.gradient!(E.grad, costfun, z.z)
+    return false 
+end
+
+function _hessian!(::ForwardAD, E, cost::CostFunction, x, cache=nothing)
+    costfun(x) = stage_cost(cost, x)
+    ForwardDiff.hessian!(E.xx, costfun, x)
+    return false
+end
+
+function _hessian!(::ForwardAD, E, cost::CostFunction, z::AbstractKnotPoint, cache=nothing)
+    if is_terminal(z)
+        return hessian!(E, cost, state(z))
+    end
+    ix,iu = z._x, z._u
+    costfun(z) = stage_cost(cost, z[ix], z[iu]) 
+    ForwardDiff.hessian!(E.hess, costfun, z.z)
+    return false
+end
+
+function _gradient!(::FiniteDifference, E, cost::CostFunction, x, cache=FiniteDiff.GradientCache(E.x.data, Vector(x), Val(:forward)))
+    costfun(x) = stage_cost(cost, x)
+    cache.c3 .= x
+    FiniteDiff.finite_difference_gradient!(E.x.data, costfun, cache.c3, cache)
+    return false 
+end
+
+function _gradient!(::FiniteDifference, E, cost::CostFunction, z::AbstractKnotPoint, 
+        cache=FiniteDiff.GradientCache(E.grad, Vector(z.z), Val(:forward)))
+    ix,iu = z._x, z._u
+    costfun(z) = stage_cost(cost, z[ix], z[iu])
+    cache.c3 .= z.z 
+    FiniteDiff.finite_difference_gradient!(E.grad, costfun, cache.c3, cache)
+    return false 
+end
+
+function _hessian!(::FiniteDifference, E, cost::CostFunction, x, cache=FiniteDiff.HessianCache(Vector(x)))
+    costfun(x) = stage_cost(cost, x)
+    cache.xmm .= x
+    cache.xmp .= x
+    cache.xpm .= x
+    cache.xpp .= x
+    FiniteDiff.finite_difference_hessian!(E.xx.data, costfun, cache.xmm, cache)
+    return false
+end
+
+function _hessian!(::FiniteDifference, E, cost::CostFunction, z::AbstractKnotPoint, 
+        cache=FiniteDiff.HessianCache(Vector(z.z)))
+    ix,iu = z._x, z._u
+    costfun(z) = stage_cost(cost, z[ix], z[iu])
+    cache.xmm .= z.z 
+    cache.xmp .= z.z 
+    cache.xpm .= z.z 
+    cache.xpp .= z.z 
+    FiniteDiff.finite_difference_hessian!(E.hess, costfun, cache.xmm, cache)
+    return false
+end
+
+@inline ExpansionCache(cost::CostFunction) = 
+    ExpansionCache(diffmethod(cost), state_dim(cost), control_dim(cost))
+@inline ExpansionCache(::ForwardAD, n::Int, m::Int) = (nothing,nothing,nothing,nothing)
+function ExpansionCache(::FiniteDifference, n::Int, m::Int) 
+    grad_cache0 = FiniteDiff.GradientCache(zeros(n), zeros(n), Val(:forward))
+    hess_cache0 = FiniteDiff.HessianCache(zeros(n))
+    grad_cache  = FiniteDiff.GradientCache(zeros(n+m), zeros(n+m), Val(:forward))
+    hess_cache  = FiniteDiff.HessianCache(zeros(n+m))
+    return (grad_cache, hess_cache, grad_cache0, hess_cache0)
+end
+
 """
 An abstract type that represents any [`CostFunction`](@ref) of the form
 ```math

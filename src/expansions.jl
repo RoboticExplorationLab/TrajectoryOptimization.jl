@@ -168,3 +168,59 @@ end
 # 	error_expansion!(D, G1, G2)
 # 	return D.A, D.B
 # end
+
+struct StaticExpansion{T,N,M,NN,MM,NM}
+	x::SVector{N,T}
+	xx::SMatrix{N,N,T,NN}
+	u::SVector{M,T}
+	uu::SMatrix{M,M,T,MM}
+	ux::SMatrix{M,N,T,NM}
+end
+
+function StaticExpansion(E::AbstractExpansion)
+	StaticExpansion(SVector(E.x), SMatrix(E.xx),
+		SVector(E.u), SMatrix(E.uu), SMatrix(E.ux))
+end
+
+function StaticExpansion(x,xx,u,uu,ux)
+	StaticExpansion(SVector(x), SMatrix(xx), SVector(u), SMatrix(uu), SMatrix(ux))
+end
+
+struct Expansion{n,m,T}
+    # not sure why calling it with 
+    res::DiffResults.MutableDiffResult{2,T,Tuple{Vector{T},Matrix{T}}}
+    hess::Matrix{T}
+    grad::Vector{T}
+    x::SizedVector{n,T,SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+    u::SizedVector{m,T,SubArray{T,1,Vector{T},Tuple{UnitRange{Int}},true}}
+    xx::SizedMatrix{n,n,T,2,SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}}
+    uu::SizedMatrix{m,m,T,2,SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}}
+    ux::SizedMatrix{m,n,T,2,SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}}
+    function Expansion{T}(n::Int, m::Int) where T
+        ix,iu = 1:n, n .+ (1:m)
+        res = DiffResults.HessianResult(zeros(T,n+m))
+        grad = DiffResults.gradient(res)
+        x = SizedVector{n}(view(grad,ix))
+        u = SizedVector{m}(view(grad,iu))
+        hess = DiffResults.hessian(res)
+        xx = SizedMatrix{n,n}(view(hess,ix,ix))
+        uu = SizedMatrix{m,m}(view(hess,iu,iu))
+        ux = SizedMatrix{m,n}(view(hess,iu,ix))
+        new{n,m,T}(res, hess, grad, x, u, xx, uu, ux)
+    end
+end
+function Base.getproperty(E::Expansion, field::Symbol)
+    if field == :q
+        getfield(E, :x)
+    elseif field == :r
+        getfield(E, :u)
+    elseif field == :Q
+        getfield(E, :xx)
+    elseif field == :R
+        getfield(E, :uu)
+    elseif field == :H
+        getfield(E, :ux)
+    else
+        getfield(E, field)
+    end
+end

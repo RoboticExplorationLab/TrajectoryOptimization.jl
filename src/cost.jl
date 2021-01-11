@@ -60,15 +60,16 @@ Evaluate the cost gradient along the entire tracjectory `Z`, storing the result 
 
 If `init == true`, all gradients will be evaluated, even if they are constant.
 """
-function cost_gradient!(E::Objective, obj::Objective, Z::AbstractTrajectory, init::Bool=false)
-    is_const = E.const_grad
-    N = length(Z)
+function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory, 
+		cache=ExpansionCache(obj); init::Bool=false)
+	is_const = obj.const_grad
+	N = length(Z)
     for k in eachindex(Z)
         if init || !is_const[k]
 			if is_terminal(Z[k])
-            	is_const[k] = gradient!(E.cost[k], obj.cost[k], state(Z[k]))
+            	is_const[k] = gradient!(E[k], obj.cost[k], state(Z[k]), cache[3])
 			else
-            	is_const[k] = gradient!(E.cost[k], obj.cost[k], state(Z[k]), control(Z[k]))
+            	is_const[k] = gradient!(E[k], obj.cost[k], Z[k], cache[1]) 
 			end
             dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
             dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
@@ -86,8 +87,9 @@ Evaluate the cost hessian along the entire tracjectory `Z`, storing the result i
 If `init == true`, all hessian will be evaluated, even if they are constant. If false,
 they will only be evaluated if they are not constant.
 """
-function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init::Bool=false, rezero::Bool=false)
-	is_const = E.const_hess
+function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory, 
+		cache=ExpansionCache(obj); init::Bool=false, rezero::Bool=false)
+	is_const = obj.const_hess
 	if !init && all(is_const)
 		return
 	end
@@ -95,14 +97,15 @@ function cost_hessian!(E::Objective, obj::Objective, Z::AbstractTrajectory, init
     for k in eachindex(Z)
         if init || !is_const[k]
 			if rezero
-				E[k].Q .= 0
-				E[k].R .= 0
-				!is_blockdiag(E[k]) && (E[k].H .= 0)
+				E[k].hess .= 0
+				# E[k].Q .= 0
+				# E[k].R .= 0
+				# !is_blockdiag(E[k]) && (E[k].H .= 0)
 			end
 			if is_terminal(Z[k])
-            	is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]))
+            	is_const[k] = hessian!(E[k], obj.cost[k], state(Z[k]), cache[4])
 			else
-				is_const[k] = hessian!(E.cost[k], obj.cost[k], state(Z[k]), control(Z[k]))
+				is_const[k] = hessian!(E[k], obj.cost[k], Z[k], cache[2])
 			end
             dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
             dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
@@ -123,9 +126,10 @@ If `init == false`, the expansions will only be evaluated if they are not consta
 
 If `rezero == true`, all expansions will be multiplied by zero before taking the expansion.
 """
-function cost_expansion!(E::Objective, obj::Objective, Z::Traj, init::Bool=false, rezero::Bool=false)
-    cost_gradient!(E, obj, Z, init)
-    cost_hessian!(E, obj, Z, init, rezero)
+function cost_expansion!(E, obj::Objective, Z::Traj, 
+		cache=ExpansionCache(obj); init::Bool=false, rezero::Bool=false)
+    cost_gradient!(E, obj, Z, cache, init=init)
+    cost_hessian!(E, obj, Z, cache, init=init, rezero=rezero)
     return nothing
 end
 
@@ -157,23 +161,6 @@ function error_expansion!(E::QuadraticCost, cost::QuadraticCost, model, z::Abstr
         mul!(E.Q, Transpose(G), tmp, 1.0, 1.0)
 	end
     return nothing
-end
-
-struct StaticExpansion{T,N,M,NN,MM,NM} <: AbstractExpansion{T}
-	x::SVector{N,T}
-	xx::SMatrix{N,N,T,NN}
-	u::SVector{M,T}
-	uu::SMatrix{M,M,T,MM}
-	ux::SMatrix{M,N,T,NM}
-end
-
-function StaticExpansion(E::AbstractExpansion)
-	StaticExpansion(SVector(E.x), SMatrix(E.xx),
-		SVector(E.u), SMatrix(E.uu), SMatrix(E.ux))
-end
-
-function StaticExpansion(x,xx,u,uu,ux)
-	StaticExpansion(SVector(x), SMatrix(xx), SVector(u), SMatrix(uu), SMatrix(ux))
 end
 
 function static_expansion(cost::QuadraticCost)

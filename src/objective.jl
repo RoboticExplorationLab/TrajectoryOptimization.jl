@@ -37,6 +37,8 @@ end
 
 state_dim(obj::Objective) = state_dim(obj.cost[1])
 control_dim(obj::Objective) = control_dim(obj.cost[1])
+Base.size(obj::Objective) = (state_dim(obj), control_dim(obj))
+@inline ExpansionCache(obj::Objective) = ExpansionCache(obj[1])
 
 """
     is_quadratic(obj::Objective)
