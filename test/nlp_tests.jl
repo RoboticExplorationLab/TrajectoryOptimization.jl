@@ -141,7 +141,8 @@ G_ = TO.hess_f_structure(nlp)
 @test nnz(G_) == NN
 @test diag(G_) == 1:NN
 
-obj_ = TO.QuadraticObjective(n,m,N)
+# obj_ = TO.QuadraticObjective(n,m,N)
+obj_ = Objective(QuadraticCost{Float64}(n,m),N)
 prob_ = Problem(prob, obj=obj_)
 nlp_ = TrajOptNLP(prob_)
 @test !(nlp_.obj isa Objective{<:TO.DiagonalCostFunction})

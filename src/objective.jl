@@ -85,8 +85,33 @@ Base.eachindex(obj::Objective) = Base.OneTo(length(obj))
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
-const CostExpansion{n,m,T} = Vector{Expansion{n,m,T}} where {n,m,T}
-CostExpansion{T}(n::Int, m::Int, N::Int) where T<:Real = [Expansion{T}(n,m) for k = 1:N]
+"""
+    CostExpansion{n,m,T}
+
+A vector of `Expansion`s, combined with some bit vectors for storing whether the 
+terms are constant or not.
+
+# Constructors
+    CostExpansion{T}(n,m,N)
+    CostExpansion(n,m,T)  # defaults to Float64
+    CostExpansion(E::CostExpansion, model)
+
+where the last constructor is for allocating the expansion for the "raw" expansion, 
+    before accounting for the Lie group structure. For a standard (Euclidiean) state 
+    vector, it will create an alias to the original expansion. For a `LieGroupModel`,
+    it will allocate new storage.
+"""
+struct CostExpansion{n,m,T} <: AbstractArray{Expansion{n,m,T},1}
+    data::Vector{Expansion{n,m,T}}
+    const_hess::BitVector
+    const_grad::BitVector
+    function CostExpansion{T}(n::Int, m::Int, N::Int) where T
+        data = [Expansion{T}(n,m) for k = 1:N]
+        const_hess = BitVector(undef, N)
+        const_grad = BitVector(undef, N)
+        new{n,m,T}(data, const_hess, const_grad)
+    end
+end
 @inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
 function CostExpansion(E::CostExpansion, model::AbstractModel)
     # Create QuadraticObjective linked to error cost expansion
@@ -100,40 +125,43 @@ function CostExpansion(E::CostExpansion{n,m,T}, model::LieGroupModel) where {n,m
     n0 = state_dim(model)
     return CostExpansion{T}(n0,m,length(E))
 end
+Base.size(E::CostExpansion) = size(E.data) 
+Base.getindex(E::CostExpansion, i::Int) = Base.getindex(E.data, i)
 
 
-############################################################################################
-#                            Quadratic Objectives (Expansions)
-############################################################################################
-const QuadraticObjective{n,m,T} = Objective{QuadraticCost{n,m,T,SizedMatrix{n,n,T,2,Matrix{T}},SizedMatrix{m,m,T,2,Matrix{T}}}}
-const QuadraticExpansion{n,m,T} = Objective{<:QuadraticCostFunction{n,m,T}}
-const DiagonalCostFunction{n,m,T} = Union{DiagonalCost{n,m,T},QuadraticCost{n,m,T,<:Diagonal,<:Diagonal}}
 
-function QuadraticObjective(n::Int, m::Int, N::Int, isequal::Bool=false)
-    Objective([QuadraticCost{Float64}(n,m, terminal=(k==N) && !isequal) for k = 1:N])
-end
+# ############################################################################################
+# #                            Quadratic Objectives (Expansions)
+# ############################################################################################
+# const QuadraticObjective{n,m,T} = Objective{QuadraticCost{n,m,T,SizedMatrix{n,n,T,2,Matrix{T}},SizedMatrix{m,m,T,2,Matrix{T}}}}
+# const QuadraticExpansion{n,m,T} = Objective{<:QuadraticCostFunction{n,m,T}}
+# const DiagonalCostFunction{n,m,T} = Union{DiagonalCost{n,m,T},QuadraticCost{n,m,T,<:Diagonal,<:Diagonal}}
 
-function QuadraticObjective(obj::QuadraticObjective, model::AbstractModel)
-    # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.state_diff_size(model) == size(model)[1]
-    return obj
-end
+# function QuadraticObjective(n::Int, m::Int, N::Int, isequal::Bool=false)
+#     Objective([QuadraticCost{Float64}(n,m, terminal=(k==N) && !isequal) for k = 1:N])
+# end
 
-function QuadraticObjective(obj::QuadraticObjective, model::LieGroupModel)
-    # Create QuadraticObjective partially linked to error cost expansion
-    @assert length(obj[1].q) == RobotDynamics.state_diff_size(model)
-    n,m = size(model)
-    costfuns = map(obj.cost) do costfun
-        Q = SizedMatrix{n,n}(zeros(n,n))
-        R = costfun.R
-        H = SizedMatrix{m,n}(zeros(m,n))
-        q = @MVector zeros(n)
-        r = costfun.r
-        c = costfun.c
-        QuadraticCost(Q,R,H,q,r,c, checks=false, terminal=costfun.terminal)
-    end
-    Objective(costfuns)
-end
+# function QuadraticObjective(obj::QuadraticObjective, model::AbstractModel)
+#     # Create QuadraticObjective linked to error cost expansion
+#     @assert RobotDynamics.state_diff_size(model) == size(model)[1]
+#     return obj
+# end
+
+# function QuadraticObjective(obj::QuadraticObjective, model::LieGroupModel)
+#     # Create QuadraticObjective partially linked to error cost expansion
+#     @assert length(obj[1].q) == RobotDynamics.state_diff_size(model)
+#     n,m = size(model)
+#     costfuns = map(obj.cost) do costfun
+#         Q = SizedMatrix{n,n}(zeros(n,n))
+#         R = costfun.R
+#         H = SizedMatrix{m,n}(zeros(m,n))
+#         q = @MVector zeros(n)
+#         r = costfun.r
+#         c = costfun.c
+#         QuadraticCost(Q,R,H,q,r,c, checks=false, terminal=costfun.terminal)
+#     end
+#     Objective(costfuns)
+# end
 
 
 # Convenience constructors
@@ -199,7 +227,7 @@ function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
     Objective(costs)
 end
 
-function update_trajectory!(obj::QuadraticExpansion, Z::AbstractTrajectory, start=1)
+function update_trajectory!(obj::Objective{<:QuadraticCostFunction}, Z::AbstractTrajectory, start=1)
     inds = (start-1) .+ (1:length(obj))
     for (i,k) in enumerate(inds)
         set_LQR_goal!(obj[i], state(Z[k]), control(Z[k]))

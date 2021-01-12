@@ -107,16 +107,6 @@ function dynamics_expansion!(Q, D::Vector{<:DynamicsExpansion}, model::AbstractM
 	end
 end
 
-# function dynamics_expansion!(D::Vector{<:DynamicsExpansion}, model::AbstractModel,
-# 		Z::Traj, Q=RobotDynamics.RK3)
-# 	for k in eachindex(D)
-# 		RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k])
-# 		D[k].tmpA .= D[k].A_  # avoids allocations later
-# 		D[k].tmpB .= D[k].B_
-# 	end
-# end
-
-
 function error_expansion!(D::DynamicsExpansion,G1,G2)
     mul!(D.tmp, D.tmpA, G1)
     mul!(D.A, Transpose(G2), D.tmp)
@@ -146,28 +136,6 @@ function error_expansion!(D::Vector{<:DynamicsExpansion}, model::LieGroupModel, 
 	end
 end
 
-# function linearize(::Type{Q}, model::AbstractModel, z::AbstractKnotPoint) where Q
-# 	D = DynamicsExpansion(model)
-# 	linearize!(Q, D, model, z)
-# end
-#
-# function linearize!(::Type{Q}, D::DynamicsExpansion{<:Any,<:Any,N,M}, model::AbstractModel,
-# 		z::AbstractKnotPoint) where {N,M,Q}
-# 	discrete_jacobian!(Q, D.∇f, model, z)
-# 	D.tmpA .= D.A_  # avoids allocations later
-# 	D.tmpB .= D.B_
-# 	return D.tmpA, D.tmpB
-# end
-#
-# function linearize!(::Type{Q}, D::DynamicsExpansion, model::LieGroupModel) where Q
-# 	discrete_jacobian!(Q, D.∇f, model, z)
-# 	D.tmpA .= D.A_  # avoids allocations later
-# 	D.tmpB .= D.B_
-# 	G1 = state_diff_jacobian(model, state(z))
-# 	G2 = state_diff_jacobian(model, x1)
-# 	error_expansion!(D, G1, G2)
-# 	return D.A, D.B
-# end
 
 struct StaticExpansion{T,N,M,NN,MM,NM}
 	x::SVector{N,T}
@@ -186,6 +154,17 @@ function StaticExpansion(x,xx,u,uu,ux)
 	StaticExpansion(SVector(x), SMatrix(xx), SVector(u), SMatrix(uu), SMatrix(ux))
 end
 
+"""
+	Expansion{n,m,T}
+
+Stores a full second-order expansion of a scalar-valued function (e.g. the cost function)
+with respect to both the state and control. The Hessian and gradient with respect to the 
+concatenated state and control, available via the `hess` and `grad` fields.
+
+The pieces with respect to the state and control separately are available via 
+`x`, `xx`, `u`, `uu`, and `ux`, which are aliased (for backward compatibility) with
+`q`, `Q`, `r`, `R`, and `H`.
+"""
 struct Expansion{n,m,T}
     # not sure why calling it with 
     res::DiffResults.MutableDiffResult{2,T,Tuple{Vector{T},Matrix{T}}}

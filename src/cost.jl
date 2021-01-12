@@ -134,7 +134,7 @@ function error_expansion!(E, Jexp, model::LieGroupModel, Z::Traj, G, tmp=G[end])
     for k in eachindex(E)
         error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
-	# E.const_hess .= false   # hessian will always be dependent on the state
+	E.const_hess .= false   # hessian will always be dependent on the state
 end
 
 function error_expansion!(E, cost, model, z::AbstractKnotPoint,
@@ -167,7 +167,7 @@ end
 Calculate the derivative of the cost in the direction of `dZ`, where `E` is the current
 quadratic expansion of the cost.
 """
-function dgrad(E::QuadraticExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
+function dgrad(E, dZ::Traj)
 	g = zero(T)
 	N = length(E)
 	for k = 1:N-1
@@ -182,7 +182,7 @@ end
 
 Calculate the scalar 0.5*dZ'G*dZ where G is the hessian of cost
 """
-function dhess(E::QuadraticExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
+function dhess(E::CostExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
 	h = zero(T)
 	N = length(E)
 	for k = 1:N-1
@@ -200,7 +200,7 @@ end
 
 Norm of the cost gradient
 """
-function norm_grad(E::QuadraticExpansion{n,m,T}, p=2)::T where {n,m,T}
+function norm_grad(E::CostExpansion{n,m,T}, p=2)::T where {n,m,T}
 	J = get_J(E)
 	for (k,cost) in enumerate(E)
 		J[k] = norm(cost.q, p)

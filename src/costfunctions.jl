@@ -89,6 +89,14 @@ function _hessian!(::FiniteDifference, E, cost::CostFunction, z::AbstractKnotPoi
     return false
 end
 
+"""
+    ExpansionCache(cost)
+
+Allocate the cache needed to evaluate the gradient and Hessian of the cost function.
+Returns a 4-element vector with the following elements: `[grad, hess, grad_term, hess_term]`,
+which are the caches need for the gradient and Hessian for the state and terminal cost
+functions.
+"""
 @inline ExpansionCache(cost::CostFunction) = 
     ExpansionCache(diffmethod(cost), state_dim(cost), control_dim(cost))
 @inline ExpansionCache(::ForwardAD, n::Int, m::Int) = (nothing,nothing,nothing,nothing)
