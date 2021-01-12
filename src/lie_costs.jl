@@ -295,8 +295,22 @@ function stage_cost(cost::DiagonalQuatCost, x::SVector)
     J += cost.w*min(1+dq, 1-dq)
 end
 
-function gradient!(E::QuadraticCostFunction, cost::DiagonalQuatCost{T,N,M}, 
-        x::SVector) where {T,N,M}
+# function gradient!(E::QuadraticCostFunction, cost::DiagonalQuatCost{T,N,M}, 
+#         x::SVector) where {T,N,M}
+#     Qx = cost.Q*x + cost.q
+#     q = x[cost.q_ind]
+#     dq = cost.q_ref'q
+#     if dq < 0
+#         Qx += cost.w*cost.Iq*cost.q_ref
+#     else
+#         Qx -= cost.w*cost.Iq*cost.q_ref
+#     end
+#     E.q .= Qx
+#     return false
+# end
+
+function gradient!(E, cost::DiagonalQuatCost, z::AbstractKnotPoint, cache=nothing)
+    x,u = state(z), control(z)
     Qx = cost.Q*x + cost.q
     q = x[cost.q_ind]
     dq = cost.q_ref'q
@@ -306,6 +320,9 @@ function gradient!(E::QuadraticCostFunction, cost::DiagonalQuatCost{T,N,M},
         Qx -= cost.w*cost.Iq*cost.q_ref
     end
     E.q .= Qx
+    if !is_terminal(z)
+        E.r .= cost.R*u .+ cost.r
+    end
     return false
 end
 
@@ -436,81 +453,94 @@ function ErrorQuadratic(model::RD.RigidBody{Rot}, Q::Diagonal{T,<:SVector{N0}},
 end
 
 
-function stage_cost(cost::ErrorQuadratic, x::SVector)
-    dx = RD.state_diff(cost.model, x, cost.x_ref, Rotations.ExponentialMap())
+function stage_cost(cost::ErrorQuadratic, x::AbstractVector)
+    dx = RD.state_diff(cost.model, x, cost.x_ref, Rotations.CayleyMap())
     return 0.5*dx'cost.Q*dx + cost.c
 end
 
-function stage_cost(cost::ErrorQuadratic, x::SVector, u::SVector)
+function stage_cost(cost::ErrorQuadratic, x::AbstractVector, u::AbstractVector)
     stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
 end
 
+diffmethod(::ErrorQuadratic) = RobotDynamics.FiniteDifference()
 
-function gradient!(E::QuadraticCostFunction, cost::ErrorQuadratic, x)
-    f(x) = stage_cost(cost, x)
-    ForwardDiff.gradient!(E.q, f, x)
-    return false
 
-    model = cost.model
-    Q = cost.Q
-    q = RD.orientation(model, x)
-    q_ref = RD.orientation(model, cost.x_ref)
-    dq = Rotations.params(q_ref \ q)
-    err = RD.state_diff(model, x, cost.x_ref)
-    dx = @SVector [err[1],  err[2],  err[3],
-                    dq[1],   dq[2],   dq[3],   dq[4],
-                   err[7],  err[8],  err[9],
-                   err[10], err[11], err[12]]
-    # G = state_diff_jacobian(model, dx) # n × dn
+# function gradient!(E, cost::ErrorQuadratic, z::AbstractKnotPoint, cache=nothing)
+#     x,u = state(z), control(z)
+#     f(x) = stage_cost(cost, x)
+#     ForwardDiff.gradient!(E.q, f, x)
+#     if !is_terminal(z)
+#         E.u .= cost.R*u + cost.r
+#     end
+#     return false
 
-    # Gradient
-    dmap = inverse_map_jacobian(model, dx) # dn × n
-    # Qx = G'dmap'Q*err
-    Qx = dmap'Q*err
-    E.q = Qx
-    return false
-end
-function gradient!(E::QuadraticCostFunction, cost::ErrorQuadratic, x, u)
-    gradient!(E, cost, x)
-    Qu = cost.R*u
-    E.r .= Qu
-    return false
-end
+#     model = cost.model
+#     Q = cost.Q
+#     q = RD.orientation(model, x)
+#     q_ref = RD.orientation(model, cost.x_ref)
+#     dq = Rotations.params(q_ref \ q)
+#     err = RD.state_diff(model, x, cost.x_ref)
+#     dx = @SVector [err[1],  err[2],  err[3],
+#                     dq[1],   dq[2],   dq[3],   dq[4],
+#                    err[7],  err[8],  err[9],
+#                    err[10], err[11], err[12]]
+#     # G = state_diff_jacobian(model, dx) # n × dn
 
-function hessian!(E::QuadraticCostFunction, cost::ErrorQuadratic, x)
-    f(x) = stage_cost(cost, x)
-    ForwardDiff.hessian!(E.Q, f, x)
-    return false
+#     # Gradient
+#     dmap = inverse_map_jacobian(model, dx) # dn × n
+#     # Qx = G'dmap'Q*err
+#     Qx = dmap'Q*err
+#     E.x .= Qx
+#     if !is_terminal(z)
+#         E.r .= cost.R * u
+#     end
+#     return false
+# end
+# # function gradient!(E::QuadraticCostFunction, cost::ErrorQuadratic, x, u)
+# #     gradient!(E, cost, x)
+# #     Qu = cost.R*u
+# #     E.r .= Qu
+# #     return false
+# # end
 
-    model = cost.model
-    Q = cost.Q
-    q = RD.orientation(model, x)
-    q_ref = RD.orientation(model, cost.x_ref)
-    dq = Rotations.params(q_ref\q)
-    err = RD.state_diff(model, x, cost.x_ref)
-    dx = @SVector [err[1],  err[2],  err[3],
-                    dq[1],   dq[2],   dq[3],   dq[4],
-                   err[7],  err[8],  err[9],
-                   err[10], err[11], err[12]]
-    # G = state_diff_jacobian(model, dx) # n × dn
+# function hessian!(E, cost::ErrorQuadratic, z::AbstractKnotPoint, cache=nothing)
+#     x,u = state(z), control(z)
+#     f(x) = stage_cost(cost, x)
+#     ForwardDiff.hessian!(E.Q, f, x)
+#     return false
 
-    # Gradient
-    dmap = inverse_map_jacobian(model, dx) # dn × n
+#     model = cost.model
+#     Q = cost.Q
+#     q = RD.orientation(model, x)
+#     q_ref = RD.orientation(model, cost.x_ref)
+#     dq = Rotations.params(q_ref\q)
+#     err = RD.state_diff(model, x, cost.x_ref)
+#     dx = @SVector [err[1],  err[2],  err[3],
+#                     dq[1],   dq[2],   dq[3],   dq[4],
+#                    err[7],  err[8],  err[9],
+#                    err[10], err[11], err[12]]
+#     # G = state_diff_jacobian(model, dx) # n × dn
 
-    # Hessian
-    ∇jac = inverse_map_∇jacobian(model, dx, Q*err)
-    # Qxx = G'dmap'Q*dmap*G + G'∇jac*G + ∇²differential(model, x, dmap'Q*err)
-    Qxx = dmap'Q*dmap + ∇jac #+ ∇²differential(model, x, dmap'Q*err)
-    E.Q = Qxx
-    E.H .*= 0 
-    return false
-end
+#     # Gradient
+#     dmap = inverse_map_jacobian(model, dx) # dn × n
 
-function hessian!(E::QuadraticCostFunction, cost::ErrorQuadratic, x, u)
-    hessian!(E, cost, x)
-    E.R .= cost.R
-    return false
-end
+#     # Hessian
+#     ∇jac = inverse_map_∇jacobian(model, dx, Q*err)
+#     # Qxx = G'dmap'Q*dmap*G + G'∇jac*G + ∇²differential(model, x, dmap'Q*err)
+#     Qxx = dmap'Q*dmap + ∇jac #+ ∇²differential(model, x, dmap'Q*err)
+#     E.Q = Qxx
+#     E.H .*= 0 
+#     if !is_terminal(z)
+#         E.R .= cost.R
+#     end
+#     return false
+# end
+
+# function hessian!(E::QuadraticCostFunction, cost::ErrorQuadratic, x, u)
+#     hessian!(E, cost, x)
+#     E.R .= cost.R
+#     return false
+# end
 
 
 function change_dimension(cost::ErrorQuadratic, n, m)
