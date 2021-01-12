@@ -81,6 +81,7 @@ Base.getindex(obj::Objective,i::Int) = obj.cost[i]
 @inline Base.eltype(obj::Objective) = eltype(obj.cost)
 @inline Base.length(obj::Objective) = length(obj.cost)
 Base.IteratorSize(obj::Objective) = Base.HasLength()
+Base.eachindex(obj::Objective) = Base.OneTo(length(obj))
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 

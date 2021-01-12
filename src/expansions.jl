@@ -205,7 +205,9 @@ struct Expansion{n,m,T}
         hess = DiffResults.hessian(res)
         xx = SizedMatrix{n,n}(view(hess,ix,ix))
         uu = SizedMatrix{m,m}(view(hess,iu,iu))
-        ux = SizedMatrix{m,n}(view(hess,iu,ix))
+		ux = SizedMatrix{m,n}(view(hess,iu,ix))
+		hess .= I(n+m)
+		grad .= 0 
         new{n,m,T}(res, hess, grad, x, u, xx, uu, ux)
     end
 end
@@ -224,3 +226,5 @@ function Base.getproperty(E::Expansion, field::Symbol)
         getfield(E, field)
     end
 end
+
+static_expansion(E::Expansion) = StaticExpansion(E.x, E.xx, E.u, E.uu, E.ux)

@@ -140,6 +140,8 @@ end
 function error_expansion!(E, cost, model, z::AbstractKnotPoint,
         G, tmp)
 	E.Q .= 0
+	E.R .= cost.R
+	E.r .= cost.r
     RobotDynamics.∇²differential!(E.Q, model, state(z), cost.q)
     if size(model)[1] < 15
         G = SMatrix(G)
