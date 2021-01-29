@@ -136,7 +136,7 @@ nlp.conSet.λ[end][1] .= rand(n) * 1000
 # @test !(TO.hess_L!(nlp, Z) ≈ G)  # not sure why this has non-deterministic behavior
 
 # Test cost hessian structure
-@test nlp.obj isa Objective{<:TO.DiagonalCostFunction}
+@test nlp.obj isa Objective{<:TO.DiagonalCost}
 G_ = TO.hess_f_structure(nlp)
 @test nnz(G_) == NN
 @test diag(G_) == 1:NN
@@ -145,7 +145,7 @@ G_ = TO.hess_f_structure(nlp)
 obj_ = Objective(QuadraticCost{Float64}(n,m),N)
 prob_ = Problem(prob, obj=obj_)
 nlp_ = TrajOptNLP(prob_)
-@test !(nlp_.obj isa Objective{<:TO.DiagonalCostFunction})
+@test !(nlp_.obj isa Objective{<:TO.DiagonalCost})
 G_ = TO.hess_f_structure(nlp_)
 @test nnz(G_) == (N-1)*(n+m)^2 + n^2
 @test G_[1:n+m, 1:n+m] == reshape(1:(n+m)^2, n+m, n+m)

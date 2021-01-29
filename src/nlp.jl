@@ -505,6 +505,7 @@ end
 @inline num_constraints(nlp::TrajOptNLP) = length(nlp.data.d)
 
 @inline get_primals(nlp::TrajOptNLP) = nlp.Z.Z
+@inline get_duals(nlp::TrajOptNLP) = nlp.data.λ
 @inline get_trajectory(nlp::TrajOptNLP) = nlp.Z
 @inline get_constraints(nlp::TrajOptNLP) = nlp.conSet
 @inline get_model(nlp::TrajOptNLP) = nlp.model
@@ -599,7 +600,7 @@ function hess_f_structure(nlp::TrajOptNLP)
 	N = num_knotpoints(nlp)
 	n,m = size(nlp.model)
 	G = spzeros(Int, NN, NN)
-	if nlp.obj isa Objective{<:DiagonalCostFunction}
+	if nlp.obj isa Objective{<:DiagonalCost}
 		for i = 1:NN
 			G[i,i] = i
 		end
@@ -666,7 +667,7 @@ function jac_c!(nlp::TrajOptNLP, Z=get_primals(nlp), C::AbstractArray=nlp.data.D
 		copyto!(C, nlp.data.C)
 		if nlp.opts.reset_views
 			nlp.data.D = C
-			reset_views(nlp.conet, nlp.data)
+			reset_views!(nlp.conSet, nlp.data)
 		end
 	elseif C isa AbstractVector && C != nlp.data.v
 		copyto!(C, nlp.data.v)
