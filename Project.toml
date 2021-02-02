@@ -16,6 +16,7 @@ UnsafeArrays = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
 
 [compat]
 DocStringExtensions = "0.8"
+FiniteDiff = "2"
 ForwardDiff = "0.10"
 MathOptInterface = "0.9"
 RobotDynamics = "0.3.2"
