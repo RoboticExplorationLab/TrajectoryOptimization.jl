@@ -49,6 +49,7 @@ since each constraint is unique, in general.
 List of currently implemented constraints
 * [`GoalConstraint`](@ref)
 * [`BoundConstraint`](@ref)
+* [`LinearConstraint`](@ref)
 * [`CircleConstraint`](@ref)
 * [`SphereConstraint`](@ref)
 * [`NormConstraint`](@ref)
@@ -58,6 +59,7 @@ List of currently implemented constraints
 ```@docs
 GoalConstraint
 BoundConstraint
+LinearConstraint
 CircleConstraint
 SphereConstraint
 NormConstraint
