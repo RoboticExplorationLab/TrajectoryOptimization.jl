@@ -1,3 +1,17 @@
+# New in `v0.5`
+## Support for Finite Differencing
+Added support for finite differencing with `FiniteDiff` for dynamics, constraints, and cost functions.
+
+## Added general nonlinear costs
+Generic nonlinear costs are now officially supported and can be automatically differentiated using either ForwardDiff or FiniteDiff.
+
+## Added generic `Expansion` type
+The new `Expansion` type is provided for storing cost expansions, and is now preferred for use over `QuadraticCost`. It supports both `xx,xu,uu,x,u` and `Q,H,R,q,r` fields.
+In general, the way cost functions were used has been cleaned up. `QuadraticObjective` and other such type aliases have been removed in favor of a less complicated API.
+
+## Expanded Documentation
+Documentation has been significantly updated.
+
 # New in `v0.4`
 
 ## Conic Constraints
