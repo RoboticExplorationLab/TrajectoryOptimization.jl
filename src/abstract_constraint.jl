@@ -190,7 +190,7 @@ All constraints are categorized into the following type tree:
                         ↙                ↘
            StageConstraint               CoupledConstraint
             ↙        ↘                       ↙           ↘
-StageConstraint ControlConstraint CoupledStateConstraint CoupledControlConstraint
+StateConstraint ControlConstraint CoupledStateConstraint CoupledControlConstraint
 ```
 
 The state and control dimensions (where applicable) can be queried using
