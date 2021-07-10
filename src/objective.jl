@@ -219,6 +219,11 @@ function LQRObjective(
     Objective(ℓ, ℓN, N)
 end
 
+"""
+    TrackingObjective(Q, R, Z; [Qf])
+
+Generate a quadratic objective that tracks the reference trajectory specified by `Z`.
+"""
 function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
     costs = map(Z) do z
         LQRCost(Q, R, state(z), control(z))
@@ -227,6 +232,15 @@ function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
     Objective(costs)
 end
 
+"""
+    update_trajectory!(obj, Z, [start=1])
+
+For use with a tracking-style trajectory (see [`TrackingObjective`](@ref)).
+Update the costs to track the new trajectory `Z`. The `start` parameter specifies the 
+index of reference trajectory that should be used as the starting point of the reference 
+tracked by the objective. This is useful when a single, long time-horizon trajectory is given
+but the optimization only tracks a portion of the reference at each solve (e.g. MPC).
+"""
 function update_trajectory!(obj::Objective{<:QuadraticCostFunction}, Z::AbstractTrajectory, start=1)
     inds = (start-1) .+ (1:length(obj))
     for (i,k) in enumerate(inds)

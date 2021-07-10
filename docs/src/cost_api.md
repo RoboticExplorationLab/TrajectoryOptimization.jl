@@ -40,10 +40,12 @@ cost3 = cost1 + cost2
 ```@docs
 Objective
 LQRObjective
+TrackingObjective
 get_J
 dgrad
 dhess
 norm_grad
+update_trajectory!
 ```
 
 ## Evaluating the Cost
