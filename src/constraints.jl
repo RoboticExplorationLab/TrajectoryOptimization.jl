@@ -153,7 +153,7 @@ end
 	CircleConstraint{P,T}
 
 Constraint of the form
-`` (x - x_c)^2 + (y - y_c)^2 \\leq r^2 ``
+`` (x - x_c)^2 + (y - y_c)^2 \\geq r^2 ``
 where ``x``, ``y`` are given by `x[xi]`,`x[yi]`, ``(x_c,y_c)`` is the center
 of the circle, and ``r`` is the radius.
 
@@ -217,7 +217,7 @@ end
 	SphereConstraint{P,T}
 
 Constraint of the form
-`` (x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2 \\leq r^2 ``
+`` (x - x_c)^2 + (y - y_c)^2 + (z - z_c)^2 \\geq r^2 ``
 where ``x``, ``y``, ``z`` are given by `x[xi]`,`x[yi]`,`x[zi]`, ``(x_c,y_c,z_c)`` is the center
 of the sphere, and ``r`` is the radius.
 
@@ -293,7 +293,7 @@ end
     CollisionConstraint
 
 Enforces a pairwise non self-collision constraint on the state, such that
-    `norm(x[x1] - x[x2]).^2 > r^2`,
+    `norm(x[x1] - x[x2]).^2 ≥ r^2`,
     where `x1` and `x2` are the indices of the positions of the respective bodies and `r`
     is the collision radius.
 
