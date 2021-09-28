@@ -11,11 +11,11 @@ function setup(; num_lift=3)
     r0_load = [0,0,0.25]
     scenario = :doorway
     prob = gen_prob(:batch, quad_params, load_params, r0_load, scenario=scenario,num_lift=num_lift,quat=quat);
-    return prob
+    return prob, r0_load, quat
 end
 
-function get_trajs(; verbose=true, visualize=true)
-    prob = setup()
+function get_trajs(; num_lift=3, verbose=true, visualize=true)
+    prob, r0_load, quat = setup(;num_lift=num_lift)
     opts_ilqr = iLQRSolverOptions(verbose=verbose,
       iterations=50)
 
