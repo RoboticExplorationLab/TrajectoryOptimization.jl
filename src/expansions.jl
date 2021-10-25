@@ -70,7 +70,7 @@ struct DynamicsExpansion{T,N,N̄,M}
 		fux = view(∇²f, iu, ix)
 		tmpA = SizedMatrix{n0,n0}(zeros(n0,n0))
 		tmpB = SizedMatrix{n0,m}(zeros(n0,m))
-		tmp = zeros(n0,n)
+		tmp = SizedMatrix{n0,n}(zeros(n0,n))
 		new{T,n0,n,m}(∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
 	end
 	function DynamicsExpansion{T}(n::Int, m::Int) where T
