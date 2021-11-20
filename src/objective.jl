@@ -26,12 +26,14 @@ struct Objective{C} <: AbstractObjective
     J::Vector{Float64}
     const_grad::BitVector
     const_hess::BitVector
+    diffmethod::Vector{RD.DiffMethod}
     function Objective(cost::Vector{C}) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
         grad = zeros(Bool,N)
         hess = zeros(Bool,N)
-        new{C}(cost, J, grad, hess)
+        diffmethod = fill(RD.UserDefined(), N)
+        new{C}(cost, J, grad, hess, diffmethod)
     end
 end
 
@@ -115,13 +117,13 @@ end
 @inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
 function CostExpansion(E::CostExpansion, model::AbstractModel)
     # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.state_diff_size(model) == size(model)[1]
+    @assert RobotDynamics.errstate_dim(model) == size(model)[1]
     return E 
 end
 
 function CostExpansion(E::CostExpansion{n,m,T}, model::LieGroupModel) where {n,m,T}
     # Create an expansion for the full state dimension
-    @assert length(E[1].q) == RobotDynamics.state_diff_size(model)
+    @assert length(E[1].q) == RobotDynamics.errstate_dim(model)
     n0 = state_dim(model)
     return CostExpansion{T}(n0,m,length(E))
 end

@@ -177,7 +177,7 @@ struct Expansion{n,m,T} <: AbstractMatrix{T}
     u::SizedVector{m,T,SubArray{T,1,Matrix{T},Tuple{UnitRange{Int64}, Int64}, true}}
     function Expansion{T}(n::Int, m::Int) where T
         ix,iu = 1:n, n .+ (1:m)
-        data = zeros(n+m,n+m+1)
+        data = zeros(T,n+m,n+m+1)
         hess = view(data,:,1:n+m)
         xx = SizedMatrix{n,n}(view(hess,ix,ix))
         uu = SizedMatrix{m,m}(view(hess,iu,iu))

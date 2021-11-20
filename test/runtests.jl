@@ -12,8 +12,8 @@ const TO = TrajectoryOptimization
 const RD = RobotDynamics
 Random.seed!(1)
 
-##
 include("test_models.jl")
+##
 
 @testset "Costs" begin
     include("cost_tests.jl")

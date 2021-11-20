@@ -1,6 +1,7 @@
 using TrajectoryOptimization: state, control
 
 @testset "Objectives" begin
+    using RobotDynamics: state, control
     n, m = rand(10:20), rand(5:10)
     N = 11
 
@@ -132,13 +133,15 @@ using TrajectoryOptimization: state, control
         # Evaluation and expansion functions
         dt = 0.01
         N = 101
-        Z = Traj([KnotPoint(rand(SVector{n}), rand(SVector{m}), dt * (k < N)) for k = 1:N])
+        Z = Traj([KnotPoint(rand(SVector{n}), rand(SVector{m}), dt*(k-1), dt * (k < N)) for k = 1:N])
+        RD.setcontrol!(Z[end], zeros(m))
         uref = @SVector rand(m)
         obj = LQRObjective(Q, R, Qf, xf, N, uf = uref)
         J = sum([
                 0.5 * (x - xf)'Q * (x - xf) + 0.5 * (u - uref)'R * (u - uref)
                 for (x, u) in zip(states(Z)[1:N-1], controls(Z))
-            ]) * dt + 0.5 * (state(Z[end]) - xf)'Qf * (state(Z[end]) - xf)
+            ]) + 0.5 * (state(Z[end]) - xf)'Qf * (state(Z[end]) - xf)
+        cost(obj, Z)
         @test cost(obj, Z) ≈ J
 
         TO.cost!(obj, Z)
@@ -146,32 +149,33 @@ using TrajectoryOptimization: state, control
 
         # E = TO.QuadraticObjective(n, m, N)
         E0 = TO.CostExpansion(n, m, N)
+        TO.cost_gradient!(E0, obj, Z, init=true)
         TO.cost_gradient!(E0, obj, Z)
         @test (@allocated TO.cost_gradient!(E0, obj, Z)) == 0
-        @test all([E0[k].q ≈ obj[k].Q * (state(Z[k]) - xf) * (k < N ? dt : 1.0) for k = 1:N])
-        @test all([E0[k].r ≈ R * (control(Z[k]) - uref) * dt for k = 1:N-1])
+        @test all([E0[k].q ≈ obj[k].Q * (state(Z[k]) - xf) for k = 1:N])
+        @test all([E0[k].r ≈ R * (control(Z[k]) - uref) for k = 1:N-1])
 
         TO.cost_hessian!(E0, obj, Z, init=true, rezero=true)
         # @test (@allocated TO.cost_hessian!(E0, obj, Z, init=true)) == 0
-        @test all([E0[k].Q ≈ obj[k].Q * (k < N ? dt : 1.0) for k = 1:N])
-        @test all([E0[k].R ≈ R * dt for k = 1:N-1])
+        @test all([E0[k].Q ≈ obj[k].Q for k = 1:N])
+        @test all([E0[k].R ≈ R for k = 1:N-1])
 
-        # pass in cache
-        cache = TO.ExpansionCache(obj[1])
-        TO.cost_expansion!(E0, obj, Z)
-        TO.cost_expansion!(E0, obj, Z, cache)
+        # # pass in cache
+        # cache = TO.ExpansionCache(obj[1])
+        # TO.cost_expansion!(E0, obj, Z)
+        # TO.cost_expansion!(E0, obj, Z, cache)
 
         # Test error expansion
         model = Cartpole()
         G = [zeros(n,n) for k = 1:N]
         E = TO.CostExpansion(E0, model)
-        RobotDynamics.state_diff_jacobian!(G, model, Z)
+        RobotDynamics.state_diff_jacobian!(model, G, Z)
         TO.error_expansion!(E, E0, model, Z, G)
 
         model = Quadrotor()
         G = [SizedMatrix{13,12}(zeros(13,12)) for k = 1:N]
-        Z = Traj([KnotPoint(rand(model)..., dt) for k = 1:N])
-        RobotDynamics.state_diff_jacobian!(G, model, Z)
+        Z = Traj([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
+        RobotDynamics.state_diff_jacobian!(model, G, Z)
         E0 = TO.CostExpansion(12, 4, N)
         E = TO.CostExpansion(E0, model)
         obj = LQRObjective(Diagonal(rand(13)), Diagonal(rand(4)), 
