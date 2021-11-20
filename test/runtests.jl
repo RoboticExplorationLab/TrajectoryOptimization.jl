@@ -9,8 +9,10 @@ using RobotDynamics
 using BenchmarkTools
 using FiniteDiff
 const TO = TrajectoryOptimization
+const RD = RobotDynamics
 Random.seed!(1)
 
+##
 include("test_models.jl")
 
 @testset "Costs" begin

@@ -121,7 +121,7 @@ states(x) = states(get_trajectory(x))
 
 Get the times for all the knot points in the problem.
 """
-@inline RobotDynamics.get_times(prob::Problem) = get_times(get_trajectory(prob))
+@inline RobotDynamics.gettimes(prob::Problem) = gettimes(get_trajectory(prob))
 
 
 """

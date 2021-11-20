@@ -1,3 +1,27 @@
+function test_cost_allocs(qcost)
+    n,m = RD.dims(qcost)
+    E = TO.Expansion{Float64}(n,m)
+    x = @SVector randn(n)
+    u = @SVector randn(m)
+    t,dt = 1.1, 0.1
+    z = KnotPoint(x,u,t,dt)
+    zterm = KnotPoint(x,u*0,t,0.0)
+    method = RD.UserDefined()
+    allocs = 0
+    allocs += @allocated RD.evaluate(qcost, x, u)
+    allocs += @allocated RD.evaluate(qcost, z)
+    allocs += @allocated RD.gradient!(qcost, E.grad, z)
+    allocs += @allocated RD.hessian!(qcost, E.hess, z)
+    allocs += @allocated RD.evaluate(qcost, x, u)
+    allocs += @allocated RD.evaluate(qcost, zterm)
+    allocs += @allocated RD.gradient!(qcost, E.grad, zterm)
+    allocs += @allocated RD.hessian!(qcost, E.hess, zterm)
+
+    allocs += @allocated RD.gradient!(method, qcost, E.grad, z)
+    allocs += @allocated RD.hessian!(method, qcost, E.hess, z)
+    return allocs
+end
+
 @testset "Quadratic Costs" begin
     # Quadratic Costs
     n, m = rand(10:20), rand(5:10)
@@ -198,57 +222,50 @@
         # Test cost functions and expansions
         x = @SVector rand(n)
         u = @SVector rand(m)
-        dt = 0.1
-        z = KnotPoint(x, u, dt)
-        zterm = KnotPoint(x, u, 0.0)
+        t,dt = 1.1, 0.1
+        z = KnotPoint(x, u, t, dt)
+        zterm = KnotPoint(x, u, t, 0.0)
         @test TO.is_terminal(zterm)
 
         qcost = QuadraticCost(Q, R, H, q, r, c)
-        @test TO.stage_cost(qcost, z) ≈ TO.stage_cost(qcost, x, u) * dt
-        @test TO.stage_cost(qcost, x, u) ≈
+        @test RD.evaluate(qcost, z) ≈ RD.evaluate(qcost, x, u)
+        @test RD.evaluate(qcost, x, u) ≈
               0.5 * (x'Q * x + u'R * u) + q'x + r'u + c + u'H * x
 
-        E = QuadraticCost{Float64}(n, m)
-        TO.gradient!(E, qcost, zterm)
+        E = TO.Expansion{Float64}(n, m)
+        RD.gradient!(qcost, E.grad, zterm)
         @test E.q ≈ Q * x + q
         @test E.r ≈ zero(r)
-        TO.gradient!(E, qcost, z)
+        RD.gradient!(qcost, E.grad, z)
         @test E.q ≈ Q * x + q + H'u
         @test E.r ≈ R * u + r + H * x
 
-        TO.hessian!(E, qcost, zterm)
+        RD.hessian!(qcost, E.hess, zterm)
         @test E.Q ≈ Q
         @test E.R ≈ I(m)
-        TO.hessian!(E, qcost, z) 
+        RD.hessian!(qcost, E.hess, z) 
         @test E.R ≈ R
         @test E.H ≈ H
-        @test (@allocated TO.gradient!(E, qcost, zterm)) == 0
-        # @test (@allocated TO.gradient!(E, qcost, z)) == 0
-        @test (@allocated TO.hessian!(E, qcost, zterm)) == 0
-        @test (@allocated TO.hessian!(E, qcost, z)) == 0
+        @test test_cost_allocs(qcost) == 0
 
         dcost = DiagonalCost(Q, R, q, r, c)
-        @test TO.stage_cost(dcost, z) ≈ TO.stage_cost(dcost, x, u) * dt
-        @test TO.stage_cost(dcost, x, u) ≈ 0.5 * (x'Q * x + u'R * u) + q'x + r'u + c
+        @test RD.evaluate(dcost, z) ≈ RD.evaluate(dcost, x, u)
+        @test RD.evaluate(dcost, x, u) ≈ 0.5 * (x'Q * x + u'R * u) + q'x + r'u + c
 
-        E = QuadraticCost{Float64}(n, m)
-        TO.gradient!(E, dcost, zterm)
+        E = TO.Expansion{Float64}(n, m)
+        RD.gradient!(dcost, E.grad, zterm)
         @test E.q ≈ Q * x + q
         @test E.r ≈ zero(r)
-        TO.gradient!(E, dcost, z) 
+        RD.gradient!(dcost, E.grad, z) 
         @test E.q ≈ Q * x + q
         @test E.r ≈ R * u + r
 
-        TO.hessian!(E, dcost, zterm)
+        RD.hessian!(dcost, E.hess, zterm)
         @test E.Q ≈ Q
-        @test E.R ≈ I(m)
-        TO.hessian!(E, dcost, z) 
+        @test E.R ≈ zeros(m,m) 
+        RD.hessian!(dcost, E.hess, z) 
         @test E.R ≈ R
         @test E.H ≈ zero(H)
-        @test (@allocated TO.gradient!(E, dcost, zterm)) == 0
-        @test (@allocated TO.gradient!(E, dcost, z)) == 0
-        @test (@allocated TO.hessian!(E, dcost, zterm)) == 0
-        @test (@allocated TO.hessian!(E, dcost, z)) == 0
+        @test test_cost_allocs(dcost) == 0
     end
-
 end

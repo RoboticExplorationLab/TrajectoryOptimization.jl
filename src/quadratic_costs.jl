@@ -66,6 +66,15 @@ function stage_cost(cost::QuadraticCostFunction, x::AbstractVector{T}) where T
     0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
 end
 
+function RD.evaluate(cost::QuadraticCostFunction, x, u)
+    # J = 0.5*u'cost.R*(u + 2cost.r) + 0.5*x'cost.Q*(x + 2cost.q) + cost.c
+    J = 0.5*u'cost.R*u + dot(cost.r,u) + 0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
+    if !is_blockdiag(cost)
+        J += u'cost.H*x
+    end
+    return J
+end
+
 """
     gradient!(E::QuadraticCostFunction, costfun::CostFunction, z::AbstractKnotPoint, [cache])
 
@@ -94,6 +103,19 @@ function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
         end
     end
     return false
+end
+function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint) where {n,m}
+    x,u = state(z), control(z)
+    ix,iu = 1:n, n+1:n+m
+    grad[ix] .= cost.Q * x .+ cost.q
+    if !is_terminal(z)
+        grad[iu] .= cost.R * u .+ cost.r 
+        if !is_blockdiag(cost)
+            matmul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
+            matmul!(view(grad, iu), cost.H, x, 1.0, 1.0)
+        end
+    end
+    return nothing
 end
 
 """
@@ -131,6 +153,28 @@ function hessian!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
         end
     end
     return true
+end
+
+function RD.hessian!(cost::QuadraticCostFunction{n,m}, hess, z::AbstractKnotPoint) where {n,m}
+    ix,iu = 1:n, n+1:n+m
+    x,u = state(z), control(z)
+    if is_diag(cost)
+        hess .= 0
+        for i = 1:n; hess[i,i] = cost.Q[i,i] end
+    else
+        hess[ix,ix] .= cost.Q
+    end
+    if !is_terminal(z)
+        if is_diag(cost)
+            for i = 1:m; hess[i+n,i+n] = cost.R[i,i] end
+        else
+            hess[iu,iu] .= cost.R
+        end
+        if !is_blockdiag(cost)
+            hess[iu,ix] .= cost.H
+        end
+    end
+    return nothing
 end
 
 function Base.copy(c::QC) where QC<:QuadraticCostFunction
