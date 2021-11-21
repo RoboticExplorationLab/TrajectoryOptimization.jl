@@ -30,8 +30,8 @@ where `Z` is a trajectory (Vector of `KnotPoint`s)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
-    model::AbstractModel
+struct Problem{T<:AbstractFloat}
+    model::DiscreteDynamics
     obj::AbstractObjective
     constraints::ConstraintList
     x0::MVector
@@ -40,7 +40,7 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     N::Int
     t0::T
     tf::T
-    function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
+    function Problem(model::DiscreteDynamics, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
             Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
@@ -53,23 +53,19 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
         @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
-        new{Q,T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
+        new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
 
-"Use RK3 as default integration"
-Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
-    Problem{RobotDynamics.RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
-
-function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintList(size(model)...,length(obj)),
+function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
+        xf::AbstractVector = fill(NaN, state_dim(model)),
+        constraints=ConstraintList(state_dim(model), control_dim(model), length(obj)),
         t0=zero(tf),
-        x0=zero(xf), N::Int=length(obj),
-        X0=[x0*NaN for k = 1:N],
-        U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
-        dt=fill((tf-t0)/(N-1),N-1),
-        integration=DEFAULT_Q) where {L,O}
-    n,m = size(model)
+        X0=[x0*NaN for k = 1:length(obj)],
+        U0=[@SVector zeros(size(model)[2]) for k = 1:length(obj)-1],
+        dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
+    n,m = dims(model)
+    N = length(obj)
     if dt isa Real
         dt = fill(dt,N)
     end
@@ -83,22 +79,25 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
     t = pushfirst!(cumsum(dt), 0)
     Z = Traj(X0,U0,dt,t)
 
-    Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
+    Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)
 end
 
+function Problem(model::AbstractModel, args...; 
+                 integration::RD.QuadratureRule=RD.RK4(model), kwargs...)
+    discrete_model = RD.DiscretizedDynamics(model, integration)
+    Problem(discrete_model, args...; kwargs...)
+end
+
+function Problem{Q}(model::AbstractModel, args...; kwargs...) where {Q<:QuadratureRule}
+    discrete_model = RD.DiscretizedDynamics(model, integration)
+    Problem(discrete_model, args...; kwargs...)
+end
 
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
 Base.size(prob::Problem) = size(prob.model)..., prob.N
-
-"""```julia
-integration(::Problem)
-integration(::DynamicsConstraint)
-```
-Get the integration rule"""
-integration(prob::Problem{Q}) where Q = Q
 
 """
     controls(::Problem)
@@ -142,7 +141,7 @@ end
 
 Copy the state trajectory
 """
-@inline initial_states!(prob, X0) = RobotDynamics.set_states!(get_trajectory(prob), X0)
+@inline initial_states!(prob, X0) = RobotDynamics.setstates!(get_trajectory(prob), X0)
 
 
 """
@@ -199,7 +198,7 @@ end
 
 Copy the control trajectory
 """
-@inline initial_controls!(prob, U0) = RobotDynamics.set_controls!(get_trajectory(prob), U0)
+@inline initial_controls!(prob, U0) = RobotDynamics.setcontrols!(get_trajectory(prob), U0)
 
 """
     cost(::Problem)

@@ -97,10 +97,11 @@ function save_tmp!(D::DynamicsExpansion)
     D.tmpB .= D.B_
 end
 
-function dynamics_expansion!(Q, D::Vector{<:DynamicsExpansion}, model::AbstractModel,
-        Z::Traj, args...)
+function dynamics_expansion!(sig::RD.FunctionSignature, fun::RD.DiffMethod, 
+                             model::DiscreteDynamics, D::Vector{<:DynamicsExpansion}, Z::Traj)
     for k in eachindex(D)
-        RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k], args...)
+        # RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k], args...)
+        RobotDynamics.jacobian!(sig, diff, model, D[k].∇f, Z[k])
         # save_tmp!(D[k])
         # D[k].tmpA .= D[k].A_  # avoids allocations later
         # D[k].tmpB .= D[k].B_
@@ -113,23 +114,23 @@ function error_expansion!(D::DynamicsExpansion,G1,G2)
     mul!(D.B, Transpose(G2), D.tmpB)
 end
 
-@inline error_expansion(D::DynamicsExpansion, model::LieGroupModel) = D.A, D.B
-@inline error_expansion(D::DynamicsExpansion, model::AbstractModel) = D.tmpA, D.tmpB
+@inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
+@inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.tmpA, D.tmpB
 
-@inline DynamicsExpansion(model::AbstractModel) = DynamicsExpansion{Float64}(model)
-@inline function DynamicsExpansion{T}(model::AbstractModel) where T
+@inline DynamicsExpansion(model::DiscreteDynamics) = DynamicsExpansion{Float64}(model)
+@inline function DynamicsExpansion{T}(model::DiscreteDynamics) where T
     n,m = size(model)
-    n̄ = state_diff_size(model)
+    n̄ = RD.errstate_dim(model)
     DynamicsExpansion{T}(n,n̄,m)
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion}, model::AbstractModel, G)
+function error_expansion!(D::Vector{<:DynamicsExpansion}, model::DiscreteDynamics, G)
     for d in D
         save_tmp!(d)
     end
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion}, model::LieGroupModel, G)
+function error_expansion!(D::Vector{<:DynamicsExpansion}, model::DiscreteLieDynamics, G)
     for k in eachindex(D)
         save_tmp!(D[k])
         error_expansion!(D[k], G[k], G[k+1])

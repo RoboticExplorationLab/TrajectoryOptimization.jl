@@ -20,12 +20,12 @@ const MOI = MathOptInterface
 import RobotDynamics
 const RD = RobotDynamics
 
-using RobotDynamics: AbstractModel, LieGroupModel,
+using RobotDynamics: AbstractModel, DiscreteDynamics, LieGroupModel, DiscreteLieDynamics,
 	KnotPoint, StaticKnotPoint, AbstractKnotPoint,
 	QuadratureRule, Implicit, Explicit, 
 	is_terminal, state_diff, state_diff_jacobian!,
 	state, control, states, controls, gettimes, Traj, AbstractTrajectory,
-	num_vars,
+	num_vars, dims,
 	FiniteDifference, ForwardAD, StaticReturn, InPlace
 
 import RobotDynamics: jacobian!, state_dim, control_dim, states, controls, 
