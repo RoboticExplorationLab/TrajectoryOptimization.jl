@@ -343,7 +343,7 @@ If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, o
     op = V <: SVector ? :(=) : :(.=)
     quote
         for (i, k) in enumerate(inds)
-            $(Expr(op, :(vals([i])), :(evaluate(con, Z[k]))))
+            $(Expr(op, :(vals[i]), :(RD.evaluate(con, Z[k]))))
         end
     end
 end
@@ -356,7 +356,7 @@ function RD.evaluate!(
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
-        evaluate!(con, vals[i], Z[k])
+        RD.evaluate!(con, vals[i], Z[k])
     end
 end
 
@@ -466,6 +466,29 @@ function RD.∇jacobian!(
     for (i, k) in enumerate(inds)
         ∇jacobian!(con, H[i], λ[i], c[i], Z[k])
     end
+end
+
+function error_expansion!(jac, jac0, con::StageConstraint, model::DiscreteDynamics, G, inds) where C
+	if jac !== jac0
+		n,m = size(model)
+        n̄ = RD.errstate_dim(model)
+		ix = 1:n̄
+		iu = n̄ .+ (1:m)
+		ix0 = 1:n
+		iu0 = n .+ (1:m)
+		for (i,k) in enumerate(inds)
+            ∇x  = view(jac[i], :, ix)
+            ∇u  = view(jac[i], :, iu)
+            ∇x0 = view(jac0[i], :, ix0)
+            ∇u0 = view(jac0[i], :, iu0)
+
+			if con isa StateConstraints
+				mul!(∇x, ∇x0, get_data(G[k]))
+			elseif con isa ControlConstraints
+				∇u .= ∇u0
+			end
+		end
+	end
 end
 
 # function ∇jacobian!(
@@ -601,11 +624,11 @@ end
 # end
 
 
-# function gen_jacobian(con::AbstractConstraint, i = 1)
-#     ws = widths(con)
-#     p = length(con)
-#     C1 = SizedMatrix{p,ws[i]}(zeros(p, ws[i]))
-# end
+function gen_jacobian(con::AbstractConstraint, i = 1)
+    ws = widths(con)
+    p = length(con)
+    C1 = SizedMatrix{p,ws[i]}(zeros(p, ws[i]))
+end
 
 # function gen_views(∇c::AbstractMatrix, con::StateConstraint, n = state_dim(con), m = 0)
 #     view(∇c, :, 1:n), view(∇c, :, n:n-1)

@@ -256,7 +256,9 @@ Simulate the dynamics forward from the initial condition `x0` using the controls
 trajectory `Z`.
 If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0`.
 """
-@inline rollout!(prob::Problem{Q}) where {Q} = rollout!(Q, get_model(prob), get_trajectory(prob), get_initial_state(prob))
+@inline rollout!(prob::Problem) = rollout!(StaticReturn(), prob)
+@inline rollout!(sig::FunctionSignature, prob::Problem) = 
+    rollout!(sig, get_model(prob), get_trajectory(prob), get_initial_state(prob))
 
 function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
     x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)

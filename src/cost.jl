@@ -106,16 +106,17 @@ function cost_expansion!(E, obj::Objective, Z::Traj; init::Bool=false, rezero::B
     return nothing
 end
 
-function error_expansion!(E, Jexp, model::AbstractModel, Z::Traj, G, tmp=G[end])
+function error_expansion!(E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
     @assert E === Jexp "E and Jexp should be the same object for AbstractModel"
     return nothing
 end
 
-function error_expansion!(E, Jexp, model::LieGroupModel, Z::Traj, G, tmp=G[end])
+function error_expansion!(E, Jexp, model::DiscreteLieDynamics, Z::Traj, G, tmp=G[end])
     for k in eachindex(E)
         error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
 	E.const_hess .= false   # hessian will always be dependent on the state
+	return nothing
 end
 
 function error_expansion!(E, cost, model, z::AbstractKnotPoint,

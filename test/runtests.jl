@@ -27,7 +27,7 @@ end
     include("constraint_tests.jl")
     include("dynamics_constraints.jl")
     include("constraint_list.jl")
-    include("constraint_sets.jl")
+    # include("constraint_sets.jl")
 end
 
 @testset "Problems" begin
@@ -37,15 +37,19 @@ end
 # @testset "Utils" begin
 # end
 
-@testset "NLP" begin
-    include("nlp_tests.jl")
-    include("moi_test.jl")
+# @testset "NLP" begin
+#     include("nlp_tests.jl")
+#     include("moi_test.jl")
+# end
+
+@testset "Internal API" begin
+    include("internal_api.jl")
 end
 
-using NBInclude
-@testset "Examples" begin
-    @nbinclude(joinpath(@__DIR__, "..", "examples", "Internal API.ipynb"))
-    # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
-    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
-    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
-end
+# using NBInclude
+# @testset "Examples" begin
+#     @nbinclude(joinpath(@__DIR__, "..", "examples", "Internal API.ipynb"))
+#     # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
+#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
+#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
+# end

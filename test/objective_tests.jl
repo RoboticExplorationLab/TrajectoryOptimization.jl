@@ -120,10 +120,11 @@ using TrajectoryOptimization: state, control
         @test E1 === E0
 
         model = Quadrotor() 
+        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         E0 = TO.CostExpansion(13,4,11)
         @test_throws AssertionError TO.CostExpansion(E0, model)
         E0 = TO.CostExpansion(12,4,11)
-        E1 = TO.CostExpansion(E0, model)
+        E1 = TO.CostExpansion(E0, dmodel)
         @test E1 !== E0
         @test size(E1[1].xx) == (13,13)
         @test size(E0[1].xx) == (12,12)
@@ -167,22 +168,24 @@ using TrajectoryOptimization: state, control
 
         # Test error expansion
         model = Cartpole()
+        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         G = [zeros(n,n) for k = 1:N]
         E = TO.CostExpansion(E0, model)
         RobotDynamics.state_diff_jacobian!(model, G, Z)
-        TO.error_expansion!(E, E0, model, Z, G)
+        TO.error_expansion!(E, E0, dmodel, Z, G)
 
         model = Quadrotor()
+        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         G = [SizedMatrix{13,12}(zeros(13,12)) for k = 1:N]
         Z = Traj([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
         RobotDynamics.state_diff_jacobian!(model, G, Z)
         E0 = TO.CostExpansion(12, 4, N)
-        E = TO.CostExpansion(E0, model)
+        E = TO.CostExpansion(E0, dmodel)
         obj = LQRObjective(Diagonal(rand(13)), Diagonal(rand(4)), 
             Diagonal(rand(13)), rand(model)[1], N)
         TO.cost_expansion!(E, obj, Z, init=true, rezero=true)
         @test E[1].xx != zeros(13,13)
-        TO.error_expansion!(E0, E, model, Z, G)
-        run_alloc_tests && @test (@allocated TO.error_expansion!(E0, E, model, Z, G)) == 0
+        TO.error_expansion!(E0, E, dmodel, Z, G)
+        run_alloc_tests && @test (@allocated TO.error_expansion!(E0, E, dmodel, Z, G)) == 0
     end
 end

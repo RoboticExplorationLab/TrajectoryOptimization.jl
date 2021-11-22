@@ -4,8 +4,8 @@ model = Cartpole()
 n,m = size(model)
 N = 11
 x,u = rand(model)
-dt = 0.1
-z = KnotPoint(x,u,dt)
+t,dt = 0.1
+z = KnotPoint(x,u,t,dt)
 
 
 #--- Generate some constraints

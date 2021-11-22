@@ -44,12 +44,13 @@ This method will provide the error state Jacobians for `LieGroupModel`s, and
     the normal Jacobian otherwise. Both `fdx` and `fdu` are a `SizedMatrix`.
 """
 struct DynamicsExpansion{T,N,N̄,M}
+    f::Vector{T}
     ∇f::Matrix{T} # n × (n+m)
     ∇²f::Matrix{T}  # (n+m) × (n+m)
     A_::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
     B_::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
-    A::SizedMatrix{N̄,N̄,T,2,Matrix{T}}
-    B::SizedMatrix{N̄,M,T,2,Matrix{T}}
+    A::SizedMatrix{N̄,N̄,T,2,Matrix{T}}  # corrected error Jacobian
+    B::SizedMatrix{N̄,M,T,2,Matrix{T}}  # corrected error Jacobian
     fxx::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
     fuu::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
     fux::SubArray{T,2,Matrix{T},Tuple{UnitRange{Int},UnitRange{Int}},false}
@@ -57,6 +58,7 @@ struct DynamicsExpansion{T,N,N̄,M}
     tmpB::SizedMatrix{N,M,T,2,Matrix{T}}
     tmp::SizedMatrix{N,N̄,T,2,Matrix{T}}
     function DynamicsExpansion{T}(n0::Int, n::Int, m::Int) where T
+        f = zeros(n0)
         ∇f = zeros(n0,n0+m)
         ∇²f = zeros(n0+m,n0+m)
         ix = 1:n0
@@ -71,9 +73,10 @@ struct DynamicsExpansion{T,N,N̄,M}
         tmpA = SizedMatrix{n0,n0}(zeros(n0,n0))
         tmpB = SizedMatrix{n0,m}(zeros(n0,m))
         tmp = SizedMatrix{n0,n}(zeros(n0,n))
-        new{T,n0,n,m}(∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
+        new{T,n0,n,m}(f,∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
     end
     function DynamicsExpansion{T}(n::Int, m::Int) where T
+        f = zeros(n)
         ∇f = zeros(n,n+m)
         ∇²f = zeros(n+m,n+m)
         ix = 1:n
@@ -88,7 +91,7 @@ struct DynamicsExpansion{T,N,N̄,M}
         tmpA = A
         tmpB = B
         tmp = zeros(n,n)
-        new{T,n,n,m}(∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
+        new{T,n,n,m}(f,∇f,∇²f,A_,B_,A,B,fxx,fuu,fux,tmpA,tmpB,tmp)
     end
 end
 
@@ -97,11 +100,11 @@ function save_tmp!(D::DynamicsExpansion)
     D.tmpB .= D.B_
 end
 
-function dynamics_expansion!(sig::RD.FunctionSignature, fun::RD.DiffMethod, 
+function dynamics_expansion!(sig::FunctionSignature, diff::DiffMethod, 
                              model::DiscreteDynamics, D::Vector{<:DynamicsExpansion}, Z::Traj)
     for k in eachindex(D)
         # RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k], args...)
-        RobotDynamics.jacobian!(sig, diff, model, D[k].∇f, Z[k])
+        RobotDynamics.jacobian!(sig, diff, model, D[k].∇f, D[k].f, Z[k])
         # save_tmp!(D[k])
         # D[k].tmpA .= D[k].A_  # avoids allocations later
         # D[k].tmpB .= D[k].B_
@@ -115,7 +118,7 @@ function error_expansion!(D::DynamicsExpansion,G1,G2)
 end
 
 @inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
-@inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.tmpA, D.tmpB
+@inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.A, D.B
 
 @inline DynamicsExpansion(model::DiscreteDynamics) = DynamicsExpansion{Float64}(model)
 @inline function DynamicsExpansion{T}(model::DiscreteDynamics) where T
@@ -124,13 +127,16 @@ end
     DynamicsExpansion{T}(n,n̄,m)
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion}, model::DiscreteDynamics, G)
+function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne}
+    @assert Nx == Ne
     for d in D
-        save_tmp!(d)
+        copyto!(d.A, d.A_) 
+        copyto!(d.B, d.B_) 
     end
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion}, model::DiscreteLieDynamics, G)
+function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteLieDynamics, G) where {Nx,Ne}
+    @assert Nx > Ne
     for k in eachindex(D)
         save_tmp!(D[k])
         error_expansion!(D[k], G[k], G[k+1])

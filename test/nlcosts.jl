@@ -54,7 +54,7 @@ TO.control_dim(::CartpoleCost) = 1
 
     ## Test expansion of trajectory
     N = 11
-    obj = Objective(cst, N, diff=RD.ForwardAD())
+    obj = Objective(cst, N, diffmethod=RD.ForwardAD())
     X = [@SVector rand(n) for k = 1:N]
     U = [@SVector rand(m) for k = 1:N-1]
     Z = Traj(X,U,fill(0.1,N))
