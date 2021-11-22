@@ -70,7 +70,12 @@ function RD.evaluate(cost::QuadraticCostFunction, x, u)
     # J = 0.5*u'cost.R*(u + 2cost.r) + 0.5*x'cost.Q*(x + 2cost.q) + cost.c
     J = 0.5*u'cost.R*u + dot(cost.r,u) + 0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
     if !is_blockdiag(cost)
-        J += u'cost.H*x
+        if length(x) <= 14
+            J += u'SMatrix(cost.H)*x
+        else
+            mul!(cost.tmpu, cost.H, x)
+            J += cost.tmpu'u
+        end
     end
     return J
 end
@@ -373,6 +378,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     c::T                      # constant term
     terminal::Bool
     zeroH::Bool
+    tmpu::MVector{m,T}
     function (::Type{QC})(Q::TQ, R::TR, H::TH,
             q::Tq, r::Tr, c::Real; checks=true, terminal=false, kwargs...) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
         @assert size(Q,1) == length(q)
@@ -389,7 +395,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
         zeroH = norm(H,Inf) ≈ 0
         m,n = size(H)
         T = promote_type(eltype(Q), eltype(R), eltype(H), eltype(q), eltype(r), typeof(c))
-        new{n,m,T,TQ,TR}(Q,R,H,q,r,c,terminal,zeroH)
+        new{n,m,T,TQ,TR}(Q,R,H,q,r,c,terminal,zeroH,copy(r))
     end
     function QuadraticCost{n,m,T,TQ,TR}(qcost::QuadraticCost) where {n,m,T,TQ,TR}
         new{n,m,T,TQ,TR}(qcost.Q, qcost.R, qcost.H, qcost.q, qcost.r, qcost.c, qcost.terminal, qcost.zeroH)

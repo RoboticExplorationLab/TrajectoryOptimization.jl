@@ -27,12 +27,11 @@ struct Objective{C} <: AbstractObjective
     const_grad::BitVector
     const_hess::BitVector
     diffmethod::Vector{RD.DiffMethod}
-    function Objective(cost::Vector{C}) where C <: CostFunction
+    function Objective(cost::Vector{C}, diffmethod::Vector{<:DiffMethod}) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
         grad = zeros(Bool,N)
         hess = zeros(Bool,N)
-        diffmethod = fill(RD.UserDefined(), N)
         new{C}(cost, J, grad, hess, diffmethod)
     end
 end
@@ -55,18 +54,21 @@ For example, if the original cost function is an augmented Lagrangian cost funct
 is_quadratic(obj::Objective) = all(obj.const_hess)
 
 # Constructors
-function Objective(cost::CostFunction,N::Int)
-    Objective([cost for k = 1:N])
+function Objective(cost::CostFunction,N::Int; diff=RD.UserDefined())
+    diffmethod = fill(diff, N)
+    Objective([cost for k = 1:N], diffmethod)
 end
 
-function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
+function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int; diff=RD.UserDefined())
     stage, term = promote(cost, cost_terminal)
-    Objective([k < N ? stage : term for k = 1:N])
+    diffmethod = fill(diff, N)
+    Objective([k < N ? stage : term for k = 1:N], diffmethod)
 end
 
-function Objective(cost::Vector{<:CostFunction},cost_terminal::CostFunction)
+function Objective(cost::Vector{<:CostFunction},cost_terminal::CostFunction; diff=RD.UserDefined())
     N = length(cost) + 1
-    Objective([cost...,cost_terminal])
+    diffmethod = fill(diff, N)
+    Objective([cost...,cost_terminal], diffmethod)
 end
 
 # Methods

@@ -151,7 +151,7 @@ using TrajectoryOptimization: state, control
         E0 = TO.CostExpansion(n, m, N)
         TO.cost_gradient!(E0, obj, Z, init=true)
         TO.cost_gradient!(E0, obj, Z)
-        @test (@allocated TO.cost_gradient!(E0, obj, Z)) == 0
+        run_alloc_tests && @test (@allocated TO.cost_gradient!(E0, obj, Z)) == 0
         @test all([E0[k].q ≈ obj[k].Q * (state(Z[k]) - xf) for k = 1:N])
         @test all([E0[k].r ≈ R * (control(Z[k]) - uref) for k = 1:N-1])
 
@@ -183,6 +183,6 @@ using TrajectoryOptimization: state, control
         TO.cost_expansion!(E, obj, Z, init=true, rezero=true)
         @test E[1].xx != zeros(13,13)
         TO.error_expansion!(E0, E, model, Z, G)
-        @test (@allocated TO.error_expansion!(E0, E, model, Z, G)) == 0
+        run_alloc_tests && @test (@allocated TO.error_expansion!(E0, E, model, Z, G)) == 0
     end
 end

@@ -9,10 +9,14 @@ function test_cost_allocs(qcost)
     method = RD.UserDefined()
     allocs = 0
     allocs += @allocated RD.evaluate(qcost, x, u)
+    allocs > 0 && println("allocs for evaluate(qcost, x, u)")
     allocs += @allocated RD.evaluate(qcost, z)
+    allocs > 0 && println("allocs for evaluate(qcost, z)")
     allocs += @allocated RD.gradient!(qcost, E.grad, z)
+    allocs > 0 && println("allocs for gradient!(qcost, E.grad, z)")
     allocs += @allocated RD.hessian!(qcost, E.hess, z)
-    allocs += @allocated RD.evaluate(qcost, x, u)
+    allocs > 0 && println("allocs for hessian!(qcost, E.hess, z)")
+
     allocs += @allocated RD.evaluate(qcost, zterm)
     allocs += @allocated RD.gradient!(qcost, E.grad, zterm)
     allocs += @allocated RD.hessian!(qcost, E.hess, zterm)
@@ -246,7 +250,7 @@ end
         RD.hessian!(qcost, E.hess, z) 
         @test E.R ≈ R
         @test E.H ≈ H
-        @test test_cost_allocs(qcost) == 0
+        run_alloc_tests && @test test_cost_allocs(qcost) == 0
 
         dcost = DiagonalCost(Q, R, q, r, c)
         @test RD.evaluate(dcost, z) ≈ RD.evaluate(dcost, x, u)
@@ -266,6 +270,6 @@ end
         RD.hessian!(dcost, E.hess, z) 
         @test E.R ≈ R
         @test E.H ≈ zero(H)
-        @test test_cost_allocs(dcost) == 0
+        run_alloc_tests && @test test_cost_allocs(dcost) == 0
     end
 end
