@@ -59,12 +59,16 @@ struct ConstraintList <: AbstractConstraintSet
 	m::Int
 	constraints::Vector{AbstractConstraint}
 	inds::Vector{UnitRange{Int}}
+	sigs::Vector{FunctionSignature}
+	diffs::Vector{DiffMethod}
 	p::Vector{Int}
 	function ConstraintList(n::Int, m::Int, N::Int)
 		constraints = AbstractConstraint[]
 		inds = UnitRange{Int}[]
 		p = zeros(Int,N)
-		new(n, m, constraints, inds, p)
+		sigs = FunctionSignature[]
+		diffs = DiffMethod[]
+		new(n, m, constraints, inds, sigs, diffs, p)
 	end
 end
 
@@ -103,7 +107,8 @@ cons_and_inds = [(con,ind) in zip(cons)]
 cons_and_inds[1] == (bnd,1:n-1)            # (true)
 ```
 """
-function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
+function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, 
+						 idx=-1; sig::FunctionSignature=StaticReturn(), diff::DiffMethod=UserDefined())
 	@assert check_dims(con, cons.n, cons.m) "New constraint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
@@ -122,8 +127,8 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 	@assert length(cons.constraints) == length(cons.inds)
 end
 
-@inline add_constraint!(cons::ConstraintList, con::AbstractConstraint, k::Int, idx=-1) =
-	add_constraint!(cons, con, k:k, idx)
+@inline add_constraint!(cons::ConstraintList, con::AbstractConstraint, k::Int, idx=-1; kwargs...) =
+	add_constraint!(cons, con, k:k, idx; kwargs...)
 
 # Iteration
 Base.iterate(cons::ConstraintList) = length(cons) == 0 ? nothing : (cons[1], 1)

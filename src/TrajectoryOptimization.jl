@@ -27,7 +27,7 @@ using RobotDynamics: AbstractModel, DiscreteDynamics, LieGroupModel, DiscreteLie
 	state, control, states, controls, gettimes, Traj, AbstractTrajectory,
 	num_vars, dims,
 	FunctionSignature, DiffMethod,
-	FiniteDifference, ForwardAD, StaticReturn, InPlace
+	FiniteDifference, ForwardAD, StaticReturn, InPlace, UserDefined
 
 import RobotDynamics: jacobian!, state_dim, control_dim, states, controls, 
 	state_diff_jacobian!, rollout!

@@ -4,7 +4,8 @@
     n,m = size(model)
     N = 11
     x,u = rand(model)
-    z = KnotPoint(x,u,0.1)
+    t,h = 1.1, 0.1
+    z = KnotPoint(x,u,t,h)
 
     #--- Generate some constraints
     # Circle Constraint
@@ -31,7 +32,8 @@
     bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
 
     # Dynamics Constraint
-    dyn = TO.DynamicsConstraint(model, N)
+    dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
+    dyn = TO.DynamicsConstraint(dmodel)
 
     #--- Create a List
     cons = ConstraintList(n,m,N)
