@@ -242,8 +242,9 @@ RobotDynamics.control_dim(::C) where {C<:ControlConstraint} =
 "Return the constraint value"
 evaluate(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:evaluate, Symbol(C)))
 
-"Length of constraint vector"
-Base.length(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:length, Symbol(C)))
+"Length of constraint vector (deprecated for RD.output_dim)"
+# Base.length(con::C) where {C<:AbstractConstraint} = RD.output_dim(con) 
+RD.output_dim(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:output_dim, Symbol(C)))
 
 # widths(con::StageConstraint, n=state_dim(con), m=control_dim(con)) = (n+m,)
 # widths(con::StateConstraint, n=state_dim(con), m=0) = (n,)

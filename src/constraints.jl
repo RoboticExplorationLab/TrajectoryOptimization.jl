@@ -41,7 +41,7 @@ end
 Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
-@inline Base.length(con::GoalConstraint{P}) where P = P
+@inline RD.output_dim(con::GoalConstraint{P}) where P = P
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
@@ -129,7 +129,7 @@ Base.copy(con::LinearConstraint{S}) where S =
 	LinearConstraint(con.n, con.m, copy(con.A), copy(con.b), S(), con.inds)
 
 @inline sense(con::LinearConstraint) = con.sense
-@inline Base.length(con::LinearConstraint{<:Any,P}) where P = P
+@inline RD.output_dim(con::LinearConstraint{<:Any,P}) where P = P
 @inline state_dim(con::LinearConstraint) = con.n
 @inline control_dim(con::LinearConstraint) = con.m
 RD.evaluate(con::LinearConstraint, z::AbstractKnotPoint) = con.A*RD.getdata(z)[con.inds] .- con.b
@@ -221,7 +221,7 @@ function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, X, u) where P
 	return
 end
 
-@inline Base.length(::CircleConstraint{P}) where P = P
+@inline RD.output_dim(::CircleConstraint{P}) where P = P
 @inline sense(::CircleConstraint) = Inequality()
 
 function change_dimension(con::CircleConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -268,7 +268,7 @@ end
 
 @inline state_dim(con::SphereConstraint) = con.n
 @inline sense(::SphereConstraint) = Inequality()
-@inline Base.length(::SphereConstraint{P}) where P = P
+@inline RD.output_dim(::SphereConstraint{P}) where P = P
 
 function RD.evaluate(con::SphereConstraint, x, u)
 	xc = con.x; xi = con.xi
@@ -340,7 +340,7 @@ end
 
 @inline state_dim(con::CollisionConstraint) = con.n
 @inline sense(::CollisionConstraint) = Inequality()
-@inline Base.length(::CollisionConstraint) = 1
+@inline RD.output_dim(::CollisionConstraint) = 1
 
 function RD.evaluate(con::CollisionConstraint, x, u)
     x1 = x[con.x1]
@@ -441,8 +441,8 @@ end
 @inline state_dim(con::NormConstraint) = con.n
 @inline control_dim(con::NormConstraint) = con.m
 @inline sense(con::NormConstraint) = con.sense
-@inline Base.length(::NormConstraint) = 1
-@inline Base.length(::NormConstraint{SecondOrderCone,D}) where D = D + 1
+@inline RD.output_dim(::NormConstraint) = 1
+@inline RD.output_dim(::NormConstraint{SecondOrderCone,D}) where D = D + 1
 
 function RD.evaluate(con::NormConstraint, z::AbstractKnotPoint)
 	x = z.z[con.inds]
@@ -609,7 +609,7 @@ checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, fill(u,n), l)
 @inline lower_bound(bnd::BoundConstraint) = bnd.z_min
 @inline upper_bound(bnd::BoundConstraint) = bnd.z_max
 @inline sense(::BoundConstraint) = Inequality()
-@inline Base.length(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
+@inline RD.output_dim(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
 
 function primal_bounds!(zL, zU, bnd::BoundConstraint)
 	for i = 1:length(zL)
@@ -786,7 +786,7 @@ end
 
 @inline state_dim(con::IndexedConstraint) = con.n
 @inline control_dim(con::IndexedConstraint) = con.m
-@inline Base.length(con::IndexedConstraint) = length(con.con)
+@inline RD.output_dim(con::IndexedConstraint) = length(con.con)
 @inline sense(con::IndexedConstraint) = sense(con.con)
 
 function Base.copy(c::IndexedConstraint{C,n0,m0}) where {C,n0,m0}
@@ -975,20 +975,20 @@ end
 # 	end
 # end
 
-struct QuatVecEq{T} <: StateConstraint
-    n::Int
-    qf::UnitQuaternion{T}
-    qind::SVector{4,Int}
-end
-function evaluate(con::QuatVecEq, x::StaticVector)
-    qf = Rotations.params(con.qf)
-    q = normalize(x[con.qind])
-    dq = qf'q
-    if dq < 0
-        qf *= -1
-    end
-    return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
-end
-sense(::QuatVecEq) = Equality()
-state_dim(con::QuatVecEq) = con.n
-Base.length(con::QuatVecEq) = 3
+# struct QuatVecEq{T} <: StateConstraint
+#     n::Int
+#     qf::UnitQuaternion{T}
+#     qind::SVector{4,Int}
+# end
+# function evaluate(con::QuatVecEq, x::StaticVector)
+#     qf = Rotations.params(con.qf)
+#     q = normalize(x[con.qind])
+#     dq = qf'q
+#     if dq < 0
+#         qf *= -1
+#     end
+#     return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
+# end
+# sense(::QuatVecEq) = Equality()
+# state_dim(con::QuatVecEq) = con.n
+# RD.output_dim(con::QuatVecEq) = 3
