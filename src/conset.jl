@@ -23,22 +23,22 @@ Base.IteratorEltype(::AbstractConstraintSet) = Base.HasEltype()
 Base.eltype(::AbstractConstraintSet) = AbstractConstraint
 
 # Constraint Evaluation
-function evaluate!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
+function RD.evaluate!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
     for i = 1:length(conSet) 
-        evaluate!(conSet.convals[i], Z)
+        RD.evaluate!(conSet.convals[i], Z)
     end
 end
 
-function jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory, init::Bool=true)
+function RD.jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory, init::Bool=true)
     for conval in get_convals(conSet)
-        jacobian!(conval, Z, init)
+        RD.jacobian!(conval, Z)
     end
 end
 
-function ∇jacobian!(G::Vector{<:Matrix}, conSet::AbstractConstraintSet, Z::AbstractTrajectory,
+function RD.∇jacobian!(G::Vector{<:Matrix}, conSet::AbstractConstraintSet, Z::AbstractTrajectory,
 		λ::Vector{<:Vector})
 	for (i,conval) in enumerate(get_convals(conSet))
-		∇jacobian!(G[i], conval, Z, λ[i])
+		RD.∇jacobian!(G[i], conval, Z, λ[i])
 	end
 end
 

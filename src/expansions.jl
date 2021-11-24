@@ -95,6 +95,13 @@ struct DynamicsExpansion{T,N,N̄,M}
     end
 end
 
+@inline DynamicsExpansion(model::DiscreteDynamics) = DynamicsExpansion{Float64}(model)
+@inline function DynamicsExpansion{T}(model::DiscreteDynamics) where T
+    n,m = size(model)
+    n̄ = RD.errstate_dim(model)
+    DynamicsExpansion{T}(n,n̄,m)
+end
+
 function save_tmp!(D::DynamicsExpansion)
     D.tmpA .= D.A_
     D.tmpB .= D.B_
@@ -109,22 +116,6 @@ function dynamics_expansion!(sig::FunctionSignature, diff::DiffMethod,
         # D[k].tmpA .= D[k].A_  # avoids allocations later
         # D[k].tmpB .= D[k].B_
     end
-end
-
-function error_expansion!(D::DynamicsExpansion,G1,G2)
-    mul!(D.tmp, D.tmpA, G1)
-    mul!(D.A, Transpose(G2), D.tmp)
-    mul!(D.B, Transpose(G2), D.tmpB)
-end
-
-@inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
-@inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.A, D.B
-
-@inline DynamicsExpansion(model::DiscreteDynamics) = DynamicsExpansion{Float64}(model)
-@inline function DynamicsExpansion{T}(model::DiscreteDynamics) where T
-    n,m = size(model)
-    n̄ = RD.errstate_dim(model)
-    DynamicsExpansion{T}(n,n̄,m)
 end
 
 function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne}
@@ -142,6 +133,17 @@ function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::Di
         error_expansion!(D[k], G[k], G[k+1])
     end
 end
+
+# Helper methods
+function error_expansion!(D::DynamicsExpansion,G1,G2)
+    mul!(D.tmp, D.tmpA, G1)
+    mul!(D.A, Transpose(G2), D.tmp)
+    mul!(D.B, Transpose(G2), D.tmpB)
+end
+
+@inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
+@inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.A, D.B
+
 
 
 struct StaticExpansion{T,N,M,NN,MM,NM}

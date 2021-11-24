@@ -975,20 +975,20 @@ end
 # 	end
 # end
 
-# struct QuatVecEq{T} <: StateConstraint
-#     n::Int
-#     qf::UnitQuaternion{T}
-#     qind::SVector{4,Int}
-# end
-# function evaluate(con::QuatVecEq, x::StaticVector)
-#     qf = Rotations.params(con.qf)
-#     q = normalize(x[con.qind])
-#     dq = qf'q
-#     if dq < 0
-#         qf *= -1
-#     end
-#     return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
-# end
-# sense(::QuatVecEq) = Equality()
-# state_dim(con::QuatVecEq) = con.n
-# RD.output_dim(con::QuatVecEq) = 3
+RD.@autodiff struct QuatVecEq{T} <: StateConstraint
+    n::Int
+    qf::UnitQuaternion{T}
+    qind::SVector{4,Int}
+end
+function RD.evaluate(con::QuatVecEq, x::StaticVector)
+    qf = Rotations.params(con.qf)
+    q = normalize(x[con.qind])
+    dq = qf'q
+    if dq < 0
+        qf *= -1
+    end
+    return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
+end
+sense(::QuatVecEq) = Equality()
+RD.state_dim(con::QuatVecEq) = con.n
+RD.output_dim(con::QuatVecEq) = 3

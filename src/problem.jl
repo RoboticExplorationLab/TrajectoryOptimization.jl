@@ -97,7 +97,7 @@ end
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
-Base.size(prob::Problem) = size(prob.model)..., prob.N
+Base.size(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
 
 """
     controls(::Problem)
@@ -208,8 +208,8 @@ Compute the cost for the current trajectory
 @inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
 
 "Copy the problem"
-function Base.copy(prob::Problem{Q}) where Q
-    Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
+function Base.copy(prob::Problem)
+    Problem(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
         copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
 
@@ -273,12 +273,12 @@ defaults to the same integration specified in `prob`, but can be changed. The
 argument `idx` specifies the location of the dynamics constraint in the constraint vector.
 If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
-function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
+function add_dynamics_constraints!(prob::Problem, idx=-1)
 	n,m = size(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
-    dyn_con = DynamicsConstraint{integration}(prob.model, prob.N)
+    dyn_con = DynamicsConstraint(prob.model)
     add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
 
     # Initial condition

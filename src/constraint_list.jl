@@ -27,6 +27,8 @@ Once the previous interface is defined, the following methods are defined
 	constraint violation in the trajectory
 """
 abstract type AbstractConstraintSet end
+get_convals(::AbstractConstraintSet) = throw(NotImplemented(:get_convals, :AbstractConstraintSet))
+get_errvals(::AbstractConstraintSet) = throw(NotImplemented(:get_convals, :AbstractConstraintSet))
 
 """
 	ConstraintList

@@ -448,7 +448,7 @@ function stage_cost(cost::ErrorQuadratic, x::AbstractVector, u::AbstractVector)
     stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
 end
 
-diffmethod(::ErrorQuadratic) = RobotDynamics.FiniteDifference()
+# diffmethod(::ErrorQuadratic) = RobotDynamics.FiniteDifference()
 
 
 # function gradient!(E, cost::ErrorQuadratic, z::AbstractKnotPoint, cache=nothing)
