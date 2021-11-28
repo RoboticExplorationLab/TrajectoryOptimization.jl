@@ -259,13 +259,15 @@ function gen_convals(n̄::Int, m::Int, con::AbstractConstraint, inds)
     p = RD.output_dim(con)
 	if con isa StageConstraint
 		njac = 1
+		len = length(inds)
 	elseif con isa CoupledConstraint
 		njac = 2
+		len = length(inds) + 1
 	else
 		error("gen_convals only defined for Stage and Coupled Constraints.")
 	end
-    C = [SizedMatrix{p,n̄+m}(zeros(p,n̄+m)) for k in inds, w in 1:njac]
-	c = [@MVector zeros(p) for k in inds]
+    C = [SizedMatrix{p,n̄+m}(zeros(p,n̄+m)) for k in 1:len, w in 1:njac]
+	c = [@MVector zeros(p) for k in 1:len]
     return C, c
 end
 

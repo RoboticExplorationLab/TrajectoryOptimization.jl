@@ -82,10 +82,10 @@ end
 	inds=1:length(Z)-1
 ) where V
 	if sig <: InPlace
-		expr = :(RD.dynamics_error!(con.model, vals[i+1], vals[i], Z[k+1], Z[k]))
+		expr = :(RD.dynamics_error!(con.model, vals[i], vals[i+1], Z[k+1], Z[k]))
 	elseif sig <: StaticReturn
     	op = V <: SVector ? :(=) : :(.=)
-		expr = Expr(op, :(vals[i+1]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
+		expr = Expr(op, :(vals[i]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
 	end
 	quote
 		for (i, k) in enumerate(inds)	

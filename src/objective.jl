@@ -28,7 +28,7 @@ struct Objective{C} <: AbstractObjective
     const_hess::BitVector
     diffmethod::Vector{RD.DiffMethod}
     function Objective(cost::Vector{C}, 
-                       diffmethod::Vector{<:DiffMethod}=fill(UserDefined(), length(cost))
+                       diffmethod::Vector{<:DiffMethod}=RD.default_diffmethod.(cost)
     ) where C <: CostFunction
         N = length(cost)
         J = zeros(N)

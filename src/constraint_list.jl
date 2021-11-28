@@ -110,7 +110,9 @@ cons_and_inds[1] == (bnd,1:n-1)            # (true)
 ```
 """
 function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, 
-						 idx=-1; sig::FunctionSignature=StaticReturn(), diff::DiffMethod=UserDefined())
+						 idx=-1; sig::FunctionSignature=RD.default_signature(con), 
+						 diffmethod::DiffMethod=RD.default_diffmethod(con)
+)
 	@assert check_dims(con, cons.n, cons.m) "New constraint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
@@ -119,9 +121,13 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 	if idx == -1
 		push!(cons.constraints, con)
 		push!(cons.inds, inds)
+		push!(cons.diffs, diffmethod)
+		push!(cons.sigs, sig)
 	elseif 0 < idx <= length(cons)
 		insert!(cons.constraints, idx, con)
 		insert!(cons.inds, idx, inds)
+		insert!(cons.diffs, idx, diffmethod)
+		insert!(cons.sigs, idx, sig)
 	else
 		throw(ArgumentError("cannot insert constraint at index=$idx. Length = $(length(cons))"))
 	end
