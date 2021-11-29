@@ -134,6 +134,6 @@ function findmax_violation(conSet::AbstractConstraintSet)
 	viol = abs.(violation(con_sense, conval.vals[i_con])) 
 	c_max, i_max = findmax(viol)  # index into constraint
 	@assert c_max == c_max0
-	con_name = string(typeof(conval.con).name)
+	con_name = string(typeof(conval.con).name.name)
 	return con_name * " at time step $k_con at " * con_label(conval.con, i_max)
 end

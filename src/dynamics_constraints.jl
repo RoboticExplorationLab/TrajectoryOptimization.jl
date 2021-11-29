@@ -66,6 +66,7 @@ end
 @inline control_dim(con::DynamicsConstraint) = control_dim(con.model)
 @inline Base.length(con::DynamicsConstraint) = state_dim(con.model)
 RD.output_dim(con::DynamicsConstraint) = state_dim(con.model)
+RD.default_diffmethod(con::DynamicsConstraint) = RD.default_diffmethod(con.model)
 
 # @inline DynamicsConstraint(model, N) = DynamicsConstraint{DEFAULT_Q}(model, N)
 # integration(::DynamicsConstraint{Q}) where Q = Q

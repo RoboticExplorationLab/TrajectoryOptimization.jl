@@ -26,7 +26,7 @@ z = KnotPoint(x,u,t,h)
     RD.jacobian!(goal, C, c, z)
     @test C ≈ I(n)
 
-    @test length(goal) == n
+    @test RD.output_dim(goal) == n
     @test TO.upper_bound(goal) ≈ zero(xf)
     @test TO.lower_bound(goal) ≈ zero(xf)
     @test TO.is_bound(goal)

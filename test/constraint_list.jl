@@ -67,7 +67,7 @@
     add_constraint!(cons, dyn, 1:N-1, 2)
     @test cons[2] == dyn
     @test collect(zip(cons))[2] == (1:N-1, dyn)
-    @test cons.p[1] == length(cir) + length(bnd) + length(lin) + n
+    @test cons.p[1] == RD.output_dim(cir) + RD.output_dim(bnd) + RD.output_dim(lin) + n
     @test length(cons) == 5
 
     @test TO.has_dynamics_constraint(cons) == true

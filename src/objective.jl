@@ -27,13 +27,16 @@ struct Objective{C} <: AbstractObjective
     const_grad::BitVector
     const_hess::BitVector
     diffmethod::Vector{RD.DiffMethod}
-    function Objective(cost::Vector{C}, 
-                       diffmethod::Vector{<:DiffMethod}=RD.default_diffmethod.(cost)
+    function Objective(cost::Vector{C}; 
+                       diffmethod=RD.default_diffmethod.(cost)
     ) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
         grad = zeros(Bool,N)
         hess = zeros(Bool,N)
+        if diffmethod isa DiffMethod 
+            diffmethod = fill(diffmethod, N)
+        end
         new{C}(cost, J, grad, hess, diffmethod)
     end
 end
@@ -56,28 +59,25 @@ For example, if the original cost function is an augmented Lagrangian cost funct
 is_quadratic(obj::Objective) = all(obj.const_hess)
 
 # Constructors
-function Objective(cost::CostFunction,N::Int; diffmethod=RD.UserDefined())
-    diffmethod = fill(diffmethod, N)
-    Objective([cost for k = 1:N], diffmethod)
+function Objective(cost::CostFunction, N::Int; kwargs...)
+    Objective([cost for k = 1:N]; kwargs...)
 end
 
-function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int; diffmethod=RD.UserDefined())
+function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int; kwargs...)
     stage, term = promote(cost, cost_terminal)
-    diffmethod = fill(diffmethod, N)
-    Objective([k < N ? stage : term for k = 1:N], diffmethod)
+    Objective([k < N ? stage : term for k = 1:N]; kwargs...)
 end
 
-function Objective(cost::Vector{<:CostFunction},cost_terminal::CostFunction; diffmethod=RD.UserDefined())
+function Objective(cost::Vector{<:CostFunction}, cost_terminal::CostFunction; kwargs...) 
     N = length(cost) + 1
-    diffmethod = fill(diffmethod, N)
-    Objective([cost...,cost_terminal], diffmethod)
+    Objective([cost...,cost_terminal]; kwargs...)
 end
 
 # Methods
 "Get the vector of costs at each knot point. `sum(get_J(obj))` is equal to the cost"
 get_J(obj::Objective) = obj.J
 
-Base.copy(obj::Objective) = Objective(copy.(obj.cost), copy(obj.diffmethod))
+Base.copy(obj::Objective) = Objective(copy.(obj.cost); diffmethod=copy(obj.diffmethod))
 
 Base.getindex(obj::Objective,i::Int) = obj.cost[i]
 
