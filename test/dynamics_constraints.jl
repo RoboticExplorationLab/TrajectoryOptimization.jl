@@ -44,14 +44,14 @@ dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
 dyn = TO.DynamicsConstraint(dmodel)
 RD.evaluate!(RD.InPlace(), dyn, vals, Z)
 for k = 1:N-1
-    @test vals[k+1] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
+    @test vals[k] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
 end
 
 RD.evaluate!(RD.StaticReturn(), dyn, vals, Z)
 RD.evaluate!(RD.StaticReturn(), dyn, vals2, Z)
 for k = 1:N-1
-    @test vals[k+1] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
-    @test vals2[k+1] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
+    @test vals[k] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
+    @test vals2[k] ≈ RD.discrete_dynamics(dmodel, Z[k]) - RD.state(Z[k+1])
 end
 
 RD.jacobian!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)
@@ -80,15 +80,15 @@ dyn = TO.DynamicsConstraint(dmodel)
 RD.evaluate!(RD.InPlace(), dyn, vals, Z)
 for k = 1:N-1
     fmid = RD.dynamics(model, (RD.state(Z[k]) + RD.state(Z[k+1]))/2, RD.control(Z[k]))
-    @test vals[k+1] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
+    @test vals[k] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
 end
 
 RD.evaluate!(RD.StaticReturn(), dyn, vals, Z)
 RD.evaluate!(RD.StaticReturn(), dyn, vals2, Z)
 for k = 1:N-1
     fmid = RD.dynamics(model, (RD.state(Z[k]) + RD.state(Z[k+1]))/2, RD.control(Z[k]))
-    @test vals[k+1] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
-    @test vals2[k+1] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
+    @test vals[k] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
+    @test vals2[k] ≈ RD.state(Z[k]) - RD.state(Z[k+1]) + dt*fmid
 end
 
 RD.jacobian!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)

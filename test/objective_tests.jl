@@ -113,16 +113,17 @@ using TrajectoryOptimization: state, control
 
         # Test error expansion constructor
         model = Cartpole()
+        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         E0 = TO.CostExpansion(n,m,N)
         E = TO.CostExpansion{Float32}(n,m,N)
         @test eltype(E[1].hess) == Float32
-        E1 = TO.CostExpansion(E0, model)
+        E1 = TO.CostExpansion(E0, dmodel)
         @test E1 === E0
 
         model = Quadrotor() 
         dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         E0 = TO.CostExpansion(13,4,11)
-        @test_throws AssertionError TO.CostExpansion(E0, model)
+        @test_throws AssertionError TO.CostExpansion(E0, dmodel)
         E0 = TO.CostExpansion(12,4,11)
         E1 = TO.CostExpansion(E0, dmodel)
         @test E1 !== E0
@@ -170,8 +171,8 @@ using TrajectoryOptimization: state, control
         model = Cartpole()
         dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         G = [zeros(n,n) for k = 1:N]
-        E = TO.CostExpansion(E0, model)
-        RobotDynamics.state_diff_jacobian!(model, G, Z)
+        E = TO.CostExpansion(E0, dmodel)
+        RobotDynamics.state_diff_jacobian!(dmodel, G, Z)
         TO.error_expansion!(E, E0, dmodel, Z, G)
 
         model = Quadrotor()
