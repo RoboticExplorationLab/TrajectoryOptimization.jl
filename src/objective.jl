@@ -119,13 +119,17 @@ struct CostExpansion{n,m,T} <: AbstractArray{Expansion{n,m,T},1}
     end
 end
 @inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
-function CostExpansion(E::CostExpansion, model::DiscreteDynamics)
+
+CostExpansion(E::CostExpansion, model::DiscreteDynamics) = 
+    CostExpansion(RD.statevectortype(model), E, model)
+
+function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
     # Create QuadraticObjective linked to error cost expansion
     @assert RobotDynamics.errstate_dim(model) == size(model)[1]
     return E 
 end
 
-function CostExpansion(E::CostExpansion{n,m,T}, model::DiscreteLieDynamics) where {n,m,T}
+function CostExpansion(::RD.RotationState, E::CostExpansion{n,m,T}, model::DiscreteDynamics) where {n,m,T}
     # Create an expansion for the full state dimension
     @assert length(E[1].q) == RobotDynamics.errstate_dim(model)
     n0 = state_dim(model)

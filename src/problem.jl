@@ -9,15 +9,15 @@ Contains the full definition of a trajectory optimization problem, including:
 
 # Constructors:
 ```julia
-Problem(model, obj, constraints, x0, xf, Z, N, tf) # defaults to RK3 integration
-Problem{Q}(model, obj, constraints, x0, xf, Z, N, tf) where Q<:QuadratureRule
-Problem(model, obj, xf, tf; x0, constraints, N, X0, U0, dt, integration)
-Problem{Q}(prob::Problem)  # change integration
+Problem(model, obj, constraints, x0, xf, Z, N, tf)
+Problem(model, obj, x0, tf; xf, constraints, N, X0, U0, dt, integration)
 ```
 where `Z` is a trajectory (Vector of `KnotPoint`s)
 
 # Arguments
-* `model`: Dynamics model. Can be either `Discrete` or `Continuous`
+* `model`: A `DiscreteDynamics` model. If a `ContinuousDynamics` model is provided, it will
+           be converted to a `DiscretizedDynamics` model via the integrator specified by the
+           `integration` keyword argument.
 * `obj`: Objective
 * `X0`: Initial state trajectory. If omitted it will be initialized with NaNs, to be later overwritten by the solver.
 * `U0`: Initial control trajectory. If omitted it will be initialized with zeros.
@@ -279,7 +279,7 @@ function add_dynamics_constraints!(prob::Problem, idx=-1)
 
     # Implicit dynamics
     dyn_con = DynamicsConstraint(prob.model)
-    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
+    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, diffmethod=ForwardAD()) # add it at the end
 
     # Initial condition
     init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked

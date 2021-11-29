@@ -118,7 +118,10 @@ function dynamics_expansion!(sig::FunctionSignature, diff::DiffMethod,
     end
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne}
+error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne} = 
+    error_expansion!(RD.statevectortype(model), D, model, G)
+
+function error_expansion!(::RD.EuclideanState, D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne}
     @assert Nx == Ne
     for d in D
         copyto!(d.A, d.A_) 
@@ -126,22 +129,24 @@ function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::Di
     end
 end
 
-function error_expansion!(D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteLieDynamics, G) where {Nx,Ne}
+function error_expansion!(::RD.RotationState, D::Vector{<:DynamicsExpansion{<:Any,Nx,Ne}}, model::DiscreteDynamics, G) where {Nx,Ne}
     @assert Nx > Ne
     for k in eachindex(D)
-        save_tmp!(D[k])
+        # save_tmp!(D[k])
         error_expansion!(D[k], G[k], G[k+1])
     end
 end
 
 # Helper methods
 function error_expansion!(D::DynamicsExpansion,G1,G2)
+    D.tmpA .= D.A_
+    D.tmpB .= D.B_
     mul!(D.tmp, D.tmpA, G1)
     mul!(D.A, Transpose(G2), D.tmp)
     mul!(D.B, Transpose(G2), D.tmpB)
 end
 
-@inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
+# @inline error_expansion(D::DynamicsExpansion, model::DiscreteLieDynamics) = D.A, D.B
 @inline error_expansion(D::DynamicsExpansion, model::DiscreteDynamics) = D.A, D.B
 
 
