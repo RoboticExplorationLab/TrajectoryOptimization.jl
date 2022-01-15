@@ -179,7 +179,7 @@ knot point.
 function num_constraints!(cons::ConstraintList)
 	cons.p .*= 0
 	for i = 1:length(cons)
-		p = length(cons[i])
+		p = RD.output_dim(cons[i])
 		for k in cons.inds[i]
 			cons.p[k] += p
 		end

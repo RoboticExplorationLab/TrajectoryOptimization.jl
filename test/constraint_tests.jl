@@ -1,7 +1,7 @@
 #--- Setup
 function alloc_con(con,z)
     ∇c = TO.gen_jacobian(con)
-    c = zeros(length(con))
+    c = zeros(RD.output_dim(con))
     allocs  = @ballocated RD.evaluate($con, $z) samples=1 evals=1
     allocs += @ballocated RD.evaluate!($con, $c, $z) samples=1 evals=1
     allocs += @ballocated RD.jacobian!($con, $∇c, $c, $z) samples=1 evals=1
@@ -60,7 +60,7 @@ end
     @test lin2.A isa SizedMatrix{p,n+m}
     @test lin2.b isa SVector{p}
 
-    @test length(lin) == p
+    @test RD.output_dim(lin) == p
     @test TO.widths(lin) == (n+m,)
     @test state_dim(lin) == n
     @test control_dim(lin) == m
@@ -112,7 +112,7 @@ end
     @test ∇c ≈ hcat(-2*(x[1] .- xc), -2*(x[2] .- yc), zeros(3,n-2))
     @test cir isa CircleConstraint{3,Int}
     @test cir isa TO.StateConstraint
-    @test length(cir) == 3
+    @test RD.output_dim(cir) == 3
     @test state_dim(cir) == n
     @test_throws RobotDynamics.NotImplementedError control_dim(cir)
     @test TO.widths(cir) == (n,)
@@ -139,7 +139,7 @@ end
     @test ∇c ≈ hcat(-2*(x[1] .- xc), -2*(x[2] .- yc), -2*(x[3] .- zc), zeros(3,n-3))
     @test sph isa SphereConstraint{3,Int}
     @test sph isa TO.StateConstraint
-    @test length(sph) == 3
+    @test RD.output_dim(sph) == 3
 
     sph_ = SphereConstraint(n, Float64.(xc), yc, zc, r)
     @test sph_ isa SphereConstraint{3,Float64}
@@ -170,7 +170,7 @@ end
     ∇c = TO.gen_jacobian(col)
     RD.jacobian!(col, ∇c, c, z)
     @test ∇c ≈ [-2d' 2d']
-    @test length(col) == 1
+    @test RD.output_dim(col) == 1
 
     col_ = CollisionConstraint(n, x1, x2, 1)
     @test col_.radius isa Float64
@@ -191,7 +191,7 @@ end
     TO.jacobian!(ncon, ∇c, c, z)
     @test ∇c ≈ [2x; 0]'
 
-    @test length(ncon) == 1
+    @test RD.output_dim(ncon) == 1
     @test TO.widths(ncon) == (n+m,)
     @test TO.sense(ncon) == Inequality()
 
@@ -220,14 +220,14 @@ end
     umax = +@SVector rand(m)
 
     bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
-    c = zeros(length(bnd))
+    c = zeros(RD.output_dim(bnd))
     @test RD.evaluate(bnd, z) ≈ [x - xmax; u - umax; xmin - x; umin - u]
     RD.evaluate!(bnd, c, z)
     bnd.i_max
     ∇c = TO.gen_jacobian(bnd)
     RD.jacobian!(bnd, ∇c, c, z)
     @test ∇c ≈ [I(n+m); -I(n+m)]
-    @test length(bnd) == 2(n+m)
+    @test RD.output_dim(bnd) == 2(n+m)
     @test TO.widths(bnd) == (n+m,)
     @test TO.upper_bound(bnd) == [xmax; umax]
     @test TO.lower_bound(bnd) == [xmin; umin]
@@ -236,7 +236,7 @@ end
     xmin = pop(pushfirst(xmin, -Inf))
     umax = popfirst(push(umax, Inf))
     bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
-    c = zeros(length(bnd))
+    c = zeros(RD.output_dim(bnd))
     @test RD.evaluate(bnd, z) ≈ [x - xmax; u[1:end-1] - umax[1:end-1];
         xmin[2:end] - x[2:end]; umin - u]
     RD.evaluate!(bnd, c, z)
@@ -247,14 +247,14 @@ end
     iz[n+1] = 0
     iz[n+m+1] = 0
     @test ∇c ≈ [I(n+m); -I(n+m)][iz, :]
-    @test length(bnd) == 2(n+m) - 2
+    @test RD.output_dim(bnd) == 2(n+m) - 2
     @test TO.widths(bnd) == (n+m,)
     @test TO.upper_bound(bnd) == [xmax; umax]
     @test TO.lower_bound(bnd) == [xmin; umin]
     @test TO.is_bound(bnd) == true
 
     bnd_ = BoundConstraint(n,m, x_min=-10, x_max=10, u_min=umin, u_max=umax)
-    c = zeros(length(bnd_))
+    c = zeros(RD.output_dim(bnd_))
     @test RD.evaluate(bnd_, z) ≈ [x .- 10; u[1:end-1] - umax[1:end-1];
         -10 .- x; umin - u]
     RD.evaluate!(bnd_, c, z)
@@ -289,7 +289,7 @@ end
     z2 = KnotPoint(x2,u2,z.dt,z.t)
 
     idx = TO.IndexedConstraint(n2,m2, bnd)
-    c = zeros(length(idx))
+    c = zeros(RD.output_dim(idx))
     @test RD.evaluate(idx, z2) ≈ RD.evaluate(bnd, z)
     RD.evaluate!(idx, c, z2)
     @test c ≈ RD.evaluate(bnd, z)
@@ -298,9 +298,9 @@ end
     ∇c0 = TO.gen_jacobian(bnd)
     RD.jacobian!(idx, ∇c, c, z2)
     RD.jacobian!(bnd, ∇c0, c, z)
-    @test ∇c ≈ [∇c0[:,1:n] zeros(length(bnd), n) ∇c0[:,n+1:end] zeros(length(bnd), m)]
+    @test ∇c ≈ [∇c0[:,1:n] zeros(RD.output_dim(bnd), n) ∇c0[:,n+1:end] zeros(RD.output_dim(bnd), m)]
 
-    @test TO.length(idx) == TO.length(bnd)
+    @test RD.output_dim(idx) == RD.output_dim(bnd)
     @test TO.sense(idx) == TO.sense(bnd)
     @test TO.state_dim(idx) == 2n
     @test TO.control_dim(idx) == 2m
@@ -315,7 +315,7 @@ end
     cir = CircleConstraint(n, xc, yc, r)
 
     idx = TO.IndexedConstraint(n2,m2, cir, n+1:2n, m+1:2m)
-    c = zeros(length(idx))
+    c = zeros(RD.output_dim(idx))
     @test size(idx.A) == size(idx.∇c)
     @test isempty(idx.B)
     @test RD.evaluate(idx, z2) ≈ RD.evaluate(cir, 2z)
@@ -325,9 +325,9 @@ end
     ∇c0 = TO.gen_jacobian(cir)
     TO.jacobian!(idx, ∇c, c, z2)
     TO.jacobian!(cir, ∇c0, c, 2z)
-    @test ∇c ≈ [zeros(length(cir), n) ∇c0[:,1:n] zeros(length(cir), 2)]
+    @test ∇c ≈ [zeros(RD.output_dim(cir), n) ∇c0[:,1:n] zeros(RD.output_dim(cir), 2)]
 
-    @test TO.length(idx) == TO.length(cir)
+    @test RD.output_dim(idx) == RD.output_dim(cir)
     @test TO.sense(idx) == TO.sense(cir)
     @test TO.state_dim(idx) == 2n
     @test TO.control_dim(idx) == 2m

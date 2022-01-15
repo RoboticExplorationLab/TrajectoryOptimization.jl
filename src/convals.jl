@@ -51,7 +51,7 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
 			throw(DimensionMismatch("size of jac[i] $(size(jac[1])) does not match the expected size of $(size(gen_jacobian(con)))"))
 		end
 		vals2 = deepcopy(vals)
-        p = length(con)
+        p = RD.output_dim(con)
         P = length(vals)
         ix = 1:n
         iu = n .+ (1:m)
@@ -69,7 +69,7 @@ function ConVal(n::Int, m::Int, cval::ConVal)
 	# create a ConVal for the "raw" Jacobians, if needed
 	# 	otherwise return the same ConVal
 	if cval.iserr
-		p = length(cval.con)
+		p = RD.output_dim(cval.con)
 		ws = widths(cval.con, n, m)
 		jac = [SizedMatrix{p,w}(zeros(p,w)) for k in cval.inds, w in ws]
 		ConVal(n, m, cval.con, cval.inds, jac, cval.vals, false; 
@@ -93,8 +93,9 @@ function _index(cval::AbstractConstraintValues, k::Int)
 	end
 end
 
-Base.length(cval::AbstractConstraintValues) = RD.output_dim(cval)   # deprecated
 @inline RD.output_dim(cval::AbstractConstraintValues) = RD.output_dim(cval.con) 
+import Base.length
+@deprecate length(cval::AbstractConstraintValues) RD.output_dim(cval)
 
 function RD.evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
 	RD.evaluate!(cval.sig, cval.con, cval.vals, Z, cval.inds)
@@ -273,7 +274,7 @@ end
 
 function gen_convals(D::AbstractMatrix, d::AbstractVector, cinds, zinds, con::AbstractConstraint, inds)
     P = length(inds)
-    p = length(con)
+    p = RD.output_dim(con)
 	n,m = get_dims(con, length(zinds[1]))
     ws = widths(con, n, m)
 

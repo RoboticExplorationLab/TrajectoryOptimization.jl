@@ -786,7 +786,7 @@ end
 
 @inline state_dim(con::IndexedConstraint) = con.n
 @inline control_dim(con::IndexedConstraint) = con.m
-@inline RD.output_dim(con::IndexedConstraint) = length(con.con)
+@inline RD.output_dim(con::IndexedConstraint) = RD.output_dim(con.con)
 @inline sense(con::IndexedConstraint) = sense(con.con)
 
 function Base.copy(c::IndexedConstraint{C,n0,m0}) where {C,n0,m0}
@@ -796,7 +796,7 @@ end
 
 function IndexedConstraint(n,m,con::AbstractConstraint,
 		ix::UnitRange{Int}, iu::UnitRange{Int})
-	p = length(con)
+	p = RD.output_dim(con)
 	n0,m0 = length(ix), length(iu)
 	iu = iu .+ n
 	iz = SVector{n0+m0}([ix; iu])

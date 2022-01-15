@@ -256,14 +256,14 @@ RD.output_dim(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:output_
 "Upper bound of the constraint, as a vector, which is 0 for all constraints
 (except bound constraints)"
 @inline upper_bound(con::AbstractConstraint) =
-    upper_bound(sense(con)) * @SVector ones(length(con))
+    upper_bound(sense(con)) * @SVector ones(RD.output_dim(con))
 @inline upper_bound(::Inequality) = 0.0
 @inline upper_bound(::Equality) = 0.0
 
 "Upper bound of the constraint, as a vector, which is 0 equality and -Inf for inequality
 (except bound constraints)"
 @inline lower_bound(con::AbstractConstraint) =
-    lower_bound(sense(con)) * @SVector ones(length(con))
+    lower_bound(sense(con)) * @SVector ones(RD.output_dim(con))
 @inline lower_bound(::Inequality) = -Inf
 @inline lower_bound(::Equality) = 0.0
 
@@ -627,7 +627,7 @@ end
 
 function gen_jacobian(con::AbstractConstraint, i = 1)
     ws = widths(con)
-    p = length(con)
+    p = RD.output_dim(con)
     C1 = SizedMatrix{p,ws[i]}(zeros(p, ws[i]))
 end
 

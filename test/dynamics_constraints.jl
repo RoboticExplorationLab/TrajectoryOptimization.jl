@@ -118,7 +118,7 @@ for k = 1:N-1
     @test jacs[k,2] ≈ [A2 zeros(n,m)]
 end
 
-@test length(dyn) == n
+@test RD.output_dim(dyn) == n
 @test RD.dims(dyn) == (n,m,n)
 @test TO.widths(dyn) == (n+m,n+m)
 @test TO.upper_bound(dyn) == zeros(n)

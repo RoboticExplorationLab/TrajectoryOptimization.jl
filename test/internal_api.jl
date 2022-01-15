@@ -106,16 +106,16 @@ con,inds = cons[2], 1:N-1
 @test con isa TO.StateConstraint      # it inherits from StateConstraint, so it's a function of a single state
 @test state_dim(con) == n             # the state dimension. control_dim won't be defined.
 @test TO.check_dims(con, n, m)        # useful method to check if a constraint is consistent with the problem sizes
-p = length(con);                      # get the length of the constraint vector
+p = RD.output_dim(con);               # get the length of the constraint vector
 println("Length of the constraint: $p")
 
-c = zeros(length(con))
+c = zeros(RD.output_dim(con))
 RD.evaluate(con, Z[1])
 RD.evaluate!(con, c, Z[1])
 
 vals = [zero(c) for i = inds]
-jacs0 = [zeros(length(con), n+m) for i in inds]
-jacs = [zeros(length(con), n̄+m) for i in inds]
+jacs0 = [zeros(RD.output_dim(con), n+m) for i in inds]
+jacs = [zeros(RD.output_dim(con), n̄+m) for i in inds]
 
 RD.evaluate!(RD.StaticReturn(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])

@@ -41,22 +41,22 @@
     @test cons.constraints[1] === cir
     @test cons[1] === cir
     @test cons.inds[1] == 1:N
-    @test cons.p == fill(length(cir), N)
+    @test cons.p == fill(RD.output_dim(cir), N)
 
     add_constraint!(cons, goal, N)
     @test cons.constraints[2] === goal
     @test cons[2] === goal
     @test cons.inds[2] == N:N
-    @test cons.p[1:N-1] == fill(length(cir), N-1)
-    @test cons.p[end] == length(cir) + length(goal)
+    @test cons.p[1:N-1] == fill(RD.output_dim(cir), N-1)
+    @test cons.p[end] == RD.output_dim(cir) + RD.output_dim(goal)
 
     add_constraint!(cons, lin, 1:4, 1)
     @test cons[1] === lin
     @test cons[2] === cir
     @test cons[end] === goal
     @test cons.inds[1] === 1:4
-    @test cons.p[1:4] == fill(length(cir)+length(lin), 4)
-    @test cons.p[5:N-1] == fill(length(cir), N-1-4)
+    @test cons.p[1:4] == fill(RD.output_dim(cir)+RD.output_dim(lin), 4)
+    @test cons.p[5:N-1] == fill(RD.output_dim(cir), N-1-4)
     @test length(cons) == 3
 
     cons2 = copy(cons)
@@ -89,6 +89,6 @@
     # Test iteration
     conlist = [lin, cir, goal, bnd, dyn]
     @test all(conlist .=== [con for con in cons])
-    @test length.(cons) == length.(conlist)
+    @test RD.output_dim.(cons) == RD.output_dim.(conlist)
     @test eltype(cons) == TO.AbstractConstraint
 end
