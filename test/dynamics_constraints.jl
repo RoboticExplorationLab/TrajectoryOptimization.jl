@@ -115,7 +115,7 @@ for k = 1:N-1
     A2 = ForwardDiff.jacobian(x->mid(x1,x,u), x2)
     B1 = ForwardDiff.jacobian(u->mid(x1,x2,u), u)
     @test jacs[k,1] ≈ [A1 B1] atol=1e-6
-    @test jacs[k,2] ≈ [A2 zeros(n,m)]
+    @test jacs[k,2] ≈ [A2 zeros(n,m)] atol=1e-6
 end
 
 @test RD.output_dim(dyn) == n
