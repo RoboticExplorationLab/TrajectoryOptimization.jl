@@ -89,12 +89,6 @@ function Problem(model::AbstractModel, args...;
     Problem(discrete_model, args...; kwargs...)
 end
 
-function Problem{Q}(model::AbstractModel, args...; kwargs...) where {Q<:QuadratureRule}
-    discrete_model = RD.DiscretizedDynamics(model, integration)
-    Problem(discrete_model, args...; kwargs...)
-end
-
-
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
 Base.size(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
