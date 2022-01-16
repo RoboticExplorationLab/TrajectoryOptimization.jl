@@ -9,15 +9,15 @@ Contains the full definition of a trajectory optimization problem, including:
 
 # Constructors:
 ```julia
-Problem(model, obj, constraints, x0, xf, Z, N, tf) # defaults to RK3 integration
-Problem{Q}(model, obj, constraints, x0, xf, Z, N, tf) where Q<:QuadratureRule
-Problem(model, obj, xf, tf; x0, constraints, N, X0, U0, dt, integration)
-Problem{Q}(prob::Problem)  # change integration
+Problem(model, obj, constraints, x0, xf, Z, N, tf)
+Problem(model, obj, x0, tf; xf, constraints, N, X0, U0, dt, integration)
 ```
 where `Z` is a trajectory (Vector of `KnotPoint`s)
 
 # Arguments
-* `model`: Dynamics model. Can be either `Discrete` or `Continuous`
+* `model`: A `DiscreteDynamics` model. If a `ContinuousDynamics` model is provided, it will
+           be converted to a `DiscretizedDynamics` model via the integrator specified by the
+           `integration` keyword argument.
 * `obj`: Objective
 * `X0`: Initial state trajectory. If omitted it will be initialized with NaNs, to be later overwritten by the solver.
 * `U0`: Initial control trajectory. If omitted it will be initialized with zeros.
@@ -30,8 +30,8 @@ where `Z` is a trajectory (Vector of `KnotPoint`s)
 Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
-struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
-    model::AbstractModel
+struct Problem{T<:AbstractFloat}
+    model::DiscreteDynamics
     obj::AbstractObjective
     constraints::ConstraintList
     x0::MVector
@@ -40,7 +40,7 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
     N::Int
     t0::T
     tf::T
-    function Problem{Q}(model::AbstractModel, obj::AbstractObjective,
+    function Problem(model::DiscreteDynamics, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
             Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
@@ -53,23 +53,19 @@ struct Problem{Q<:QuadratureRule,T<:AbstractFloat}
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
         @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
-        new{Q,T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
+        new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
 
-"Use RK3 as default integration"
-Problem(model, obj, constraints, x0, xf, Z, N, t0, tf) =
-    Problem{RobotDynamics.RK3}(model, obj, constraints, x0, xf, Z, N, t0, tf)
-
-function Problem(model::L, obj::O, xf::AbstractVector, tf;
-        constraints=ConstraintList(size(model)...,length(obj)),
+function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
+        xf::AbstractVector = fill(NaN, state_dim(model)),
+        constraints=ConstraintList(state_dim(model), control_dim(model), length(obj)),
         t0=zero(tf),
-        x0=zero(xf), N::Int=length(obj),
-        X0=[x0*NaN for k = 1:N],
-        U0=[@SVector zeros(size(model)[2]) for k = 1:N-1],
-        dt=fill((tf-t0)/(N-1),N-1),
-        integration=DEFAULT_Q) where {L,O}
-    n,m = size(model)
+        X0=[x0*NaN for k = 1:length(obj)],
+        U0=[@SVector zeros(size(model)[2]) for k = 1:length(obj)-1],
+        dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
+    n,m = dims(model)
+    N = length(obj)
     if dt isa Real
         dt = fill(dt,N)
     end
@@ -83,22 +79,19 @@ function Problem(model::L, obj::O, xf::AbstractVector, tf;
     t = pushfirst!(cumsum(dt), 0)
     Z = Traj(X0,U0,dt,t)
 
-    Problem{integration}(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
+    Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)
 end
 
-
+function Problem(model::AbstractModel, args...; 
+                 integration::RD.QuadratureRule=RD.RK4(model), kwargs...)
+    discrete_model = RD.DiscretizedDynamics(model, integration)
+    Problem(discrete_model, args...; kwargs...)
+end
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
-Base.size(prob::Problem) = size(prob.model)..., prob.N
-
-"""```julia
-integration(::Problem)
-integration(::DynamicsConstraint)
-```
-Get the integration rule"""
-integration(prob::Problem{Q}) where Q = Q
+Base.size(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
 
 """
     controls(::Problem)
@@ -121,7 +114,7 @@ states(x) = states(get_trajectory(x))
 
 Get the times for all the knot points in the problem.
 """
-@inline RobotDynamics.get_times(prob::Problem) = get_times(get_trajectory(prob))
+@inline RobotDynamics.gettimes(prob::Problem) = gettimes(get_trajectory(prob))
 
 
 """
@@ -142,7 +135,7 @@ end
 
 Copy the state trajectory
 """
-@inline initial_states!(prob, X0) = RobotDynamics.set_states!(get_trajectory(prob), X0)
+@inline initial_states!(prob, X0) = RobotDynamics.setstates!(get_trajectory(prob), X0)
 
 
 """
@@ -199,7 +192,7 @@ end
 
 Copy the control trajectory
 """
-@inline initial_controls!(prob, U0) = RobotDynamics.set_controls!(get_trajectory(prob), U0)
+@inline initial_controls!(prob, U0) = RobotDynamics.setcontrols!(get_trajectory(prob), U0)
 
 """
     cost(::Problem)
@@ -209,8 +202,8 @@ Compute the cost for the current trajectory
 @inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
 
 "Copy the problem"
-function Base.copy(prob::Problem{Q}) where Q
-    Problem{Q}(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
+function Base.copy(prob::Problem)
+    Problem(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
         copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
 
@@ -257,7 +250,9 @@ Simulate the dynamics forward from the initial condition `x0` using the controls
 trajectory `Z`.
 If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0`.
 """
-@inline rollout!(prob::Problem{Q}) where {Q} = rollout!(Q, get_model(prob), get_trajectory(prob), get_initial_state(prob))
+@inline rollout!(prob::Problem) = rollout!(StaticReturn(), prob)
+@inline rollout!(sig::FunctionSignature, prob::Problem) = 
+    rollout!(sig, get_model(prob), get_trajectory(prob), get_initial_state(prob))
 
 function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
     x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
@@ -272,13 +267,13 @@ defaults to the same integration specified in `prob`, but can be changed. The
 argument `idx` specifies the location of the dynamics constraint in the constraint vector.
 If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
-function add_dynamics_constraints!(prob::Problem{Q}, integration=Q, idx=-1) where Q
+function add_dynamics_constraints!(prob::Problem, idx=-1)
 	n,m = size(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
-    dyn_con = DynamicsConstraint{integration}(prob.model, prob.N)
-    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx) # add it at the end
+    dyn_con = DynamicsConstraint(prob.model)
+    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, diffmethod=ForwardAD()) # add it at the end
 
     # Initial condition
     init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked

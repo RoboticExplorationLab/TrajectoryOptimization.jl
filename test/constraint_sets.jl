@@ -4,8 +4,8 @@ model = Cartpole()
 n,m = size(model)
 N = 11
 x,u = rand(model)
-dt = 0.1
-z = KnotPoint(x,u,dt)
+t,dt = 1.1, 0.1
+z = KnotPoint(x,u,t,dt)
 
 
 #--- Generate some constraints
@@ -33,7 +33,8 @@ umax = +@SVector rand(m)
 bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
 
 # Dynamics Constraint
-dyn = TO.DynamicsConstraint(model, N)
+dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
+dyn = TO.DynamicsConstraint(dmodel)
 
 #--- Create the Constraint List
 cons = ConstraintList(n,m,N)
@@ -49,5 +50,25 @@ add_constraint!(cons, dyn, 1:N-1)
 @test cons[2] === cons2[2]
 @test cons[2] !== cons2_[2]
 
+## Constraint Value
+C,c = TO.gen_convals(n, m, cir, 1:N)
+errval = TO.ConVal(n, m, cir, 1:N, C, c, false)
+cval = TO.ConVal(n, m, errval)
+@test errval === cval
+@test RD.output_dim(cval) == RD.output_dim(cir) 
+
+
+Z = Traj([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
+RD.evaluate!(cval, Z)
+for k = 1:N
+    @test cval.vals[k] ≈ RD.evaluate(cir, Z[k])
+end
+RD.jacobian!(cval, Z)
+for k = 1:N
+    jac = zeros(3, n+m)
+    RD.jacobian!(RD.StaticReturn(), RD.UserDefined(), cir, jac, cval.vals[k], Z[k])
+    @test cval.jac[k] ≈ jac 
+end
+@test max_violation(cval) > 0
 
 end

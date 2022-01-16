@@ -26,12 +26,18 @@ struct Objective{C} <: AbstractObjective
     J::Vector{Float64}
     const_grad::BitVector
     const_hess::BitVector
-    function Objective(cost::Vector{C}) where C <: CostFunction
+    diffmethod::Vector{RD.DiffMethod}
+    function Objective(cost::Vector{C}; 
+                       diffmethod=RD.default_diffmethod.(cost)
+    ) where C <: CostFunction
         N = length(cost)
         J = zeros(N)
         grad = zeros(Bool,N)
         hess = zeros(Bool,N)
-        new{C}(cost, J, grad, hess)
+        if diffmethod isa DiffMethod 
+            diffmethod = fill(diffmethod, N)
+        end
+        new{C}(cost, J, grad, hess, diffmethod)
     end
 end
 
@@ -53,25 +59,25 @@ For example, if the original cost function is an augmented Lagrangian cost funct
 is_quadratic(obj::Objective) = all(obj.const_hess)
 
 # Constructors
-function Objective(cost::CostFunction,N::Int)
-    Objective([cost for k = 1:N])
+function Objective(cost::CostFunction, N::Int; kwargs...)
+    Objective([cost for k = 1:N]; kwargs...)
 end
 
-function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int)
+function Objective(cost::CostFunction, cost_terminal::CostFunction, N::Int; kwargs...)
     stage, term = promote(cost, cost_terminal)
-    Objective([k < N ? stage : term for k = 1:N])
+    Objective([k < N ? stage : term for k = 1:N]; kwargs...)
 end
 
-function Objective(cost::Vector{<:CostFunction},cost_terminal::CostFunction)
+function Objective(cost::Vector{<:CostFunction}, cost_terminal::CostFunction; kwargs...) 
     N = length(cost) + 1
-    Objective([cost...,cost_terminal])
+    Objective([cost...,cost_terminal]; kwargs...)
 end
 
 # Methods
 "Get the vector of costs at each knot point. `sum(get_J(obj))` is equal to the cost"
 get_J(obj::Objective) = obj.J
 
-Base.copy(obj::Objective) = Objective(copy.(obj.cost))
+Base.copy(obj::Objective) = Objective(copy.(obj.cost); diffmethod=copy(obj.diffmethod))
 
 Base.getindex(obj::Objective,i::Int) = obj.cost[i]
 
@@ -113,15 +119,19 @@ struct CostExpansion{n,m,T} <: AbstractArray{Expansion{n,m,T},1}
     end
 end
 @inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
-function CostExpansion(E::CostExpansion, model::AbstractModel)
+
+CostExpansion(E::CostExpansion, model::DiscreteDynamics) = 
+    CostExpansion(RD.statevectortype(model), E, model)
+
+function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
     # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.state_diff_size(model) == size(model)[1]
+    @assert RobotDynamics.errstate_dim(model) == size(model)[1]
     return E 
 end
 
-function CostExpansion(E::CostExpansion{n,m,T}, model::LieGroupModel) where {n,m,T}
+function CostExpansion(::RD.RotationState, E::CostExpansion{n,m,T}, model::DiscreteDynamics) where {n,m,T}
     # Create an expansion for the full state dimension
-    @assert length(E[1].q) == RobotDynamics.state_diff_size(model)
+    @assert length(E[1].q) == RobotDynamics.errstate_dim(model)
     n0 = state_dim(model)
     return CostExpansion{T}(n0,m,length(E))
 end
@@ -175,7 +185,9 @@ Where `eltype(obj) <: DiagonalCost` if `Q`, `R`, and `Qf` are
     `Union{Diagonal{<:Any,<:StaticVector}}, <:StaticVector}`
 """
 function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
-        xf::AbstractVector, N::Int; checks=true, uf=@SVector zeros(size(R,1)))
+        xf::AbstractVector, N::Int; checks=true, diffmethod=UserDefined(), 
+        uf=@SVector zeros(size(R,1))
+)
     @assert size(Q,1) == length(xf)
     @assert size(Qf,1) == length(xf)
     @assert size(R,1) == length(uf)
@@ -199,6 +211,7 @@ function LQRObjective(
         R::Union{<:Diagonal, <:AbstractVector},
         Qf::Union{<:Diagonal, <:AbstractVector},
         xf::AbstractVector, N::Int;
+        diffmethod::DiffMethod = UserDefined(),
         uf=(@SVector zeros(size(R,1))),
         checks=true)
     n,m = size(Q,1), size(R,1)

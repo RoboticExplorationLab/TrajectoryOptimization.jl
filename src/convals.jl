@@ -23,7 +23,7 @@ With these fields, the following methods are implemented:
 abstract type AbstractConstraintValues{C<:AbstractConstraint} end
 
 """
-	ConVal{C,V,M,W}
+	ConVal{C,V,M,T}
 
 Holds information about a constraint of type `C`. Allows for any type of
 vector (`V`) or matrix (`M`) storage for constraint values and Jacobians
@@ -31,6 +31,8 @@ vector (`V`) or matrix (`M`) storage for constraint values and Jacobians
 """
 struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
     con::C
+	sig::FunctionSignature
+	diffmethod::DiffMethod
     inds::Vector{Int}
     vals::Vector{V}
 	vals2::Vector{V}
@@ -42,22 +44,23 @@ struct ConVal{C,V,M,W} <: AbstractConstraintValues{C}
 	const_hess::BitVector
 	iserr::Bool  # are the Jacobians on the error state
 	function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::Union{Vector{Int},UnitRange}, 
-			jac, vals, iserr::Bool=false)
-		if !iserr && size(gen_jacobian(con)) != size(jac[1])
+			jac, vals, iserr::Bool=false; 
+			sig::FunctionSignature=StaticReturn(), diffmethod::DiffMethod=UserDefined()
+	)
+		if !iserr && (RD.output_dim(con), n+m) != size(jac[1])
 			throw(DimensionMismatch("size of jac[i] $(size(jac[1])) does not match the expected size of $(size(gen_jacobian(con)))"))
 		end
 		vals2 = deepcopy(vals)
-        p = length(con)
+        p = RD.output_dim(con)
         P = length(vals)
         ix = 1:n
         iu = n .+ (1:m)
-		views = [gen_views(∇c, con, n, m) for ∇c in jac]
-		∇x = [v[1] for v in views]
-		∇u = [v[2] for v in views]
+		∇x = [view(∇c, :, ix) for ∇c in jac]
+		∇u = [view(∇c, :, iu) for ∇c in jac]
         c_max = zeros(P)
 		is_const = BitArray(undef, size(jac)) 
 		const_hess = BitVector(undef, P)
-        new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con,
+        new{typeof(con), eltype(vals), eltype(jac), eltype(∇x)}(con, sig, diffmethod,
 			collect(inds), vals, vals2, jac, ∇x, ∇u, c_max, is_const, const_hess, iserr)
     end
 end
@@ -66,18 +69,20 @@ function ConVal(n::Int, m::Int, cval::ConVal)
 	# create a ConVal for the "raw" Jacobians, if needed
 	# 	otherwise return the same ConVal
 	if cval.iserr
-		p = length(cval.con)
+		p = RD.output_dim(cval.con)
 		ws = widths(cval.con, n, m)
 		jac = [SizedMatrix{p,w}(zeros(p,w)) for k in cval.inds, w in ws]
-		ConVal(n, m, cval.con, cval.inds, jac, cval.vals, false)
+		ConVal(n, m, cval.con, cval.inds, jac, cval.vals, false; 
+		       sig=cval.sig, diffmethod=cval.diffmethod)
 	else
 		return cval
 	end
 end
 
-function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::UnitRange{Int}, iserr::Bool=false)
+function ConVal(n::Int, m::Int, con::AbstractConstraint, inds::UnitRange{Int}, 
+	            iserr::Bool=false; kwargs...)
 	C,c = gen_convals(n,m,con,inds)
-	ConVal(n, m, con, inds, C, c)
+	ConVal(n, m, con, inds, C, c; kwargs...)
 end
 
 function _index(cval::AbstractConstraintValues, k::Int)
@@ -88,28 +93,52 @@ function _index(cval::AbstractConstraintValues, k::Int)
 	end
 end
 
-Base.length(cval::AbstractConstraintValues) = length(cval.con)
+@inline RD.output_dim(cval::AbstractConstraintValues) = RD.output_dim(cval.con) 
+import Base.length
+@deprecate length(cval::AbstractConstraintValues) RD.output_dim(cval)
 
-function evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
-	evaluate!(cval.vals, cval.con, Z, cval.inds)
+function RD.evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
+	RD.evaluate!(cval.sig, cval.con, cval.vals, Z, cval.inds)
 end
 
-function jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory, init::Bool=false)
+function RD.jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
 	if cval.iserr
 		throw(ErrorException("Can't evaluate Jacobians directly on the error state Jacobians"))
 	else
-		if init
-			cval.is_const .= true
-		elseif all(cval.is_const)
-			return
-		end
-		jacobian!(cval.jac, cval.con, Z, cval.inds, cval.is_const)
+		RD.jacobian!(cval.sig, cval.diffmethod, cval.con, cval.jac, cval.vals, Z, cval.inds)
 	end
 end
 
-function ∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, λ, init::Bool=false)
-	∇jacobian!(G, cval.con, Z, λ, cval.inds, cval.const_hess, init)
+function RD.∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, λ)
+	RD.∇jacobian!(cval.sig, cval.diffmethod, cval.con, G, cval.λ, cval.vvals, Z, cval.inds)
 end
+
+function error_expansion!(errval::AbstractConstraintValues{C}, conval::AbstractConstraintValues, 
+		model::AbstractModel, G) where C
+	if errval.jac !== conval.jac
+		n,m = size(model)
+		ix = 1:n
+		iu = 1:m
+		for (i,k) in enumerate(conval.inds)
+			if C <: StateConstraint
+				mul!(errval.jac[i], conval.jac[i], get_data(G[k]))
+			elseif C <: ControlConstraint
+				errval.jac[i] .= conval.jac[i]
+			else
+				∇x  = view(errval.jac[i], :, ix)
+				∇u  = view(errval.jac[i], :, iu)
+				∇x0 = view(conval.jac[i], :, ix)
+				∇u0 = view(conval.jac[i], :, iu)
+				mul!(∇x, ∇x0, get_data(G[k]))
+				∇u .= ∇u0
+			end
+		end
+	end
+end
+
+##################################################
+# Constraint Violations
+##################################################
 
 violation(::Equality, x) = x
 violation(cone::Conic, x) = projection(cone, x) - x
@@ -139,7 +168,7 @@ end
 
 function max_violation!(cval::AbstractConstraintValues)
 	s = sense(cval.con)
-	P = length(cval)
+	P = output_dim(cval)
     for i in eachindex(cval.inds)
         cval.c_max[i] = max_violation(s, SVector{P}(cval.vals[i]))
     end
@@ -226,45 +255,26 @@ function norm_residual!(res, cval::AbstractConstraintValues, λ::Vector{<:Abstra
 	return nothing
 end
 
-function error_expansion!(errval::AbstractConstraintValues{C}, conval::AbstractConstraintValues, 
-		model::AbstractModel, G) where C
-	if errval.jac !== conval.jac
-		n,m = size(model)
-		ix = 1:n
-		iu = 1:m
-		for (i,k) in enumerate(conval.inds)
-			if C <: StateConstraint
-				mul!(errval.jac[i], conval.jac[i], get_data(G[k]))
-			elseif C <: ControlConstraint
-				errval.jac[i] .= conval.jac[i]
-			else
-				∇x  = view(errval.jac[i], :, ix)
-				∇u  = view(errval.jac[i], :, iu)
-				∇x0 = view(conval.jac[i], :, ix)
-				∇u0 = view(conval.jac[i], :, iu)
-				mul!(∇x, ∇x0, get_data(G[k]))
-				∇u .= ∇u0
-			end
-		end
-	end
-end
-
-function error_expansion!(con::AbstractConstraint, err, jac, G)
-	mul!(err, jac, G)
-end
-
 function gen_convals(n̄::Int, m::Int, con::AbstractConstraint, inds)
     # n is the state diff size
-    p = length(con)
-	ws = widths(con, n̄,m)
-    C = [SizedMatrix{p,w}(zeros(p,w)) for k in inds, w in ws]
-	c = [@MVector zeros(p) for k in inds]
+    p = RD.output_dim(con)
+	if con isa StageConstraint
+		njac = 1
+		len = length(inds)
+	elseif con isa CoupledConstraint
+		njac = 2
+		len = length(inds) + 1
+	else
+		error("gen_convals only defined for Stage and Coupled Constraints.")
+	end
+    C = [SizedMatrix{p,n̄+m}(zeros(p,n̄+m)) for k in 1:len, w in 1:njac]
+	c = [@MVector zeros(p) for k in 1:len]
     return C, c
 end
 
 function gen_convals(D::AbstractMatrix, d::AbstractVector, cinds, zinds, con::AbstractConstraint, inds)
     P = length(inds)
-    p = length(con)
+    p = RD.output_dim(con)
 	n,m = get_dims(con, length(zinds[1]))
     ws = widths(con, n, m)
 

@@ -1,5 +1,6 @@
 # Model and discretization
 model = Cartpole()
+dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
 n,m = size(model)
 N = 11
 tf = 5.
@@ -30,8 +31,7 @@ U0 = [u0 for k = 1:N-1]
 Z = Traj(X0,U0, fill(dt, N))
 
 # Inner constructor
-prob = Problem{RK3}(model, obj, conSet, x0, xf, Z, N, 0.0, tf)
-@test TO.integration(prob) == RK3
+prob = Problem(dmodel, obj, conSet, x0, xf, Z, N, 0.0, tf)
 @test prob.x0 == x0
 @test prob.xf == xf
 @test prob.constraints === conSet
@@ -45,8 +45,7 @@ add_constraint!(conSet, goal, N-1)
 @test controls(prob) ≈ U0
 
 # Alternate constructor
-prob = Problem(model, obj, xf, tf, x0=x0, constraints=conSet, X0=X0, U0=U0)
-@test TO.integration(prob) == RK3
+prob = Problem(dmodel, obj, x0, tf, xf=xf, constraints=conSet, X0=X0, U0=U0)
 @test prob.x0 == x0
 @test prob.xf == xf
 @test prob.constraints === conSet
@@ -60,18 +59,17 @@ add_constraint!(conSet, goal, N-1)
 @test controls(prob) ≈ U0
 
 # Change integration
-prob = Problem(model, obj, xf, tf, x0=x0, constraints=conSet, integration=RK2)
-@test TO.integration(prob) == RK2
+prob = Problem(model, obj, x0, tf, xf=xf, constraints=conSet, integration=RD.Euler(model))
+@test RD.integration(prob.model) isa RD.Euler
 
 # Test defaults
-prob = Problem(model, obj, xf, tf)
+prob = Problem(model, obj, x0, tf)
 @test prob.x0 == zero(x0)
 @test prob.N == N
 @test all(all.(isnan, states(prob)))
 @test controls(prob) == [zeros(m) for k = 1:N-1]
 @test isempty(prob.constraints)
-@test TO.integration(prob) == RK3
-@test RobotDynamics.get_times(prob) ≈ range(0, tf; step=dt)
+@test RobotDynamics.gettimes(prob) ≈ range(0, tf; step=dt)
 
 # Set initial trajectories
 initial_states!(prob, 2 .* X0)
@@ -99,17 +97,17 @@ prob = Problem(model, obj, xf, tf, X0=X0_mat, U0=U0_mat)
 dts = rand(N-1)
 dts = dts / sum(dts) * tf
 prob = Problem(model, obj, xf, tf, dt=dts)
-times = RobotDynamics.get_times(prob)
+times = RobotDynamics.gettimes(prob)
 @test times[end] ≈ tf
 @test times[1] ≈ 0
 @test times[2] ≈ dts[1]
 @test diff(times) ≈ dts
 
 # Test initial and final conditions
-prob = Problem(model, obj, Vector(xf), tf, x0=Vector(x0))
+prob = Problem(model, obj, Vector(x0), tf, xf=Vector(xf))
 @test prob.x0 ≈ x0
 @test prob.xf ≈ xf
-prob = Problem(model, obj, MVector(xf), tf, x0=MVector(x0))
+prob = Problem(model, obj, MVector(x0), tf, xf=MVector(xf))
 @test prob.x0 ≈ x0
 @test prob.xf ≈ xf
 @test prob.x0 isa MVector
@@ -121,7 +119,7 @@ TO.set_initial_state!(prob, x0_)
 @test_throws DimensionMismatch TO.set_initial_state!(prob, rand(2n))
 
 ## Change initial and goal states
-prob = Problem(model, copy(obj), xf, tf, x0=x0, constraints=deepcopy(conSet))
+prob = Problem(model, copy(obj), x0, tf, xf=xf, constraints=deepcopy(conSet))
 x0_new = @SVector rand(n)
 TO.set_initial_state!(prob, x0_new)
 @test TO.get_initial_state(prob) == x0_new
@@ -141,7 +139,7 @@ TO.set_goal_state!(prob, xf_new)
 @test conSet[2].xf ≈ xf
 
 # don't modify the terminal constraint
-prob = Problem(model, copy(obj), xf, tf, x0=x0, constraints=copy(conSet))
+prob = Problem(model, copy(obj), x0, tf, xf=xf, constraints=copy(conSet))
 TO.set_goal_state!(prob, xf_new, constraint=false)
 @test prob.xf ≈ xf_new
 @test prob.obj[1].q ≈ -Q*xf_new
@@ -149,14 +147,14 @@ TO.set_goal_state!(prob, xf_new, constraint=false)
 @test prob.constraints[2].xf ≈ xf
 
 # don't modify the objective, and leave off constraints
-prob = Problem(model, copy(obj), xf, tf, x0=x0)
+prob = Problem(model, copy(obj), x0, tf, xf=xf)
 TO.set_goal_state!(prob, xf_new, objective=false)
 @test prob.xf ≈ xf_new
 @test prob.obj[1].q ≈ -Q*xf
 @test prob.obj[end].q ≈ -Qf*xf
 
 # check that it modifies the orignal objective and constraint list if not copied
-prob = Problem(model, obj, xf, tf, x0=x0, constraints=copy(conSet))
+prob = Problem(model, obj, x0, tf, xf=xf, constraints=copy(conSet))
 TO.set_goal_state!(prob, xf_new)
 @test obj[1].q ≈ -Q*xf_new
 @test obj[end].q ≈ -Qf*xf_new

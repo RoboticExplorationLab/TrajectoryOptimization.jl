@@ -89,13 +89,13 @@ J = zeros(5,5)
 x = push(v, s+0.1)
 @test soc_projection(x) == x
 @test ∇soc_projection(x) ≈ ForwardDiff.jacobian(soc_projection, x) ≈ I(5)
-@test ∇soc_projection!(J,x) ≈ I(5)
+# @test ∇soc_projection!(J,x) ≈ I(5)
 
 # outside the code
 x = push(v, s-0.1)
 @test soc_projection(x) ≈ 0.5*(1 + (s-.1)/norm(v)) * [v; norm(v)]
 @test ∇soc_projection(x) ≈ ForwardDiff.jacobian(soc_projection, x)
-@test ∇soc_projection!(J,x) ≈ ∇soc_projection(x)
+# @test ∇soc_projection!(J,x) ≈ ∇soc_projection(x)
 # @btime ∇soc_projection($x)
 # @btime ∇soc_projection!($J, $x)
 # @btime ForwardDiff.jacobian($soc_projection, $x)
@@ -104,7 +104,7 @@ x = push(v, s-0.1)
 x = push(v, -s-0.1)
 @test soc_projection(x) == zero(x)
 @test ∇soc_projection(x) ≈ ForwardDiff.jacobian(soc_projection, x) ≈ zeros(5,5)
-@test ∇soc_projection!(J,x) ≈ ∇soc_projection(x)
+# @test ∇soc_projection!(J,x) ≈ ∇soc_projection(x)
 
 
 ## Penalty term
@@ -168,21 +168,24 @@ s = 4.2
 n,m = 3,2
 x = @SVector rand(n)
 u = @SVector rand(m)
-z = KnotPoint(x,u,0.1)
+t,dt = 1.1, 0.1
+z = KnotPoint(x,u,t,dt)
 
 normcon1 = NormConstraint(n, m, s, Inequality(), :control)
-@test TO.evaluate(normcon1, z) == [u'u - s]
+@test RD.evaluate(normcon1, z) == [u'u - s*s]
 J = zeros(1,n+m)
-TO.jacobian!(J, normcon1, z)
+c = zeros(1)
+RD.jacobian!(normcon1, J, c, z)
 @test J ≈ [zero(x); 2u]'
-@test length(normcon1) == 1
+@test RD.output_dim(normcon1) == 1
 
 normcon2 = NormConstraint(n, m, s, TO.SecondOrderCone(), :control)
-@test TO.evaluate(normcon2, z) ≈ [u; s]
+@test RD.evaluate(normcon2, z) ≈ [u; s]
 J = zeros(m+1,n+m)
-@test TO.jacobian!(J, normcon2, z) == true  # the Jacobian in constant
+c = zeros(RD.output_dim(normcon2))
+RD.jacobian!(normcon2, J, c, z)
 @test J ≈ [zeros(m,n) I(m); zeros(1,n+m)]
-eval_con2(x) = TO.evaluate(normcon2, StaticKnotPoint(z, x))
+eval_con2(x) = RD.evaluate(normcon2, RD.StaticKnotPoint(z, x))
 @test eval_con2(z.z) ≈ [u; s]
 @test ForwardDiff.jacobian(eval_con2, z.z) ≈ J
 @test length(normcon2) == m + 1

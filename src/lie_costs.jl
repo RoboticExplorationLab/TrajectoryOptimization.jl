@@ -284,18 +284,17 @@ function DiagonalQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T
     DiagonalQuatCost(Q, R, q, r, c, q_ref, q_ind)
 end
 
-function stage_cost(cost::DiagonalQuatCost, x::SVector, u::SVector)
-    stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
-end
-
-function stage_cost(cost::DiagonalQuatCost, x::SVector)
+function RD.evaluate(cost::DiagonalQuatCost, x, u)
     J = 0.5*x'cost.Q*x + cost.q'x + cost.c
+    J += 0.5 * u'cost.R*u + cost.r'u
     q = x[cost.q_ind]
     dq = cost.q_ref'q
     J += cost.w*min(1+dq, 1-dq)
 end
 
-function gradient!(E, cost::DiagonalQuatCost, z::AbstractKnotPoint, cache=nothing)
+function gradient!(cost::DiagonalQuatCost{n,m}, grad, z::AbstractKnotPoint) where {n,m}
+    x,u = state(z), control(z)
+    ix,iu = 1:n, n+1:n+m
     x,u = state(z), control(z)
     Qx = cost.Q*x + cost.q
     q = x[cost.q_ind]
@@ -305,11 +304,11 @@ function gradient!(E, cost::DiagonalQuatCost, z::AbstractKnotPoint, cache=nothin
     else
         Qx -= cost.w*cost.Iq*cost.q_ref
     end
-    E.q .= Qx
+    grad[ix] .= Qx
     if !is_terminal(z)
-        E.r .= cost.R*u .+ cost.r
+        grad[iu] .= cost.R*u .+ cost.r
     end
-    return false
+    return
 end
 
 """
@@ -393,6 +392,30 @@ end
 #                             Error Quadratic
 ############################################################################################
 
+RD.@autodiff struct ErrorQuadratic{Rot,N,M} <: CostFunction
+    model::RobotDynamics.RigidBody{Rot}
+    Q::Diagonal{Float64,SVector{12,Float64}}
+    R::Diagonal{Float64,SVector{M,Float64}}
+    r::SVector{M,Float64}
+    c::Float64
+    x_ref::SVector{N,Float64}
+    q_ind::SVector{4,Int}
+    function ErrorQuadratic(model::RobotDynamics.RigidBody{Rot}, 
+        Q::Diagonal{<:Real,<:StaticVector{12}}, 
+        R::Diagonal{<:Real,<:StaticVector{Nu}},
+        r::StaticVector{Nu},
+        c::Real,
+        x_ref::StaticVector{Nx},
+        q_ind::StaticVector{4}
+    ) where {Rot,Nx,Nu}
+        new{Rot, Nx, Nu}(model, Q, R, r, c, x_ref, q_ind)
+    end
+end
+function Base.copy(c::ErrorQuadratic)
+    ErrorQuadratic(c.model, c.Q, c.R, c.r, c.c, c.x_ref, c.q_ind)
+end
+RD.default_diffmethod(::ErrorQuadratic) = ForwardAD()
+
 """
     ErrorQuadratic{Rot,N,M}
 
@@ -405,50 +428,36 @@ where ``x_k \\ominus x_d`` is the error state, computed using
 This cost function isn't recommended: we've found that `DiagonalQuatCost` usually
     peforms better and is much more computationally efficient.
 """
-struct ErrorQuadratic{Rot,N,M} <: CostFunction
-    model::RD.RigidBody{Rot}
-    Q::Diagonal{Float64,SVector{12,Float64}}
-    R::Diagonal{Float64,SVector{M,Float64}}
-    r::SVector{M,Float64}
-    c::Float64
-    x_ref::SVector{N,Float64}
-    q_ind::SVector{4,Int}
-end
-function Base.copy(c::ErrorQuadratic)
-    ErrorQuadratic(c.model, c.Q, c.R, c.r, c.c, c.x_ref, c.q_ind)
-end
+ErrorQuadratic
 
 state_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = N
 control_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = M
 
-function ErrorQuadratic(model::RD.RigidBody{Rot}, Q::Diagonal{T,<:SVector{N0}},
-        R::Diagonal{T,<:SVector{M}},
-        x_ref::SVector{N}, 
-        u_ref=(@SVector zeros(T,M)); 
-        r=(@SVector zeros(T,M)), 
-        c=zero(T),
+function ErrorQuadratic(model::RD.RigidBody{Rot}, Q::Diagonal,
+        R::Diagonal,
+        x_ref,
+        u_ref=(@SVector zeros(eltype(Q),size(R,1))); 
+        r=(@SVector zeros(eltype(Q),size(R,1))), 
+        c=zero(eltype(Q)),
         q_ind=(@SVector [4,5,6,7])
-    ) where {T,N,N0,M,Rot}
-    if Rot <: UnitQuaternion && N0 == N 
+    ) where {Rot}
+    if Rot <: UnitQuaternion && size(Q,1) == size(x_ref,1) 
         Qd = deleteat(Q.diag, 4)
         Q = Diagonal(Qd)
     end
     r += -R*u_ref
     c += 0.5*u_ref'R*u_ref
-    return ErrorQuadratic{Rot,N,M}(model, Q, R, r, c, x_ref, q_ind)
+    return ErrorQuadratic(model, Q, R, r, c, x_ref, q_ind)
 end
 
 
-function stage_cost(cost::ErrorQuadratic, x::AbstractVector)
+function RD.evaluate(cost::ErrorQuadratic, x, u)
     dx = RD.state_diff(cost.model, x, cost.x_ref, Rotations.CayleyMap())
-    return 0.5*dx'cost.Q*dx + cost.c
+    return 0.5*dx'cost.Q*dx + cost.c + 0.5*u'cost.R*u + cost.r'u
 end
 
-function stage_cost(cost::ErrorQuadratic, x::AbstractVector, u::AbstractVector)
-    stage_cost(cost, x) + 0.5*u'cost.R*u + cost.r'u
-end
 
-diffmethod(::ErrorQuadratic) = RobotDynamics.FiniteDifference()
+# diffmethod(::ErrorQuadratic) = RobotDynamics.FiniteDifference()
 
 
 # function gradient!(E, cost::ErrorQuadratic, z::AbstractKnotPoint, cache=nothing)

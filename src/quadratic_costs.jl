@@ -66,6 +66,20 @@ function stage_cost(cost::QuadraticCostFunction, x::AbstractVector{T}) where T
     0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
 end
 
+function RD.evaluate(cost::QuadraticCostFunction, x, u)
+    # J = 0.5*u'cost.R*(u + 2cost.r) + 0.5*x'cost.Q*(x + 2cost.q) + cost.c
+    J = 0.5*u'cost.R*u + dot(cost.r,u) + 0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
+    if !is_blockdiag(cost)
+        if length(x) <= 14
+            J += u'SMatrix(cost.H)*x
+        else
+            mul!(cost.tmpu, cost.H, x)
+            J += cost.tmpu'u
+        end
+    end
+    return J
+end
+
 """
     gradient!(E::QuadraticCostFunction, costfun::CostFunction, z::AbstractKnotPoint, [cache])
 
@@ -94,6 +108,19 @@ function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
         end
     end
     return false
+end
+function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint) where {n,m}
+    x,u = state(z), control(z)
+    ix,iu = 1:n, n+1:n+m
+    grad[ix] .= cost.Q * x .+ cost.q
+    if !is_terminal(z)
+        grad[iu] .= cost.R * u .+ cost.r 
+        if !is_blockdiag(cost)
+            mul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
+            mul!(view(grad, iu), cost.H, x, 1.0, 1.0)
+        end
+    end
+    return nothing
 end
 
 """
@@ -131,6 +158,28 @@ function hessian!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
         end
     end
     return true
+end
+
+function RD.hessian!(cost::QuadraticCostFunction{n,m}, hess, z::AbstractKnotPoint) where {n,m}
+    ix,iu = 1:n, n+1:n+m
+    x,u = state(z), control(z)
+    if is_diag(cost)
+        hess .= 0
+        for i = 1:n; hess[i,i] = cost.Q[i,i] end
+    else
+        hess[ix,ix] .= cost.Q
+    end
+    if !is_terminal(z)
+        if is_diag(cost)
+            for i = 1:m; hess[i+n,i+n] = cost.R[i,i] end
+        else
+            hess[iu,iu] .= cost.R
+        end
+        if !is_blockdiag(cost)
+            hess[iu,ix] .= cost.H
+        end
+    end
+    return nothing
 end
 
 function Base.copy(c::QC) where QC<:QuadraticCostFunction
@@ -329,6 +378,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
     c::T                      # constant term
     terminal::Bool
     zeroH::Bool
+    tmpu::MVector{m,T}
     function (::Type{QC})(Q::TQ, R::TR, H::TH,
             q::Tq, r::Tr, c::Real; checks=true, terminal=false, kwargs...) where {TQ,TR,TH,Tq,Tr,QC<:QuadraticCost}
         @assert size(Q,1) == length(q)
@@ -345,7 +395,7 @@ mutable struct QuadraticCost{n,m,T,TQ,TR} <: QuadraticCostFunction{n,m,T}
         zeroH = norm(H,Inf) ≈ 0
         m,n = size(H)
         T = promote_type(eltype(Q), eltype(R), eltype(H), eltype(q), eltype(r), typeof(c))
-        new{n,m,T,TQ,TR}(Q,R,H,q,r,c,terminal,zeroH)
+        new{n,m,T,TQ,TR}(Q,R,H,q,r,c,terminal,zeroH,copy(r))
     end
     function QuadraticCost{n,m,T,TQ,TR}(qcost::QuadraticCost) where {n,m,T,TQ,TR}
         new{n,m,T,TQ,TR}(qcost.Q, qcost.R, qcost.H, qcost.q, qcost.r, qcost.c, qcost.terminal, qcost.zeroH)

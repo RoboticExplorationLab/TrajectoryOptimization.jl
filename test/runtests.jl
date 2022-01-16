@@ -9,9 +9,13 @@ using RobotDynamics
 using BenchmarkTools
 using FiniteDiff
 const TO = TrajectoryOptimization
+const RD = RobotDynamics
 Random.seed!(1)
 
 include("test_models.jl")
+
+const run_alloc_tests = !haskey(ENV, "CI") 
+##
 
 @testset "Costs" begin
     include("cost_tests.jl")
@@ -33,15 +37,19 @@ end
 # @testset "Utils" begin
 # end
 
-@testset "NLP" begin
-    include("nlp_tests.jl")
-    include("moi_test.jl")
+# @testset "NLP" begin
+#     include("nlp_tests.jl")
+#     include("moi_test.jl")
+# end
+
+@testset "Internal API" begin
+    include("internal_api.jl")
 end
 
-using NBInclude
-@testset "Examples" begin
-    @nbinclude(joinpath(@__DIR__, "..", "examples", "Internal API.ipynb"))
-    # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
-    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
-    # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
-end
+# using NBInclude
+# @testset "Examples" begin
+#     @nbinclude(joinpath(@__DIR__, "..", "examples", "Internal API.ipynb"))
+#     # @test_nowarn include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
+#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Cartpole.ipynb"); softscope=true)
+#     # @nbinclude(joinpath(@__DIR__, "..", "examples", "Quadrotor.ipynb"); softscope=true)
+# end

@@ -1,14 +1,3 @@
-# export
-# 	GoalConstraint,
-# 	BoundConstraint,
-# 	CircleConstraint,
-# 	SphereConstraint,
-# 	NormConstraint,
-# 	LinearConstraint,
-# 	VariableBoundConstraint,
-# 	QuatNormConstraint,
-# 	QuatSlackConstraint
-
 import RobotDynamics: state_dim, control_dim
 
 Base.copy(con::AbstractConstraint) = con
@@ -52,7 +41,7 @@ end
 Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
-@inline Base.length(con::GoalConstraint{P}) where P = P
+@inline RD.output_dim(con::GoalConstraint{P}) where P = P
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
@@ -63,8 +52,14 @@ function primal_bounds!(zL,zU,con::GoalConstraint)
 	return true
 end
 
-evaluate(con::GoalConstraint, x::StaticVector) = x[con.inds] - con.xf
-function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
+RD.evaluate(con::GoalConstraint, x, u) = x[con.inds] - con.xf
+function RD.evaluate!(con::GoalConstraint, y, x, u)
+	for (i, j) in enumerate(con.inds)
+		y[i] = x[j] - con.xf[i]
+	end
+	return nothing
+end
+function jacobian!(con::GoalConstraint, ∇c, y, x, u)
 	T = eltype(∇c)
 	for (i,j) in enumerate(con.inds)
 		∇c[i,j] = one(T)
@@ -72,7 +67,10 @@ function jacobian!(∇c, con::GoalConstraint, z::KnotPoint)
 	return true
 end
 
-∇jacobian!(G, con::GoalConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
+function ∇jacobian!(con::GoalConstraint, H, λ, c, z::AbstractKnotPoint)
+	H .= 0
+	return nothing
+end
 
 function change_dimension(con::GoalConstraint, n::Int, m::Int, xi=1:n, ui=1:m)
 	GoalConstraint(con.n, con.xf, xi[con.inds])
@@ -131,13 +129,18 @@ Base.copy(con::LinearConstraint{S}) where S =
 	LinearConstraint(con.n, con.m, copy(con.A), copy(con.b), S(), con.inds)
 
 @inline sense(con::LinearConstraint) = con.sense
-@inline Base.length(con::LinearConstraint{<:Any,P}) where P = P
+@inline RD.output_dim(con::LinearConstraint{<:Any,P}) where P = P
 @inline state_dim(con::LinearConstraint) = con.n
 @inline control_dim(con::LinearConstraint) = con.m
-evaluate(con::LinearConstraint, z::AbstractKnotPoint) = con.A*z.z[con.inds] .- con.b
-function jacobian!(∇c, con::LinearConstraint, z::AbstractKnotPoint)
+RD.evaluate(con::LinearConstraint, z::AbstractKnotPoint) = con.A*RD.getdata(z)[con.inds] .- con.b
+function RD.evaluate!(con::LinearConstraint, c, z::AbstractKnotPoint) 
+	mul!(c, con.A, view(RD.getdata(z), con.inds[1]:con.inds[end]))
+	c .-= con.b 
+	return nothing
+end
+function RD.jacobian!(con::LinearConstraint, ∇c, c, z::AbstractKnotPoint)
 	∇c[:,con.inds[1]:con.inds[end]] .= con.A
-	return true
+	return nothing 
 end
 
 function change_dimension(con::LinearConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -183,7 +186,7 @@ function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius
 end
 state_dim(con::CircleConstraint) = con.n
 
-function evaluate(con::CircleConstraint, X::StaticVector)
+function RD.evaluate(con::CircleConstraint, X, u)
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -192,7 +195,19 @@ function evaluate(con::CircleConstraint, X::StaticVector)
 	-(x .- xc).^2 - (y .- yc).^2 + r.^2
 end
 
-function jacobian!(∇c, con::CircleConstraint{P}, X::SVector) where P
+function RD.evaluate!(con::CircleConstraint{P}, c, X, u) where P
+	xc = con.x
+	yc = con.y
+	r = con.radius
+	x = X[con.xi]
+	y = X[con.yi]
+	for i = 1:P
+		c[i] = -(x - xc[i])^2 - (y - yc[i])^2 + r[i]^2
+	end
+	return
+end
+
+function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, X, u) where P
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	x = X[xi]
@@ -203,10 +218,10 @@ function jacobian!(∇c, con::CircleConstraint{P}, X::SVector) where P
 		∇c[i,xi] = ∇f(x, xc[i])
 		∇c[i,yi] = ∇f(y, yc[i])
 	end
-	return false
+	return
 end
 
-@inline Base.length(::CircleConstraint{P}) where P = P
+@inline RD.output_dim(::CircleConstraint{P}) where P = P
 @inline sense(::CircleConstraint) = Inequality()
 
 function change_dimension(con::CircleConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -253,9 +268,9 @@ end
 
 @inline state_dim(con::SphereConstraint) = con.n
 @inline sense(::SphereConstraint) = Inequality()
-@inline Base.length(::SphereConstraint{P}) where P = P
+@inline RD.output_dim(::SphereConstraint{P}) where P = P
 
-function evaluate(con::SphereConstraint, x::SVector)
+function RD.evaluate(con::SphereConstraint, x, u)
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
@@ -264,21 +279,32 @@ function evaluate(con::SphereConstraint, x::SVector)
 	-((x[xi] .- xc).^2 + (x[yi] .- yc).^2 + (x[zi] .- zc).^2 - r.^2)
 end
 
-function jacobian!(con::SphereConstraint, X::SVector)
+function RD.evaluate!(con::SphereConstraint{P}, c, X, u) where P
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
-	x = X[xi]
-	y = X[yi]
-	z = X[zi]
 	r = con.radius
+	x,y,z, = X[xi], X[yi], X[zi]
+	for i = 1:P
+		c[i] = -(x - xc[i])^2 - (y - yc[i])^2 - (z - zc[i])^2 + r[i]^2
+	end
+	return
+end
+
+function RD.jacobian!(con::SphereConstraint{P}, ∇c, c, X, u) where P
+	xc = con.x; xi = con.xi
+	yc = con.y; yi = con.yi
+	zc = con.z; zi = con.zi
+	r = con.radius
+	x,y,z, = X[xi], X[yi], X[zi]
+
 	∇f(x,xc) = -2*(x - xc)
 	for i = 1:P
 		∇c[i,xi] = ∇f(x, xc[i])
 		∇c[i,yi] = ∇f(y, yc[i])
 		∇c[i,zi] = ∇f(z, zc[i])
 	end
-	return false
+	return
 end
 
 function change_dimension(con::SphereConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -314,24 +340,37 @@ end
 
 @inline state_dim(con::CollisionConstraint) = con.n
 @inline sense(::CollisionConstraint) = Inequality()
-@inline Base.length(::CollisionConstraint) = 1
+@inline RD.output_dim(::CollisionConstraint) = 1
 
-function evaluate(con::CollisionConstraint, x::SVector)
+function RD.evaluate(con::CollisionConstraint, x, u)
     x1 = x[con.x1]
     x2 = x[con.x2]
     d = x1 - x2
     @SVector [con.radius^2 - d'd]
 end
 
-function jacobian!(∇c, con::CollisionConstraint, x::SVector)
-    x1 = x[con.x1]
-    x2 = x[con.x2]
-    d = x1 - x2
-	∇x1 = -2d
-	∇x2 =  2d
-	∇c[1,con.x1] .= ∇x1
-	∇c[1,con.x2] .= ∇x2
-	return false
+function RD.evaluate!(con::CollisionConstraint{D}, c, x, u) where D
+	c[1] = con.radius^2
+	for i = 1:D
+		x1 = x[con.x1[i]]
+		x2 = x[con.x2[i]]
+		d = x1 - x2
+		c[1] -= d*d
+	end
+	return 
+end
+
+function RD.jacobian!(con::CollisionConstraint{D}, ∇c, c, x, u) where D
+	for i = 1:D
+		x1 = x[con.x1[i]]
+		x2 = x[con.x2[i]]
+		d = x1 - x2
+		∇x1 = -2d
+		∇x2 =  2d
+		∇c[1,con.x1[i]] = ∇x1
+		∇c[1,con.x2[i]] = ∇x2
+	end
+	return
 end
 
 function change_dimension(con::CollisionConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -402,30 +441,53 @@ end
 @inline state_dim(con::NormConstraint) = con.n
 @inline control_dim(con::NormConstraint) = con.m
 @inline sense(con::NormConstraint) = con.sense
-@inline Base.length(::NormConstraint) = 1
-@inline Base.length(::NormConstraint{SecondOrderCone,D}) where D = D + 1
+@inline RD.output_dim(::NormConstraint) = 1
+@inline RD.output_dim(::NormConstraint{SecondOrderCone,D}) where D = D + 1
 
-function evaluate(con::NormConstraint, z::AbstractKnotPoint)
+function RD.evaluate(con::NormConstraint, z::AbstractKnotPoint)
 	x = z.z[con.inds]
 	return @SVector [x'x - con.val*con.val]
 end
 
-function evaluate(con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
+function RD.evaluate!(con::NormConstraint, c, z::AbstractKnotPoint)
+	z_ = RD.getdata(z)
+	c[1] = -con.val * con.val
+	for (i, j) in enumerate(con.inds)
+		x = z_[i]
+		c[1] += x*x 
+	end
+	return
+end
+
+function RD.evaluate(con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
 	v = z.z[con.inds]
 	return push(v, con.val)
 end
 
-function jacobian!(∇c, con::NormConstraint, z::AbstractKnotPoint)
-	x = z.z[con.inds]
-	∇c[1,con.inds] .= 2*x
-	return false
+function RD.evaluate!(con::NormConstraint{SecondOrderCone,D}, c, z::AbstractKnotPoint) where D
+	z_ = RD.getdata(z)
+	for (i, j) in enumerate(con.inds) 
+		c[i] = z_[j]
+	end
+	c[end] = con.val
+	return
 end
 
-function jacobian!(∇c, con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
+function RD.jacobian!(con::NormConstraint, ∇c, c, z::AbstractKnotPoint)
+	z_ = RD.getdata(z)
+	∇c .= 0
+	for (i, j) in enumerate(con.inds)
+		∇c[1,j] = 2*z_[j]
+	end
+	return
+end
+
+function RD.jacobian!(con::NormConstraint{SecondOrderCone}, ∇c, c, z::AbstractKnotPoint)
+	∇c .= 0
 	for (i,j) in enumerate(con.inds)
 		∇c[i,j] = 1.0 
 	end
-	return true
+	return
 end
 
 function change_dimension(con::NormConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
@@ -470,12 +532,14 @@ struct BoundConstraint{P,NM,T} <: StageConstraint
 	z_min::SVector{NM,T}
 	i_max::Vector{Int}
 	i_min::Vector{Int}
+	a_max::Vector{Int}
+	a_min::Vector{Int}
 	inds::SVector{P,Int}
 end
 
 Base.copy(bnd::BoundConstraint{P,nm,T}) where {P,nm,T} =
 	BoundConstraint(bnd.n, bnd.m, bnd.z_max, bnd.z_min, 
-		copy(bnd.i_max), copy(bnd.i_min), bnd.inds)
+		copy(bnd.i_max), copy(bnd.i_min), copy(bnd.a_max), copy(bnd.a_min), bnd.inds)
 
 function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVector ones(n)),
 		u_max=Inf*(@SVector ones(m)), u_min=-Inf*(@SVector ones(m)))
@@ -503,7 +567,7 @@ function BoundConstraint(n, m; x_max=Inf*(@SVector ones(n)), x_min=-Inf*(@SVecto
 	linds_u = LinearIndices(zeros(u+l,n+m))[carts_u]
 	linds_l = LinearIndices(zeros(u+l,n+m))[carts_l]
 
-	BoundConstraint(n, m, z_max, z_min, linds_u, linds_l, inds)
+	BoundConstraint(n, m, z_max, z_min, linds_u, linds_l, a_max, a_min, inds)
 end
 
 function con_label(con::BoundConstraint, ind::Int)
@@ -545,7 +609,7 @@ checkBounds(n::Int, u::Real, l::AbstractVector) = checkBounds(n, fill(u,n), l)
 @inline lower_bound(bnd::BoundConstraint) = bnd.z_min
 @inline upper_bound(bnd::BoundConstraint) = bnd.z_max
 @inline sense(::BoundConstraint) = Inequality()
-@inline Base.length(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
+@inline RD.output_dim(con::BoundConstraint) = length(con.i_max) + length(con.i_min)
 
 function primal_bounds!(zL, zU, bnd::BoundConstraint)
 	for i = 1:length(zL)
@@ -555,21 +619,39 @@ function primal_bounds!(zL, zU, bnd::BoundConstraint)
 	return true
 end
 
-function evaluate(bnd::BoundConstraint, z::AbstractKnotPoint)
-	[(z.z - bnd.z_max); (bnd.z_min - z.z)][bnd.inds]
+function RD.evaluate(bnd::BoundConstraint, z::AbstractKnotPoint)
+	z_ = RD.getdata(z)
+	[(z_ - bnd.z_max); (bnd.z_min - z_)][bnd.inds]
 end
 
-function jacobian!(∇c, bnd::BoundConstraint{U,L}, z::AbstractKnotPoint) where {U,L}
+function RD.evaluate!(bnd::BoundConstraint, c, z::AbstractKnotPoint)
+	z_ = RD.getdata(z)
+	i = 1
+	for j in bnd.a_max
+		c[i] = z_[j] - bnd.z_max[j]
+		i += 1
+	end
+	for j in bnd.a_min
+		c[i] = bnd.z_min[j] - z_[j]
+		i += 1
+	end
+	return
+end
+
+function RD.jacobian!(bnd::BoundConstraint, ∇c, c, z::AbstractKnotPoint)
 	for i in bnd.i_max
 		∇c[i]  = 1
 	end
 	for i in bnd.i_min
 		∇c[i] = -1
 	end
-	return true
+	return
 end
 
-∇jacobian!(G, con::BoundConstraint, z::AbstractKnotPoint, λ::AbstractVector) = true # zeros
+function RD.∇jacobian!(con::BoundConstraint, H, λ, c, z::AbstractKnotPoint)
+	H .= 0
+	return
+end
 
 function change_dimension(con::BoundConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 	n0,m0 = con.n, con.m
@@ -704,7 +786,7 @@ end
 
 @inline state_dim(con::IndexedConstraint) = con.n
 @inline control_dim(con::IndexedConstraint) = con.m
-@inline Base.length(con::IndexedConstraint) = length(con.con)
+@inline RD.output_dim(con::IndexedConstraint) = RD.output_dim(con.con)
 @inline sense(con::IndexedConstraint) = sense(con.con)
 
 function Base.copy(c::IndexedConstraint{C,n0,m0}) where {C,n0,m0}
@@ -714,7 +796,7 @@ end
 
 function IndexedConstraint(n,m,con::AbstractConstraint,
 		ix::UnitRange{Int}, iu::UnitRange{Int})
-	p = length(con)
+	p = RD.output_dim(con)
 	n0,m0 = length(ix), length(iu)
 	iu = iu .+ n
 	iz = SVector{n0+m0}([ix; iu])
@@ -754,30 +836,46 @@ function IndexedConstraint(n,m,con::AbstractConstraint)
 	IndexedConstraint(n, m, con, ix, iu)
 end
 
-function evaluate(con::IndexedConstraint, z::AbstractKnotPoint)
+function RD.evaluate(con::IndexedConstraint, z::AbstractKnotPoint)
 	x0 = z.z[con.ix]
 	u0 = z.z[con.iu]
 	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
-	evaluate(con.con, z_)
+	RD.evaluate(con.con, z_)
 end
 
-@generated function jacobian!(∇c, con::IndexedConstraint{C}, z::AbstractKnotPoint) where C
+function RD.evaluate!(con::IndexedConstraint, c, z::AbstractKnotPoint)
+	x0 = z.z[con.ix]
+	u0 = z.z[con.iu]
+	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
+	RD.evaluate!(con.con, c, z_)
+end
+
+# function RD.jacobian!(con::IndexedConstraint, ∇c, c, z::AbstractKnotPoint)
+# 	x0 = z.z[con.ix]
+# 	u0 = z.z[con.iu]
+# 	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
+# 	RD.jacobian!(con, ∇c, c, z_)
+# end
+
+@generated function RD.jacobian!(con::IndexedConstraint{C}, ∇c, c, z::AbstractKnotPoint) where C
 	if C <: StateConstraint
 		assignment = quote
-			∇c_ = uview(∇c, :, con.ix)
-			isconst = jacobian!(∇c_, con.con, z_)
+			∇c_ = view(∇c, :, con.ix)
+			RD.jacobian!(con.con, ∇c_, c, z_)
+			view(∇c, :, con.iu) .= 0
 		end
 	elseif C <: ControlConstraint
 		assignment = quote
-			∇c_ = uview(∇c, :, con.iu)
-			isconst = jacobian!(∇c_, con.con, z_)
+			∇c_ = view(∇c, :, con.iu)
+			RD.jacobian!(con.con, ∇c_, c, z_)
+			view(∇c, :, con.ix) .= 0
 		end
 	else
 		assignment = quote
 			∇c_ = con.∇c
-			isconst = jacobian!(∇c_, con.con, z_)
-			uview(∇c, :, con.ix) .= con.A
-			uview(∇c, :, con.iu) .= con.B
+			RD.jacobian!(con.con, ∇c_, c, z_)
+			view(∇c, :, con.ix) .= con.A
+			view(∇c, :, con.iu) .= con.B
 		end
 	end
 	quote
@@ -785,7 +883,7 @@ end
 		u0 = z.z[con.iu]
 		z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
 		$assignment
-		return isconst
+		return
 	end
 end
 
@@ -877,12 +975,12 @@ end
 # 	end
 # end
 
-struct QuatVecEq{T} <: StateConstraint
+RD.@autodiff struct QuatVecEq{T} <: StateConstraint
     n::Int
     qf::UnitQuaternion{T}
     qind::SVector{4,Int}
 end
-function evaluate(con::QuatVecEq, x::StaticVector)
+function RD.evaluate(con::QuatVecEq, x, u)
     qf = Rotations.params(con.qf)
     q = normalize(x[con.qind])
     dq = qf'q
@@ -892,5 +990,7 @@ function evaluate(con::QuatVecEq, x::StaticVector)
     return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
 end
 sense(::QuatVecEq) = Equality()
-state_dim(con::QuatVecEq) = con.n
-Base.length(con::QuatVecEq) = 3
+RD.state_dim(con::QuatVecEq) = con.n
+RD.control_dim(con::QuatVecEq) = 0
+RD.output_dim(con::QuatVecEq) = 3
+RD.default_diffmethod(::QuatVecEq) = ForwardAD()

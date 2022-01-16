@@ -35,17 +35,14 @@ end
 function cost(obj::AbstractObjective, Z::AbstractTrajectory{<:Any,<:Any,T}) where T
     J = zero(T)
     for k = 1:length(obj)
-        J += stage_cost(obj[k], Z[k])
+        J += RD.evaluate(obj[k], Z[k])
     end
     return J
 end
 
-# Default to no integration
-cost(obj, dyn_con::DynamicsConstraint{Q}, Z) where Q<:QuadratureRule = cost(obj, Z)
-
 "Evaluate the cost for a trajectory (non-allocating)"
 @inline function cost!(obj::Objective, Z::AbstractTrajectory)
-    map!(stage_cost, obj.J, obj.cost, Z)
+    map!(RD.evaluate, obj.J, obj.cost, Z)
 end
 
 
@@ -60,17 +57,11 @@ Evaluate the cost gradient along the entire tracjectory `Z`, storing the result 
 
 If `init == true`, all gradients will be evaluated, even if they are constant.
 """
-function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory, 
-		cache=ExpansionCache(obj); init::Bool=false)
+function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory; init::Bool=false)
 	is_const = obj.const_grad
-	N = length(Z)
     for k in eachindex(Z)
 		if init || !is_const[k]
-			is_const[k] = gradient!(E[k], obj.cost[k], Z[k], cache) 
-            dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
-            dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
-            E[k].q .*= dt_x
-            E[k].r .*= dt_u
+			RD.gradient!(obj.diffmethod[k], obj.cost[k], E[k].grad, Z[k]) 
         end
     end
 end
@@ -83,27 +74,18 @@ Evaluate the cost hessian along the entire tracjectory `Z`, storing the result i
 If `init == true`, all hessian will be evaluated, even if they are constant. If false,
 they will only be evaluated if they are not constant.
 """
-function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory, 
-		cache=ExpansionCache(obj); init::Bool=false, rezero::Bool=false)
+function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory; 
+        init::Bool=false, rezero::Bool=false)
 	is_const = obj.const_hess
 	if !init && all(is_const)
 		return
 	end
-    N = length(Z)
     for k in eachindex(Z)
         if init || !is_const[k]
 			if rezero
 				E[k].hess .= 0
-				# E[k].Q .= 0
-				# E[k].R .= 0
-				# !is_blockdiag(E[k]) && (E[k].H .= 0)
 			end
-			is_const[k] = hessian!(E[k], obj.cost[k], Z[k], cache)
-            dt_x = k < N ? Z[k].dt :  one(Z[k].dt)
-            dt_u = k < N ? Z[k].dt : zero(Z[k].dt)
-            E[k].Q .*= dt_x
-            E[k].R .*= dt_u
-            E[k].H .*= dt_u
+			RD.hessian!(obj.diffmethod[k], obj.cost[k], E[k].hess, Z[k])
         end
 	end
 end
@@ -118,41 +100,44 @@ If `init == false`, the expansions will only be evaluated if they are not consta
 
 If `rezero == true`, all expansions will be multiplied by zero before taking the expansion.
 """
-function cost_expansion!(E, obj::Objective, Z::Traj, 
-		cache=ExpansionCache(obj); init::Bool=false, rezero::Bool=false)
-    cost_gradient!(E, obj, Z, cache, init=init)
-    cost_hessian!(E, obj, Z, cache, init=init, rezero=rezero)
+function cost_expansion!(E, obj::Objective, Z::Traj; init::Bool=false, rezero::Bool=false)
+    cost_gradient!(E, obj, Z, init=init)
+    cost_hessian!(E, obj, Z, init=init, rezero=rezero)
     return nothing
 end
 
-function error_expansion!(E, Jexp, model::AbstractModel, Z::Traj, G, tmp=G[end])
+error_expansion!(E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end]) = 
+	error_expansion!(RD.statevectortype(model), E, Jexp, model, Z, G, tmp)
+
+function error_expansion!(::RD.EuclideanState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
     @assert E === Jexp "E and Jexp should be the same object for AbstractModel"
     return nothing
 end
 
-function error_expansion!(E, Jexp, model::LieGroupModel, Z::Traj, G, tmp=G[end])
+function error_expansion!(::RD.RotationState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
     for k in eachindex(E)
         error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
 	E.const_hess .= false   # hessian will always be dependent on the state
+	return nothing
 end
 
 function error_expansion!(E, cost, model, z::AbstractKnotPoint,
         G, tmp)
-	E.Q .= 0
-	E.R .= cost.R
-	E.r .= cost.r
-    RobotDynamics.∇²differential!(E.Q, model, state(z), cost.q)
+	E.xx .= 0
+	E.uu .= cost.uu
+	E.u .= cost.u
+    RobotDynamics.∇²differential!(model, E.xx, state(z), cost.x)
     if size(model)[1] < 15
         G = SMatrix(G)
-        E.H .= SMatrix(cost.H) * G
-        E.q .= G'SVector(cost.q)
-        E.Q .+= G'cost.Q*G
+        E.ux .= SMatrix(cost.ux) * G
+        E.x .= G'SVector(cost.x)
+        E.xx .+= G'cost.xx*G
     else
-        mul!(E.H, cost.H, G)
-        mul!(E.q, Transpose(G), cost.q)
-        mul!(tmp, cost.Q, G)
-        mul!(E.Q, Transpose(G), tmp, 1.0, 1.0)
+        mul!(E.ux, cost.ux, G)
+        mul!(E.x, Transpose(G), cost.x)
+        mul!(tmp, cost.xx, G)
+        mul!(E.xx, Transpose(G), tmp, 1.0, 1.0)
 	end
     return nothing
 end

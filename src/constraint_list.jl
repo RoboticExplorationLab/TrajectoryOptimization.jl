@@ -27,6 +27,8 @@ Once the previous interface is defined, the following methods are defined
 	constraint violation in the trajectory
 """
 abstract type AbstractConstraintSet end
+get_convals(::AbstractConstraintSet) = throw(NotImplemented(:get_convals, :AbstractConstraintSet))
+get_errvals(::AbstractConstraintSet) = throw(NotImplemented(:get_convals, :AbstractConstraintSet))
 
 """
 	ConstraintList
@@ -59,12 +61,16 @@ struct ConstraintList <: AbstractConstraintSet
 	m::Int
 	constraints::Vector{AbstractConstraint}
 	inds::Vector{UnitRange{Int}}
+	sigs::Vector{FunctionSignature}
+	diffs::Vector{DiffMethod}
 	p::Vector{Int}
 	function ConstraintList(n::Int, m::Int, N::Int)
 		constraints = AbstractConstraint[]
 		inds = UnitRange{Int}[]
 		p = zeros(Int,N)
-		new(n, m, constraints, inds, p)
+		sigs = FunctionSignature[]
+		diffs = DiffMethod[]
+		new(n, m, constraints, inds, sigs, diffs, p)
 	end
 end
 
@@ -103,7 +109,10 @@ cons_and_inds = [(con,ind) in zip(cons)]
 cons_and_inds[1] == (bnd,1:n-1)            # (true)
 ```
 """
-function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, idx=-1)
+function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange{Int}, 
+						 idx=-1; sig::FunctionSignature=RD.default_signature(con), 
+						 diffmethod::DiffMethod=RD.default_diffmethod(con)
+)
 	@assert check_dims(con, cons.n, cons.m) "New constraint not consistent with n=$(cons.n) and m=$(cons.m)"
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
@@ -112,9 +121,13 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 	if idx == -1
 		push!(cons.constraints, con)
 		push!(cons.inds, inds)
+		push!(cons.diffs, diffmethod)
+		push!(cons.sigs, sig)
 	elseif 0 < idx <= length(cons)
 		insert!(cons.constraints, idx, con)
 		insert!(cons.inds, idx, inds)
+		insert!(cons.diffs, idx, diffmethod)
+		insert!(cons.sigs, idx, sig)
 	else
 		throw(ArgumentError("cannot insert constraint at index=$idx. Length = $(length(cons))"))
 	end
@@ -122,8 +135,8 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 	@assert length(cons.constraints) == length(cons.inds)
 end
 
-@inline add_constraint!(cons::ConstraintList, con::AbstractConstraint, k::Int, idx=-1) =
-	add_constraint!(cons, con, k:k, idx)
+@inline add_constraint!(cons::ConstraintList, con::AbstractConstraint, k::Int, idx=-1; kwargs...) =
+	add_constraint!(cons, con, k:k, idx; kwargs...)
 
 # Iteration
 Base.iterate(cons::ConstraintList) = length(cons) == 0 ? nothing : (cons[1], 1)
@@ -166,7 +179,7 @@ knot point.
 function num_constraints!(cons::ConstraintList)
 	cons.p .*= 0
 	for i = 1:length(cons)
-		p = length(cons[i])
+		p = RD.output_dim(cons[i])
 		for k in cons.inds[i]
 			cons.p[k] += p
 		end

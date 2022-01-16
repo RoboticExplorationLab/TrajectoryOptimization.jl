@@ -19,12 +19,15 @@ const MOI = MathOptInterface
 import RobotDynamics
 const RD = RobotDynamics
 
-using RobotDynamics: AbstractModel, LieGroupModel,
+using RobotDynamics: AbstractModel, DiscreteDynamics, LieGroupModel, DiscreteLieDynamics,
 	KnotPoint, StaticKnotPoint, AbstractKnotPoint,
-	QuadratureRule, Implicit, Explicit, DEFAULT_Q, HermiteSimpson,
-	is_terminal, state_diff, state_diff_jacobian!, state_diff_jacobian,
-	state, control, states, controls, get_times, Traj, AbstractTrajectory,
-	num_vars
+	QuadratureRule, Implicit, Explicit, 
+	state_dim, control_dim, output_dim,
+	is_terminal, state_diff, state_diff_jacobian!,
+	state, control, states, controls, gettimes, Traj, AbstractTrajectory,
+	num_vars, dims,
+	FunctionSignature, DiffMethod,
+	FiniteDifference, ForwardAD, StaticReturn, InPlace, UserDefined
 
 import RobotDynamics: jacobian!, state_dim, control_dim, states, controls, 
 	state_diff_jacobian!, rollout!
@@ -89,7 +92,11 @@ include("convals.jl")
 include("problem.jl")
 include("conset.jl")
 
-include("nlp.jl")
+# include("nlp.jl")
 
 include("utils.jl")
+# include("deprecated.jl")
+
+import Base.length
+@deprecate length(con::AbstractConstraint) RobotDynamics.output_dim(con)
 end
