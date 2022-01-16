@@ -1,3 +1,19 @@
+# New `v0.6`
+## Updated to new RobotDynamics `v0.4` API
+Allows for both inplace and out-of-place dynamics, cost, and constraint evaluations.
+Jacobians can be calculated using finite differences, forward AD, or user-specified.
+Avoids prohibitively long compilation times for larger state and control dimensions.
+
+- Replaced `length` and `size` methods with `state_dim`, `control_dim`, `output_dim` and 
+`dims`. 
+- `Problem` constructor is now of the form `Problem(model, obj, xf, tf, [x0, constraints])
+Note that `x0` is now a required positional argument and `xf` is an optional keyword 
+argument.
+- Integration for dynamics is now specified by the model instead of a type parameter. 
+- Support for direct collocation via MathOptInterface has been removed (will be implemented
+in a separate repo in the future)
+
+
 # New in `v0.5`
 ## Support for Finite Differencing
 Added support for finite differencing with `FiniteDiff` for dynamics, constraints, and cost functions.
