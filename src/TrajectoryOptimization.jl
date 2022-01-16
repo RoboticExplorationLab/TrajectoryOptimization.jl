@@ -14,7 +14,6 @@ using UnsafeArrays
 using SparseArrays
 using MathOptInterface
 using Rotations
-using Octavian
 const MOI = MathOptInterface
 
 import RobotDynamics

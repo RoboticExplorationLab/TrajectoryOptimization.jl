@@ -116,8 +116,8 @@ function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoi
     if !is_terminal(z)
         grad[iu] .= cost.R * u .+ cost.r 
         if !is_blockdiag(cost)
-            matmul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
-            matmul!(view(grad, iu), cost.H, x, 1.0, 1.0)
+            mul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
+            mul!(view(grad, iu), cost.H, x, 1.0, 1.0)
         end
     end
     return nothing
