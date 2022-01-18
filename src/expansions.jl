@@ -110,11 +110,7 @@ end
 function dynamics_expansion!(sig::FunctionSignature, diff::DiffMethod, 
                              model::DiscreteDynamics, D::Vector{<:DynamicsExpansion}, Z::Traj)
     for k in eachindex(D)
-        # RobotDynamics.discrete_jacobian!(Q, D[k].∇f, model, Z[k], args...)
         RobotDynamics.jacobian!(sig, diff, model, D[k].∇f, D[k].f, Z[k])
-        # save_tmp!(D[k])
-        # D[k].tmpA .= D[k].A_  # avoids allocations later
-        # D[k].tmpB .= D[k].B_
     end
 end
 

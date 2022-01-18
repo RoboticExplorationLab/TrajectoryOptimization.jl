@@ -91,7 +91,10 @@ end
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
-Base.size(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
+RD.dims(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
+
+import Base.size
+@deprecate size(prob::Problem) dims(prob) 
 
 """
     controls(::Problem)
@@ -268,7 +271,7 @@ argument `idx` specifies the location of the dynamics constraint in the constrai
 If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
 function add_dynamics_constraints!(prob::Problem, idx=-1)
-	n,m = size(prob)
+	n,m = dims(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
