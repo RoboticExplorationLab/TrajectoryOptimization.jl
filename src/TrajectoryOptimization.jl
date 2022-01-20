@@ -80,6 +80,7 @@ include("quadratic_costs.jl")
 include("lie_costs.jl")
 include("objective.jl")
 
+include("cones.jl")
 include("abstract_constraint.jl")
 include("constraints.jl")
 include("dynamics_constraints.jl")
