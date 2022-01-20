@@ -46,7 +46,7 @@ projection(::PositiveOrthant, x) = max.(0, x)
 
 @generated function projection(::SecondOrderCone, x::V) where V <: AbstractVector
     # assumes x is stacked [v; s] such that ||v||₂ ≤ s
-    v = V isa StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n-1))
+    v = V <: StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n-1))
     quote
         n = length(x)
         s = x[end]
@@ -63,6 +63,8 @@ projection(::PositiveOrthant, x) = max.(0, x)
         end
     end
 end
+
+projection!(::Equality, px, x) = px .= 0 
 
 function projection!(::NegativeOrthant, px, x)
     @assert length(px) == length(x)
@@ -101,7 +103,7 @@ function ∇projection!(::NegativeOrthant, J, x)
 end
 
 @generated function ∇projection!(::SecondOrderCone, J, x::V) where V <: AbstractVector
-    v = V isa StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n-1))
+    v = V <: StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n-1))
     return quote
         n = length(x)
         s = x[end]
@@ -159,8 +161,8 @@ end
 @generated function ∇²projection!(
     ::SecondOrderCone, hess, x::V1, b::V2
 ) where {V1<:AbstractVecOrMat,V2<:AbstractVector}
-    v = V1 isa StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n))
-    bv = V2 isa StaticVector ? :(bv = pop(b)) : :(bv = view(b, 1:n))
+    v = V1 <: StaticVector ? :(v = pop(x)) : :(v = view(x, 1:n))
+    bv = V2 <: StaticVector ? :(bv = pop(b)) : :(bv = view(b, 1:n))
     quote
         n = length(x)-1
         @assert size(hess) == (n+1,n+1)
