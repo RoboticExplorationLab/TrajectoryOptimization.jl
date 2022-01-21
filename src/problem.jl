@@ -270,13 +270,14 @@ defaults to the same integration specified in `prob`, but can be changed. The
 argument `idx` specifies the location of the dynamics constraint in the constraint vector.
 If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
-function add_dynamics_constraints!(prob::Problem, idx=-1)
+function add_dynamics_constraints!(prob::Problem, idx=-1; 
+        diffmethod=ForwardAD(), sig=StaticReturn())
 	n,m = dims(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
     dyn_con = DynamicsConstraint(prob.model)
-    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, diffmethod=ForwardAD()) # add it at the end
+    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, sig=sig, diffmethod=diffmethod) # add it at the end
 
     # Initial condition
     init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
