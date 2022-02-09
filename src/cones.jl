@@ -13,11 +13,15 @@ If `sense(con) <: Conic` (i.e. not `Equality`), then the following operations ar
 abstract type ConstraintSense end
 abstract type Conic <: ConstraintSense end
 
+struct IdentityCone <: Conic end
+struct ZeroCone <: Conic end
+
 """
 Equality constraints of the form ``g(x) = 0`.
 Type singleton, so it is created with `Equality()`.
 """
-struct Equality <: ConstraintSense end
+const Equality = ZeroCone
+
 """
 Inequality constraints of the form ``h(x) \\leq 0``.
 Type singleton, so it is created with `Inequality()`. 
@@ -37,10 +41,14 @@ the last element in the vector.
 """
 struct SecondOrderCone <: Conic end
 
+dualcone(::IdentityCone) = ZeroCone()
+dualcone(::ZeroCone) = IdentityCone()
 dualcone(::NegativeOrthant) = NegativeOrthant()
 dualcone(::PositiveOrthant) = PositiveOrthant()
 dualcone(::SecondOrderCone) = SecondOrderCone()
 
+projection(::IdentityCone, x) = x
+projection(::ZeroCone, x) = zero(x)
 projection(::NegativeOrthant, x) = min.(0, x)
 projection(::PositiveOrthant, x) = max.(0, x)
 
@@ -64,7 +72,9 @@ projection(::PositiveOrthant, x) = max.(0, x)
     end
 end
 
-projection!(::Equality, px, x) = px .= 0 
+projection!(::IdentityCone, px, x) = px .= x
+projection!(::ZeroCone, px, x) = px .= 0
+# projection!(::Equality, px, x) = px .= 0 
 
 function projection!(::NegativeOrthant, px, x)
     @assert length(px) == length(x)
@@ -94,6 +104,17 @@ function projection!(::SecondOrderCone, px, x::V) where V <: AbstractVector
     end
     return pv
 end
+
+function ∇projection!(::IdentityCone, J, x)
+    T = eltype(J)
+    J .= 0
+    for i = 1:length(x)
+        J[i,i] = one(J) 
+    end
+    return J
+end
+
+∇projection!(::ZeroCone, J, x) = J .= 0
 
 function ∇projection!(::NegativeOrthant, J, x)
     for i in eachindex(x)
@@ -145,6 +166,8 @@ end
     end
 end
 
+Base.in(x, ::IdentityCone) = true
+Base.in(x, ::ZeroCone) = norm(x, 1) ≈ zero(eltype(X))
 Base.in(x, ::NegativeOrthant) = all(x->x<=0, x)
 
 function Base.in(x, ::SecondOrderCone)
@@ -153,6 +176,9 @@ function Base.in(x, ::SecondOrderCone)
     a = norm(v)
     return a <= s
 end
+
+∇²projection!(::IdentityCone, hess, x, b) = hess .= 0
+∇²projection!(::ZeroCone, hess, x, b) = hess .= 0
 
 function ∇²projection!(::NegativeOrthant, hess, x, b)
     get_data(hess) .= 0

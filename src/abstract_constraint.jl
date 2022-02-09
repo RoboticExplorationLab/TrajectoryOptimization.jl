@@ -158,6 +158,20 @@ in, they are assumed to be consistent with those returned by `state_dim` and `co
 ############################################################################################
 # 								EVALUATION METHODS 										   #
 ############################################################################################
+function evaluate_constraint!(::StaticReturn, con::AbstractConstraint, val, args...)
+	val .= RD.evaluate(con, args...)
+end
+
+function evaluate_constraint!(::InPlace, con::AbstractConstraint, val, args...)
+	RD.evaluate!(con, val, args...)
+    val
+end
+
+function constraint_jacobian!(sig::FunctionSignature, diff::DiffMethod, jac, val, args...)
+    RD.jacobian!(sig, diff, con, jac, val, args...)
+end
+
+
 """
     evaluate!(vals, con::AbstractConstraint, Z, [inds])
 
