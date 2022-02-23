@@ -75,19 +75,27 @@ RD.default_diffmethod(con::DynamicsConstraint) = RD.default_diffmethod(con.model
 	(n+m,n+m)
 end
 
-@generated function RD.evaluate!(
-	sig::FunctionSignature, 
+function RD.evaluate!(
+	sig::InPlace, 
 	con::DynamicsConstraint, 
 	vals::Vector{V}, 
 	Z::AbstractTrajectory, 
 	inds=1:length(Z)-1
 ) where V
-	if sig <: InPlace
-		expr = :(RD.dynamics_error!(con.model, vals[i], vals[i+1], Z[k+1], Z[k]))
-	elseif sig <: StaticReturn
-    	op = V <: SVector ? :(=) : :(.=)
-		expr = Expr(op, :(vals[i]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
+	for (i, k) in enumerate(inds)	
+		RD.dynamics_error!(con.model, vals[i], vals[i+1], Z[k+1], Z[k])
 	end
+end
+
+@generated function RD.evaluate!(
+	sig::StaticReturn, 
+	con::DynamicsConstraint, 
+	vals::Vector{V}, 
+	Z::AbstractTrajectory, 
+	inds=1:length(Z)-1
+) where V
+	op = V <: SVector ? :(=) : :(.=)
+	expr = Expr(op, :(vals[i]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
 	quote
 		for (i, k) in enumerate(inds)	
 			$expr
