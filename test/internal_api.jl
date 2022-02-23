@@ -117,13 +117,13 @@ vals = [zero(c) for i = inds]
 jacs0 = [zeros(RD.output_dim(con), n+m) for i in inds]
 jacs = [zeros(RD.output_dim(con), n̄+m) for i in inds]
 
-RD.evaluate!(RD.StaticReturn(), con, vals, Z, inds)
+TO.evaluate_constraints!(RD.StaticReturn(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])
 
-RD.evaluate!(RD.InPlace(), con, vals, Z, inds)
+TO.evaluate_constraints!(RD.InPlace(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])
 
-RD.jacobian!(RD.StaticReturn(), RD.UserDefined(), con, jacs0, vals, Z, inds)
+TO.constraint_jacobians!(RD.StaticReturn(), RD.UserDefined(), con, jacs0, vals, Z, inds)
 f(z) = RD.evaluate(con, z[1:n], z[n+1:end])
 @test jacs0[1] ≈ ForwardDiff.jacobian(f, RD.getdata(Z[1]))
 

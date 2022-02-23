@@ -167,7 +167,7 @@ function evaluate_constraint!(::InPlace, con::AbstractConstraint, val, args...)
     val
 end
 
-function constraint_jacobian!(sig::FunctionSignature, diff::DiffMethod, jac, val, args...)
+function constraint_jacobian!(sig::FunctionSignature, diff::DiffMethod, con, jac, val, args...)
     RD.jacobian!(sig, diff, con, jac, val, args...)
 end
 
@@ -182,7 +182,7 @@ The `inds` argument determines at which knot points the constraint is evaluated.
 If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, or
 `evaluate(con, z1, z2)` if `con` is a `CoupledConstraint`.
 """
-@generated function RD.evaluate!(
+@generated function evaluate_constraints!(
     sig::StaticReturn,
     con::StageConstraint,
     vals::Vector{V},
@@ -197,7 +197,7 @@ If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, o
     end
 end
 
-function RD.evaluate!(
+function evaluate_constraints!(
     sig::InPlace,
     con::StageConstraint,
     vals::Vector{<:AbstractVector},
@@ -247,7 +247,7 @@ The values are stored in `∇c`, which should be a matrix of matrices. If `con` 
 If `con` is a `StageConstraint`, this will call `jacobian!(∇c, con, z)` by default, or
 `jacobian!(∇c, con, z1, z2, i)` if `con` is a `CoupledConstraint`.
 """
-function RD.jacobian!(
+function constraint_jacobians!(
     sig::FunctionSignature,
     dif::DiffMethod,
     con::StageConstraint,
