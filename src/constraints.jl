@@ -977,10 +977,14 @@ end
 
 RD.@autodiff struct QuatVecEq{T} <: StateConstraint
     n::Int
+	m::Int
     qf::UnitQuaternion{T}
     qind::SVector{4,Int}
+	function QuatVecEq(n,m,qf::Rotation{3,T},qind=SA[4,5,6,7]) where T
+		new{T}(n,m,UnitQuaternion(qf),SA[qind[1],qind[2],qind[3],qind[4]])
+	end
 end
-function RD.evaluate(con::QuatVecEq, x, u)
+function RD.evaluate(con::QuatVecEq, x::RD.DataVector)
     qf = Rotations.params(con.qf)
     q = normalize(x[con.qind])
     dq = qf'q
@@ -989,8 +993,13 @@ function RD.evaluate(con::QuatVecEq, x, u)
     end
     return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
 end
+function RD.evaluate!(con::QuatVecEq, c, x::RD.DataVector)
+	c .= RD.evaluate(con, x)
+	return nothing
+end
 sense(::QuatVecEq) = Equality()
 RD.state_dim(con::QuatVecEq) = con.n
-RD.control_dim(con::QuatVecEq) = 0
+RD.control_dim(con::QuatVecEq) = con.m 
 RD.output_dim(con::QuatVecEq) = 3
 RD.default_diffmethod(::QuatVecEq) = ForwardAD()
+RD.functioninputs(::QuatVecEq) = RD.StateOnly()
