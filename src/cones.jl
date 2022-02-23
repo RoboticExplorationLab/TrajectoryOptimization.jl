@@ -41,6 +41,8 @@ the last element in the vector.
 """
 struct SecondOrderCone <: Conic end
 
+conename(::C) where {C <: Conic} = C.name.name 
+
 dualcone(::IdentityCone) = ZeroCone()
 dualcone(::ZeroCone) = IdentityCone()
 dualcone(::NegativeOrthant) = NegativeOrthant()
@@ -109,7 +111,7 @@ function ∇projection!(::IdentityCone, J, x)
     T = eltype(J)
     J .= 0
     for i = 1:length(x)
-        J[i,i] = one(J) 
+        J[i,i] = one(T)
     end
     return J
 end
