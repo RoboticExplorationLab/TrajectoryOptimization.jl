@@ -286,7 +286,9 @@ end
 
 function RD.evaluate(cost::DiagonalQuatCost, x, u)
     J = 0.5*x'cost.Q*x + cost.q'x + cost.c
-    J += 0.5 * u'cost.R*u + cost.r'u
+    if !isempty(u)
+        J += 0.5 * u'cost.R*u + cost.r'u
+    end
     q = x[cost.q_ind]
     dq = cost.q_ref'q
     J += cost.w*min(1+dq, 1-dq)

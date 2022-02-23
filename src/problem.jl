@@ -48,8 +48,8 @@ struct Problem{T<:AbstractFloat}
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
         @assert tf > t0
-        @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
-        @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
+        # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
+        # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
         @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
@@ -210,13 +210,6 @@ function Base.copy(prob::Problem)
         copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
 
-
-# function max_violation(prob::Problem, Z::Traj=prob.Z)
-#     conSet = get_constraints(prob)
-#     evaluate!(conSet, Z)
-#     max_violation!(conSet)
-#     return maximum(conSet.c_max)
-# end
 
 "Get the number of constraint values at each time step"
 num_constraints(prob::Problem) = get_constraints(prob).p
