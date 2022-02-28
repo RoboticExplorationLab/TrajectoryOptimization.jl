@@ -123,5 +123,5 @@ set_times!(Z::Traj, t::Vector)
 
 To initialize a problem with a given `Traj` type, you can use
 ```
-initial_trajectory!(::Problem, Z::AbstractTrajectory)
+initial_trajectory!(::Problem, Z::SampledTrajectory)
 ```

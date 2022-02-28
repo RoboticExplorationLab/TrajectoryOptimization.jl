@@ -186,7 +186,7 @@ If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, o
     sig::StaticReturn,
     con::StageConstraint,
     vals::Vector{V},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 ) where V
     op = V <: SVector ? :(=) : :(.=)
@@ -201,7 +201,7 @@ function evaluate_constraints!(
     sig::InPlace,
     con::StageConstraint,
     vals::Vector{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -212,7 +212,7 @@ end
 # function evaluate!(
 #     vals::Vector{<:AbstractVector},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z),
 # )
 #     for (i, k) in enumerate(inds)
@@ -223,7 +223,7 @@ end
 # function evaluate!(
 #     vals::Vector{<:AbstractVector},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z)-1,
 # )
 #     for (i, k) in enumerate(inds)
@@ -253,7 +253,7 @@ function constraint_jacobians!(
     con::StageConstraint,
     ∇c::VecOrMat{<:AbstractMatrix},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -264,7 +264,7 @@ end
 # function jacobian!(
 #     ∇c::VecOrMat{<:AbstractMatrix},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z),
 #     is_const = BitArray(undef, size(∇c))
 # )
@@ -276,7 +276,7 @@ end
 # function jacobian!(
 #     ∇c::VecOrMat{<:AbstractMatrix},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:size(∇c, 1),
 #     is_const = BitArray(undef, size(∇c))
 # )
@@ -309,7 +309,7 @@ function RD.∇jacobian!(
     H::VecOrMat{<:AbstractMatrix},
     λ::VecOrMat{<:AbstractVector},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -343,7 +343,7 @@ end
 # function ∇jacobian!(
 #     G::VecOrMat{<:AbstractMatrix},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     λ::Vector{<:AbstractVector},
 #     inds = 1:length(Z),
 #     is_const = ones(Bool, length(inds)),
@@ -359,7 +359,7 @@ end
 # function ∇jacobian!(
 #     G::VecOrMat{<:AbstractMatrix},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     λ::Vector{<:AbstractVector},
 #     inds = 1:length(Z),
 #     is_const = ones(Bool, length(inds)),

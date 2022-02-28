@@ -125,7 +125,7 @@ Get the times for all the knot points in the problem.
 
 Copy the trajectory
 """
-function initial_trajectory!(prob::Problem, Z0::AbstractTrajectory)
+function initial_trajectory!(prob::Problem, Z0::SampledTrajectory)
 	Z = get_trajectory(prob)
     for k = 1:prob.N
         Z[k].z = Z0[k].z
@@ -219,7 +219,7 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline get_model(prob::Problem) = prob.model
 "Get the objective. Returns an `AbstractObjective`."
 @inline get_objective(prob::Problem) = prob.obj
-"Get the trajectory. Returns an `RobotDynamics.AbstractTrajectory`"
+"Get the trajectory. Returns an `RobotDynamics.SampledTrajectory`"
 @inline get_trajectory(prob::Problem) = prob.Z
 "Determines if the problem is constrained."
 @inline is_constrained(prob) = isempty(get_constraints(prob))

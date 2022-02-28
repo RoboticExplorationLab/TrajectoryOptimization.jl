@@ -24,7 +24,7 @@ using RobotDynamics: AbstractModel, DiscreteDynamics, LieGroupModel, DiscreteLie
 	QuadratureRule, Implicit, Explicit, 
 	state_dim, control_dim, output_dim,
 	is_terminal, state_diff, state_diff_jacobian!,
-	state, control, states, controls, gettimes, Traj, AbstractTrajectory,
+	state, control, states, controls, gettimes, Traj, SampledTrajectory,
 	num_vars, dims,
 	FunctionSignature, DiffMethod,
 	FiniteDifference, ForwardAD, StaticReturn, InPlace, UserDefined

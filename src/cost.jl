@@ -25,14 +25,14 @@ end
 Evaluate the cost for a trajectory. If a dynamics constraint is given,
     use the appropriate integration rule, if defined.
 """
-function cost(obj::Objective, Z::AbstractTrajectory{<:Any,<:Any,<:AbstractFloat})
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,<:AbstractFloat})
     cost!(obj, Z)
     J = get_J(obj)
     return sum(J)
 end
 
 # ForwardDiff-able method
-function cost(obj::Objective, Z::AbstractTrajectory{<:Any,<:Any,T}) where T
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,T}) where T
     J = zero(T)
     for k = 1:length(obj)
         J += RD.evaluate(obj[k], Z[k])
@@ -41,7 +41,7 @@ function cost(obj::Objective, Z::AbstractTrajectory{<:Any,<:Any,T}) where T
 end
 
 "Evaluate the cost for a trajectory (non-allocating)"
-@inline function cost!(obj::Objective, Z::AbstractTrajectory)
+@inline function cost!(obj::Objective, Z::SampledTrajectory)
     map!(RD.evaluate, obj.J, obj.cost, Z)
 end
 
@@ -57,7 +57,7 @@ Evaluate the cost gradient along the entire tracjectory `Z`, storing the result 
 
 If `init == true`, all gradients will be evaluated, even if they are constant.
 """
-function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory; init::Bool=false)
+function cost_gradient!(E, obj::Objective, Z::SampledTrajectory; init::Bool=false)
 	is_const = obj.const_grad
     for k in eachindex(Z)
 		if init || !is_const[k]
@@ -74,7 +74,7 @@ Evaluate the cost hessian along the entire tracjectory `Z`, storing the result i
 If `init == true`, all hessian will be evaluated, even if they are constant. If false,
 they will only be evaluated if they are not constant.
 """
-function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory; 
+function cost_hessian!(E, obj::Objective, Z::SampledTrajectory; 
         init::Bool=false, rezero::Bool=false)
 	is_const = obj.const_hess
 	if !init && all(is_const)

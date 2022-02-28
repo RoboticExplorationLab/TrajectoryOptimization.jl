@@ -23,19 +23,19 @@ Base.IteratorEltype(::AbstractConstraintSet) = Base.HasEltype()
 Base.eltype(::AbstractConstraintSet) = AbstractConstraint
 
 # Constraint Evaluation
-function RD.evaluate!(conSet::AbstractConstraintSet, Z::AbstractTrajectory)
+function RD.evaluate!(conSet::AbstractConstraintSet, Z::SampledTrajectory)
     for i = 1:length(conSet) 
         RD.evaluate!(conSet.convals[i], Z)
     end
 end
 
-function RD.jacobian!(conSet::AbstractConstraintSet, Z::AbstractTrajectory, init::Bool=true)
+function RD.jacobian!(conSet::AbstractConstraintSet, Z::SampledTrajectory, init::Bool=true)
     for conval in get_convals(conSet)
         RD.jacobian!(conval, Z)
     end
 end
 
-function RD.∇jacobian!(G::Vector{<:Matrix}, conSet::AbstractConstraintSet, Z::AbstractTrajectory,
+function RD.∇jacobian!(G::Vector{<:Matrix}, conSet::AbstractConstraintSet, Z::SampledTrajectory,
 		λ::Vector{<:Vector})
 	for (i,conval) in enumerate(get_convals(conSet))
 		RD.∇jacobian!(G[i], conval, Z, λ[i])
@@ -102,7 +102,7 @@ function norm_violation!(conSet::AbstractConstraintSet, p=2)
 	end
 end
 
-function norm_dgrad(conSet::AbstractConstraintSet, dx::AbstractTrajectory, p=1)
+function norm_dgrad(conSet::AbstractConstraintSet, dx::SampledTrajectory, p=1)
 	convals = get_convals(conSet)
 	T = eltype(conSet.c_max)
 	for i in eachindex(convals)

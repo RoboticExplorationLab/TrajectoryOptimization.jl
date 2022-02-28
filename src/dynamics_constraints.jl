@@ -79,7 +79,7 @@ function evaluate_constraints!(
 	sig::InPlace, 
 	con::DynamicsConstraint, 
 	vals::Vector{V}, 
-	Z::AbstractTrajectory, 
+	Z::SampledTrajectory, 
 	inds=1:length(Z)-1
 ) where V
 	for (i, k) in enumerate(inds)	
@@ -91,7 +91,7 @@ end
 	sig::StaticReturn, 
 	con::DynamicsConstraint, 
 	vals::Vector{V}, 
-	Z::AbstractTrajectory, 
+	Z::SampledTrajectory, 
 	inds=1:length(Z)-1
 ) where V
 	op = V <: SVector ? :(=) : :(.=)
@@ -109,7 +109,7 @@ function constraint_jacobians!(
     con::DynamicsConstraint,
     ∇c::Matrix{<:AbstractMatrix},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)-1
 )
     for (i, k) in enumerate(inds)
