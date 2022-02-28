@@ -42,6 +42,7 @@ Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
 @inline RD.output_dim(con::GoalConstraint{P}) where P = P
+RD.functioninputs(::GoalConstraint) = RD.StateOnly()
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
@@ -52,14 +53,14 @@ function primal_bounds!(zL,zU,con::GoalConstraint)
 	return true
 end
 
-RD.evaluate(con::GoalConstraint, x, u) = x[con.inds] - con.xf
-function RD.evaluate!(con::GoalConstraint, y, x, u)
+RD.evaluate(con::GoalConstraint, x::RD.DataVector) = x[con.inds] - con.xf
+function RD.evaluate!(con::GoalConstraint, y, x::RD.DataVector)
 	for (i, j) in enumerate(con.inds)
 		y[i] = x[j] - con.xf[i]
 	end
 	return nothing
 end
-function jacobian!(con::GoalConstraint, ∇c, y, x, u)
+function jacobian!(con::GoalConstraint, ∇c, y, x::RD.DataVector)
 	T = eltype(∇c)
 	for (i,j) in enumerate(con.inds)
 		∇c[i,j] = one(T)
@@ -185,8 +186,10 @@ function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius
     CircleConstraint{P,T}(n, xc, yc, radius, xi, yi)
 end
 state_dim(con::CircleConstraint) = con.n
+RD.functioninputs(::CircleConstraint) = RD.StateOnly()
 
-function RD.evaluate(con::CircleConstraint, X, u)
+function RD.evaluate(con::CircleConstraint, z::AbstractKnotPoint)
+	X = state(z)
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -195,7 +198,8 @@ function RD.evaluate(con::CircleConstraint, X, u)
 	-(x .- xc).^2 - (y .- yc).^2 + r.^2
 end
 
-function RD.evaluate!(con::CircleConstraint{P}, c, X, u) where P
+function RD.evaluate!(con::CircleConstraint{P}, c, z::AbstractKnotPoint) where P
+	X = state(z)
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -207,7 +211,8 @@ function RD.evaluate!(con::CircleConstraint{P}, c, X, u) where P
 	return
 end
 
-function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, X, u) where P
+function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, z::AbstractKnotPoint) where P
+	X = state(z)
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	x = X[xi]
