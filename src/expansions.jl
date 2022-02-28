@@ -108,7 +108,7 @@ function save_tmp!(D::DynamicsExpansion)
 end
 
 function dynamics_expansion!(sig::FunctionSignature, diff::DiffMethod, 
-                             model::DiscreteDynamics, D::Vector{<:DynamicsExpansion}, Z::Traj)
+                             model::DiscreteDynamics, D::Vector{<:DynamicsExpansion}, Z::SampledTrajectory)
     for k in eachindex(D)
         RobotDynamics.jacobian!(sig, diff, model, D[k].∇f, D[k].f, Z[k])
     end

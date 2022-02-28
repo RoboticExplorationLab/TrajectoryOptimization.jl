@@ -19,8 +19,8 @@ function stage_cost(cost::CostFunction, z::AbstractKnotPoint)
 end
 
 """
-	cost(obj::Objective, Z::Traj)
-	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
+	cost(obj::Objective, Z::SampledTrajectory)
+	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::SampledTrajectory)
 
 Evaluate the cost for a trajectory. If a dynamics constraint is given,
     use the appropriate integration rule, if defined.
@@ -100,21 +100,21 @@ If `init == false`, the expansions will only be evaluated if they are not consta
 
 If `rezero == true`, all expansions will be multiplied by zero before taking the expansion.
 """
-function cost_expansion!(E, obj::Objective, Z::Traj; init::Bool=false, rezero::Bool=false)
+function cost_expansion!(E, obj::Objective, Z::SampledTrajectory; init::Bool=false, rezero::Bool=false)
     cost_gradient!(E, obj, Z, init=init)
     cost_hessian!(E, obj, Z, init=init, rezero=rezero)
     return nothing
 end
 
-error_expansion!(E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end]) = 
+error_expansion!(E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end]) = 
 	error_expansion!(RD.statevectortype(model), E, Jexp, model, Z, G, tmp)
 
-function error_expansion!(::RD.EuclideanState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
+function error_expansion!(::RD.EuclideanState, E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end])
     @assert E === Jexp "E and Jexp should be the same object for AbstractModel"
     return nothing
 end
 
-function error_expansion!(::RD.RotationState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
+function error_expansion!(::RD.RotationState, E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end])
     for k in eachindex(E)
         error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
@@ -147,12 +147,12 @@ function static_expansion(cost::QuadraticCost)
 end
 
 """
-	dgrad(E::QuadraticExpansion, dZ::Traj)
+	dgrad(E::QuadraticExpansion, dZ::SampledTrajectory)
 
 Calculate the derivative of the cost in the direction of `dZ`, where `E` is the current
 quadratic expansion of the cost.
 """
-function dgrad(E, dZ::Traj)
+function dgrad(E, dZ::SampledTrajectory)
 	g = zero(T)
 	N = length(E)
 	for k = 1:N-1
@@ -163,11 +163,11 @@ function dgrad(E, dZ::Traj)
 end
 
 """
-	dhess(E::QuadraticCost, dZ::Traj)
+	dhess(E::QuadraticCost, dZ::SampledTrajectory)
 
 Calculate the scalar 0.5*dZ'G*dZ where G is the hessian of cost
 """
-function dhess(E::CostExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
+function dhess(E::CostExpansion{n,m,T}, dZ::SampledTrajectory)::T where {n,m,T}
 	h = zero(T)
 	N = length(E)
 	for k = 1:N-1

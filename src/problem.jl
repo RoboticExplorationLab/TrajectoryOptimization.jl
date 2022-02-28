@@ -36,14 +36,14 @@ struct Problem{T<:AbstractFloat}
     constraints::ConstraintList
     x0::MVector
     xf::MVector
-    Z::Traj
+    Z::SampledTrajectory
     N::Int
     t0::T
     tf::T
     function Problem(model::DiscreteDynamics, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
-            Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
+            Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
         n,m = size(model)
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
@@ -77,7 +77,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
     t = pushfirst!(cumsum(dt), 0)
-    Z = Traj(X0,U0,dt,t)
+    Z = SampledTrajectory(X0,U0,dt,t)
 
     Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)
