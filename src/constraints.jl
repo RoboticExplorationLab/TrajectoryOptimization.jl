@@ -498,22 +498,6 @@ function change_dimension(con::NormConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 end
 
 
-############################################################################################
-# 								COPY CONSTRAINT 										   #
-############################################################################################
-
-# struct CopyConstraint{K,W,S,P,N,M} <: AbstractConstraint{W,S,P}
-# 	con::AbstractConstraint{W,S,P}
-#     xinds::Vector{SVector{N,Int}}
-#     uinds::Vector{SVector{M,Int}}
-# end
-#
-# function evaluate(con::CopyConstraint{K}, z::KnotPoint)
-# 	c = evaluate(con,)
-# 	for 2 = 1:K
-# 	end
-# end
-
 
 ############################################################################################
 # 								BOUND CONSTRAINTS 										   #
@@ -669,76 +653,6 @@ function change_dimension(con::BoundConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 	BoundConstraint(n, m, x_max=x_max, x_min=x_min, u_max=u_max, u_min=u_min)
 end
 
-############################################################################################
-#  							VARIABLE BOUND CONSTRAINT 									   #
-############################################################################################
-
-# struct VariableBoundConstraint{T,P,NM,PNM} <: AbstractConstraint{Inequality,Stage,P}
-# 	n::Int
-# 	m::Int
-# 	z_max::Vector{SVector{NM,T}}
-# 	z_min::Vector{SVector{NM,T}}
-# 	b::Vector{SVector{P,T}}
-# 	B::SMatrix{P,NM,T,PNM}
-# 	function VariableBoundConstraint(n::Int,m::Int,
-# 			z_max::Vector{<:SVector{NM,T}}, z_min::Vector{<:SVector{NM,T}},
-# 			b::Vector{<:SVector{P}}, B::SMatrix{P,NM,T,PNM}) where {T,P,PN,NM,PNM}
-# 		new{T,P,NM,PNM}(n,m,z_max,z_min,b,B)
-# 	end
-# end
-#
-# state_dim(con::VariableBoundConstraint) = con.n
-# control_dim(con::VariableBoundConstraint) = con.m
-# is_bound(::VariableBoundConstraint) = true
-#
-# function evaluate!(vals::Vector{<:AbstractVector},
-# 		con::VariableBoundConstraint, Z::Traj, inds=1:length(Z)-1)
-# 	for (i,k) in enumerate(inds)
-# 		vals[i] = con.B*Z[k].z + con.b[k]
-# 	end
-# end
-#
-# function jacobian(con::VariableBoundConstraint, z::KnotPoint)
-# 	return con.B
-# end
-#
-# function VariableBoundConstraint(n, m, N;
-# 		x_max=[Inf*(@SVector ones(n)) for k = 1:N], x_min=[-Inf*(@SVector ones(n)) for k = 1:N],
-# 		u_max=[Inf*(@SVector ones(m)) for k = 1:N], u_min=[-Inf*(@SVector ones(m)) for k = 1:N])
-# 	@assert length(x_max) == N
-# 	@assert length(u_max) == N
-# 	@assert length(x_min) == N
-# 	@assert length(u_min) == N
-#
-# 	# Check and convert bounds
-# 	for k = 1:N
-# 		x_max[k], x_min[k] = checkBounds(Val(n), x_max[k], x_min[k])
-# 		u_max[k], u_min[k] = checkBounds(Val(m), u_max[k], u_min[k])
-# 	end
-#
-# 	# Concatenate bounds
-# 	z_max = [SVector{n+m}([x_max[k]; u_max[k]]) for k = 1:N]
-# 	z_min = [SVector{n+m}([x_min[k]; u_min[k]]) for k = 1:N]
-# 	b = [[-z_max[k]; z_min[k]] for k = 1:N]
-#
-# 	active = map(x->isfinite.(x), b)
-# 	equal_active = all(1:N-2) do k
-# 		active[k] == active[k+1]
-# 	end
-# 	if !equal_active
-# 		throw(ArgumentError("All bounds must have the same active constraints"))
-# 	end
-# 	active = active[1]
-# 	p = sum(active)
-#
-# 	inds = SVector{p}(findall(active))
-#
-# 	b = [bi[inds] for bi in b]
-# 	B = SMatrix{2(n+m), n+m}([1.0I(n+m); -1.0I(n+m)])
-#
-# 	VariableBoundConstraint(n, m, z_max, z_min, b, B[inds,:])
-# end
-
 
 
 ############################################################################################
@@ -853,13 +767,6 @@ function RD.evaluate!(con::IndexedConstraint, c, z::AbstractKnotPoint)
 	RD.evaluate!(con.con, c, z_)
 end
 
-# function RD.jacobian!(con::IndexedConstraint, ∇c, c, z::AbstractKnotPoint)
-# 	x0 = z.z[con.ix]
-# 	u0 = z.z[con.iu]
-# 	z_ = StaticKnotPoint(x0, u0, z.dt, z.t)
-# 	RD.jacobian!(con, ∇c, c, z_)
-# end
-
 @generated function RD.jacobian!(con::IndexedConstraint{C}, ∇c, c, z::AbstractKnotPoint) where C
 	if C <: StateConstraint
 		assignment = quote
@@ -897,86 +804,6 @@ end
 function change_dimension(con::AbstractConstraint, n::Int, m::Int, ix=1:n, iu=1:m)
 	IndexedConstraint(n, m, con, ix, iu)
 end
-#
-# # TODO: define higher-level evaluate! function instead
-# @generated function evaluate(con::IndexedConstraint{<:Any,<:Stage,<:Any,N,M}, z::KnotPoint) where {N,M}
-# 	ix = SVector{N}(1:N)
-# 	iu = N .+ SVector{M}(1:M)
-# 	return quote
-# 		x0 = state(z)[con.ix]
-# 		u0 = control(z)[con.iu]
-# 		z_ = StaticKnotPoint([x0; u0], $ix, $iu, z.dt, z.t)
-# 		evaluate(con.con, z_)
-# 	end
-# end
-#
-# # TODO: define higher-leel jacobian! function instead
-# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Stage,P,N0,M0},
-# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-# 	iP = 1:P
-# 	ix = SVector{N0}(1:N0)
-# 	iu = SVector{M0}(N0 .+ (1:M0))
-# 	if eltype(∇c) <: SizedMatrix
-# 		assignment = quote
-# 			uview(∇c.data,$iP,iA) .= con.A
-# 			uview(∇c.data,$iP,iB) .= con.B
-# 		end
-# 	else
-# 		assignment = quote
-# 			uview(∇c,$iP,iA) .= con.A
-# 			uview(∇c,$iP,iB) .= con.B
-# 		end
-# 	end
-# 	quote
-# 		x0 = state(z)[con.ix]
-# 		u0 = control(z)[con.iu]
-# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-# 		jacobian!(con.∇c, con.con, z_)
-# 		iA = con.ix
-# 		iB = N .+ con.iu
-# 		$assignment
-# 	end
-# end
-#
-# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,State,P,N0,M0},
-# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-# 	iP = 1:P
-# 	ix = SVector{N0}(1:N0)
-# 	iu = SVector{M0}(N0 .+ (1:M0))
-# 	if eltype(∇c) <: SizedArray
-# 		assignment = :(uview(∇c.data,$iP,iA) .= con.∇c)
-# 	else
-# 		assignment = :(uview(∇c,$iP,iA) .= con.∇c)
-# 	end
-# 	quote
-# 		x0 = state(z)[con.ix]
-# 		u0 = control(z)[con.iu]
-# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-# 		jacobian!(con.∇c, con.con, z_)
-# 		iA = con.ix
-# 		$assignment
-# 	end
-# end
-#
-# @generated function jacobian!(∇c, con::IndexedConstraint{<:Any,Control,P,N0,M0},
-# 		z::KnotPoint{<:Any,N}) where {P,N0,M0,N}
-# 	iP = 1:P
-# 	ix = SVector{N0}(1:N0)
-# 	iu = SVector{M0}(N0 .+ (1:M0))
-# 	if eltype(∇c) <: SizedArray
-# 		assignment = :(uview(∇c.data,$iP,iB) .= con.∇c)
-# 	else
-# 		assignment = :(uview(∇c,$iP,iB) .= con.∇c)
-# 	end
-# 	quote
-# 		x0 = state(z)[con.ix]
-# 		u0 = control(z)[con.iu]
-# 		z_ = StaticKnotPoint([x0;u0], $ix, $iu, z.dt, z.t)
-# 		jacobian!(con.∇c, con.con, z_)
-# 		iB = con.iu
-# 		$assignment
-# 	end
-# end
 
 RD.@autodiff struct QuatVecEq{T} <: StateConstraint
     n::Int

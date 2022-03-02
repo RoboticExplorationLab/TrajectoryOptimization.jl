@@ -70,7 +70,6 @@ export
 	NormConstraint,
 	add_constraint!
 
-# include("expansions.jl")
 include("costfunctions.jl")
 include("quadratic_costs.jl")
 include("lie_costs.jl")
@@ -79,19 +78,14 @@ include("objective.jl")
 include("cones.jl")
 include("abstract_constraint.jl")
 include("constraints.jl")
-# include("dynamics_constraints.jl")
 include("constraint_list.jl")
-# include("integration.jl")
 
 include("cost.jl")
-# include("convals.jl")
 
 include("problem.jl")
-# include("conset.jl")
 
 
 include("utils.jl")
-# include("deprecated.jl")
 
 import Base.length
 @deprecate length(con::AbstractConstraint) RobotDynamics.output_dim(con)
