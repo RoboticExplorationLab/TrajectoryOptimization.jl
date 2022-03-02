@@ -86,21 +86,21 @@ abstract type CostFunction <: RobotDynamics.ScalarFunction end
 #     return false
 # end
 
-"""
-    ExpansionCache(cost)
+# """
+#     ExpansionCache(cost)
 
-Allocate the cache needed to evaluate the gradient and Hessian of the cost function.
-Returns a 4-element vector with the following elements: `[grad, hess, grad_term, hess_term]`,
-which are the caches need for the gradient and Hessian for the state and terminal cost
-functions.
-"""
-@inline ExpansionCache(cost::CostFunction) = 
-    ExpansionCache(diffmethod(cost), state_dim(cost), control_dim(cost))
-@inline ExpansionCache(::ForwardAD, n::Int, m::Int) = (nothing,nothing,nothing,nothing)
-function ExpansionCache(::FiniteDifference, n::Int, m::Int) 
-    grad_cache0 = FiniteDiff.GradientCache(zeros(n), zeros(n), Val(:forward))
-    hess_cache0 = FiniteDiff.HessianCache(zeros(n))
-    grad_cache  = FiniteDiff.GradientCache(zeros(n+m), zeros(n+m), Val(:forward))
-    hess_cache  = FiniteDiff.HessianCache(zeros(n+m))
-    return (grad_cache, hess_cache, grad_cache0, hess_cache0)
-end
+# Allocate the cache needed to evaluate the gradient and Hessian of the cost function.
+# Returns a 4-element vector with the following elements: `[grad, hess, grad_term, hess_term]`,
+# which are the caches need for the gradient and Hessian for the state and terminal cost
+# functions.
+# """
+# @inline ExpansionCache(cost::CostFunction) = 
+#     ExpansionCache(diffmethod(cost), state_dim(cost), control_dim(cost))
+# @inline ExpansionCache(::ForwardAD, n::Int, m::Int) = (nothing,nothing,nothing,nothing)
+# function ExpansionCache(::FiniteDifference, n::Int, m::Int) 
+#     grad_cache0 = FiniteDiff.GradientCache(zeros(n), zeros(n), Val(:forward))
+#     hess_cache0 = FiniteDiff.HessianCache(zeros(n))
+#     grad_cache  = FiniteDiff.GradientCache(zeros(n+m), zeros(n+m), Val(:forward))
+#     hess_cache  = FiniteDiff.HessianCache(zeros(n+m))
+#     return (grad_cache, hess_cache, grad_cache0, hess_cache0)
+# end
