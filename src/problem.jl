@@ -52,7 +52,8 @@ struct Problem{T<:AbstractFloat}
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
-        @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
+        # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
+        # TODO: validate trajectory size
         new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
@@ -76,7 +77,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    Z = SampledTrajectory(X0,U0,dt=dt)
+    Z = SampledTrajectory{n,m}(X0,U0,dt=dt)
 
     Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)

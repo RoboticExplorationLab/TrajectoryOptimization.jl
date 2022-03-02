@@ -1,7 +1,7 @@
 
 @testset "Constraint List" begin
     model = Cartpole()
-    n,m = size(model)
+    n,m = RD.dims(model)
     N = 11
     x,u = rand(model)
     t,h = 1.1, 0.1

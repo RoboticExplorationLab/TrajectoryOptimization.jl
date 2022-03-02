@@ -1,7 +1,7 @@
 # Model and discretization
 model = Cartpole()
 dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-n,m = size(model)
+n,m = RD.dims(model)
 N = 11
 tf = 5.
 dt = tf/(N-1)
@@ -28,7 +28,7 @@ add_constraint!(conSet, goal, N:N)
 X0 = [@SVector fill(0.0,n) for k = 1:N]
 u0 = @SVector fill(0.01,m)
 U0 = [u0 for k = 1:N-1]
-Z = Traj(X0,U0, fill(dt, N))
+Z = SampledTrajectory(X0,U0, dt=dt) 
 
 # Inner constructor
 prob = Problem(dmodel, obj, conSet, x0, xf, Z, N, 0.0, tf)

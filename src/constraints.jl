@@ -188,8 +188,7 @@ end
 state_dim(con::CircleConstraint) = con.n
 RD.functioninputs(::CircleConstraint) = RD.StateOnly()
 
-function RD.evaluate(con::CircleConstraint, z::AbstractKnotPoint)
-	X = state(z)
+function RD.evaluate(con::CircleConstraint, X::RD.DataVector)
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -198,8 +197,7 @@ function RD.evaluate(con::CircleConstraint, z::AbstractKnotPoint)
 	-(x .- xc).^2 - (y .- yc).^2 + r.^2
 end
 
-function RD.evaluate!(con::CircleConstraint{P}, c, z::AbstractKnotPoint) where P
-	X = state(z)
+function RD.evaluate!(con::CircleConstraint{P}, c, X::RD.DataVector) where P
 	xc = con.x
 	yc = con.y
 	r = con.radius

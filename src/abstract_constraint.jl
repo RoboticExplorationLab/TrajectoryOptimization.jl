@@ -319,7 +319,7 @@ end
 
 function error_expansion!(jac, jac0, con::StageConstraint, model::DiscreteDynamics, G, inds) where C
 	if jac !== jac0
-		n,m = size(model)
+		n,m = RD.dims(model)
         n̄ = RD.errstate_dim(model)
 		ix = 1:n̄
 		iu = n̄ .+ (1:m)

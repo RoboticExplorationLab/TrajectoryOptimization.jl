@@ -8,7 +8,7 @@ function alloc_con(con,z)
 end
 
 model = Cartpole()
-n,m = size(model)
+n,m = RD.dims(model)
 x,u = rand(model)
 t,h = 1.1, 0.1
 z = KnotPoint(x,u,t,h)
@@ -19,8 +19,8 @@ z = KnotPoint(x,u,t,h)
     goal = GoalConstraint(xf)
     c = zeros(n)
     @test RD.evaluate(goal, z) ≈ x - xf
-    @test RD.evaluate(goal, x, u) ≈ x - xf
-    RD.evaluate!(goal, c, x, u)
+    @test RD.evaluate(goal, x) ≈ x - xf
+    RD.evaluate!(goal, c, x)
     @test c ≈ x - xf
     C = zeros(n,n)
     RD.jacobian!(goal, C, c, z)
