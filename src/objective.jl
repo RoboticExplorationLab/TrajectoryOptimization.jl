@@ -91,52 +91,52 @@ Base.eachindex(obj::Objective) = Base.OneTo(length(obj))
 
 Base.show(io::IO, obj::Objective{C}) where C = print(io,"Objective")
 
-"""
-    CostExpansion{n,m,T}
+# """
+#     CostExpansion{n,m,T}
 
-A vector of `Expansion`s, combined with some bit vectors for storing whether the 
-terms are constant or not.
+# A vector of `Expansion`s, combined with some bit vectors for storing whether the 
+# terms are constant or not.
 
-# Constructors
-    CostExpansion{T}(n,m,N)
-    CostExpansion(n,m,T)  # defaults to Float64
-    CostExpansion(E::CostExpansion, model)
+# # Constructors
+#     CostExpansion{T}(n,m,N)
+#     CostExpansion(n,m,T)  # defaults to Float64
+#     CostExpansion(E::CostExpansion, model)
 
-where the last constructor is for allocating the expansion for the "raw" expansion, 
-    before accounting for the Lie group structure. For a standard (Euclidiean) state 
-    vector, it will create an alias to the original expansion. For a `LieGroupModel`,
-    it will allocate new storage.
-"""
-struct CostExpansion{n,m,T} <: AbstractArray{Expansion{n,m,T},1}
-    data::Vector{Expansion{n,m,T}}
-    const_hess::BitVector
-    const_grad::BitVector
-    function CostExpansion{T}(n::Int, m::Int, N::Int) where T
-        data = [Expansion{T}(n,m) for k = 1:N]
-        const_hess = BitVector(undef, N)
-        const_grad = BitVector(undef, N)
-        new{n,m,T}(data, const_hess, const_grad)
-    end
-end
-@inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
+# where the last constructor is for allocating the expansion for the "raw" expansion, 
+#     before accounting for the Lie group structure. For a standard (Euclidiean) state 
+#     vector, it will create an alias to the original expansion. For a `LieGroupModel`,
+#     it will allocate new storage.
+# """
+# struct CostExpansion{n,m,T} <: AbstractArray{Expansion{n,m,T},1}
+#     data::Vector{Expansion{n,m,T}}
+#     const_hess::BitVector
+#     const_grad::BitVector
+#     function CostExpansion{T}(n::Int, m::Int, N::Int) where T
+#         data = [Expansion{T}(n,m) for k = 1:N]
+#         const_hess = BitVector(undef, N)
+#         const_grad = BitVector(undef, N)
+#         new{n,m,T}(data, const_hess, const_grad)
+#     end
+# end
+# @inline CostExpansion(n,m,N) = CostExpansion{Float64}(n,m,N)
 
-CostExpansion(E::CostExpansion, model::DiscreteDynamics) = 
-    CostExpansion(RD.statevectortype(model), E, model)
+# CostExpansion(E::CostExpansion, model::DiscreteDynamics) = 
+#     CostExpansion(RD.statevectortype(model), E, model)
 
-function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
-    # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.errstate_dim(model) == state_dim(model) 
-    return E 
-end
+# function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
+#     # Create QuadraticObjective linked to error cost expansion
+#     @assert RobotDynamics.errstate_dim(model) == state_dim(model) 
+#     return E 
+# end
 
-function CostExpansion(::RD.RotationState, E::CostExpansion{n,m,T}, model::DiscreteDynamics) where {n,m,T}
-    # Create an expansion for the full state dimension
-    @assert length(E[1].q) == RobotDynamics.errstate_dim(model)
-    n0 = state_dim(model)
-    return CostExpansion{T}(n0,m,length(E))
-end
-Base.size(E::CostExpansion) = size(E.data) 
-Base.getindex(E::CostExpansion, i::Int) = Base.getindex(E.data, i)
+# function CostExpansion(::RD.RotationState, E::CostExpansion{n,m,T}, model::DiscreteDynamics) where {n,m,T}
+#     # Create an expansion for the full state dimension
+#     @assert length(E[1].q) == RobotDynamics.errstate_dim(model)
+#     n0 = state_dim(model)
+#     return CostExpansion{T}(n0,m,length(E))
+# end
+# Base.size(E::CostExpansion) = size(E.data) 
+# Base.getindex(E::CostExpansion, i::Int) = Base.getindex(E.data, i)
 
 
 

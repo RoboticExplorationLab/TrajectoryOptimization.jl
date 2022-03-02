@@ -1,7 +1,3 @@
-"""
-    TrajectoryOptimization
-Primary module for setting up and evaluating trajectory optimization problems.
-"""
 module TrajectoryOptimization
 
 # using Rotations
@@ -74,7 +70,7 @@ export
 	NormConstraint,
 	add_constraint!
 
-include("expansions.jl")
+# include("expansions.jl")
 include("costfunctions.jl")
 include("quadratic_costs.jl")
 include("lie_costs.jl")
@@ -83,17 +79,16 @@ include("objective.jl")
 include("cones.jl")
 include("abstract_constraint.jl")
 include("constraints.jl")
-include("dynamics_constraints.jl")
+# include("dynamics_constraints.jl")
 include("constraint_list.jl")
-include("integration.jl")
+# include("integration.jl")
 
 include("cost.jl")
-include("convals.jl")
+# include("convals.jl")
 
 include("problem.jl")
-include("conset.jl")
+# include("conset.jl")
 
-# include("nlp.jl")
 
 include("utils.jl")
 # include("deprecated.jl")
