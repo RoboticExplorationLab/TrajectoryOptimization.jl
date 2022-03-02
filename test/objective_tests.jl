@@ -110,25 +110,6 @@ using TrajectoryOptimization: state, control
 
         obj = LQRObjective(Diagonal(Vector(Q.diag)), R.diag, Vector(Qf.diag), xf, N)
         @test eltype(obj) <: DiagonalCost{n,m}
-
-        # Test error expansion constructor
-        model = Cartpole()
-        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-        E0 = TO.CostExpansion(n,m,N)
-        E = TO.CostExpansion{Float32}(n,m,N)
-        @test eltype(E[1].hess) == Float32
-        E1 = TO.CostExpansion(E0, dmodel)
-        @test E1 === E0
-
-        model = Quadrotor() 
-        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-        E0 = TO.CostExpansion(13,4,11)
-        @test_throws AssertionError TO.CostExpansion(E0, dmodel)
-        E0 = TO.CostExpansion(12,4,11)
-        E1 = TO.CostExpansion(E0, dmodel)
-        @test E1 !== E0
-        @test size(E1[1].xx) == (13,13)
-        @test size(E0[1].xx) == (12,12)
     end
 
     @testset "Evaluation and expansion" begin
@@ -148,49 +129,5 @@ using TrajectoryOptimization: state, control
 
         TO.cost!(obj, Z)
         @test sum(TO.get_J(obj)) ≈ J
-
-        # E = TO.QuadraticObjective(n, m, N)
-        E0 = TO.CostExpansion(n, m, N)
-        TO.cost_gradient!(E0, obj, Z, init=true)
-        TO.cost_gradient!(E0, obj, Z)
-        run_alloc_tests && @test (@allocated TO.cost_gradient!(E0, obj, Z)) == 0
-        @test all([E0[k].q ≈ obj[k].Q * (state(Z[k]) - xf) for k = 1:N])
-        @test all([E0[k].r ≈ R * (control(Z[k]) - uref) for k = 1:N-1])
-
-        TO.cost_hessian!(E0, obj, Z, init=true, rezero=true)
-        # @test (@allocated TO.cost_hessian!(E0, obj, Z, init=true)) == 0
-        @test all([E0[k].Q ≈ obj[k].Q for k = 1:N])
-        @test all([E0[k].R ≈ R for k = 1:N-1])
-
-        # # pass in cache
-        # cache = TO.ExpansionCache(obj[1])
-        # TO.cost_expansion!(E0, obj, Z)
-        # TO.cost_expansion!(E0, obj, Z, cache)
-
-        # Test error expansion
-        model = Cartpole()
-        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-        G = [zeros(n,n) for k = 1:N]
-        E = TO.CostExpansion(E0, dmodel)
-        for k in eachindex(Z)
-            RobotDynamics.errstate_jacobian!(dmodel, G[k], Z[k])
-        end
-        TO.error_expansion!(E, E0, dmodel, Z, G)
-
-        model = Quadrotor()
-        dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-        G = [SizedMatrix{13,12}(zeros(13,12)) for k = 1:N]
-        Z = SampledTrajectory([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
-        for k in eachindex(Z)
-            RobotDynamics.errstate_jacobian!(model, G[k], Z[k])
-        end
-        E0 = TO.CostExpansion(12, 4, N)
-        E = TO.CostExpansion(E0, dmodel)
-        obj = LQRObjective(Diagonal(rand(13)), Diagonal(rand(4)), 
-            Diagonal(rand(13)), rand(model)[1], N)
-        TO.cost_expansion!(E, obj, Z, init=true, rezero=true)
-        @test E[1].xx != zeros(13,13)
-        TO.error_expansion!(E0, E, dmodel, Z, G)
-        run_alloc_tests && @test (@allocated TO.error_expansion!(E0, E, dmodel, Z, G)) == 0
     end
 end

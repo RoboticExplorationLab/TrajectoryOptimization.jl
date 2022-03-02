@@ -31,23 +31,16 @@ TO.control_dim(::CartpoleCost) = 1
     t,h = 1.1, 0.1
     z = KnotPoint(x,u,t,h)
     zterm = KnotPoint(x,u,t,0.0)
+    ix = 1:n
+    iu = n .+ (1:m)
 
     ## Test ForwardDiff
-    E = Expansion{Float64}(n,m)
-    RD.gradient!(RD.StaticReturn(), RD.ForwardAD(), cst, E.grad, z)
-    RD.hessian!(RD.StaticReturn(), RD.ForwardAD(), cst, E.hess, z)
-    @test E.xx ≈ Diagonal([1, -0.5*cos(x[2]/2), 3, 4])
-    @test E.uu ≈ Diagonal([2])
-    @test E.x ≈ [1*x[1], -sin(x[2]/2), 3*x[3], 4*x[4]]
-    @test E.u ≈ 2*u
-
-    ## Test expansion of trajectory
-    N = 11
-    obj = Objective(cst, N, diffmethod=RD.ForwardAD())
-    X = [@SVector rand(n) for k = 1:N]
-    U = [@SVector rand(m) for k = 1:N-1]
-    Z = SampledTrajectory(X,U, dt=0.1)
-
-    E0 = TO.CostExpansion(n, m, N)
-    TO.cost_expansion!(E0, obj, Z, init=true, rezero=true)
+    grad = zeros(n + m)
+    hess = zeros(n + m, n + m)
+    RD.gradient!(RD.StaticReturn(), RD.ForwardAD(), cst, grad, z)
+    RD.hessian!(RD.StaticReturn(), RD.ForwardAD(), cst, hess, z)
+    @test hess[ix,ix] ≈ Diagonal([1, -0.5*cos(x[2]/2), 3, 4])
+    @test hess[iu,iu] ≈ Diagonal([2])
+    @test grad[ix] ≈ [1*x[1], -sin(x[2]/2), 3*x[3], 4*x[4]]
+    @test grad[iu] ≈ 2*u
 end
