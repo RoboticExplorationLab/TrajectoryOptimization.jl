@@ -196,23 +196,23 @@ function change_dimension(cons::ConstraintList, n::Int, m::Int, ix=1:n, iu=1:m)
 end
 
 # sort the constraint list by stage < coupled, preserving ordering
-function Base.sort!(cons::ConstraintList; rev::Bool=false)
-	lt(con1,con2) = false
-	lt(con1::StageConstraint, con2::CoupledConstraint) = true
-	inds = sortperm(cons.constraints, alg=MergeSort, lt=lt, rev=rev)
-	permute!(cons.inds, inds)
-	permute!(cons.constraints, inds)
-	return cons
-end
+# function Base.sort!(cons::ConstraintList; rev::Bool=false)
+# 	lt(con1,con2) = false
+# 	# lt(con1::StageConstraint, con2::CoupledConstraint) = true
+# 	inds = sortperm(cons.constraints, alg=MergeSort, lt=lt, rev=rev)
+# 	permute!(cons.inds, inds)
+# 	permute!(cons.constraints, inds)
+# 	return cons
+# end
 
-function has_dynamics_constraint(conSet::ConstraintList)
-	for con in conSet
-		if con isa DynamicsConstraint
-			return true
-		end
-	end
-	return false
-end
+# function has_dynamics_constraint(conSet::ConstraintList)
+# 	for con in conSet
+# 		if con isa DynamicsConstraint
+# 			return true
+# 		end
+# 	end
+# 	return false
+# end
 
 
 

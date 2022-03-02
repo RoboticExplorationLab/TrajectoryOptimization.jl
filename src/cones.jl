@@ -100,7 +100,7 @@ function projection!(::SecondOrderCone, px, x::V) where V <: AbstractVector
     elseif a >= abs(s)  # outside the cone
         pv .= v
         px[end] = a
-        get_data(px) .*= 0.5 * (1 + s/a)
+        px .*= 0.5 * (1 + s/a)
     else
         throw(ErrorException("Invalid second-order cone projection"))
     end
@@ -133,9 +133,9 @@ end
         $v
         a = norm(v)
         if a <= -s                               # below cone
-            get_data(J) .*= 0
+            J .*= 0
         elseif a <= s                            # in cone
-            get_data(J) .*= 0
+            J .*= 0
             for i = 1:n
                 J[i,i] = 1.0
             end
@@ -183,7 +183,7 @@ end
 ∇²projection!(::ZeroCone, hess, x, b) = hess .= 0
 
 function ∇²projection!(::NegativeOrthant, hess, x, b)
-    get_data(hess) .= 0
+    hess .= 0
 end
 
 @generated function ∇²projection!(
@@ -202,9 +202,9 @@ end
         vbv = dot(v,bv)
 
         if a <= -s
-            return get_data(hess) .= 0
+            return hess .= 0
         elseif a <= s
-            return get_data(hess) .= 0
+            return hess .= 0
         elseif a > abs(s)
             # Original equations from chain rule
             # n = n + 1
