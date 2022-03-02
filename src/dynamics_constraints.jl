@@ -75,19 +75,27 @@ RD.default_diffmethod(con::DynamicsConstraint) = RD.default_diffmethod(con.model
 	(n+m,n+m)
 end
 
-@generated function RD.evaluate!(
-	sig::FunctionSignature, 
+function evaluate_constraints!(
+	sig::InPlace, 
 	con::DynamicsConstraint, 
 	vals::Vector{V}, 
-	Z::AbstractTrajectory, 
+	Z::SampledTrajectory, 
 	inds=1:length(Z)-1
 ) where V
-	if sig <: InPlace
-		expr = :(RD.dynamics_error!(con.model, vals[i], vals[i+1], Z[k+1], Z[k]))
-	elseif sig <: StaticReturn
-    	op = V <: SVector ? :(=) : :(.=)
-		expr = Expr(op, :(vals[i]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
+	for (i, k) in enumerate(inds)	
+		RD.dynamics_error!(con.model, vals[i], vals[i+1], Z[k+1], Z[k])
 	end
+end
+
+@generated function evaluate_constraints!(
+	sig::StaticReturn, 
+	con::DynamicsConstraint, 
+	vals::Vector{V}, 
+	Z::SampledTrajectory, 
+	inds=1:length(Z)-1
+) where V
+	op = V <: SVector ? :(=) : :(.=)
+	expr = Expr(op, :(vals[i]), :(RD.dynamics_error(con.model, Z[k+1], Z[k])))
 	quote
 		for (i, k) in enumerate(inds)	
 			$expr
@@ -95,13 +103,13 @@ end
 	end
 end
 
-function RD.jacobian!(
+function constraint_jacobians!(
     sig::FunctionSignature,
     dif::DiffMethod,
     con::DynamicsConstraint,
     ∇c::Matrix{<:AbstractMatrix},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)-1
 )
     for (i, k) in enumerate(inds)
@@ -109,40 +117,3 @@ function RD.jacobian!(
 		                            Z[k+1], Z[k])
     end
 end
-
-a = 1
-
-# widths(con::DynamicsConstraint{<:Any,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n+m)
-# widths(con::DynamicsConstraint{<:Explicit,<:Any,N,M},n::Int=N,m::Int=M) where {N,M} = (n+m,n)
-
-# get_inds(con::DynamicsConstraint{<:Explicit}, n, m) = (1:n+m, (n+m) .+ (1:n))
-
-# # Explict 
-# function evaluate(con::DynamicsConstraint{Q}, z1::AbstractKnotPoint, z2::AbstractKnotPoint) where Q <: Explicit
-# 	RobotDynamics.discrete_dynamics(Q, con.model, z1) - state(z2)
-# end
-
-# function jacobian!(∇c, con::DynamicsConstraint{Q,L},
-# 		z::AbstractKnotPoint, z2::AbstractKnotPoint{<:Any,n}, i=1) where {Q,L,n}
-# 	if i == 1
-# 		RobotDynamics.discrete_jacobian!(Q, ∇c, con.model, z, con.cache)
-# 		return L <: RD.LinearModel
-# 	elseif i == 2
-# 		for i = 1:n
-# 			∇c[i,i] = -1
-# 		end
-# 		return true   # is constant
-# 	end
-# 	# return nothing
-# end
-
-# function ∇jacobian!(G, con::DynamicsConstraint{<:Explicit},
-# 	z::AbstractKnotPoint, z2::AbstractKnotPoint, λ, i=1)
-# 	if i == 1
-# 		dyn(x) = evaluate(con, StaticKnotPoint(z,x), z2)'λ
-# 		G .+= ForwardDiff.hessian(dyn, z.z)
-# 	elseif i == 2
-# 		nothing
-# 	end
-# 	return false
-# end

@@ -125,7 +125,7 @@ CostExpansion(E::CostExpansion, model::DiscreteDynamics) =
 
 function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
     # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.errstate_dim(model) == size(model)[1]
+    @assert RobotDynamics.errstate_dim(model) == state_dim(model) 
     return E 
 end
 
@@ -237,7 +237,7 @@ end
 
 Generate a quadratic objective that tracks the reference trajectory specified by `Z`.
 """
-function TrackingObjective(Q,R,Z::AbstractTrajectory; Qf=Q)
+function TrackingObjective(Q,R,Z::SampledTrajectory; Qf=Q)
     costs = map(Z) do z
         LQRCost(Q, R, state(z), control(z))
     end
@@ -254,7 +254,7 @@ index of reference trajectory that should be used as the starting point of the r
 tracked by the objective. This is useful when a single, long time-horizon trajectory is given
 but the optimization only tracks a portion of the reference at each solve (e.g. MPC).
 """
-function update_trajectory!(obj::Objective{<:QuadraticCostFunction}, Z::AbstractTrajectory, start=1)
+function update_trajectory!(obj::Objective{<:QuadraticCostFunction}, Z::SampledTrajectory, start=1)
     inds = (start-1) .+ (1:length(obj))
     for (i,k) in enumerate(inds)
         set_LQR_goal!(obj[i], state(Z[k]), control(Z[k]))

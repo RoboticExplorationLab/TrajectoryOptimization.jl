@@ -42,6 +42,7 @@ Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
 @inline RD.output_dim(con::GoalConstraint{P}) where P = P
+RD.functioninputs(::GoalConstraint) = RD.StateOnly()
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
@@ -52,14 +53,14 @@ function primal_bounds!(zL,zU,con::GoalConstraint)
 	return true
 end
 
-RD.evaluate(con::GoalConstraint, x, u) = x[con.inds] - con.xf
-function RD.evaluate!(con::GoalConstraint, y, x, u)
+RD.evaluate(con::GoalConstraint, x::RD.DataVector) = x[con.inds] - con.xf
+function RD.evaluate!(con::GoalConstraint, y, x::RD.DataVector)
 	for (i, j) in enumerate(con.inds)
 		y[i] = x[j] - con.xf[i]
 	end
 	return nothing
 end
-function jacobian!(con::GoalConstraint, ∇c, y, x, u)
+function jacobian!(con::GoalConstraint, ∇c, y, x::RD.DataVector)
 	T = eltype(∇c)
 	for (i,j) in enumerate(con.inds)
 		∇c[i,j] = one(T)
@@ -185,8 +186,9 @@ function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius
     CircleConstraint{P,T}(n, xc, yc, radius, xi, yi)
 end
 state_dim(con::CircleConstraint) = con.n
+RD.functioninputs(::CircleConstraint) = RD.StateOnly()
 
-function RD.evaluate(con::CircleConstraint, X, u)
+function RD.evaluate(con::CircleConstraint, X::RD.DataVector)
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -195,7 +197,7 @@ function RD.evaluate(con::CircleConstraint, X, u)
 	-(x .- xc).^2 - (y .- yc).^2 + r.^2
 end
 
-function RD.evaluate!(con::CircleConstraint{P}, c, X, u) where P
+function RD.evaluate!(con::CircleConstraint{P}, c, X::RD.DataVector) where P
 	xc = con.x
 	yc = con.y
 	r = con.radius
@@ -207,7 +209,8 @@ function RD.evaluate!(con::CircleConstraint{P}, c, X, u) where P
 	return
 end
 
-function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, X, u) where P
+function RD.jacobian!(con::CircleConstraint{P}, ∇c, c, z::AbstractKnotPoint) where P
+	X = state(z)
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	x = X[xi]
@@ -977,10 +980,14 @@ end
 
 RD.@autodiff struct QuatVecEq{T} <: StateConstraint
     n::Int
+	m::Int
     qf::UnitQuaternion{T}
     qind::SVector{4,Int}
+	function QuatVecEq(n,m,qf::Rotation{3,T},qind=SA[4,5,6,7]) where T
+		new{T}(n,m,UnitQuaternion(qf),SA[qind[1],qind[2],qind[3],qind[4]])
+	end
 end
-function RD.evaluate(con::QuatVecEq, x, u)
+function RD.evaluate(con::QuatVecEq, x::RD.DataVector)
     qf = Rotations.params(con.qf)
     q = normalize(x[con.qind])
     dq = qf'q
@@ -989,8 +996,13 @@ function RD.evaluate(con::QuatVecEq, x, u)
     end
     return -SA[qf[2] - q[2], qf[3] - q[3], qf[4] - q[4]] 
 end
+function RD.evaluate!(con::QuatVecEq, c, x::RD.DataVector)
+	c .= RD.evaluate(con, x)
+	return nothing
+end
 sense(::QuatVecEq) = Equality()
 RD.state_dim(con::QuatVecEq) = con.n
-RD.control_dim(con::QuatVecEq) = 0
+RD.control_dim(con::QuatVecEq) = con.m 
 RD.output_dim(con::QuatVecEq) = 3
 RD.default_diffmethod(::QuatVecEq) = ForwardAD()
+RD.functioninputs(::QuatVecEq) = RD.StateOnly()

@@ -8,7 +8,7 @@ function alloc_con(con,z)
 end
 
 model = Cartpole()
-n,m = size(model)
+n,m = RD.dims(model)
 x,u = rand(model)
 t,h = 1.1, 0.1
 z = KnotPoint(x,u,t,h)
@@ -19,8 +19,8 @@ z = KnotPoint(x,u,t,h)
     goal = GoalConstraint(xf)
     c = zeros(n)
     @test RD.evaluate(goal, z) ≈ x - xf
-    @test RD.evaluate(goal, x, u) ≈ x - xf
-    RD.evaluate!(goal, c, x, u)
+    @test RD.evaluate(goal, x) ≈ x - xf
+    RD.evaluate!(goal, c, x)
     @test c ≈ x - xf
     C = zeros(n,n)
     RD.jacobian!(goal, C, c, z)
@@ -336,4 +336,40 @@ end
     @test TO.is_bound(idx) == TO.is_bound(cir)
 
     # TODO: test IndexedConstraint with a ControlConstraint
+end
+
+using Rotations
+@testset "QuatVecEq" begin
+    model = Quadrotor()
+    n,m = RD.dims(model)
+    qf = Rotations.expm([1,0,0]*deg2rad(45))
+    qcon = TO.QuatVecEq(n,m,qf)
+    @test qcon.qind == 4:7
+    @test_nowarn TO.QuatVecEq(n,m,MRP(qf))
+    qcon2 = TO.QuatVecEq(n,m,qf,[1,2,3,4])
+    @test qcon2.qind === SA[1,2,3,4]
+
+    x,u = rand(model)
+    z = RD.KnotPoint(x,u,0.0,NaN)
+    q = RD.orientation(model, x)
+    dq = RD.params(qf)'RD.params(q)
+    sign(dq)
+    Rotations.vector(q)
+    @test RD.evaluate(qcon, x) ≈ -(sign(dq)*Rotations.vector(qf) - Rotations.vector(q))
+    c = zeros(3)
+    RD.evaluate!(qcon, c, x)
+    @test c ≈ -(sign(dq)*Rotations.vector(qf) - Rotations.vector(q))
+    c .= 0
+    TO.evaluate_constraint!(RD.StaticReturn(), qcon, c, z)
+    @test c ≈ -(sign(dq)*Rotations.vector(qf) - Rotations.vector(q))
+
+    J = zeros(3,n)
+    TO.constraint_jacobian!(RD.StaticReturn(), RD.ForwardAD(), qcon, J, c, z)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(qcon,x), RD.state(z))
+    TO.constraint_jacobian!(RD.InPlace(), RD.ForwardAD(), qcon, J, c, z)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(qcon,x), RD.state(z))
+
+    J .= 0
+    TO.constraint_jacobian!(RD.InPlace(), RD.FiniteDifference(), qcon, J, c, z)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(qcon,x), RD.state(z)) atol=1e-6
 end

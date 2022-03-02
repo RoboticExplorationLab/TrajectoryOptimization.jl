@@ -81,13 +81,13 @@ end
 control_dim(con::ControlNorm2) = con.m
 sense(::ControlNorm2) = Inequality()
 Base.length(::ControlNorm2) = 1
-function evaluate!(vals, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z))
+function evaluate!(vals, con::ControlNorm2, Z::SampledTrajectory, inds=1:length(Z))
 	for (i,k) in enumerate(inds)
 		u = control(Z[k])
 		vals[i] = SA[norm(u) - con.a[i]]
 	end
 end
-function jacobian!(∇c, con::ControlNorm2, Z::AbstractTrajectory, inds=1:length(Z),
+function jacobian!(∇c, con::ControlNorm2, Z::SampledTrajectory, inds=1:length(Z),
 		is_const = BitArray(undef, size(∇c)))
 	for (i,k) in enumerate(inds)
 			u = control(Z[k])

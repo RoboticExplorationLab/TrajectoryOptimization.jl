@@ -68,7 +68,10 @@ end
 
 function RD.evaluate(cost::QuadraticCostFunction, x, u)
     # J = 0.5*u'cost.R*(u + 2cost.r) + 0.5*x'cost.Q*(x + 2cost.q) + cost.c
-    J = 0.5*u'cost.R*u + dot(cost.r,u) + 0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
+    J = 0.5*x'cost.Q*x + dot(cost.q,x) + cost.c
+    if !isempty(u)
+        J += 0.5*u'cost.R*u + dot(cost.r,u) 
+    end
     if !is_blockdiag(cost)
         if length(x) <= 14
             J += u'SMatrix(cost.H)*x
@@ -98,9 +101,10 @@ terminal cost function.
 """
 function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint, 
         cache=ExpansionCache(cost))
-    x,u = state(z), control(z)
+    x = state(z)
     E.q .= cost.Q*x .+ cost.q
     if !is_terminal(z)
+        u = control(z)
         E.r .= cost.R*u .+ cost.r
         if !is_blockdiag(cost)
             E.q .+= cost.H'u
@@ -109,12 +113,36 @@ function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
     end
     return false
 end
-function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint) where {n,m}
-    x,u = state(z), control(z)
+
+function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint{<:Any,<:Any,<:StaticVector}) where {n,m}
+    x = state(z)
     ix,iu = 1:n, n+1:n+m
     grad[ix] .= cost.Q * x .+ cost.q
     if !is_terminal(z)
+        u = control(z)
         grad[iu] .= cost.R * u .+ cost.r 
+        if !is_blockdiag(cost)
+            mul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
+            mul!(view(grad, iu), cost.H, x, 1.0, 1.0)
+        end
+    end
+    return nothing
+end
+
+function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint) where {n,m}
+    x = state(z)
+    ix,iu = 1:n, n+1:n+m
+    gradx = view(grad,ix)
+    gradx .= cost.q
+    mul!(gradx, cost.Q, x, 1.0, 1.0)
+
+    # grad[ix] .= cost.Q * x .+ cost.q
+    if !is_terminal(z)
+        gradu = view(grad,iu)
+        u = control(z)
+        gradu .= cost.r
+        mul!(gradu, cost.R, u, 1.0, 1.0)
+        # grad[iu] .= cost.R * u .+ cost.r 
         if !is_blockdiag(cost)
             mul!(view(grad, ix), Transpose(cost.H), u, 1.0, 1.0)
             mul!(view(grad, iu), cost.H, x, 1.0, 1.0)
@@ -141,13 +169,14 @@ terminal cost function.
 """
 function hessian!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
         cache=ExpansionCache(cost))
-    x,u = state(z), control(z)
+    x = state(z)
     if is_diag(cost)
         for i = 1:length(x); E.Q[i,i] = cost.Q[i,i] end
     else
         E.Q .= cost.Q
     end
     if !is_terminal(z)
+        u = control(z)
         if is_diag(cost)
             for i = 1:length(u); E.R[i,i] = cost.R[i,i]; end
         else
@@ -162,7 +191,7 @@ end
 
 function RD.hessian!(cost::QuadraticCostFunction{n,m}, hess, z::AbstractKnotPoint) where {n,m}
     ix,iu = 1:n, n+1:n+m
-    x,u = state(z), control(z)
+    x = state(z)
     if is_diag(cost)
         hess .= 0
         for i = 1:n; hess[i,i] = cost.Q[i,i] end
@@ -170,6 +199,7 @@ function RD.hessian!(cost::QuadraticCostFunction{n,m}, hess, z::AbstractKnotPoin
         hess[ix,ix] .= cost.Q
     end
     if !is_terminal(z)
+        u = control(z)
         if is_diag(cost)
             for i = 1:m; hess[i+n,i+n] = cost.R[i,i] end
         else

@@ -1,7 +1,7 @@
 
 @testset "Constraint Sets" begin
 model = Cartpole()
-n,m = size(model)
+n,m = RD.dims(model)
 N = 11
 x,u = rand(model)
 t,dt = 1.1, 0.1
@@ -58,7 +58,7 @@ cval = TO.ConVal(n, m, errval)
 @test RD.output_dim(cval) == RD.output_dim(cir) 
 
 
-Z = Traj([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
+Z = SampledTrajectory([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
 RD.evaluate!(cval, Z)
 for k = 1:N
     @test cval.vals[k] ≈ RD.evaluate(cir, Z[k])

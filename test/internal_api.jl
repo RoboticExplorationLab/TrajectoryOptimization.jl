@@ -11,7 +11,7 @@ const RD = RobotDynamics
 
 ## Create a Problem
 model = Quadrotor()
-n,m = size(model)           # number of states and controls
+n,m = RD.dims(model)           # number of states and controls
 n̄ = RD.errstate_dim(model)  # size of error state
 N = 51                      # number of knot points
 tf = 5.0                    # final time
@@ -61,7 +61,7 @@ initial_controls!(prob, u0)
 RD.rollout!(RD.StaticReturn(), prob.model, Z, prob.x0)
 states(prob)[end]
 
-Zmut = Traj([KnotPoint{n,m}(MVector(z.z), z.t, z.dt) for z in Z])
+Zmut = SampledTrajectory([KnotPoint{n,m}(MVector(z.z), z.t, z.dt) for z in Z])
 RD.rollout!(RD.InPlace(), prob.model, Zmut, prob.x0)
 
 
@@ -73,7 +73,9 @@ TO.dynamics_expansion!(RD.InPlace(), RD.ForwardAD(), prob.model, D, Z)
 TO.dynamics_expansion!(RD.InPlace(), RD.FiniteDifference(), prob.model, D, Z)
 
 G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]
-RD.state_diff_jacobian!(prob.model, G, Z)
+for k in eachindex(Z)
+    RD.errstate_jacobian!(prob.model, G[k], Z[k])
+end
 TO.error_expansion!(D, prob.model, G)
 A,B = TO.error_expansion(D[1], prob.model)
 
@@ -117,14 +119,14 @@ vals = [zero(c) for i = inds]
 jacs0 = [zeros(RD.output_dim(con), n+m) for i in inds]
 jacs = [zeros(RD.output_dim(con), n̄+m) for i in inds]
 
-RD.evaluate!(RD.StaticReturn(), con, vals, Z, inds)
+TO.evaluate_constraints!(RD.StaticReturn(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])
 
-RD.evaluate!(RD.InPlace(), con, vals, Z, inds)
+TO.evaluate_constraints!(RD.InPlace(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])
 
-RD.jacobian!(RD.StaticReturn(), RD.UserDefined(), con, jacs0, vals, Z, inds)
-f(z) = RD.evaluate(con, z[1:n], z[n+1:end])
+TO.constraint_jacobians!(RD.StaticReturn(), RD.UserDefined(), con, jacs0, vals, Z, inds)
+f(z) = RD.evaluate(con, z[1:n])
 @test jacs0[1] ≈ ForwardDiff.jacobian(f, RD.getdata(Z[1]))
 
 TO.error_expansion!(jacs, jacs0, con, prob.model, G, inds)
@@ -134,11 +136,11 @@ dyn = TO.DynamicsConstraint(prob.model)
 
 vals = [zeros(n) for k = 1:N]
 jacs = [zeros(n,n+m) for k = 1:N, i = 1:2]
-RD.evaluate!(RD.StaticReturn(), dyn, vals, Z)
-RD.evaluate!(RD.InPlace(), dyn, vals, Z)
+TO.evaluate_constraints!(RD.StaticReturn(), dyn, vals, Z)
+TO.evaluate_constraints!(RD.InPlace(), dyn, vals, Z)
 
-RD.jacobian!(RD.StaticReturn(), RD.FiniteDifference(), dyn, jacs, vals, Z)
-RD.jacobian!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)
+TO.constraint_jacobians!(RD.StaticReturn(), RD.FiniteDifference(), dyn, jacs, vals, Z)
+TO.constraint_jacobians!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)
 @test jacs[1,1] ≈ D[1].∇f
 @test jacs[1,2] ≈ [-I(n) zeros(n,m)]
 
@@ -146,8 +148,8 @@ RD.jacobian!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)
 model_implicit = RD.DiscretizedDynamics{RD.ImplicitMidpoint}(model)
 dyn_implicit = TO.DynamicsConstraint(model_implicit)
 
-RD.evaluate!(RD.StaticReturn(), dyn_implicit, vals, Z)
-RD.evaluate!(RD.InPlace(), dyn_implicit, vals, Z)
+TO.evaluate_constraints!(RD.StaticReturn(), dyn_implicit, vals, Z)
+TO.evaluate_constraints!(RD.InPlace(), dyn_implicit, vals, Z)
 
-RD.jacobian!(RD.StaticReturn(), RD.ForwardAD(), dyn_implicit, jacs, vals, Z)
-RD.jacobian!(RD.InPlace(), RD.FiniteDifference(), dyn_implicit, jacs, vals, Z)
+TO.constraint_jacobians!(RD.StaticReturn(), RD.ForwardAD(), dyn_implicit, jacs, vals, Z)
+TO.constraint_jacobians!(RD.InPlace(), RD.FiniteDifference(), dyn_implicit, jacs, vals, Z)

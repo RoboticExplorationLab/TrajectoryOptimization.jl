@@ -16,8 +16,8 @@ The first dimension of all of these data fields should be the same
 (the number time indices).
 
 With these fields, the following methods are implemented:
-* `evaluate!(::AbstractConstraintValues, ::AbstractTrajectory)`
-* `jacobian!(::AbstractConstraintValues, ::AbstractTrajectory)`
+* `evaluate!(::AbstractConstraintValues, ::SampledTrajectory)`
+* `jacobian!(::AbstractConstraintValues, ::SampledTrajectory)`
 * `max_violation(::AbstractConstraintValues)`
 """
 abstract type AbstractConstraintValues{C<:AbstractConstraint} end
@@ -97,19 +97,19 @@ end
 import Base.length
 @deprecate length(cval::AbstractConstraintValues) RD.output_dim(cval)
 
-function RD.evaluate!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
-	RD.evaluate!(cval.sig, cval.con, cval.vals, Z, cval.inds)
+function RD.evaluate!(cval::AbstractConstraintValues, Z::SampledTrajectory)
+	evaluate_constraints!(cval.sig, cval.con, cval.vals, Z, cval.inds)
 end
 
-function RD.jacobian!(cval::AbstractConstraintValues, Z::AbstractTrajectory)
+function RD.jacobian!(cval::AbstractConstraintValues, Z::SampledTrajectory)
 	if cval.iserr
 		throw(ErrorException("Can't evaluate Jacobians directly on the error state Jacobians"))
 	else
-		RD.jacobian!(cval.sig, cval.diffmethod, cval.con, cval.jac, cval.vals, Z, cval.inds)
+		constraint_jacobians!(cval.sig, cval.diffmethod, cval.con, cval.jac, cval.vals, Z, cval.inds)
 	end
 end
 
-function RD.∇jacobian!(G, cval::AbstractConstraintValues, Z::AbstractTrajectory, λ)
+function RD.∇jacobian!(G, cval::AbstractConstraintValues, Z::SampledTrajectory, λ)
 	RD.∇jacobian!(cval.sig, cval.diffmethod, cval.con, G, cval.λ, cval.vvals, Z, cval.inds)
 end
 
@@ -209,7 +209,7 @@ function norm_violation!(cval::AbstractConstraintValues, p=2)
 	end
 end
 
-function norm_dgrad!(cval::AbstractConstraintValues, Z::AbstractTrajectory, p=1)
+function norm_dgrad!(cval::AbstractConstraintValues, Z::SampledTrajectory, p=1)
 	for (i,k) in enumerate(cval.inds)
 		zs = RobotDynamics.get_z(cval.con, Z, k)
 		mul!(cval.vals2[i], cval.jac[i,1], zs[1])

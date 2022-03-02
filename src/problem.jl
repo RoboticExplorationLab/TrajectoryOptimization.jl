@@ -36,23 +36,24 @@ struct Problem{T<:AbstractFloat}
     constraints::ConstraintList
     x0::MVector
     xf::MVector
-    Z::Traj
+    Z::SampledTrajectory
     N::Int
     t0::T
     tf::T
     function Problem(model::DiscreteDynamics, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
-            Z::Traj, N::Int, t0::T, tf::T) where {Q,T}
-        n,m = size(model)
+            Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
+        n,m = RD.dims(model)
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
         @assert tf > t0
-        @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
-        @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
+        # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
+        # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
-        @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
+        # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
+        # TODO: validate trajectory size
         new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
@@ -62,7 +63,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
         constraints=ConstraintList(state_dim(model), control_dim(model), length(obj)),
         t0=zero(tf),
         X0=[x0*NaN for k = 1:length(obj)],
-        U0=[@SVector zeros(size(model)[2]) for k = 1:length(obj)-1],
+        U0=[@SVector zeros(control_dim(model)) for k = 1:length(obj)-1],
         dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
     n,m = dims(model)
     N = length(obj)
@@ -76,8 +77,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    t = pushfirst!(cumsum(dt), 0)
-    Z = Traj(X0,U0,dt,t)
+    Z = SampledTrajectory{n,m}(X0,U0,dt=dt)
 
     Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)
@@ -125,7 +125,7 @@ Get the times for all the knot points in the problem.
 
 Copy the trajectory
 """
-function initial_trajectory!(prob::Problem, Z0::AbstractTrajectory)
+function initial_trajectory!(prob::Problem, Z0::SampledTrajectory)
 	Z = get_trajectory(prob)
     for k = 1:prob.N
         Z[k].z = Z0[k].z
@@ -211,13 +211,6 @@ function Base.copy(prob::Problem)
 end
 
 
-# function max_violation(prob::Problem, Z::Traj=prob.Z)
-#     conSet = get_constraints(prob)
-#     evaluate!(conSet, Z)
-#     max_violation!(conSet)
-#     return maximum(conSet.c_max)
-# end
-
 "Get the number of constraint values at each time step"
 num_constraints(prob::Problem) = get_constraints(prob).p
 "Get problem constraints. Returns `AbstractConstraintSet`."
@@ -226,7 +219,7 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline get_model(prob::Problem) = prob.model
 "Get the objective. Returns an `AbstractObjective`."
 @inline get_objective(prob::Problem) = prob.obj
-"Get the trajectory. Returns an `RobotDynamics.AbstractTrajectory`"
+"Get the trajectory. Returns an `RobotDynamics.SampledTrajectory`"
 @inline get_trajectory(prob::Problem) = prob.Z
 "Determines if the problem is constrained."
 @inline is_constrained(prob) = isempty(get_constraints(prob))

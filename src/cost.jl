@@ -19,20 +19,20 @@ function stage_cost(cost::CostFunction, z::AbstractKnotPoint)
 end
 
 """
-	cost(obj::Objective, Z::Traj)
-	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::Traj)
+	cost(obj::Objective, Z::SampledTrajectory)
+	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::SampledTrajectory)
 
 Evaluate the cost for a trajectory. If a dynamics constraint is given,
     use the appropriate integration rule, if defined.
 """
-function cost(obj::AbstractObjective, Z::AbstractTrajectory{<:Any,<:Any,<:AbstractFloat})
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,<:AbstractFloat})
     cost!(obj, Z)
     J = get_J(obj)
     return sum(J)
 end
 
 # ForwardDiff-able method
-function cost(obj::AbstractObjective, Z::AbstractTrajectory{<:Any,<:Any,T}) where T
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,T}) where T
     J = zero(T)
     for k = 1:length(obj)
         J += RD.evaluate(obj[k], Z[k])
@@ -41,8 +41,8 @@ function cost(obj::AbstractObjective, Z::AbstractTrajectory{<:Any,<:Any,T}) wher
 end
 
 "Evaluate the cost for a trajectory (non-allocating)"
-@inline function cost!(obj::Objective, Z::AbstractTrajectory)
-    map!(RD.evaluate, obj.J, obj.cost, Z)
+@inline function cost!(obj::Objective, Z::SampledTrajectory)
+    map!(RD.evaluate, obj.J, obj.cost, Z.data)
 end
 
 
@@ -57,7 +57,7 @@ Evaluate the cost gradient along the entire tracjectory `Z`, storing the result 
 
 If `init == true`, all gradients will be evaluated, even if they are constant.
 """
-function cost_gradient!(E, obj::Objective, Z::AbstractTrajectory; init::Bool=false)
+function cost_gradient!(E, obj::Objective, Z::SampledTrajectory; init::Bool=false)
 	is_const = obj.const_grad
     for k in eachindex(Z)
 		if init || !is_const[k]
@@ -74,7 +74,7 @@ Evaluate the cost hessian along the entire tracjectory `Z`, storing the result i
 If `init == true`, all hessian will be evaluated, even if they are constant. If false,
 they will only be evaluated if they are not constant.
 """
-function cost_hessian!(E, obj::Objective, Z::AbstractTrajectory; 
+function cost_hessian!(E, obj::Objective, Z::SampledTrajectory; 
         init::Bool=false, rezero::Bool=false)
 	is_const = obj.const_hess
 	if !init && all(is_const)
@@ -100,21 +100,21 @@ If `init == false`, the expansions will only be evaluated if they are not consta
 
 If `rezero == true`, all expansions will be multiplied by zero before taking the expansion.
 """
-function cost_expansion!(E, obj::Objective, Z::Traj; init::Bool=false, rezero::Bool=false)
+function cost_expansion!(E, obj::Objective, Z::SampledTrajectory; init::Bool=false, rezero::Bool=false)
     cost_gradient!(E, obj, Z, init=init)
     cost_hessian!(E, obj, Z, init=init, rezero=rezero)
     return nothing
 end
 
-error_expansion!(E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end]) = 
+error_expansion!(E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end]) = 
 	error_expansion!(RD.statevectortype(model), E, Jexp, model, Z, G, tmp)
 
-function error_expansion!(::RD.EuclideanState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
+function error_expansion!(::RD.EuclideanState, E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end])
     @assert E === Jexp "E and Jexp should be the same object for AbstractModel"
     return nothing
 end
 
-function error_expansion!(::RD.RotationState, E, Jexp, model::DiscreteDynamics, Z::Traj, G, tmp=G[end])
+function error_expansion!(::RD.RotationState, E, Jexp, model::DiscreteDynamics, Z::SampledTrajectory, G, tmp=G[end])
     for k in eachindex(E)
         error_expansion!(E[k], Jexp[k], model, Z[k], G[k], tmp)
 	end
@@ -127,8 +127,8 @@ function error_expansion!(E, cost, model, z::AbstractKnotPoint,
 	E.xx .= 0
 	E.uu .= cost.uu
 	E.u .= cost.u
-    RobotDynamics.∇²differential!(model, E.xx, state(z), cost.x)
-    if size(model)[1] < 15
+    RobotDynamics.∇errstate_jacobian!(model, E.xx, state(z), cost.x)
+    if state_dim(model) < 15
         G = SMatrix(G)
         E.ux .= SMatrix(cost.ux) * G
         E.x .= G'SVector(cost.x)
@@ -147,12 +147,12 @@ function static_expansion(cost::QuadraticCost)
 end
 
 """
-	dgrad(E::QuadraticExpansion, dZ::Traj)
+	dgrad(E::QuadraticExpansion, dZ::SampledTrajectory)
 
 Calculate the derivative of the cost in the direction of `dZ`, where `E` is the current
 quadratic expansion of the cost.
 """
-function dgrad(E, dZ::Traj)
+function dgrad(E, dZ::SampledTrajectory)
 	g = zero(T)
 	N = length(E)
 	for k = 1:N-1
@@ -163,11 +163,11 @@ function dgrad(E, dZ::Traj)
 end
 
 """
-	dhess(E::QuadraticCost, dZ::Traj)
+	dhess(E::QuadraticCost, dZ::SampledTrajectory)
 
 Calculate the scalar 0.5*dZ'G*dZ where G is the hessian of cost
 """
-function dhess(E::CostExpansion{n,m,T}, dZ::Traj)::T where {n,m,T}
+function dhess(E::CostExpansion{n,m,T}, dZ::SampledTrajectory)::T where {n,m,T}
 	h = zero(T)
 	N = length(E)
 	for k = 1:N-1

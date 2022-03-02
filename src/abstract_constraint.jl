@@ -158,6 +158,20 @@ in, they are assumed to be consistent with those returned by `state_dim` and `co
 ############################################################################################
 # 								EVALUATION METHODS 										   #
 ############################################################################################
+function evaluate_constraint!(::StaticReturn, con::AbstractConstraint, val, args...)
+	val .= RD.evaluate(con, args...)
+end
+
+function evaluate_constraint!(::InPlace, con::AbstractConstraint, val, args...)
+	RD.evaluate!(con, val, args...)
+    val
+end
+
+function constraint_jacobian!(sig::FunctionSignature, diff::DiffMethod, con, jac, val, args...)
+    RD.jacobian!(sig, diff, con, jac, val, args...)
+end
+
+
 """
     evaluate!(vals, con::AbstractConstraint, Z, [inds])
 
@@ -168,11 +182,11 @@ The `inds` argument determines at which knot points the constraint is evaluated.
 If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, or
 `evaluate(con, z1, z2)` if `con` is a `CoupledConstraint`.
 """
-@generated function RD.evaluate!(
+@generated function evaluate_constraints!(
     sig::StaticReturn,
     con::StageConstraint,
     vals::Vector{V},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 ) where V
     op = V <: SVector ? :(=) : :(.=)
@@ -183,11 +197,11 @@ If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, o
     end
 end
 
-function RD.evaluate!(
+function evaluate_constraints!(
     sig::InPlace,
     con::StageConstraint,
     vals::Vector{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -198,7 +212,7 @@ end
 # function evaluate!(
 #     vals::Vector{<:AbstractVector},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z),
 # )
 #     for (i, k) in enumerate(inds)
@@ -209,7 +223,7 @@ end
 # function evaluate!(
 #     vals::Vector{<:AbstractVector},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z)-1,
 # )
 #     for (i, k) in enumerate(inds)
@@ -233,13 +247,13 @@ The values are stored in `∇c`, which should be a matrix of matrices. If `con` 
 If `con` is a `StageConstraint`, this will call `jacobian!(∇c, con, z)` by default, or
 `jacobian!(∇c, con, z1, z2, i)` if `con` is a `CoupledConstraint`.
 """
-function RD.jacobian!(
+function constraint_jacobians!(
     sig::FunctionSignature,
     dif::DiffMethod,
     con::StageConstraint,
     ∇c::VecOrMat{<:AbstractMatrix},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -250,7 +264,7 @@ end
 # function jacobian!(
 #     ∇c::VecOrMat{<:AbstractMatrix},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:length(Z),
 #     is_const = BitArray(undef, size(∇c))
 # )
@@ -262,7 +276,7 @@ end
 # function jacobian!(
 #     ∇c::VecOrMat{<:AbstractMatrix},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     inds = 1:size(∇c, 1),
 #     is_const = BitArray(undef, size(∇c))
 # )
@@ -295,7 +309,7 @@ function RD.∇jacobian!(
     H::VecOrMat{<:AbstractMatrix},
     λ::VecOrMat{<:AbstractVector},
     c::VecOrMat{<:AbstractVector},
-    Z::AbstractTrajectory,
+    Z::SampledTrajectory,
     inds = 1:length(Z)
 )
     for (i, k) in enumerate(inds)
@@ -305,7 +319,7 @@ end
 
 function error_expansion!(jac, jac0, con::StageConstraint, model::DiscreteDynamics, G, inds) where C
 	if jac !== jac0
-		n,m = size(model)
+		n,m = RD.dims(model)
         n̄ = RD.errstate_dim(model)
 		ix = 1:n̄
 		iu = n̄ .+ (1:m)
@@ -329,7 +343,7 @@ end
 # function ∇jacobian!(
 #     G::VecOrMat{<:AbstractMatrix},
 #     con::StageConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     λ::Vector{<:AbstractVector},
 #     inds = 1:length(Z),
 #     is_const = ones(Bool, length(inds)),
@@ -345,7 +359,7 @@ end
 # function ∇jacobian!(
 #     G::VecOrMat{<:AbstractMatrix},
 #     con::CoupledConstraint,
-#     Z::AbstractTrajectory,
+#     Z::SampledTrajectory,
 #     λ::Vector{<:AbstractVector},
 #     inds = 1:length(Z),
 #     is_const = ones(Bool, length(inds)),

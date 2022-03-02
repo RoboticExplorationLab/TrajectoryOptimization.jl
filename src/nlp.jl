@@ -348,18 +348,18 @@ function RobotDynamics.StaticKnotPoint(Z::Vector, Zdata::TrajData{n,m}, k::Int) 
 end
 
 """
-	NLPTraj{n,m,T} <: AbstractTrajectory{n,m,T}
+	NLPTraj{n,m,T} <: SampledTrajectory{n,m,T}
 
 A trajectory of states and controls, where the underlying data storage is a large vector.
 
 Supports indexing and iteration, where the elements are `StaticKnotPoint`s.
 """
-mutable struct NLPTraj{n,m,T} <: AbstractTrajectory{n,m,T}
+mutable struct NLPTraj{n,m,T} <: SampledTrajectory{n,m,T}
 	Z::Vector{T}
 	Zdata::TrajData{n,m,Float64}
 end
 
-function NLPTraj(Z::AbstractTrajectory)
+function NLPTraj(Z::SampledTrajectory)
 	NN = num_vars(Z)
 	Zvec = zeros(NN)
 	Zdata = TrajData(Z)
@@ -510,7 +510,7 @@ end
 @inline get_constraints(nlp::TrajOptNLP) = nlp.conSet
 @inline get_model(nlp::TrajOptNLP) = nlp.model
 @inline max_violation(nlp::TrajOptNLP) = max_violation(get_constraints(nlp))
-@inline initial_trajectory!(nlp::TrajOptNLP, Z0::AbstractTrajectory) = 
+@inline initial_trajectory!(nlp::TrajOptNLP, Z0::SampledTrajectory) = 
 	copyto!(get_trajectory(nlp), Z0)
 
 function integration(nlp::TrajOptNLP)
