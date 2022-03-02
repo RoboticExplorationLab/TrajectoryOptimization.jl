@@ -133,12 +133,12 @@ function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoi
     x = state(z)
     ix,iu = 1:n, n+1:n+m
     gradx = view(grad,ix)
-    gradu = view(grad,iu)
     gradx .= cost.q
     mul!(gradx, cost.Q, x, 1.0, 1.0)
 
     # grad[ix] .= cost.Q * x .+ cost.q
     if !is_terminal(z)
+        gradu = view(grad,iu)
         u = control(z)
         gradu .= cost.r
         mul!(gradu, cost.R, u, 1.0, 1.0)

@@ -135,7 +135,7 @@ using TrajectoryOptimization: state, control
         # Evaluation and expansion functions
         dt = 0.01
         N = 101
-        Z = Traj([KnotPoint(rand(SVector{n}), rand(SVector{m}), dt*(k-1), dt * (k < N)) for k = 1:N])
+        Z = SampledTrajectory([KnotPoint(rand(SVector{n}), rand(SVector{m}), dt*(k-1), dt * (k < N)) for k = 1:N])
         RD.setcontrol!(Z[end], zeros(m))
         uref = @SVector rand(m)
         obj = LQRObjective(Q, R, Qf, xf, N, uf = uref)
@@ -172,14 +172,18 @@ using TrajectoryOptimization: state, control
         dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         G = [zeros(n,n) for k = 1:N]
         E = TO.CostExpansion(E0, dmodel)
-        RobotDynamics.state_diff_jacobian!(dmodel, G, Z)
+        for k in eachindex(Z)
+            RobotDynamics.errstate_jacobian!(dmodel, G[k], Z[k])
+        end
         TO.error_expansion!(E, E0, dmodel, Z, G)
 
         model = Quadrotor()
         dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
         G = [SizedMatrix{13,12}(zeros(13,12)) for k = 1:N]
-        Z = Traj([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
-        RobotDynamics.state_diff_jacobian!(model, G, Z)
+        Z = SampledTrajectory([KnotPoint(rand(model)..., dt*(k-1), dt) for k = 1:N])
+        for k in eachindex(Z)
+            RobotDynamics.errstate_jacobian!(model, G[k], Z[k])
+        end
         E0 = TO.CostExpansion(12, 4, N)
         E = TO.CostExpansion(E0, dmodel)
         obj = LQRObjective(Diagonal(rand(13)), Diagonal(rand(4)), 

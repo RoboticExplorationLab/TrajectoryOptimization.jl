@@ -125,7 +125,7 @@ CostExpansion(E::CostExpansion, model::DiscreteDynamics) =
 
 function CostExpansion(::RD.EuclideanState, E::CostExpansion, model::DiscreteDynamics)
     # Create QuadraticObjective linked to error cost expansion
-    @assert RobotDynamics.errstate_dim(model) == size(model)[1]
+    @assert RobotDynamics.errstate_dim(model) == state_dim(model) 
     return E 
 end
 

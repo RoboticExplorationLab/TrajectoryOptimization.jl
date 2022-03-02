@@ -44,7 +44,7 @@ struct Problem{T<:AbstractFloat}
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
             Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
-        n,m = size(model)
+        n,m = RD.dims(model)
         @assert length(x0) == length(xf) == n
         @assert length(Z) == N
         @assert tf > t0
@@ -52,7 +52,7 @@ struct Problem{T<:AbstractFloat}
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         @assert constraints.n == n "Constraint state dimension doesn't match model"
         @assert constraints.m == m "Constraint control dimension doesn't match model"
-        @assert RobotDynamics.traj_size(Z) == (n,m,N) "Trajectory sizes don't match"
+        @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
@@ -62,7 +62,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
         constraints=ConstraintList(state_dim(model), control_dim(model), length(obj)),
         t0=zero(tf),
         X0=[x0*NaN for k = 1:length(obj)],
-        U0=[@SVector zeros(size(model)[2]) for k = 1:length(obj)-1],
+        U0=[@SVector zeros(control_dim(model)) for k = 1:length(obj)-1],
         dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
     n,m = dims(model)
     N = length(obj)
@@ -76,8 +76,7 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    t = pushfirst!(cumsum(dt), 0)
-    Z = SampledTrajectory(X0,U0,dt,t)
+    Z = SampledTrajectory(X0,U0,dt=dt)
 
     Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
         Z, N, t0, tf)

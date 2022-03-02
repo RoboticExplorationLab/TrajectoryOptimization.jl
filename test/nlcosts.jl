@@ -1,15 +1,4 @@
-# using Test
-# using StaticArrays
-# using TrajectoryOptimization
-# using RobotZoo: Cartpole
-# using ForwardDiff
-# using BenchmarkTools
-# using RobotDynamics
-# using DiffResults
-# using FiniteDiff
-# using LinearAlgebra
 import TrajectoryOptimization: stage_cost, CostFunction, Expansion
-# const TO = TrajectoryOptimization
 
 ##
 RD.@autodiff struct CartpoleCost{T} <: TO.CostFunction 
@@ -32,7 +21,7 @@ TO.control_dim(::CartpoleCost) = 1
 ## Initialize Model
 @testset "Nonlinear Costs" begin
     model = Cartpole()
-    n,m = size(model)
+    n,m = RD.dims(model)
     x = zeros(n)
     u = zeros(m)
     cst = CartpoleCost{Float64}([1,2,3,4.], [2.])
@@ -57,7 +46,7 @@ TO.control_dim(::CartpoleCost) = 1
     obj = Objective(cst, N, diffmethod=RD.ForwardAD())
     X = [@SVector rand(n) for k = 1:N]
     U = [@SVector rand(m) for k = 1:N-1]
-    Z = Traj(X,U,fill(0.1,N))
+    Z = SampledTrajectory(X,U, dt=0.1)
 
     E0 = TO.CostExpansion(n, m, N)
     TO.cost_expansion!(E0, obj, Z, init=true, rezero=true)

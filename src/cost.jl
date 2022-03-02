@@ -42,7 +42,7 @@ end
 
 "Evaluate the cost for a trajectory (non-allocating)"
 @inline function cost!(obj::Objective, Z::SampledTrajectory)
-    map!(RD.evaluate, obj.J, obj.cost, Z)
+    map!(RD.evaluate, obj.J, obj.cost, Z.data)
 end
 
 
@@ -127,8 +127,8 @@ function error_expansion!(E, cost, model, z::AbstractKnotPoint,
 	E.xx .= 0
 	E.uu .= cost.uu
 	E.u .= cost.u
-    RobotDynamics.∇²differential!(model, E.xx, state(z), cost.x)
-    if size(model)[1] < 15
+    RobotDynamics.∇errstate_jacobian!(model, E.xx, state(z), cost.x)
+    if state_dim(model) < 15
         G = SMatrix(G)
         E.ux .= SMatrix(cost.ux) * G
         E.x .= G'SVector(cost.x)
