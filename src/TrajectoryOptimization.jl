@@ -70,8 +70,7 @@ export
 	NormConstraint,
 	add_constraint!
 
-include("costfunctions.jl")
-include("quadratic_costs.jl")
+include("cost_functions.jl")
 include("lie_costs.jl")
 include("objective.jl")
 
@@ -80,10 +79,7 @@ include("abstract_constraint.jl")
 include("constraints.jl")
 include("constraint_list.jl")
 
-include("cost.jl")
-
 include("problem.jl")
-
 
 include("utils.jl")
 
