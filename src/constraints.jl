@@ -272,8 +272,9 @@ end
 @inline state_dim(con::SphereConstraint) = con.n
 @inline sense(::SphereConstraint) = Inequality()
 @inline RD.output_dim(::SphereConstraint{P}) where P = P
+RD.functioninputs(::SphereConstraint) = RD.StateOnly()
 
-function RD.evaluate(con::SphereConstraint, x, u)
+function RD.evaluate(con::SphereConstraint, x::RD.DataVector)
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
@@ -282,7 +283,7 @@ function RD.evaluate(con::SphereConstraint, x, u)
 	-((x[xi] .- xc).^2 + (x[yi] .- yc).^2 + (x[zi] .- zc).^2 - r.^2)
 end
 
-function RD.evaluate!(con::SphereConstraint{P}, c, X, u) where P
+function RD.evaluate!(con::SphereConstraint{P}, c, X::RD.DataVector) where P
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
@@ -294,7 +295,7 @@ function RD.evaluate!(con::SphereConstraint{P}, c, X, u) where P
 	return
 end
 
-function RD.jacobian!(con::SphereConstraint{P}, ∇c, c, X, u) where P
+function RD.jacobian!(con::SphereConstraint{P}, ∇c, c, X::RD.DataVector) where P
 	xc = con.x; xi = con.xi
 	yc = con.y; yi = con.yi
 	zc = con.z; zi = con.zi
@@ -344,15 +345,16 @@ end
 @inline state_dim(con::CollisionConstraint) = con.n
 @inline sense(::CollisionConstraint) = Inequality()
 @inline RD.output_dim(::CollisionConstraint) = 1
+RD.functioninputs(::CollisionConstraint) = RD.StateOnly()
 
-function RD.evaluate(con::CollisionConstraint, x, u)
+function RD.evaluate(con::CollisionConstraint, x::RD.DataVector)
     x1 = x[con.x1]
     x2 = x[con.x2]
     d = x1 - x2
     @SVector [con.radius^2 - d'd]
 end
 
-function RD.evaluate!(con::CollisionConstraint{D}, c, x, u) where D
+function RD.evaluate!(con::CollisionConstraint{D}, c, x::RD.DataVector) where D
 	c[1] = con.radius^2
 	for i = 1:D
 		x1 = x[con.x1[i]]
@@ -363,7 +365,7 @@ function RD.evaluate!(con::CollisionConstraint{D}, c, x, u) where D
 	return 
 end
 
-function RD.jacobian!(con::CollisionConstraint{D}, ∇c, c, x, u) where D
+function RD.jacobian!(con::CollisionConstraint{D}, ∇c, c, x::RD.DataVector) where D
 	for i = 1:D
 		x1 = x[con.x1[i]]
 		x2 = x[con.x2[i]]
@@ -717,7 +719,8 @@ function IndexedConstraint(n,m,con::AbstractConstraint,
 	n0,m0 = length(ix), length(iu)
 	iu = iu .+ n
 	iz = SVector{n0+m0}([ix; iu])
-	w = widths(con)[1]
+	# w = widths(con)[1]
+	w = RD.input_dim(con)
 	∇c = zeros(p,w)
 	if con isa StageConstraint
 		if con isa ControlConstraint
@@ -738,12 +741,12 @@ function IndexedConstraint(n,m,con::AbstractConstraint,
 end
 
 function IndexedConstraint(n,m,con::AbstractConstraint)
-	if con isa Union{StateConstraint, CoupledStateConstraint}
+	if con isa StateConstraint
 		m0 = m
 	else
 		m0 = control_dim(con)
 	end
-	if con isa Union{ControlConstraint, CoupledControlConstraint}
+	if con isa ControlConstraint
 		n0 = n
 	else
 		n0 = state_dim(con)

@@ -33,9 +33,6 @@ z = KnotPoint(x,u,t,h)
     @test TO.check_dims(goal, n, m)
     @test TO.check_dims(goal, n+1, m) == false
     @test TO.check_dims(goal, n, m+1) == true
-    @test TO.widths(goal) == (n,)
-    @test TO.widths(goal, n, m) == (n,)
-    @test TO.widths(goal, n+1, m) == (n+1,)
     @test state_dim(goal) == n
 
     @test GoalConstraint(Vector(xf)).xf isa MVector{n}
@@ -61,7 +58,6 @@ end
     @test lin2.b isa SVector{p}
 
     @test RD.output_dim(lin) == p
-    @test TO.widths(lin) == (n+m,)
     @test state_dim(lin) == n
     @test control_dim(lin) == m
     @test TO.upper_bound(lin) ≈ zeros(p)
@@ -75,7 +71,6 @@ end
     TO.jacobian!(lin2, ∇c, c, z)
     @test ∇c ≈ [A zeros(p)]
 
-    @test TO.widths(lin2) == (n+m,)
     @test alloc_con(lin2,z) == 0
     @test state_dim(lin2) == n
     @test control_dim(lin2) == m
@@ -115,7 +110,6 @@ end
     @test RD.output_dim(cir) == 3
     @test state_dim(cir) == n
     @test_throws RobotDynamics.NotImplementedError control_dim(cir)
-    @test TO.widths(cir) == (n,)
 
     cir_ = CircleConstraint(n, Float64.(xc), yc, r)
     @test cir_ isa CircleConstraint{3,Float64}
@@ -192,7 +186,6 @@ end
     @test ∇c ≈ [2x; 0]'
 
     @test RD.output_dim(ncon) == 1
-    @test TO.widths(ncon) == (n+m,)
     @test TO.sense(ncon) == Inequality()
 
     ncon2 = NormConstraint(n,m, 2.0, Inequality(), :state)
@@ -228,7 +221,6 @@ end
     RD.jacobian!(bnd, ∇c, c, z)
     @test ∇c ≈ [I(n+m); -I(n+m)]
     @test RD.output_dim(bnd) == 2(n+m)
-    @test TO.widths(bnd) == (n+m,)
     @test TO.upper_bound(bnd) == [xmax; umax]
     @test TO.lower_bound(bnd) == [xmin; umin]
     @test TO.is_bound(bnd) == true
@@ -248,7 +240,6 @@ end
     iz[n+m+1] = 0
     @test ∇c ≈ [I(n+m); -I(n+m)][iz, :]
     @test RD.output_dim(bnd) == 2(n+m) - 2
-    @test TO.widths(bnd) == (n+m,)
     @test TO.upper_bound(bnd) == [xmax; umax]
     @test TO.lower_bound(bnd) == [xmin; umin]
     @test TO.is_bound(bnd) == true

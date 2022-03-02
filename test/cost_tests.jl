@@ -1,6 +1,7 @@
 function test_cost_allocs(qcost)
     n,m = RD.dims(qcost)
-    E = TO.Expansion{Float64}(n,m)
+    grad = zeros(n + m)
+    hess = zeros(n + m, n + m)
     x = @SVector randn(n)
     u = @SVector randn(m)
     t,dt = 1.1, 0.1
@@ -12,17 +13,17 @@ function test_cost_allocs(qcost)
     allocs > 0 && println("allocs for evaluate(qcost, x, u)")
     allocs += @allocated RD.evaluate(qcost, z)
     allocs > 0 && println("allocs for evaluate(qcost, z)")
-    allocs += @allocated RD.gradient!(qcost, E.grad, z)
+    allocs += @allocated RD.gradient!(qcost, grad, z)
     allocs > 0 && println("allocs for gradient!(qcost, E.grad, z)")
-    allocs += @allocated RD.hessian!(qcost, E.hess, z)
+    allocs += @allocated RD.hessian!(qcost, hess, z)
     allocs > 0 && println("allocs for hessian!(qcost, E.hess, z)")
 
     allocs += @allocated RD.evaluate(qcost, zterm)
-    allocs += @allocated RD.gradient!(qcost, E.grad, zterm)
-    allocs += @allocated RD.hessian!(qcost, E.hess, zterm)
+    allocs += @allocated RD.gradient!(qcost, grad, zterm)
+    allocs += @allocated RD.hessian!(qcost, hess, zterm)
 
-    allocs += @allocated RD.gradient!(method, qcost, E.grad, z)
-    allocs += @allocated RD.hessian!(method, qcost, E.hess, z)
+    allocs += @allocated RD.gradient!(method, qcost, grad, z)
+    allocs += @allocated RD.hessian!(method, qcost, hess, z)
     return allocs
 end
 
@@ -37,6 +38,9 @@ end
     c = rand()
     Qf = Diagonal(@SVector fill(10.0, n))
     xf = @SVector ones(n)
+
+    ix = 1:n
+    iu = n .+ (1:m)
 
     @testset "Constructors" begin
         qcost = QuadraticCost(Q, R)
@@ -236,40 +240,43 @@ end
         @test RD.evaluate(qcost, x, u) ≈
               0.5 * (x'Q * x + u'R * u) + q'x + r'u + c + u'H * x
 
-        E = TO.Expansion{Float64}(n, m)
-        RD.gradient!(qcost, E.grad, zterm)
-        @test E.q ≈ Q * x + q
-        @test E.r ≈ zero(r)
-        RD.gradient!(qcost, E.grad, z)
-        @test E.q ≈ Q * x + q + H'u
-        @test E.r ≈ R * u + r + H * x
+        # E = TO.Expansion{Float64}(n, m)
+        grad = zeros(n + m)
+        RD.gradient!(qcost,grad, zterm)
+        @test grad[ix] ≈ Q * x + q
+        @test grad[iu] ≈ zero(r)
+        RD.gradient!(qcost, grad, z)
+        @test grad[ix] ≈ Q * x + q + H'u
+        @test grad[iu] ≈ R * u + r + H * x
 
-        RD.hessian!(qcost, E.hess, zterm)
-        @test E.Q ≈ Q
-        @test E.R ≈ I(m)
-        RD.hessian!(qcost, E.hess, z) 
-        @test E.R ≈ R
-        @test E.H ≈ H
+        hess = zeros(n + m, n + m)
+        RD.hessian!(qcost, hess, zterm)
+        @test hess[ix,ix] ≈ Q
+        @test hess[iu,iu] ≈ zero(R) 
+        RD.hessian!(qcost, hess, z) 
+        @test hess[iu,iu] ≈ R
+        @test hess[iu,ix] ≈ H
         run_alloc_tests && @test test_cost_allocs(qcost) == 0
 
         dcost = DiagonalCost(Q, R, q, r, c)
         @test RD.evaluate(dcost, z) ≈ RD.evaluate(dcost, x, u)
         @test RD.evaluate(dcost, x, u) ≈ 0.5 * (x'Q * x + u'R * u) + q'x + r'u + c
 
-        E = TO.Expansion{Float64}(n, m)
-        RD.gradient!(dcost, E.grad, zterm)
-        @test E.q ≈ Q * x + q
-        @test E.r ≈ zero(r)
-        RD.gradient!(dcost, E.grad, z) 
-        @test E.q ≈ Q * x + q
-        @test E.r ≈ R * u + r
+        grad .= 0
+        RD.gradient!(dcost, grad, zterm)
+        @test grad[ix] ≈ Q * x + q
+        @test grad[iu] ≈ zeros(m) 
+        RD.gradient!(dcost, grad, z) 
+        @test grad[ix] ≈ Q * x + q
+        @test grad[iu] ≈ R * u + r
 
-        RD.hessian!(dcost, E.hess, zterm)
-        @test E.Q ≈ Q
-        @test E.R ≈ zeros(m,m) 
-        RD.hessian!(dcost, E.hess, z) 
-        @test E.R ≈ R
-        @test E.H ≈ zero(H)
+        hess .= 0
+        RD.hessian!(dcost, hess, zterm)
+        @test hess[ix,ix] ≈ Q
+        @test hess[iu,iu] ≈ zero(R) 
+        RD.hessian!(dcost, hess, z) 
+        @test hess[iu,iu] ≈ R
+        @test hess[iu,ix] ≈ zero(H)
         run_alloc_tests && @test test_cost_allocs(dcost) == 0
     end
 end

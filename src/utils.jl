@@ -1,12 +1,12 @@
 
-# function ispossemidef(A)
-# 	eigs = eigvals(A)
-# 	if any(real(eigs) .< 0)
-# 		return false
-# 	else
-# 		return true
-# 	end
-# end
+function ispossemidef(A)
+	eigs = eigvals(A)
+	if any(real(eigs) .< 0)
+		return false
+	else
+		return true
+	end
+end
 
 # struct NotImplemented <: Exception
 # 	fun::Symbol

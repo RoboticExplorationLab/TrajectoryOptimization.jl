@@ -31,10 +31,6 @@
     umax = +@SVector rand(m)
     bnd = BoundConstraint(n,m, x_min=xmin, x_max=xmax, u_min=umin, u_max=umax)
 
-    # Dynamics Constraint
-    dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
-    dyn = TO.DynamicsConstraint(dmodel)
-
     #--- Create a List
     cons = ConstraintList(n,m,N)
     add_constraint!(cons, cir, 1:N)
@@ -64,30 +60,17 @@
     @test length(cons) == 4
     @test length(cons2) == 3
 
-    add_constraint!(cons, dyn, 1:N-1, 2)
-    @test cons[2] == dyn
-    @test collect(zip(cons))[2] == (1:N-1, dyn)
-    @test cons.p[1] == RD.output_dim(cir) + RD.output_dim(bnd) + RD.output_dim(lin) + n
-    @test length(cons) == 5
-
-    @test TO.has_dynamics_constraint(cons) == true
-    @test TO.has_dynamics_constraint(cons2) == false
     @test TO.num_constraints(cons) === cons.p
     @test TO.num_constraints(cons2) !== cons.p
     @test cons[end] == bnd
-    sort!(cons)
-    @test cons[end] == dyn
-    @test cons[end-1] == bnd
-    @test cons[1] == lin
-    @test length(cons) == 5
+    @test length(cons) == 4
 
     # Try adding a constraint with incorrect dimensions
     lin2 = LinearConstraint(2, 1, rand(3,2), rand(3), Inequality(), 1:2)
     @test_throws AssertionError add_constraint!(cons, lin2, 1:4)
-    @test_throws AssertionError add_constraint!(cons2, dyn, 1:N+1)
 
     # Test iteration
-    conlist = [lin, cir, goal, bnd, dyn]
+    conlist = [lin, cir, goal, bnd]
     @test all(conlist .=== [con for con in cons])
     @test RD.output_dim.(cons) == RD.output_dim.(conlist)
     @test eltype(cons) == TO.AbstractConstraint
