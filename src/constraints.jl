@@ -1,6 +1,5 @@
 import RobotDynamics: state_dim, control_dim
 
-Base.copy(con::AbstractConstraint) = con
 
 ############################################################################################
 #                              GOAL CONSTRAINTS 										   #
