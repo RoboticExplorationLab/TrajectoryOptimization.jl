@@ -1,3 +1,19 @@
+import Base.:+
+
+############################################################################################
+#                              COST FUNCTION                                               #
+############################################################################################
+
+"""
+Abstract type that represents a scalar-valued function that accepts a state and control
+at a single knot point.
+"""
+abstract type CostFunction <: RobotDynamics.ScalarFunction end
+
+
+############################################################################################
+#                              QUADRATIC COST FUNCTIONS 
+############################################################################################
 """
 An abstract type that represents any [`CostFunction`](@ref) of the form
 ```math

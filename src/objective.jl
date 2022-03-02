@@ -1,3 +1,4 @@
+
 ############################################################################################
 #                              OBJECTIVES                                                  #
 ############################################################################################
@@ -71,6 +72,33 @@ end
 function Objective(cost::Vector{<:CostFunction}, cost_terminal::CostFunction; kwargs...) 
     N = length(cost) + 1
     Objective([cost...,cost_terminal]; kwargs...)
+end
+
+"""
+	cost(obj::Objective, Z::SampledTrajectory)
+	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::SampledTrajectory)
+
+Evaluate the cost for a trajectory. If a dynamics constraint is given,
+    use the appropriate integration rule, if defined.
+"""
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,<:AbstractFloat})
+    cost!(obj, Z)
+    J = get_J(obj)
+    return sum(J)
+end
+
+# ForwardDiff-able method
+function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,T}) where T
+    J = zero(T)
+    for k = 1:length(obj)
+        J += RD.evaluate(obj[k], Z[k])
+    end
+    return J
+end
+
+"Evaluate the cost for a trajectory (non-allocating)"
+@inline function cost!(obj::Objective, Z::SampledTrajectory)
+    map!(RD.evaluate, obj.J, obj.cost, Z.data)
 end
 
 # Methods
