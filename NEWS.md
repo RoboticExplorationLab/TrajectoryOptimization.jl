@@ -1,4 +1,12 @@
 # New `v0.6`
+
+## v`0.6.2`
+Treats equality constraints as cones. 
+Fixes deprecation warnings and small API changes from RobotDynamics v`0.4.3`, including:
+- Replacing `Traj` with `SampledTrajectory`
+- Using `RobotDynamics.dims` instead of `Base.size`
+- Using `RobotDynamics.errstate_jacobian!` instead of `RobotDynamics.state_diff_jacobian!`
+
 ## Updated to new RobotDynamics `v0.4` API
 Allows for both inplace and out-of-place dynamics, cost, and constraint evaluations.
 Jacobians can be calculated using finite differences, forward AD, or user-specified.
