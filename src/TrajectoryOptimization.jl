@@ -83,6 +83,4 @@ include("problem.jl")
 
 include("utils.jl")
 
-import Base.length
-@deprecate length(con::AbstractConstraint) RobotDynamics.output_dim(con)
 end

@@ -54,19 +54,7 @@ abstract type ControlConstraint <: StageConstraint end
 "Get constraint sense (Inequality vs Equality)"
 sense(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:sense, Symbol(C)))
 
-# "Dimension of the state vector"
-# RobotDynamics.state_dim(::C) where {C<:StateConstraint} =
-#     throw(NotImplemented(:state_dim, Symbol(C)))
-
-# "Dimension of the control vector"
-# RobotDynamics.control_dim(::C) where {C<:ControlConstraint} =
-#     throw(NotImplemented(:control_dim, Symbol(C)))
-
-# "Return the constraint value"
-# evaluate(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:evaluate, Symbol(C)))
-
-# "Length of constraint vector (deprecated for RD.output_dim)"
-# RD.output_dim(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:output_dim, Symbol(C)))
+Base.copy(con::AbstractConstraint) = con
 
 "Upper bound of the constraint, as a vector, which is 0 for all constraints
 (except bound constraints)"
