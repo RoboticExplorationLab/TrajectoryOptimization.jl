@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         version:
-          - '1.5'
+          - '1.6'
         os:
           - ubuntu-latest
           - macOS-latest
@@ -25,6 +25,8 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
+      - name: Install Dependencies
+        run: julia --project=. -e 'using Pkg; pkg"""add RobotDynamics#master"""; Pkg.instantiate()'
       - uses: julia-actions/julia-runtest@latest
       - uses: julia-actions/julia-uploadcodecov@latest
         env:
