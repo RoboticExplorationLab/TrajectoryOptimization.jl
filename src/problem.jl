@@ -31,7 +31,7 @@ Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be t
 At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
 """
 struct Problem{T<:AbstractFloat}
-    model::DiscreteDynamics
+    model::Vector{<:DiscreteDynamics}
     obj::AbstractObjective
     constraints::ConstraintList
     x0::MVector
@@ -40,32 +40,42 @@ struct Problem{T<:AbstractFloat}
     N::Int
     t0::T
     tf::T
-    function Problem(model::DiscreteDynamics, obj::AbstractObjective,
+    function Problem(models::Vector{<:DiscreteDynamics}, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
             Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
-        n,m = RD.dims(model)
-        @assert length(x0) == length(xf) == n
+        nx = map(RD.state_dim, models)
+        nu = map(RD.control_dim, models)
+        @assert length(x0) == nx[1]
+        @assert length(xf) == nx[end]
         @assert length(Z) == N
+        @assert length(models) == N-1 
         @assert tf > t0
         # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
-        @assert constraints.n == n "Constraint state dimension doesn't match model"
-        @assert constraints.m == m "Constraint control dimension doesn't match model"
+        @assert constraints.n == nx[1] "Constraint state dimension doesn't match model"
+        @assert constraints.m == nu[1] "Constraint control dimension doesn't match model"
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         # TODO: validate trajectory size
-        new{T}(model, obj, constraints, x0, xf, Z, N, t0, tf)
+        new{T}(models, obj, constraints, x0, xf, Z, N, t0, tf)
     end
 end
 
-function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
-        xf::AbstractVector = fill(NaN, state_dim(model)),
-        constraints=ConstraintList(state_dim(model), control_dim(model), length(obj)),
+function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector, tf::Real;
+        xf::AbstractVector = fill(NaN, state_dim(models[1])),
+        constraints=ConstraintList(state_dim(models[1]), control_dim(models[1]), length(obj)),
         t0=zero(tf),
         X0=[x0*NaN for k = 1:length(obj)],
-        U0=[@SVector zeros(control_dim(model)) for k = 1:length(obj)-1],
+        U0=[@SVector zeros(control_dim(model)) for model in models],
         dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
-    n,m = dims(model)
+
+    # Check control dimensions
+    nx = map(RD.state_dim, models)
+    nu = map(RD.control_dim, models)
+    same_state_dimension = all(x->x == nx[1], nx)
+    same_control_dimension = all(x->x == nu[1], nu)
+    Nx = same_state_dimension ? nx[1] : Any
+    Nu = same_control_dimension ? nu[1] : Any
     N = length(obj)
     if dt isa Real
         dt = fill(dt,N)
@@ -77,10 +87,16 @@ function Problem(model::DiscreteDynamics, obj::O, x0::AbstractVector, tf::Real;
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    Z = SampledTrajectory{n,m}(X0,U0,dt=dt)
+    Z = SampledTrajectory{Nx,Nu}(X0,U0,dt=dt)
 
-    Problem(model, obj, constraints, SVector{n}(x0), SVector{n}(xf),
+    Problem(models, obj, constraints, MVector{nx[1]}(x0), MVector{nx[end]}(xf),
         Z, N, t0, tf)
+end
+
+function Problem(model::DiscreteDynamics, obj::Objective, args...; kwargs...)
+    N = length(obj)
+    models = [copy(model) for k = 1:N-1]
+    Problem(models, obj, args...; kwargs...)
 end
 
 function Problem(model::AbstractModel, args...; 
