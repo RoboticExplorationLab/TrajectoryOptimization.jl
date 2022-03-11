@@ -15,37 +15,52 @@ iteration of both the constraints and the indices of the knot points at which th
 via `zip(cons::ConstraintList)`.
 
 Constraints are added via the [`add_constraint!`](@ref) method, which verifies that the constraint
-dimension is consistent with the state and control dimensions of the problem.
+dimension is consistent with the state and control dimensions at the knot points at which 
+they are applied. 
 
 The total number of constraints at each knot point can be queried using the
 [`num_constraints`](@ref) method.
 
-The constraint list can also be sorted to separate `StageConstraint`s and `CoupledConstraint`s
-via the `sort!` method.
+# Constructors
 
-A constraint list can be queried if it has a `DynamicsConstraint` via
-`has_dynamics_constraint(::ConstraintList)`.
+	ConstraintList(nx, nu)
+	ConstraintList(n, m, N)
+	ConstraintList(models)
 
-# Constructor
-	ConstraintList(n::Int, m::Int, N::Int)
+Where `nx` and `nu` are `N`-dimensional vectors that specify the state and control dimension 
+at each knot point. If these are the same for the entire trajectory, the user can use the 
+2nd constructor. Alternatively, they can be constructed automatically from `models`, a 
+vector of `DiscreteDynamics` models.
 """
 struct ConstraintList <: AbstractConstraintSet
-	n::Int
-	m::Int
+	nx::Vector{Int}
+	nu::Vector{Int}
 	constraints::Vector{AbstractConstraint}
 	inds::Vector{UnitRange{Int}}
 	sigs::Vector{FunctionSignature}
 	diffs::Vector{DiffMethod}
 	p::Vector{Int}
-	function ConstraintList(n::Int, m::Int, N::Int)
+	function ConstraintList(nx::AbstractVector{<:Integer}, nu::AbstractVector{<:Integer})
+		N = length(nx)
 		constraints = AbstractConstraint[]
 		inds = UnitRange{Int}[]
 		p = zeros(Int,N)
 		sigs = FunctionSignature[]
 		diffs = DiffMethod[]
-		new(n, m, constraints, inds, sigs, diffs, p)
+		new(nx, nu, constraints, inds, sigs, diffs, p)
 	end
 end
+
+function ConstraintList(n::Integer, m::Integer, N::Integer)
+	nx = fill(n, N)
+	nu = fill(m, N)
+	return ConstraintList(nx, nu)
+end
+
+function ConstraintList(models::Vector{<:DiscreteDynamics})
+	ConstraintList(RD.dims(models)...)
+end
+
 
 """
 	add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange, [idx])
@@ -86,7 +101,9 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 						 idx=-1; sig::FunctionSignature=RD.default_signature(con), 
 						 diffmethod::DiffMethod=RD.default_diffmethod(con)
 )
-	@assert check_dims(con, cons.n, cons.m) "New constraint not consistent with n=$(cons.n) and m=$(cons.m)"
+	for (i,k) in enumerate(inds)
+		@assert check_dims(con, cons.nx[k], cons.nu[k]) "New constraint not consistent with n=$(cons.nx[k]) and m=$(cons.nu[k]) at time step $k."
+	end
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
 		idx = -1
@@ -129,7 +146,7 @@ Base.getindex(cons::ConstraintList, I) = cons.constraints[I]
 
 for method in (:deepcopy, :copy)
 	@eval function Base.$method(cons::ConstraintList)
-		cons2 = ConstraintList(cons.n, cons.m, length(cons.p))
+		cons2 = ConstraintList(cons.nx, cons.nu)
 		for i in eachindex(cons.constraints)
 			con_ = $(method == :deepcopy ? :(copy(cons.constraints[i])) : :(cons.constraints[i]))
 			add_constraint!(cons2, con_, copy(cons.inds[i]))
@@ -160,6 +177,8 @@ function num_constraints!(cons::ConstraintList)
 end
 
 function change_dimension(cons::ConstraintList, n::Int, m::Int, ix=1:n, iu=1:m)
+	@assert all(x->x == n, cons.nx) "change_dimension not supported when the state dimension changes along the trajectory."
+	@assert all(x->x == m, cons.nu) "change_dimension not supported when the control dimension changes along the trajectory."
 	new_list = ConstraintList(n, m, length(cons.p))
 	for (i,con) in enumerate(cons)
 		new_con = change_dimension(con, n, m, ix, iu)
