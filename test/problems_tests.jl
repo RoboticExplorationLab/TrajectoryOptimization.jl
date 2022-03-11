@@ -6,6 +6,9 @@ N = 11
 tf = 5.
 dt = tf/(N-1)
 
+# Create vector of models
+dmodels = [copy(dmodel) for k = 1:N-1]
+
 # Initial and Final conditions
 x0 = @SVector zeros(n)
 xf = @SVector [0, pi, 0, 0]
@@ -31,6 +34,20 @@ U0 = [u0 for k = 1:N-1]
 Z = SampledTrajectory(X0,U0, dt=dt) 
 
 # Inner constructor
+prob = Problem(dmodels, obj, conSet, x0, xf, Z, N, 0.0, tf)
+@test prob.x0 == x0
+@test prob.xf == xf
+@test prob.constraints === conSet
+add_constraint!(conSet, goal, N-1)
+@test length(TO.get_constraints(prob)) == length(conSet)
+@test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
+@test prob.obj === obj
+@test prob.tf ≈ tf
+@test prob.N == N
+@test states(prob) ≈ X0
+@test controls(prob) ≈ U0
+
+# Try passing a single model
 prob = Problem(dmodel, obj, conSet, x0, xf, Z, N, 0.0, tf)
 @test prob.x0 == x0
 @test prob.xf == xf
@@ -60,7 +77,7 @@ add_constraint!(conSet, goal, N-1)
 
 # Change integration
 prob = Problem(model, obj, x0, tf, xf=xf, constraints=conSet, integration=RD.Euler(model))
-@test RD.integration(prob.model) isa RD.Euler
+@test RD.integration(prob.model[1]) isa RD.Euler
 
 # Test defaults
 prob = Problem(model, obj, x0, tf)
@@ -159,3 +176,10 @@ TO.set_goal_state!(prob, xf_new)
 @test obj[1].q ≈ -Q*xf_new
 @test obj[end].q ≈ -Qf*xf_new
 @test conSet[2].xf ≈ xf_new
+
+## Specify a vector of models
+prob = Problem(dmodels, obj, x0, tf, xf=xf, constraints=copy(conSet))
+@test prob.model === dmodels
+
+dmodels2 = [copy(dmodel) for k = 1:N]
+@test_throws AssertionError Problem(dmodels2, obj, x0, tf, xf=xf, constraints=copy(conSet))
