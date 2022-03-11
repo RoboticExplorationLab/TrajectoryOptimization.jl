@@ -44,8 +44,7 @@ struct Problem{T<:AbstractFloat}
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
             Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
-        nx = map(RD.state_dim, models)
-        nu = map(RD.control_dim, models)
+        nx,nu = RD.dims(models)
         @assert length(x0) == nx[1]
         @assert length(xf) == nx[end]
         @assert length(Z) == N
@@ -53,8 +52,8 @@ struct Problem{T<:AbstractFloat}
         @assert tf > t0
         # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
-        @assert constraints.n == nx[1] "Constraint state dimension doesn't match model"
-        @assert constraints.m == nu[1] "Constraint control dimension doesn't match model"
+        @assert constraints.nx == nx "Constraint state dimensions don't match model"
+        @assert constraints.nu == nu "Constraint control dimensions don't match model"
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         # TODO: validate trajectory size
         new{T}(models, obj, constraints, x0, xf, Z, N, t0, tf)
@@ -63,7 +62,7 @@ end
 
 function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector, tf::Real;
         xf::AbstractVector = fill(NaN, state_dim(models[1])),
-        constraints=ConstraintList(state_dim(models[1]), control_dim(models[1]), length(obj)),
+        constraints=ConstraintList(models),
         t0=zero(tf),
         X0=[x0*NaN for k = 1:length(obj)],
         U0=[@SVector zeros(control_dim(model)) for model in models],
