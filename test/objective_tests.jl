@@ -19,8 +19,8 @@ using TrajectoryOptimization: state, control
         qcost = QuadraticCost(Q, R, H, q, r, c)
         obj = Objective(qcost, N)
         @test length(obj) == N
-        @test state_dim(obj) == n
-        @test control_dim(obj) == m
+        @test state_dim(obj,1) == n
+        @test control_dim(obj,1) == m
         @test TO.get_J(obj) === obj.J
         @test obj[end].terminal == false
 
