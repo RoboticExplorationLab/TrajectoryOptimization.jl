@@ -31,4 +31,5 @@ end
 
 @testset "Problems" begin
     include("problems_tests.jl")
+    include("hybrid_dynamics_model.jl")
 end

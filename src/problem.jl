@@ -52,8 +52,12 @@ struct Problem{T<:AbstractFloat}
         @assert tf > t0
         # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
-        @assert constraints.nx == nx "Constraint state dimensions don't match model"
-        @assert constraints.nu == nu "Constraint control dimensions don't match model"
+        constraints.nx == nx || throw(DimensionMismatch("Constraint state dimensions don't match model"))
+        constraints.nu == nu || throw(DimensionMismatch("Constraint control dimensions don't match model"))
+        nx_obj = map(RD.state_dim, obj)
+        nu_obj = map(RD.control_dim, obj)
+        nx_obj == nx || throw(DimensionMismatch("Objective state dimensions don't match model."))
+        nu_obj == nu || throw(DimensionMismatch("Objective control dimensions don't match model."))
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         # TODO: validate trajectory size
         new{T}(models, obj, constraints, x0, xf, Z, N, t0, tf)
@@ -61,16 +65,15 @@ struct Problem{T<:AbstractFloat}
 end
 
 function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector, tf::Real;
-        xf::AbstractVector = fill(NaN, state_dim(models[1])),
+        xf::AbstractVector = fill(NaN, state_dim(models[end])),
         constraints=ConstraintList(models),
         t0=zero(tf),
-        X0=[x0*NaN for k = 1:length(obj)],
-        U0=[@SVector zeros(control_dim(model)) for model in models],
+        X0=[fill(NaN, n) for n in RD.dims(models)[1]],
+        U0=[fill(0.0, RD.control_dim(model)) for model in models],
         dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
 
     # Check control dimensions
-    nx = map(RD.state_dim, models)
-    nu = map(RD.control_dim, models)
+    nx,nu = RD.dims(models)
     same_state_dimension = all(x->x == nx[1], nx)
     same_control_dimension = all(x->x == nu[1], nu)
     Nx = same_state_dimension ? nx[1] : Any

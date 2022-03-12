@@ -22,8 +22,8 @@ function RD.dims(models::Vector{<:DiscreteDynamics})
         nx_next = nx[k+1]
         if nx_next != ny 
             throw(DimensionMismatch(
-                "Model mismatch at time step $k.
-                 Model $k has an output dimension of $ny but model $(k+1) has a state dimension of $nx_next.")
+                "Model mismatch at time step $k. " *
+                "Model $k has an output dimension of $ny but model $(k+1) has a state dimension of $nx_next.")
             )
         end
     end

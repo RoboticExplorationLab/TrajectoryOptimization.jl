@@ -102,7 +102,9 @@ function add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::Un
 						 diffmethod::DiffMethod=RD.default_diffmethod(con)
 )
 	for (i,k) in enumerate(inds)
-		@assert check_dims(con, cons.nx[k], cons.nu[k]) "New constraint not consistent with n=$(cons.nx[k]) and m=$(cons.nu[k]) at time step $k."
+		if !check_dims(con, cons.nx[k], cons.nu[k])
+			throw(DimensionMismatch("New constraint not consistent with n=$(cons.nx[k]) and m=$(cons.nu[k]) at time step $k."))
+		end
 	end
 	@assert inds[end] <= length(cons.p) "Invalid inds, inds[end] must be less than number of knotpoints, $(length(cons.p))"
 	if isempty(cons)
