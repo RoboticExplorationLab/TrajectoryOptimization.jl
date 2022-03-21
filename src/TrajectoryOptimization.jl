@@ -79,6 +79,8 @@ include("abstract_constraint.jl")
 include("constraints.jl")
 include("constraint_list.jl")
 
+include("dynamics.jl")
+
 include("problem.jl")
 
 include("utils.jl")

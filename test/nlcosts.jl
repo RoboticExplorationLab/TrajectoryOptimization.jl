@@ -1,4 +1,4 @@
-import TrajectoryOptimization: stage_cost, CostFunction, Expansion
+import TrajectoryOptimization: stage_cost, CostFunction
 
 ##
 RD.@autodiff struct CartpoleCost{T} <: TO.CostFunction 

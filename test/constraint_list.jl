@@ -67,7 +67,7 @@
 
     # Try adding a constraint with incorrect dimensions
     lin2 = LinearConstraint(2, 1, rand(3,2), rand(3), Inequality(), 1:2)
-    @test_throws AssertionError add_constraint!(cons, lin2, 1:4)
+    @test_throws DimensionMismatch add_constraint!(cons, lin2, 1:4)
 
     # Test iteration
     conlist = [lin, cir, goal, bnd]

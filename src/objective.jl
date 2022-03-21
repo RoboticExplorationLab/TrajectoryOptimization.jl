@@ -42,10 +42,15 @@ struct Objective{C} <: AbstractObjective
     end
 end
 
-state_dim(obj::Objective) = state_dim(obj.cost[1])
-control_dim(obj::Objective) = control_dim(obj.cost[1])
-Base.size(obj::Objective) = (state_dim(obj), control_dim(obj))
+state_dim(obj::Objective, k::Integer) = state_dim(obj.cost[k])
+control_dim(obj::Objective, k::Integer) = control_dim(obj.cost[k])
+# Base.size(obj::Objective) = (state_dim(obj), control_dim(obj))
 @inline ExpansionCache(obj::Objective) = ExpansionCache(obj[1])
+
+import Base.size
+@deprecate size(obj::Objective) RobotDynamics.dims(obj)
+@deprecate state_dim(obj::Objective) state_dim(obj[1]) 
+@deprecate control_dim(obj::Objective) control_dim(obj, 1)
 
 """
     is_quadratic(obj::Objective)
