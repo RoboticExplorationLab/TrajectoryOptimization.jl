@@ -107,8 +107,11 @@ function Problem(model::AbstractModel, args...;
 end
 
 "$(TYPEDSIGNATURES)
-Get number of states, controls, and knot points"
-RD.dims(prob::Problem) = state_dim(prob.model[1]), control_dim(prob.model[1]), prob.N
+Get number of states, controls, and knot points."
+RD.dims(prob::Problem) = RD.dims(prob.model), N 
+
+RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
+RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
 
 import Base.size
 @deprecate size(prob::Problem) dims(prob) 
@@ -290,7 +293,6 @@ If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
 function add_dynamics_constraints!(prob::Problem, idx=-1; 
         diffmethod=ForwardAD(), sig=StaticReturn())
-	n,m = dims(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
@@ -298,6 +300,7 @@ function add_dynamics_constraints!(prob::Problem, idx=-1;
     add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, sig=sig, diffmethod=diffmethod) # add it at the end
 
     # Initial condition
+    n = RD.state_dim(prob, N)
     init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
     add_constraint!(conSet, init_con, 1, 1)  # add it at the top
 
