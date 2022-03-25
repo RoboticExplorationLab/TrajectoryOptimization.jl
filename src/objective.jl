@@ -5,8 +5,8 @@
 
 abstract type AbstractObjective end
 Base.length(obj::AbstractObjective) = length(obj.cost)
-state_dim(obj::AbstractObjective) = throw(ErrorException("state_dim not implemented"))
-control_dim(obj::AbstractObjective) = throw(ErrorException("control_dim not implemented"))
+state_dim(obj::AbstractObjective, k::Integer) = throw(ErrorException("state_dim not implemented"))
+control_dim(obj::AbstractObjective, k::Integer) = throw(ErrorException("control_dim not implemented"))
 get_J(obj::AbstractObjective) = throw(ErrorException("get_J not implemented"))
 
 
@@ -44,6 +44,7 @@ end
 
 state_dim(obj::Objective, k::Integer) = state_dim(obj.cost[k])
 control_dim(obj::Objective, k::Integer) = control_dim(obj.cost[k])
+RD.dims(obj::Objective) = state_dim.(obj.cost), control_dim.(obj.cost)
 # Base.size(obj::Objective) = (state_dim(obj), control_dim(obj))
 @inline ExpansionCache(obj::Objective) = ExpansionCache(obj[1])
 
