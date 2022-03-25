@@ -108,7 +108,7 @@ end
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points."
-RD.dims(prob::Problem) = RD.dims(prob.model), N 
+RD.dims(prob::Problem) = RD.dims(prob.model)..., prob.N 
 
 RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
 RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
