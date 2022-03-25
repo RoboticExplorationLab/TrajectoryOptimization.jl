@@ -54,8 +54,7 @@ struct Problem{T<:AbstractFloat}
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         constraints.nx == nx || throw(DimensionMismatch("Constraint state dimensions don't match model"))
         constraints.nu == nu || throw(DimensionMismatch("Constraint control dimensions don't match model"))
-        nx_obj = map(RD.state_dim, obj)
-        nu_obj = map(RD.control_dim, obj)
+        nx_obj, nu_obj = RD.dims(obj)
         nx_obj == nx || throw(DimensionMismatch("Objective state dimensions don't match model."))
         nu_obj == nu || throw(DimensionMismatch("Objective control dimensions don't match model."))
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
@@ -109,7 +108,7 @@ end
 
 "$(TYPEDSIGNATURES)
 Get number of states, controls, and knot points"
-RD.dims(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
+RD.dims(prob::Problem) = state_dim(prob.model[1]), control_dim(prob.model[1]), prob.N
 
 import Base.size
 @deprecate size(prob::Problem) dims(prob) 
@@ -267,6 +266,14 @@ If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0
 @inline rollout!(prob::Problem) = rollout!(StaticReturn(), prob)
 @inline rollout!(sig::FunctionSignature, prob::Problem) = 
     rollout!(sig, get_model(prob), get_trajectory(prob), get_initial_state(prob))
+
+function rollout!(sig::FunctionSignature, models::Vector{<:DiscreteDynamics}, 
+                  Z::RD.AbstractTrajectory, x0)
+    RD.setstate!(Z[1], x0)
+    for k = 2:length(Z)
+        RobotDynamics.propagate_dynamics!(sig, models[k-1], Z[k], Z[k-1])
+    end
+end
 
 function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
     x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
