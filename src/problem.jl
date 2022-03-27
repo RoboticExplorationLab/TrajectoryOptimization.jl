@@ -248,18 +248,6 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 
 
 """
-    change_integration(prob::Problem, Q<:QuadratureRule)
-
-Change dynamics integration for the problem. Returns a new problem.
-"""
-change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
-    Problem{Q}(prob)
-
-function Problem{Q}(p::Problem) where Q
-    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.t0, p.tf)
-end
-
-"""
 	rollout!(::Problem)
 
 Simulate the dynamics forward from the initial condition `x0` using the controls in the
