@@ -179,8 +179,8 @@ function num_constraints!(cons::ConstraintList)
 end
 
 function change_dimension(cons::ConstraintList, n::Int, m::Int, ix=1:n, iu=1:m)
-	@assert all(x->x == n, cons.nx) "change_dimension not supported when the state dimension changes along the trajectory."
-	@assert all(x->x == m, cons.nu) "change_dimension not supported when the control dimension changes along the trajectory."
+	@assert all(x->x == cons.nx[1], cons.nx) "change_dimension not supported when the state dimension changes along the trajectory."
+	@assert all(x->x == cons.nu[1], cons.nu) "change_dimension not supported when the control dimension changes along the trajectory."
 	new_list = ConstraintList(n, m, length(cons.p))
 	for (i,con) in enumerate(cons)
 		new_con = change_dimension(con, n, m, ix, iu)
