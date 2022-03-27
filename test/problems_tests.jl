@@ -183,3 +183,22 @@ prob = Problem(dmodels, obj, x0, tf, xf=xf, constraints=copy(conSet))
 
 dmodels2 = [copy(dmodel) for k = 1:N]
 @test_throws AssertionError Problem(dmodels2, obj, x0, tf, xf=xf, constraints=copy(conSet))
+
+## Check dims
+nx,nu,N = RD.dims(prob)
+@test nx == fill(n,N)
+@test nu == fill(m,N)
+
+@test RD.state_dim(prob,1) == n
+@test RD.control_dim(prob,1) == m
+
+## Misc
+@test TO.is_constrained(prob) == false
+@test isnan(cost(prob))
+rollout!(prob)
+@test !isnan(cost(prob))
+@test TO.get_model(prob) isa Vector{<:RD.DiscreteDynamics}
+
+@test TO.set_initial_time!(prob, 1.0) == 1.0 + tf
+@test prob.Z[1].t == 1.0
+@test prob.Z[end].t == 1.0 + tf
