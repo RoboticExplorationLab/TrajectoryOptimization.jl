@@ -54,8 +54,7 @@ struct Problem{T<:AbstractFloat}
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         constraints.nx == nx || throw(DimensionMismatch("Constraint state dimensions don't match model"))
         constraints.nu == nu || throw(DimensionMismatch("Constraint control dimensions don't match model"))
-        nx_obj = map(RD.state_dim, obj)
-        nu_obj = map(RD.control_dim, obj)
+        nx_obj, nu_obj = RD.dims(obj)
         nx_obj == nx || throw(DimensionMismatch("Objective state dimensions don't match model."))
         nu_obj == nu || throw(DimensionMismatch("Objective control dimensions don't match model."))
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
@@ -82,7 +81,7 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
     if dt isa Real
         dt = fill(dt,N)
     end
-	@assert sum(dt[1:N-1]) ≈ tf "Time steps are inconsistent with final time"
+	@assert sum(dt[1:N-1]) ≈ tf - t0 "Time steps are inconsistent with final time"
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
@@ -90,6 +89,7 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
     Z = SampledTrajectory{Nx,Nu}(X0,U0,dt=dt)
+    RD.setinitialtime!(Z, t0)
 
     Problem(models, obj, constraints, MVector{nx[1]}(x0), MVector{nx[end]}(xf),
         Z, N, t0, tf)
@@ -108,8 +108,11 @@ function Problem(model::AbstractModel, args...;
 end
 
 "$(TYPEDSIGNATURES)
-Get number of states, controls, and knot points"
-RD.dims(prob::Problem) = state_dim(prob.model), control_dim(prob.model), prob.N
+Get number of states, controls, and knot points."
+RD.dims(prob::Problem) = RD.dims(prob.model)..., prob.N 
+
+RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
+RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
 
 import Base.size
 @deprecate size(prob::Problem) dims(prob) 
@@ -246,18 +249,6 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 
 
 """
-    change_integration(prob::Problem, Q<:QuadratureRule)
-
-Change dynamics integration for the problem. Returns a new problem.
-"""
-change_integration(prob::Problem, ::Type{Q}) where Q<:QuadratureRule =
-    Problem{Q}(prob)
-
-function Problem{Q}(p::Problem) where Q
-    Problem{Q}(p.model, p.obj, p.constraints, p.x0, p.xf, p.Z, p.N, p.t0, p.tf)
-end
-
-"""
 	rollout!(::Problem)
 
 Simulate the dynamics forward from the initial condition `x0` using the controls in the
@@ -267,6 +258,14 @@ If a problem is passed in, `Z = prob.Z`, `model = prob.model`, and `x0 = prob.x0
 @inline rollout!(prob::Problem) = rollout!(StaticReturn(), prob)
 @inline rollout!(sig::FunctionSignature, prob::Problem) = 
     rollout!(sig, get_model(prob), get_trajectory(prob), get_initial_state(prob))
+
+function rollout!(sig::FunctionSignature, models::Vector{<:DiscreteDynamics}, 
+                  Z::RD.AbstractTrajectory, x0)
+    RD.setstate!(Z[1], x0)
+    for k = 2:length(Z)
+        RobotDynamics.propagate_dynamics!(sig, models[k-1], Z[k], Z[k-1])
+    end
+end
 
 function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
     x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
@@ -283,7 +282,6 @@ If `idx == -1`, it will be added at the end of the `ConstraintList`.
 """
 function add_dynamics_constraints!(prob::Problem, idx=-1; 
         diffmethod=ForwardAD(), sig=StaticReturn())
-	n,m = dims(prob)
     conSet = prob.constraints
 
     # Implicit dynamics
@@ -291,6 +289,7 @@ function add_dynamics_constraints!(prob::Problem, idx=-1;
     add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, sig=sig, diffmethod=diffmethod) # add it at the end
 
     # Initial condition
+    n = RD.state_dim(prob, N)
     init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
     add_constraint!(conSet, init_con, 1, 1)  # add it at the top
 

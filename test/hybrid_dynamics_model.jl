@@ -27,6 +27,8 @@ function RD.dynamics(::Model1, x, u)
     return SA[x[3], x[4], u[1], u[2]]
 end
 
+RD.dynamics!(model::Model1, y, x, u) = y .= RD.dynamics(model, x, u)
+
 function RD.dynamics(::JumpMap, x, u)
     return SA[(x[3] + x[4])/2, (u[1] + u[2])/2]
 end
@@ -45,9 +47,15 @@ models = [
     jumpmap
     [copy(model2) for k = 1:4];
 ]
+@test eltype(models) isa UnionAll 
+models2 = [copy(model1) for k = 1:10]
 nx, nu = RD.dims(models)
 @test nx == [4,4,4,4,4, 4, 2,2,2,2,2]
 @test nu == [2,2,2,2,2, 2, 1,1,1,1,1]
+
+x,u = rand(models[1])
+xn = zeros(4)
+RD.discrete_dynamics!(models[1], xn, x, u, 0.0, 0.1)
 
 # Test bad model vector (no jump map)
 models_bad = [
