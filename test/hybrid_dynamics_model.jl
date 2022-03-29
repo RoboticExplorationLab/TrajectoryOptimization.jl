@@ -47,7 +47,7 @@ models = [
     jumpmap
     [copy(model2) for k = 1:4];
 ]
-eltype(models) isa UnionAll 
+@test eltype(models) isa UnionAll 
 models2 = [copy(model1) for k = 1:10]
 nx, nu = RD.dims(models)
 @test nx == [4,4,4,4,4, 4, 2,2,2,2,2]

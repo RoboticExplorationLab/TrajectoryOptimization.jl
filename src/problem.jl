@@ -81,7 +81,7 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
     if dt isa Real
         dt = fill(dt,N)
     end
-	@assert sum(dt[1:N-1]) ≈ tf "Time steps are inconsistent with final time"
+	@assert sum(dt[1:N-1]) ≈ tf - t0 "Time steps are inconsistent with final time"
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
@@ -89,6 +89,7 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
     Z = SampledTrajectory{Nx,Nu}(X0,U0,dt=dt)
+    RD.setinitialtime!(Z, t0)
 
     Problem(models, obj, constraints, MVector{nx[1]}(x0), MVector{nx[end]}(xf),
         Z, N, t0, tf)
