@@ -91,6 +91,9 @@ using TrajectoryOptimization: state, control
         @test obj[2].r ≈ zero(r)
         @test obj[2].c ≈ 0.5 * xf'Q * xf
         @test obj[end].c ≈ 0.5 * xf'Qf * xf
+        @test obj[end].q ≈ -Qf * xf
+        @test obj[end].Q ≈ Qf
+        @test obj[end].R ≈ R
 
         obj = LQRObjective(Matrix(Q), R, Qf, xf, N)
         @test eltype(obj) <: QuadraticCost{n,m,Float64,<:SizedMatrix,<:Diagonal}
@@ -99,6 +102,9 @@ using TrajectoryOptimization: state, control
         @test obj[2].r ≈ zero(r)
         @test obj[2].c ≈ 0.5 * xf'Q * xf
         @test obj[end].c ≈ 0.5 * xf'Qf * xf
+        @test obj[end].q ≈ -Qf * xf
+        @test obj[end].Q ≈ Qf
+        @test obj[end].R ≈ R
 
         obj = LQRObjective(Q.diag, R.diag, Qf, xf, N)
         @test eltype(obj) <: DiagonalCost{n,m}
@@ -107,6 +113,9 @@ using TrajectoryOptimization: state, control
         @test obj[2].r ≈ zero(r)
         @test obj[2].c ≈ 0.5 * xf'Q * xf
         @test obj[end].c ≈ 0.5 * xf'Qf * xf
+        @test obj[end].q ≈ -Qf * xf
+        @test obj[end].Q ≈ Qf
+        @test obj[end].R ≈ R
 
         obj = LQRObjective(Diagonal(Vector(Q.diag)), R.diag, Vector(Qf.diag), xf, N)
         @test eltype(obj) <: DiagonalCost{n,m}
