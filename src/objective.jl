@@ -190,10 +190,13 @@ end
 Generate a quadratic objective that tracks the reference trajectory specified by `Z`.
 """
 function TrackingObjective(Q,R,Z::SampledTrajectory; Qf=Q)
-    costs = map(Z) do z
-        LQRCost(Q, R, state(z), control(z))
+    costs = map(eachindex(Z)) do k
+        if k < length(Z)
+            LQRCost(Q, R, state(Z[k]), control(Z[k]))
+        else
+            LQRCost(Qf, R, state(Z[k]))
+        end
     end
-    costs[end] = LQRCost(Qf, R, state(Z[end]))
     Objective(costs)
 end
 
