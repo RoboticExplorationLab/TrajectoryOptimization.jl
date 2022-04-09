@@ -6,11 +6,8 @@ using LinearAlgebra
 using DocStringExtensions
 using ForwardDiff
 using FiniteDiff
-using UnsafeArrays
 using SparseArrays
-using MathOptInterface
 using Rotations
-const MOI = MathOptInterface
 
 import RobotDynamics
 const RD = RobotDynamics
