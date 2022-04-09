@@ -27,9 +27,10 @@ Taylor series expansions of the cost at each iteration.
 In TrajectoryOptimization.jl we differentiate between the entire objective and the cost functions at each time step. We use `Objective` to describe the function that is being minimized, which typically consists of a sum of cost functions, with potentially some additional terms (as is the case with augmented Lagrangian objectives). Describing the Objective as a sum of individual functions allows the solvers to more efficiently compute the gradient and Hessian of the entire cost, which is block-diagonal given the Markovianity of the problem.
 
 ## Cost functions
-While TrajectoryOptimization allows for general nonlinear cost function in principle, currently
-only quadratic cost functions are implemented (implementing nonlinear cost functions is a
-great way to contribute!). All cost functions inherit from the general `CostFunction` type.
+TrajectoryOptimization.jl currently provide a few useful cost functions.
+For generic nonlinear cost functions, users are encouraged to define their 
+own.
+All cost functions inherit from the general `CostFunction` type.
 
 Since quadratic costs are the most standard cost function they excellent place to start.
 Let's assume we are creating an LQR tracking cost of the form
@@ -79,7 +80,7 @@ obj = Objective(costfun, costfun_term, N)
 ```
 
 There's also a convenient constructor that skips all the previous steps and builds
-the objective directly, see[`LQRObjective`](@ref)
+the objective directly, see [`LQRObjective`](@ref).
 ```julia
 obj = LQRObjective(Q, R, Qf, xf, N)
 ```

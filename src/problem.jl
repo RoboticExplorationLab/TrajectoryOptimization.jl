@@ -167,8 +167,19 @@ Get the times for all the knot points in the problem.
 """
 @inline RobotDynamics.gettimes(prob::Problem) = gettimes(get_trajectory(prob))
 
-getinitialtime(prob::Problem) = RD.time(get_trajectory(prob)[1])
-getfinaltime(prob::Problem) = RD.time(get_trajectory(prob)[end])
+"""
+    get_initial_time(problem)
+    
+Get the initial time of the trajectory.
+"""
+get_initial_time(prob::Problem) = RD.time(get_trajectory(prob)[1])
+
+"""
+    get_final_time(problem)
+
+Get the final time of the trajectory.
+"""
+get_final_time(prob::Problem) = RD.time(get_trajectory(prob)[end])
 
 "Get problem constraints. Returns [`ConstraintList`](@ref)."
 @inline get_constraints(prob::Problem) = prob.constraints
@@ -202,6 +213,8 @@ Get the dynamics model at time step `k`.
 "Get the in initial state. Returns an `AbstractVector`."
 @inline get_initial_state(prob::Problem) = prob.x0
 
+"Get the in initial state. Returns an `AbstractVector`."
+@inline get_final_state(prob::Problem) = prob.xf
 
 #############################################
 # Setters
@@ -224,6 +237,15 @@ end
 Copy the state trajectory
 """
 @inline initial_states!(prob, X0) = RobotDynamics.setstates!(get_trajectory(prob), X0)
+
+"""
+	initial_controls!(::Problem, U0::Vector{<:AbstractVector})
+	initial_controls!(::Problem, U0::AbstractMatrx)
+
+Copy the control trajectory
+"""
+@inline initial_controls!(prob, U0) = RobotDynamics.setcontrols!(get_trajectory(prob), U0)
+
 
 
 """
@@ -272,14 +294,6 @@ function set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, cons
     copyto!(prob.xf, xf)
     return nothing
 end
-
-"""
-	initial_controls!(::Problem, U0::Vector{<:AbstractVector})
-	initial_controls!(::Problem, U0::AbstractMatrx)
-
-Copy the control trajectory
-"""
-@inline initial_controls!(prob, U0) = RobotDynamics.setcontrols!(get_trajectory(prob), U0)
 
 #############################################
 # Other Methods

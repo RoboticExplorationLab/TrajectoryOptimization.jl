@@ -41,7 +41,7 @@ Base.copy(con::GoalConstraint) = GoalConstraint(copy(con.xf), con.inds)
 
 @inline sense(::GoalConstraint) = Equality()
 @inline RD.output_dim(con::GoalConstraint{P}) where P = P
-RD.functioninputs(::GoalConstraint) = RD.StateOnly()
+# RD.functioninputs(::GoalConstraint) = RD.StateOnly()
 @inline state_dim(con::GoalConstraint) = con.n
 @inline is_bound(::GoalConstraint) = true
 function primal_bounds!(zL,zU,con::GoalConstraint)
@@ -185,7 +185,7 @@ function CircleConstraint(n::Int, xc::AbstractVector, yc::AbstractVector, radius
     CircleConstraint{P,T}(n, xc, yc, radius, xi, yi)
 end
 state_dim(con::CircleConstraint) = con.n
-RD.functioninputs(::CircleConstraint) = RD.StateOnly()
+# RD.functioninputs(::CircleConstraint) = RD.StateOnly()
 
 function RD.evaluate(con::CircleConstraint, X::RD.DataVector)
 	xc = con.x
@@ -271,7 +271,7 @@ end
 @inline state_dim(con::SphereConstraint) = con.n
 @inline sense(::SphereConstraint) = Inequality()
 @inline RD.output_dim(::SphereConstraint{P}) where P = P
-RD.functioninputs(::SphereConstraint) = RD.StateOnly()
+# RD.functioninputs(::SphereConstraint) = RD.StateOnly()
 
 function RD.evaluate(con::SphereConstraint, x::RD.DataVector)
 	xc = con.x; xi = con.xi
@@ -344,7 +344,7 @@ end
 @inline state_dim(con::CollisionConstraint) = con.n
 @inline sense(::CollisionConstraint) = Inequality()
 @inline RD.output_dim(::CollisionConstraint) = 1
-RD.functioninputs(::CollisionConstraint) = RD.StateOnly()
+# RD.functioninputs(::CollisionConstraint) = RD.StateOnly()
 
 function RD.evaluate(con::CollisionConstraint, x::RD.DataVector)
     x1 = x[con.x1]
@@ -845,4 +845,4 @@ RD.state_dim(con::QuatVecEq) = con.n
 RD.control_dim(con::QuatVecEq) = con.m 
 RD.output_dim(con::QuatVecEq) = 3
 RD.default_diffmethod(::QuatVecEq) = ForwardAD()
-RD.functioninputs(::QuatVecEq) = RD.StateOnly()
+# RD.functioninputs(::QuatVecEq) = RD.StateOnly()
