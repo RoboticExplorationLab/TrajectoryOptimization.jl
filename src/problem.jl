@@ -10,9 +10,9 @@ Contains the full definition of a trajectory optimization problem, including:
 # Constructors:
 ```julia
 Problem(model, obj, constraints, x0, xf, Z, N, tf)
-Problem(model, obj, x0, tf; xf, constraints, N, X0, U0, dt, integration)
+Problem(model, obj, x0, tf; [xf, constraints, N, X0, U0, dt, integration])
 ```
-where `Z` is a trajectory (Vector of `KnotPoint`s)
+where `Z` is a [`RobotDynamics.SampledTrajectory`].
 
 # Arguments
 * `model`: A `DiscreteDynamics` model. If a `ContinuousDynamics` model is provided, it will
@@ -36,20 +36,26 @@ struct Problem{T<:AbstractFloat}
     constraints::ConstraintList
     x0::MVector
     xf::MVector
-    Z::SampledTrajectory
+    Z::SampledTrajectory{Nx,Nu,T,KnotPoint{Nx,Nu,Vector{T},T}} where {Nx,Nu}
     N::Int
     t0::T
     tf::T
     function Problem(models::Vector{<:DiscreteDynamics}, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
-            Z::SampledTrajectory, N::Int, t0::T, tf::T) where {Q,T}
+            Z::SampledTrajectory{Nx,Nu}, N::Int, t0::T, tf::T) where {Q,T,Nx,Nu} 
         nx,nu = RD.dims(models)
         @assert length(x0) == nx[1]
         @assert length(xf) == nx[end]
         @assert length(Z) == N
         @assert length(models) == N-1 
         @assert tf > t0
+
+        # Convert to a trajectory that uses normal Julia vectors
+        Z_new = SampledTrajectory(map(1:N) do k
+            z = Z[k]
+            KnotPoint{Nx,Nu}(nx[k], nu[k], Vector(z.z), RD.time(z), RD.timestep(z))
+        end)
         # @assert RobotDynamics.state_dim(obj) == n  "Objective state dimension doesn't match model"
         # @assert RobotDynamics.control_dim(obj) == m "Objective control dimension doesn't match model"
         constraints.nx == nx || throw(DimensionMismatch("Constraint state dimensions don't match model"))
@@ -59,7 +65,7 @@ struct Problem{T<:AbstractFloat}
         nu_obj == nu || throw(DimensionMismatch("Objective control dimensions don't match model."))
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         # TODO: validate trajectory size
-        new{T}(models, obj, constraints, x0, xf, Z, N, t0, tf)
+        new{T}(models, obj, constraints, x0, xf, Z_new, N, t0, tf)
     end
 end
 
@@ -69,7 +75,7 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
         t0=zero(tf),
         X0=[fill(NaN, n) for n in RD.dims(models)[1]],
         U0=[fill(0.0, RD.control_dim(model)) for model in models],
-        dt=fill((tf-t0)/(length(obj)-1),length(obj)-1)) where {O}
+        kwargs...) where {O}
 
     # Check control dimensions
     nx,nu = RD.dims(models)
@@ -78,17 +84,13 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
     Nx = same_state_dimension ? nx[1] : Any
     Nu = same_control_dimension ? nu[1] : Any
     N = length(obj)
-    if dt isa Real
-        dt = fill(dt,N)
-    end
-	@assert sum(dt[1:N-1]) ≈ tf - t0 "Time steps are inconsistent with final time"
     if X0 isa AbstractMatrix
         X0 = [X0[:,k] for k = 1:size(X0,2)]
     end
     if U0 isa AbstractMatrix
         U0 = [U0[:,k] for k = 1:size(U0,2)]
     end
-    Z = SampledTrajectory{Nx,Nu}(X0,U0,dt=dt)
+    Z = SampledTrajectory{Nx,Nu}(X0,U0; tf=tf, kwargs...)
     RD.setinitialtime!(Z, t0)
 
     Problem(models, obj, constraints, MVector{nx[1]}(x0), MVector{nx[end]}(xf),
@@ -107,9 +109,20 @@ function Problem(model::AbstractModel, args...;
     Problem(discrete_model, args...; kwargs...)
 end
 
-"$(TYPEDSIGNATURES)
-Get number of states, controls, and knot points."
-RD.dims(prob::Problem) = RD.dims(prob.model)..., prob.N 
+"""
+    RobotDynamics.dims(prob)
+
+Return vectors of the state and control dimensions at each time step in the problem.
+"""
+RD.dims(prob::Problem) = RD.dims(prob.model)
+
+"""
+    RobotDynamics.dims(prob, k)
+
+Return `(n,m,N)`, the state and control dimensions at time step `k`, and the length 
+of the trajectory, `N`.
+"""
+RD.dims(prob::Problem, i::Integer) = RD.dims(prob.model[i])..., prob.N 
 
 RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
 RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
