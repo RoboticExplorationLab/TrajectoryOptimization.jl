@@ -38,8 +38,6 @@ struct Problem{T<:AbstractFloat}
     xf::MVector
     Z::SampledTrajectory{Nx,Nu,T,KnotPoint{Nx,Nu,Vector{T},T}} where {Nx,Nu}
     N::Int
-    t0::T
-    tf::T
     function Problem(models::Vector{<:DiscreteDynamics}, obj::AbstractObjective,
             constraints::ConstraintList,
             x0::StaticVector, xf::StaticVector,
@@ -50,6 +48,8 @@ struct Problem{T<:AbstractFloat}
         @assert length(Z) == N
         @assert length(models) == N-1 
         @assert tf > t0
+        @assert RD.time(Z[1]) ≈ t0
+        @assert RD.time(Z[end]) ≈ tf
 
         # Convert to a trajectory that uses normal Julia vectors
         Z_new = SampledTrajectory(map(1:N) do k
@@ -65,9 +65,13 @@ struct Problem{T<:AbstractFloat}
         nu_obj == nu || throw(DimensionMismatch("Objective control dimensions don't match model."))
         # @assert RobotDynamics.dims(Z) == (n,m,N) "Trajectory sizes don't match"
         # TODO: validate trajectory size
-        new{T}(models, obj, constraints, x0, xf, Z_new, N, t0, tf)
+        new{T}(models, obj, constraints, x0, xf, Z_new, N)
     end
 end
+
+#############################################
+# Constructors 
+#############################################
 
 function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector, tf::Real;
         xf::AbstractVector = fill(NaN, state_dim(models[end])),
@@ -109,6 +113,10 @@ function Problem(model::AbstractModel, args...;
     Problem(discrete_model, args...; kwargs...)
 end
 
+#############################################
+# Getters
+#############################################
+
 """
     RobotDynamics.dims(prob)
 
@@ -145,23 +153,57 @@ Get the state trajectory.
 states(prob, args...) = states(get_trajectory(prob), args...)
 
 """
-	get_times(::Problem)
+	gettimes(::Problem)
 
 Get the times for all the knot points in the problem.
 """
 @inline RobotDynamics.gettimes(prob::Problem) = gettimes(get_trajectory(prob))
 
+getinitialtime(prob::Problem) = RD.time(get_trajectory(prob)[1])
+getfinaltime(prob::Problem) = RD.time(get_trajectory(prob)[end])
+
+"Get problem constraints. Returns [`ConstraintList`](@ref)."
+@inline get_constraints(prob::Problem) = prob.constraints
+
+"""
+    get_model(prob::Problem)
+
+Get the dynamics models used at each time step. 
+Returns Vector{`RobotDynamics.DiscreteDynamics`}.
+"""
+@inline get_model(prob::Problem) = prob.model
+
+"""
+    get_model(prob::Problem, k::Integer)
+
+Get the dynamics model at time step `k`.
+"""
+@inline get_model(prob::Problem, k) = prob.model[k]
+
+"Get the objective. Returns an `AbstractObjective`."
+@inline get_objective(prob::Problem) = prob.obj
+
+"Get the trajectory. Returns an `RobotDynamics.SampledTrajectory`"
+@inline get_trajectory(prob::Problem) = prob.Z
+
+"Determines if the problem is constrained."
+@inline is_constrained(prob) = isempty(get_constraints(prob))
+
+"Get the in initial state. Returns an `AbstractVector`."
+@inline get_initial_state(prob::Problem) = prob.x0
+
+#############################################
+# Setters
+#############################################
 
 """
 	initial_trajectory!(prob::Problem, Z)
 
-Copy the trajectory
+Copies the trajectory data from `Z` to the problem.
 """
 function initial_trajectory!(prob::Problem, Z0::SampledTrajectory)
 	Z = get_trajectory(prob)
-    for k = 1:prob.N
-        Z[k].z = Z0[k].z
-    end
+    copyto!(Z, Z0)
 end
 
 """
@@ -183,19 +225,18 @@ function set_initial_state!(prob::Problem, x0::AbstractVector)
 end
 
 """
-    set_initial_time!(prob, t0)
+    setinitialtime!(prob, t0)
 
 Set the initial time of the optimization problem, shifting the time of all points in the trajectory.
 Returns the updated final time.
 """
-function set_initial_time!(prob, t0::Real)
+function RD.setinitialtime!(prob, t0)
     Z = get_trajectory(prob)
-    Δt = t0 - Z[1].t
-    for k in eachindex(Z)
-        Z[k].t += Δt
-    end
-    return Z[end].t 
+    RD.setinitialtime!(Z, t0)
+    Z[end].t
 end
+
+@deprecate set_initial_time!(prob, t0::Real) RD.setinitialtime!(prob, t0)
 
 """
     set_goal_state!(prob::Problem, xf::AbstractVector; objective=true, constraint=true)
@@ -233,10 +274,9 @@ Copy the control trajectory
     cost(::Problem)
 
 Compute the cost for the current trajectory
-    """
+"""
 @inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
 
-"Copy the problem"
 function Base.copy(prob::Problem)
     Problem(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
         copy(prob.Z), prob.N, prob.t0, prob.tf)
@@ -245,20 +285,6 @@ end
 
 "Get the number of constraint values at each time step"
 num_constraints(prob::Problem) = get_constraints(prob).p
-"Get problem constraints. Returns `AbstractConstraintSet`."
-@inline get_constraints(prob::Problem) = prob.constraints
-"Get the dynamics model. Returns `RobotDynamics.AbstractModel`."
-@inline get_model(prob::Problem) = prob.model
-@inline get_model(prob::Problem, k) = prob.model[k]
-
-"Get the objective. Returns an `AbstractObjective`."
-@inline get_objective(prob::Problem) = prob.obj
-"Get the trajectory. Returns an `RobotDynamics.SampledTrajectory`"
-@inline get_trajectory(prob::Problem) = prob.Z
-"Determines if the problem is constrained."
-@inline is_constrained(prob) = isempty(get_constraints(prob))
-"Get the in initial state. Returns an `AbstractVector`."
-@inline get_initial_state(prob::Problem) = prob.x0
 
 
 """
@@ -283,28 +309,4 @@ end
 function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
     x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
     Problem(model, obj, constraints, x0, xf, copy(p.Z), p.N, t0, tf)
-end
-
-"""
-    add_dynamics_constraints!(prob::Problem, [integration; idx])
-
-Add dynamics constraints to the constraint set. The integration method `integration` 
-defaults to the same integration specified in `prob`, but can be changed. The 
-argument `idx` specifies the location of the dynamics constraint in the constraint vector.
-If `idx == -1`, it will be added at the end of the `ConstraintList`.
-"""
-function add_dynamics_constraints!(prob::Problem, idx=-1; 
-        diffmethod=ForwardAD(), sig=StaticReturn())
-    conSet = prob.constraints
-
-    # Implicit dynamics
-    dyn_con = DynamicsConstraint(prob.model)
-    add_constraint!(conSet, dyn_con, 1:prob.N-1, idx, sig=sig, diffmethod=diffmethod) # add it at the end
-
-    # Initial condition
-    n = RD.state_dim(prob, N)
-    init_con = GoalConstraint(n, prob.x0, SVector{n}(1:n))  # make sure it's linked
-    add_constraint!(conSet, init_con, 1, 1)  # add it at the top
-
-    return nothing
 end
