@@ -63,12 +63,15 @@ end
 
 
 """
-	add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange, [idx])
+	add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange, [idx, sig, diffmethod])
 
 Add constraint `cons` to `ConstraintList` `cons` for knot points given by `inds`.
 
 Use `idx` to determine the location of the constraint in the constraint list.
 `idx=-1` (default) adds the constraint at the end of the list.
+
+The `FunctionSignature` and `DiffMethod` used to evaluate the constraint can be specified by
+the `sig` and `diffmethod` keyword arguments, respectively.
 
 # Example
 Here is an example of adding a goal and control limit constraint for a cartpole swing-up.
@@ -145,6 +148,21 @@ Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 
 @inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
 Base.getindex(cons::ConstraintList, I) = cons.constraints[I]
+
+"""
+	functionsignature(::ConstraintList, i)
+
+Get the `FunctionSignature` used to evaluate the `i`th constraint in the constraint list.
+"""
+functionsignature(cons::ConstraintList, i::Integer) = cons.sigs[i]
+
+"""
+	diffmethod(::ConstraintList, i)
+
+Get the `DiffMethod` used to evaluate the Jacobian for `i`th constraint in the constraint 
+list.
+"""
+diffmethod(cons::ConstraintList, i::Integer) = cons.diffs[i]
 
 for method in (:deepcopy, :copy)
 	@eval function Base.$method(cons::ConstraintList)

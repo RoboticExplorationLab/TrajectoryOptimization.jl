@@ -1,8 +1,8 @@
 """$(TYPEDEF) Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:
-* dynamics model (`Model`)
-* objective (`Objective`)
-* constraints (`ConstraintSet`)
+* dynamics model (`RD.DiscreteDynamics`)
+* objective ([`Objective`](@ref))
+* constraints ([`ConstraintList`](@ref))
 * initial and final states
 * Primal variables (state and control trajectories)
 * Discretization information: knot points (`N`), time step (`dt`), and total time (`tf`)
@@ -118,20 +118,18 @@ import Base.size
 @deprecate size(prob::Problem) dims(prob) 
 
 """
-    controls(::Problem)
+    controls(::Problem, args...)
 
 Get the control trajectory
 """
-controls(prob::Problem) = controls(prob.Z)
-controls(x) = controls(get_trajectory(x))
+controls(prob, args...) = controls(get_trajectory(prob), args...)
 
 """
-    states(::Problem)
+    states(::Problem, args...)
 
 Get the state trajectory.
 """
-states(prob::Problem) = states(prob.Z)
-states(x) = states(get_trajectory(x))
+states(prob, args...) = states(get_trajectory(prob), args...)
 
 """
 	get_times(::Problem)
@@ -238,6 +236,8 @@ num_constraints(prob::Problem) = get_constraints(prob).p
 @inline get_constraints(prob::Problem) = prob.constraints
 "Get the dynamics model. Returns `RobotDynamics.AbstractModel`."
 @inline get_model(prob::Problem) = prob.model
+@inline get_model(prob::Problem, k) = prob.model[k]
+
 "Get the objective. Returns an `AbstractObjective`."
 @inline get_objective(prob::Problem) = prob.obj
 "Get the trajectory. Returns an `RobotDynamics.SampledTrajectory`"

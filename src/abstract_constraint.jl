@@ -56,21 +56,44 @@ sense(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:sense, Symbol(C
 
 Base.copy(con::AbstractConstraint) = con
 
-"Upper bound of the constraint, as a vector, which is 0 for all constraints
-(except bound constraints)"
+""" 
+    upper_bound(constraint)
+
+Upper bound of the constraint, as a vector. This is zero for inequality and equality
+constraints, and +Inf for [`SecondOrderCone`](@ref).
+"""
 @inline upper_bound(con::AbstractConstraint) =
     upper_bound(sense(con)) * @SVector ones(RD.output_dim(con))
 @inline upper_bound(::Inequality) = 0.0
 @inline upper_bound(::Equality) = 0.0
+@inline upper_bound(::SecondOrderCone) = Inf
 
-"Upper bound of the constraint, as a vector, which is 0 equality and -Inf for inequality
-(except bound constraints)"
+""" 
+    lower_bound(constraint)
+
+Lower bound of the constraint, as a vector. This is zero for equality constraints
+and -Inf for [`SecondOrderCone`](@ref) and inequality constraints.
+"""
 @inline lower_bound(con::AbstractConstraint) =
     lower_bound(sense(con)) * @SVector ones(RD.output_dim(con))
 @inline lower_bound(::Inequality) = -Inf
 @inline lower_bound(::Equality) = 0.0
+@inline lower_bound(::SecondOrderCone) = -Inf
 
-"Is the constraint a bound constraint or not"
+"""
+    is_bound(constraints)
+
+Returns true if the constraint can be represeted as either
+
+```math
+    x_\\text{min} \\leq x \\leq x_\\text{max}
+```
+or 
+```math
+    u_\\text{min} \\leq u \\leq u_\\text{max}
+```
+i.e. simple bound constraints on the states and controls.
+"""
 @inline is_bound(con::AbstractConstraint) = false
 
 "Check whether the constraint is consistent with the specified state and control dimensions"
@@ -120,14 +143,13 @@ end
 
 
 """
-    evaluate_constraints!(vals, con::AbstractConstraint, Z, [inds])
+    evaluate_constraints!(sig, con, vals, Z, inds)
 
-Evaluate constraints for entire trajectory. This is the most general method used to evaluate
-constraints along the trajectory `Z`, and should be the one used in other functions.
-The `inds` argument determines at which knot points the constraint is evaluated.
+Evaluate the constraint `con` using the `sig` `FunctionSignature` for the time steps in 
+`inds` along trajectory `Z`, storing the output in `vals`.
 
-If `con` is a `StageConstraint`, this will call `evaluate(con, z)` by default, or
-`evaluate(con, z1, z2)` if `con` is a `CoupledConstraint`.
+The `vals` argument should be a vector with the same length as `inds`, where each element 
+is a mutable vector of length `RD.output_dim(con)`.
 """
 @generated function evaluate_constraints!(
     sig::StaticReturn,
@@ -157,20 +179,13 @@ function evaluate_constraints!(
 end
 
 """
-    constraint_jacobians!(∇c, con::AbstractConstraint, Z, [inds, is_const])
+    constraint_jacobians!(sig, diffmethod, con, vals, Z, inds)
 
-Evaluate constraints for entire trajectory. This is the most general method used to evaluate
-constraints along the trajectory `Z`, and should be the one used in other functions.
-The `inds` argument determines at which knot points the constraint is evaluated.
-The optional `is_const` argument is a `BitArray` of the same size as `∇c`, and captures 
-the output of `jacobian!`, which should return a Boolean specifying if the Jacobian is
-constant or not.
+Evaluate the constraint `con` using the `sig` `FunctionSignature` for the time steps in 
+`inds` along trajectory `Z`, storing the output in `vals`.
 
-The values are stored in `∇c`, which should be a matrix of matrices. If `con` is a
-`StageConstraint`, `size(∇c,2) = 1`, and `size(∇c,2) = 2` if `con` is a `CoupledConstraint`.
-
-If `con` is a `StageConstraint`, this will call `jacobian!(∇c, con, z)` by default, or
-`jacobian!(∇c, con, z1, z2, i)` if `con` is a `CoupledConstraint`.
+The `vals` argument should be a vector with the same length as `inds`, where each element 
+is a mutable vector of length `RD.output_dim(con)`.
 """
 function constraint_jacobians!(
     sig::FunctionSignature,

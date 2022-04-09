@@ -464,14 +464,25 @@ function RD.evaluate!(con::NormConstraint, c, z::AbstractKnotPoint)
 end
 
 function RD.evaluate(con::NormConstraint{SecondOrderCone}, z::AbstractKnotPoint)
+
 	v = z.z[con.inds]
 	return push(v, con.val)
 end
 
-function RD.evaluate!(con::NormConstraint{SecondOrderCone,D}, c, z::AbstractKnotPoint) where D
-	z_ = RD.getdata(z)
+getval(i,x,u) = i <= length(x) ? x[i] : u[i-length(x)]
+@generated function RD.evaluate(con::NormConstraint{SecondOrderCone,D}, x, u) where D
+	exprs = [:(getval(inds[$i],x,u)) for i = 1:D]
+	quote
+		n,m = con.n, con.m
+		inds = con.inds
+		SVector{D+1}($(exprs...), con.val)
+	end
+end
+
+function RD.evaluate!(con::NormConstraint{SecondOrderCone,D}, c, x, u) where D
 	for (i, j) in enumerate(con.inds) 
-		c[i] = z_[j]
+		# c[i] = z_[j]
+		c[i] = getval(j, x, u) 
 	end
 	c[end] = con.val
 	return
