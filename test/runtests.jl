@@ -33,3 +33,9 @@ end
     include("problems_tests.jl")
     include("hybrid_dynamics_model.jl")
 end
+
+@testset "Examples" begin
+    @testset "Quickstart" begin
+        include(joinpath(@__DIR__, "..", "examples", "quickstart.jl"))
+    end
+end
