@@ -1,4 +1,6 @@
 """"
+    ConstraintSense
+
 Specifies whether the constraint is an equality or inequality constraint.
 Valid subtypes are `Equality`, `Inequality` ⟺ `NegativeOrthant`, and `SecondOrderCone`.
 
