@@ -1,40 +1,57 @@
 """"
     ConstraintSense
 
-Specifies whether the constraint is an equality or inequality constraint.
-Valid subtypes are `Equality`, `Inequality` ⟺ `NegativeOrthant`, and `SecondOrderCone`.
+Specifies the type of the constraint, or in which convex cone it is to be enforced.
+Valid subtypes are `Equality` ⟺ [`ZeroCone`](@ref), `Inequality` ⟺ [`NegativeOrthant`](@ref), and 
+[`SecondOrderCone`](@ref).
 
 The sense of a constraint can be queried using `sense(::AbstractConstraint)`
 
-If `sense(con) <: Conic` (i.e. not `Equality`), then the following operations are supported:
-* `Base.in(::Conic, x::StaticVector)`. i.e. `x ∈ cone`
-* `projection(::Conic, x::StaticVector)`
-* `∇projection(::Conic, J, x::StaticVector)`
-* `∇²projection(::Conic, J, x::StaticVector, b::StaticVector)`
+The following operations are supported:
+* `Base.in(::ConstraintSense, x::StaticVector)`. i.e. `x ∈ cone`
+* `projection(::ConstraintSense, x::StaticVector)`
+* `∇projection(::ConstraintSense, J, x::StaticVector)`
+* `∇²projection(::ConstraintSense, J, x::StaticVector, b::StaticVector)`
+* `dualcone(::ConstraintSense)`
 """
 abstract type ConstraintSense end
 abstract type Conic <: ConstraintSense end
 
 struct IdentityCone <: Conic end
+
+"""
+    ZeroCone
+
+The cone whose valid set is only the origin. Equivalent to [`Equality`](@ref).
+"""
 struct ZeroCone <: Conic end
 
 """
-Equality constraints of the form ``g(x) = 0`.
-Type singleton, so it is created with `Equality()`.
+    Equality
+
+Equality constraints of the form ``g(x) = 0``. Equivalent to [`ZeroCone`](@ref).
 """
 const Equality = ZeroCone
 
 """
-Inequality constraints of the form ``h(x) \\leq 0``.
-Type singleton, so it is created with `Inequality()`. 
-Equivalent to `NegativeOrthant`.
+    NegativeOrthant
+
+Inequality constraints of the form ``h(x) \\leq 0``. Equivalent to [`Inequality`](@ref).
 """
 struct NegativeOrthant <: Conic end
+
+"""
+    Inequality
+
+Inequality constraints of the form ``h(x) \\leq 0``.  Equivalent to [`NegativeOrthant`](@ref).
+"""
 const Inequality = NegativeOrthant
 
 struct PositiveOrthant <: Conic end 
 
 """
+    SecondOrderCone
+
 The second-order cone is defined as 
 ``\\|x\\| \\leq t``
 where ``x`` and ``t`` are both part of the cone.

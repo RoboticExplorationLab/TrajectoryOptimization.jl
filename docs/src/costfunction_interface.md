@@ -17,8 +17,9 @@ Here we define a nonlinear cost function for the cartpole system:
     Q_2 * cos(\theta / 2) + \frac{1}{2} (Q_1 y^2 + Q_3 \dot{y}^2 + Q_4 \dot{\theta}^2) + \frac{1}{2} R ^2
 ```
 
-We start by defining a new struct that inherits from 
-`TrajectoryOptimization.CostFunction`:
+We just need to define a new struct that inherits from
+`TrajectoryOptimization.CostFunction` and implements the methods required by the
+`AbstractFunction` interface: 
 
 ```@example
 using TrajectoryOptimization
@@ -57,39 +58,3 @@ end
     The `RobotDynamics.@autodiff` macro automatically defines the `gradient!`
     and `hessian!` methods from RobotDynamics.jl for us, using ForwardDiff.jl
     and FiniteDiff.jl.
-
-
-
-All cost functions are required to define the following methods
-```julia
-n = RobotDynamics.state_dim(cost)
-m = RobotDynamics.control_dim(cost)
-RD.evaluate(cost, x, u)
-```
-and inherit from `CostFunction`. Note the it is good practice to use the method defined on
-the terminal state internal to the method defined for both the state and control, i.e.
-`gradient!(E, cost, x, u)` should call `gradient!(E, cost, xN)`.
-They then inherit the following methods defined on knot points:
-
-```julia
-stage_cost(::CostFunction, ::KnotPoint)
-gradient!(::QuadraticCostFunction, ::CostFunction, ::AbstractKnotPoint)
-hessian!(::QuadraticCostFunction, ::CostFunction, ::AbstractKnotPoint)
-```
-
-
-# Objective Interface
-The objective interface is very simple. After inheriting from `AbstractObjective`, define
-the following methods:
-```julia
-Base.length(::NewObjective)       # number of knot points
-get_J(::NewObjective)             # return vector of costs at each knot point
-cost!(::NewObjective, Z::Traj)    # calculate the cost at each knot point and store in get_J(::NewSolver)
-cost_expansion!(E::CostExpansion, obj::NewObjective, Z::Traj)
-```
-
-And inherits the single method
-```julia
-cost(::NewObjective, Z::Traj)
-```
-that simply returns the summed cost.
