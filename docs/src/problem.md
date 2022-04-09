@@ -20,6 +20,7 @@ Problem
 cost(::Problem)
 states(::Problem)
 controls(::Problem)
+horizonlength
 get_objective
 get_constraints
 get_model

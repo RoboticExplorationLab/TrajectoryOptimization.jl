@@ -143,6 +143,14 @@ RD.dims(prob::Problem, i::Integer) = RD.dims(prob.model[i])..., prob.N
 RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
 RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
 
+"""
+    horizonlength(prob::Problem)
+
+Number of knot points in the time horizon, i.e. the length of the sampled 
+state and control trajectories.
+"""
+horizonlength(prob::Problem) = prob.N
+
 import Base.size
 @deprecate size(prob::Problem) dims(prob) 
 

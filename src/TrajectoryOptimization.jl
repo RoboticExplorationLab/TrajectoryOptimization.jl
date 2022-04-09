@@ -55,6 +55,7 @@ export  # methods
 	get_objective,
 	get_constraints,
 	get_model,
+	horizonlength,
 	state_dim,    # from RobotDynamics
 	control_dim   # from RobotDynamics
 
