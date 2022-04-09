@@ -83,7 +83,7 @@ abstract type AbstractConstraint <: RD.AbstractFunction end
 
 "Only a function of states and controls at a single knotpoint"
 abstract type StageConstraint <: AbstractConstraint end
-RD.functioninputs(::CollisionConstraint) = RD.StateControl()
+RD.functioninputs(::StageConstraint) = RD.StateControl()
 
 "Only a function of states at a single knotpoint"
 abstract type StateConstraint <: StageConstraint end

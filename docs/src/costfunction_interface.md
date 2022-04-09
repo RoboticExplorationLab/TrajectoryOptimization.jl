@@ -10,7 +10,7 @@ efficient methods to evaluate the gradient and Hessian.
 We give an example of defining a new user-defined cost function in the 
 example below, to illustrate how the interface works.
 
-# Cost Function Interface
+# [Cost Function Interface](@id cost_interface)
 Here we define a nonlinear cost function for the cartpole system:
 
 ```math
