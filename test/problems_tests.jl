@@ -42,7 +42,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test prob.tf ≈ tf
+@test TO.getfinaltime(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
@@ -56,7 +56,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test prob.tf ≈ tf
+@test TO.getfinaltime(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
@@ -70,7 +70,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test prob.tf ≈ tf
+@test TO.getfinaltime(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
@@ -196,7 +196,8 @@ dmodels2 = [copy(dmodel) for k = 1:N]
 @test_throws AssertionError Problem(dmodels2, obj, x0, tf, xf=xf, constraints=copy(conSet))
 
 ## Check dims
-nx,nu,N = RD.dims(prob)
+nx,nu = RD.dims(prob)
+N = length(nx)
 @test nx == fill(n,N)
 @test nu == fill(m,N)
 
@@ -210,6 +211,6 @@ rollout!(prob)
 @test !isnan(cost(prob))
 @test TO.get_model(prob) isa Vector{<:RD.DiscreteDynamics}
 
-@test TO.set_initial_time!(prob, 1.0) == 1.0 + tf
+@test RD.setinitialtime!(prob, 1.0) == 1.0 + tf
 @test prob.Z[1].t == 1.0
 @test prob.Z[end].t == 1.0 + tf
