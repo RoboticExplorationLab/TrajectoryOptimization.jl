@@ -5,6 +5,8 @@ import Base: +
 ############################################################################################
 
 """
+    Cost Function
+
 Abstract type that represents a scalar-valued function that accepts a state and control
 at a single knot point.
 """
@@ -15,6 +17,8 @@ abstract type CostFunction <: RobotDynamics.ScalarFunction end
 #                              QUADRATIC COST FUNCTIONS 
 ############################################################################################
 """
+    QuadraticCostFunction
+
 An abstract type that represents any [`CostFunction`](@ref) of the form
 ```math
 \\frac{1}{2} x^T Q x + \\frac{1}{2} u^T R u + u^T H x + q^T x + r^T u + c
@@ -99,36 +103,36 @@ function RD.evaluate(cost::QuadraticCostFunction, x, u)
     return J
 end
 
-"""
-    gradient!(E::QuadraticCostFunction, costfun::CostFunction, z::AbstractKnotPoint, [cache])
+# """
+#     gradient!(E::QuadraticCostFunction, costfun::CostFunction, z::AbstractKnotPoint, [cache])
 
-Evaluate the gradient of the cost function `costfun` at state `x` and control `u`, storing
-    the result in `E.q` and `E.r`. Return a `true` if the gradient is constant, and `false`
-    otherwise.
+# Evaluate the gradient of the cost function `costfun` at state `x` and control `u`, storing
+#     the result in `E.q` and `E.r`. Return a `true` if the gradient is constant, and `false`
+#     otherwise.
 
-If `is_terminal(z)` is true, it will only calculate the gradientwith respect to the terminal
-state.
+# If `is_terminal(z)` is true, it will only calculate the gradientwith respect to the terminal
+# state.
 
-The optional `cache` argument provides an optional method to pass in extra memory to
-facilitate computation of cost expansion. It is vector of length 4, with the following
-entries: `[grad, hess, grad_term, hess_term]`, where `grad` and `hess` are the caches 
-for gradients and Hessians repectively, and the `[]_term` entries are the caches for the
-terminal cost function.
-"""
-function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint, 
-        cache=ExpansionCache(cost))
-    x = state(z)
-    E.q .= cost.Q*x .+ cost.q
-    if !is_terminal(z)
-        u = control(z)
-        E.r .= cost.R*u .+ cost.r
-        if !is_blockdiag(cost)
-            E.q .+= cost.H'u
-            E.r .+= cost.H*x
-        end
-    end
-    return false
-end
+# The optional `cache` argument provides an optional method to pass in extra memory to
+# facilitate computation of cost expansion. It is vector of length 4, with the following
+# entries: `[grad, hess, grad_term, hess_term]`, where `grad` and `hess` are the caches 
+# for gradients and Hessians repectively, and the `[]_term` entries are the caches for the
+# terminal cost function.
+# """
+# function gradient!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint, 
+#         cache=ExpansionCache(cost))
+#     x = state(z)
+#     E.q .= cost.Q*x .+ cost.q
+#     if !is_terminal(z)
+#         u = control(z)
+#         E.r .= cost.R*u .+ cost.r
+#         if !is_blockdiag(cost)
+#             E.q .+= cost.H'u
+#             E.r .+= cost.H*x
+#         end
+#     end
+#     return false
+# end
 
 function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoint{<:Any,<:Any,<:StaticVector}) where {n,m}
     x = state(z)
@@ -167,43 +171,43 @@ function RD.gradient!(cost::QuadraticCostFunction{n,m}, grad, z::AbstractKnotPoi
     return nothing
 end
 
-"""
-    hessian!(E, costfun::CostFunction, z::AbstractKnotPoint, [cache])
+# """
+#     hessian!(E, costfun::CostFunction, z::AbstractKnotPoint, [cache])
 
-Evaluate the hessian of the cost function `costfun` at knotpoint `z`.
-    the result in `E.Q`, `E.R`, and `E.H`. Return a `true` if the hessian is constant, and `false`
-    otherwise.
+# Evaluate the hessian of the cost function `costfun` at knotpoint `z`.
+#     the result in `E.Q`, `E.R`, and `E.H`. Return a `true` if the hessian is constant, and `false`
+#     otherwise.
 
-If `is_terminal(z)` is true, it will only calculate the Hessian with respect to the terminal
-state.
+# If `is_terminal(z)` is true, it will only calculate the Hessian with respect to the terminal
+# state.
 
-The optional `cache` argument provides an optional method to pass in extra memory to
-facilitate computation of cost expansion. It is vector of length 4, with the following
-entries: `[grad, hess, grad_term, hess_term]`, where `grad` and `hess` are the caches 
-for gradients and Hessians repectively, and the `[]_term` entries are the caches for the
-terminal cost function.
-"""
-function hessian!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
-        cache=ExpansionCache(cost))
-    x = state(z)
-    if is_diag(cost)
-        for i = 1:length(x); E.Q[i,i] = cost.Q[i,i] end
-    else
-        E.Q .= cost.Q
-    end
-    if !is_terminal(z)
-        u = control(z)
-        if is_diag(cost)
-            for i = 1:length(u); E.R[i,i] = cost.R[i,i]; end
-        else
-            E.R .= cost.R
-        end
-        if !is_blockdiag(cost)
-            E.H .= cost.H
-        end
-    end
-    return true
-end
+# The optional `cache` argument provides an optional method to pass in extra memory to
+# facilitate computation of cost expansion. It is vector of length 4, with the following
+# entries: `[grad, hess, grad_term, hess_term]`, where `grad` and `hess` are the caches 
+# for gradients and Hessians repectively, and the `[]_term` entries are the caches for the
+# terminal cost function.
+# """
+# function hessian!(E, cost::QuadraticCostFunction, z::AbstractKnotPoint,
+#         cache=ExpansionCache(cost))
+#     x = state(z)
+#     if is_diag(cost)
+#         for i = 1:length(x); E.Q[i,i] = cost.Q[i,i] end
+#     else
+#         E.Q .= cost.Q
+#     end
+#     if !is_terminal(z)
+#         u = control(z)
+#         if is_diag(cost)
+#             for i = 1:length(u); E.R[i,i] = cost.R[i,i]; end
+#         else
+#             E.R .= cost.R
+#         end
+#         if !is_blockdiag(cost)
+#             E.H .= cost.H
+#         end
+#     end
+#     return true
+# end
 
 function RD.hessian!(cost::QuadraticCostFunction{n,m}, hess, z::AbstractKnotPoint) where {n,m}
     ix,iu = 1:n, n+1:n+m
@@ -294,7 +298,7 @@ end
 
 
 #######################################################
-#              COST FUNCTION INTERFACE                #
+# Concrete Quadratic Cost Functions
 #######################################################
 
 """
