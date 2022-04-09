@@ -23,24 +23,18 @@ SecondOrderCone
 ## Evaluating Constraints
 The following methods are used to evaluate a constraint:
 ```@docs
-evaluate
-evaluate!
-jacobian!
-∇jacobian!
+evaluate_constraints!
+constraint_jacobians!
 ```
 
 ### Methods
 The following methods are defined for all `AbstractConstraint`s
 ```@docs
-state_dim
-control_dim
 sense
-widths
 upper_bound
 lower_bound
 is_bound
 check_dims
-get_inds
 ```
 
 ## Adding a New Constraint
@@ -104,7 +98,4 @@ state or constraint values needed to calculate the constraint.
 StageConstraint
 StateConstraint
 ControlConstraint
-CoupledConstraint
-CoupledStateConstraint
-CoupledControlConstraint
 ```

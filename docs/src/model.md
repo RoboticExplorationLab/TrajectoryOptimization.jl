@@ -8,11 +8,16 @@ the problem. Please refer to the documentation for more details on setting up an
 models. We present a simple example here.
 
 Assume we want to find an optimal trajectory for the canonical cartpole system. We can either
-import the existing model defined in [RobotZoo.jl](https://github.com/bjack205/RobotZoo.jl) or
+import an existing model defined in [RobotZoo.jl](https://github.com/bjack205/RobotZoo.jl) or
 use RobotDynamics.jl to define our own. Defining our own model is pretty straight-forward:
 
-```julia
-struct Cartpole{T} <: AbstractModel
+```@example
+using RobotDynamics
+using ForwardDiff
+using FiniteDiff
+using StaticArrays
+
+RobotDynamics.@autodiff struct Cartpole{T} <: RobotDynamics.ContinuousDynamics
     mc::T
     mp::T
     l::T
@@ -21,11 +26,14 @@ end
 
 Cartpole() = Cartpole(1.0, 0.2, 0.5, 9.81)
 
-function dynamics(model::Cartpole, x, u)
-    mc = model.mc  # mass of the cart in kg (10)
+RobotDynamics.state_dim(::Cartpole) = 4
+RobotDynamics.control_dim(::Cartpole) = 1
+
+function RobotDynamics.dynamics(model::Cartpole, x, u)
+    mc = model.mc   # mass of the cart in kg (10)
     mp = model.mp   # mass of the pole (point mass at the end) in kg
-    l = model.l   # length of the pole in m
-    g = model.g  # gravity m/s^2
+    l = model.l     # length of the pole in m
+    g = model.g     # gravity m/s^2
 
     q  = x[ SA[1,2] ]  # SA[...] creates a StaticArray.
     qd = x[ SA[3,4] ]
@@ -42,13 +50,19 @@ function dynamics(model::Cartpole, x, u)
     return [qd; qdd]
 end
 
-RobotDynamics.state_dim(::Cartpole) = 4
-RobotDynamics.control_dim(::Cartpole) = 1
+function RobotDynamics.dynamics!(model::Cartpole, xdot, x, u)
+    xstatic = SA[x[1], x[2], x[3], x[4]]
+    ustatic = SA[u[1]]
+    xdot .= RobotDynamics.dynamics(model, xstatic, ustatic)
+    return nothing
+end
 ```
 
 with our dynamics model defined, we are ready to start setting up the optimization problem.
 
 !!! tip
     For best performance, use [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl), which offers loop-unrolling and allocation-free methods for 
-    small to medium-sized matrices and vectors.
+    small to medium-sized matrices and vectors. For systems with 
+    large state vectors, prefer to use the in-place methods (the ones
+    that end in `!`).
 

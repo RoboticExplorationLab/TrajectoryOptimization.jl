@@ -5,40 +5,18 @@ CurrentModule = TrajectoryOptimization
 # Constraints
 This page provides details about the various types in TrajectoryOptimization.jl for working
 with constraints, as well as the methods defined on those types.
-In general, a [`ConstraintList`](@ref) is used to define the constraints, and another
-[`AbstractConstraintSet`](@ref) is instantiated by a
-solver to hold the constraint values and Jacobians.
 
 ## Constraint List
-A [`ConstraintList`](@ref) is used to define a trajectory optimization [`Problem`](@ref) and
-only holds basic information about the constraints included in the problem. Although it is
-a child of [`AbstractConstraintSet`](@ref) and supports indexing and iteration, it does not
-hold any information about constraint values or Jacobians.
+A [`ConstraintList`](@ref) is used to define a trajectory optimization [`Problem`](@ref)
+and only holds basic information about the constraints included in the problem. 
 ```@docs
 ConstraintList
 add_constraint!
 num_constraints
-```
-
-## Constraint Sets
-A constraint set holding a list of [`ConVal`](@ref)s is generally
-instantiated by a solver and holds the constraint definitions, as well as the
-associated constraint values, Jacobians, and other constraint-related
-information required by the solver.
-```@docs
-AbstractConstraintSet
-```
-
-## Constraint Value type
-The [`AbstractConstraintValues`](@ref) type holds all the constraint values
-and Jacobians for a particular constraint, and supports different ways of
-storing those (either as individual matrices/vectors or as views into a large
-matrix/vector). This abstract type is meant to be implemented by the solver, but
-a reference implementation is provided, [`ConVal`](@ref).
-
-```@docs
-AbstractConstraintValues
-ConVal
+constraintindices
+functionsignature
+diffmethod
+gen_jacobian
 ```
 
 ## Implemented Constraints
@@ -51,9 +29,9 @@ List of currently implemented constraints
 * [`BoundConstraint`](@ref)
 * [`LinearConstraint`](@ref)
 * [`CircleConstraint`](@ref)
+* [`CollisionConstraint`](@ref)
 * [`SphereConstraint`](@ref)
 * [`NormConstraint`](@ref)
-* [`DynamicsConstraint`](@ref)
 * [`IndexedConstraint`](@ref)
 
 ```@docs
@@ -62,7 +40,7 @@ BoundConstraint
 LinearConstraint
 CircleConstraint
 SphereConstraint
+CollisionConstraint
 NormConstraint
-DynamicsConstraint
 IndexedConstraint
 ```
