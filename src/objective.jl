@@ -11,16 +11,18 @@ get_J(obj::AbstractObjective) = throw(ErrorException("get_J not implemented"))
 
 
 
-"""$(TYPEDEF)
-Objective: stores stage cost(s) and terminal cost functions
+"""
+    Objective{C}
+
+Objective: stores stage cost(s) and terminal cost functions. All the cost functions
+at each time step must have the same type.
 
 Constructors:
-```julia
-Objective(cost, N)
-Objective(cost, cost_term, N)
-Objective(costs::Vector{<:CostFunction}, cost_term)
-Objective(costs::Vector{<:CostFunction})
-```
+
+    Objective(cost, N)
+    Objective(cost, cost_term, N)
+    Objective(costs::Vector{<:CostFunction}, cost_term)
+    Objective(costs::Vector{<:CostFunction})
 """
 struct Objective{C} <: AbstractObjective
     cost::Vector{C}
@@ -46,8 +48,7 @@ state_dim(obj::Objective, k::Integer) = state_dim(obj.cost[k])
 control_dim(obj::Objective, k::Integer) = control_dim(obj.cost[k])
 RD.dims(obj::Objective) = state_dim.(obj.cost), control_dim.(obj.cost)
 RD.dims(obj::Objective, k::Integer) = (state_dim(obj.cost[k]), control_dim(obj.cost[k]), length(obj.cost))
-# Base.size(obj::Objective) = (state_dim(obj), control_dim(obj))
-@inline ExpansionCache(obj::Objective) = ExpansionCache(obj[1])
+# @inline ExpansionCache(obj::Objective) = ExpansionCache(obj[1])
 
 import Base.size
 @deprecate size(obj::Objective) RobotDynamics.dims(obj)
@@ -57,12 +58,11 @@ import Base.size
 """
     is_quadratic(obj::Objective)
 
-Only valid for a cost expansion, i.e. an objective containing the 2nd order expansion of 
-    another objective. Determines if the original objective is a quadratic function, or 
-    in other words, if the hessian of the objective is constant. 
+Determines objective is a quadratic function, or in other words, if the hessian of the 
+objective is constant. 
 
 For example, if the original cost function is an augmented Lagrangian cost function, the
-    result will return true only if all constraints are linear.
+result will return true only if all constraints are linear.
 """
 is_quadratic(obj::Objective) = all(obj.const_hess)
 
@@ -83,10 +83,8 @@ end
 
 """
 	cost(obj::Objective, Z::SampledTrajectory)
-	cost(obj::Objective, dyn_con::DynamicsConstraint{Q}, Z::SampledTrajectory)
 
-Evaluate the cost for a trajectory. If a dynamics constraint is given,
-    use the appropriate integration rule, if defined.
+Evaluate the cost for a trajectory. 
 """
 function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,<:AbstractFloat})
     cost!(obj, Z)
@@ -103,7 +101,6 @@ function cost(obj::Objective, Z::SampledTrajectory{<:Any,<:Any,T}) where T
     return J
 end
 
-"Evaluate the cost for a trajectory (non-allocating)"
 @inline function cost!(obj::Objective, Z::SampledTrajectory)
     map!(RD.evaluate, obj.J, obj.cost, Z.data)
 end
@@ -114,8 +111,8 @@ get_J(obj::Objective) = obj.J
 
 Base.copy(obj::Objective) = Objective(copy.(obj.cost); diffmethod=copy(obj.diffmethod))
 
+# Iteration and indexing
 Base.getindex(obj::Objective,i::Int) = obj.cost[i]
-
 @inline Base.firstindex(obj::Objective) = firstindex(obj.cost)
 @inline Base.lastindex(obj::Objective) = lastindex(obj.cost)
 @inline Base.iterate(obj::Objective, start=1) = Base.iterate(obj.cost, start)
