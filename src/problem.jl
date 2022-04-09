@@ -1,4 +1,7 @@
-"""$(TYPEDEF) Trajectory Optimization Problem.
+"""
+    Problem{T}
+
+Trajectory Optimization Problem.
 Contains the full definition of a trajectory optimization problem, including:
 * dynamics model (`RD.DiscreteDynamics`)
 * objective ([`Objective`](@ref))
@@ -21,14 +24,14 @@ where `Z` is a [`RobotDynamics.SampledTrajectory`].
 * `obj`: Objective
 * `X0`: Initial state trajectory. If omitted it will be initialized with NaNs, to be later overwritten by the solver.
 * `U0`: Initial control trajectory. If omitted it will be initialized with zeros.
-* `x0`: Initial state. Defaults to zeros.
+* `x0`: Initial state
 * `xf`: Final state. Defaults to zeros.
-* `dt`: Time step
-* `tf`: Final time. Set to zero to specify a time penalized problem.
-* `N`: Number of knot points. Defaults to 51, unless specified by `dt` and `tf`.
+* `dt`: Time step. Can be either a vector of length `N-1` or a positive real number.
+* `tf`: Final time. Set to zero.
+* `N`: Number of knot points. Uses the length of the objective.
 * `integration`: One of the defined integration types to discretize the continuous dynamics model.
-Both `X0` and `U0` can be either a `Matrix` or a `Vector{Vector}`, but must be the same.
-At least 2 of `dt`, `tf`, and `N` need to be specified (or just 1 of `dt` and `tf`).
+
+Both `X0` and `U0` can be either a `Matrix` or a `Vector{<:AbstractVector}`.
 """
 struct Problem{T<:AbstractFloat}
     model::Vector{<:DiscreteDynamics}
@@ -113,6 +116,11 @@ function Problem(model::AbstractModel, args...;
     Problem(discrete_model, args...; kwargs...)
 end
 
+function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
+    x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
+    Problem(model, obj, constraints, x0, xf, copy(p.Z), p.N, t0, tf)
+end
+
 #############################################
 # Getters
 #############################################
@@ -165,6 +173,8 @@ getfinaltime(prob::Problem) = RD.time(get_trajectory(prob)[end])
 "Get problem constraints. Returns [`ConstraintList`](@ref)."
 @inline get_constraints(prob::Problem) = prob.constraints
 
+num_constraints(prob::Problem) = get_constraints(prob).p
+
 """
     get_model(prob::Problem)
 
@@ -191,6 +201,7 @@ Get the dynamics model at time step `k`.
 
 "Get the in initial state. Returns an `AbstractVector`."
 @inline get_initial_state(prob::Problem) = prob.x0
+
 
 #############################################
 # Setters
@@ -270,22 +281,16 @@ Copy the control trajectory
 """
 @inline initial_controls!(prob, U0) = RobotDynamics.setcontrols!(get_trajectory(prob), U0)
 
+#############################################
+# Other Methods
+#############################################
+
 """
     cost(::Problem)
 
 Compute the cost for the current trajectory
 """
 @inline cost(prob::Problem, Z=prob.Z) = cost(prob.obj, Z)
-
-function Base.copy(prob::Problem)
-    Problem(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
-        copy(prob.Z), prob.N, prob.t0, prob.tf)
-end
-
-
-"Get the number of constraint values at each time step"
-num_constraints(prob::Problem) = get_constraints(prob).p
-
 
 """
 	rollout!(::Problem)
@@ -306,7 +311,7 @@ function rollout!(sig::FunctionSignature, models::Vector{<:DiscreteDynamics},
     end
 end
 
-function Problem(p::Problem; model=p.model, obj=copy(p.obj), constraints=copy(p.constraints),
-    x0=copy(p.x0), xf=copy(p.xf), t0=p.t0, tf=p.tf)
-    Problem(model, obj, constraints, x0, xf, copy(p.Z), p.N, t0, tf)
+function Base.copy(prob::Problem)
+    Problem(prob.model, copy(prob.obj), copy(prob.constraints), copy(prob.x0), copy(prob.xf),
+        copy(prob.Z), prob.N, prob.t0, prob.tf)
 end
