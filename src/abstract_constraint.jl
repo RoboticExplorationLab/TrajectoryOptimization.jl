@@ -138,7 +138,11 @@ i.e. simple bound constraints on the states and controls.
 """
 @inline is_bound(con::AbstractConstraint) = false
 
-"Check whether the constraint is consistent with the specified state and control dimensions"
+"""
+    check_dims(con, n, m)
+
+Check whether the constraint is consistent with the specified state and control dimensions.
+"""
 @inline check_dims(con::StateConstraint, n, m) = state_dim(con) == n
 @inline check_dims(con::ControlConstraint, n, m) = control_dim(con) == m
 @inline check_dims(con::AbstractConstraint, n, m) =

@@ -16,6 +16,8 @@ is referred to as the `ConstraintSense`. The following are currently implemented
 ```@docs
 ConstraintSense
 Equality
+Inequality
+ZeroCone
 NegativeOrthant
 SecondOrderCone
 ```
@@ -44,56 +46,38 @@ we have a 2-norm constraint on the controls at each time step, e.g. ``||u|| \leq
 We can do this with just a few lines of code:
 
 ```julia
-struct ControlNorm{T} <: ControlConstraint
-	m::Int
-	val::T
-	function ControlNorm(m::Int, val::T) where T
-		@assert val ≥ 0 "Value must be greater than or equal to zero"
-		new{T}(m,val,sense,inds)
-	end
+using TrajectoryOptimization
+using RobotDynamics
+using ForwardDiff
+using FiniteDiff
+
+RobotDynamics.@autodiff struct ControlNorm{T} <: TrajectoryOptimization.ControlConstraint
+    m::Int
+    val::T
+    function ControlNorm(m::Int, val::T) where T
+        @assert val ≥ 0 "Value must be greater than or equal to zero"
+        new{T}(m,val,sense,inds)
+    end
 end
-control_dim(con::ControlNorm) = con.m
-sense(::ControlNorm) = Inequality()
-Base.length(::ControlNorm) = 1
-evaluate(con::ControlNorm, u::SVector) = SA[norm(u) - con.a] # needs to be a vector output
-jacobian(con::ControlNorm, u::SVector) = u'/norm(u)  # optional
+RobotDynamics.control_dim(con::ControlNorm) = con.m
+RobotDynamics.output_dim(::ControlNorm) = 1
+TrajectoryOptimization.sense(::ControlNorm) = Inequality()
+
+RobotDynamics.evaluate(con::ControlNorm, u) = SA[norm(u) - con.a] # needs to be a vector output
+RobotDynamics.evaluate!(con::ControlNorm, c, u) = SA[norm(u) - con.a]
+
+function RobotDynamics.jacobian!(con::ControlNorm, J, c, u)  # optional
+    J[1,:] .= u'/norm(u)
+end
 ```
 Importantly, note that the inheritance specifies the constraint applies only to
 individual controls.
 
-Let's say the bound ``a`` varied by time-step. We could handle this easily by instead defining the methods operating on the entire trajectory:
-
-```julia
-struct ControlNorm2{T} <: ControlConstraint
-	m::Int
-	val::Vector{T}
-	function ControlNorm2(m::Int, val::T) where T
-		@assert val ≥ 0 "Value must be greater than or equal to zero"
-		new{T}(m,val,sense,inds)
-	end
-end
-control_dim(con::ControlNorm2) = con.m
-sense(::ControlNorm2) = Inequality()
-Base.length(::ControlNorm2) = 1
-function evaluate!(vals, con::ControlNorm2, Z::SampledTrajectory, inds=1:length(Z))
-	for (i,k) in enumerate(inds)
-		u = control(Z[k])
-		vals[i] = SA[norm(u) - con.a[i]]
-	end
-end
-function jacobian!(∇c, con::ControlNorm2, Z::SampledTrajectory, inds=1:length(Z),
-		is_const = BitArray(undef, size(∇c)))
-	for (i,k) in enumerate(inds)
-			u = control(Z[k])
-			∇c[i] = u'/norm(u)
-			is_const[i] = false
-	end
-end
-```
-
 ### Constraint Types
-The `ConstraintType` defines the "bandedness" of the constraint, or the number of adjacent
-state or constraint values needed to calculate the constraint.
+The `ConstraintType` defines the whether the constraint is a function of just the 
+state, control, or both the state and control. This automatically defines the 
+`RobotDynamics.FunctionInputs` trait for the constraint.
+
 ```@docs
 StageConstraint
 StateConstraint
