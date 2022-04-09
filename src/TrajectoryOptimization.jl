@@ -51,7 +51,7 @@ export  # methods
 	states,
 	controls,
 	get_trajectory,
-	get_times,
+	gettimes,
 	get_objective,
 	get_constraints,
 	get_model,
