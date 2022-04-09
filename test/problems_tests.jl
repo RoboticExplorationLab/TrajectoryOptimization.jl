@@ -61,7 +61,7 @@ add_constraint!(conSet, goal, N-1)
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
 
-# Alternate constructor
+# Keyword constructor
 prob = Problem(dmodel, obj, x0, tf, xf=xf, constraints=conSet, X0=X0, U0=U0)
 @test prob.x0 == x0
 @test prob.xf == xf
@@ -75,6 +75,15 @@ add_constraint!(conSet, goal, N-1)
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
 
+# Test passing uneven time steps
+dts = [fill(1.0, N÷2); fill(0.5, N - N÷2 - 1)] 
+dts = dts .* (tf / sum(dts))
+prob = Problem(dmodel, obj, x0, tf, xf=xf, constraints=conSet, X0=X0, U0=U0, dt=dts)
+@test TO.gettimes(prob) ≈ cumsum([0; dts])
+
+# Test passing bad time steps
+@test_throws AssertionError Problem(dmodel, obj, x0, tf, xf=xf, constraints=conSet, X0=X0, U0=U0, dt=1.0)
+
 # Change integration
 prob = Problem(model, obj, x0, tf, xf=xf, constraints=conSet, integration=RD.Euler(model))
 @test RD.integration(prob.model[1]) isa RD.Euler
@@ -87,6 +96,7 @@ prob = Problem(model, obj, x0, tf)
 @test controls(prob) == [zeros(m) for k = 1:N-1]
 @test isempty(prob.constraints)
 @test RobotDynamics.gettimes(prob) ≈ range(0, tf; step=dt)
+@test RD.integration(get_model(prob, 1)) isa RD.RK4
 
 # Set initial trajectories
 initial_states!(prob, 2 .* X0)
@@ -105,6 +115,7 @@ initial_states!(prob, 3*X0)
 initial_controls!(prob, 4*U0)
 @test states(prob) ≈ 3 .* X0
 @test controls(prob) ≈ 4 .* U0
+typeof(Z)
 
 prob = Problem(model, obj, xf, tf, X0=X0_mat, U0=U0_mat)
 @test states(prob) ≈ X0
