@@ -2,7 +2,7 @@
 CurrentModule = TrajectoryOptimization
 ```
 
-# Constraints
+# [Constraints](@id constraint_api)
 This page provides details about the various types in TrajectoryOptimization.jl for working
 with constraints, as well as the methods defined on those types.
 

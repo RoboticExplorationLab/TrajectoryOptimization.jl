@@ -1,3 +1,18 @@
+```@meta
+CurrentModule = TrajectoryOptimization
+```
+
+# [Quickstart](@id quickstart_page)
+This page provides a quick overview of the API to help you get started quickly. 
+It also points to other places in the documentation to help you get more 
+details.
+
+## Step 1: Define the Dynamics Model
+Define the dynamics model. See documentation for 
+[RobotDynamics.jl](https://github.com/RoboticExplorationLab/RobotDynamics.jl) 
+for more details.
+
+```julia
 using TrajectoryOptimization
 using RobotDynamics
 using StaticArrays
@@ -21,17 +36,25 @@ end
 
 RD.state_dim(::DoubleIntegrator) = 4
 RD.control_dim(::DoubleIntegrator) = 2
+```
 
-## Problem definition
+## Step 2: Define the Discretization
+The next step is to instantiate our model, discretize it, if necessary, and 
+define the number of knot points to use and time horizon.
 
-# Model and discretization
+```julia
 model = DoubleIntegrator(1.0)
+dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
 n,m = RD.dims(model)
 tf = 3.0         # final time (sec)
 N = 21           # number of knot points
 dt = tf / (N-1)  # time step (sec)
-@test (n,m) == (4,2)
+```
 
+## Step 3: Define the Objective
+We now define our objective. See [Setting up an Objective](@ref objective_section)
+[Cost Function Inteface](@ref cost_interface), and the [Cost/Objective API](@ref cost_api).
+```julia
 # Objective
 x0 = SA[0,0.,0,0]  # initial state
 xf = SA[0,2.,0,0]  # final state
@@ -40,25 +63,47 @@ Q = Diagonal(@SVector ones(n))
 R = Diagonal(@SVector ones(m))
 Qf = Q*(N-1)
 obj = LQRObjective(Q, R, Qf, xf, N)
+```
 
-# Constraints
-# * Adds the following constraints
-#   - Constraint to get to the goal
-#   - A single circular obstacle at (0,1.0) with radius 0.5
-#   - Norm constraint on the controls: ||u||₂ <= 5.0
-#   - Bounds the controls between -10 and 10
-# * Note that the time indices are chosen to avoid redundant constraints at the 
-#   first and last time steps.
+## Step 4: Define constraints
+The next step is to define any constraints we want to add to our trajectory 
+optimization problem. Here we define the following constraints:
+
+- A constraint to get to the goal
+- A single circular obstacle at (0,1.0) with radius 0.5
+- Norm constraint on the controls: ||u||₂ <= 5.0
+- Bounds the controls between -10 and 10
+
+See [Creating Constraints](@ref constraint_section), [Constraint Interface](@ref),
+and the [Constraint API](@ref constraint_api) for more details.
+
+```julia
 cons = ConstraintList(n,m,N)
 add_constraint!(cons, GoalConstraint(xf), N)
 add_constraint!(cons, CircleConstraint(n, SA[0.0], SA[1.0], SA[0.5]), 2:N-1)
 add_constraint!(cons, NormConstraint(n, m, 5.0, TO.SecondOrderCone(), :control), 1:N-1)
 add_constraint!(cons, BoundConstraint(n,m, u_min=-10, u_max=10), 1:N-1)
+```
+!!! note
+    Note that the time indices are chosen to avoid redundant constraints at the 
+    first and last time steps.
 
+## Step 5: Create the Problem
+The last step is to actually create the problem by passing all of the information 
+we defined previously to the constructor. See 
+[Setting up a Problem](@ref problem_section) and the [Problem API](@ref problem_api)
+for more details.
+
+```julia
 # Create problem
 prob = Problem(model, obj, x0, tf, xf=xf, constraints=cons)
+```
 
-## Methods on Problem
+## Step 6: Methods on Problems
+The following code gives some examples of a few of the methods you can use on a 
+[`Problem`](@ref) once it's created.
+
+```julia
 # Set initial controls
 U0 = [randn(m) for k = 1:N]
 initial_controls!(prob, U0)
@@ -101,47 +146,59 @@ Umat = hcat(Vector.(U)...)
 
 # Extract out individual states and controls
 x1 = states(prob, 2)
-# u1 = controls(prob, 1)
+u1 = controls(prob, 1)
+```
 
-## Constraints
-# `ConstraintList` supports indexing (and iteration):
+## Step 7: Working with Constraints
+This section provides a few more details and example on how to work with the 
+constraints we defined previously.
+
+The [`ConstraintList`](@ref) type supports indexing and iteration:
+```julia
 constraints = get_constraints(prob)
 goalcon = constraints[1]
 circlecon = constraints[2]
 normcon = constraints[3]
+```
 
-# Can use the `zip` method to iterate over the constraint and its assigned indices
+You can use the `zip` method to iterate over the constraint and its assigned 
+indices:
+```julia
 for (inds,con) in zip(constraints)
     @show inds
 end
+```
 
-# Get the cone for each constraint
-#  `ZeroCone` is an equality constraint
-#  `NegativeOrthant` is an inequality constraint c(x) <= 0
+You can identify the type of constraint using the 
+[`TrajectoryOptimization.sense`](@ref) function, which returns a 
+[`ConstraintSense`](@ref):
+```julia
 cones = map(TO.sense, constraints)
-@test cones == [TO.ZeroCone(), TO.NegativeOrthant(), TO.SecondOrderCone(), TO.NegativeOrthant()]
+```
 
-# Get bounds for each constraint
-# * These are useful when passing to interfaces like MathOptInterface that expect 
-#   a vector of constraints and their upper and lower bounds
-# * Equality constraints have upper and lower bounds of zero
-# * Inequality constraints have an upper bound of zero 
-# * If a constraint can be represented as a simple bound on the states and/or controls,
-#   e.g. `xmin ≤ x ≤ xmax` or `xumin ≤ u ≤ umax` the `TO.is_bound` method will return `true``.
-is_bound_constraint = map(TO.is_bound, constraints)
-@test is_bound_constraint == [true, false, false, true]
+You can get the bounds of each constraint, which are useful when passing 
+to interfaces like 
+[MathOptInterface](https://github.com/jump-dev/MathOptInterface.jl) 
+that expect a vector of constraints with upper and lower bounds to encode 
+equality/inequality constraints.
+
+```julia
 
 lower_bounds = vcat(Vector.(map(TO.lower_bound, constraints))...)
 upper_bounds = vcat(Vector.(map(TO.upper_bound, constraints))...)
 @test lower_bounds ≈ [zeros(n); fill(-Inf, 1); fill(-Inf, m+1); fill(-Inf, n); fill(-10, m)]
 @test upper_bounds ≈ [zeros(n); fill(0.0, 1); fill(+Inf, m+1); fill(+Inf, n); fill(+10, m)]
+```
 
-# Constraint evaluation
-# * Each constraint inherits from the `AbstractFunction` interface defined in RobotDynamics
-# * They can be individually evaluated using the methods provided by that interface
-# * TrajectoryOptimization also provides some methods for evaluating the constraints 
-#   for multiple time steps
+You can use the [`is_bound`](@ref) function to check to see if the constraint can 
+be represented as a simple bound constraint on the states or controls:
+```julia
+is_bound_constraint = map(TO.is_bound, constraints)
+```
 
+To evaluate constraints, you use the same interface from `AbstractFunction` 
+defined in RobotDynamics:
+```julia
 # Evaluating a single constraint
 # * Note that the `GoalConstraint` is only a function of the state, but
 #   `NormConstraint` is a function of both the state and control
@@ -195,3 +252,4 @@ TO.constraint_jacobians!(
     TO.functionsignature(constraints, 2), TO.diffmethod(constraints, 2), 
     normcon, jacs, vals, Z, inds
 )
+```

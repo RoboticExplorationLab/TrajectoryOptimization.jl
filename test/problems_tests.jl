@@ -42,7 +42,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test TO.getfinaltime(prob) ≈ tf
+@test TO.get_final_time(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
@@ -56,7 +56,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test TO.getfinaltime(prob) ≈ tf
+@test TO.get_final_time(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0
@@ -70,7 +70,7 @@ add_constraint!(conSet, goal, N-1)
 @test length(TO.get_constraints(prob)) == length(conSet)
 @test TO.num_constraints(TO.get_constraints(prob)) === conSet.p
 @test prob.obj === obj
-@test TO.getfinaltime(prob) ≈ tf
+@test TO.get_final_time(prob) ≈ tf
 @test prob.N == N
 @test states(prob) ≈ X0
 @test controls(prob) ≈ U0

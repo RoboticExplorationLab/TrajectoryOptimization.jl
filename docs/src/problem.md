@@ -2,7 +2,7 @@
 CurrentModule = TrajectoryOptimization
 ```
 
-# Problem
+# [Problem](@id problem_api)
 
 ```@contents
 Pages = ["problem.md"]
