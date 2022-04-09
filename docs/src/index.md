@@ -10,7 +10,6 @@ Documentation for TrajectoryOptimization.jl
 Pages = ["index.md"]
 ```
 
-
 ## Overview
 This package facilitates the definition and evaluation of trajectory optimization problems.
 Importantly, this package should be considered more of a modeling framework than an
@@ -38,6 +37,9 @@ Key features include:
 * Support for general, per-timestep constraints
 * Support for Second-Order Cone constraints 
 * ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints
+
+## Quickstart
+See the [Quickstart](@ref quickstart_page) page for a quick overview of the API.
 
 ## Installation
 TrajectoryOptimization.jl can be installed via the Julia package manager. Within the Julia

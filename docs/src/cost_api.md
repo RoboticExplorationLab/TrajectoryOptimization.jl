@@ -2,7 +2,7 @@
 CurrentModule = TrajectoryOptimization
 ```
 
-# Cost Functions and Objectives
+# [Cost Functions and Objectives](@id cost_api)
 This page details the functions related to building and evaluating cost functions and objectives.
 
 
