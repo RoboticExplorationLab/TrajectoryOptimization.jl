@@ -1,4 +1,22 @@
-# New `v0.6`
+# New in `v0.7`
+Version `v0.7` is a dramatic reduction in scope from the previous versions.
+The focus starting from this version is to provide a simple API for defining
+trajectory optimization problems, leaving the task of evaluating and solving 
+these to the solvers that wish to consume the `Problem` type.
+
+Some notable changes:
+- `Problem` constructor now has `x0` as position argument and `xf` as keyword argument
+- The `Problem` type now stores a vector of `RobotDynamics.DiscreteDynamics` models,
+allowing for changing dynamics models (i.e. hybrid dynamics) along the trajectory.
+- Objectives no longer multiply "stage" costs by the time step automatically. This 
+is left up to the user.
+- The package no longer provides methods to evaluate cost or constraint expansions 
+for the entire problem. Types such as `AbstractConstraintVals` or `CostExpansion`
+have been removed.
+- The package no longer provides native support for `MathOptInterface`. This 
+functionality should be implemented by the solvers themselves.
+
+# New in `v0.6`
 
 ## v`0.6.2`
 Treats equality constraints as cones. 
