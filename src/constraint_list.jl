@@ -179,7 +179,6 @@ end
 """
 	num_constraints(::ConstraintList)
 	num_constraints(::Problem)
-	num_constraints(::TrajOptNLP)
 
 Return a vector of length `N` constaining the total number of constraint values at each
 knot point.
