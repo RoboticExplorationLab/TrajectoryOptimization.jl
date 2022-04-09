@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Quickstart · TrajectoryOptimization</title><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="index.html">TrajectoryOptimization</a></span></div><form class="docs-search" action="search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="index.html">Introduction</a></li><li class="is-active"><a class="tocitem" href="quickstart.html">Quickstart</a><ul class="internal"><li><a class="tocitem" href="#Step-1:-Define-the-Dynamics-Model"><span>Step 1: Define the Dynamics Model</span></a></li><li><a class="tocitem" href="#Step-2:-Define-the-Discretization"><span>Step 2: Define the Discretization</span></a></li><li><a class="tocitem" href="#Step-3:-Define-the-Objective"><span>Step 3: Define the Objective</span></a></li><li><a class="tocitem" href="#Step-4:-Define-constraints"><span>Step 4: Define constraints</span></a></li><li><a class="tocitem" href="#Step-5:-Create-the-Problem"><span>Step 5: Create the Problem</span></a></li><li><a class="tocitem" href="#Step-6:-Methods-on-Problems"><span>Step 6: Methods on Problems</span></a></li><li><a class="tocitem" href="#Step-7:-Working-with-Constraints"><span>Step 7: Working with Constraints</span></a></li></ul></li><li><span class="tocitem">Getting Started</span><ul><li><a class="tocitem" href="model.html">1. Setting Up a Dynamics Model</a></li><li><a class="tocitem" href="costfunctions.html">2. Setting up an Objective</a></li><li><a class="tocitem" href="constraints.html">3. Creating Constraints</a></li><li><a class="tocitem" href="creating_problems.html">4. Setting up a Problem</a></li></ul></li><li><span class="tocitem">Interfaces</span><ul><li><a class="tocitem" href="costfunction_interface.html">Cost Function Interface</a></li><li><a class="tocitem" href="constraint_interface.html">Constraint Interface</a></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="cost_api.html">Cost Functions and Objectives</a></li><li><a class="tocitem" href="constraint_api.html">Constraints</a></li><li><a class="tocitem" href="problem.html">Problem</a></li><li><a class="tocitem" href="rotations.html">Optimizing Rotations</a></li></ul></li><li><a class="tocitem" href="examples.html">Examples</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="quickstart.html">Quickstart</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="quickstart.html">Quickstart</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/RoboticExplorationLab/TrajectoryOptimization.jl/blob/master/docs/src/quickstart.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="quickstart_page"><a class="docs-heading-anchor" href="#quickstart_page">Quickstart</a><a id="quickstart_page-1"></a><a class="docs-heading-anchor-permalink" href="#quickstart_page" title="Permalink"></a></h1><p>This page provides a quick overview of the API to help you get started quickly.  It also points to other places in the documentation to help you get more  details.</p><h2 id="Step-1:-Define-the-Dynamics-Model"><a class="docs-heading-anchor" href="#Step-1:-Define-the-Dynamics-Model">Step 1: Define the Dynamics Model</a><a id="Step-1:-Define-the-Dynamics-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Step-1:-Define-the-Dynamics-Model" title="Permalink"></a></h2><p>Define the dynamics model. See documentation for  <a href="https://github.com/RoboticExplorationLab/RobotDynamics.jl">RobotDynamics.jl</a>  for more details.</p><pre><code class="language-julia hljs">using TrajectoryOptimization
+using RobotDynamics
+using StaticArrays
+using LinearAlgebra
+using RobotDynamics
+using Test
+const TO = TrajectoryOptimization
+const RD = RobotDynamics
+
+## Model Definition
+struct DoubleIntegrator{T} &lt;: RD.ContinuousDynamics 
+    mass::T
+end
+
+function RD.dynamics(model::DoubleIntegrator, x, u)
+    mass = model.mass
+    vx,vy = x[3], x[4]
+    ax,ay = u[1] / mass, u[2] / mass
+    SA[vx, vy, ax, ay]
+end
+
+RD.state_dim(::DoubleIntegrator) = 4
+RD.control_dim(::DoubleIntegrator) = 2</code></pre><h2 id="Step-2:-Define-the-Discretization"><a class="docs-heading-anchor" href="#Step-2:-Define-the-Discretization">Step 2: Define the Discretization</a><a id="Step-2:-Define-the-Discretization-1"></a><a class="docs-heading-anchor-permalink" href="#Step-2:-Define-the-Discretization" title="Permalink"></a></h2><p>The next step is to instantiate our model, discretize it, if necessary, and  define the number of knot points to use and time horizon.</p><pre><code class="language-julia hljs">model = DoubleIntegrator(1.0)
+dmodel = RD.DiscretizedDynamics{RD.RK4}(model)
+n,m = RD.dims(model)
+tf = 3.0         # final time (sec)
+N = 21           # number of knot points
+dt = tf / (N-1)  # time step (sec)</code></pre><h2 id="Step-3:-Define-the-Objective"><a class="docs-heading-anchor" href="#Step-3:-Define-the-Objective">Step 3: Define the Objective</a><a id="Step-3:-Define-the-Objective-1"></a><a class="docs-heading-anchor-permalink" href="#Step-3:-Define-the-Objective" title="Permalink"></a></h2><p>We now define our objective. See <a href="costfunctions.html#objective_section">Setting up an Objective</a> <a href="costfunction_interface.html#cost_interface">Cost Function Inteface</a>, and the <a href="cost_api.html#cost_api">Cost/Objective API</a>.</p><pre><code class="language-julia hljs"># Objective
+x0 = SA[0,0.,0,0]  # initial state
+xf = SA[0,2.,0,0]  # final state
+
+Q = Diagonal(@SVector ones(n))
+R = Diagonal(@SVector ones(m))
+Qf = Q*(N-1)
+obj = LQRObjective(Q, R, Qf, xf, N)</code></pre><h2 id="Step-4:-Define-constraints"><a class="docs-heading-anchor" href="#Step-4:-Define-constraints">Step 4: Define constraints</a><a id="Step-4:-Define-constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Step-4:-Define-constraints" title="Permalink"></a></h2><p>The next step is to define any constraints we want to add to our trajectory  optimization problem. Here we define the following constraints:</p><ul><li>A constraint to get to the goal</li><li>A single circular obstacle at (0,1.0) with radius 0.5</li><li>Norm constraint on the controls: ||u||₂ &lt;= 5.0</li><li>Bounds the controls between -10 and 10</li></ul><p>See <a href="constraints.html#constraint_section">Creating Constraints</a>, <a href="constraint_interface.html#Constraint-Interface">Constraint Interface</a>, and the <a href="constraint_api.html#constraint_api">Constraint API</a> for more details.</p><pre><code class="language-julia hljs">cons = ConstraintList(n,m,N)
+add_constraint!(cons, GoalConstraint(xf), N)
+add_constraint!(cons, CircleConstraint(n, SA[0.0], SA[1.0], SA[0.5]), 2:N-1)
+add_constraint!(cons, NormConstraint(n, m, 5.0, TO.SecondOrderCone(), :control), 1:N-1)
+add_constraint!(cons, BoundConstraint(n,m, u_min=-10, u_max=10), 1:N-1)</code></pre><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>Note that the time indices are chosen to avoid redundant constraints at the  first and last time steps.</p></div></div><h2 id="Step-5:-Create-the-Problem"><a class="docs-heading-anchor" href="#Step-5:-Create-the-Problem">Step 5: Create the Problem</a><a id="Step-5:-Create-the-Problem-1"></a><a class="docs-heading-anchor-permalink" href="#Step-5:-Create-the-Problem" title="Permalink"></a></h2><p>The last step is to actually create the problem by passing all of the information  we defined previously to the constructor. See  <a href="creating_problems.html#problem_section">Setting up a Problem</a> and the <a href="problem.html#problem_api">Problem API</a> for more details.</p><pre><code class="language-julia hljs"># Create problem
+prob = Problem(model, obj, x0, tf, xf=xf, constraints=cons)</code></pre><h2 id="Step-6:-Methods-on-Problems"><a class="docs-heading-anchor" href="#Step-6:-Methods-on-Problems">Step 6: Methods on Problems</a><a id="Step-6:-Methods-on-Problems-1"></a><a class="docs-heading-anchor-permalink" href="#Step-6:-Methods-on-Problems" title="Permalink"></a></h2><p>The following code gives some examples of a few of the methods you can use on a  <a href="problem.html#TrajectoryOptimization.Problem"><code>Problem</code></a> once it&#39;s created.</p><pre><code class="language-julia hljs"># Set initial controls
+U0 = [randn(m) for k = 1:N]
+initial_controls!(prob, U0)
+
+# Set initial state
+X0 = [zeros(n) for k = 1:N]
+initial_states!(prob, X0)
+
+# Evaluate the cost
+J = cost(prob)
+@test J ≈ mapreduce(+, 1:N) do k
+    if k &lt; N
+        x,u = X0[k], U0[k]
+        0.5 * (x - xf)&#39;Q*(x - xf) + 0.5*u&#39;R*u
+    else
+        x = X0[k]
+        0.5 * (x - xf)&#39;Qf*(x - xf)
+    end
+end
+
+# Simulate the system forward
+rollout!(prob)
+
+# Extract states, controls, and times
+X = states(prob)
+U = controls(prob)
+t = gettimes(prob)
+
+Xrollout = [copy(x0) for k = 1:N]
+for k = 1:N-1
+    Xrollout[k+1] = RD.discrete_dynamics(
+        get_model(prob, k), Xrollout[k], U0[k], dt*(k-1), dt
+    )
+end
+@test Xrollout ≈ X 
+
+# Convert to matrices
+Xmat = hcat(Vector.(X)...)
+Umat = hcat(Vector.(U)...)
+
+# Extract out individual states and controls
+x1 = states(prob, 2)
+u1 = controls(prob, 1)</code></pre><h2 id="Step-7:-Working-with-Constraints"><a class="docs-heading-anchor" href="#Step-7:-Working-with-Constraints">Step 7: Working with Constraints</a><a id="Step-7:-Working-with-Constraints-1"></a><a class="docs-heading-anchor-permalink" href="#Step-7:-Working-with-Constraints" title="Permalink"></a></h2><p>This section provides a few more details and example on how to work with the  constraints we defined previously.</p><p>The <a href="constraint_api.html#TrajectoryOptimization.ConstraintList"><code>ConstraintList</code></a> type supports indexing and iteration:</p><pre><code class="language-julia hljs">constraints = get_constraints(prob)
+goalcon = constraints[1]
+circlecon = constraints[2]
+normcon = constraints[3]</code></pre><p>You can use the <code>zip</code> method to iterate over the constraint and its assigned  indices:</p><pre><code class="language-julia hljs">for (inds,con) in zip(constraints)
+    @show inds
+end</code></pre><p>You can identify the type of constraint using the  <a href="constraint_interface.html#TrajectoryOptimization.sense"><code>TrajectoryOptimization.sense</code></a> function, which returns a  <a href="constraint_interface.html#TrajectoryOptimization.ConstraintSense"><code>ConstraintSense</code></a>:</p><pre><code class="language-julia hljs">cones = map(TO.sense, constraints)</code></pre><p>You can get the bounds of each constraint, which are useful when passing  to interfaces like  <a href="https://github.com/jump-dev/MathOptInterface.jl">MathOptInterface</a>  that expect a vector of constraints with upper and lower bounds to encode  equality/inequality constraints.</p><pre><code class="language-julia hljs">
+lower_bounds = vcat(Vector.(map(TO.lower_bound, constraints))...)
+upper_bounds = vcat(Vector.(map(TO.upper_bound, constraints))...)
+@test lower_bounds ≈ [zeros(n); fill(-Inf, 1); fill(-Inf, m+1); fill(-Inf, n); fill(-10, m)]
+@test upper_bounds ≈ [zeros(n); fill(0.0, 1); fill(+Inf, m+1); fill(+Inf, n); fill(+10, m)]</code></pre><p>You can use the <a href="constraint_interface.html#TrajectoryOptimization.is_bound"><code>is_bound</code></a> function to check to see if the constraint can  be represented as a simple bound constraint on the states or controls:</p><pre><code class="language-julia hljs">is_bound_constraint = map(TO.is_bound, constraints)</code></pre><p>To evaluate constraints, you use the same interface from <code>AbstractFunction</code>  defined in RobotDynamics:</p><pre><code class="language-julia hljs"># Evaluating a single constraint
+# * Note that the `GoalConstraint` is only a function of the state, but
+#   `NormConstraint` is a function of both the state and control
+x,u = rand(model)  # generate some random states and controls
+z = KnotPoint(x, u, 0.0, NaN)
+c = zeros(RD.output_dim(goalcon))
+RD.evaluate(goalcon, x)
+RD.evaluate(goalcon, z)
+RD.evaluate!(goalcon, c, x)
+RD.evaluate!(goalcon, c, z)
+
+c = zeros(RD.output_dim(normcon))
+RD.evaluate(normcon, x, u)
+RD.evaluate(normcon, z)
+RD.evaluate!(normcon, c, x, u)
+RD.evaluate!(normcon, c, z)
+
+# Evaluating the Jacobian for a single constraint
+# * Note that these methods require passing in a KnotPoint type
+J = TO.gen_jacobian(goalcon)
+c = zeros(RD.output_dim(goalcon))
+RD.jacobian!(RD.StaticReturn(), RD.UserDefined(), goalcon, J, c, z)
+
+J = TO.gen_jacobian(normcon)
+c = zeros(RD.output_dim(normcon))
+RD.jacobian!(RD.StaticReturn(), RD.UserDefined(), normcon, J, c, z)
+
+# Evaluating constraint at multiple time steps 
+Z = get_trajectory(prob)
+inds = constraints.inds[1]
+vals = [zeros(RD.output_dim(goalcon)) for i in inds] 
+TO.evaluate_constraints!(RD.StaticReturn(), goalcon, vals, Z, inds)
+
+inds = constraints.inds[2]
+vals = [zeros(RD.output_dim(normcon)) for i in inds] 
+TO.evaluate_constraints!(constraints.sigs[2], normcon, vals, Z, inds)
+
+# Evaluating constraint Jacobians at multiple time steps
+inds = constraints.inds[1]
+jacs = [TO.gen_jacobian(goalcon) for i in inds] 
+vals = [zeros(RD.output_dim(goalcon)) for i in inds] 
+TO.constraint_jacobians!(
+    TO.functionsignature(constraints, 1), TO.diffmethod(constraints, 1), 
+    goalcon, jacs, vals, Z, inds
+)
+
+inds = constraints.inds[2]
+jacs = [TO.gen_jacobian(normcon) for i in inds] 
+vals = [zeros(RD.output_dim(normcon)) for i in inds] 
+TO.constraint_jacobians!(
+    TO.functionsignature(constraints, 2), TO.diffmethod(constraints, 2), 
+    normcon, jacs, vals, Z, inds
+)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="index.html">« Introduction</a><a class="docs-footer-nextpage" href="model.html">1. Setting Up a Dynamics Model »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.15 on <span class="colophon-date" title="Saturday 9 April 2022 21:42">Saturday 9 April 2022</span>. Using Julia version 1.6.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
