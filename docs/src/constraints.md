@@ -43,10 +43,12 @@ The following constraints are currently defined. See their individual docstrings
 on how to construct them, since constraint constructors are, in general, unique to the constraint.
 
 * [`GoalConstraint`](@ref)
-* [`BoundConstraint`](@ref)
+* [`LinearConstraint`](@ref)
 * [`CircleConstraint`](@ref)
 * [`SphereConstraint`](@ref)
+* [`CollisionConstraint`](@ref)
 * [`NormConstraint`](@ref)
+* [`BoundConstraint`](@ref)
 * [`IndexedConstraint`](@ref)
 
 
@@ -59,17 +61,15 @@ It supports many of the operations that work on an `AbstractVector`, such as
 `length`, indexing (e.g. `cons[1]` or `cons[end]`), and iteration (e.g. `[con
 for con in cons]`).
 
-The time step indices can be retrieved via the `inds` field, e.g. `cons.inds[1]` returns the indices for the first constraint. You can also iterate over constraints and their time indices simultaneously using `zip(::ConstraintList)`, e.g. `[(length(con), length(inds)) for (con,inds) in zip(cons)]`. 
+The time step indices can be retrieved via [`constraintindices`](@ref), e.g.
+`constraintindices(cons, 1)`, which returns the indices for the first
+constraint. You can also iterate over constraints and their time indices
+simultaneously using `zip(::ConstraintList)`, e.g. 
+`[(length(con), length(inds)) for (inds,con) in zip(cons)]`. 
 
-The `num_constraints(::ConstraintList)` returns a vector of length `N` with
-total number of constraint values per time step. Note that since each
-constraint is vector-valued, this is different than
-`length(::ConstraintList)`. The total number of dual variables can be
-calculated using `sum(num_constraints(cons))`.
-
-The constraint list can also be sorted via `sort!(::ConstraintList)` to
-partition it into constraints that apply each time step (`StageConstraint`)
-and those that apply across two time steps (`CoupledConstraint`), such as
-dynamics constraints.
-
-To query if a constraint list contains a dynamics constraint, use `has_dynamics_constraint(::ConstraintList)`.
+The [`num_constraints(::ConstraintList)`](@ref) returns a vector of length `N`
+with total number of constraint values per time step. Note that since each
+constraint is vector-valued, this is different than 
+`length(::ConstraintList)`.
+The total number of dual variables can be calculated using
+`sum(num_constraints(cons))`.

@@ -26,18 +26,18 @@ This package deals with trajectory optimization problems of the form,
 \begin{aligned}
   \min_{x_{0:N},u_{0:N-1}} \quad & \ell_f(x_N) + \sum_{k=0}^{N-1} \ell_k(x_k, u_k, dt) \\
   \textrm{s.t.}            \quad & x_{k+1} = f(x_k, u_k), \\
-                                 & g_k(x_k,u_k) \leq 0, \\
+                                 & g_k(x_k,u_k) \in \mathcal{K}, \\
                                  & h_k(x_k,u_k) = 0.
 \end{aligned}
 ```
+where ``\mathcal{K}`` is a cone. Right now, only positive/negative orthants 
+and second-order cones are supported.
 
 Key features include:
 * Easy and intuitive interface for setting up trajectory optimization problems
 * Support for general, per-timestep constraints
 * Support for Second-Order Cone constraints 
 * ForwardDiff for fast auto-differentiation of dynamics, cost functions, and constraints
-* Efficient methods for evaluating the trajectory optimization problem as a general NLP, so that it can be passed off to NLP solvers such as Ipopt or SNOPT via
-  [MathOptInterface.jl](https://github.com/JuliaOpt/MathOptInterface.jl).
 
 ## Installation
 TrajectoryOptimization.jl can be installed via the Julia package manager. Within the Julia

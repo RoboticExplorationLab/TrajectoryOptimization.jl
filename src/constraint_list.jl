@@ -65,7 +65,7 @@ end
 """
 	add_constraint!(cons::ConstraintList, con::AbstractConstraint, inds::UnitRange, [idx, sig, diffmethod])
 
-Add constraint `cons` to `ConstraintList` `cons` for knot points given by `inds`.
+Add constraint `con` to `ConstraintList` `cons` for knot points given by `inds`.
 
 Use `idx` to determine the location of the constraint in the constraint list.
 `idx=-1` (default) adds the constraint at the end of the list.
@@ -163,6 +163,13 @@ Get the `DiffMethod` used to evaluate the Jacobian for `i`th constraint in the c
 list.
 """
 diffmethod(cons::ConstraintList, i::Integer) = cons.diffs[i]
+
+"""
+	constraintindices(::ConstraintList, i)
+
+Get the knot point indices at which the `i`th constraint is applied.
+"""
+constraintindices(cons::ConstraintList, i::Integer) = cons.inds[i]
 
 for method in (:deepcopy, :copy)
 	@eval function Base.$method(cons::ConstraintList)

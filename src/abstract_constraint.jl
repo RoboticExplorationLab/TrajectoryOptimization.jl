@@ -1,55 +1,97 @@
 import RobotDynamics: jacobian!
 
 """
-    AbstractConstraint
+    AbstractConstraint <: RobotDynamics.AbstractFunction
 
 Abstract vector-valued constraint for a trajectory optimization problem.
-May be either inequality or equality (specified by `sense(::AbstractConstraint)::ConstraintSense`),
-and be function of single or adjacent knotpoints.
+Defined using the `AbstractFunction` interface from RobotDynamics.jl which 
+allows for a flexible API for using in-place or out-of-place evaluation, 
+multiple methods for evaluating Jacobians, etc.
+
+The "sense" of a constraint is specified by defining the [`ConstraintSense`](@ref)
+trait on the type, accessed via `TrajectoryOptimization.sense`, which defines 
+whether the constraint is an equality, inequality, or conic constraint.
 
 Interface:
-Any constraint type must implement the following interface:
+Any constraint must implement the following interface:
 ```julia
-n = state_dim(::MyCon)
-m = control_dim(::MyCon)
-p = Base.length(::MyCon)
-sense(::MyCon)::ConstraintSense
-c = evaluate(::MyCon, args...)
-jacobian!(∇c, ::MyCon, args...)
+n = RobotDynamics.state_dim(::MyCon)
+m = RobotDynamics.control_dim(::MyCon)
+p = RobotDynamics.output_dim(::MyCon)
+TrajectoryOptimization.sense(::MyCon)::ConstraintSense
+c = RobotDynamics.evaluate(::MyCon, x, u)
+RobotDynamics.evaluate!(::MyCon, c, x, u)
 ```
+
+Constraints 
 
 All constraints are categorized into the following type tree:
 ```text
-                        AbstractConstraint
-                        ↙                ↘
-           StageConstraint               CoupledConstraint
-            ↙        ↘                       ↙           ↘
-StageConstraint ControlConstraint CoupledStateConstraint CoupledControlConstraint
+          AbstractConstraint
+                  ↓
+           StageConstraint
+            ↙            ↘ 
+StageConstraint       ControlConstraint
 ```
 
 The state and control dimensions (where applicable) can be queried using
 `state_dim(::AbstractConstraint)` and `control_dim(::AbstractConstraint)`.
 The dimensions of a constraint can be verified using [`check_dims`](@ref).
-The width of the constraint Jacobian is given by [`get_inds`](@ref) or [`widths`](@ref).
 
-The number of constraint values associated with the constraint (length of the constraint vector)
-is given with `length(::AbstractConstraint)`.
+The width of the Jacobian is specified by whether the constraint inherits 
+from `StageConstraint`, `StateConstraint`, or `ControlConstraint`. It can 
+be generated automatically using [`gen_jacobian`](@ref).
 
-# Evaluation methods
-Refer to the doc strings for the following methods for more information on the required
-signatures.
-* [`evaluate`](@ref)
-* [`jacobian!`](@ref)
-* [`∇jacobian!`](@ref)
+## Evaluation
+All constraints can be evaluated by using one of these methods using a 
+`KnotPoint`:
+
+    RobotDynamics.evaluate(::MyCon, z::AbstractKnotPoint)
+    RobotDynamics.evaluate!(::MyCon, c, z::AbstractKnotPoint)
+
+Alternatively, a `StageConstraint` can be evaluated using
+
+    RobotDynamics.evaluate(::MyCon, x, u)
+    RobotDynamics.evaluate!(::MyCon, c, x, u)
+
+a `StateConstraint` can be evaluated using
+
+    RobotDynamics.evaluate(::MyCon, x)
+    RobotDynamics.evaluate!(::MyCon, c, x)
+
+and a `ControlConstraint can be evaluated using`
+
+    RobotDynamics.evaluate(::MyCon, u)
+    RobotDynamics.evaluate!(::MyCon, c, u)
+
+## Jacobian Evaluation
+The Jacobian for all types of constraints can be evaluated using 
+
+    RobotDynamics.jacobian!(::FunctionSignature, ::DiffMethod, ::MyCon, J, c, z)
+
+where `z` is an `AbstractKnotPoint`. To define custom Jacobians, one of the following
+methods must be defined:
+
+    RobotDynamics.jacobian!(::MyCon, J, c, z)     # All constraints 
+    RobotDynamics.jacobian!(::MyCon, J, c, x, u)  # StageConstraint only
+    RobotDynamics.jacobian!(::MyCon, J, c, x)     # StateConstraint only
+    RobotDynamics.jacobian!(::MyCon, J, c, u)     # ControlConstraint only
+
+The most specific methods are preferred over those that accept only an `AbstractKnotPoint`.
 """
 abstract type AbstractConstraint <: RD.AbstractFunction end
 
 "Only a function of states and controls at a single knotpoint"
 abstract type StageConstraint <: AbstractConstraint end
+RD.functioninputs(::CollisionConstraint) = RD.StateControl()
+
 "Only a function of states at a single knotpoint"
 abstract type StateConstraint <: StageConstraint end
+RD.functioninputs(::StateConstraint) = RD.StateOnly()
+
 "Only a function of controls at a single knotpoint"
 abstract type ControlConstraint <: StageConstraint end
+RD.functioninputs(::ControlConstraint) = RD.ControlOnly()
 
 "Get constraint sense (Inequality vs Equality)"
 sense(::C) where {C<:AbstractConstraint} = throw(NotImplemented(:sense, Symbol(C)))
