@@ -214,3 +214,5 @@ rollout!(prob)
 @test RD.setinitialtime!(prob, 1.0) == 1.0 + tf
 @test prob.Z[1].t == 1.0
 @test prob.Z[end].t == 1.0 + tf
+
+@test_throws ArgumentError Problem(dmodel, obj, xf, tf, x0=x0)

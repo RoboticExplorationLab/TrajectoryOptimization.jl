@@ -84,6 +84,12 @@ function Problem(models::Vector{<:DiscreteDynamics}, obj::O, x0::AbstractVector,
         U0=[fill(0.0, RD.control_dim(model)) for model in models],
         kwargs...) where {O}
 
+    if :x0 in keys(kwargs)
+        throw(ArgumentError("Cannot pass x0 as a keyword argument. It is now a positional argument, and xf is a keyword argument.\n" * 
+            "\tUse Problem(model, obj, x0, tf, xf=xf, kwargs...) instead."
+        ))
+    end
+
     # Check control dimensions
     nx,nu = RD.dims(models)
     same_state_dimension = all(x->x == nx[1], nx)

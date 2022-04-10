@@ -52,9 +52,9 @@ A specific version can be specified using
 ```
 (v1.5) pkg> add TrajectoryOptimization@0.4.1
 ```
-Or you can check out the master branch with
+Or you can check out the main branch with
 ```
-(v1.5) pkg> add TrajectoryOptimization#master
+(v1.5) pkg> add TrajectoryOptimization#main
 ```
 Lastly, if you want to clone the repo into your `.julia/dev/` directory for development, you can use
 ```
