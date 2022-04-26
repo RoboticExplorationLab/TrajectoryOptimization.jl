@@ -153,7 +153,7 @@ function LQRObjective(Q::AbstractArray, R::AbstractArray, Qf::AbstractArray,
     ℓ = QuadraticCost(Q, R, H, q, r, c, checks=checks)
     ℓN = QuadraticCost(Qf, R, H, qf, r, cf, checks=false, terminal=true)
 
-    Objective(ℓ, ℓN, N)
+    Objective(ℓ, ℓN, N, diffmethod=diffmethod)
 end
 
 function LQRObjective(
@@ -179,7 +179,7 @@ function LQRObjective(
 
     ℓN = DiagonalCost(Qf, R, qf, r, cf, checks=false, terminal=true)
 
-    Objective(ℓ, ℓN, N)
+    Objective(ℓ, ℓN, N, diffmethod=diffmethod)
 end
 
 """
@@ -187,12 +187,12 @@ end
 
 Generate a quadratic objective that tracks the reference trajectory specified by `Z`.
 """
-function TrackingObjective(Q,R,Z::SampledTrajectory; Qf=Q)
+function TrackingObjective(Q,R,Z::SampledTrajectory; Qf=Q, diffmethod=UserDefined())
     costs = map(Z) do z
         LQRCost(Q, R, state(z), control(z))
     end
     costs[end] = LQRCost(Qf, R, state(Z[end]))
-    Objective(costs)
+    Objective(costs, diffmethod=diffmethod)
 end
 
 """
