@@ -514,6 +514,112 @@ end
 ############################################################################################
 # 								BOUND CONSTRAINTS 										   #
 ############################################################################################
+struct BoundConBase{L,U,T}
+	n::Int
+	x_min::SVector{L,T}
+	x_max::SVector{U,T}
+	i_min::SVector{L,Int}
+	i_max::SVector{U,Int}
+	function BoundConBase(n::Integer, x_min=fill(-Inf, n), x_max=fill(+Inf, n))
+		x_max, x_min = checkBounds(n, x_max, x_min)	
+		i_min_finite = findall(isfinite, x_min)
+		i_max_finite = findall(isfinite, x_max)
+		x_min_finite = x_min[i_min_finite]
+		x_max_finite = x_max[i_max_finite]
+		L = length(x_min_finite)
+		U = length(x_max_finite)
+		T = promote_type(eltype(x_min), eltype(x_max))
+		new{L,U,T}(n, x_min_finite, x_max_finite, i_min_finite, i_max_finite)
+	end
+end
+
+function RD.evaluate(con::BoundConBase, x)
+	[x[con.i_max] - con.x_max; con.x_min - x[con.i_min]]
+end
+
+function RD.evaluate!(con::BoundConBase{L,U}, c, x) where {L,U} 
+	for i = 1:U
+		c[i] = x[con.i_max][i] - con.x_max[i]
+	end
+	for i = 1:L
+		c[i+U] = con.x_min[i] - x[con.i_min][i]
+	end
+	nothing
+end
+
+function RD.jacobian!(con::BoundConBase{L,U}, J, c, x) where {L,U}
+	for i = 1:U
+		J[i, con.i_max[i]] = 1
+	end
+	for i = 1:L
+		J[i+U, con.i_min[i]] = -1
+	end
+	nothing
+end
+
+function upper_bound(bnd::BoundConBase{L,U}) where {L,U}
+	u = fill(Inf, bnd.n)
+	for i = 1:U
+		u[bnd.i_max[i]] = bnd.x_max[i]
+	end
+	u
+end
+
+function lower_bound(bnd::BoundConBase{L,U}) where {L,U}
+	l = fill(-Inf, bnd.n)
+	for i = 1:L
+		l[bnd.i_min[i]] = bnd.x_min[i]
+	end
+	l
+end
+
+Base.copy(bnd::BoundConBase) = BoundConBase(bnd.n, lower_bound(bnd), upper_bound(bnd))
+
+struct StateBound{L,U,T} <: StateConstraint
+	bnd::BoundConBase{L,U,T}
+end
+function StateBound(n::Integer; x_min=fill(-Inf, n), x_max=fill(+Inf, n))
+	StateBound(BoundConBase(n, x_min, x_max))
+end
+
+RD.output_dim(::StateBound{L,U}) where {L,U} = L+U
+RD.state_dim(con::StateBound) = con.bnd.n
+RD.default_diffmethod(::StateBound) = RD.UserDefined()
+RD.default_signature(::StateBound) = RD.InPlace()
+sense(::StateBound) = Inequality()
+is_bound(::StateBound) = true
+lower_bound(con::StateBound) = lower_bound(con.bnd)
+upper_bound(con::StateBound) = upper_bound(con.bnd)
+
+Base.copy(con::StateBound) = StateBound(copy(con.bnd))
+
+RD.evaluate(con::StateBound, x::RD.DataVector) = RD.evaluate(con.bnd, x)
+RD.evaluate!(con::StateBound, c, x::RD.DataVector) = RD.evaluate!(con.bnd, c, x)
+RD.jacobian!(con::StateBound, J, c, x) = RD.jacobian!(con.bnd, J, c, x)
+
+struct ControlBound{L,U,T} <: ControlConstraint
+	bnd::BoundConBase{L,U,T}
+end
+function ControlBound(n::Integer; u_min=fill(-Inf, n), u_max=fill(+Inf, n))
+	ControlBound(BoundConBase(n, u_min, u_max))
+end
+
+RD.output_dim(::ControlBound{L,U}) where {L,U} = L+U
+RD.control_dim(con::ControlBound) = con.bnd.n
+RD.default_diffmethod(::ControlBound) = RD.UserDefined()
+RD.default_signature(::ControlBound) = RD.InPlace()
+sense(::ControlBound) = Inequality()
+is_bound(::ControlBound) = true
+lower_bound(con::ControlBound) = lower_bound(con.bnd)
+upper_bound(con::ControlBound) = upper_bound(con.bnd)
+
+Base.copy(con::ControlBound) = ControlBound(copy(con.bnd))
+
+RD.evaluate(con::ControlBound, u::RD.DataVector) = RD.evaluate(con.bnd, u)
+RD.evaluate!(con::ControlBound, c, u::RD.DataVector) = RD.evaluate!(con.bnd, c, u)
+RD.jacobian!(con::ControlBound, J, c, u) = RD.jacobian!(con.bnd, J, c, u)
+
+
 """
 	BoundConstraint{P,NM,T}
 

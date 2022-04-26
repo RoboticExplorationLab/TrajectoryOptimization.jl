@@ -60,6 +60,8 @@ export
 	Equality,
 	Inequality,
 	BoundConstraint,
+	StateBound,
+	ControlBound,
 	CircleConstraint,
 	SphereConstraint,
 	GoalConstraint,

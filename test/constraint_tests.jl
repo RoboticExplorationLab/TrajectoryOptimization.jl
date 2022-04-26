@@ -206,7 +206,7 @@ end
 
 
 #--- Bound Constraint
-@testset "Bound Constraint" begin
+@testset "Bound Constraints" begin
     xmin = -@SVector rand(n)
     xmax = +@SVector rand(n)
     umin = -@SVector rand(m)
@@ -264,6 +264,85 @@ end
 
     @test_throws ArgumentError BoundConstraint(n,m, x_min=10, x_max=-10, u_min=umin, u_max=umax)
 end
+
+@testset "State Bound" begin
+    n = 3
+    x_max = [10,2,5.]
+    x_min = [0,-3,-4.]
+
+    bnd = StateBound(n, x_max=x_max, x_min=x_min)
+    @test RD.output_dim(bnd) == 2n
+    @test RD.state_dim(bnd) == n
+    @test RD.input_dim(bnd) == n
+    @test TO.lower_bound(bnd) == x_min
+    @test TO.upper_bound(bnd) == x_max
+    x = [0,1,2.]
+    @test RD.evaluate(bnd, x) == [-10, -1, -3, 0, -4, -6]
+
+    p = 2n
+    J = zeros(p,n)
+    c = zeros(p)
+    RD.jacobian!(bnd, J, c, x)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(bnd, x), x)
+
+    x_max = [10,2,5]
+    x_min = [-Inf,-3,-4.]
+    bnd2 = StateBound(n, x_max=x_max, x_min=x_min)
+    @test RD.output_dim(bnd2) == 5
+    @test RD.evaluate(bnd2, x) == [-10, -1, -3, -4, -6]
+
+    p = 5 
+    J = zeros(p,n)
+    c = zeros(p)
+    RD.jacobian!(bnd2, J, c, x)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(bnd2, x), x)
+
+    x_max = 10 
+    bnd3 = StateBound(n, x_max=x_max)
+    @test RD.evaluate(bnd3, x) == [-10, -9, -8]
+
+    @test_throws ArgumentError StateBound(n, x_max=-10, x_min=10)
+end
+
+@testset "Control Bound" begin
+    m = 3
+    u_max = [10,2,5.]
+    u_min = [0,-3,-4.]
+
+    bnd = ControlBound(m, u_max=u_max, u_min=u_min)
+    @test RD.output_dim(bnd) == 2m
+    @test RD.control_dim(bnd) == m
+    @test RD.input_dim(bnd) == m
+    @test TO.lower_bound(bnd) == u_min
+    @test TO.upper_bound(bnd) == u_max
+    u = [0,1,2.]
+    @test RD.evaluate(bnd, u) == [-10, -1, -3, 0, -4, -6]
+
+    p = 2m
+    J = zeros(p,m)
+    c = zeros(p)
+    RD.jacobian!(bnd, J, c, u)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(bnd, x), u)
+
+    u_max = [10,2,5]
+    u_min = [-Inf,-3,-4.]
+    bnd2 = ControlBound(m, u_max=u_max, u_min=u_min)
+    @test RD.output_dim(bnd2) == 5
+    @test RD.evaluate(bnd2, u) == [-10, -1, -3, -4, -6]
+
+    p = 5 
+    J = zeros(p,m)
+    c = zeros(p)
+    RD.jacobian!(bnd2, J, c, u)
+    @test J ≈ ForwardDiff.jacobian(x->RD.evaluate(bnd2, x), u)
+
+    u_max = 10 
+    bnd3 = ControlBound(m, u_max=u_max)
+    @test RD.evaluate(bnd3, u) == [-10, -9, -8]
+
+    @test_throws ArgumentError ControlBound(m, u_max=-10, u_min=10)
+end
+
 
 
 #--- Indexed Constraint
