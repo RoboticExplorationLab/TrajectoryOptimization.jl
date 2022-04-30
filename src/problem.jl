@@ -146,7 +146,7 @@ of the trajectory, `N`.
 """
 RD.dims(prob::Problem, i::Integer) = RD.dims(prob.model[i])..., prob.N 
 
-RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[k])
+RD.state_dim(prob::Problem, k::Integer) = state_dim(prob.model[min(k, prob.N-1)])
 RD.control_dim(prob::Problem, k::Integer) = control_dim(prob.model[k])
 
 """
@@ -213,7 +213,7 @@ Returns Vector{`RobotDynamics.DiscreteDynamics`}.
 
 Get the dynamics model at time step `k`.
 """
-@inline get_model(prob::Problem, k) = prob.model[k]
+@inline get_model(prob::Problem, k) = prob.model[min(k,prob.N-1)]
 
 "Get the objective. Returns an `AbstractObjective`."
 @inline get_objective(prob::Problem) = prob.obj

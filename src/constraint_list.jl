@@ -149,6 +149,9 @@ Base.zip(cons::ConstraintList) = zip(cons.inds, cons.constraints)
 @inline Base.getindex(cons::ConstraintList, i::Int) = cons.constraints[i]
 Base.getindex(cons::ConstraintList, I) = cons.constraints[I]
 
+RD.state_dim(cons::ConstraintList, k) = cons.nx[k]
+RD.control_dim(cons::ConstraintList, k) = cons.nu[k]
+
 """
 	functionsignature(::ConstraintList, i)
 
