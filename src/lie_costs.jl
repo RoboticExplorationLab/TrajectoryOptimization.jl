@@ -34,8 +34,8 @@ where `q_ref` is the reference quaternion (provided as a `SVector{4}`), and
 struct DiagonalQuatCost{N,M,T,N4} <: QuadraticCostFunction{N,M,T}
     Q::Diagonal{T,SVector{N,T}}
     R::Diagonal{T,SVector{M,T}}
-    q::SVector{N,T}
-    r::SVector{M,T}
+    q::MVector{N,T}
+    r::MVector{M,T}
     c::T
     w::T
     q_ref::SVector{4,T}
