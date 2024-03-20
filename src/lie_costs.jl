@@ -1,4 +1,4 @@
-for rot in (:UnitQuaternion, :MRP, :RodriguesParam)
+for rot in (:QuatRotation, :MRP, :RodriguesParam)
     @eval rotation_name(::Type{<:$rot}) = $rot
 end
 
@@ -43,14 +43,14 @@ struct DiagonalQuatCost{N,M,T,N4} <: QuadraticCostFunction{N,M,T}
     Iq::SMatrix{N,4,T,N4}
     terminal::Bool
     function DiagonalQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}},
-            q::SVector{N,T}, r::SVector{M,T}, c::T, w::T,
-            q_ref::SVector{4,T}, q_ind::SVector{4,Int}; terminal::Bool=false) where {T,N,M}
-        Iq = @MMatrix zeros(N,4)
+        q::SVector{N,T}, r::SVector{M,T}, c::T, w::T,
+        q_ref::SVector{4,T}, q_ind::SVector{4,Int}; terminal::Bool=false) where {T,N,M}
+        Iq = @MMatrix zeros(N, 4)
         for i = 1:4
-            Iq[q_ind[i],i] = 1
+            Iq[q_ind[i], i] = 1
         end
         Iq = SMatrix{N,4}(Iq)
-        return new{N,M,T,N*4}(Q, R, q, r, c, w, q_ref, q_ind, Iq, terminal)
+        return new{N,M,T,N * 4}(Q, R, q, r, c, w, q_ref, q_ind, Iq, terminal)
     end
 end
 
@@ -60,36 +60,36 @@ is_blockdiag(::DiagonalQuatCost) = true
 is_diag(::DiagonalQuatCost) = true
 
 function DiagonalQuatCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}};
-        q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T), w=one(T),
-        q_ref=(@SVector [1.0,0,0,0]), q_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    q=(@SVector zeros(N)), r=(@SVector zeros(M)), c=zero(T), w=one(T),
+    q_ref=(@SVector [1.0, 0, 0, 0]), q_ind=(@SVector [4, 5, 6, 7])) where {T,N,M}
     DiagonalQuatCost(Q, R, q, r, c, q_ref, q_ind)
 end
 
 function RD.evaluate(cost::DiagonalQuatCost, x, u)
-    J = 0.5*x'cost.Q*x + cost.q'x + cost.c
+    J = 0.5 * x'cost.Q * x + cost.q'x + cost.c
     if !isempty(u)
-        J += 0.5 * u'cost.R*u + cost.r'u
+        J += 0.5 * u'cost.R * u + cost.r'u
     end
     q = x[cost.q_ind]
     dq = cost.q_ref'q
-    J += cost.w*min(1+dq, 1-dq)
+    J += cost.w * min(1 + dq, 1 - dq)
 end
 
 function gradient!(cost::DiagonalQuatCost{n,m}, grad, z::AbstractKnotPoint) where {n,m}
-    x,u = state(z), control(z)
-    ix,iu = 1:n, n+1:n+m
-    x,u = state(z), control(z)
-    Qx = cost.Q*x + cost.q
+    x, u = state(z), control(z)
+    ix, iu = 1:n, n+1:n+m
+    x, u = state(z), control(z)
+    Qx = cost.Q * x + cost.q
     q = x[cost.q_ind]
     dq = cost.q_ref'q
     if dq < 0
-        Qx += cost.w*cost.Iq*cost.q_ref
+        Qx += cost.w * cost.Iq * cost.q_ref
     else
-        Qx -= cost.w*cost.Iq*cost.q_ref
+        Qx -= cost.w * cost.Iq * cost.q_ref
     end
     grad[ix] .= Qx
     if !is_terminal(z)
-        grad[iu] .= cost.R*u .+ cost.r
+        grad[iu] .= cost.R * u .+ cost.r
     end
     return
 end
@@ -117,7 +117,7 @@ We can create this cost function as follows:
 ```julia
 Q = Diagonal(SVector(RBState(fill(0.1,3), zeros(4), fill(0.1,3), fill(0.1,3))))
 R = Diagonal(@SVector fill(0.01, 6))
-xf = RBState([1,2,3], rand(UnitQuaternion), zeros(3), zeros(3))
+xf = RBState([1,2,3], rand(QuatRotation), zeros(3), zeros(3))
 QuatLQRCost(Q,R,xf)
 ```
 We can add a reference control and change the weight on the rotation error with the optional
@@ -131,12 +131,12 @@ QuatLQRCost(Q,R,xf,uf, w=10.0, quat_inds=4:7)
 ```
 """
 function QuatLQRCost(Q::Diagonal{T,SVector{N,T}}, R::Diagonal{T,SVector{M,T}}, xf,
-        uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4,5,6,7])) where {T,N,M}
+    uf=(@SVector zeros(M)); w=one(T), quat_ind=(@SVector [4, 5, 6, 7])) where {T,N,M}
     @assert length(quat_ind) == 4 "quat_ind argument must be of length 4"
     quat_ind = SVector{4}(quat_ind)
-    r = -R*uf
-    q = -Q*xf
-    c = 0.5*xf'Q*xf + 0.5*uf'R*uf
+    r = -R * uf
+    q = -Q * xf
+    c = 0.5 * xf'Q * xf + 0.5 * uf'R * uf
     q_ref = xf[quat_ind]
     return DiagonalQuatCost(Q, R, q, r, c, T(w), q_ref, quat_ind)
 end
@@ -151,7 +151,7 @@ function change_dimension(cost::DiagonalQuatCost, n, m, ix, iu)
     q[ix] = cost.q
     r[iu] = cost.r
     qind = (1:n)[ix[cost.q_ind]]
-    DiagonalQuatCost(Diagonal(SVector{n}(Qd)), Diagonal(SVector{m}(Rd)), 
+    DiagonalQuatCost(Diagonal(SVector{n}(Qd)), Diagonal(SVector{m}(Rd)),
         SVector{n}(q), SVector{m}(r), cost.c, cost.w, cost.q_ref, qind)
 end
 
@@ -183,15 +183,15 @@ RD.@autodiff struct ErrorQuadratic{Rot,N,M} <: CostFunction
     c::Float64
     x_ref::SVector{N,Float64}
     q_ind::SVector{4,Int}
-    function ErrorQuadratic(model::RobotDynamics.RigidBody{Rot}, 
-        Q::Diagonal{<:Real,<:StaticVector{12}}, 
+    function ErrorQuadratic(model::RobotDynamics.RigidBody{Rot},
+        Q::Diagonal{<:Real,<:StaticVector{12}},
         R::Diagonal{<:Real,<:StaticVector{Nu}},
         r::StaticVector{Nu},
         c::Real,
         x_ref::StaticVector{Nx},
         q_ind::StaticVector{4}
     ) where {Rot,Nx,Nu}
-        new{Rot, Nx, Nu}(model, Q, R, r, c, x_ref, q_ind)
+        new{Rot,Nx,Nu}(model, Q, R, r, c, x_ref, q_ind)
     end
 end
 function Base.copy(c::ErrorQuadratic)
@@ -217,31 +217,31 @@ state_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = N
 control_dim(::ErrorQuadratic{Rot,N,M}) where {Rot,N,M} = M
 
 function ErrorQuadratic(model::RD.RigidBody{Rot}, Q::Diagonal,
-        R::Diagonal,
-        x_ref,
-        u_ref=(@SVector zeros(eltype(Q),size(R,1))); 
-        r=(@SVector zeros(eltype(Q),size(R,1))), 
-        c=zero(eltype(Q)),
-        q_ind=(@SVector [4,5,6,7])
-    ) where {Rot}
-    if Rot <: UnitQuaternion && size(Q,1) == size(x_ref,1) 
+    R::Diagonal,
+    x_ref,
+    u_ref=(@SVector zeros(eltype(Q), size(R, 1)));
+    r=(@SVector zeros(eltype(Q), size(R, 1))),
+    c=zero(eltype(Q)),
+    q_ind=(@SVector [4, 5, 6, 7])
+) where {Rot}
+    if Rot <: QuatRotation && size(Q, 1) == size(x_ref, 1)
         Qd = deleteat(Q.diag, 4)
         Q = Diagonal(Qd)
     end
-    r += -R*u_ref
-    c += 0.5*u_ref'R*u_ref
+    r += -R * u_ref
+    c += 0.5 * u_ref'R * u_ref
     return ErrorQuadratic(model, Q, R, r, c, x_ref, q_ind)
 end
 
 
 function RD.evaluate(cost::ErrorQuadratic, x, u)
     dx = RD.state_diff(cost.model, x, cost.x_ref, Rotations.CayleyMap())
-    return 0.5*dx'cost.Q*dx + cost.c + 0.5*u'cost.R*u + cost.r'u
+    return 0.5 * dx'cost.Q * dx + cost.c + 0.5 * u'cost.R * u + cost.r'u
 end
 
 
 function change_dimension(cost::ErrorQuadratic, n, m)
-    n0,m0 = state_dim(cost), control_dim(cost)
+    n0, m0 = state_dim(cost), control_dim(cost)
     Q_diag = diag(cost.Q)
     R_diag = diag(cost.R)
     r = cost.r
@@ -265,7 +265,7 @@ function (+)(cost1::ErrorQuadratic, cost2::QuadraticCost)
     @assert norm(cost2.H) ≈ 0
     @assert norm(cost2.q) ≈ 0
     if state_dim(cost2) == 13
-        rm_quat = @SVector [1,2,3,4,5,6,8,9,10,11,12,13]
+        rm_quat = @SVector [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]
         Q2 = Diagonal(diag(cost2.Q)[rm_quat])
     else
         Q2 = cost2.Q

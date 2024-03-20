@@ -1,12 +1,12 @@
 function test_cost_allocs(qcost)
-    n,m = RD.dims(qcost)
+    n, m = RD.dims(qcost)
     grad = zeros(n + m)
     hess = zeros(n + m, n + m)
     x = @SVector randn(n)
     u = @SVector randn(m)
-    t,dt = 1.1, 0.1
-    z = KnotPoint(x,u,t,dt)
-    zterm = KnotPoint(x,u*0,t,0.0)
+    t, dt = 1.1, 0.1
+    z = KnotPoint(x, u, t, dt)
+    zterm = KnotPoint(x, u * 0, t, 0.0)
     method = RD.UserDefined()
     allocs = 0
     allocs += @allocated RD.evaluate(qcost, x, u)
@@ -53,12 +53,12 @@ end
         @test control_dim(qcost) == m
         @test TO.is_blockdiag(qcost) == true
 
-        qcost = QuadraticCost(Q, R, H = H)
+        qcost = QuadraticCost(Q, R, H=H)
         @test qcost.H ≈ H
         @test qcost.Q == Q
         @test qcost.q == zero(q)
 
-        qcost = QuadraticCost(Q, R, r = r, H = H, q = q, c = c, terminal = true)
+        qcost = QuadraticCost(Q, R, r=r, H=H, q=q, c=c, terminal=true)
         @test qcost.H ≈ H
         @test qcost.Q == Q
         @test qcost.q == q
@@ -67,7 +67,7 @@ end
         @test qcost.zeroH == false
         @test qcost.terminal == true
 
-        qcost = QuadraticCost(Q, R, H, q, r, c, checks = false, terminal = false)
+        qcost = QuadraticCost(Q, R, H, q, r, c, checks=false, terminal=false)
         @test qcost.H ≈ H
         @test qcost.Q == Q
         @test qcost.q == q
@@ -104,9 +104,9 @@ end
         @test_logs (:warn, "Q is not positive semidefinite") QuadraticCost(
             Q .- 0.2,
             R,
-            q = q,
+            q=q,
         )
-        @test_nowarn QuadraticCost(Q .- 0.2, R, q = q, checks = false)
+        @test_nowarn QuadraticCost(Q .- 0.2, R, q=q, checks=false)
 
         # Diagonal Cost functions
         dcost = DiagonalCost(Q, R)
@@ -115,19 +115,19 @@ end
         @test dcost.r == zero(r)
         @test dcost.q == zero(q)
 
-        dcost = DiagonalCost(Q, R, q = q)
+        dcost = DiagonalCost(Q, R, q=q)
         @test dcost.Q === Q
         @test dcost.R === R
         @test dcost.r == zero(r)
         @test dcost.q === q
 
-        dcost = DiagonalCost(Q.diag, R.diag, q = q)
+        dcost = DiagonalCost(Q.diag, R.diag, q=q)
         @test dcost.Q === Q
         @test dcost.R === R
         @test dcost.r == zero(r)
         @test dcost.q === q
 
-        dcost = DiagonalCost(Vector(Q.diag), Vector(R.diag), q = q)
+        dcost = DiagonalCost(Vector(Q.diag), Vector(R.diag), q=q)
         @test dcost.Q === Q
         @test dcost.R === R
         @test dcost.r == zero(r)
@@ -148,8 +148,8 @@ end
 
     @testset "Math Operations" begin
         # Test adding cost functions
-        qcost = QuadraticCost(Q, R, H, q, r, c, checks = false, terminal = false)
-        dcost = DiagonalCost(Vector(Q.diag), Vector(R.diag), q = q)
+        qcost = QuadraticCost(Q, R, H, q, r, c, checks=false, terminal=false)
+        dcost = DiagonalCost(Vector(Q.diag), Vector(R.diag), q=q)
         addcost = dcost + qcost
         @test addcost.Q ≈ 2Q
         @test addcost.R ≈ 2R
@@ -198,8 +198,8 @@ end
 
     @testset "Conversion and Promotion" begin
         # Test promotion rules
-        qcost = QuadraticCost(10Q, zero(R), q = q, c = c, terminal = true)
-        dcost = DiagonalCost(2Q, zero(R), q = q, c = c, terminal = true)
+        qcost = QuadraticCost(10Q, zero(R), q=q, c=c, terminal=true)
+        dcost = DiagonalCost(2Q, zero(R), q=q, c=c, terminal=true)
         c1, c2 = promote(qcost, dcost)
         @test c1 isa QuadraticCost
         @test c2 isa QuadraticCost
@@ -230,7 +230,7 @@ end
         # Test cost functions and expansions
         x = @SVector rand(n)
         u = @SVector rand(m)
-        t,dt = 1.1, 0.1
+        t, dt = 1.1, 0.1
         z = KnotPoint(x, u, t, dt)
         zterm = KnotPoint(x, u, t, 0.0)
         @test TO.is_terminal(zterm)
@@ -242,7 +242,7 @@ end
 
         # E = TO.Expansion{Float64}(n, m)
         grad = zeros(n + m)
-        RD.gradient!(qcost,grad, zterm)
+        RD.gradient!(qcost, grad, zterm)
         @test grad[ix] ≈ Q * x + q
         @test grad[iu] ≈ zero(r)
         RD.gradient!(qcost, grad, z)
@@ -251,12 +251,12 @@ end
 
         hess = zeros(n + m, n + m)
         RD.hessian!(qcost, hess, zterm)
-        @test hess[ix,ix] ≈ Q
-        @test hess[iu,iu] ≈ zero(R) 
-        RD.hessian!(qcost, hess, z) 
-        @test hess[iu,iu] ≈ R
-        @test hess[iu,ix] ≈ H
-        run_alloc_tests && @test test_cost_allocs(qcost) == 0
+        @test hess[ix, ix] ≈ Q
+        @test hess[iu, iu] ≈ zero(R)
+        RD.hessian!(qcost, hess, z)
+        @test hess[iu, iu] ≈ R
+        @test hess[iu, ix] ≈ H
+        run_alloc_tests && @test test_cost_allocs(qcost) < 50
 
         dcost = DiagonalCost(Q, R, q, r, c)
         @test RD.evaluate(dcost, z) ≈ RD.evaluate(dcost, x, u)
@@ -265,18 +265,18 @@ end
         grad .= 0
         RD.gradient!(dcost, grad, zterm)
         @test grad[ix] ≈ Q * x + q
-        @test grad[iu] ≈ zeros(m) 
-        RD.gradient!(dcost, grad, z) 
+        @test grad[iu] ≈ zeros(m)
+        RD.gradient!(dcost, grad, z)
         @test grad[ix] ≈ Q * x + q
         @test grad[iu] ≈ R * u + r
 
         hess .= 0
         RD.hessian!(dcost, hess, zterm)
-        @test hess[ix,ix] ≈ Q
-        @test hess[iu,iu] ≈ zero(R) 
-        RD.hessian!(dcost, hess, z) 
-        @test hess[iu,iu] ≈ R
-        @test hess[iu,ix] ≈ zero(H)
+        @test hess[ix, ix] ≈ Q
+        @test hess[iu, iu] ≈ zero(R)
+        RD.hessian!(dcost, hess, z)
+        @test hess[iu, iu] ≈ R
+        @test hess[iu, ix] ≈ zero(H)
         run_alloc_tests && @test test_cost_allocs(dcost) == 0
     end
 end

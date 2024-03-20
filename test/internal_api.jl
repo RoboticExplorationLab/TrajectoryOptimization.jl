@@ -11,27 +11,27 @@ const RD = RobotDynamics
 
 ## Create a Problem
 model = Quadrotor()
-n,m = RD.dims(model)           # number of states and controls
+n, m = RD.dims(model)           # number of states and controls
 n̄ = RD.errstate_dim(model)  # size of error state
 N = 51                      # number of knot points
 tf = 5.0                    # final time
 
 # initial and final conditions
-x0 = RBState([1,2,1], UnitQuaternion(I), zeros(3), zeros(3))
-xf = RBState([0,0,2], UnitQuaternion(I), zeros(3), zeros(3))
+x0 = RBState([1, 2, 1], QuatRotation(I), zeros(3), zeros(3))
+xf = RBState([0, 0, 2], QuatRotation(I), zeros(3), zeros(3))
 
 # objective
 Q = Diagonal(@SVector fill(0.1, n))
 R = Diagonal(@SVector fill(0.01, m))
 Qf = Diagonal(@SVector fill(100.0, n))
-obj = LQRObjective(Q,R,Qf,xf,N)
-obj = LQRObjective(Q,R,Qf,xf,N, diffmethod=RD.UserDefined())
+obj = LQRObjective(Q, R, Qf, xf, N)
+obj = LQRObjective(Q, R, Qf, xf, N, diffmethod=RD.UserDefined())
 
 # constraints
-cons = ConstraintList(n,m,N)
-add_constraint!(cons, BoundConstraint(n,m, u_min=zeros(4), u_max=fill(10.0,4)), 1:N-1)
-add_constraint!(cons, CircleConstraint(n, SA_F64[1,2], SA_F64[1,2], SA[0.1,0.1]), 1:N-1)
-add_constraint!(cons, GoalConstraint(xf, SA[1,2,3]), N)
+cons = ConstraintList(n, m, N)
+add_constraint!(cons, BoundConstraint(n, m, u_min=zeros(4), u_max=fill(10.0, 4)), 1:N-1)
+add_constraint!(cons, CircleConstraint(n, SA_F64[1, 2], SA_F64[1, 2], SA[0.1, 0.1]), 1:N-1)
+add_constraint!(cons, GoalConstraint(xf, SA[1, 2, 3]), N)
 
 # problem
 prob = Problem(model, obj, x0, tf, xf=xf, constraints=cons);
@@ -41,7 +41,7 @@ Z = prob.Z
 u0 = zeros(model)[2]                        # get hover control
 initial_controls!(prob, u0)                 # set all time-steps to the same
 initial_controls!(prob, [u0 for k = 1:N-1]) # use a vector of initial controls
-initial_controls!(prob, fill(u0[1],m,N-1))  # use a matrix of initial controls
+initial_controls!(prob, fill(u0[1], m, N - 1))  # use a matrix of initial controls
 
 ## Simulating the Dynamics
 using RobotDynamics: state, control, states, controls
@@ -56,7 +56,7 @@ rollout!(RD.StaticReturn(), prob.model, Z, prob.x0)
 @test states(prob)[end] ≈ prob.x0
 
 # change control so that the state changes
-u0 += [1,0,1,0]*1e-2
+u0 += [1, 0, 1, 0] * 1e-2
 initial_controls!(prob, u0)
 RD.rollout!(RD.StaticReturn(), prob.model, Z, prob.x0)
 states(prob)[end]
@@ -66,18 +66,18 @@ RD.rollout!(RD.InPlace(), prob.model, Zmut, prob.x0)
 
 
 ## Computing the dynamics Jacobians
-D = [TO.DynamicsExpansion{Float64}(n,n̄,m) for k = 1:N-1]
+D = [TO.DynamicsExpansion{Float64}(n, n̄, m) for k = 1:N-1]
 TO.dynamics_expansion!(RD.StaticReturn(), RD.ForwardAD(), prob.model, D, Z)
 TO.dynamics_expansion!(RD.StaticReturn(), RD.FiniteDifference(), prob.model, D, Z)
 TO.dynamics_expansion!(RD.InPlace(), RD.ForwardAD(), prob.model, D, Z)
 TO.dynamics_expansion!(RD.InPlace(), RD.FiniteDifference(), prob.model, D, Z)
 
-G = [SizedMatrix{n,n̄}(zeros(n,n̄)) for k = 1:N+1]
+G = [SizedMatrix{n,n̄}(zeros(n, n̄)) for k = 1:N+1]
 for k in eachindex(Z)
     RD.errstate_jacobian!(prob.model, G[k], Z[k])
 end
 TO.error_expansion!(D, prob.model, G)
-A,B = TO.error_expansion(D[1], prob.model)
+A, B = TO.error_expansion(D[1], prob.model)
 
 ## Computing the cost
 cost(prob)
@@ -98,12 +98,12 @@ TO.cost_hessian!(E0, prob.obj, Z)
 RD.gradient!(obj.diffmethod[1], obj[1], E0[1].grad, Z[1])
 RD.hessian!(obj.diffmethod[1], obj[1], E0[1].hess, Z[1])
 
-E = TO.CostExpansion(n̄,m,N)
+E = TO.CostExpansion(n̄, m, N)
 E0 = TO.CostExpansion(E, prob.model)
 TO.error_expansion!(E, E0, prob.model, Z, G)
 
 ## Constraints
-con,inds = cons[2], 1:N-1
+con, inds = cons[2], 1:N-1
 @show typeof(con)                     # just verifying it's a CircleConstraint
 @test con isa TO.StateConstraint      # it inherits from StateConstraint, so it's a function of a single state
 @test state_dim(con) == n             # the state dimension. control_dim won't be defined.
@@ -116,8 +116,8 @@ RD.evaluate(con, Z[1])
 RD.evaluate!(con, c, Z[1])
 
 vals = [zero(c) for i = inds]
-jacs0 = [zeros(RD.output_dim(con), n+m) for i in inds]
-jacs = [zeros(RD.output_dim(con), n̄+m) for i in inds]
+jacs0 = [zeros(RD.output_dim(con), n + m) for i in inds]
+jacs = [zeros(RD.output_dim(con), n̄ + m) for i in inds]
 
 TO.evaluate_constraints!(RD.StaticReturn(), con, vals, Z, inds)
 @test vals[1] ≈ RD.evaluate(con, Z[1])
@@ -135,14 +135,14 @@ TO.error_expansion!(jacs, jacs0, con, prob.model, G, inds)
 dyn = TO.DynamicsConstraint(prob.model)
 
 vals = [zeros(n) for k = 1:N]
-jacs = [zeros(n,n+m) for k = 1:N, i = 1:2]
+jacs = [zeros(n, n + m) for k = 1:N, i = 1:2]
 TO.evaluate_constraints!(RD.StaticReturn(), dyn, vals, Z)
 TO.evaluate_constraints!(RD.InPlace(), dyn, vals, Z)
 
 TO.constraint_jacobians!(RD.StaticReturn(), RD.FiniteDifference(), dyn, jacs, vals, Z)
 TO.constraint_jacobians!(RD.InPlace(), RD.ForwardAD(), dyn, jacs, vals, Z)
-@test jacs[1,1] ≈ D[1].∇f
-@test jacs[1,2] ≈ [-I(n) zeros(n,m)]
+@test jacs[1, 1] ≈ D[1].∇f
+@test jacs[1, 2] ≈ [-I(n) zeros(n, m)]
 
 # Implicit dynamics
 model_implicit = RD.DiscretizedDynamics{RD.ImplicitMidpoint}(model)
