@@ -1,6 +1,6 @@
 name = "TrajectoryOptimization"
 uuid = "c79d492b-0548-5874-b488-5a62c1d9d0ca"
-version = "0.7.0"
+version = "0.7.1"
 
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -19,6 +19,6 @@ FiniteDiff = "2"
 ForwardDiff = "0.10"
 RobotDynamics = "0.4.3"
 RobotZoo = "0.3"
-Rotations = "~1.0"
+Rotations = "1"
 StaticArrays = "1"
 julia = "1"
