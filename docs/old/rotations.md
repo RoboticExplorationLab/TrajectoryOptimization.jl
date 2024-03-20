@@ -4,7 +4,7 @@ CurrentModule = TrajectoryOptimization
 
 # Rotations
 ```@docs
-UnitQuaternion
+QuatRotation
 MRP
 RPY
 ```

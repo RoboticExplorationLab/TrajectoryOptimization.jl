@@ -14,7 +14,7 @@ Random.seed!(1)
 
 include("test_models.jl")
 
-const run_alloc_tests = !haskey(ENV, "CI") 
+const run_alloc_tests = !haskey(ENV, "CI")
 ##
 
 @testset "Costs" begin
