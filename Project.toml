@@ -16,7 +16,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 DocStringExtensions = "0.9"
 FiniteDiff = "2"
-ForwardDiff = "0.10"
+ForwardDiff = "0.10, 1"
 RobotDynamics = "0.4.8"
 RobotZoo = "0.3"
 Rotations = "1"
